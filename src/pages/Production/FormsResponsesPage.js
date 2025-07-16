@@ -39,10 +39,12 @@ import { ref, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Komponent strony odpowiedzi formularzy
 const FormsResponsesPage = () => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -376,7 +378,7 @@ const FormsResponsesPage = () => {
   const CompletedMOTable = () => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">Raporty zakończonych MO</Typography>
+        <Typography variant="h6">{t('completedMO.title')}</Typography>
         <Box>
           <Button 
             variant="outlined" 
@@ -384,19 +386,19 @@ const FormsResponsesPage = () => {
             disabled={completedMOResponses.length === 0}
             sx={{ mr: 1 }}
           >
-            Eksportuj do CSV
+            {t('exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
             color="secondary"
             onClick={handleBack}
           >
-            Powrót
+            {t('back')}
           </Button>
         </Box>
       </Box>
       {completedMOResponses.length === 0 ? (
-        <Alert severity="info">Brak zapisanych odpowiedzi formularzy</Alert>
+        <Alert severity="info">{t('noCompletedMOResponses')}</Alert>
       ) : (
         <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
@@ -406,16 +408,16 @@ const FormsResponsesPage = () => {
                   ? 'rgba(255, 255, 255, 0.05)' 
                   : '#f5f5f5' 
               }}>
-                <TableCell>Data</TableCell>
-                <TableCell>Godzina</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Numer MO</TableCell>
-                <TableCell align="right">Ilość produktu</TableCell>
-                <TableCell align="right">Straty opakowania</TableCell>
-                <TableCell align="right">Straty wieczka</TableCell>
-                <TableCell align="right">Straty surowca</TableCell>
-                <TableCell>Raport planu mieszań</TableCell>
-                <TableCell align="center">Akcje</TableCell>
+                <TableCell>{t('date')}</TableCell>
+                <TableCell>{t('time')}</TableCell>
+                <TableCell>{t('email')}</TableCell>
+                <TableCell>{t('moNumber')}</TableCell>
+                <TableCell align="right">{t('productQuantity')}</TableCell>
+                <TableCell align="right">{t('packagingLoss')}</TableCell>
+                <TableCell align="right">{t('bulkLoss')}</TableCell>
+                <TableCell align="right">{t('rawMaterialLoss')}</TableCell>
+                <TableCell>{t('mixingPlanReport')}</TableCell>
+                <TableCell align="center">{t('actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -437,12 +439,12 @@ const FormsResponsesPage = () => {
                         target="_blank" 
                         rel="noopener noreferrer"
                       >
-                        {row.mixingPlanReportName || 'Pobierz'}
+                        {row.mixingPlanReportName || t('download')}
                       </Button>
                     ) : '-'}
                   </TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Edytuj odpowiedź">
+                    <Tooltip title={t('editResponse')}>
                       <IconButton 
                         size="small" 
                         color="primary"
@@ -451,7 +453,7 @@ const FormsResponsesPage = () => {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Usuń odpowiedź">
+                    <Tooltip title={t('deleteResponse')}>
                       <IconButton 
                         size="small" 
                         color="error"
@@ -474,7 +476,7 @@ const FormsResponsesPage = () => {
   const ProductionControlTable = () => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">Raporty kontroli produkcji</Typography>
+        <Typography variant="h6">{t('productionControl.title')}</Typography>
         <Box>
           <Button 
             variant="outlined" 
@@ -482,19 +484,19 @@ const FormsResponsesPage = () => {
             disabled={productionControlResponses.length === 0}
             sx={{ mr: 1 }}
           >
-            Eksportuj do CSV
+            {t('exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
             color="secondary"
             onClick={handleBack}
           >
-            Powrót
+            {t('back')}
           </Button>
         </Box>
       </Box>
       {productionControlResponses.length === 0 ? (
-        <Alert severity="info">Brak zapisanych odpowiedzi formularzy</Alert>
+        <Alert severity="info">{t('noProductionControlResponses')}</Alert>
       ) : (
         <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
@@ -504,32 +506,32 @@ const FormsResponsesPage = () => {
                   ? 'rgba(255, 255, 255, 0.05)' 
                   : '#f5f5f5' 
               }}>
-                <TableCell>Data wypełnienia</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Imię i nazwisko</TableCell>
-                <TableCell>Stanowisko</TableCell>
-                <TableCell>Manufacturing Order</TableCell>
-                <TableCell>Customer Order</TableCell>
-                <TableCell>Data rozpoczęcia</TableCell>
-                <TableCell>Godzina rozpoczęcia</TableCell>
-                <TableCell>Data zakończenia</TableCell>
-                <TableCell>Godzina zakończenia</TableCell>
-                <TableCell>Nazwa produktu</TableCell>
-                <TableCell>Numer LOT</TableCell>
-                <TableCell>Data ważności</TableCell>
-                <TableCell>Ilość</TableCell>
-                <TableCell>Numer zmiany</TableCell>
-                <TableCell>Temperatura</TableCell>
-                <TableCell>Wilgotność</TableCell>
-                <TableCell>Stan surowca</TableCell>
-                <TableCell>Stan opakowania</TableCell>
-                <TableCell>Zamknięcie opakowania</TableCell>
-                <TableCell>Ilość opakowań na palecie</TableCell>
-                <TableCell>Skany dokumentów</TableCell>
-                <TableCell>Zdjęcie produktu 1</TableCell>
-                <TableCell>Zdjęcie produktu 2</TableCell>
-                <TableCell>Zdjęcie produktu 3</TableCell>
-                <TableCell align="center">Akcje</TableCell>
+                <TableCell>{t('fillDate')}</TableCell>
+                <TableCell>{t('email')}</TableCell>
+                <TableCell>{t('name')}</TableCell>
+                <TableCell>{t('position')}</TableCell>
+                <TableCell>{t('manufacturingOrder')}</TableCell>
+                <TableCell>{t('customerOrder')}</TableCell>
+                <TableCell>{t('productionStartDate')}</TableCell>
+                <TableCell>{t('productionStartTime')}</TableCell>
+                <TableCell>{t('productionEndDate')}</TableCell>
+                <TableCell>{t('productionEndTime')}</TableCell>
+                <TableCell>{t('productName')}</TableCell>
+                <TableCell>{t('lotNumber')}</TableCell>
+                <TableCell>{t('expiryDate')}</TableCell>
+                <TableCell>{t('quantity')}</TableCell>
+                <TableCell>{t('shiftNumber')}</TableCell>
+                <TableCell>{t('temperature')}</TableCell>
+                <TableCell>{t('humidity')}</TableCell>
+                <TableCell>{t('rawMaterialPurity')}</TableCell>
+                <TableCell>{t('packagingPurity')}</TableCell>
+                <TableCell>{t('packagingClosure')}</TableCell>
+                <TableCell>{t('packagingQuantity')}</TableCell>
+                <TableCell>{t('documentScansUrl')}</TableCell>
+                <TableCell>{t('productPhoto1Url')}</TableCell>
+                <TableCell>{t('productPhoto2Url')}</TableCell>
+                <TableCell>{t('productPhoto3Url')}</TableCell>
+                <TableCell align="center">{t('actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -559,7 +561,7 @@ const FormsResponsesPage = () => {
                   <TableCell>
                     {row.documentScansUrl ? (
                       <Link href={row.documentScansUrl} target="_blank" rel="noopener noreferrer">
-                        {row.documentScansName || 'Pokaż dokument'}
+                        {row.documentScansName || t('showDocument')}
                       </Link>
                     ) : '-'}
                   </TableCell>
@@ -573,7 +575,7 @@ const FormsResponsesPage = () => {
                           onClick={() => window.open(row.productPhoto1Url, '_blank')}
                         />
                         <Link href={row.productPhoto1Url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: '12px' }}>
-                          {row.productPhoto1Name || 'Powiększ'}
+                          {row.productPhoto1Name || t('zoom')}
                         </Link>
                       </Box>
                     ) : '-'}
@@ -588,7 +590,7 @@ const FormsResponsesPage = () => {
                           onClick={() => window.open(row.productPhoto2Url, '_blank')}
                         />
                         <Link href={row.productPhoto2Url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: '12px' }}>
-                          {row.productPhoto2Name || 'Powiększ'}
+                          {row.productPhoto2Name || t('zoom')}
                         </Link>
                       </Box>
                     ) : '-'}
@@ -603,13 +605,13 @@ const FormsResponsesPage = () => {
                           onClick={() => window.open(row.productPhoto3Url, '_blank')}
                         />
                         <Link href={row.productPhoto3Url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: '12px' }}>
-                          {row.productPhoto3Name || 'Powiększ'}
+                          {row.productPhoto3Name || t('zoom')}
                         </Link>
                       </Box>
                     ) : '-'}
                   </TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Edytuj odpowiedź">
+                    <Tooltip title={t('editResponse')}>
                       <IconButton 
                         size="small" 
                         color="primary"
@@ -618,7 +620,7 @@ const FormsResponsesPage = () => {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Usuń odpowiedź">
+                    <Tooltip title={t('deleteResponse')}>
                       <IconButton 
                         size="small" 
                         color="error"
@@ -647,7 +649,7 @@ const FormsResponsesPage = () => {
     return (
       <>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6">Raporty zmian produkcyjnych</Typography>
+          <Typography variant="h6">{t('productionShift.title')}</Typography>
           <Box>
             <Button 
               variant="outlined" 
@@ -655,7 +657,7 @@ const FormsResponsesPage = () => {
               disabled={filteredShiftResponses.length === 0}
               sx={{ mr: 1 }}
             >
-              Eksportuj do CSV
+              {t('exportToCSV')}
             </Button>
             <Button 
               variant="outlined"
@@ -663,7 +665,7 @@ const FormsResponsesPage = () => {
               onClick={handleBack}
               sx={{ mr: 1 }}
             >
-              Powrót
+              {t('back')}
             </Button>
             <Button
               variant="outlined"
@@ -671,7 +673,7 @@ const FormsResponsesPage = () => {
               onClick={toggleFilters}
               startIcon={<FilterListIcon />}
             >
-              Filtry
+              {t('filters')}
             </Button>
           </Box>
         </Box>
@@ -681,21 +683,21 @@ const FormsResponsesPage = () => {
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>
-                  Filtry raportów zmian produkcyjnych
+                  {t('productionShiftFilters')}
                 </Typography>
               </Grid>
               
               <Grid item xs={12} sm={6} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Osoba odpowiedzialna</InputLabel>
+                  <InputLabel>{t('responsiblePerson')}</InputLabel>
                   <Select
                     name="responsiblePerson"
                     value={shiftFilters.responsiblePerson}
                     onChange={handleFilterChange}
-                    label="Osoba odpowiedzialna"
+                    label={t('responsiblePerson')}
                     displayEmpty
                   >
-                    <MenuItem value="">Wszystkie</MenuItem>
+                    <MenuItem value="">{t('all')}</MenuItem>
                     {uniqueResponsiblePersons.map(person => (
                       <MenuItem key={person} value={person}>{person}</MenuItem>
                     ))}
@@ -705,15 +707,15 @@ const FormsResponsesPage = () => {
               
               <Grid item xs={12} sm={6} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Rodzaj zmiany</InputLabel>
+                  <InputLabel>{t('shiftType')}</InputLabel>
                   <Select
                     name="shiftType"
                     value={shiftFilters.shiftType}
                     onChange={handleFilterChange}
-                    label="Rodzaj zmiany"
+                    label={t('shiftType')}
                     displayEmpty
                   >
-                    <MenuItem value="">Wszystkie</MenuItem>
+                    <MenuItem value="">{t('all')}</MenuItem>
                     {uniqueShiftTypes.map(type => (
                       <MenuItem key={type} value={type}>{type}</MenuItem>
                     ))}
@@ -723,15 +725,15 @@ const FormsResponsesPage = () => {
               
               <Grid item xs={12} sm={6} md={3}>
                 <FormControl fullWidth size="small">
-                  <InputLabel>Produkt</InputLabel>
+                  <InputLabel>{t('product')}</InputLabel>
                   <Select
                     name="product"
                     value={shiftFilters.product}
                     onChange={handleFilterChange}
-                    label="Produkt"
+                    label={t('product')}
                     displayEmpty
                   >
-                    <MenuItem value="">Wszystkie</MenuItem>
+                    <MenuItem value="">{t('all')}</MenuItem>
                     {uniqueProducts.map(product => (
                       <MenuItem key={product} value={product}>{product}</MenuItem>
                     ))}
@@ -743,7 +745,7 @@ const FormsResponsesPage = () => {
                 <TextField
                   fullWidth
                   size="small"
-                  label="Numer MO"
+                  label={t('moNumber')}
                   name="moNumber"
                   value={shiftFilters.moNumber}
                   onChange={handleFilterChange}
@@ -765,7 +767,7 @@ const FormsResponsesPage = () => {
                     onClick={clearFilters}
                     size="small"
                   >
-                    Wyczyść filtry
+                    {t('clearFilters')}
                   </Button>
                 </Box>
               </Grid>
@@ -775,12 +777,12 @@ const FormsResponsesPage = () => {
         
         <Box sx={{ mb: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            Znaleziono {filteredShiftResponses.length} z {productionShiftResponses.length} raportów
+            {t('found')} {filteredShiftResponses.length} {t('of')} {productionShiftResponses.length} {t('reports')}
           </Typography>
         </Box>
         
         {filteredShiftResponses.length === 0 ? (
-          <Alert severity="info">Brak zapisanych odpowiedzi formularzy lub brak wyników dla wybranych filtrów</Alert>
+          <Alert severity="info">{t('noProductionShiftResponses')}</Alert>
         ) : (
           <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
             <Table size="small" stickyHeader>
@@ -790,28 +792,28 @@ const FormsResponsesPage = () => {
                     ? 'rgba(255, 255, 255, 0.05)' 
                     : '#f5f5f5' 
                 }}>
-                  <TableCell>Data</TableCell>
-                  <TableCell>Godzina</TableCell>
-                  <TableCell>Email</TableCell>
-                  <TableCell>Osoba odpowiedzialna</TableCell>
-                  <TableCell>Rodzaj zmiany</TableCell>
-                  <TableCell>Produkt</TableCell>
-                  <TableCell>Numer MO</TableCell>
-                  <TableCell align="right">Ilość produkcji</TableCell>
-                  <TableCell>Pracownicy</TableCell>
-                  <TableCell>Nadruk doypack/tub 1</TableCell>
-                  <TableCell align="right">Ilość nadruku 1</TableCell>
-                  <TableCell align="right">Straty nadruku 1</TableCell>
-                  <TableCell>Nadruk doypack/tub 2</TableCell>
-                  <TableCell align="right">Ilość nadruku 2</TableCell>
-                  <TableCell align="right">Straty nadruku 2</TableCell>
-                  <TableCell>Nadruk doypack/tub 3</TableCell>
-                  <TableCell align="right">Ilość nadruku 3</TableCell>
-                  <TableCell align="right">Straty nadruku 3</TableCell>
-                  <TableCell>Straty surowca</TableCell>
-                  <TableCell>Inne czynności</TableCell>
-                  <TableCell>Awarie maszyn</TableCell>
-                  <TableCell align="center">Akcje</TableCell>
+                  <TableCell>{t('date')}</TableCell>
+                  <TableCell>{t('time')}</TableCell>
+                  <TableCell>{t('email')}</TableCell>
+                  <TableCell>{t('responsiblePerson')}</TableCell>
+                  <TableCell>{t('shiftType')}</TableCell>
+                  <TableCell>{t('product')}</TableCell>
+                  <TableCell>{t('moNumber')}</TableCell>
+                  <TableCell align="right">{t('productionQuantity')}</TableCell>
+                  <TableCell>{t('shiftWorkers')}</TableCell>
+                  <TableCell>{t('firstProduct')}</TableCell>
+                  <TableCell align="right">{t('firstProductQuantity')}</TableCell>
+                  <TableCell align="right">{t('firstProductLoss')}</TableCell>
+                  <TableCell>{t('secondProduct')}</TableCell>
+                  <TableCell align="right">{t('secondProductQuantity')}</TableCell>
+                  <TableCell align="right">{t('secondProductLoss')}</TableCell>
+                  <TableCell>{t('thirdProduct')}</TableCell>
+                  <TableCell align="right">{t('thirdProductQuantity')}</TableCell>
+                  <TableCell align="right">{t('thirdProductLoss')}</TableCell>
+                  <TableCell>{t('rawMaterialLoss')}</TableCell>
+                  <TableCell>{t('otherActivities')}</TableCell>
+                  <TableCell>{t('machineIssues')}</TableCell>
+                  <TableCell align="center">{t('actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -839,7 +841,7 @@ const FormsResponsesPage = () => {
                     <TableCell>{row.otherActivities}</TableCell>
                     <TableCell>{row.machineIssues}</TableCell>
                     <TableCell align="center">
-                      <Tooltip title="Edytuj odpowiedź">
+                      <Tooltip title={t('editResponse')}>
                         <IconButton 
                           size="small" 
                           color="primary"
@@ -848,7 +850,7 @@ const FormsResponsesPage = () => {
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Usuń odpowiedź">
+                      <Tooltip title={t('deleteResponse')}>
                         <IconButton 
                           size="small" 
                           color="error"
@@ -872,16 +874,16 @@ const FormsResponsesPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" gutterBottom>
-          Odpowiedzi formularzy produkcyjnych
+          {t('formsResponsesTitle')}
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Przeglądaj dane z wypełnionych formularzy produkcyjnych
+          {t('formsResponsesDescription')}
         </Typography>
       </Box>
       
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Błąd podczas ładowania danych: {error}
+          {t('errorLoadingData')}: {error}
         </Alert>
       )}
       
@@ -893,9 +895,9 @@ const FormsResponsesPage = () => {
           textColor="primary"
           variant="fullWidth"
         >
-          <Tab label="Raporty zakończonych MO" />
-          <Tab label="Raporty kontroli produkcji" />
-          <Tab label="Raporty zmian produkcyjnych" />
+          <Tab label={t('completedMO.tab')} />
+          <Tab label={t('productionControl.tab')} />
+          <Tab label={t('productionShift.tab')} />
         </Tabs>
       </Paper>
       
@@ -916,18 +918,18 @@ const FormsResponsesPage = () => {
         open={deleteConfirmOpen}
         onClose={handleDeleteCancel}
       >
-        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogTitle>{t('confirmDeleteTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć tę odpowiedź formularza? Ta operacja jest nieodwracalna.
+            {t('confirmDeleteMessage')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDeleteCancel} color="primary">
-            Anuluj
+            {t('cancel')}
           </Button>
           <Button onClick={handleDeleteConfirm} color="error" autoFocus>
-            Usuń
+            {t('delete')}
           </Button>
         </DialogActions>
       </Dialog>

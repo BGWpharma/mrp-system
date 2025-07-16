@@ -337,10 +337,7 @@ function App() {
                     <Route path="/crm/opportunities/:opportunityId/edit" element={<PrivateLayout><OpportunityFormPage /></PrivateLayout>} />
                     
                     {/* Interakcje zakupowe w sekcji Magazyn */}
-                    <Route path="/inventory/interactions" element={<PrivateLayout><InteractionsPage /></PrivateLayout>} />
-                    <Route path="/inventory/interactions/new" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
-                    <Route path="/inventory/interactions/:interactionId" element={<PrivateLayout><InteractionDetailsPage /></PrivateLayout>} />
-                    <Route path="/inventory/interactions/:interactionId/edit" element={<PrivateLayout><InteractionFormPage /></PrivateLayout>} />
+
                     
                     {/* Powiadomienia */}
                     <Route path="/notifications/history" element={<PrivateLayout><NotificationsHistoryPage /></PrivateLayout>} />

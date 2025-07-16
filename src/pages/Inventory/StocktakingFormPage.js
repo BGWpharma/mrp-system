@@ -20,12 +20,14 @@ import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-materia
 import { createStocktaking, getStocktakingById, updateStocktaking, getAllWarehouses } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const StocktakingFormPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   
   const [stocktaking, setStocktaking] = useState({
     name: '',
@@ -57,7 +59,7 @@ const StocktakingFormPage = () => {
       setWarehouses(warehousesData);
     } catch (error) {
       console.error('Błąd podczas pobierania magazynów:', error);
-      showError('Nie udało się pobrać listy magazynów');
+      showError(t('stocktaking.warehousesLoadError'));
     }
   };
 
@@ -68,7 +70,7 @@ const StocktakingFormPage = () => {
       
       // Sprawdź, czy można edytować inwentaryzację
       if (stocktakingData.status === 'Zakończona') {
-        showError('Nie można edytować zakończonej inwentaryzacji');
+        showError(t('stocktaking.cannotEditCompleted'));
         navigate('/inventory/stocktaking');
         return;
       }
@@ -76,7 +78,7 @@ const StocktakingFormPage = () => {
       setStocktaking(stocktakingData);
     } catch (error) {
       console.error('Błąd podczas pobierania danych inwentaryzacji:', error);
-      setError('Nie udało się pobrać danych inwentaryzacji');
+      setError(t('stocktaking.loadError'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +94,7 @@ const StocktakingFormPage = () => {
     
     // Walidacja
     if (!stocktaking.name) {
-      showError('Nazwa inwentaryzacji jest wymagana');
+      showError(t('stocktaking.nameRequired'));
       return;
     }
     
@@ -102,11 +104,11 @@ const StocktakingFormPage = () => {
       if (id && id !== 'new') {
         // Aktualizacja istniejącej inwentaryzacji
         await updateStocktaking(id, stocktaking, currentUser.uid);
-        showSuccess('Inwentaryzacja została zaktualizowana');
+        showSuccess(t('stocktaking.updateSuccess'));
       } else {
         // Tworzenie nowej inwentaryzacji
         const newStocktaking = await createStocktaking(stocktaking, currentUser.uid);
-        showSuccess('Inwentaryzacja została utworzona');
+        showSuccess(t('stocktaking.createSuccess'));
         navigate(`/inventory/stocktaking/${newStocktaking.id}`);
         return;
       }
@@ -114,7 +116,7 @@ const StocktakingFormPage = () => {
       navigate('/inventory/stocktaking');
     } catch (error) {
       console.error('Błąd podczas zapisywania inwentaryzacji:', error);
-      showError(`Błąd podczas zapisywania: ${error.message}`);
+      showError(t('stocktaking.saveError', { message: error.message }));
     } finally {
       setSaving(false);
     }
@@ -143,10 +145,10 @@ const StocktakingFormPage = () => {
             onClick={handleCancel}
             sx={{ mr: 2 }}
           >
-            Powrót
+            {t('stocktaking.back')}
           </Button>
           <Typography variant="h5" component="h1">
-            {id && id !== 'new' ? 'Edytuj inwentaryzację' : 'Nowa inwentaryzacja'}
+            {id && id !== 'new' ? t('stocktaking.editStocktaking') : t('stocktaking.newStocktaking')}
           </Typography>
         </Box>
         
@@ -158,7 +160,7 @@ const StocktakingFormPage = () => {
               <TextField
                 fullWidth
                 required
-                label="Nazwa inwentaryzacji"
+                label={t('stocktaking.name')}
                 name="name"
                 value={stocktaking.name}
                 onChange={handleChange}
@@ -167,16 +169,16 @@ const StocktakingFormPage = () => {
             
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel id="location-label">Lokalizacja</InputLabel>
+                <InputLabel id="location-label">{t('stocktaking.location')}</InputLabel>
                 <Select
                   labelId="location-label"
                   name="location"
                   value={stocktaking.location || ''}
                   onChange={handleChange}
-                  label="Lokalizacja"
+                  label={t('stocktaking.location')}
                 >
                   <MenuItem value="">
-                    <em>Wszystkie lokalizacje</em>
+                    <em>{t('stocktaking.allLocations')}</em>
                   </MenuItem>
                   {warehouses.map(warehouse => (
                     <MenuItem key={warehouse.id} value={warehouse.name}>
@@ -190,7 +192,7 @@ const StocktakingFormPage = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Data planowana"
+                label={t('stocktaking.scheduledDate')}
                 name="scheduledDate"
                 type="date"
                 value={stocktaking.scheduledDate || new Date().toISOString().split('T')[0]}
@@ -202,7 +204,7 @@ const StocktakingFormPage = () => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Opis"
+                label={t('stocktaking.description')}
                 name="description"
                 value={stocktaking.description || ''}
                 onChange={handleChange}
@@ -214,7 +216,7 @@ const StocktakingFormPage = () => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Uwagi"
+                label={t('stocktaking.notes')}
                 name="notes"
                 value={stocktaking.notes || ''}
                 onChange={handleChange}
@@ -226,16 +228,16 @@ const StocktakingFormPage = () => {
             {id && id !== 'new' && (
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
-                  <InputLabel id="status-label">Status</InputLabel>
+                  <InputLabel id="status-label">{t('stocktaking.status')}</InputLabel>
                   <Select
                     labelId="status-label"
                     name="status"
                     value={stocktaking.status}
                     onChange={handleChange}
-                    label="Status"
+                    label={t('stocktaking.status')}
                   >
-                    <MenuItem value="Otwarta">Otwarta</MenuItem>
-                    <MenuItem value="W trakcie">W trakcie</MenuItem>
+                                         <MenuItem value="Otwarta">{t('stocktaking.statusValues.otwarta')}</MenuItem>
+                     <MenuItem value="W trakcie">{t('stocktaking.statusValues.wtrakcie')}</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -250,7 +252,7 @@ const StocktakingFormPage = () => {
               onClick={handleCancel}
               sx={{ mr: 2 }}
             >
-              Anuluj
+              {t('stocktaking.cancel')}
             </Button>
             <Button
               type="submit"
@@ -259,7 +261,7 @@ const StocktakingFormPage = () => {
               startIcon={<SaveIcon />}
               disabled={saving}
             >
-              {saving ? <CircularProgress size={24} /> : 'Zapisz'}
+              {saving ? <CircularProgress size={24} /> : t('stocktaking.save')}
             </Button>
           </Box>
         </form>

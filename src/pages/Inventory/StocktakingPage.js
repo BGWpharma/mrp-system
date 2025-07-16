@@ -38,6 +38,7 @@ import { getAllStocktakings, deleteStocktaking } from '../../services/inventoryS
 import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate } from '../../utils/formatters';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -52,6 +53,7 @@ const StocktakingPage = () => {
   const [stocktakingToDelete, setStocktakingToDelete] = useState(null);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const [userNames, setUserNames] = useState({});
 
   useEffect(() => {
@@ -77,7 +79,7 @@ const StocktakingPage = () => {
       fetchUserNames(userIds);
     } catch (error) {
       console.error('Błąd podczas pobierania inwentaryzacji:', error);
-      setError('Wystąpił błąd podczas ładowania inwentaryzacji.');
+      setError(t('stocktaking.loadError'));
     } finally {
       setLoading(false);
     }
@@ -101,7 +103,7 @@ const StocktakingPage = () => {
   
   // Funkcja zwracająca nazwę użytkownika zamiast ID
   const getUserName = (userId) => {
-    return userNames[userId] || userId || 'System';
+    return userNames[userId] || userId || t('stocktaking.system');
   };
 
   const filterStocktakings = () => {
@@ -137,7 +139,8 @@ const StocktakingPage = () => {
         color = 'default';
     }
     
-    return <Chip label={status} color={color} size="small" />;
+    const translatedStatus = t(`stocktaking.statusValues.${status.toLowerCase().replace(' ', '')}`, status);
+    return <Chip label={translatedStatus} color={color} size="small" />;
   };
 
   const handleDeleteStocktaking = (stocktaking) => {
@@ -150,7 +153,7 @@ const StocktakingPage = () => {
     
     try {
       await deleteStocktaking(stocktakingToDelete.id);
-      showSuccess('Inwentaryzacja została usunięta');
+      showSuccess(t('stocktaking.deleteSuccess'));
       setDeleteDialogOpen(false);
       setStocktakingToDelete(null);
       
@@ -158,7 +161,7 @@ const StocktakingPage = () => {
       fetchStocktakings();
     } catch (error) {
       console.error('Błąd podczas usuwania inwentaryzacji:', error);
-      showError(`Błąd podczas usuwania: ${error.message}`);
+      showError(t('stocktaking.deleteError', { message: error.message }));
     }
   };
 
@@ -171,7 +174,7 @@ const StocktakingPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
-          Inwentaryzacja
+          {t('stocktaking.title')}
         </Typography>
         <Button
           variant="contained"
@@ -180,7 +183,7 @@ const StocktakingPage = () => {
           component={Link}
           to="/inventory/stocktaking/new"
         >
-          Nowa inwentaryzacja
+          {t('stocktaking.newStocktaking')}
         </Button>
       </Box>
       
@@ -190,7 +193,7 @@ const StocktakingPage = () => {
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Szukaj inwentaryzacji..."
+              placeholder={t('stocktaking.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -213,19 +216,19 @@ const StocktakingPage = () => {
         <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
       ) : filteredStocktakings.length === 0 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Nie znaleziono żadnych inwentaryzacji. Możesz utworzyć nową klikając przycisk "Nowa inwentaryzacja".
+          {t('stocktaking.noStocktakingsFound')}
         </Alert>
       ) : (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Nazwa</TableCell>
-                <TableCell>Lokalizacja</TableCell>
-                <TableCell>Data utworzenia</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Utworzony przez</TableCell>
-                <TableCell align="center">Akcje</TableCell>
+                <TableCell>{t('stocktaking.name')}</TableCell>
+                <TableCell>{t('stocktaking.location')}</TableCell>
+                <TableCell>{t('stocktaking.createdAt')}</TableCell>
+                <TableCell>{t('stocktaking.status')}</TableCell>
+                <TableCell>{t('stocktaking.createdBy')}</TableCell>
+                <TableCell align="center">{t('stocktaking.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -276,18 +279,16 @@ const StocktakingPage = () => {
       
       {/* Dialog potwierdzenia usunięcia */}
       <Dialog open={deleteDialogOpen} onClose={cancelDeleteStocktaking}>
-        <DialogTitle>Potwierdź usunięcie inwentaryzacji</DialogTitle>
+        <DialogTitle>{t('stocktaking.deleteConfirmTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć inwentaryzację "{stocktakingToDelete?.name}"? 
-            Ta operacja jest nieodwracalna i usunie również wszystkie powiązane elementy inwentaryzacji.
+            {t('stocktaking.deleteConfirmText', { name: stocktakingToDelete?.name })}
+            {t('stocktaking.deleteConfirmWarning')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={cancelDeleteStocktaking}>Anuluj</Button>
-          <Button onClick={confirmDeleteStocktaking} color="error">
-            Usuń
-          </Button>
+          <Button onClick={cancelDeleteStocktaking}>{t('stocktaking.deleteCancel')}</Button>
+          <Button onClick={confirmDeleteStocktaking} color="error">{t('stocktaking.deleteConfirm')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

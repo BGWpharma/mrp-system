@@ -9,8 +9,10 @@ import {
   List as ListIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const FormsPage = () => {
+  const { t } = useTranslation();
   // URL do strony Google Sites
   const googleSiteUrl = 'https://sites.google.com/bgwpharma.com/brygadzisci/g%C5%82%C3%B3wna';
   
@@ -18,10 +20,10 @@ const FormsPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" gutterBottom>
-          Formularze produkcyjne
+          {t('productionForms.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Formularze, dokumenty i narzędzia dostępne dla brygadzistów i operatorów produkcji
+          {t('productionForms.description')}
         </Typography>
       </Box>
       
@@ -31,10 +33,10 @@ const FormsPage = () => {
             <CardContent sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <AssignmentIcon sx={{ mr: 1 }} />
-                Raport - Skończone MO
+                {t('productionForms.completedMO.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Formularz do raportowania zakończonych zadań produkcyjnych (MO). Wypełnij po zakończeniu zlecenia produkcyjnego.
+                {t('productionForms.completedMO.description')}
               </Typography>
             </CardContent>
             <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -47,7 +49,7 @@ const FormsPage = () => {
                 fullWidth
                 sx={{ mb: 1 }}
               >
-                Wypełnij formularz
+                {t('productionForms.fillForm')}
               </Button>
               <Button 
                 startIcon={<ListIcon />} 
@@ -57,7 +59,7 @@ const FormsPage = () => {
                 variant="outlined"
                 fullWidth
               >
-                Wyświetl odpowiedzi
+                {t('productionForms.viewResponses')}
               </Button>
             </CardActions>
           </Card>
@@ -68,10 +70,10 @@ const FormsPage = () => {
             <CardContent sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <FactCheckIcon sx={{ mr: 1 }} />
-                Raport - Kontrola Produkcji
+                {t('productionForms.productionControl.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Formularz do raportowania kontroli jakości produkcji. Zawiera szczegółowe informacje o przebiegu procesu produkcyjnego i warunkach atmosferycznych.
+                {t('productionForms.productionControl.description')}
               </Typography>
             </CardContent>
             <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -84,7 +86,7 @@ const FormsPage = () => {
                 fullWidth
                 sx={{ mb: 1 }}
               >
-                Wypełnij formularz
+                {t('productionForms.fillForm')}
               </Button>
               <Button 
                 startIcon={<ListIcon />} 
@@ -94,7 +96,7 @@ const FormsPage = () => {
                 variant="outlined"
                 fullWidth
               >
-                Wyświetl odpowiedzi
+                {t('productionForms.viewResponses')}
               </Button>
             </CardActions>
           </Card>
@@ -105,10 +107,10 @@ const FormsPage = () => {
             <CardContent sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <SwapVertIcon sx={{ mr: 1 }} />
-                Raport - Zmiana Produkcji
+                {t('productionForms.productionShift.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Formularz do raportowania pracy na zmianie produkcyjnej. Zawiera informacje o pracownikach, wykonanych produktach i innych czynnościach.
+                {t('productionForms.productionShift.description')}
               </Typography>
             </CardContent>
             <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -121,7 +123,7 @@ const FormsPage = () => {
                 fullWidth
                 sx={{ mb: 1 }}
               >
-                Wypełnij formularz
+                {t('productionForms.fillForm')}
               </Button>
               <Button 
                 startIcon={<ListIcon />} 
@@ -131,7 +133,7 @@ const FormsPage = () => {
                 variant="outlined"
                 fullWidth
               >
-                Wyświetl odpowiedzi
+                {t('productionForms.viewResponses')}
               </Button>
             </CardActions>
           </Card>

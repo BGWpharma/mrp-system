@@ -52,6 +52,7 @@ import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierP
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
@@ -83,6 +84,7 @@ const ItemDetailsPage = () => {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   const [item, setItem] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -123,7 +125,7 @@ const ItemDetailsPage = () => {
       const names = await getUsersDisplayNames(uniqueUserIds);
       setUserNames(names);
     } catch (error) {
-      console.error("Błąd podczas pobierania danych użytkowników:", error);
+      console.error(t('inventory.itemDetails.errorFetchingUserData'), error);
     }
   };
 
@@ -139,7 +141,7 @@ const ItemDetailsPage = () => {
             const parentPackageItem = await getInventoryItemById(itemData.parentPackageItemId);
             itemData.parentPackageItem = parentPackageItem;
           } catch (error) {
-            console.error('Nie udało się pobrać danych powiązanego kartonu:', error);
+            console.error(t('inventory.itemDetails.errorFetchingLinkedPackage'), error);
             // Jeśli nie można pobrać kartonu, usuń powiązanie aby uniknąć błędów
             itemData.parentPackageItem = null;
           }
@@ -189,7 +191,7 @@ const ItemDetailsPage = () => {
         // Pobierz oczekiwane zamówienia
         fetchAwaitingOrders(id);
       } catch (error) {
-        showError('Błąd podczas pobierania danych pozycji: ' + error.message);
+        showError(t('inventory.itemDetails.errorFetchingData') + ': ' + error.message);
         console.error('Error fetching item details:', error);
       } finally {
         setLoading(false);
@@ -462,10 +464,10 @@ const ItemDetailsPage = () => {
       const updatedItem = await getInventoryItemById(id);
       setItem(updatedItem);
       
-      showSuccess(`Odświeżono ilość towaru. Aktualny stan: ${formatQuantity(newQuantity)} ${updatedItem.unit}`);
+      showSuccess(t('inventory.itemDetails.quantityRefreshed', { quantity: formatQuantity(newQuantity), unit: updatedItem.unit }));
     } catch (error) {
-      console.error('Błąd podczas odświeżania ilości:', error);
-      showError('Wystąpił błąd podczas odświeżania ilości: ' + error.message);
+      console.error(t('inventory.itemDetails.errorRefreshingQuantity'), error);
+      showError(t('inventory.itemDetails.errorRefreshingQuantityMessage') + ': ' + error.message);
     } finally {
       setRefreshingQuantity(false);
     }
@@ -478,21 +480,21 @@ const ItemDetailsPage = () => {
       const awaitingOrdersData = await getAwaitingOrdersForInventoryItem(itemId);
       setAwaitingOrders(awaitingOrdersData);
     } catch (error) {
-      console.error('Błąd podczas pobierania oczekiwanych zamówień:', error);
-      showError('Nie udało się pobrać oczekujących zamówień: ' + error.message);
+      console.error(t('inventory.itemDetails.errorFetchingAwaitingOrders'), error);
+      showError(t('inventory.itemDetails.errorFetchingAwaitingOrdersMessage') + ': ' + error.message);
     } finally {
       setAwaitingOrdersLoading(false);
     }
   };
 
   if (loading) {
-    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
+    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>{t('common.loading')}</Container>;
   }
 
   if (!item) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h5">Pozycja nie została znaleziona</Typography>
+        <Typography variant="h5">{t('inventory.itemDetails.itemNotFound')}</Typography>
         <Button 
           variant="contained" 
           component={Link} 
@@ -500,7 +502,7 @@ const ItemDetailsPage = () => {
           startIcon={<ArrowBackIcon />}
           sx={{ mt: 2 }}
         >
-          Powrót do magazynu
+          {t('inventory.itemDetails.backToInventory')}
         </Button>
       </Container>
     );
@@ -515,10 +517,10 @@ const ItemDetailsPage = () => {
           variant="outlined"
           sx={{ alignSelf: isMobile ? 'stretch' : 'flex-start' }}
         >
-          Powrót
+          {t('common.back')}
         </Button>
         <Typography variant="h5" fontWeight="bold" align={isMobile ? "center" : "left"}>
-          Szczegóły pozycji magazynowej
+          {t('inventory.itemDetails.title')}
         </Typography>
         <Box sx={{ 
           display: 'flex', 
@@ -526,7 +528,7 @@ const ItemDetailsPage = () => {
           gap: isMobile ? 1 : 0,
           width: isMobile ? '100%' : 'auto'
         }}>
-          <Tooltip title="Odśwież ilość towaru">
+          <Tooltip title={t('inventory.itemDetails.refreshQuantity')}>
             <Button 
               variant="outlined" 
               onClick={handleRefreshQuantity}
@@ -534,7 +536,7 @@ const ItemDetailsPage = () => {
               sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0, width: '100%' }}
               disabled={refreshingQuantity}
             >
-              Odśwież ilość
+              {t('inventory.itemDetails.refreshQuantityButton')}
             </Button>
           </Tooltip>
           <Button 
@@ -544,7 +546,7 @@ const ItemDetailsPage = () => {
             startIcon={<EditIcon />}
             sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0, width: '100%' }}
           >
-            Edytuj
+            {t('common.edit')}
           </Button>
           <Button 
             variant="outlined" 
@@ -553,7 +555,7 @@ const ItemDetailsPage = () => {
             startIcon={<ViewListIcon />}
             sx={{ mr: isMobile ? 0 : 1, mb: isMobile ? 1 : 0, width: '100%' }}
           >
-            Zarządzaj partiami
+            {t('inventory.itemDetails.manageBatches')}
           </Button>
           <Button 
             variant="outlined"
@@ -565,7 +567,7 @@ const ItemDetailsPage = () => {
               whiteSpace: 'nowrap'
             }}
           >
-            Drukuj etykietę
+            {t('inventory.itemDetails.printLabel')}
           </Button>
         </Box>
       </Box>
@@ -578,7 +580,7 @@ const ItemDetailsPage = () => {
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Chip 
-              label={item.category || 'Brak kategorii'} 
+              label={item.category || t('inventory.itemDetails.noCategory')} 
               color="primary" 
               sx={{ mr: 2, fontWeight: 'medium' }}
             />
@@ -617,7 +619,7 @@ const ItemDetailsPage = () => {
               {item.unit}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-                Stan magazynowy
+                {t('inventory.itemDetails.stockLevel')}
               </Typography>
           </Box>
 
@@ -628,10 +630,10 @@ const ItemDetailsPage = () => {
             minWidth: '150px'
           }}>
             <Typography variant="h6" fontWeight="bold">
-              {item.location || 'Nie określono'}
+              {item.location || t('inventory.itemDetails.notSpecified')}
               </Typography>
             <Typography variant="body2" color="text.secondary">
-                Lokalizacja
+                {t('inventory.itemDetails.location')}
               </Typography>
           </Box>
 
@@ -642,10 +644,10 @@ const ItemDetailsPage = () => {
             minWidth: '150px'
           }}>
             <Typography variant="h6" fontWeight="bold">
-              {item.minStock || 'Nie określono'}
+              {item.minStock || t('inventory.itemDetails.notSpecified')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Min. ilość
+              {t('inventory.itemDetails.minQuantity')}
             </Typography>
           </Box>
 
@@ -656,10 +658,10 @@ const ItemDetailsPage = () => {
             minWidth: '150px'
           }}>
             <Typography variant="h6" fontWeight="bold">
-              {item.maxStock || 'Nie określono'}
+              {item.maxStock || t('inventory.itemDetails.notSpecified')}
               </Typography>
             <Typography variant="body2" color="text.secondary">
-              Maks. ilość
+              {t('inventory.itemDetails.maxQuantity')}
               </Typography>
           </Box>
 
@@ -673,7 +675,7 @@ const ItemDetailsPage = () => {
                 {formatDate(item.updatedAt)}
               </Typography>
             <Typography variant="body2" color="text.secondary">
-              Ostatnia aktualizacja
+              {t('inventory.itemDetails.lastUpdate')}
             </Typography>
           </Box>
         </Box>
@@ -700,7 +702,7 @@ const ItemDetailsPage = () => {
               px: 3 
             }}
           >
-            Przyjmij
+            {t('inventory.itemDetails.receive')}
           </Button>
           <Button 
             variant="contained" 
@@ -714,7 +716,7 @@ const ItemDetailsPage = () => {
               px: 3 
             }}
           >
-            Wydaj
+            {t('inventory.itemDetails.issue')}
           </Button>
         </Box>
       </Paper>
@@ -757,11 +759,11 @@ const ItemDetailsPage = () => {
             textColor="primary"
             indicatorColor="primary"
           >
-            <Tab label="Szczegółowe informacje" id="item-tab-0" sx={{ fontWeight: 'medium', py: 2 }} />
-            <Tab label="Partie i daty ważności" id="item-tab-1" sx={{ fontWeight: 'medium', py: 2 }} />
-            <Tab label="Historia transakcji" id="item-tab-2" sx={{ fontWeight: 'medium', py: 2 }} />
-            <Tab label="Rezerwacje" id="item-tab-3" sx={{ fontWeight: 'medium', py: 2 }} />
-            <Tab label="Oczekiwane" id="item-tab-4" sx={{ fontWeight: 'medium', py: 2 }} icon={<ClockIcon fontSize="small" sx={{ mr: 1 }} />} iconPosition="start" />
+            <Tab label={t('inventory.itemDetails.tabs.detailedInfo')} id="item-tab-0" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label={t('inventory.itemDetails.tabs.batchesAndExpiry')} id="item-tab-1" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label={t('inventory.itemDetails.tabs.transactionHistory')} id="item-tab-2" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label={t('inventory.itemDetails.tabs.reservations')} id="item-tab-3" sx={{ fontWeight: 'medium', py: 2 }} />
+            <Tab label={t('inventory.itemDetails.tabs.awaiting')} id="item-tab-4" sx={{ fontWeight: 'medium', py: 2 }} icon={<ClockIcon fontSize="small" sx={{ mr: 1 }} />} iconPosition="start" />
           </Tabs>
         </Box>
 
@@ -771,43 +773,43 @@ const ItemDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
-                  Parametry magazynowe
+                  {t('inventory.itemDetails.warehouseParameters')}
                 </Typography>
                 <TableContainer>
                   <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
                     <TableBody>
                       <TableRow>
-                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Numer CAS</TableCell>
-                        <TableCell>{item.casNumber || 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>{t('inventory.itemDetails.casNumber')}</TableCell>
+                        <TableCell>{item.casNumber || t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Kod kreskowy</TableCell>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>{t('inventory.itemDetails.barcode')}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
-                          {item.barcode || 'Nie określono'}
+                          {item.barcode || t('inventory.itemDetails.notSpecified')}
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Minimalny stan</TableCell>
-                        <TableCell>{item.minStock ? `${formatQuantity(item.minStock)} ${item.unit}` : 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>{t('inventory.itemDetails.minimumStock')}</TableCell>
+                        <TableCell>{item.minStock ? `${formatQuantity(item.minStock)} ${item.unit}` : t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Maksymalny stan</TableCell>
-                        <TableCell>{item.maxStock ? `${formatQuantity(item.maxStock)} ${item.unit}` : 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.maximumStock')}</TableCell>
+                        <TableCell>{item.maxStock ? `${formatQuantity(item.maxStock)} ${item.unit}` : t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość kartonów na paletę</TableCell>
-                        <TableCell>{item.boxesPerPallet ? `${formatQuantity(item.boxesPerPallet)} szt.` : 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.boxesPerPallet')}</TableCell>
+                        <TableCell>{item.boxesPerPallet ? `${formatQuantity(item.boxesPerPallet)} ${t('common.pieces')}` : t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Ilość produktu per karton</TableCell>
-                        <TableCell>{item.itemsPerBox ? `${formatQuantity(item.itemsPerBox)} ${item.unit}` : 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.itemsPerBox')}</TableCell>
+                        <TableCell>{item.itemsPerBox ? `${formatQuantity(item.itemsPerBox)} ${item.unit}` : t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Waga</TableCell>
-                        <TableCell>{item.weight ? `${formatQuantity(item.weight)} kg` : 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.weight')}</TableCell>
+                        <TableCell>{item.weight ? `${formatQuantity(item.weight)} kg` : t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Powiązany karton</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.linkedPackage')}</TableCell>
                         <TableCell>
                           {item.parentPackageItem ? (
                             <Typography 
@@ -822,7 +824,7 @@ const ItemDetailsPage = () => {
                             >
                               {item.parentPackageItem.name}
                             </Typography>
-                          ) : 'Nie określono'}
+                          ) : t('inventory.itemDetails.notSpecified')}
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -833,30 +835,30 @@ const ItemDetailsPage = () => {
               {supplierPrices.length > 0 && (
                 <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
                   <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
-                    Dostawcy i ceny
+                    {t('inventory.itemDetails.suppliersAndPrices')}
                   </Typography>
                   <TableContainer>
                     <Table size="small" sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                       <TableHead>
                         <TableRow>
-                          <TableCell>Dostawca</TableCell>
-                          <TableCell align="right">Cena</TableCell>
-                          <TableCell align="right">Min. ilość</TableCell>
-                          <TableCell align="right">Czas dostawy</TableCell>
+                          <TableCell>{t('inventory.itemDetails.supplier')}</TableCell>
+                          <TableCell align="right">{t('inventory.itemDetails.price')}</TableCell>
+                          <TableCell align="right">{t('inventory.itemDetails.minQuantityTable')}</TableCell>
+                          <TableCell align="right">{t('inventory.itemDetails.deliveryTime')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {supplierPrices.map(price => (
                           <TableRow key={price.id} hover>
                             <TableCell sx={{ fontWeight: price.isDefault ? 'bold' : 'normal' }}>
-                              {price.isDefault && <Chip size="small" label="Domyślny" color="primary" variant="outlined" sx={{ mr: 1, height: 20 }} />}
+                              {price.isDefault && <Chip size="small" label={t('inventory.itemDetails.default')} color="primary" variant="outlined" sx={{ mr: 1, height: 20 }} />}
                               {price.supplierName}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'medium' }}>
                               {price.price} {price.currency || item.currency || 'EUR'}
                             </TableCell>
                             <TableCell align="right">{price.minQuantity || 1} {item.unit}</TableCell>
-                            <TableCell align="right">{price.leadTime || 7} dni</TableCell>
+                            <TableCell align="right">{price.leadTime || 7} {t('common.days')}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -869,22 +871,22 @@ const ItemDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
-                  Dane finansowe
+                  {t('inventory.itemDetails.financialData')}
                 </Typography>
                 <TableContainer>
                   <Table sx={{ '& td, & th': { borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#f5f5f5', py: 1.5 } }}>
                     <TableBody>
                       <TableRow>
-                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>Cena</TableCell>
-                        <TableCell>{item.price ? `${item.price} ${item.currency || 'EUR'}` : 'Nie określono'}</TableCell>
+                        <TableCell component="th" sx={{ width: '40%', fontWeight: 'medium' }}>{t('inventory.itemDetails.price')}</TableCell>
+                        <TableCell>{item.price ? `${item.price} ${item.currency || 'EUR'}` : t('inventory.itemDetails.notSpecified')}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Min. ilość</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.minQuantityTable')}</TableCell>
                         <TableCell>{item.minQuantity || 1} {item.unit}</TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>Czas dostawy</TableCell>
-                        <TableCell>{item.leadTime || 7} dni</TableCell>
+                        <TableCell component="th" sx={{ fontWeight: 'medium' }}>{t('inventory.itemDetails.deliveryTime')}</TableCell>
+                        <TableCell>{item.leadTime || 7} {t('common.days')}</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -893,11 +895,11 @@ const ItemDetailsPage = () => {
 
               <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
                 <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
-                  Opis i załączniki
+                  {t('inventory.itemDetails.descriptionAndAttachments')}
                 </Typography>
                 <Box sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fafafa', borderRadius: 1, minHeight: '200px' }}>
                   <Typography variant="body2">
-                    {item.description || 'Brak opisu produktu.'}
+                    {item.description || t('inventory.itemDetails.noDescription')}
                   </Typography>
                 </Box>
               </Paper>
@@ -914,26 +916,26 @@ const ItemDetailsPage = () => {
             bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white'
           }}>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Partie i daty ważności
+              {t('inventory.itemDetails.tabs.batchesAndExpiry')}
             </Typography>
           </Box>
           
           {batches.length === 0 ? (
             <Paper elevation={1} sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
-            <Typography variant="body1">Brak zarejestrowanych partii dla tego produktu.</Typography>
+            <Typography variant="body1">{t('inventory.itemDetails.noBatches')}</Typography>
             </Paper>
           ) : (
             <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
               <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Numer partii</TableCell>
-                    <TableCell>Data ważności</TableCell>
-                    <TableCell>Ilość</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Lokalizacja</TableCell>
-                    <TableCell>Data przyjęcia</TableCell>
-                    <TableCell>Notatki</TableCell>
+                    <TableCell>{t('inventory.itemDetails.batchNumber')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.expiryDate')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.quantity')}</TableCell>
+                    <TableCell>{t('common.status')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.location')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.receivedDate')}</TableCell>
+                    <TableCell>{t('common.notes')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -989,7 +991,7 @@ const ItemDetailsPage = () => {
                             {status === 'expired' && (
                               <Chip 
                                 size="small" 
-                                label="Przeterminowane" 
+                                label={t('inventory.itemDetails.expired')} 
                                 color="error" 
                                 sx={{ ml: 1 }} 
                               />
@@ -997,7 +999,7 @@ const ItemDetailsPage = () => {
                             {status === 'expiring' && (
                               <Chip 
                                 size="small" 
-                                label="Wkrótce wygaśnie" 
+                                label={t('inventory.itemDetails.expiringSoon')} 
                                 color="warning" 
                                 sx={{ ml: 1 }} 
                               />
@@ -1012,7 +1014,7 @@ const ItemDetailsPage = () => {
                             {batch.quantity === 0 && (
                               <Chip 
                                 size="small" 
-                                label="Wydane" 
+                                label={t('inventory.itemDetails.issued')} 
                                 color="default" 
                                 sx={{ ml: 1 }} 
                               />
@@ -1020,10 +1022,10 @@ const ItemDetailsPage = () => {
                             </Box>
                           </TableCell>
                           <TableCell>
-                            {status === 'expired' && 'Przeterminowane'}
-                            {status === 'expiring' && 'Kończy się termin'}
-                            {status === 'valid' && batch.quantity > 0 && 'Dostępne'}
-                            {batch.quantity <= 0 && 'Wydane'}
+                            {status === 'expired' && t('inventory.itemDetails.expired')}
+                            {status === 'expiring' && t('inventory.itemDetails.expiringStatus')}
+                            {status === 'valid' && batch.quantity > 0 && t('inventory.itemDetails.available')}
+                            {batch.quantity <= 0 && t('inventory.itemDetails.issued')}
                           </TableCell>
                           <TableCell>{batch.warehouseName || '-'}</TableCell>
                           <TableCell>{receivedDate.toLocaleDateString('pl-PL')}</TableCell>
@@ -1045,26 +1047,26 @@ const ItemDetailsPage = () => {
             bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white'
           }}>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-              Historia transakcji
+              {t('inventory.itemDetails.tabs.transactionHistory')}
             </Typography>
           </Box>
           
           {transactions.length === 0 ? (
             <Typography variant="body1" align="center">
-              Brak historii transakcji dla tej pozycji
+              {t('inventory.itemDetails.noTransactionHistory')}
             </Typography>
           ) : (
             <TableContainer>
               <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Data</TableCell>
-                    <TableCell>Ilość</TableCell>
-                    <TableCell>Powód</TableCell>
-                    <TableCell>Referencja</TableCell>
-                    <TableCell>Magazyn</TableCell>
-                    <TableCell>Notatki</TableCell>
-                    <TableCell>Użytkownik</TableCell>
+                    <TableCell>{t('common.date')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.quantity')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.reason')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.reference')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.warehouse')}</TableCell>
+                    <TableCell>{t('common.notes')}</TableCell>
+                    <TableCell>{t('common.user')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1105,7 +1107,7 @@ const ItemDetailsPage = () => {
 
         <TabPanel value={tabValue} index={3}>
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderRadius: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Rezerwacje produktu</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('inventory.itemDetails.productReservations')}</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Button 
                 startIcon={updatingReservations ? <CircularProgress size={20} /> : <RefreshIcon />} 
@@ -1114,7 +1116,7 @@ const ItemDetailsPage = () => {
                 disabled={updatingReservations}
                 sx={{ mr: 2 }}
               >
-                Odśwież
+                {t('common.refresh')}
               </Button>
               <Button 
                 startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
@@ -1124,26 +1126,26 @@ const ItemDetailsPage = () => {
                 disabled={updatingReservations}
                 sx={{ mr: 2 }}
               >
-                {updatingReservations ? 'Czyszczenie...' : 'Usuń rezerwacje usuniętych MO'}
+                {updatingReservations ? t('inventory.itemDetails.cleaning') : t('inventory.itemDetails.removeDeletedReservations')}
               </Button>
-              <FormControl variant="outlined" size="small" sx={{ minWidth: 150, mr: 2 }}>
-                <InputLabel id="reservation-filter-label">Filtruj</InputLabel>
+                              <FormControl variant="outlined" size="small" sx={{ minWidth: 150, mr: 2 }}>
+                <InputLabel id="reservation-filter-label">{t('common.filter')}</InputLabel>
                 <Select
                   labelId="reservation-filter-label"
                   value={reservationFilter}
                   onChange={handleFilterChange}
-                  label="Filtruj"
+                  label={t('common.filter')}
                 >
-                  <MenuItem value="all">Wszystkie</MenuItem>
-                  <MenuItem value="active">Tylko aktywne</MenuItem>
-                  <MenuItem value="fulfilled">Tylko zakończone</MenuItem>
+                  <MenuItem value="all">{t('common.all')}</MenuItem>
+                  <MenuItem value="active">{t('inventory.itemDetails.activeOnly')}</MenuItem>
+                  <MenuItem value="fulfilled">{t('inventory.itemDetails.completedOnly')}</MenuItem>
                 </Select>
               </FormControl>
             </Box>
           </Box>
           
           {filteredReservations.length === 0 ? (
-            <Alert severity="info">Brak rezerwacji dla tego produktu.</Alert>
+            <Alert severity="info">{t('inventory.itemDetails.noReservations')}</Alert>
           ) : (
             <TableContainer component={Paper} elevation={0} variant="outlined">
               <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
@@ -1151,7 +1153,7 @@ const ItemDetailsPage = () => {
                   <TableRow>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Data rezerwacji
+                        {t('inventory.itemDetails.reservationDate')}
                         <IconButton size="small" onClick={() => handleSort('createdAt')}>
                           <SortIcon />
                         </IconButton>
@@ -1159,7 +1161,7 @@ const ItemDetailsPage = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Ilość
+                        {t('inventory.itemDetails.quantity')}
                         <IconButton size="small" onClick={() => handleSort('quantity')}>
                           <SortIcon />
                         </IconButton>
@@ -1167,7 +1169,7 @@ const ItemDetailsPage = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Zadanie produkcyjne
+                        {t('inventory.itemDetails.productionTask')}
                         <IconButton size="small" onClick={() => handleSort('taskNumber')}>
                           <SortIcon />
                         </IconButton>
@@ -1175,15 +1177,15 @@ const ItemDetailsPage = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Nr MO
+                        {t('inventory.itemDetails.moNumber')}
                         <IconButton size="small" onClick={() => handleSort('moNumber')}>
                           <SortIcon />
                         </IconButton>
                       </Box>
                     </TableCell>
-                    <TableCell>Partia</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Akcje</TableCell>
+                    <TableCell>{t('inventory.itemDetails.batch')}</TableCell>
+                    <TableCell>{t('common.status')}</TableCell>
+                    <TableCell align="right">{t('common.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1217,7 +1219,7 @@ const ItemDetailsPage = () => {
                         </TableCell>
                         <TableCell>
                           <Chip 
-                            label={reservation.status === 'completed' ? 'Zakończona' : 'Aktywna'} 
+                            label={reservation.status === 'completed' ? t('inventory.itemDetails.completed') : t('inventory.itemDetails.active')} 
                             color={reservation.status === 'completed' ? 'default' : 'secondary'} 
                             size="small"
                           />
@@ -1228,7 +1230,7 @@ const ItemDetailsPage = () => {
                               size="small" 
                               color="error" 
                               onClick={() => handleDeleteReservation(reservation.taskId)}
-                              aria-label="Usuń rezerwację"
+                              aria-label={t('inventory.itemDetails.deleteReservation')}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -1255,15 +1257,15 @@ const ItemDetailsPage = () => {
             alignItems: 'center'
           }}>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>
-              Oczekiwane pozycje z zamówień zakupowych
+              {t('inventory.itemDetails.awaitingFromPurchaseOrders')}
             </Typography>
-            <Button 
+                          <Button 
               variant="outlined" 
               startIcon={awaitingOrdersLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
               onClick={() => fetchAwaitingOrders(id)}
               disabled={awaitingOrdersLoading}
             >
-              Odśwież
+              {t('common.refresh')}
             </Button>
           </Box>
           
@@ -1273,34 +1275,34 @@ const ItemDetailsPage = () => {
             </Box>
           ) : awaitingOrders.length === 0 ? (
             <Alert severity="info" sx={{ mt: 2 }}>
-              Brak oczekujących zamówień dla tego produktu.
+              {t('inventory.itemDetails.noAwaitingOrders')}
             </Alert>
           ) : (
             <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
               <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Nr zamówienia</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Zamówione</TableCell>
-                    <TableCell>Otrzymane</TableCell>
-                    <TableCell>Pozostało</TableCell>
-                    <TableCell>Cena jednostkowa</TableCell>
-                    <TableCell>Data zamówienia</TableCell>
-                    <TableCell>Oczekiwana dostawa</TableCell>
-                    <TableCell>Tymczasowe ID</TableCell>
-                    <TableCell>Akcje</TableCell>
+                    <TableCell>{t('inventory.itemDetails.orderNumber')}</TableCell>
+                    <TableCell>{t('common.status')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.ordered')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.received')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.remaining')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.unitPrice')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.orderDate')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.expectedDelivery')}</TableCell>
+                    <TableCell>{t('inventory.itemDetails.tempId')}</TableCell>
+                    <TableCell>{t('common.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {awaitingOrders.map(order => {
                     const statusText = (() => {
                       switch(order.status) {
-                        case 'pending': return 'Oczekujące';
-                        case 'approved': return 'Zatwierdzone';
-                        case 'ordered': return 'Zamówione';
-                        case 'confirmed': return 'Potwierdzone';
-                        case 'partial': return 'Częściowo dostarczone';
+                        case 'pending': return t('inventory.itemDetails.orderStatus.pending');
+                        case 'approved': return t('inventory.itemDetails.orderStatus.approved');
+                        case 'ordered': return t('inventory.itemDetails.orderStatus.ordered');
+                        case 'confirmed': return t('inventory.itemDetails.orderStatus.confirmed');
+                        case 'partial': return t('inventory.itemDetails.orderStatus.partial');
                         default: return order.status;
                       }
                     })();
@@ -1363,7 +1365,7 @@ const ItemDetailsPage = () => {
                                   {isOverdue && (
                                     <Chip 
                                       size="small" 
-                                      label="Opóźnione" 
+                                      label={t('inventory.itemDetails.overdue')} 
                                       color="error" 
                                       sx={{ ml: 1 }} 
                                     />
@@ -1382,7 +1384,7 @@ const ItemDetailsPage = () => {
                               component={Link}
                               to={`/purchase-orders/${order.id}`}
                             >
-                              Szczegóły
+                              {t('common.details')}
                             </Button>
                           </TableCell>
                         </TableRow>

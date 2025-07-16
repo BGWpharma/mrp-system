@@ -58,6 +58,7 @@ import {
 } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate } from '../../utils/formatters';
 import { getUsersDisplayNames } from '../../services/userService';
 import { doc, getDoc } from 'firebase/firestore';
@@ -68,6 +69,7 @@ const StocktakingDetailsPage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   
   const [stocktaking, setStocktaking] = useState(null);
   const [items, setItems] = useState([]);
@@ -450,10 +452,10 @@ const StocktakingDetailsPage = () => {
           component={Link}
           to="/inventory/stocktaking"
         >
-          Powrót
+          {t('stocktaking.back')}
         </Button>
         <Typography variant="h4" component="h1">
-          Szczegóły inwentaryzacji
+          {t('stocktaking.detailsTitle')}
         </Typography>
         <Box>
           {!isCompleted && (
@@ -465,7 +467,7 @@ const StocktakingDetailsPage = () => {
               to={`/inventory/stocktaking/${id}/edit`}
               sx={{ mr: 1 }}
             >
-              Edytuj
+              {t('stocktaking.edit')}
             </Button>
           )}
           <Button
@@ -475,7 +477,7 @@ const StocktakingDetailsPage = () => {
             component={Link}
             to={`/inventory/stocktaking/${id}/report`}
           >
-            Raport
+            {t('stocktaking.report')}
           </Button>
         </Box>
       </Box>
@@ -484,47 +486,47 @@ const StocktakingDetailsPage = () => {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle1" gutterBottom>
-              Informacje podstawowe
+              {t('stocktaking.basicInfo')}
             </Typography>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body1">
-                <strong>Nazwa:</strong> {stocktaking.name}
+                <strong>{t('stocktaking.name')}:</strong> {stocktaking.name}
               </Typography>
               <Typography variant="body1">
-                <strong>Status:</strong> {renderStatusChip(stocktaking.status)}
+                <strong>{t('stocktaking.status')}:</strong> {renderStatusChip(stocktaking.status)}
               </Typography>
               <Typography variant="body1">
-                <strong>Lokalizacja:</strong> {stocktaking.location || 'Wszystkie lokalizacje'}
+                <strong>{t('stocktaking.location')}:</strong> {stocktaking.location || t('stocktaking.allLocations')}
               </Typography>
               <Typography variant="body1">
-                <strong>Data planowana:</strong> {stocktaking.scheduledDate ? formatDate(stocktaking.scheduledDate) : '-'}
+                <strong>{t('stocktaking.scheduledDate')}:</strong> {stocktaking.scheduledDate ? formatDate(stocktaking.scheduledDate) : '-'}
               </Typography>
               {stocktaking.description && (
                 <Typography variant="body1">
-                  <strong>Opis:</strong> {stocktaking.description}
+                  <strong>{t('stocktaking.description')}:</strong> {stocktaking.description}
                 </Typography>
               )}
             </Box>
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle1" gutterBottom>
-              Informacje dodatkowe
+              {t('stocktaking.additionalInfo')}
             </Typography>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body1">
-                <strong>Data utworzenia:</strong> {stocktaking.createdAt ? formatDate(stocktaking.createdAt) : '-'}
+                <strong>{t('stocktaking.createdAt')}:</strong> {stocktaking.createdAt ? formatDate(stocktaking.createdAt) : '-'}
               </Typography>
               <Typography variant="body1">
-                <strong>Utworzona przez:</strong> {stocktaking.createdBy ? getUserName(stocktaking.createdBy) : '-'}
+                <strong>{t('stocktaking.createdBy')}:</strong> {stocktaking.createdBy ? getUserName(stocktaking.createdBy) : '-'}
               </Typography>
               {stocktaking.completedAt && (
                 <Typography variant="body1">
-                  <strong>Data zakończenia:</strong> {formatDate(stocktaking.completedAt)}
+                  <strong>{t('stocktaking.completedAt')}:</strong> {formatDate(stocktaking.completedAt)}
                 </Typography>
               )}
               {stocktaking.notes && (
                 <Typography variant="body1">
-                  <strong>Uwagi:</strong> {stocktaking.notes}
+                  <strong>{t('stocktaking.notes')}:</strong> {stocktaking.notes}
                 </Typography>
               )}
             </Box>
@@ -534,7 +536,7 @@ const StocktakingDetailsPage = () => {
       
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5">
-          Produkty ({items.length})
+          {t('stocktaking.products', { count: items.length })}
         </Typography>
         <Box>
           {!isCompleted && (
@@ -545,7 +547,7 @@ const StocktakingDetailsPage = () => {
               onClick={() => setAddItemDialogOpen(true)}
               sx={{ mr: 1 }}
             >
-              Dodaj produkt
+              {t('stocktaking.addProduct')}
             </Button>
           )}
           {!isCompleted && items.length > 0 && (

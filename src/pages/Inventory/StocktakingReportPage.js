@@ -32,11 +32,13 @@ import {
   getStocktakingItems,
   generateStocktakingReport
 } from '../../services/inventoryService';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatCurrency } from '../../utils/formatters';
 
 const StocktakingReportPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   
   const [stocktaking, setStocktaking] = useState(null);
   const [items, setItems] = useState([]);
@@ -271,10 +273,10 @@ const StocktakingReportPage = () => {
           component={Link}
           to={`/inventory/stocktaking/${id}`}
         >
-          Powrót
+          {t('stocktaking.back')}
         </Button>
         <Typography variant="h4" component="h1">
-          Raport inwentaryzacji
+          {t('stocktaking.reportTitle')}
         </Typography>
         <Box>
           <Button
@@ -283,7 +285,7 @@ const StocktakingReportPage = () => {
             onClick={handlePrint}
             sx={{ mr: 1 }}
           >
-            Drukuj
+            {t('stocktaking.print')}
           </Button>
           <Button
             variant="contained"
@@ -291,7 +293,7 @@ const StocktakingReportPage = () => {
             startIcon={<DownloadIcon />}
             onClick={handleExportPDF}
           >
-            Eksportuj PDF
+            {t('stocktaking.exportPDF')}
           </Button>
         </Box>
       </Box>
@@ -299,11 +301,11 @@ const StocktakingReportPage = () => {
       {/* Nagłówek raportu - widoczny zawsze */}
       <Paper sx={{ p: 3, mb: 3 }} className="print-visible">
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h5">Raport inwentaryzacji: {stocktaking.name}</Typography>
+          <Typography variant="h5">{t('stocktaking.reportFor', { name: stocktaking.name })}</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <ReportIcon sx={{ mr: 1 }} />
             <Typography variant="body2">
-              Wygenerowano: {formatDate(new Date())}
+              {t('stocktaking.generatedOn', { date: formatDate(new Date()) })}
             </Typography>
           </Box>
         </Box>
@@ -313,7 +315,7 @@ const StocktakingReportPage = () => {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle1" gutterBottom>
-              Informacje o inwentaryzacji
+              {t('stocktaking.stocktakingInfo')}
             </Typography>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body1">

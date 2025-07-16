@@ -58,6 +58,7 @@ import {
   deleteBatchCertificate
 } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
@@ -69,6 +70,7 @@ const BatchesPage = () => {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   const [localUser, setLocalUser] = useState(null);
   const [item, setItem] = useState(null);
   const [batches, setBatches] = useState([]);
@@ -158,7 +160,7 @@ const BatchesPage = () => {
         setBatches(enhancedBatches);
         setFilteredBatches(enhancedBatches);
       } catch (error) {
-        showError('Błąd podczas pobierania danych partii: ' + error.message);
+        showError(t('inventory.batches.errorFetchingBatchData') + ': ' + error.message);
         console.error('Error fetching batch data:', error);
       } finally {
         setLoading(false);
@@ -200,12 +202,12 @@ const BatchesPage = () => {
 
   const getBatchStatus = (batch) => {
     if (batch.quantity <= 0) {
-      return { label: 'Wyczerpana', color: 'default' };
+      return { label: t('inventory.batches.status.depleted'), color: 'default' };
     }
 
     // Jeśli brak daty ważności, nie może być przeterminowana
     if (!batch.expiryDate) {
-      return { label: 'Aktualna', color: 'success' };
+      return { label: t('inventory.batches.status.current'), color: 'success' };
     }
 
     const today = new Date();
@@ -218,21 +220,21 @@ const BatchesPage = () => {
     
     // Jeśli to domyślna data, traktuj jak brak daty ważności
     if (isDefaultOrInvalidDate) {
-      return { label: 'Aktualna', color: 'success' };
+      return { label: t('inventory.batches.status.current'), color: 'success' };
     }
     
     if (expiryDate < today) {
-      return { label: 'Przeterminowana', color: 'error' };
+      return { label: t('inventory.batches.status.expired'), color: 'error' };
     }
     
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
     
     if (expiryDate <= thirtyDaysFromNow) {
-      return { label: 'Wygasa wkrótce', color: 'warning' };
+      return { label: t('inventory.batches.status.expiringSoon'), color: 'warning' };
     }
     
-    return { label: 'Aktualna', color: 'success' };
+    return { label: t('inventory.batches.status.current'), color: 'success' };
   };
 
   const getExpiryWarning = () => {
@@ -309,28 +311,28 @@ const BatchesPage = () => {
     const errors = {};
     
     if (!targetWarehouseId) {
-      errors.targetWarehouseId = 'Wybierz magazyn docelowy';
+      errors.targetWarehouseId = t('inventory.batches.selectTargetWarehouse');
     }
     
     // Pobierz sourceWarehouseId z partii - musi być zdefiniowany
     const sourceWarehouseId = selectedBatch.warehouseId;
     
     if (!sourceWarehouseId) {
-      errors.general = 'Nie można określić magazynu źródłowego. Odśwież stronę.';
+      errors.general = t('inventory.batches.cannotDetermineSourceWarehouse');
     } else if (sourceWarehouseId === targetWarehouseId) {
-      errors.targetWarehouseId = 'Magazyn docelowy musi być inny niż bieżący';
+              errors.targetWarehouseId = t('inventory.batches.targetWarehouseMustBeDifferent');
     }
     
     if (!transferQuantity) {
-      errors.transferQuantity = 'Podaj ilość do przeniesienia';
+      errors.transferQuantity = t('inventory.batches.enterQuantityToTransfer');
     } else {
       const qty = parseFloat(transferQuantity);
       if (isNaN(qty)) {
-        errors.transferQuantity = 'Podaj prawidłową wartość liczbową';
+        errors.transferQuantity = t('inventory.batches.enterValidNumericValue');
       } else if (qty <= 0) {
-        errors.transferQuantity = 'Ilość musi być większa od zera';
+        errors.transferQuantity = t('inventory.batches.quantityMustBeGreaterThanZero');
       } else if (qty > selectedBatch.quantity) {
-        errors.transferQuantity = `Maksymalna dostępna ilość to ${selectedBatch.quantity}`;
+        errors.transferQuantity = t('inventory.batches.maxAvailableQuantityIs', { quantity: selectedBatch.quantity });
       }
     }
     
@@ -348,7 +350,7 @@ const BatchesPage = () => {
       const sourceWarehouseId = selectedBatch.warehouseId;
       
       if (!sourceWarehouseId) {
-        throw new Error('Nie można określić magazynu źródłowego. Spróbuj odświeżyć stronę.');
+        throw new Error(t('inventory.batches.cannotDetermineSourceWarehouseError'));
       }
       
       // Używamy wielu źródeł danych użytkownika aby zapewnić, że zawsze mamy dostęp do poprawnych danych
@@ -368,7 +370,7 @@ const BatchesPage = () => {
         userData
       );
       
-      showSuccess('Partia została przeniesiona pomyślnie');
+              showSuccess(t('inventory.batches.batchTransferredSuccessfully'));
       closeTransferDialog();
       
       const batchesData = await getItemBatches(id);
@@ -468,7 +470,7 @@ const BatchesPage = () => {
   
   const handleUploadCertificate = async () => {
     if (!certificateFile || !selectedBatchForCertificate) {
-      showError('Wybierz plik certyfikatu');
+      showError(t('inventory.batches.selectCertificateFile'));
       return;
     }
     
@@ -479,7 +481,7 @@ const BatchesPage = () => {
       // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
       const userId = effectiveUser?.uid || 'unknown';
       await uploadBatchCertificate(certificateFile, selectedBatchForCertificate.id, userId);
-      showSuccess('Certyfikat został pomyślnie dodany do partii');
+      showSuccess(t('inventory.batches.certificateAddedSuccessfully'));
       
       // Odśwież dane partii
       const refreshedBatches = await getItemBatches(id);
@@ -500,15 +502,15 @@ const BatchesPage = () => {
       
       closeCertificateDialog();
     } catch (error) {
-      console.error('Błąd podczas przesyłania certyfikatu:', error);
-      showError(error.message || 'Wystąpił błąd podczas przesyłania certyfikatu');
+      console.error(t('inventory.batches.errorUploadingCertificate'), error);
+      showError(error.message || t('inventory.batches.errorUploadingCertificateMessage'));
     } finally {
       setUploadingCertificate(false);
     }
   };
   
   const handleDeleteCertificate = async (batch) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć certyfikat tej partii? Ta operacja jest nieodwracalna.')) {
+    if (!window.confirm(t('inventory.batches.confirmDeleteCertificate'))) {
       return;
     }
     
@@ -519,7 +521,7 @@ const BatchesPage = () => {
       // Sprawdź czy user istnieje i pobierz uid lub użyj 'unknown'
       const userId = effectiveUser?.uid || 'unknown';
       await deleteBatchCertificate(batch.id, userId);
-      showSuccess('Certyfikat został pomyślnie usunięty');
+      showSuccess(t('inventory.batches.certificateDeletedSuccessfully'));
       
       // Odśwież dane partii
       const refreshedBatches = await getItemBatches(id);
@@ -538,8 +540,8 @@ const BatchesPage = () => {
       setBatches(enhancedBatches);
       setFilteredBatches(enhancedBatches);
     } catch (error) {
-      console.error('Błąd podczas usuwania certyfikatu:', error);
-      showError(error.message || 'Wystąpił błąd podczas usuwania certyfikatu');
+      console.error(t('inventory.batches.errorDeletingCertificate'), error);
+      showError(error.message || t('inventory.batches.errorDeletingCertificateMessage'));
     } finally {
       setUploadingCertificate(false);
     }
@@ -563,7 +565,7 @@ const BatchesPage = () => {
       const result = await deleteBatch(selectedBatchForDelete.id, userData);
       
       if (result.success) {
-        showSuccess(result.message || 'Partia została usunięta');
+        showSuccess(result.message || t('inventory.batches.batchDeleted'));
         
         // Odśwież listę partii po usunięciu
         const batchesData = await getItemBatches(id);
@@ -580,26 +582,26 @@ const BatchesPage = () => {
         setBatches(enhancedBatches);
         setFilteredBatches(enhancedBatches);
       } else {
-        showError(result.message || 'Nie można usunąć partii');
+        showError(result.message || t('inventory.batches.cannotDeleteBatch'));
       }
       
       closeDeleteDialog();
     } catch (error) {
       console.error('Error deleting batch:', error);
-      showError(error.message || 'Wystąpił błąd podczas usuwania partii');
+      showError(error.message || t('inventory.batches.errorDeletingBatch'));
     } finally {
       setProcessingDelete(false);
     }
   };
 
   if (loading) {
-    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>Ładowanie danych...</Container>;
+    return <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>{t('common.loading')}</Container>;
   }
 
   if (!item && batches.length === 0) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h5">Nie znaleziono pozycji magazynowej ani partii</Typography>
+        <Typography variant="h5">{t('inventory.batches.itemNotFoundNorBatches')}</Typography>
         <Button 
           variant="contained" 
           component={Link} 
@@ -607,7 +609,7 @@ const BatchesPage = () => {
           startIcon={<ArrowBackIcon />}
           sx={{ mt: 2 }}
         >
-          Powrót do magazynu
+          {t('inventory.batches.backToInventory')}
         </Button>
       </Container>
     );
@@ -622,10 +624,10 @@ const BatchesPage = () => {
           variant="outlined"
           sx={{ alignSelf: isMobile ? 'stretch' : 'flex-start' }}
         >
-          Powrót do szczegółów
+          {t('inventory.batches.backToDetails')}
         </Button>
         <Typography variant="h5" align={isMobile ? "center" : "left"}>
-          {item ? `Partie: ${item.name}` : 'Partie (Produkt niedostępny)'}
+          {item ? t('inventory.batches.batchesForItem', { itemName: item.name }) : t('inventory.batches.batchesProductUnavailable')}
         </Typography>
         <Box sx={{ 
           display: 'flex', 
@@ -645,7 +647,7 @@ const BatchesPage = () => {
                 width: '100%'
               }}
             >
-              Drukuj etykietę
+              {t('inventory.batches.printLabel')}
             </Button>
           )}
           {item && (
@@ -656,7 +658,7 @@ const BatchesPage = () => {
               to={`/inventory/${id}/receive`}
               sx={{ width: isMobile ? '100%' : 'auto' }}
             >
-              Przyjmij nową partię
+              {t('inventory.batches.receiveNewBatch')}
             </Button>
           )}
         </Box>
@@ -670,7 +672,7 @@ const BatchesPage = () => {
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Szukaj partii..."
+              placeholder={t('inventory.batches.searchBatches')}
               value={searchTerm}
               onChange={handleSearchChange}
               InputProps={{
@@ -698,14 +700,14 @@ const BatchesPage = () => {
             }}>
               {item ? (
                 <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
-                  <strong>Stan całkowity:</strong> {formatQuantity(item.quantity)} {item.unit}
+                  <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(item.quantity)} {item.unit}
                 </Typography>
               ) : (
                 <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
-                  <strong>Stan całkowity:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || 'szt.'}
+                  <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || t('common.pieces')}
                 </Typography>
               )}
-              <Tooltip title="Partie są wydawane według zasady FEFO (First Expiry, First Out)">
+              <Tooltip title={t('inventory.batches.fefoInfo')}>
                 <IconButton size="small">
                   <InfoIcon />
                 </IconButton>
@@ -720,23 +722,23 @@ const BatchesPage = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Numer partii</TableCell>
-                <TableCell>Data ważności</TableCell>
-                {!isMobile && <TableCell>Magazyn</TableCell>}
-                <TableCell>Ilość aktualna</TableCell>
-                {!isMobile && <TableCell>Cena jedn.</TableCell>}
-                <TableCell>Status</TableCell>
-                {!isMobile && <TableCell>Pochodzenie</TableCell>}
-                {!isMobile && <TableCell>Certyfikat</TableCell>}
-                {!isMobile && <TableCell>Uwagi</TableCell>}
-                <TableCell>Akcje</TableCell>
+                <TableCell>{t('inventory.batches.batchNumber')}</TableCell>
+                <TableCell>{t('inventory.batches.expiryDate')}</TableCell>
+                {!isMobile && <TableCell>{t('inventory.batches.warehouse')}</TableCell>}
+                <TableCell>{t('inventory.batches.currentQuantity')}</TableCell>
+                {!isMobile && <TableCell>{t('inventory.batches.unitPrice')}</TableCell>}
+                <TableCell>{t('common.status')}</TableCell>
+                {!isMobile && <TableCell>{t('inventory.batches.origin')}</TableCell>}
+                {!isMobile && <TableCell>{t('inventory.batches.certificate')}</TableCell>}
+                {!isMobile && <TableCell>{t('common.notes')}</TableCell>}
+                <TableCell>{t('common.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredBatches.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={isMobile ? 5 : 10} align="center">
-                    Brak partii dla tego produktu
+                    {t('inventory.batches.noBatchesForProduct')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -789,7 +791,7 @@ const BatchesPage = () => {
                           </TableCell>
                         )}
                         <TableCell>
-                          {batch.quantity} {item?.unit || batch.unit || 'szt.'}
+                          {batch.quantity} {item?.unit || batch.unit || t('common.pieces')}
                         </TableCell>
                         {!isMobile && (
                           <TableCell>
@@ -807,11 +809,11 @@ const BatchesPage = () => {
                                 
                                 // Wyświetl rozszerzone informacje o cenie
                                 return (
-                                  <Tooltip title={`Cena bazowa: ${basePrice} EUR + Koszt dodatkowy: ${additionalCost} EUR`}>
+                                  <Tooltip title={t('inventory.batches.basePriceTooltip', { basePrice, additionalCost })}>
                                     <Box>
                                       <Typography variant="body2">{priceDisplay}</Typography>
                                       <Typography variant="caption" color="text.secondary">
-                                        (baza: {basePrice} + dod. koszt: {additionalCost})
+                                        ({t('inventory.batches.basePriceSummary', { basePrice, additionalCost })})
                                       </Typography>
                                     </Box>
                                   </Tooltip>
@@ -842,19 +844,19 @@ const BatchesPage = () => {
                                 return (
                                   <Box>
                                     <Typography variant="body2">
-                                      <strong>Z zamówienia zakupu:</strong>
+                                      <strong>{t('inventory.batches.fromPurchaseOrder')}:</strong>
                                     </Typography>
                                     <Typography variant="body2">
                                       PO: {po.number || '-'}
                                     </Typography>
                                     {po.supplier && (
                                       <Typography variant="body2" color="text.secondary">
-                                        Dostawca: {po.supplier.name || '-'}
+                                        {t('inventory.batches.supplier')}: {po.supplier.name || '-'}
                                       </Typography>
                                     )}
                                     {po.orderDate && (
                                       <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
-                                        Data zamówienia: {typeof po.orderDate === 'string' 
+                                        {t('inventory.batches.orderDate')}: {typeof po.orderDate === 'string' 
                                           ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
                                           : po.orderDate instanceof Date 
                                             ? po.orderDate.toLocaleDateString('pl-PL')
@@ -872,7 +874,7 @@ const BatchesPage = () => {
                                         to={`/purchase-orders/${po.id}`}
                                         sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
                                       >
-                                        Szczegóły PO
+                                        {t('inventory.batches.poDetails')}
                                       </Button>
                                     )}
                                   </Box>
@@ -882,7 +884,7 @@ const BatchesPage = () => {
                               // Stara metoda - sprawdź czy partia pochodzi z zamówienia zakupu (PO)
                               else if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
                                 // Fallback dla starszych rekordów bez szczegółów PO
-                                source = 'Z zamówienia zakupu';
+                                source = t('inventory.batches.fromPurchaseOrder');
                                 if (batch.orderNumber) {
                                   source += ` (PO: ${batch.orderNumber})`;
                                 } else if (batch.sourceDetails && batch.sourceDetails.orderNumber) {
@@ -908,7 +910,7 @@ const BatchesPage = () => {
                                         to={`/purchase-orders/${batch.sourceDetails.orderId}`}
                                         sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
                                       >
-                                        Szczegóły PO
+                                        {t('inventory.batches.poDetails')}
                                       </Button>
                                     </Box>
                                   );
@@ -919,7 +921,7 @@ const BatchesPage = () => {
                               
                               // Produkcja - wyświetlanie informacji o MO i CO
                               else if (batch.source === 'Produkcja' || batch.source === 'production') {
-                                source = 'Z produkcji';
+                                source = t('inventory.batches.fromProduction');
                                 // Dodaj informacje o MO i CO, jeśli są dostępne
                                 if (batch.moNumber) {
                                   source += ` (MO: ${batch.moNumber})`;
@@ -939,7 +941,7 @@ const BatchesPage = () => {
                           <TableCell>
                             {(batch.certificateBase64 || batch.certificateFileName || batch.certificateDownloadURL) ? (
                               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                                <Tooltip title={`Podgląd certyfikatu: ${batch.certificateFileName || 'Dokument'}`}>
+                                <Tooltip title={t('inventory.batches.certificatePreview', { fileName: batch.certificateFileName || t('inventory.batches.document') })}>
                                   <Box 
                                     sx={{ 
                                       display: 'flex', 
@@ -954,11 +956,11 @@ const BatchesPage = () => {
                                   >
                                     <InsertDriveFileIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
                                     <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
-                                      {batch.certificateFileName || 'Dokument'}
+                                      {batch.certificateFileName || t('inventory.batches.document')}
                                     </Typography>
                                   </Box>
                                 </Tooltip>
-                                <Tooltip title="Usuń certyfikat">
+                                <Tooltip title={t('inventory.batches.deleteCertificate')}>
                                   <IconButton 
                                     size="small" 
                                     color="error"
@@ -969,7 +971,7 @@ const BatchesPage = () => {
                                 </Tooltip>
                               </Box>
                             ) : (
-                              <Tooltip title="Dodaj certyfikat">
+                              <Tooltip title={t('inventory.batches.addCertificate')}>
                                 <IconButton 
                                   size="small" 
                                   color="primary"
@@ -988,7 +990,7 @@ const BatchesPage = () => {
                         )}
                         <TableCell>
                           <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 0.5 : 1 }}>
-                            <Tooltip title="Drukuj etykietę partii">
+                            <Tooltip title={t('inventory.batches.printBatchLabel')}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenBatchLabelDialog(batch)}
@@ -997,7 +999,7 @@ const BatchesPage = () => {
                               </IconButton>
                             </Tooltip>
                             
-                            <Tooltip title="Edytuj">
+                            <Tooltip title={t('common.edit')}>
                               <IconButton
                                 size="small"
                                 component={Link}
@@ -1007,7 +1009,7 @@ const BatchesPage = () => {
                               </IconButton>
                             </Tooltip>
                             
-                            <Tooltip title="Usuń">
+                            <Tooltip title={t('common.delete')}>
                               <IconButton
                                 size="small"
                                 onClick={() => openDeleteDialog(batch)}
@@ -1033,8 +1035,8 @@ const BatchesPage = () => {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage={isMobile ? "Wierszy:" : "Wierszy na stronę:"}
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+          labelRowsPerPage={isMobile ? t('common.rows') + ":" : t('common.rowsPerPage') + ":"}
+          labelDisplayedRows={({ from, to, count }) => t('common.displayedRows', { from, to, count })}
           sx={isMobile ? {
             '.MuiTablePagination-selectLabel': { display: 'none' },
             '.MuiTablePagination-select': { marginRight: '8px' },
@@ -1046,28 +1048,28 @@ const BatchesPage = () => {
 
       <Dialog open={transferDialogOpen} onClose={closeTransferDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Przenieś partię do innego magazynu
+          {t('inventory.batches.transferBatchToWarehouse')}
         </DialogTitle>
         <DialogContent>
           {selectedBatch && (
             <Box sx={{ pt: 1 }}>
               <Typography variant="subtitle1" gutterBottom>
-                Informacje o partii:
+                {t('inventory.batches.batchInfo')}:
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Numer partii/LOT:</strong> {selectedBatch.batchNumber || selectedBatch.lotNumber || '-'}
+                <strong>{t('inventory.batches.batchNumber')}:</strong> {selectedBatch.batchNumber || selectedBatch.lotNumber || '-'}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Bieżący magazyn:</strong> {selectedBatch.warehouseAddress || selectedBatch.warehouseName || 'Magazyn podstawowy'}
+                <strong>{t('inventory.batches.currentWarehouse')}:</strong> {selectedBatch.warehouseAddress || selectedBatch.warehouseName || t('inventory.batches.defaultWarehouse')}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Dostępna ilość:</strong> {selectedBatch.quantity} {item?.unit || selectedBatch.unit || 'szt.'}
+                <strong>{t('inventory.batches.availableQuantity')}:</strong> {selectedBatch.quantity} {item?.unit || selectedBatch.unit || t('common.pieces')}
               </Typography>
               
               {/* Dodaj informacje o cenie jednostkowej z rozbiciem na bazową i dodatkowe koszty */}
               {selectedBatch.unitPrice > 0 && (
                 <Typography variant="body2" gutterBottom>
-                  <strong>Cena jednostkowa:</strong> {parseFloat(selectedBatch.unitPrice).toFixed(4)} EUR
+                  <strong>{t('inventory.batches.unitPrice')}:</strong> {parseFloat(selectedBatch.unitPrice).toFixed(4)} EUR
                   {selectedBatch.baseUnitPrice !== undefined && selectedBatch.additionalCostPerUnit !== undefined && (
                     <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.9em' }}>
                       {` (baza: ${parseFloat(selectedBatch.baseUnitPrice).toFixed(4)} EUR + dodatkowy koszt: ${parseFloat(selectedBatch.additionalCostPerUnit).toFixed(4)} EUR)`}
@@ -1080,23 +1082,23 @@ const BatchesPage = () => {
               {(selectedBatch.purchaseOrderDetails || selectedBatch.moNumber || selectedBatch.orderNumber || selectedBatch.source) && (
                 <>
                   <Typography variant="subtitle2" sx={{ mt: 1 }}>
-                    Informacje o pochodzeniu:
+                    {t('inventory.batches.originInfo')}:
                   </Typography>
                   
                   {/* Szczegóły PO - najpierw sprawdź nowy format danych */}
                   {selectedBatch.purchaseOrderDetails && selectedBatch.purchaseOrderDetails.id && (
                     <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                       <Typography variant="body2" gutterBottom>
-                        <strong>Zamówienie zakupu:</strong> {selectedBatch.purchaseOrderDetails.number || '-'}
+                        <strong>{t('inventory.batches.purchaseOrder')}:</strong> {selectedBatch.purchaseOrderDetails.number || '-'}
                       </Typography>
                       {selectedBatch.purchaseOrderDetails.supplier && (
                         <Typography variant="body2" gutterBottom>
-                          <strong>Dostawca:</strong> {selectedBatch.purchaseOrderDetails.supplier.name || '-'}
+                          <strong>{t('inventory.batches.supplier')}:</strong> {selectedBatch.purchaseOrderDetails.supplier.name || '-'}
                         </Typography>
                       )}
                       {selectedBatch.purchaseOrderDetails.orderDate && (
                         <Typography variant="body2" gutterBottom>
-                          <strong>Data zamówienia:</strong> {typeof selectedBatch.purchaseOrderDetails.orderDate === 'string' 
+                          <strong>{t('inventory.batches.orderDate')}:</strong> {typeof selectedBatch.purchaseOrderDetails.orderDate === 'string' 
                             ? new Date(selectedBatch.purchaseOrderDetails.orderDate).toLocaleDateString('pl-PL') 
                             : selectedBatch.purchaseOrderDetails.orderDate instanceof Date 
                               ? selectedBatch.purchaseOrderDetails.orderDate.toLocaleDateString('pl-PL')
@@ -1154,19 +1156,19 @@ const BatchesPage = () => {
                     <>
                       {selectedBatch.source && (
                         <Typography variant="body2" gutterBottom>
-                          <strong>Źródło:</strong> {selectedBatch.source === 'production' ? 'Z produkcji' : selectedBatch.source}
+                          <strong>{t('inventory.batches.source')}:</strong> {selectedBatch.source === 'production' ? t('inventory.batches.fromProduction') : selectedBatch.source}
                         </Typography>
                       )}
                       
                       {selectedBatch.moNumber && (
                         <Typography variant="body2" gutterBottom>
-                          <strong>Numer MO:</strong> {selectedBatch.moNumber}
+                          <strong>{t('inventory.batches.moNumber')}:</strong> {selectedBatch.moNumber}
                         </Typography>
                       )}
                       
                       {selectedBatch.orderNumber && (
                         <Typography variant="body2" gutterBottom>
-                          <strong>Numer CO:</strong> {selectedBatch.orderNumber}
+                          <strong>{t('inventory.batches.coNumber')}:</strong> {selectedBatch.orderNumber}
                         </Typography>
                       )}
                     </>
@@ -1178,11 +1180,11 @@ const BatchesPage = () => {
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
                     <FormControl fullWidth error={!!transferErrors.targetWarehouseId}>
-                      <InputLabel>Magazyn docelowy</InputLabel>
+                      <InputLabel>{t('inventory.batches.targetWarehouse')}</InputLabel>
                       <Select
                         value={targetWarehouseId}
                         onChange={(e) => setTargetWarehouseId(e.target.value)}
-                        label="Magazyn docelowy"
+                        label={t('inventory.batches.targetWarehouse')}
                       >
                         {warehouses
                           .filter(wh => wh.id !== selectedBatch.warehouseId)
@@ -1201,7 +1203,7 @@ const BatchesPage = () => {
                   <Grid item xs={12}>
                     <TextField
                       fullWidth
-                      label="Ilość do przeniesienia"
+                      label={t('inventory.batches.quantityToTransfer')}
                       type="number"
                       value={transferQuantity}
                       onChange={(e) => {
@@ -1221,7 +1223,7 @@ const BatchesPage = () => {
                         step: 'any' 
                       }}
                       error={!!transferErrors.transferQuantity}
-                      helperText={transferErrors.transferQuantity || `Maksymalna dostępna ilość: ${selectedBatch.quantity}`}
+                      helperText={transferErrors.transferQuantity || t('inventory.batches.maxAvailableQuantity', { quantity: selectedBatch.quantity })}
                     />
                   </Grid>
                 </Grid>
@@ -1231,7 +1233,7 @@ const BatchesPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeTransferDialog} disabled={processingTransfer}>
-            Anuluj
+            {t('common.cancel')}
           </Button>
           <Button 
             variant="contained" 
@@ -1239,7 +1241,7 @@ const BatchesPage = () => {
             onClick={handleTransferBatch}
             disabled={processingTransfer}
           >
-            {processingTransfer ? 'Przetwarzanie...' : 'Przenieś partię'}
+            {processingTransfer ? t('inventory.batches.processing') : t('inventory.batches.transferBatch')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1258,36 +1260,36 @@ const BatchesPage = () => {
         fullWidth
       >
         <DialogTitle>
-          Czy na pewno chcesz usunąć tę partię?
+          {t('inventory.batches.confirmDeleteBatch')}
         </DialogTitle>
         <DialogContent>
           {selectedBatchForDelete && (
             <Box sx={{ pt: 1 }}>
               <Typography variant="body1" color="error" gutterBottom>
-                Uwaga! Ta operacja jest nieodwracalna.
+                {t('inventory.batches.deleteWarning')}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Numer partii/LOT:</strong> {selectedBatchForDelete.batchNumber || selectedBatchForDelete.lotNumber || '-'}
+                <strong>{t('inventory.batches.batchNumber')}:</strong> {selectedBatchForDelete.batchNumber || selectedBatchForDelete.lotNumber || '-'}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Ilość:</strong> {selectedBatchForDelete.quantity} {item?.unit || 'szt.'}
+                <strong>{t('inventory.batches.quantity')}:</strong> {selectedBatchForDelete.quantity} {item?.unit || t('common.pieces')}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Magazyn:</strong> {selectedBatchForDelete.warehouseAddress || selectedBatchForDelete.warehouseName || 'Magazyn podstawowy'}
+                <strong>{t('inventory.batches.warehouse')}:</strong> {selectedBatchForDelete.warehouseAddress || selectedBatchForDelete.warehouseName || t('inventory.batches.defaultWarehouse')}
               </Typography>
               
               {/* Dodatkowe informacje jeśli partia pochodzi z PO */}
               {selectedBatchForDelete.purchaseOrderDetails && selectedBatchForDelete.purchaseOrderDetails.id && (
                 <Box sx={{ mt: 2, p: 1, bgcolor: 'warning.light', color: 'warning.contrastText', borderRadius: 1, border: 1, borderColor: 'warning.main' }}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Ta partia jest powiązana z zamówieniem zakupowym:
+                    {t('inventory.batches.batchLinkedToPO')}:
                   </Typography>
                   <Typography variant="body2">
                     PO: {selectedBatchForDelete.purchaseOrderDetails.number || '-'}
                   </Typography>
                   {selectedBatchForDelete.purchaseOrderDetails.supplier && (
                     <Typography variant="body2">
-                      Dostawca: {selectedBatchForDelete.purchaseOrderDetails.supplier.name || '-'}
+                      {t('inventory.batches.supplier')}: {selectedBatchForDelete.purchaseOrderDetails.supplier.name || '-'}
                     </Typography>
                   )}
                   <Button 
@@ -1299,7 +1301,7 @@ const BatchesPage = () => {
                     sx={{ mt: 1 }}
                     onClick={closeDeleteDialog}
                   >
-                    Zobacz szczegóły PO
+                    {t('inventory.batches.viewPoDetails')}
                   </Button>
                 </Box>
               )}
@@ -1309,14 +1311,14 @@ const BatchesPage = () => {
                 selectedBatchForDelete.sourceDetails.sourceType === 'purchase' && selectedBatchForDelete.sourceDetails.orderId && (
                 <Box sx={{ mt: 2, p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Ta partia jest powiązana z zamówieniem zakupowym:
+                    {t('inventory.batches.batchLinkedToPO')}:
                   </Typography>
                   <Typography variant="body2">
                     PO: {selectedBatchForDelete.sourceDetails.orderNumber || '-'}
                   </Typography>
                   {selectedBatchForDelete.sourceDetails.supplierName && (
                     <Typography variant="body2">
-                      Dostawca: {selectedBatchForDelete.sourceDetails.supplierName || '-'}
+                      {t('inventory.batches.supplier')}: {selectedBatchForDelete.sourceDetails.supplierName || '-'}
                     </Typography>
                   )}
                   <Button 
@@ -1328,28 +1330,28 @@ const BatchesPage = () => {
                     sx={{ mt: 1 }}
                     onClick={closeDeleteDialog}
                   >
-                    Zobacz szczegóły PO
+                    {t('inventory.batches.viewPoDetails')}
                   </Button>
                 </Box>
               )}
               
               <Typography variant="body2" sx={{ mt: 2, fontWeight: 'medium' }}>
-                Usunięcie partii spowoduje:
+                {t('inventory.batches.deletionConsequences')}:
               </Typography>
               <ul>
                 <li>
                   <Typography variant="body2">
-                    Zmniejszenie całkowitej ilości produktu w magazynie
+                    {t('inventory.batches.decreaseTotalQuantity')}
                   </Typography>
                 </li>
                 <li>
                   <Typography variant="body2">
-                    Pozostawienie historii transakcji (pojawi się nowa transakcja usunięcia)
+                    {t('inventory.batches.transactionHistoryKept')}
                   </Typography>
                 </li>
                 <li>
                   <Typography variant="body2">
-                    Utratę powiązań z zamówieniami zakupowymi lub produkcyjnymi
+                    {t('inventory.batches.lossOfLinksToOrders')}
                   </Typography>
                 </li>
               </ul>
@@ -1358,7 +1360,7 @@ const BatchesPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeDeleteDialog} disabled={processingDelete}>
-            Anuluj
+            {t('common.cancel')}
           </Button>
           <Button 
             variant="contained" 
@@ -1366,7 +1368,7 @@ const BatchesPage = () => {
             onClick={handleDeleteBatch}
             disabled={processingDelete}
           >
-            {processingDelete ? 'Usuwanie...' : 'Usuń partię'}
+            {processingDelete ? t('inventory.batches.deleting') : t('inventory.batches.deleteBatch')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1374,19 +1376,19 @@ const BatchesPage = () => {
       {/* Dialog do zarządzania certyfikatem partii */}
       <Dialog open={certificateDialogOpen} onClose={closeCertificateDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Dodaj certyfikat do partii
+          {t('inventory.batches.addCertificateToBatch')}
         </DialogTitle>
         <DialogContent>
           {selectedBatchForCertificate && (
             <Box sx={{ pt: 1 }}>
               <Typography variant="subtitle1" gutterBottom>
-                Informacje o partii:
+                {t('inventory.batches.batchInfo')}:
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Numer partii/LOT:</strong> {selectedBatchForCertificate.batchNumber || selectedBatchForCertificate.lotNumber || '-'}
+                <strong>{t('inventory.batches.batchNumber')}:</strong> {selectedBatchForCertificate.batchNumber || selectedBatchForCertificate.lotNumber || '-'}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Magazyn:</strong> {selectedBatchForCertificate.warehouseName || 'Magazyn podstawowy'}
+                <strong>{t('inventory.batches.warehouse')}:</strong> {selectedBatchForCertificate.warehouseName || t('inventory.batches.defaultWarehouse')}
               </Typography>
               
               <Box sx={{ mt: 3 }}>
@@ -1406,27 +1408,27 @@ const BatchesPage = () => {
                     fullWidth
                     sx={{ mb: 2 }}
                   >
-                    Wybierz plik certyfikatu
+                    {t('inventory.batches.selectCertificateFile')}
                   </Button>
                 </label>
                 
                 {certificateFile && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" gutterBottom>
-                      Wybrany plik: {certificateFile.name}
+                      {t('inventory.batches.selectedFile')}: {certificateFile.name}
                     </Typography>
                     
                     {certificatePreviewUrl && (
                       <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
                         <Typography variant="subtitle2" gutterBottom>
-                          Podgląd dokumentu:
+                          {t('inventory.batches.documentPreview')}:
                         </Typography>
                         
                         {certificateFile.type.startsWith('image/') ? (
                           <Box sx={{ mt: 1, textAlign: 'center' }}>
                             <img 
                               src={certificatePreviewUrl} 
-                              alt="Podgląd certyfikatu" 
+                              alt={t('inventory.batches.certificatePreviewAlt')} 
                               style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
                             />
                           </Box>
@@ -1434,7 +1436,7 @@ const BatchesPage = () => {
                           <Box sx={{ mt: 1, textAlign: 'center', height: '300px' }}>
                             <iframe 
                               src={certificatePreviewUrl} 
-                              title="Podgląd PDF" 
+                              title={t('inventory.batches.pdfPreview')} 
                               width="100%" 
                               height="100%" 
                               style={{ border: 'none' }}
@@ -1442,7 +1444,7 @@ const BatchesPage = () => {
                           </Box>
                         ) : (
                           <Typography variant="body2" color="text.secondary">
-                            Podgląd dla tego typu pliku nie jest dostępny. Dokument zostanie zapisany w systemie.
+                            {t('inventory.batches.previewNotAvailable')}
                           </Typography>
                         )}
                       </Box>
@@ -1459,7 +1461,7 @@ const BatchesPage = () => {
             color="inherit"
             disabled={uploadingCertificate}
           >
-            Anuluj
+            {t('common.cancel')}
           </Button>
           <Button 
             onClick={handleUploadCertificate} 
@@ -1468,7 +1470,7 @@ const BatchesPage = () => {
             disabled={!certificateFile || uploadingCertificate}
             startIcon={uploadingCertificate ? <CircularProgress size={20} /> : null}
           >
-            {uploadingCertificate ? 'Przesyłanie...' : 'Prześlij certyfikat'}
+            {uploadingCertificate ? t('inventory.batches.uploading') : t('inventory.batches.uploadCertificate')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1481,23 +1483,23 @@ const BatchesPage = () => {
         fullWidth
       >
         <DialogTitle>
-          Podgląd certyfikatu
+          {t('inventory.batches.certificatePreviewTitle')}
         </DialogTitle>
         <DialogContent>
           {selectedCertificateForPreview && (
             <Box sx={{ pt: 1 }}>
               <Typography variant="subtitle1" gutterBottom>
-                Informacje o certyfikacie:
+                {t('inventory.batches.certificateInfo')}:
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Nazwa pliku:</strong> {selectedCertificateForPreview.certificateFileName || "Dokument"}
+                <strong>{t('inventory.batches.fileName')}:</strong> {selectedCertificateForPreview.certificateFileName || t('inventory.batches.document')}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Numer partii:</strong> {selectedCertificateForPreview.batchNumber || selectedCertificateForPreview.lotNumber || "—"}
+                <strong>{t('inventory.batches.batchNumber')}:</strong> {selectedCertificateForPreview.batchNumber || selectedCertificateForPreview.lotNumber || "—"}
               </Typography>
               {selectedCertificateForPreview.certificateUploadedAt && (
                 <Typography variant="body2" gutterBottom>
-                  <strong>Data dodania:</strong> {
+                  <strong>{t('inventory.batches.addedDate')}:</strong> {
                     selectedCertificateForPreview.certificateUploadedAt.toDate 
                       ? formatDate(selectedCertificateForPreview.certificateUploadedAt.toDate()) 
                       : formatDate(new Date(selectedCertificateForPreview.certificateUploadedAt))
@@ -1512,7 +1514,7 @@ const BatchesPage = () => {
                     <Box sx={{ textAlign: 'center' }}>
                       <img 
                         src={selectedCertificateForPreview.certificateBase64} 
-                        alt="Podgląd certyfikatu" 
+                        alt={t('inventory.batches.certificatePreviewAlt')} 
                         style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
                       />
                     </Box>
@@ -1521,7 +1523,7 @@ const BatchesPage = () => {
                     <Box sx={{ height: '500px', border: '1px solid #e0e0e0' }}>
                       <iframe 
                         src={selectedCertificateForPreview.certificateBase64} 
-                        title="Podgląd PDF" 
+                        title={t('inventory.batches.pdfPreview')} 
                         width="100%" 
                         height="100%" 
                         style={{ border: 'none' }}
@@ -1531,7 +1533,7 @@ const BatchesPage = () => {
                     // Inne typy plików - informacja o nieobsługiwanym formacie
                     <Box sx={{ textAlign: 'center' }}>
                       <Typography variant="body2" color="text.secondary" paragraph>
-                        Podgląd dla tego typu dokumentu nie jest dostępny.
+                        {t('inventory.batches.previewNotAvailableDocument')}
                       </Typography>
                       <a 
                         href={selectedCertificateForPreview.certificateBase64} 
@@ -1544,7 +1546,7 @@ const BatchesPage = () => {
                           startIcon={<InsertDriveFileIcon />}
                           sx={{ mt: 1 }}
                         >
-                          Pobierz certyfikat
+                          {t('inventory.batches.downloadCertificate')}
                         </Button>
                       </a>
                     </Box>
@@ -1555,7 +1557,7 @@ const BatchesPage = () => {
                     <Box sx={{ textAlign: 'center' }}>
                       <img 
                         src={selectedCertificateForPreview.certificateDownloadURL} 
-                        alt="Podgląd certyfikatu" 
+                        alt={t('inventory.batches.certificatePreviewAlt')} 
                         style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain' }} 
                       />
                     </Box>
@@ -1564,7 +1566,7 @@ const BatchesPage = () => {
                     <Box sx={{ height: '500px', border: '1px solid #e0e0e0' }}>
                       <iframe 
                         src={selectedCertificateForPreview.certificateDownloadURL} 
-                        title="Podgląd PDF" 
+                        title={t('inventory.batches.pdfPreview')} 
                         width="100%" 
                         height="100%" 
                         style={{ border: 'none' }}
@@ -1574,7 +1576,7 @@ const BatchesPage = () => {
                     // Inne typy plików - przycisk do pobrania
                     <Box sx={{ textAlign: 'center' }}>
                       <Typography variant="body2" color="text.secondary" paragraph>
-                        Podgląd dla tego typu dokumentu nie jest dostępny.
+                        {t('inventory.batches.previewNotAvailableDocument')}
                       </Typography>
                       <a 
                         href={selectedCertificateForPreview.certificateDownloadURL} 
@@ -1587,7 +1589,7 @@ const BatchesPage = () => {
                           startIcon={<InsertDriveFileIcon />}
                           sx={{ mt: 1 }}
                         >
-                          Pobierz certyfikat
+                          {t('inventory.batches.downloadCertificate')}
                         </Button>
                       </a>
                     </Box>
@@ -1596,7 +1598,7 @@ const BatchesPage = () => {
                   // Brak danych certyfikatu
                   <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="body2" color="error">
-                      Nie można wyświetlić certyfikatu. Dane są uszkodzone lub niekompletne.
+                      {t('inventory.batches.cannotDisplayCertificate')}
                     </Typography>
                   </Box>
                 )}
@@ -1606,7 +1608,7 @@ const BatchesPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={closePreviewDialog}>
-            Zamknij
+            {t('common.close')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -6,16 +6,19 @@ import {
   Storage as StorageIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const InventoryFormsPage = () => {
+  const { t } = useTranslation();
+  
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" gutterBottom>
-          Formularze magazynowe
+          {t('inventoryForms.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Formularze, dokumenty i narzędzia dostępne dla pracowników magazynu
+          {t('inventoryForms.description')}
         </Typography>
       </Box>
       
@@ -25,10 +28,10 @@ const InventoryFormsPage = () => {
             <CardContent sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <StorageIcon sx={{ mr: 1 }} />
-                Raport - Załadunek towaru
+                {t('inventoryForms.loadingReport.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Formularz dokumentujący proces załadunku towaru. Zawiera identyfikację pracownika, informacje o przewoźniku i stanie technicznym pojazdu.
+                {t('inventoryForms.loadingReport.description')}
               </Typography>
             </CardContent>
             <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -41,7 +44,7 @@ const InventoryFormsPage = () => {
                 fullWidth
                 sx={{ mb: 1 }}
               >
-                Wypełnij formularz
+                {t('inventoryForms.fillForm')}
               </Button>
               <Button 
                 startIcon={<ListIcon />} 
@@ -51,7 +54,7 @@ const InventoryFormsPage = () => {
                 variant="outlined"
                 fullWidth
               >
-                Wyświetl odpowiedzi
+                {t('inventoryForms.viewResponses')}
               </Button>
             </CardActions>
           </Card>
@@ -62,10 +65,10 @@ const InventoryFormsPage = () => {
             <CardContent sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <StorageIcon sx={{ mr: 1, transform: 'scaleX(-1)' }} />
-                Raport - Rozładunek towaru
+                {t('inventoryForms.unloadingReport.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Formularz dokumentujący proces rozładunku towaru. Zawiera identyfikację pracownika, informacje o dostawcy i ocenę wizualną towaru.
+                {t('inventoryForms.unloadingReport.description')}
               </Typography>
             </CardContent>
             <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -78,7 +81,7 @@ const InventoryFormsPage = () => {
                 fullWidth
                 sx={{ mb: 1 }}
               >
-                Wypełnij formularz
+                {t('inventoryForms.fillForm')}
               </Button>
               <Button 
                 startIcon={<ListIcon />} 
@@ -88,7 +91,7 @@ const InventoryFormsPage = () => {
                 variant="outlined"
                 fullWidth
               >
-                Wyświetl odpowiedzi
+                {t('inventoryForms.viewResponses')}
               </Button>
             </CardActions>
           </Card>

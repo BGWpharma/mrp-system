@@ -276,7 +276,7 @@ const InteractionsPage = () => {
           color="primary" 
           startIcon={<AddIcon />}
           component={Link}
-          to="/inventory/interactions/new"
+          to="/crm/interactions/new"
                   >
             {t('purchaseInteractions.newInteraction')}
           </Button>
@@ -415,7 +415,7 @@ const InteractionsPage = () => {
                           <IconButton 
                             size="small"
                             component={Link}
-                            to={`/inventory/interactions/${interaction.id}/edit`}
+                            to={`/crm/interactions/${interaction.id}/edit`}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
@@ -425,7 +425,7 @@ const InteractionsPage = () => {
                             size="small"
                             color="primary"
                             component={Link}
-                            to={`/inventory/interactions/${interaction.id}`}
+                            to={`/crm/interactions/${interaction.id}`}
                           >
                             <ViewIcon fontSize="small" />
                           </IconButton>
@@ -453,7 +453,7 @@ const InteractionsPage = () => {
                       variant="contained" 
                       startIcon={<AddIcon />}
                       component={Link}
-                      to="/inventory/interactions/new"
+                      to="/crm/interactions/new"
                       sx={{ mt: 2 }}
                     >
                                               {t('purchaseInteractions.noResults.createFirst')}
@@ -608,7 +608,7 @@ const InteractionsPage = () => {
                     variant="outlined" 
                     startIcon={<EditIcon />}
                     component={Link}
-                    to={`/inventory/interactions/${selectedInteraction.id}/edit`}
+                    to={`/crm/interactions/${selectedInteraction.id}/edit`}
                     onClick={() => setDetailsDialogOpen(false)}
                   >
                     {t('InteractionsPage.editButton')}

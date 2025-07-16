@@ -31,10 +31,12 @@ import { ref, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Komponent strony odpowiedzi formularzy magazynowych
 const InventoryFormsResponsesPage = () => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -330,7 +332,7 @@ const InventoryFormsResponsesPage = () => {
   const LoadingReportTable = () => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">Raporty załadunku towaru</Typography>
+        <Typography variant="h6">{t('inventory.forms.loadingReport.title')}</Typography>
         <Box>
           <Button 
             variant="outlined" 
@@ -338,19 +340,19 @@ const InventoryFormsResponsesPage = () => {
             disabled={loadingReportResponses.length === 0}
             sx={{ mr: 1 }}
           >
-            Eksportuj do CSV
+            {t('inventory.forms.exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
             color="secondary"
             onClick={handleBack}
           >
-            Powrót
+            {t('inventory.forms.back')}
           </Button>
         </Box>
       </Box>
       {loadingReportResponses.length === 0 ? (
-        <Alert severity="info">Brak zapisanych odpowiedzi formularzy</Alert>
+        <Alert severity="info">{t('inventory.forms.noResponses')}</Alert>
       ) : (
         <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
@@ -360,25 +362,25 @@ const InventoryFormsResponsesPage = () => {
                   ? 'rgba(255, 255, 255, 0.05)' 
                   : '#f5f5f5' 
               }}>
-                <TableCell>Data wypełnienia</TableCell>
-                <TableCell>Godzina</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Pracownik</TableCell>
-                <TableCell>Stanowisko</TableCell>
-                <TableCell>Numer CMR</TableCell>
-                <TableCell>Data załadunku</TableCell>
-                <TableCell>Przewoźnik</TableCell>
-                <TableCell>Nr rejestracyjny</TableCell>
-                <TableCell>Stan techniczny</TableCell>
-                <TableCell>Nazwa klienta</TableCell>
-                <TableCell>Numer zamówienia</TableCell>
-                <TableCell>Paleta/nazwa produktu</TableCell>
-                <TableCell align="right">Ilość palet</TableCell>
-                <TableCell align="right">Waga</TableCell>
-                <TableCell>Uwagi załadunku</TableCell>
-                <TableCell>Uwagi towaru</TableCell>
-                <TableCell>Załączniki</TableCell>
-                <TableCell align="center">Akcje</TableCell>
+                <TableCell>{t('inventory.forms.fillDate')}</TableCell>
+                <TableCell>{t('inventory.forms.fillTime')}</TableCell>
+                <TableCell>{t('inventory.forms.email')}</TableCell>
+                <TableCell>{t('inventory.forms.employeeName')}</TableCell>
+                <TableCell>{t('inventory.forms.position')}</TableCell>
+                <TableCell>{t('inventory.forms.cmrNumber')}</TableCell>
+                <TableCell>{t('inventory.forms.loadingDate')}</TableCell>
+                <TableCell>{t('inventory.forms.carrierName')}</TableCell>
+                <TableCell>{t('inventory.forms.vehicleRegistration')}</TableCell>
+                <TableCell>{t('inventory.forms.vehicleTechnicalCondition')}</TableCell>
+                <TableCell>{t('inventory.forms.clientName')}</TableCell>
+                <TableCell>{t('inventory.forms.orderNumber')}</TableCell>
+                <TableCell>{t('inventory.forms.palletProductName')}</TableCell>
+                <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
+                <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
+                <TableCell>{t('inventory.forms.loadingNotes')}</TableCell>
+                <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
+                <TableCell>{t('inventory.forms.documents')}</TableCell>
+                <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -409,12 +411,12 @@ const InventoryFormsResponsesPage = () => {
                         target="_blank" 
                         rel="noopener noreferrer"
                       >
-                        {row.documentsName || 'Pobierz'}
+                        {row.documentsName || t('inventory.forms.download')}
                       </Button>
                     ) : '-'}
                   </TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Edytuj odpowiedź">
+                    <Tooltip title={t('inventory.forms.editResponse')}>
                       <IconButton 
                         size="small" 
                         color="primary"
@@ -423,7 +425,7 @@ const InventoryFormsResponsesPage = () => {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Usuń odpowiedź">
+                    <Tooltip title={t('inventory.forms.deleteResponse')}>
                       <IconButton 
                         size="small" 
                         color="error"
@@ -446,7 +448,7 @@ const InventoryFormsResponsesPage = () => {
   const UnloadingReportTable = () => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">Raporty rozładunku towaru</Typography>
+        <Typography variant="h6">{t('inventory.forms.unloadingReport.title')}</Typography>
         <Box>
           <Button 
             variant="outlined" 
@@ -454,19 +456,19 @@ const InventoryFormsResponsesPage = () => {
             disabled={unloadingReportResponses.length === 0}
             sx={{ mr: 1 }}
           >
-            Eksportuj do CSV
+            {t('inventory.forms.exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
             color="secondary"
             onClick={handleBack}
           >
-            Powrót
+            {t('inventory.forms.back')}
           </Button>
         </Box>
       </Box>
       {unloadingReportResponses.length === 0 ? (
-        <Alert severity="info">Brak zapisanych odpowiedzi formularzy</Alert>
+        <Alert severity="info">{t('inventory.forms.noResponses')}</Alert>
       ) : (
         <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
           <Table size="small" stickyHeader>
@@ -476,28 +478,28 @@ const InventoryFormsResponsesPage = () => {
                   ? 'rgba(255, 255, 255, 0.05)' 
                   : '#f5f5f5' 
               }}>
-                <TableCell>Data wypełnienia</TableCell>
-                <TableCell>Godzina</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Pracownik</TableCell>
-                <TableCell>Stanowisko</TableCell>
-                <TableCell>Data rozładunku</TableCell>
-                <TableCell>Przewoźnik</TableCell>
-                <TableCell>Nr rejestracyjny</TableCell>
-                <TableCell>Stan techniczny</TableCell>
-                <TableCell>Higiena transportu</TableCell>
-                <TableCell>Dostawca</TableCell>
-                <TableCell>Numer PO</TableCell>
-                <TableCell>Pozycje dostarczone</TableCell>
-                <TableCell align="right">Ilość palet</TableCell>
-                <TableCell align="right">Ilość kartonów/tub</TableCell>
-                <TableCell align="right">Waga</TableCell>
-                <TableCell>Ocena wizualna</TableCell>
-                <TableCell>Nr certyfikatu eko</TableCell>
-                <TableCell>Uwagi rozładunku</TableCell>
-                <TableCell>Uwagi towaru</TableCell>
-                <TableCell>Załączniki</TableCell>
-                <TableCell align="center">Akcje</TableCell>
+                <TableCell>{t('inventory.forms.fillDate')}</TableCell>
+                <TableCell>{t('inventory.forms.fillTime')}</TableCell>
+                <TableCell>{t('inventory.forms.email')}</TableCell>
+                <TableCell>{t('inventory.forms.employeeName')}</TableCell>
+                <TableCell>{t('inventory.forms.position')}</TableCell>
+                <TableCell>{t('inventory.forms.unloadingDate')}</TableCell>
+                <TableCell>{t('inventory.forms.carrierName')}</TableCell>
+                <TableCell>{t('inventory.forms.vehicleRegistration')}</TableCell>
+                <TableCell>{t('inventory.forms.vehicleTechnicalCondition')}</TableCell>
+                <TableCell>{t('inventory.forms.transportHygiene')}</TableCell>
+                <TableCell>{t('inventory.forms.supplierName')}</TableCell>
+                <TableCell>{t('inventory.forms.poNumber')}</TableCell>
+                <TableCell>{t('inventory.forms.deliveredItems')}</TableCell>
+                <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
+                <TableCell align="right">{t('inventory.forms.cartonsTubsQuantity')}</TableCell>
+                <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
+                <TableCell>{t('inventory.forms.visualInspectionResult')}</TableCell>
+                <TableCell>{t('inventory.forms.ecoCertificateNumber')}</TableCell>
+                <TableCell>{t('inventory.forms.unloadingNotes')}</TableCell>
+                <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
+                <TableCell>{t('inventory.forms.documents')}</TableCell>
+                <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -533,12 +535,12 @@ const InventoryFormsResponsesPage = () => {
                         target="_blank" 
                         rel="noopener noreferrer"
                       >
-                        {row.documentsName || 'Pobierz'}
+                        {row.documentsName || t('inventory.forms.download')}
                       </Button>
                     ) : '-'}
                   </TableCell>
                   <TableCell align="center">
-                    <Tooltip title="Edytuj odpowiedź">
+                    <Tooltip title={t('inventory.forms.editResponse')}>
                       <IconButton 
                         size="small" 
                         color="primary"
@@ -547,7 +549,7 @@ const InventoryFormsResponsesPage = () => {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Usuń odpowiedź">
+                    <Tooltip title={t('inventory.forms.deleteResponse')}>
                       <IconButton 
                         size="small" 
                         color="error"
@@ -569,18 +571,12 @@ const InventoryFormsResponsesPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Odpowiedzi formularzy magazynowych
-        </Typography>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          Przeglądaj dane z wypełnionych formularzy magazynowych
-        </Typography>
+        <Typography variant="h5" gutterBottom>{t('inventory.forms.responses.title')}</Typography>
+        <Typography variant="body2" color="text.secondary" gutterBottom>{t('inventory.forms.responses.description')}</Typography>
       </Box>
       
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          Błąd podczas ładowania danych: {error}
-        </Alert>
+        <Alert severity="error" sx={{ mb: 3 }}>{t('inventory.forms.errorLoadingData')}: {error}</Alert>
       )}
       
       <Paper sx={{ mb: 4 }}>
@@ -591,8 +587,8 @@ const InventoryFormsResponsesPage = () => {
           textColor="primary"
           variant="fullWidth"
         >
-          <Tab label="Raporty załadunku towaru" />
-          <Tab label="Raporty rozładunku towaru" />
+          <Tab label={t('inventory.forms.loadingReport.title')} />
+          <Tab label={t('inventory.forms.unloadingReport.title')} />
         </Tabs>
       </Paper>
       
@@ -612,19 +608,15 @@ const InventoryFormsResponsesPage = () => {
         open={deleteConfirmOpen}
         onClose={handleDeleteCancel}
       >
-        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogTitle>{t('inventory.forms.deleteConfirm.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć tę odpowiedź formularza? Ta operacja jest nieodwracalna.
+            {t('inventory.forms.deleteConfirm.message')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDeleteCancel} color="primary">
-            Anuluj
-          </Button>
-          <Button onClick={handleDeleteConfirm} color="error" autoFocus>
-            Usuń
-          </Button>
+          <Button onClick={handleDeleteCancel} color="primary">{t('inventory.forms.deleteConfirm.cancel')}</Button>
+          <Button onClick={handleDeleteConfirm} color="error" autoFocus>{t('inventory.forms.deleteConfirm.delete')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

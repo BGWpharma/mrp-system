@@ -80,11 +80,13 @@ import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useInventoryListState } from '../../contexts/InventoryListStateContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Definicje stałych
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
 const InventoryList = () => {
+  const { t } = useTranslation();
   const [inventoryItems, setInventoryItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1495,10 +1497,10 @@ const InventoryList = () => {
   return (
     <div>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
-        <Typography variant="h5">Stany</Typography>
+        <Typography variant="h5">{t('inventory.states.title')}</Typography>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
-            <Tooltip title="Więcej opcji">
+            <Tooltip title={t('inventory.states.moreOptions')}>
               <Button
                 variant="outlined"
                 color="primary"
@@ -1507,7 +1509,7 @@ const InventoryList = () => {
                 sx={{ flex: 1 }}
                 disabled={mainTableLoading}
               >
-                Więcej
+                {t('inventory.states.more')}
               </Button>
             </Tooltip>
             <Button 
@@ -1518,7 +1520,7 @@ const InventoryList = () => {
               startIcon={<AddIcon />}
               sx={{ flex: 1 }}
             >
-              Nowa pozycja
+              {t('inventory.states.newItem')}
             </Button>
           </Box>
         </Box>
@@ -1537,19 +1539,19 @@ const InventoryList = () => {
             <ListItemIcon>
               <PdfIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Raport PDF</ListItemText>
+            <ListItemText>{t('inventory.states.pdfReport')}</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => handleMenuItemClick('csv')}>
             <ListItemIcon>
               <CsvIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Raport CSV</ListItemText>
+            <ListItemText>{t('inventory.states.csvReport')}</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => handleMenuItemClick('coa')}>
             <ListItemIcon>
               <CoAIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>Generator CoA</ListItemText>
+            <ListItemText>{t('inventory.states.coaGenerator')}</ListItemText>
           </MenuItem>
           <MenuItem component={RouterLink} to="/inventory/expiry-dates" onClick={handleMoreMenuClose}>
             <ListItemIcon>
@@ -1557,7 +1559,7 @@ const InventoryList = () => {
                 <WarningIcon fontSize="small" />
               </Badge>
             </ListItemIcon>
-            <ListItemText>Daty ważności</ListItemText>
+            <ListItemText>{t('inventory.states.expiryDates')}</ListItemText>
           </MenuItem>
         </Menu>
       </Box>
@@ -1568,10 +1570,10 @@ const InventoryList = () => {
         onChange={handleTabChange}
         sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
       >
-        <Tab label="Stany" />
-        <Tab label="Lokalizacje" />
-        <Tab label="Grupy" />
-        <Tab label="Rezerwacje" />
+        <Tab label={t('inventory.states.tabs.states')} />
+        <Tab label={t('inventory.states.tabs.locations')} />
+        <Tab label={t('inventory.states.tabs.groups')} />
+        <Tab label={t('inventory.states.tabs.reservations')} />
       </Tabs>
 
       {/* Zawartość pierwszej zakładki - Stany */}
@@ -1580,7 +1582,7 @@ const InventoryList = () => {
           <Fade in={true} timeout={300}>
             <Box sx={{ display: 'flex', mb: 3, flexWrap: 'wrap', gap: 2 }}>
               <TextField
-                label="Szukaj SKU"
+                label={t('inventory.states.searchSku')}
                 variant="outlined"
                 value={searchTerm}
                 onChange={handleSearchTermChange}
@@ -1591,15 +1593,15 @@ const InventoryList = () => {
                 }}
               />
               <FormControl sx={{ flexGrow: 1, minWidth: '200px' }}>
-                <InputLabel id="category-select-label">Szukaj kategorii</InputLabel>
+                <InputLabel id="category-select-label">{t('inventory.states.searchCategory')}</InputLabel>
                 <Select
                   labelId="category-select-label"
                   value={searchCategory}
-                  label="Szukaj kategorii"
+                  label={t('inventory.states.searchCategory')}
                   onChange={handleSearchCategoryChange}
                   size="small"
                 >
-                  <MenuItem value="">Wszystkie kategorie</MenuItem>
+                  <MenuItem value="">{t('inventory.states.allCategories')}</MenuItem>
                   {Object.values(INVENTORY_CATEGORIES).map((category) => (
                     <MenuItem key={category} value={category}>{category}</MenuItem>
                   ))}
@@ -1610,9 +1612,9 @@ const InventoryList = () => {
                 onClick={handleSearch}
                 size="medium"
               >
-                Szukaj teraz
+                {t('inventory.states.searchNow')}
               </Button>
-              <Tooltip title="Konfiguruj widoczne kolumny">
+              <Tooltip title={t('inventory.states.configureColumns')}>
                 <IconButton onClick={handleColumnMenuOpen}>
                   <ViewColumnIcon />
                 </IconButton>
@@ -1626,16 +1628,16 @@ const InventoryList = () => {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      {visibleColumns.name && <TableCell>SKU</TableCell>}
-                      {visibleColumns.category && <TableCell>Kategoria</TableCell>}
-                      {visibleColumns.casNumber && <TableCell>Numer CAS</TableCell>}
-                      {visibleColumns.barcode && <TableCell>Kod kreskowy</TableCell>}
-                      {visibleColumns.totalQuantity && <TableCell>Ilość całkowita</TableCell>}
-                      {visibleColumns.reservedQuantity && <TableCell>Ilość zarezerwowana</TableCell>}
-                      {visibleColumns.availableQuantity && <TableCell>Ilość dostępna</TableCell>}
-                      {visibleColumns.status && <TableCell>Status</TableCell>}
-                      {visibleColumns.location && <TableCell>Lokalizacja</TableCell>}
-                      {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
+                      {visibleColumns.name && <TableCell>{t('inventory.states.table.sku')}</TableCell>}
+                      {visibleColumns.category && <TableCell>{t('inventory.states.table.category')}</TableCell>}
+                      {visibleColumns.casNumber && <TableCell>{t('inventory.states.table.casNumber')}</TableCell>}
+                      {visibleColumns.barcode && <TableCell>{t('inventory.states.table.barcode')}</TableCell>}
+                      {visibleColumns.totalQuantity && <TableCell>{t('inventory.states.table.totalQuantity')}</TableCell>}
+                      {visibleColumns.reservedQuantity && <TableCell>{t('inventory.states.table.reservedQuantity')}</TableCell>}
+                      {visibleColumns.availableQuantity && <TableCell>{t('inventory.states.table.availableQuantity')}</TableCell>}
+                      {visibleColumns.status && <TableCell>{t('inventory.states.table.status')}</TableCell>}
+                      {visibleColumns.location && <TableCell>{t('inventory.states.table.location')}</TableCell>}
+                      {visibleColumns.actions && <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1674,7 +1676,7 @@ const InventoryList = () => {
           ) : filteredItems.length === 0 ? (
             <Fade in={!mainTableLoading} timeout={300}>
               <Typography variant="body1" align="center">
-                Nie znaleziono pozycji ze stanów
+                {t('inventory.states.noItemsFound')}
               </Typography>
             </Fade>
           ) : (
@@ -1687,7 +1689,7 @@ const InventoryList = () => {
                         {visibleColumns.name && (
                           <TableCell onClick={() => handleTableSort('name')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              SKU
+                              {t('inventory.states.table.sku')}
                               {tableSort.field === 'name' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1702,7 +1704,7 @@ const InventoryList = () => {
                         {visibleColumns.category && (
                           <TableCell onClick={() => handleTableSort('category')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Kategoria
+                              {t('inventory.states.table.category')}
                               {tableSort.field === 'category' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1717,7 +1719,7 @@ const InventoryList = () => {
                         {visibleColumns.casNumber && (
                           <TableCell onClick={() => handleTableSort('casNumber')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Numer CAS
+                              {t('inventory.states.table.casNumber')}
                               {tableSort.field === 'casNumber' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1732,7 +1734,7 @@ const InventoryList = () => {
                         {visibleColumns.barcode && (
                           <TableCell onClick={() => handleTableSort('barcode')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Kod kreskowy
+                              {t('inventory.states.table.barcode')}
                               {tableSort.field === 'barcode' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1747,7 +1749,7 @@ const InventoryList = () => {
                         {visibleColumns.totalQuantity && (
                           <TableCell onClick={() => handleTableSort('totalQuantity')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Ilość całkowita
+                              {t('inventory.states.table.totalQuantity')}
                               {tableSort.field === 'totalQuantity' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1762,7 +1764,7 @@ const InventoryList = () => {
                         {visibleColumns.reservedQuantity && (
                           <TableCell onClick={() => handleTableSort('reservedQuantity')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Ilość zarezerwowana
+                              {t('inventory.states.table.reservedQuantity')}
                               {tableSort.field === 'reservedQuantity' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1777,7 +1779,7 @@ const InventoryList = () => {
                         {visibleColumns.availableQuantity && (
                           <TableCell onClick={() => handleTableSort('availableQuantity')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Ilość dostępna
+                              {t('inventory.states.table.availableQuantity')}
                               {tableSort.field === 'availableQuantity' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1792,7 +1794,7 @@ const InventoryList = () => {
                         {visibleColumns.status && (
                           <TableCell onClick={() => handleTableSort('status')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Status
+                              {t('inventory.states.table.status')}
                               {tableSort.field === 'status' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1807,7 +1809,7 @@ const InventoryList = () => {
                         {visibleColumns.location && (
                           <TableCell onClick={() => handleTableSort('location')} style={{ cursor: 'pointer' }}>
                             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              Lokalizacja
+                              {t('inventory.states.table.location')}
                               {tableSort.field === 'location' && (
                                 <ArrowDropUpIcon 
                                   sx={{ 
@@ -1819,7 +1821,7 @@ const InventoryList = () => {
                             </Box>
                           </TableCell>
                         )}
-                        {visibleColumns.actions && <TableCell align="right">Akcje</TableCell>}
+                        {visibleColumns.actions && <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1911,7 +1913,7 @@ const InventoryList = () => {
                                   >
                                     {bookedQuantity} {item.unit}
                                     {bookedQuantity > 0 && (
-                                      <Tooltip title="Kliknij, aby zobaczyć szczegóły rezerwacji">
+                                      <Tooltip title={t('inventory.states.clickToViewReservations')}>
                                         <ReservationIcon 
                                           fontSize="small" 
                                           sx={{ 
@@ -1952,7 +1954,7 @@ const InventoryList = () => {
                                       component={RouterLink} 
                                       to={`/inventory/${item.id}`}
                                       color="secondary"
-                                      title="Szczegóły"
+                                      title={t('inventory.states.actions.details')}
                                       sx={{ 
                                         transition: 'all 0.15s ease-in-out',
                                         '&:hover': { transform: 'scale(1.1)' }
@@ -1964,7 +1966,7 @@ const InventoryList = () => {
                                       component={RouterLink} 
                                       to={`/inventory/${item.id}/receive`}
                                       color="success"
-                                      title="Przyjmij"
+                                      title={t('inventory.states.actions.receive')}
                                       sx={{ 
                                         transition: 'all 0.15s ease-in-out',
                                         '&:hover': { transform: 'scale(1.1)' }
@@ -1976,7 +1978,7 @@ const InventoryList = () => {
                                       component={RouterLink} 
                                       to={`/inventory/${item.id}/issue`}
                                       color="warning"
-                                      title="Wydaj"
+                                      title={t('inventory.states.actions.issue')}
                                       sx={{ 
                                         transition: 'all 0.15s ease-in-out',
                                         '&:hover': { transform: 'scale(1.1)' }
@@ -1987,7 +1989,7 @@ const InventoryList = () => {
                                     <IconButton
                                       onClick={(e) => handleMenuOpen(e, item)}
                                       color="primary"
-                                      title="Więcej akcji"
+                                      title={t('inventory.states.actions.moreActions')}
                                       sx={{ 
                                         transition: 'all 0.15s ease-in-out',
                                         '&:hover': { transform: 'scale(1.1)' }
@@ -2011,7 +2013,7 @@ const InventoryList = () => {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography variant="body2" sx={{ mr: 2 }}>
-                        Pozycje na stronie:
+                        {t('inventory.states.pagination.itemsPerPage')}:
                       </Typography>
                       <Select
                         value={pageSize}
@@ -2031,7 +2033,7 @@ const InventoryList = () => {
                       color="primary" 
                     />
                     <Typography variant="body2">
-                      Wyświetlanie {filteredItems.length} z {totalItems} pozycji
+                      {t('inventory.states.pagination.showing', { shown: filteredItems.length, total: totalItems })}
                     </Typography>
                   </Box>
                 </Fade>
@@ -2047,43 +2049,43 @@ const InventoryList = () => {
           >
             <MenuItem onClick={() => toggleColumnVisibility('name')}>
               <Checkbox checked={visibleColumns.name} />
-              <ListItemText primary="SKU" />
+              <ListItemText primary={t('inventory.states.table.sku')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('category')}>
               <Checkbox checked={visibleColumns.category} />
-              <ListItemText primary="Kategoria" />
+              <ListItemText primary={t('inventory.states.table.category')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('casNumber')}>
               <Checkbox checked={visibleColumns.casNumber} />
-              <ListItemText primary="Numer CAS" />
+              <ListItemText primary={t('inventory.states.table.casNumber')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('barcode')}>
               <Checkbox checked={visibleColumns.barcode} />
-              <ListItemText primary="Kod kreskowy" />
+              <ListItemText primary={t('inventory.states.table.barcode')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('totalQuantity')}>
               <Checkbox checked={visibleColumns.totalQuantity} />
-              <ListItemText primary="Ilość całkowita" />
+              <ListItemText primary={t('inventory.states.table.totalQuantity')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('reservedQuantity')}>
               <Checkbox checked={visibleColumns.reservedQuantity} />
-              <ListItemText primary="Ilość zarezerwowana" />
+              <ListItemText primary={t('inventory.states.table.reservedQuantity')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('availableQuantity')}>
               <Checkbox checked={visibleColumns.availableQuantity} />
-              <ListItemText primary="Ilość dostępna" />
+              <ListItemText primary={t('inventory.states.table.availableQuantity')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('status')}>
               <Checkbox checked={visibleColumns.status} />
-              <ListItemText primary="Status" />
+              <ListItemText primary={t('inventory.states.table.status')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('location')}>
               <Checkbox checked={visibleColumns.location} />
-              <ListItemText primary="Lokalizacja" />
+              <ListItemText primary={t('inventory.states.table.location')} />
             </MenuItem>
             <MenuItem onClick={() => toggleColumnVisibility('actions')}>
               <Checkbox checked={visibleColumns.actions} />
-              <ListItemText primary="Akcje" />
+              <ListItemText primary={t('inventory.states.table.actions')} />
             </MenuItem>
           </Menu>
         </>
@@ -2102,7 +2104,7 @@ const InventoryList = () => {
               onClick={() => handleOpenWarehouseDialog('add')}
                   startIcon={<AddIcon />}
             >
-                  Nowa lokalizacja
+                  {t('inventory.states.locations.newLocation')}
             </Button>
           </Box>
 
@@ -2110,10 +2112,10 @@ const InventoryList = () => {
                 <Table sx={{ minWidth: 650 }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Nazwa</TableCell>
-                      <TableCell>Adres</TableCell>
-                      <TableCell>Opis</TableCell>
-                      <TableCell align="right">Akcje</TableCell>
+                      <TableCell>{t('inventory.states.locations.name')}</TableCell>
+                      <TableCell>{t('inventory.states.locations.address')}</TableCell>
+                      <TableCell>{t('inventory.states.locations.description')}</TableCell>
+                      <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2126,7 +2128,7 @@ const InventoryList = () => {
                     ) : warehouses.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} align="center">
-                          Brak zdefiniowanych lokalizacji
+                          {t('inventory.states.locations.noLocations')}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -2173,10 +2175,10 @@ const InventoryList = () => {
                   onClick={handleBackToWarehouses}
                   sx={{ mr: 2 }}
                 >
-                  &larr; Powrót do lokalizacji
+                  &larr; {t('inventory.states.locations.backToLocations')}
                 </Button>
                 <Typography variant="h6">
-                  Pozycje w lokalizacji: {selectedWarehouseForView.name}
+                  {t('inventory.states.locations.itemsInLocation', { locationName: selectedWarehouseForView.name })}
                 </Typography>
               </Box>
 
@@ -2186,7 +2188,7 @@ const InventoryList = () => {
                     <TextField
                       fullWidth
                       variant="outlined"
-                      placeholder="Szukaj pozycji..."
+                      placeholder={t('inventory.states.locations.searchItems')}
                       value={warehouseSearchTerm}
                       onChange={handleWarehouseSearchTermChange}
                       InputProps={{
@@ -2208,7 +2210,7 @@ const InventoryList = () => {
                   <Grid item xs={12} sm={6} md={8}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                       <Typography variant="body2" color="textSecondary">
-                        Znaleziono {warehouseItemsTotalCount} pozycji
+                        {t('inventory.states.locations.foundItems', { count: warehouseItemsTotalCount })}
                       </Typography>
                     </Box>
                   </Grid>
@@ -2225,7 +2227,7 @@ const InventoryList = () => {
                           direction={warehouseItemsSort.field === 'name' ? warehouseItemsSort.order : 'asc'}
                           onClick={() => handleWarehouseTableSort('name')}
                         >
-                          SKU
+                          {t('inventory.states.table.sku')}
                         </TableSortLabel>
                       </TableCell>
                       <TableCell>
@@ -2234,20 +2236,20 @@ const InventoryList = () => {
                           direction={warehouseItemsSort.field === 'category' ? warehouseItemsSort.order : 'asc'}
                           onClick={() => handleWarehouseTableSort('category')}
                         >
-                          Kategoria
+                          {t('inventory.states.table.category')}
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>Jednostka</TableCell>
+                      <TableCell>{t('inventory.states.locations.unit')}</TableCell>
                       <TableCell align="right">
                         <TableSortLabel
                           active={warehouseItemsSort.field === 'totalQuantity'}
                           direction={warehouseItemsSort.field === 'totalQuantity' ? warehouseItemsSort.order : 'asc'}
                           onClick={() => handleWarehouseTableSort('totalQuantity')}
                         >
-                          Ilość
+                          {t('inventory.states.locations.quantity')}
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell align="right">Akcje</TableCell>
+                      <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2260,7 +2262,7 @@ const InventoryList = () => {
                     ) : warehouseItems.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} align="center">
-                          Brak pozycji w tej lokalizacji
+                          {t('inventory.states.locations.noItemsInLocation')}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -2275,7 +2277,7 @@ const InventoryList = () => {
                           <TableCell>{item.unit || 'szt.'}</TableCell>
                           <TableCell align="right">{formatQuantity(item.quantity) || 0}</TableCell>
                           <TableCell align="right">
-                            <Tooltip title="Pokaż partie">
+                            <Tooltip title={t('inventory.states.locations.showBatches')}>
                               <IconButton 
                                 color="info"
                                 onClick={() => handleShowItemBatches(item)}
@@ -2304,8 +2306,8 @@ const InventoryList = () => {
                   page={warehouseItemsPage - 1} // TablePagination używa indeksu 0, a my używamy indeksu 1
                   onPageChange={handleWarehousePageChange}
                   onRowsPerPageChange={handleWarehousePageSizeChange}
-                  labelRowsPerPage="Pozycji na stronę:"
-                  labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+                  labelRowsPerPage={t('inventory.states.pagination.itemsPerPage') + ':'}
+                  labelDisplayedRows={({ from, to, count }) => t('inventory.states.pagination.displayedRows', { from, to, count })}
                 />
               </TableContainer>
             </>
@@ -2323,7 +2325,7 @@ const InventoryList = () => {
               onClick={() => handleOpenGroupDialog('add')}
               startIcon={<AddIcon />}
             >
-              Nowa grupa
+              {t('inventory.states.groups.newGroup')}
             </Button>
           </Box>
 
@@ -2331,10 +2333,10 @@ const InventoryList = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Nazwa grupy</TableCell>
-                  <TableCell>Opis</TableCell>
-                  <TableCell>Liczba pozycji</TableCell>
-                  <TableCell align="right">Akcje</TableCell>
+                  <TableCell>{t('inventory.states.groups.groupName')}</TableCell>
+                  <TableCell>{t('common.description')}</TableCell>
+                  <TableCell>{t('inventory.states.groups.itemCount')}</TableCell>
+                  <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2347,7 +2349,7 @@ const InventoryList = () => {
                 ) : groups.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} align="center">
-                      Brak zdefiniowanych grup
+                      {t('inventory.states.groups.noGroups')}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -2383,16 +2385,16 @@ const InventoryList = () => {
         <>
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" component="h2" gutterBottom>
-              Lista zarezerwowanych partii do zadań produkcyjnych MO
+              {t('inventory.states.reservationsTab.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              Poniżej znajduje się lista wszystkich materiałów zarezerwowanych do zadań produkcyjnych.
+              {t('inventory.states.reservationsTab.description')}
             </Typography>
           </Box>
           
           <Box sx={{ display: 'flex', mb: 2, gap: 2 }}>
             <TextField
-              label="Filtruj po numerze MO"
+              label={t('inventory.states.reservationsTab.filterByMo')}
               variant="outlined"
               size="small"
               fullWidth
@@ -2413,7 +2415,7 @@ const InventoryList = () => {
               disabled={updatingTasks}
               startIcon={updatingTasks ? <CircularProgress size={24} /> : <HistoryIcon />}
             >
-              Aktualizuj zadania
+              {t('inventory.states.reservationsTab.updateTasks')}
             </Button>
             <Button 
               variant="outlined" 
@@ -2426,7 +2428,7 @@ const InventoryList = () => {
               disabled={cleaningReservations}
               startIcon={cleaningReservations ? <CircularProgress size={24} /> : <DeleteForeverIcon />}
             >
-              Usuń nieaktualne
+              {t('inventory.states.reservationsTab.removeOutdated')}
             </Button>
           </Box>
 
@@ -2434,13 +2436,13 @@ const InventoryList = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Numer MO</TableCell>
-                  <TableCell>Nazwa zadania</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell>Ilość zarezerwowana</TableCell>
-                  <TableCell>Numer partii</TableCell>
-                  <TableCell>Data rezerwacji</TableCell>
-                  <TableCell align="right">Akcje</TableCell>
+                  <TableCell>{t('inventory.states.reservationsTab.moNumber')}</TableCell>
+                  <TableCell>{t('inventory.states.reservationsTab.taskName')}</TableCell>
+                  <TableCell>{t('inventory.states.table.sku')}</TableCell>
+                  <TableCell>{t('inventory.states.reservationsTab.reservedQuantity')}</TableCell>
+                  <TableCell>{t('inventory.states.reservationsTab.batchNumber')}</TableCell>
+                  <TableCell>{t('inventory.states.reservationsTab.reservationDate')}</TableCell>
+                  <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2454,7 +2456,7 @@ const InventoryList = () => {
                   <TableRow>
                     <TableCell colSpan={8} align="center">
                       <Typography>
-                        {moFilter ? 'Nie znaleziono rezerwacji pasujących do filtra' : 'Brak rezerwacji dla zadań produkcyjnych'}
+                        {moFilter ? t('inventory.states.reservationsTab.noFilterResults') : t('inventory.states.reservationsTab.noReservations')}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -2463,7 +2465,7 @@ const InventoryList = () => {
                     <TableRow key={reservation.id}>
                       <TableCell>
                         <Typography variant="body2" component="div">
-                          {reservation.taskNumber || 'Bez numeru MO'}
+                          {reservation.taskNumber || t('inventory.states.reservationsTab.noMoNumber')}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -2515,7 +2517,7 @@ const InventoryList = () => {
       {/* Dialog do dodawania/edycji grup */}
       <Dialog open={openGroupDialog} onClose={handleCloseGroupDialog} maxWidth="md" fullWidth>
         <DialogTitle>
-          {groupDialogMode === 'add' ? 'Nowa grupa' : 'Edytuj grupę'}
+          {groupDialogMode === 'add' ? t('inventory.states.groups.newGroup') : t('inventory.states.groups.editGroup')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
@@ -2523,7 +2525,7 @@ const InventoryList = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Nazwa grupy"
+                  label={t('inventory.states.groups.groupName')}
                   name="name"
                   value={groupFormData.name}
                   onChange={(e) => setGroupFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -2533,7 +2535,7 @@ const InventoryList = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Opis (opcjonalny)"
+                  label={t('inventory.states.groups.descriptionOptional')}
                   name="description"
                   value={groupFormData.description}
                   onChange={(e) => setGroupFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -2543,16 +2545,16 @@ const InventoryList = () => {
               </Grid>
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  Pozycje w grupie ({groupItems.length})
+                  {t('inventory.states.groups.itemsInGroup', { count: groupItems.length })}
                 </Typography>
                 {groupItems.length > 0 ? (
                   <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>SKU</TableCell>
-                          <TableCell>Kategoria</TableCell>
-                          <TableCell align="right">Akcje</TableCell>
+                          <TableCell>{t('inventory.states.table.sku')}</TableCell>
+                          <TableCell>{t('inventory.states.table.category')}</TableCell>
+                          <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2577,21 +2579,21 @@ const InventoryList = () => {
                 ) : (
                   <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 1, mb: 2, border: 1, borderColor: 'divider' }}>
                     <Typography variant="body2" color="text.secondary">
-                      Brak pozycji w grupie. Dodaj pozycje z listy poniżej.
+                      {t('inventory.states.groups.noItemsInGroup')}
                     </Typography>
                   </Box>
                 )}
                 
                 <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  Dostępne pozycje
+                  {t('inventory.states.groups.availableItems')}
                 </Typography>
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>SKU</TableCell>
-                        <TableCell>Kategoria</TableCell>
-                        <TableCell align="right">Akcje</TableCell>
+                        <TableCell>{t('inventory.states.table.sku')}</TableCell>
+                        <TableCell>{t('inventory.states.table.category')}</TableCell>
+                        <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -2620,14 +2622,14 @@ const InventoryList = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseGroupDialog}>Anuluj</Button>
+          <Button onClick={handleCloseGroupDialog}>{t('common.cancel')}</Button>
           <Button 
             onClick={handleSubmitGroup} 
             variant="contained" 
             color="primary"
             disabled={savingGroup || !groupFormData.name}
           >
-            {savingGroup ? <CircularProgress size={24} /> : 'Zapisz'}
+            {savingGroup ? <CircularProgress size={24} /> : t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2640,17 +2642,20 @@ const InventoryList = () => {
         fullWidth
       >
         <DialogTitle>
-          Rezerwacje dla {selectedItem?.name}
+          {t('inventory.states.reservations.title', { itemName: selectedItem?.name })}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, mt: 1 }}>
             <Typography variant="subtitle1">
-              Łączna ilość zarezerwowana: {reservations.reduce((sum, res) => sum + res.quantity, 0)} {selectedItem?.unit}
+              {t('inventory.states.reservations.totalReserved', { 
+                quantity: reservations.reduce((sum, res) => sum + res.quantity, 0), 
+                unit: selectedItem?.unit 
+              })}
             </Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               {reservations.filter(r => !r.taskNumber && r.referenceId).length > 0 && (
                 <Typography variant="body2" sx={{ color: 'warning.main' }}>
-                  Niektóre rezerwacje nie mają przypisanych numerów MO.
+                  {t('inventory.states.reservations.missingMoNumbers')}
                 </Typography>
               )}
               <Button 
@@ -2661,7 +2666,7 @@ const InventoryList = () => {
                 disabled={updatingTasks}
                 startIcon={updatingTasks ? <CircularProgress size={20} /> : <HistoryIcon />}
               >
-                {updatingTasks ? 'Aktualizowanie...' : 'Aktualizuj dane zadań'}
+                {updatingTasks ? t('inventory.states.reservations.updating') : t('inventory.states.reservations.updateTaskData')}
               </Button>
               <Button 
                 variant="outlined" 
@@ -2671,7 +2676,7 @@ const InventoryList = () => {
                 disabled={cleaningReservations}
                 startIcon={cleaningReservations ? <CircularProgress size={20} /> : <DeleteForeverIcon />}
               >
-                {cleaningReservations ? 'Czyszczenie...' : 'Usuń rezerwacje usuniętych MO'}
+                {cleaningReservations ? t('inventory.states.reservations.cleaning') : t('inventory.states.reservations.removeDeletedMoReservations')}
               </Button>
             </Box>
           </Box>
@@ -2680,13 +2685,13 @@ const InventoryList = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Data</TableCell>
-                  <TableCell>Użytkownik</TableCell>
-                  <TableCell>Ilość</TableCell>
-                  <TableCell>Partia</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Zadanie</TableCell>
-                  <TableCell>Akcje</TableCell>
+                  <TableCell>{t('inventory.states.reservations.date')}</TableCell>
+                  <TableCell>{t('inventory.states.reservations.user')}</TableCell>
+                  <TableCell>{t('inventory.states.reservations.quantity')}</TableCell>
+                  <TableCell>{t('inventory.states.reservations.batch')}</TableCell>
+                  <TableCell>{t('inventory.states.reservations.status')}</TableCell>
+                  <TableCell>{t('inventory.states.reservations.task')}</TableCell>
+                  <TableCell>{t('inventory.states.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2698,7 +2703,7 @@ const InventoryList = () => {
                     <TableCell>{reservation.batchNumber || '-'}</TableCell>
                     <TableCell>
                       <Chip 
-                        label={reservation.fulfilled ? 'Zrealizowana' : 'Aktywna'} 
+                        label={reservation.fulfilled ? t('inventory.states.reservations.fulfilled') : t('inventory.states.reservations.active')} 
                         color={reservation.fulfilled ? 'success' : 'primary'} 
                         size="small" 
                       />
@@ -2728,7 +2733,7 @@ const InventoryList = () => {
                           )}
                         </Link>
                       ) : (
-                        'Brak zadania'
+                        t('inventory.states.reservations.noTask')
                       )}
                     </TableCell>
                     <TableCell>
@@ -2756,33 +2761,33 @@ const InventoryList = () => {
           </TableContainer>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseReservationDialog}>Zamknij</Button>
+          <Button onClick={handleCloseReservationDialog}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
 
       {/* Dialog do dodawania/edycji lokalizacji */}
       <Dialog open={openWarehouseDialog} onClose={handleCloseWarehouseDialog} fullWidth>
         <DialogTitle>
-          {dialogMode === 'add' ? 'Dodaj nową lokalizację' : 'Edytuj lokalizację'}
+          {dialogMode === 'add' ? t('inventory.states.locations.addNewLocation') : t('inventory.states.locations.editLocation')}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
               <TextField
                 name="name"
-                label="Nazwa lokalizacji"
+                label={t('inventory.states.locations.locationName')}
                 value={warehouseFormData.name}
                 onChange={handleWarehouseFormChange}
                 fullWidth
                 required
                 error={!warehouseFormData.name.trim()}
-                helperText={!warehouseFormData.name.trim() ? 'Nazwa jest wymagana' : ''}
+                helperText={!warehouseFormData.name.trim() ? t('inventory.states.locations.nameRequired') : ''}
               />
             </Grid>
             <Grid item xs={12}>
               <TextField
                 name="address"
-                label="Adres"
+                label={t('inventory.states.locations.address')}
                 value={warehouseFormData.address}
                 onChange={handleWarehouseFormChange}
                 fullWidth
@@ -2791,7 +2796,7 @@ const InventoryList = () => {
             <Grid item xs={12}>
               <TextField
                 name="description"
-                label="Opis"
+                label={t('inventory.states.locations.description')}
                 value={warehouseFormData.description}
                 onChange={handleWarehouseFormChange}
                 fullWidth
@@ -2802,14 +2807,14 @@ const InventoryList = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseWarehouseDialog}>Anuluj</Button>
+          <Button onClick={handleCloseWarehouseDialog}>{t('common.cancel')}</Button>
           <Button
             onClick={handleSubmitWarehouse}
             variant="contained"
             color="primary"
             disabled={savingWarehouse || !warehouseFormData.name.trim()}
           >
-            {savingWarehouse ? 'Zapisywanie...' : 'Zapisz'}
+            {savingWarehouse ? t('inventory.states.locations.saving') : t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2835,7 +2840,7 @@ const InventoryList = () => {
           <ListItemIcon>
             <HistoryIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Historia</ListItemText>
+          <ListItemText>{t('inventory.states.actions.history')}</ListItemText>
         </MenuItem>
         <MenuItem 
           component={RouterLink} 
@@ -2845,7 +2850,7 @@ const InventoryList = () => {
           <ListItemIcon>
             <ViewListIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Partie</ListItemText>
+          <ListItemText>{t('inventory.states.actions.batches')}</ListItemText>
         </MenuItem>
         <MenuItem 
           component={RouterLink} 
@@ -2855,7 +2860,7 @@ const InventoryList = () => {
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Edytuj</ListItemText>
+          <ListItemText>{t('inventory.states.actions.edit')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={() => {
           if (selectedItem) handleDelete(selectedItem.id);
@@ -2864,7 +2869,7 @@ const InventoryList = () => {
           <ListItemIcon>
             <DeleteIcon fontSize="small" color="error" />
           </ListItemIcon>
-          <ListItemText sx={{ color: 'error.main' }}>Usuń</ListItemText>
+          <ListItemText sx={{ color: 'error.main' }}>{t('inventory.states.actions.delete')}</ListItemText>
         </MenuItem>
       </Menu>
 
@@ -2887,7 +2892,10 @@ const InventoryList = () => {
         fullWidth
       >
         <DialogTitle>
-          Partie dla: {selectedItem?.name} (Lokalizacja: {selectedWarehouseForView?.name})
+          {t('inventory.states.locations.batchesFor', { 
+            itemName: selectedItem?.name, 
+            locationName: selectedWarehouseForView?.name 
+          })}
         </DialogTitle>
         <DialogContent>
           {loadingBatches ? (
@@ -2896,18 +2904,18 @@ const InventoryList = () => {
             </Box>
           ) : selectedItemBatches.length === 0 ? (
             <Typography variant="body1" align="center" sx={{ py: 3 }}>
-              Nie znaleziono partii dla tej pozycji w wybranej lokalizacji
+              {t('inventory.states.locations.noBatchesFound')}
             </Typography>
           ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Numer partii/LOT</TableCell>
-                    <TableCell>Ilość</TableCell>
-                    <TableCell>Data ważności</TableCell>
-                    <TableCell>Dostawca</TableCell>
-                    <TableCell>Data przyjęcia</TableCell>
+                    <TableCell>{t('inventory.states.locations.batchNumber')}</TableCell>
+                    <TableCell>{t('inventory.states.locations.quantity')}</TableCell>
+                    <TableCell>{t('inventory.states.locations.expiryDate')}</TableCell>
+                    <TableCell>{t('inventory.states.locations.supplier')}</TableCell>
+                    <TableCell>{t('inventory.states.locations.receivedDate')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2933,7 +2941,7 @@ const InventoryList = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseBatchesDialog}>Zamknij</Button>
+          <Button onClick={handleCloseBatchesDialog}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
 

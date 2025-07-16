@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   createInteraction,
   updateInteraction,
@@ -69,6 +70,7 @@ const InteractionFormPage = () => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const isEditMode = Boolean(interactionId);
@@ -95,7 +97,7 @@ const InteractionFormPage = () => {
       }
     } catch (error) {
       console.error('Błąd podczas pobierania dostawców:', error);
-      showError('Nie udało się pobrać listy dostawców: ' + error.message);
+      showError(t('purchaseInteractions.notifications.loadSuppliersFailed') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -132,7 +134,7 @@ const InteractionFormPage = () => {
       }
     } catch (error) {
       console.error('Błąd podczas pobierania danych interakcji:', error);
-      showError('Nie udało się pobrać danych interakcji: ' + error.message);
+      showError(t('purchaseInteractions.notifications.loadFailed') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -142,25 +144,25 @@ const InteractionFormPage = () => {
     const newErrors = {};
 
     if (!formData.contactId) {
-      newErrors.contactId = 'Dostawca jest wymagany';
+      newErrors.contactId = t('purchaseInteractions.form.validation.supplierRequired');
     }
 
     if (!formData.type) {
-      newErrors.type = 'Typ interakcji jest wymagany';
+      newErrors.type = t('purchaseInteractions.form.validation.typeRequired');
     }
 
     if (!formData.subject) {
-      newErrors.subject = 'Temat jest wymagany';
+      newErrors.subject = t('purchaseInteractions.form.validation.subjectRequired');
     } else if (formData.subject.length < 3) {
-      newErrors.subject = 'Temat musi zawierać co najmniej 3 znaki';
+      newErrors.subject = t('purchaseInteractions.form.validation.subjectMinLength');
     }
 
     if (!formData.date) {
-      newErrors.date = 'Data jest wymagana';
+      newErrors.date = t('purchaseInteractions.form.validation.dateRequired');
     }
 
     if (!formData.status) {
-      newErrors.status = 'Status jest wymagany';
+      newErrors.status = t('purchaseInteractions.form.validation.statusRequired');
     }
 
     setErrors(newErrors);
@@ -241,17 +243,17 @@ const InteractionFormPage = () => {
       if (isEditMode) {
         // Aktualizacja istniejącej interakcji
         await updateInteraction(interactionId, interactionData, currentUser.uid);
-        showSuccess('Interakcja została zaktualizowana');
-        navigate('/inventory/interactions');
+        showSuccess(t('purchaseInteractions.notifications.updated'));
+        navigate('/crm/interactions');
       } else {
         // Tworzenie nowej interakcji
         const newInteractionId = await createInteraction(interactionData, currentUser.uid);
-        showSuccess('Interakcja została utworzona');
-        navigate('/inventory/interactions');
+        showSuccess(t('purchaseInteractions.notifications.created'));
+        navigate('/crm/interactions');
       }
     } catch (error) {
       console.error('Błąd podczas zapisywania interakcji:', error);
-      showError('Nie udało się zapisać interakcji: ' + error.message);
+      showError(t('purchaseInteractions.notifications.createFailed') + ': ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -272,7 +274,7 @@ const InteractionFormPage = () => {
 
   const getPageTitle = () => {
     if (isEditMode) {
-      return 'Edytuj interakcję';
+      return t('purchaseInteractions.editInteraction');
     }
 
     switch (formData.type) {
@@ -283,7 +285,7 @@ const InteractionFormPage = () => {
       case INTERACTION_TYPES.MEETING:
         return 'Nowe spotkanie';
       default:
-        return 'Nowa interakcja';
+        return t('purchaseInteractions.newInteraction');
     }
   };
 
@@ -330,7 +332,7 @@ const InteractionFormPage = () => {
                   renderInput={(params) => (
                     <TextField 
                       {...params} 
-                      label="Dostawca" 
+                      label={t('purchaseInteractions.form.selectSupplier')} 
                       variant="outlined" 
                       required
                       error={Boolean(errors.contactId)}
@@ -344,14 +346,14 @@ const InteractionFormPage = () => {
 
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth error={Boolean(errors.type)}>
-                  <InputLabel id="type-label">Typ interakcji</InputLabel>
+                  <InputLabel id="type-label">{t('purchaseInteractions.form.type')}</InputLabel>
                   <Select
                     labelId="type-label"
                     id="type"
                     name="type"
                     value={formData.type}
                     onChange={handleInputChange}
-                    label="Typ interakcji"
+                    label={t('purchaseInteractions.form.type')}
                     required
                     startAdornment={getTypeIcon(formData.type)}
                     disabled={isSubmitting || Boolean(typeFromQuery)}
@@ -359,25 +361,25 @@ const InteractionFormPage = () => {
                     <MenuItem value={INTERACTION_TYPES.CALL}>
                       <Box display="flex" alignItems="center">
                         <CallIcon color="primary" sx={{ mr: 1 }} />
-                        Rozmowa telefoniczna
+                        {t('purchaseInteractions.types.call')}
                       </Box>
                     </MenuItem>
                     <MenuItem value={INTERACTION_TYPES.EMAIL}>
                       <Box display="flex" alignItems="center">
                         <EmailIcon color="info" sx={{ mr: 1 }} />
-                        Email
+                        {t('purchaseInteractions.types.email')}
                       </Box>
                     </MenuItem>
                     <MenuItem value={INTERACTION_TYPES.MEETING}>
                       <Box display="flex" alignItems="center">
                         <MeetingIcon color="success" sx={{ mr: 1 }} />
-                        Spotkanie
+                        {t('purchaseInteractions.types.meeting')}
                       </Box>
                     </MenuItem>
                     <MenuItem value={INTERACTION_TYPES.NOTE}>
                       <Box display="flex" alignItems="center">
                         <NoteIcon sx={{ mr: 1 }} />
-                        Notatka
+                        {t('purchaseInteractions.types.note')}
                       </Box>
                     </MenuItem>
                   </Select>
@@ -437,7 +439,7 @@ const InteractionFormPage = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Temat"
+                  label={t('purchaseInteractions.form.subject')}
                   name="subject"
                   value={formData.subject}
                   onChange={handleInputChange}
@@ -451,7 +453,7 @@ const InteractionFormPage = () => {
               <Grid item xs={12} md={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DateTimePicker
-                    label="Data i godzina"
+                    label={t('purchaseInteractions.form.date')}
                     value={formData.date}
                     onChange={handleDateChange}
                     format="dd.MM.yyyy HH:mm"
@@ -470,21 +472,21 @@ const InteractionFormPage = () => {
 
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth error={Boolean(errors.status)}>
-                  <InputLabel id="status-label">Status</InputLabel>
+                  <InputLabel id="status-label">{t('purchaseInteractions.form.status')}</InputLabel>
                   <Select
                     labelId="status-label"
                     id="status"
                     name="status"
                     value={formData.status}
                     onChange={handleInputChange}
-                    label="Status"
+                    label={t('purchaseInteractions.form.status')}
                     required
                     disabled={isSubmitting}
                   >
-                    <MenuItem value={INTERACTION_STATUSES.PLANNED}>Zaplanowana</MenuItem>
-                    <MenuItem value={INTERACTION_STATUSES.IN_PROGRESS}>W trakcie</MenuItem>
-                    <MenuItem value={INTERACTION_STATUSES.COMPLETED}>Zakończona</MenuItem>
-                    <MenuItem value={INTERACTION_STATUSES.CANCELLED}>Anulowana</MenuItem>
+                    <MenuItem value={INTERACTION_STATUSES.PLANNED}>{t('purchaseInteractions.statuses.planned')}</MenuItem>
+                    <MenuItem value={INTERACTION_STATUSES.IN_PROGRESS}>{t('purchaseInteractions.statuses.inProgress')}</MenuItem>
+                    <MenuItem value={INTERACTION_STATUSES.COMPLETED}>{t('purchaseInteractions.statuses.completed')}</MenuItem>
+                    <MenuItem value={INTERACTION_STATUSES.CANCELLED}>{t('purchaseInteractions.statuses.cancelled')}</MenuItem>
                   </Select>
                   {errors.status && <FormHelperText>{errors.status}</FormHelperText>}
                 </FormControl>
@@ -493,7 +495,7 @@ const InteractionFormPage = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Notatki"
+                  label={t('purchaseInteractions.form.notes')}
                   name="notes"
                   value={formData.notes}
                   onChange={handleInputChange}
@@ -511,7 +513,7 @@ const InteractionFormPage = () => {
                     sx={{ mr: 2 }}
                     disabled={isSubmitting}
                   >
-                    Anuluj
+                    {t('purchaseInteractions.actions.cancel')}
                   </Button>
                   <Button
                     type="submit"
@@ -520,7 +522,7 @@ const InteractionFormPage = () => {
                     disabled={isSubmitting}
                     startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
                   >
-                    {isSubmitting ? 'Zapisywanie...' : isEditMode ? 'Zapisz zmiany' : 'Utwórz interakcję'}
+                    {isSubmitting ? t('purchaseInteractions.loading') : isEditMode ? t('purchaseInteractions.actions.update') : t('purchaseInteractions.actions.save')}
                   </Button>
                 </Box>
               </Grid>
