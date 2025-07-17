@@ -6346,9 +6346,6 @@ const TaskDetailsPage = () => {
               {/* Sekcja rezerwacji z zamówień zakupowych (PO) */}
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" component="h2" gutterBottom>
-                    Rezerwacje z zamówień zakupowych
-                  </Typography>
                   <POReservationManager 
                     taskId={task?.id}
                     materials={task?.materials || []}

@@ -45,8 +45,7 @@ import {
   Card,
   CardContent,
   CardActions,
-  CircularProgress,
-  Badge
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -54,7 +53,6 @@ import {
   Transform as ConvertIcon,
   Visibility as ViewIcon,
   LocalShipping as DeliveryIcon,
-  ShoppingCart as POIcon,
   Inventory as BatchIcon,
   Info as InfoIcon,
   CheckCircle as CheckIcon,
@@ -515,90 +513,48 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
   
   return (
     <Box>
-      {/* Nagłówek z statystykami */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">
+      {/* Nagłówek */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" component="h2">
           Rezerwacje z zamówień zakupowych
-          {stats.total > 0 && (
-            <Badge badgeContent={stats.total} color="primary" sx={{ ml: 1 }}>
-              <POIcon />
-            </Badge>
-          )}
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAddDialog}
-          disabled={!materials.length}
-        >
-          Dodaj rezerwację
-        </Button>
-        
-        {stats.total > 0 && (
-          <>
-            <Button
-              variant="outlined"
-              startIcon={syncing ? <CircularProgress size={16} /> : <RefreshIcon />}
-              onClick={handleSyncReservations}
-              disabled={syncing || refreshing}
-              sx={{ ml: 1 }}
-            >
-              {syncing ? 'Synchronizuję...' : 'Synchronizuj'}
-            </Button>
-            
-            <Button
-              variant="outlined"
-              startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
-              onClick={handleRefreshQuantities}
-              disabled={syncing || refreshing}
-              sx={{ ml: 1 }}
-              color="secondary"
-            >
-              {refreshing ? 'Odświeżam...' : 'Odśwież ilości'}
-            </Button>
-          </>
-        )}
+        <Box>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={handleOpenAddDialog}
+            disabled={!materials.length}
+            sx={{ mr: 1 }}
+          >
+            Dodaj rezerwację
+          </Button>
+          {stats.total > 0 && (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={syncing ? <CircularProgress size={16} /> : <RefreshIcon />}
+                onClick={handleSyncReservations}
+                disabled={syncing || refreshing}
+                sx={{ mr: 1 }}
+                size="small"
+              >
+                {syncing ? 'Synchronizuję...' : 'Synchronizuj'}
+              </Button>
+              
+              <Button
+                variant="outlined"
+                startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshIcon />}
+                onClick={handleRefreshQuantities}
+                disabled={syncing || refreshing}
+                color="secondary"
+                size="small"
+              >
+                {refreshing ? 'Odświeżam...' : 'Odśwież ilości'}
+              </Button>
+            </>
+          )}
+        </Box>
       </Box>
-      
-      {/* Statystyki */}
-      {stats.total > 0 && (
-        <Grid container spacing={2} mb={2}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card variant="outlined">
-              <CardContent sx={{ p: 1.5 }}>
-                <Typography variant="body2" color="text.secondary">Oczekuje</Typography>
-                <Typography variant="h6">{stats.pending}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card variant="outlined">
-              <CardContent sx={{ p: 1.5 }}>
-                <Typography variant="body2" color="text.secondary">Dostarczone</Typography>
-                <Typography variant="h6">{stats.delivered}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card variant="outlined">
-              <CardContent sx={{ p: 1.5 }}>
-                <Typography variant="body2" color="text.secondary">Przekształcone</Typography>
-                <Typography variant="h6">{stats.converted}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card variant="outlined">
-              <CardContent sx={{ p: 1.5 }}>
-                <Typography variant="body2" color="text.secondary">Wartość</Typography>
-                <Typography variant="h6">
-                  {formatCurrency(stats.totalReservedValue)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
       
       {/* Lista rezerwacji */}
       {reservations.length === 0 ? (
@@ -612,20 +568,18 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>PO</TableCell>
                 <TableCell>Materiał</TableCell>
+                <TableCell>PO</TableCell>
                 <TableCell>Ilość</TableCell>
-                <TableCell>Cena</TableCell>
-                <TableCell>Dostawca</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Powiązane partie</TableCell>
-                <TableCell>Data dostawy</TableCell>
                 <TableCell align="right">Akcje</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {reservations.map((reservation) => (
                 <TableRow key={reservation.id}>
+                  <TableCell>{reservation.materialName}</TableCell>
                   <TableCell>
                     <Tooltip title={`Pozycja w PO: ${reservation.poItemId}`}>
                       <Chip
@@ -636,7 +590,6 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                       />
                     </Tooltip>
                   </TableCell>
-                  <TableCell>{reservation.materialName}</TableCell>
                   <TableCell>
                     {reservation.reservedQuantity} {reservation.unit}
                     {reservation.status === 'delivered' && (
@@ -650,10 +603,6 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
-                    {formatCurrency(reservation.unitPrice * reservation.reservedQuantity, reservation.currency)}
-                  </TableCell>
-                  <TableCell>{reservation.supplier?.name || '-'}</TableCell>
                   <TableCell>{renderStatusChip(reservation.status)}</TableCell>
                   <TableCell>
                     {reservation.linkedBatches && reservation.linkedBatches.length > 0 ? (
@@ -683,10 +632,6 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                         {reservation.status === 'delivered' ? 'Brak powiązanych partii' : 'Oczekuje na dostawę'}
                       </Typography>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    {reservation.expectedDeliveryDate ? 
-                      formatDateTime(reservation.expectedDeliveryDate).split(',')[0] : '-'}
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title="Podgląd">
