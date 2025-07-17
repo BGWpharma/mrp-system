@@ -1678,7 +1678,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         button
                         onClick={() => window.open(attachment.downloadURL, '_blank')}
                         sx={{
-                          border: '1px solid #e0e0e0',
+                          border: (theme) => `1px solid ${theme.palette.divider}`,
                           borderRadius: 1,
                           mb: 1,
                           backgroundColor: 'background.paper',
@@ -1753,9 +1753,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     sx={{ 
                       mb: 1.5, 
                       p: 1.5, 
-                      border: '1px solid #e0e0e0',
-                      borderLeft: '3px solid #1976d2',
-                      backgroundColor: '#fafafa'
+                      border: (theme) => `1px solid ${theme.palette.divider}`,
+                      borderLeft: (theme) => `3px solid ${theme.palette.primary.main}`,
+                      backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                        ? theme.palette.grey[900] 
+                        : theme.palette.grey[50]
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
@@ -1945,9 +1947,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                   alignItems: 'center',
                                   p: 0.5, 
                                   mb: 0.5, 
-                                  backgroundColor: 'white', 
+                                  backgroundColor: (theme) => theme.palette.background.paper, 
                                   borderRadius: 0.5,
-                                  border: '1px solid #e0e0e0'
+                                  border: (theme) => `1px solid ${theme.palette.divider}`
                                 }}
                               >
                                 <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
@@ -1981,7 +1983,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                 <Typography variant="body2" sx={{ 
                                   fontStyle: 'italic', 
                                   p: 0.5, 
-                                  backgroundColor: 'rgba(0, 0, 0, 0.04)', 
+                                  backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                                    ? 'rgba(255, 255, 255, 0.08)' 
+                                    : 'rgba(0, 0, 0, 0.04)', 
                                   borderRadius: 0.5,
                                   mt: 0.25,
                                   fontSize: '0.8rem'
@@ -1998,7 +2002,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                 <Typography variant="body2" sx={{ 
                                   fontStyle: 'italic', 
                                   p: 0.5, 
-                                  backgroundColor: 'rgba(0, 0, 0, 0.04)', 
+                                  backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                                    ? 'rgba(255, 255, 255, 0.08)' 
+                                    : 'rgba(0, 0, 0, 0.04)', 
                                   borderRadius: 0.5,
                                   mt: 0.25,
                                   fontSize: '0.8rem'
