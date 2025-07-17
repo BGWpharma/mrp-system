@@ -143,6 +143,7 @@ import { generateEndProductReportPDF } from '../../services/endProductReportServ
 import ProductionControlFormDialog from '../../components/production/ProductionControlFormDialog';
 import CompletedMOFormDialog from '../../components/production/CompletedMOFormDialog';
 import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
+import POReservationManager from '../../components/production/POReservationManager';
 import { useTranslation } from 'react-i18next';
 
 const TaskDetailsPage = () => {
@@ -210,6 +211,9 @@ const TaskDetailsPage = () => {
   // Stan dla przechowywania oczekiwanych zamówień
   const [awaitingOrders, setAwaitingOrders] = useState({});
   const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
+  
+  // Stan dla rezerwacji PO
+  const [poReservations, setPOReservations] = useState([]);
   
   // Stan edycji pozycji historii
   const [editedHistoryNote, setEditedHistoryNote] = useState('');
@@ -587,6 +591,17 @@ const TaskDetailsPage = () => {
               return { type: 'productionHistory', data: [] };
             })
         );
+        
+        // Rezerwacje PO - dodane równolegle
+        dataLoadingPromises.push(
+          import('../../services/poReservationService')
+            .then(module => module.getPOReservationsForTask(fetchedTask.id))
+            .then(reservations => ({ type: 'poReservations', data: reservations || [] }))
+            .catch(error => {
+              console.error('Błąd podczas pobierania rezerwacji PO:', error);
+              return { type: 'poReservations', data: [] };
+            })
+        );
       }
       
       // Dane wersji receptury - jeśli zadanie ma recipeId i recipeVersion
@@ -671,7 +686,9 @@ const TaskDetailsPage = () => {
               break;
             case 'awaitingOrders':
               // Oczekujące zamówienia są już ustawione w funkcji fetchAwaitingOrdersForMaterials
-
+              break;
+            case 'poReservations':
+              setPOReservations(result.data);
               break;
           }
         });
@@ -696,6 +713,45 @@ const TaskDetailsPage = () => {
   const fetchTask = async () => {
     // Przekierowanie do nowej zoptymalizowanej funkcji
     await fetchAllTaskData();
+  };
+
+  // Funkcja do pobierania rezerwacji PO
+  const fetchPOReservations = async () => {
+    try {
+      const { getPOReservationsForTask } = await import('../../services/poReservationService');
+      const reservations = await getPOReservationsForTask(id);
+      setPOReservations(reservations);
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji PO:', error);
+      // Nie pokazujemy błędu użytkownikowi - to nie jest krytyczne
+    }
+  };
+
+  // Funkcja helper do pobierania rezerwacji PO dla konkretnego materiału
+  const getPOReservationsForMaterial = (materialId) => {
+    return poReservations.filter(reservation => 
+      reservation.materialId === materialId
+    );
+  };
+
+  // Funkcja do odświeżania tylko podstawowych danych zadania (dla POReservationManager)
+  const fetchTaskBasicData = async () => {
+    try {
+      // Pobierz tylko podstawowe dane zadania bez pokazywania wskaźnika ładowania
+      const fetchedTask = await getTaskById(id);
+      setTask(fetchedTask);
+      
+      // Jeśli zadanie ma materiały, odśwież tylko dane materiałów
+      if (fetchedTask?.materials?.length > 0) {
+        await fetchBatchesForMaterialsOptimized();
+      }
+      
+      // Odśwież również rezerwacje PO
+      await fetchPOReservations();
+    } catch (error) {
+      console.error('Błąd podczas odświeżania podstawowych danych zadania:', error);
+      showError('Nie udało się odświeżyć danych zadania: ' + error.message);
+    }
   };
   
   const fetchProductionHistory = async () => {
@@ -6153,7 +6209,77 @@ const TaskDetailsPage = () => {
                               <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
                               <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
                               <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (<Box>{reservedBatches.map((batch, index) => (<Chip key={index} size="small" label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} color="info" variant="outlined" sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }} onClick={() => navigate(`/inventory/${materialId}/batches`)} />))}</Box>) : (<Typography variant="body2" color="text.secondary">Brak zarezerwowanych partii</Typography>)}</TableCell>
+                              <TableCell>
+                                {(() => {
+                                  // Standardowe rezerwacje magazynowe
+                                  const standardReservations = reservedBatches || [];
+                                  
+                                  // Rezerwacje z PO dla tego materiału (tylko te które nie zostały w pełni przekształcone)
+                                  const allPOReservations = getPOReservationsForMaterial(materialId);
+                                  const poReservationsForMaterial = allPOReservations
+                                    .filter(reservation => {
+                                      // Pokaż chip tylko jeśli:
+                                      // 1. Status to 'pending' (oczekuje na dostawę)
+                                      // 2. Status to 'delivered' ale nie wszystko zostało przekształcone
+                                      // 3. Status to 'converted' - nie pokazuj wcale
+                                      if (reservation.status === 'pending') return true;
+                                      if (reservation.status === 'delivered') {
+                                        const convertedQuantity = reservation.convertedQuantity || 0;
+                                        const reservedQuantity = reservation.reservedQuantity || 0;
+                                        return convertedQuantity < reservedQuantity;
+                                      }
+                                      return false; // nie pokazuj dla 'converted' lub innych statusów
+                                    });
+
+                                  
+                                  // Sprawdź czy są jakiekolwiek rezerwacje
+                                  const hasAnyReservations = standardReservations.length > 0 || poReservationsForMaterial.length > 0;
+                                  
+                                  if (!hasAnyReservations) {
+                                    return (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Brak zarezerwowanych partii
+                                      </Typography>
+                                    );
+                                  }
+                                  
+                                  return (
+                                    <Box>
+                                      {/* Standardowe rezerwacje magazynowe */}
+                                      {standardReservations.map((batch, index) => (
+                                        <Chip 
+                                          key={`standard-${index}`}
+                                          size="small" 
+                                          label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} 
+                                          color="info" 
+                                          variant="outlined" 
+                                          sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }} 
+                                          onClick={() => navigate(`/inventory/${materialId}/batches`)} 
+                                        />
+                                      ))}
+                                      
+                                      {/* Rezerwacje z PO - tylko te które nie zostały w pełni przekształcone */}
+                                      {poReservationsForMaterial.map((reservation, index) => {
+                                        const convertedQuantity = reservation.convertedQuantity || 0;
+                                        const reservedQuantity = reservation.reservedQuantity || 0;
+                                        const availableQuantity = reservedQuantity - convertedQuantity;
+                                        
+                                        return (
+                                          <Chip 
+                                            key={`po-${index}`}
+                                            size="small" 
+                                            label={`PO: ${reservation.poNumber} (${availableQuantity} ${material.unit})`} 
+                                            color="warning" 
+                                            variant="outlined" 
+                                            sx={{ mr: 0.5, mb: 0.5 }}
+                                            title={`Rezerwacja z zamówienia ${reservation.poNumber} - Status: ${reservation.status}${convertedQuantity > 0 ? `, przekształcone: ${convertedQuantity}` : ''}`}
+                                          />
+                                        );
+                                      })}
+                                    </Box>
+                                  );
+                                })()}
+                              </TableCell>
                               <TableCell><Checkbox checked={includeInCosts[material.id] || false} onChange={(e) => handleIncludeInCostsChange(material.id, e.target.checked)} color="primary" /></TableCell>
                               <TableCell>{editMode ? (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={handleSaveChanges} title="Zapisz zmiany"><SaveIcon /></IconButton><IconButton color="error" onClick={() => setEditMode(false)} title="Anuluj edycję"><CancelIcon /></IconButton></Box>) : (<Box sx={{ display: 'flex' }}><IconButton color="primary" onClick={() => { setEditMode(true); setMaterialQuantities(prev => ({ ...prev, [material.id]: materialQuantities[material.id] || 0 })); }} title="Edytuj ilość"><EditIcon /></IconButton><IconButton color="error" onClick={() => handleDeleteMaterial(material)} title="Usuń materiał"><DeleteIcon /></IconButton></Box>)}</TableCell>
                             </TableRow>
@@ -6216,6 +6342,26 @@ const TaskDetailsPage = () => {
                   </Paper>
                 </Grid>
               )}
+              
+              {/* Sekcja rezerwacji z zamówień zakupowych (PO) */}
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" component="h2" gutterBottom>
+                    Rezerwacje z zamówień zakupowych
+                  </Typography>
+                  <POReservationManager 
+                    taskId={task?.id}
+                    materials={task?.materials || []}
+                    onUpdate={async () => {
+                      // Odśwież podstawowe dane zadania i rezerwacje PO
+                      await Promise.all([
+                        fetchTaskBasicData(),
+                        fetchPOReservations()
+                      ]);
+                    }}
+                  />
+                </Paper>
+              </Grid>
             </Grid>
           )}
 

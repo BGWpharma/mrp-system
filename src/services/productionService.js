@@ -1062,8 +1062,33 @@ import {
         console.error(`Błąd podczas usuwania rezerwacji dla zadania ${taskId}:`, error);
         // Kontynuuj usuwanie zadania mimo błędu
       }
+
+      // OPTYMALIZACJA 3: Usuń rezerwacje PO powiązane z tym zadaniem
+      try {
+        const { getPOReservationsForTask, cancelPOReservation } = await import('./poReservationService');
+        
+        // Pobierz wszystkie rezerwacje PO dla tego zadania
+        const poReservations = await getPOReservationsForTask(taskId);
+        
+        if (poReservations.length > 0) {
+          console.log(`Znaleziono ${poReservations.length} rezerwacji PO do usunięcia dla zadania ${taskId}`);
+          
+          // Usuń wszystkie rezerwacje PO równolegle
+          const poCancellationPromises = poReservations.map(reservation =>
+            cancelPOReservation(reservation.id, task.createdBy || 'system')
+              .then(() => console.log(`Usunięto rezerwację PO ${reservation.id} dla usuniętego zadania`))
+              .catch(error => console.error(`Błąd przy usuwaniu rezerwacji PO ${reservation.id}:`, error))
+          );
+          
+          await Promise.allSettled(poCancellationPromises);
+          console.log(`Zakończono usuwanie rezerwacji PO dla zadania ${taskId}`);
+        }
+      } catch (error) {
+        console.error(`Błąd podczas usuwania rezerwacji PO dla zadania ${taskId}:`, error);
+        // Kontynuuj usuwanie zadania mimo błędu
+      }
       
-      // OPTYMALIZACJA 3: Równoległe wykonanie operacji sprawdzania partii i pobierania transakcji
+      // OPTYMALIZACJA 4: Równoległe wykonanie operacji sprawdzania partii i pobierania transakcji
       const [batchesCheck, transactionsSnapshot, orderRemovalResult] = await Promise.allSettled([
         // Sprawdź partie produktów
         (async () => {
@@ -1106,7 +1131,7 @@ import {
         })()
       ]);
       
-      // OPTYMALIZACJA 4: Batch deletion transakcji (już zoptymalizowane)
+      // OPTYMALIZACJA 5: Batch deletion transakcji (już zoptymalizowane)
       if (transactionsSnapshot.status === 'fulfilled' && transactionsSnapshot.value.docs.length > 0) {
         const transactionDeletions = transactionsSnapshot.value.docs.map(doc => 
           deleteDoc(doc.ref)

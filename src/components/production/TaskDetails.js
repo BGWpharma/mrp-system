@@ -580,6 +580,8 @@ const TaskDetails = ({ task }) => {
           </Paper>
         </Grid>
       )}
+      
+
     </>
   );
 };

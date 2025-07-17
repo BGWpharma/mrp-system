@@ -1175,6 +1175,23 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
       
       await updateDoc(poRef, updateFields);
 
+      // Sprawdź czy zmiana statusu wymaga powiadomień o dostawie PO z rezerwacjami
+      try {
+        const { shouldSendDeliveryNotification, handlePODeliveryNotification } = await import('./poDeliveryNotificationService');
+        
+        if (shouldSendDeliveryNotification(oldStatus, newStatus)) {
+          console.log(`Sprawdzanie rezerwacji PO dla dostawy: ${poData.number || purchaseOrderId}`);
+          const deliveryResult = await handlePODeliveryNotification(purchaseOrderId, userId);
+          
+          if (deliveryResult.notificationsSent > 0) {
+            console.log(`Wysłano ${deliveryResult.notificationsSent} powiadomień o dostawie PO z rezerwacjami`);
+          }
+        }
+      } catch (poNotificationError) {
+        console.warn('Błąd podczas obsługi powiadomień o dostawie PO z rezerwacjami:', poNotificationError);
+        // Nie przerywamy procesu - to dodatkowa funkcjonalność
+      }
+
       // Uwaga: Automatyczna aktualizacja cen dostawców została przeniesiona do interfejsu użytkownika
       // gdzie użytkownik może zdecydować czy chce zaktualizować ceny przy zmianie statusu na 'completed'
       

@@ -1168,6 +1168,20 @@ import {
       // Zamiast bezpośrednio aktualizować ilość, przelicz ją na podstawie partii
       await recalculateItemQuantity(itemId);
       
+      // Automatycznie odśwież ilości w rezerwacjach PO jeśli aktualizowano partię związaną z PO
+      if ((transactionData.source === 'purchase' || transactionData.orderId) && existingBatchRef) {
+        try {
+          const { refreshLinkedBatchesQuantities } = await import('./poReservationService');
+          // Odśwież tylko dla tej konkretnej partii (optymalizacja)
+          const batchId = existingBatchRef.id;
+          await refreshLinkedBatchesQuantities(batchId);
+          console.log(`Automatycznie odświeżono rezerwacje PO dla partii ${batchId}`);
+        } catch (error) {
+          console.error('Błąd podczas automatycznego odświeżania rezerwacji PO:', error);
+          // Nie przerywaj procesu - przyjęcie towaru jest ważniejsze
+        }
+      }
+      
       // Aktualizuj tylko pole unitPrice w głównej pozycji magazynowej, jeśli podano
       if (transactionData.unitPrice !== undefined) {
         const itemRef = doc(db, INVENTORY_COLLECTION, itemId);
@@ -3458,6 +3472,18 @@ import {
               
               // Oblicz różnicę dla tej partii
               const adjustment = item.countedQuantity - batchData.quantity;
+              
+              // Automatycznie odśwież rezerwacje PO po zmianie ilości w partii
+              if (adjustment !== 0) {
+                try {
+                  const { refreshLinkedBatchesQuantities } = await import('./poReservationService');
+                  await refreshLinkedBatchesQuantities(item.batchId);
+                  console.log(`Automatycznie odświeżono rezerwacje PO dla partii ${item.batchId} po inwentaryzacji`);
+                } catch (error) {
+                  console.error('Błąd podczas automatycznego odświeżania rezerwacji PO po inwentaryzacji:', error);
+                  // Nie przerywaj procesu
+                }
+              }
               
               // Dodaj transakcję korygującą
               const transactionData = {
