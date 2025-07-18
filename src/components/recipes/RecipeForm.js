@@ -50,7 +50,8 @@ import {
   Science as ScienceIcon,
   Sync as SyncIcon,
   KeyboardArrowUp as ArrowUpIcon,
-  KeyboardArrowDown as ArrowDownIcon
+  KeyboardArrowDown as ArrowDownIcon,
+  PhotoCamera as PhotoCameraIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
@@ -66,6 +67,7 @@ import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
 import { NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../utils/constants';
 import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
 import { addNutritionalComponent } from '../../services/nutritionalComponentsService';
+import RecipeDesignAttachments from './RecipeDesignAttachments';
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -150,6 +152,9 @@ const RecipeForm = ({ recipeId }) => {
     notes: ''
   });
   const [newRecipeId, setNewRecipeId] = useState(null);
+  
+  // Stan dla załączników designu
+  const [designAttachments, setDesignAttachments] = useState([]);
 
   // Funkcje pomocnicze do konwersji jednostek
   const getUnitGroup = (unit) => {
@@ -336,6 +341,9 @@ const RecipeForm = ({ recipeId }) => {
             recipeId: recipeId
           }));
           
+          // Ustaw załączniki designu jeśli istnieją
+          setDesignAttachments(recipe.designAttachments || []);
+          
           // Sprawdź czy mamy otworzyć okno dodawania produktu
           if (location.state?.openProductDialog) {
             setCreateProductDialogOpen(true);
@@ -441,12 +449,18 @@ const RecipeForm = ({ recipeId }) => {
         showInfo(t('recipes.messages.conversionInfo'));
       }
       
+      // Dodaj załączniki designu do danych receptury
+      const recipeDataWithAttachments = {
+        ...recipeData,
+        designAttachments: designAttachments
+      };
+      
       if (recipeId) {
-        await updateRecipe(recipeId, recipeData, currentUser.uid);
+        await updateRecipe(recipeId, recipeDataWithAttachments, currentUser.uid);
         showSuccess(t('recipes.messages.recipeUpdated'));
         navigate(`/recipes/${recipeId}`);
       } else {
-        const newRecipe = await createRecipe(recipeData, currentUser.uid);
+        const newRecipe = await createRecipe(recipeDataWithAttachments, currentUser.uid);
         setNewRecipeId(newRecipe.id);
         showSuccess(t('recipes.messages.recipeCreated'));
         
@@ -2079,6 +2093,44 @@ const RecipeForm = ({ recipeId }) => {
               </Typography>
             </Paper>
           )}
+        </Box>
+      </Paper>
+
+      {/* Sekcja załączników designu */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden' 
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <PhotoCameraIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">Załączniki designu produktu</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <RecipeDesignAttachments
+            recipeId={recipeId || 'temp'}
+            attachments={designAttachments}
+            onAttachmentsChange={setDesignAttachments}
+            disabled={saving}
+            showTitle={false}
+          />
         </Box>
       </Paper>
 

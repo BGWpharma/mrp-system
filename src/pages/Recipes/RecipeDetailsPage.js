@@ -48,6 +48,7 @@ import { formatDate } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
+import RecipeDesignAttachments from '../../components/recipes/RecipeDesignAttachments';
 import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { db } from '../../services/firebase/config';
 import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
@@ -490,92 +491,183 @@ const RecipeDetailsPage = () => {
 
       <Paper sx={{ mb: 3 }}>
         <Box sx={{ p: 3 }}>
-          <Typography variant="h4" gutterBottom>
-            {recipe.name}
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' } }}>
-            <Chip 
-              label={recipe.status || 'Robocza'} 
-              color={recipe.status === 'Zatwierdzona' ? 'success' : 'default'} 
-              sx={{ mr: { sm: 2 }, mb: { xs: 1, sm: 0 } }}
-            />
-            <Typography variant="subtitle1" color="text.secondary">
-              {t('recipes.details.version', { version: recipe.version || 1 })} | {t('recipes.details.lastUpdate', { date: formatDate(recipe.updatedAt) })}
-            </Typography>
-          </Box>
-          {recipe.description && (
-            <Typography variant="body1" paragraph>
-              {recipe.description}
-            </Typography>
-          )}
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('recipes.details.defaultWorkstation', { 
-                  workstation: recipe.defaultWorkstationId ? 
-                    workstations.find(w => w.id === recipe.defaultWorkstationId)?.name || t('recipes.details.unknownWorkstation') : 
-                    t('recipes.details.notSpecified')
-                })}
+            {/* Lewa kolumna - główne informacje */}
+            <Grid item xs={12} md={8}>
+              <Typography variant="h4" gutterBottom>
+                {recipe.name}
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'center' } }}>
+                <Chip 
+                  label={recipe.status || 'Robocza'} 
+                  color={recipe.status === 'Zatwierdzona' ? 'success' : 'default'} 
+                  sx={{ mr: { sm: 2 }, mb: { xs: 1, sm: 0 } }}
+                />
+                <Typography variant="subtitle1" color="text.secondary">
+                  {t('recipes.details.version', { version: recipe.version || 1 })} | {t('recipes.details.lastUpdate', { date: formatDate(recipe.updatedAt) })}
+                </Typography>
+              </Box>
+              {recipe.description && (
+                <Typography variant="body1" paragraph>
+                  {recipe.description}
+                </Typography>
+              )}
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('recipes.details.defaultWorkstation', { 
+                      workstation: recipe.defaultWorkstationId ? 
+                        workstations.find(w => w.id === recipe.defaultWorkstationId)?.name || t('recipes.details.unknownWorkstation') : 
+                        t('recipes.details.notSpecified')
+                    })}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {recipe.productionTimePerUnit ? 
+                      t('recipes.details.timePerUnit', { time: parseFloat(recipe.productionTimePerUnit).toFixed(2) }) : 
+                      t('recipes.details.notSpecified')}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {recipe.processingCostPerUnit ? 
+                      t('recipes.details.costPerUnit', { cost: recipe.processingCostPerUnit.toFixed(2) }) : 
+                      t('recipes.details.notSpecified')}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('recipes.details.inventoryPosition')} {inventoryProduct ? 
+                      <Link 
+                        to={`/inventory/${inventoryProduct.id}`} 
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <Chip 
+                          label={`${inventoryProduct.name} (${inventoryProduct.quantity || 0} ${inventoryProduct.unit || 'szt.'})`}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          sx={{ ml: 1, cursor: 'pointer' }}
+                        />
+                      </Link>
+                      : t('recipes.details.noInventoryPosition')}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {t('recipes.details.priceLists')} {priceLists.length > 0 ? (
+                      <Box component="span" sx={{ ml: 1 }}>
+                        {priceLists.map((priceListInfo, index) => (
+                          <Chip
+                            key={priceListInfo.priceList.id}
+                                                      label={`${priceListInfo.customerName} - ${priceListInfo.price.toFixed(2)} EUR/${priceListInfo.unit} ${!priceListInfo.isActive ? t('recipes.details.inactive') : ''}`}
+                            size="small"
+                            color={priceListInfo.isActive ? 'success' : 'default'}
+                            variant="outlined"
+                            sx={{ 
+                              ml: index > 0 ? 1 : 0, 
+                              mr: 1, 
+                              mb: 0.5,
+                              cursor: 'pointer'
+                            }}
+                            component={Link}
+                            to={`/sales/price-lists/${priceListInfo.priceList.id}`}
+                            style={{ textDecoration: 'none' }}
+                            title={`Lista cenowa: ${priceListInfo.priceList.name}${priceListInfo.notes ? '\nUwagi: ' + priceListInfo.notes : ''}`}
+                          />
+                        ))}
+                      </Box>
+                    ) : t('recipes.details.noPriceLists')}
+                  </Typography>
+                </Grid>
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {recipe.productionTimePerUnit ? 
-                  t('recipes.details.timePerUnit', { time: parseFloat(recipe.productionTimePerUnit).toFixed(2) }) : 
-                  t('recipes.details.notSpecified')}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {recipe.processingCostPerUnit ? 
-                  t('recipes.details.costPerUnit', { cost: recipe.processingCostPerUnit.toFixed(2) }) : 
-                  t('recipes.details.notSpecified')}
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('recipes.details.inventoryPosition')} {inventoryProduct ? 
-                  <Link 
-                    to={`/inventory/${inventoryProduct.id}`} 
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    <Chip 
-                      label={`${inventoryProduct.name} (${inventoryProduct.quantity || 0} ${inventoryProduct.unit || 'szt.'})`}
-                      size="small"
-                      color="primary"
-                      variant="outlined"
-                      sx={{ ml: 1, cursor: 'pointer' }}
-                    />
-                  </Link>
-                  : t('recipes.details.noInventoryPosition')}
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('recipes.details.priceLists')} {priceLists.length > 0 ? (
-                  <Box component="span" sx={{ ml: 1 }}>
-                    {priceLists.map((priceListInfo, index) => (
-                      <Chip
-                        key={priceListInfo.priceList.id}
-                                                  label={`${priceListInfo.customerName} - ${priceListInfo.price.toFixed(2)} EUR/${priceListInfo.unit} ${!priceListInfo.isActive ? t('recipes.details.inactive') : ''}`}
-                        size="small"
-                        color={priceListInfo.isActive ? 'success' : 'default'}
-                        variant="outlined"
-                        sx={{ 
-                          ml: index > 0 ? 1 : 0, 
-                          mr: 1, 
-                          mb: 0.5,
-                          cursor: 'pointer'
+
+            {/* Prawa kolumna - podgląd najnowszego designu */}
+            <Grid item xs={12} md={4}>
+              {(() => {
+                // Znajdź najnowszy załącznik designu, który jest obrazem
+                const designAttachments = recipe.designAttachments || [];
+                if (designAttachments.length === 0) return null;
+                
+                // Sortuj załączniki według daty przesłania (najnowsze pierwsze)
+                const sortedAttachments = [...designAttachments].sort((a, b) => 
+                  new Date(b.uploadedAt) - new Date(a.uploadedAt)
+                );
+                
+                // Znajdź pierwszy załącznik, który jest obrazem
+                const latestImageAttachment = sortedAttachments.find(attachment => 
+                  attachment.contentType && attachment.contentType.startsWith('image/')
+                );
+                
+                if (!latestImageAttachment) return null;
+                
+                return (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center',
+                    height: '100%'
+                  }}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ textAlign: 'center' }}>
+                      Najnowszy design produktu
+                    </Typography>
+                    <Paper
+                      elevation={2}
+                      sx={{
+                        width: '100%',
+                        maxWidth: 300,
+                        overflow: 'hidden',
+                        borderRadius: 2,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          elevation: 4,
+                          transform: 'scale(1.02)'
+                        }
+                      }}
+                      onClick={() => setTabValue(1)}
+                    >
+                      <Box
+                        component="img"
+                        src={latestImageAttachment.downloadURL}
+                        alt={latestImageAttachment.fileName}
+                        sx={{
+                          width: '100%',
+                          height: 'auto',
+                          maxHeight: 250,
+                          objectFit: 'cover',
+                          display: 'block'
                         }}
-                        component={Link}
-                        to={`/sales/price-lists/${priceListInfo.priceList.id}`}
-                        style={{ textDecoration: 'none' }}
-                        title={`Lista cenowa: ${priceListInfo.priceList.name}${priceListInfo.notes ? '\nUwagi: ' + priceListInfo.notes : ''}`}
                       />
-                    ))}
+                      <Box sx={{ p: 1 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ 
+                          display: 'block',
+                          textAlign: 'center',
+                          fontSize: '0.75rem'
+                        }}>
+                          {latestImageAttachment.fileName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ 
+                          display: 'block',
+                          textAlign: 'center',
+                          fontSize: '0.7rem'
+                        }}>
+                          Przesłano: {new Date(latestImageAttachment.uploadedAt).toLocaleDateString('pl-PL')}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                    <Typography variant="caption" color="primary" sx={{ 
+                      mt: 1, 
+                      textAlign: 'center',
+                      fontSize: '0.75rem'
+                    }}>
+                      Kliknij, aby zobaczyć wszystkie załączniki
+                    </Typography>
                   </Box>
-                ) : t('recipes.details.noPriceLists')}
-              </Typography>
+                );
+              })()}
             </Grid>
           </Grid>
         </Box>
@@ -583,7 +675,8 @@ const RecipeDetailsPage = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="recipe tabs">
             <Tab label={t('recipes.tabs.ingredientsAndInstructions')} id="recipe-tab-0" />
-            <Tab label={t('recipes.tabs.versionHistory')} id="recipe-tab-1" />
+            <Tab label="Załączniki designu" id="recipe-tab-1" />
+            <Tab label={t('recipes.tabs.versionHistory')} id="recipe-tab-2" />
           </Tabs>
         </Box>
 
@@ -689,6 +782,39 @@ const RecipeDetailsPage = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Załączniki designu produktu</Typography>
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              component={Link}
+              to={`/recipes/${id}/edit`}
+              size="small"
+            >
+              Edytuj recepturę
+            </Button>
+          </Box>
+          
+          {recipe.designAttachments && recipe.designAttachments.length > 0 && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Aby dodać, edytować lub usunąć załączniki designu, przejdź do edycji receptury.
+            </Alert>
+          )}
+          
+          <RecipeDesignAttachments
+            recipeId={id}
+            attachments={recipe.designAttachments || []}
+            onAttachmentsChange={() => {
+              // Odśwież dane receptury po zmianie załączników
+              fetchRecipe();
+            }}
+            disabled={true}
+            showTitle={false}
+            viewOnly={true}
+          />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
           <Typography variant="h6" gutterBottom>{t('recipes.details.versionHistory.title')}</Typography>
           
           {selectedVersions.length > 0 && (

@@ -1650,6 +1650,37 @@
       "selectComponent": "Wybierz składnik...",
       "addNewNutritionalComponent": "Dodaj nowy składnik odżywczy"
     },
+    "designAttachments": {
+      "title": "Załączniki designu produktu",
+      "upload": "Dodaj design produktu",
+      "description": "Przeciągnij pliki designu tutaj lub wybierz z dysku/aparatu",
+      "supportedFormats": "Dozwolone: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, PDF (maks. 20 MB)",
+      "selectOrTakePhoto": "Wybierz design lub zrób zdjęcie",
+      "uploading": "Przesyłanie designu...",
+      "noAttachments": "Brak załączników designu. Dodaj pierwszy design produktu powyżej.",
+      "preview": "Podgląd",
+      "download": "Pobierz",
+      "edit": "Edytuj opis",
+      "delete": "Usuń",
+      "fileName": "Nazwa pliku",
+      "fileSize": "Rozmiar pliku",
+      "uploadedAt": "Przesłano",
+      "description": "Opis",
+      "editDescription": "Edytuj opis designu",
+      "descriptionPlaceholder": "Dodaj opis tego designu (np. wersja kolorystyczna, wymiary, szczegóły techniczne...)",
+      "previewTitle": "Podgląd: {{fileName}}",
+      "pdfPreviewNotAvailable": "Podgląd PDF niedostępny",
+      "downloadAndOpen": "Pobierz i otwórz plik",
+      "messages": {
+        "uploadSuccess": "Design \"{{fileName}}\" został przesłany pomyślnie",
+        "uploadError": "Błąd podczas przesyłania pliku \"{{fileName}}\": {{error}}",
+        "deleteSuccess": "Design \"{{fileName}}\" został usunięty",
+        "deleteError": "Błąd podczas usuwania pliku: {{error}}",
+        "descriptionUpdated": "Opis załącznika został zaktualizowany",
+        "fileTooLarge": "Plik jest zbyt duży ({{size}} MB). Maksymalny rozmiar to 20 MB.",
+        "unsupportedFileType": "Nieobsługiwany typ pliku: {{type}}. Dozwolone są obrazy (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) i dokumenty PDF."
+      }
+    },
     "buttons": {
       "save": "Zapisz",
       "saving": "Zapisywanie...",
@@ -1679,6 +1710,7 @@
     },
     "tabs": {
       "ingredientsAndInstructions": "Składniki i instrukcje",
+      "designAttachments": "Załączniki designu",
       "versionHistory": "Historia wersji"
     },
     "list": {

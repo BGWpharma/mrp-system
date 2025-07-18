@@ -12,7 +12,8 @@ import {
     orderBy,
     serverTimestamp 
   } from 'firebase/firestore';
-  import { db } from './firebase/config';
+  import { db, storage } from './firebase/config';
+  import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
   import { clearCache } from './aiDataService';
   
   const RECIPES_COLLECTION = 'recipes';
@@ -303,7 +304,9 @@ import {
       processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
       productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0,
       // Sortuj składniki według ilości w ramach grup jednostek
-      ingredients: sortIngredientsByQuantity(recipeData.ingredients)
+      ingredients: sortIngredientsByQuantity(recipeData.ingredients),
+      // Załączniki designu produktu - przechowywane w wersjonowaniu
+      designAttachments: recipeData.designAttachments || []
     };
     
     const recipeWithMeta = {
@@ -373,7 +376,9 @@ import {
         processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
         productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0,
         // Sortuj składniki według ilości w ramach grup jednostek
-        ingredients: sortIngredientsByQuantity(recipeData.ingredients)
+        ingredients: sortIngredientsByQuantity(recipeData.ingredients),
+        // Załączniki designu produktu - przechowywane w wersjonowaniu
+        designAttachments: recipeData.designAttachments || []
       };
       
       // Przygotuj dane do aktualizacji
@@ -771,3 +776,111 @@ import {
       };
     }
   };
+
+// ========================
+// FUNKCJE ZAŁĄCZNIKÓW DESIGNU
+// ========================
+
+/**
+ * Przesyła załącznik designu produktu
+ * @param {File} file - Plik do przesłania
+ * @param {string} recipeId - ID receptury
+ * @param {string} userId - ID użytkownika przesyłającego
+ * @returns {Promise<Object>} - Informacje o przesłanym pliku
+ */
+export const uploadRecipeDesignAttachment = async (file, recipeId, userId) => {
+  try {
+    if (!file || !recipeId || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Sprawdź rozmiar pliku (maksymalnie 20 MB)
+    const fileSizeInMB = file.size / (1024 * 1024);
+    if (fileSizeInMB > 20) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 20 MB.`);
+    }
+
+    // Sprawdź typ pliku - dozwolone są głównie obrazy i dokumenty designu
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/svg+xml',
+      'application/pdf',
+      'application/postscript', // .eps files
+      'image/x-adobe-dng' // Adobe DNG
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`Nieobsługiwany typ pliku: ${file.type}. Dozwolone są obrazy (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) i dokumenty designu (PDF, EPS).`);
+    }
+
+    // Tworzymy ścieżkę do pliku w Firebase Storage
+    const timestamp = new Date().getTime();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `recipe-design-attachments/${recipeId}/${fileName}`;
+
+    // Przesyłamy plik do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
+
+    return {
+      id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+      fileName: file.name,
+      originalFileName: file.name,
+      storagePath,
+      downloadURL,
+      contentType: file.type,
+      size: file.size,
+      uploadedBy: userId,
+      uploadedAt: new Date().toISOString(),
+      description: '' // Pole na opis załącznika
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania załącznika designu:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa załącznik designu produktu
+ * @param {Object} attachment - Obiekt załącznika do usunięcia
+ * @returns {Promise<void>}
+ */
+export const deleteRecipeDesignAttachment = async (attachment) => {
+  try {
+    if (!attachment || !attachment.storagePath) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Usuń plik z Firebase Storage
+    const fileRef = ref(storage, attachment.storagePath);
+    await deleteObject(fileRef);
+  } catch (error) {
+    console.error('Błąd podczas usuwania załącznika designu:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera załączniki designu dla konkretnej wersji receptury
+ * @param {string} recipeId - ID receptury
+ * @param {number} version - Numer wersji receptury
+ * @returns {Promise<Array>} - Lista załączników designu
+ */
+export const getRecipeDesignAttachmentsByVersion = async (recipeId, version) => {
+  try {
+    const versionData = await getRecipeVersion(recipeId, version);
+    return versionData.data?.designAttachments || [];
+  } catch (error) {
+    console.error('Błąd podczas pobierania załączników designu dla wersji:', error);
+    return [];
+  }
+};

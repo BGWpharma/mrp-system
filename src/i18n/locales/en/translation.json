@@ -1650,6 +1650,37 @@
       "selectComponent": "Select component...",
       "addNewNutritionalComponent": "Add new nutritional component"
     },
+    "designAttachments": {
+      "title": "Product Design Attachments",
+      "upload": "Add Product Design",
+      "description": "Drag design files here or select from disk/camera",
+      "supportedFormats": "Allowed: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, PDF (max 20 MB)",
+      "selectOrTakePhoto": "Select design or take photo",
+      "uploading": "Uploading design...",
+      "noAttachments": "No design attachments. Add the first product design above.",
+      "preview": "Preview",
+      "download": "Download",
+      "edit": "Edit description",
+      "delete": "Delete",
+      "fileName": "File name",
+      "fileSize": "File size",
+      "uploadedAt": "Uploaded",
+      "description": "Description",
+      "editDescription": "Edit design description",
+      "descriptionPlaceholder": "Add description for this design (e.g. color version, dimensions, technical details...)",
+      "previewTitle": "Preview: {{fileName}}",
+      "pdfPreviewNotAvailable": "PDF preview not available",
+      "downloadAndOpen": "Download and open file",
+      "messages": {
+        "uploadSuccess": "Design \"{{fileName}}\" uploaded successfully",
+        "uploadError": "Error uploading file \"{{fileName}}\": {{error}}",
+        "deleteSuccess": "Design \"{{fileName}}\" was deleted",
+        "deleteError": "Error deleting file: {{error}}",
+        "descriptionUpdated": "Attachment description updated",
+        "fileTooLarge": "File is too large ({{size}} MB). Maximum size is 20 MB.",
+        "unsupportedFileType": "Unsupported file type: {{type}}. Allowed are images (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) and PDF documents."
+      }
+    },
     "buttons": {
       "save": "Save",
       "saving": "Saving...",
@@ -1679,6 +1710,7 @@
     },
     "tabs": {
       "ingredientsAndInstructions": "Ingredients and Instructions",
+      "designAttachments": "Design Attachments",
       "versionHistory": "Version History"
     },
     "list": {
