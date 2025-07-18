@@ -94,9 +94,12 @@ class LabelPdfGenerator {
    */
   async generateBarcode(value, options = {}) {
     try {
+      // Usuń spacje z wartości kodu kreskowego
+      const cleanValue = value ? value.toString().replace(/\s+/g, '') : '';
+      
       // Stwórz canvas do generowania kodu kreskowego
       const canvas = document.createElement('canvas');
-      JsBarcode(canvas, value, {
+      JsBarcode(canvas, cleanValue, {
         format: 'EAN13',
         width: options.width || 2,
         height: options.height || 50,
@@ -248,7 +251,7 @@ class LabelPdfGenerator {
   /**
    * Generuje etykietę kartonu
    */
-  async generateBoxLabel(cmrData, itemData, boxDetails, boxNumber, totalBoxes) {
+  async generateBoxLabel(cmrData, itemData, boxDetails) {
     // Rozmiar etykiety: 150mm x 100mm
     const width = 425; // 150mm = 425 punktów
     const height = 283; // 100mm = 283 punkty
@@ -269,8 +272,11 @@ class LabelPdfGenerator {
       });
     }
 
-    // Numery CMR i BOX - przesunięte w prawo żeby nie nakładały się na logo
-    const headerText = `CMR: ${cmrData.cmrNumber || ''} | BOX: ${boxNumber} / ${totalBoxes}`;
+    // Numer CMR i oznaczenie typu
+    let headerText = `CMR: ${cmrData.cmrNumber || ''}`;
+    if (boxDetails.isPartial) {
+      headerText += ' | BOX: PARTIAL';
+    }
     page.drawText(headerText, {
       x: margin + 38, // Dostosowane do większego logo
       y: currentY - 4, // Wyśrodkowane względem logo
@@ -459,7 +465,7 @@ class LabelPdfGenerator {
   /**
    * Generuje etykietę palety
    */
-  async generatePalletLabel(cmrData, itemData, palletDetails, palletNumber, totalPallets) {
+  async generatePalletLabel(cmrData, itemData, palletDetails) {
     // Rozmiar etykiety: 150mm x 100mm
     const width = 425; // 150mm = 425 punktów
     const height = 283; // 100mm = 283 punkty
@@ -480,8 +486,11 @@ class LabelPdfGenerator {
       });
     }
 
-    // Numery CMR i PALLET - przesunięte w prawo
-    const headerText = `CMR: ${cmrData.cmrNumber || ''} | PALLET: ${palletNumber} / ${totalPallets}`;
+    // Numer CMR i oznaczenie typu
+    let headerText = `CMR: ${cmrData.cmrNumber || ''}`;
+    if (palletDetails.isPartial) {
+      headerText += ' | PALLET: PARTIAL';
+    }
     page.drawText(headerText, {
       x: margin + 38, // Dostosowane do większego logo
       y: currentY - 4, // Wyśrodkowane względem logo
@@ -692,33 +701,25 @@ class LabelPdfGenerator {
     itemsWeightDetails.forEach(itemDetail => {
       // Generuj etykiety kartonów tylko dla pozycji które mają kartony
       if (itemDetail.hasDetailedData && itemDetail.hasBoxes && itemDetail.boxes) {
-        let boxCounter = 1;
         
-        // Etykiety dla pełnych kartonów
+        // Etykieta dla pełnych kartonów (tylko jedna)
         if (itemDetail.boxes.fullBox && itemDetail.boxes.fullBoxesCount > 0) {
-          for (let i = 0; i < itemDetail.boxes.fullBoxesCount; i++) {
-            promises.push(
-              this.generateBoxLabel(
-                cmrData,
-                itemDetail,
-                itemDetail.boxes.fullBox,
-                boxCounter,
-                itemDetail.boxesCount
-              )
-            );
-            boxCounter++;
-          }
+          promises.push(
+            this.generateBoxLabel(
+              cmrData,
+              itemDetail,
+              {...itemDetail.boxes.fullBox, isPartial: false}
+            )
+          );
         }
         
-        // Etykieta dla niepełnego kartonu
+        // Etykieta dla niepełnego kartonu (tylko jedna)
         if (itemDetail.boxes.partialBox) {
           promises.push(
             this.generateBoxLabel(
               cmrData,
               itemDetail,
-              itemDetail.boxes.partialBox,
-              boxCounter,
-              itemDetail.boxesCount
+              {...itemDetail.boxes.partialBox, isPartial: true}
             )
           );
         }
@@ -741,17 +742,31 @@ class LabelPdfGenerator {
     
     itemsWeightDetails.forEach(itemDetail => {
       if (itemDetail.hasDetailedData && itemDetail.pallets && itemDetail.pallets.length > 0) {
-        itemDetail.pallets.forEach((pallet, index) => {
+        // Znajdź pełne i niepełne palety
+        const fullPallets = itemDetail.pallets.filter(pallet => !pallet.isPartial);
+        const partialPallets = itemDetail.pallets.filter(pallet => pallet.isPartial);
+        
+        // Jedna etykieta dla pełnych palet
+        if (fullPallets.length > 0) {
           promises.push(
             this.generatePalletLabel(
               cmrData,
               itemDetail,
-              pallet,
-              pallet.palletNumber,
-              itemDetail.palletsCount
+              {...fullPallets[0], isPartial: false}
             )
           );
-        });
+        }
+        
+        // Jedna etykieta dla niepełnych palet
+        if (partialPallets.length > 0) {
+          promises.push(
+            this.generatePalletLabel(
+              cmrData,
+              itemDetail,
+              {...partialPallets[0], isPartial: true}
+            )
+          );
+        }
       }
     });
 

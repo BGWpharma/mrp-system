@@ -74,9 +74,7 @@ const formatAddress = (address) => {
 const BoxLabel = ({ 
   cmrData, 
   itemData, 
-  boxDetails, 
-  boxNumber,
-  totalBoxes 
+  boxDetails
 }) => {
   const formatDate = (date) => {
     if (!date) return '';
@@ -118,8 +116,12 @@ const BoxLabel = ({
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
             <span style={{ color: '#1976d2' }}>CMR: {cmrData.cmrNumber}</span>
-            {' | '}
-            <span style={{ color: '#333' }}>BOX: {boxNumber} / {totalBoxes}</span>
+            {boxDetails.isPartial && (
+              <>
+                {' | '}
+                <span style={{ color: '#d32f2f' }}>BOX: PARTIAL</span>
+              </>
+            )}
           </Typography>
         </Box>
       </Box>
@@ -235,7 +237,7 @@ const BoxLabel = ({
         <Box sx={{ display: 'flex', alignItems: 'flex-end', flexGrow: 1, justifyContent: 'center' }}>
           {itemData.linkedBatches && itemData.linkedBatches[0]?.barcode ? (
             <Barcode
-              value={itemData.linkedBatches[0].barcode}
+              value={itemData.linkedBatches[0].barcode.replace(/\s+/g, '')}
               width={3.5}
               height={45}
               fontSize={10}
@@ -260,9 +262,7 @@ const BoxLabel = ({
 const PalletLabel = ({ 
   cmrData, 
   itemData, 
-  palletDetails, 
-  palletNumber,
-  totalPallets 
+  palletDetails
 }) => {
   const formatDate = (date) => {
     if (!date) return '';
@@ -304,8 +304,12 @@ const PalletLabel = ({
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
             <span style={{ color: '#2e7d32' }}>CMR: {cmrData.cmrNumber}</span>
-            {' | '}
-            <span style={{ color: '#333' }}>PALLET: {palletNumber} / {totalPallets}</span>
+            {palletDetails.isPartial && (
+              <>
+                {' | '}
+                <span style={{ color: '#d32f2f' }}>PALLET: PARTIAL</span>
+              </>
+            )}
           </Typography>
         </Box>
       </Box>
@@ -425,7 +429,7 @@ const PalletLabel = ({
         <Box sx={{ display: 'flex', alignItems: 'flex-end', flexGrow: 1, justifyContent: 'center' }}>
           {itemData.linkedBatches && itemData.linkedBatches[0]?.barcode ? (
             <Barcode
-              value={itemData.linkedBatches[0].barcode}
+              value={itemData.linkedBatches[0].barcode.replace(/\s+/g, '')}
               width={3.5}
               height={45}
               fontSize={10}
@@ -455,35 +459,27 @@ const LabelGenerator = {
     itemsWeightDetails.forEach(itemDetail => {
       // Generuj etykiety kartonów tylko dla pozycji które mają kartony
       if (itemDetail.hasDetailedData && itemDetail.hasBoxes && itemDetail.boxes) {
-        let boxCounter = 1;
         
-        // Etykiety dla pełnych kartonów
+        // Etykieta dla pełnych kartonów (tylko jedna)
         if (itemDetail.boxes.fullBox && itemDetail.boxes.fullBoxesCount > 0) {
-          for (let i = 0; i < itemDetail.boxes.fullBoxesCount; i++) {
-            labels.push(
-              <BoxLabel
-                key={`${itemDetail.itemId}-full-${i}`}
-                cmrData={cmrData}
-                itemData={itemDetail}
-                boxDetails={itemDetail.boxes.fullBox}
-                boxNumber={boxCounter}
-                totalBoxes={itemDetail.boxesCount}
-              />
-            );
-            boxCounter++;
-          }
+          labels.push(
+            <BoxLabel
+              key={`${itemDetail.itemId}-full`}
+              cmrData={cmrData}
+              itemData={itemDetail}
+              boxDetails={{...itemDetail.boxes.fullBox, isPartial: false}}
+            />
+          );
         }
         
-        // Etykieta dla niepełnego kartonu
+        // Etykieta dla niepełnego kartonu (tylko jedna)
         if (itemDetail.boxes.partialBox) {
           labels.push(
             <BoxLabel
               key={`${itemDetail.itemId}-partial`}
               cmrData={cmrData}
               itemData={itemDetail}
-              boxDetails={itemDetail.boxes.partialBox}
-              boxNumber={boxCounter}
-              totalBoxes={itemDetail.boxesCount}
+              boxDetails={{...itemDetail.boxes.partialBox, isPartial: true}}
             />
           );
         }
@@ -499,18 +495,33 @@ const LabelGenerator = {
     
     itemsWeightDetails.forEach(itemDetail => {
       if (itemDetail.hasDetailedData && itemDetail.pallets && itemDetail.pallets.length > 0) {
-        itemDetail.pallets.forEach((pallet, index) => {
+        // Znajdź pełne i niepełne palety
+        const fullPallets = itemDetail.pallets.filter(pallet => !pallet.isPartial);
+        const partialPallets = itemDetail.pallets.filter(pallet => pallet.isPartial);
+        
+        // Jedna etykieta dla pełnych palet
+        if (fullPallets.length > 0) {
           labels.push(
             <PalletLabel
-              key={`${itemDetail.itemId}-pallet-${index}`}
+              key={`${itemDetail.itemId}-pallet-full`}
               cmrData={cmrData}
               itemData={itemDetail}
-              palletDetails={pallet}
-              palletNumber={pallet.palletNumber}
-              totalPallets={itemDetail.palletsCount}
+              palletDetails={{...fullPallets[0], isPartial: false}}
             />
           );
-        });
+        }
+        
+        // Jedna etykieta dla niepełnych palet
+        if (partialPallets.length > 0) {
+          labels.push(
+            <PalletLabel
+              key={`${itemDetail.itemId}-pallet-partial`}
+              cmrData={cmrData}
+              itemData={itemDetail}
+              palletDetails={{...partialPallets[0], isPartial: true}}
+            />
+          );
+        }
       }
     });
     

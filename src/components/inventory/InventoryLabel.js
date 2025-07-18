@@ -764,8 +764,8 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
     }));
   };
 
-  // Przygotuj dane do kodów
-  const codeData = item?.id ? 
+  // Przygotuj dane do kodów (usuń spacje)
+  const codeData = (item?.id ? 
     (batch ? 
       `${item.id}_${batch.lotNumber || batch.batchNumber || 'LOT'}${
         (batch.purchaseOrderDetails && batch.purchaseOrderDetails.number) 
@@ -773,7 +773,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
           : (batch.poNumber ? '_PO' + batch.poNumber : '')
       }` : 
       item.id) : 
-    'no-id';
+    'no-id').replace(/\s+/g, '');
   
   // Dane dla kodu QR w formie czytelnej dla użytkownika - format wieloliniowy
   const qrData = 

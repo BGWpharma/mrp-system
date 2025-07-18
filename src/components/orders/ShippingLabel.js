@@ -554,7 +554,7 @@ ${order.customer?.shippingAddress || 'Brak adresu dostawy'}</div>
                   ) : (
                     <Barcode
                       id="barcode-element"
-                      value={order.orderNumber || order.id?.substring(0, 10) || 'ERROR'}
+                      value={(order.orderNumber || order.id?.substring(0, 10) || 'ERROR').toString().replace(/\s+/g, '')}
                       width={1}
                       height={30}
                       fontSize={10}
