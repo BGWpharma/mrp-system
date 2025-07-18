@@ -67,6 +67,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
 import TimelineExport from './TimelineExport';
+import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
@@ -327,7 +328,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       </div>
 
       {/* Czas trwania */}
-      <div style={{ marginBottom: '8px' }}>
+      <div style={{ marginBottom: '6px' }}>
         <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
           Czas trwania: 
         </span>
@@ -335,6 +336,32 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
           {getDuration()}
         </span>
       </div>
+
+      {/* Status rezerwacji materiałów */}
+      {(() => {
+        const reservationStatus = calculateMaterialReservationStatus(task);
+        if (reservationStatus.status !== 'no_materials' && reservationStatus.status !== 'completed_confirmed') {
+          const statusColors = getReservationStatusColors(reservationStatus.status);
+          return (
+            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center' }}>
+              <span style={{ marginRight: '8px', color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
+                Materiały:
+              </span>
+              <span style={{ 
+                color: statusColors.main, 
+                fontWeight: 500,
+                backgroundColor: `${statusColors.main}20`,
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '0.8rem'
+              }}>
+                {reservationStatus.label}
+              </span>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Daty */}
       <div style={{ 
@@ -909,7 +936,7 @@ const ProductionTimeline = React.memo(() => {
         start_time: startTime.getTime(),
         end_time: endTime.getTime(),
         canMove: canEditTask,
-        canResize: canEditTask,
+        canResize: false, // Całkowicie wyłączone rozciąganie/skracanie kafelków
         canChangeGroup: false,
         // Dodatkowe dane
         task: taskForTooltip,
@@ -1211,7 +1238,13 @@ const ProductionTimeline = React.memo(() => {
     if (!item) return;
     
     if (editMode) {
-      // W trybie edycji otwórz dialog edycji
+      // Sprawdź czy zadanie można edytować (nie jest zakończone)
+      if (item.task?.status === 'Zakończone') {
+        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        return;
+      }
+      
+      // W trybie edycji otwórz dialog edycji tylko dla zadań, które można edytować
       setSelectedItem(item);
       setEditForm({
         start: new Date(item.start_time),
@@ -2196,7 +2229,6 @@ const ProductionTimeline = React.memo(() => {
           canvasTimeEnd={canvasTimeEnd}
           onTimeChange={handleTimeChange}
           onItemMove={handleItemMove}
-          onItemResize={handleItemResize}
           onItemSelect={handleItemSelect}
           onItemDrag={({ itemId, time, edge }) => {
             setIsDragging(true);
@@ -2219,6 +2251,23 @@ const ProductionTimeline = React.memo(() => {
           }}
           itemRenderer={({ item, itemContext, getItemProps }) => {
             const { key, ...itemProps } = getItemProps();
+            
+            // Oblicz status rezerwacji i kolor czcionki
+            const reservationStatus = calculateMaterialReservationStatus(item.task);
+            let textColor = '#fff'; // domyślny biały kolor
+            
+            // Ustaw kolor czcionki na podstawie statusu rezerwacji
+            if (reservationStatus.status === 'fully_reserved') {
+              const statusColors = getReservationStatusColors('fully_reserved');
+              textColor = statusColors.main;
+            } else if (reservationStatus.status === 'partially_reserved') {
+              const statusColors = getReservationStatusColors('partially_reserved');
+              textColor = statusColors.main;
+            } else if (reservationStatus.status === 'not_reserved') {
+              const statusColors = getReservationStatusColors('not_reserved');
+              textColor = statusColors.main;
+            }
+            
             return (
               <div 
                 key={key}
@@ -2240,7 +2289,7 @@ const ProductionTimeline = React.memo(() => {
                                  style={{
                    ...itemProps.style,
                    background: item.backgroundColor || '#1976d2',
-                   color: '#fff',
+                   color: textColor,
                    border: '1px solid rgba(255, 255, 255, 0.3)',
                    borderRadius: '4px',
                    padding: '2px 6px',
@@ -2249,7 +2298,8 @@ const ProductionTimeline = React.memo(() => {
                    textOverflow: 'ellipsis',
                    whiteSpace: 'nowrap',
                    cursor: 'pointer',
-                   boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                   boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                   fontWeight: reservationStatus.status !== 'no_materials' && reservationStatus.status !== 'completed_confirmed' ? '600' : 'normal' // pogrubienie dla statusów rezerwacji
                  }}
               >
                 {itemContext.title}

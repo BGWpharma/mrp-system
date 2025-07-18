@@ -145,6 +145,11 @@ import CompletedMOFormDialog from '../../components/production/CompletedMOFormDi
 import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
 import POReservationManager from '../../components/production/POReservationManager';
 import { useTranslation } from 'react-i18next';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { pl } from 'date-fns/locale';
+import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial } from '../../utils/productionUtils';
 
 const TaskDetailsPage = () => {
   const { t } = useTranslation();
@@ -243,6 +248,13 @@ const TaskDetailsPage = () => {
   const [completedMODialogOpen, setCompletedMODialogOpen] = useState(false);
   const [productionShiftDialogOpen, setProductionShiftDialogOpen] = useState(false);
   const [formTab, setFormTab] = useState(0);
+
+  // Stany dla dialogu ustawiania daty ważności przy starcie produkcji
+  const [startProductionDialogOpen, setStartProductionDialogOpen] = useState(false);
+  const [startProductionData, setStartProductionData] = useState({
+    expiryDate: null
+  });
+  const [startProductionError, setStartProductionError] = useState(null);
 
   // Nowe stany dla opcji dodawania do magazynu w dialogu historii produkcji
   const [addToInventoryOnHistory, setAddToInventoryOnHistory] = useState(true); // domyślnie włączone
@@ -1303,12 +1315,53 @@ const TaskDetailsPage = () => {
 
   const handleStartProduction = async () => {
     try {
+      // Sprawdź czy zadanie ma już ustawioną datę ważności
+      if (!task?.expiryDate) {
+        // Otwórz dialog do ustawienia daty ważności
+        setStartProductionData({
+          expiryDate: null
+        });
+        setStartProductionDialogOpen(true);
+        return;
+      }
+      
+      // Jeśli ma datę ważności, rozpocznij produkcję
       await startProduction(id, currentUser.uid);
       showSuccess('Produkcja rozpoczęta');
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);
     } catch (error) {
       showError('Błąd podczas rozpoczynania produkcji: ' + error.message);
+    }
+  };
+
+  // Funkcja obsługująca start produkcji z datą ważności
+  const handleStartProductionWithExpiry = async () => {
+    try {
+      if (!startProductionData.expiryDate) {
+        setStartProductionError('Podaj datę ważności gotowego produktu');
+        return;
+      }
+
+      setStartProductionError(null);
+      
+      // Rozpocznij produkcję z datą ważności
+      await startProduction(id, currentUser.uid, startProductionData.expiryDate);
+      
+      showSuccess('Produkcja rozpoczęta');
+      
+      // Zamknij dialog
+      setStartProductionDialogOpen(false);
+      setStartProductionData({
+        expiryDate: null
+      });
+      
+      // Odśwież dane zadania
+      const updatedTask = await getTaskById(id);
+      setTask(updatedTask);
+    } catch (error) {
+      setStartProductionError('Błąd podczas rozpoczynania produkcji: ' + error.message);
+      console.error('Error starting production:', error);
     }
   };
 
@@ -1625,27 +1678,13 @@ const TaskDetailsPage = () => {
     return { valid: true };
   };
 
-  // Funkcja pomocnicza do obliczania skonsumowanej ilości materiału
-  const getConsumedQuantityForMaterial = (materialId) => {
-    if (!task.consumedMaterials || task.consumedMaterials.length === 0) {
-      return 0;
-    }
-
-    const total = task.consumedMaterials
-      .filter(consumed => consumed.materialId === materialId)
-      .reduce((total, consumed) => total + Number(consumed.quantity || 0), 0);
-    
-    // Formatowanie do 3 miejsc po przecinku, aby uniknąć błędów precyzji float
-    return formatQuantityPrecision(total, 3);
-  };
-
   // Funkcja pomocnicza do obliczania wymaganej ilości do rezerwacji (po uwzględnieniu konsumpcji)
   const getRequiredQuantityForReservation = (material, materialId) => {
     const baseQuantity = materialQuantities[materialId] !== undefined 
       ? materialQuantities[materialId] 
       : material.quantity;
     
-    const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+    const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
     const remainingQuantity = Math.max(0, baseQuantity - consumedQuantity);
 
     return remainingQuantity;
@@ -1821,7 +1860,7 @@ const TaskDetailsPage = () => {
           const baseQuantity = materialQuantities[materialId] !== undefined 
             ? materialQuantities[materialId] 
             : material.quantity;
-          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
           const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
           
           let materialBatches = batches[materialId] || [];
@@ -3693,7 +3732,7 @@ const TaskDetailsPage = () => {
         
         if (reservedBatches && reservedBatches.length > 0) {
           // Oblicz ile zostało skonsumowane z tego materiału
-          const consumedQuantity = getConsumedQuantityForMaterial(materialId);
+          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
           const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
           const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
           
@@ -6110,6 +6149,22 @@ const TaskDetailsPage = () => {
                 color: 'white'
               }} 
             />
+                      {(() => {
+                        const reservationStatus = calculateMaterialReservationStatus(task);
+                        const statusColors = getReservationStatusColors(reservationStatus.status);
+                        
+                        return (
+                          <Chip 
+                            label={`Materiały: ${reservationStatus.label}`} 
+                            size="small" 
+                            sx={{ 
+                              ml: 1,
+                              backgroundColor: statusColors.main,
+                              color: statusColors.contrastText
+                            }} 
+                          />
+                        );
+                      })()}
 
                     </Typography>
                     <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
@@ -6206,7 +6261,7 @@ const TaskDetailsPage = () => {
                             <TableRow key={material.id}>
                               <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
                               <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
-                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
+                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
                               <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
                               <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
                               <TableCell>
@@ -9198,6 +9253,67 @@ const TaskDetailsPage = () => {
                 disabled={loading}
               >
                 {loading ? <CircularProgress size={24} /> : 'Usuń konsumpcję'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Dialog ustawiania daty ważności przy starcie produkcji */}
+          <Dialog
+            open={startProductionDialogOpen}
+            onClose={() => setStartProductionDialogOpen(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Rozpocznij produkcję</DialogTitle>
+            <DialogContent>
+              <DialogContentText sx={{ mb: 2 }}>
+                Data ważności gotowego produktu jest wymagana do rozpoczęcia produkcji.
+              </DialogContentText>
+              
+              {startProductionError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {startProductionError}
+                </Alert>
+              )}
+
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                <Box sx={{ my: 2 }}>
+                  <DateTimePicker
+                    label="Data ważności gotowego produktu *"
+                    value={startProductionData.expiryDate}
+                    onChange={(newValue) => setStartProductionData({
+                      ...startProductionData, 
+                      expiryDate: newValue
+                    })}
+                    views={['year', 'month', 'day']}
+                    format="dd-MM-yyyy"
+                    slotProps={{
+                      textField: {
+                        fullWidth: true,
+                        margin: 'dense',
+                        variant: 'outlined',
+                        helperText: "Data ważności produktu jest wymagana",
+                        error: !startProductionData.expiryDate,
+                        required: true
+                      },
+                      actionBar: {
+                        actions: ['clear', 'today']
+                      }
+                    }}
+                  />
+                </Box>
+              </LocalizationProvider>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setStartProductionDialogOpen(false)}>
+                Anuluj
+              </Button>
+              <Button 
+                onClick={handleStartProductionWithExpiry} 
+                variant="contained"
+                disabled={!startProductionData.expiryDate}
+              >
+                Rozpocznij produkcję
               </Button>
             </DialogActions>
           </Dialog>

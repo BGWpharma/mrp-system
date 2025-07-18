@@ -80,6 +80,7 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from 'react-i18next';
+import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 
 const TaskList = () => {
   const { t } = useTranslation();
@@ -184,6 +185,14 @@ const TaskList = () => {
     warehouseId: ''
   });
   const [stopProductionInventoryError, setStopProductionInventoryError] = useState(null);
+
+  // Stany dla dialogu ustawiania daty ważności przy starcie produkcji
+  const [startProductionDialogOpen, setStartProductionDialogOpen] = useState(false);
+  const [startProductionData, setStartProductionData] = useState({
+    expiryDate: null,
+    taskId: null
+  });
+  const [startProductionError, setStartProductionError] = useState(null);
 
   // Synchronizacja ilości wyprodukowanej z ilością końcową w formularzu magazynu
   useEffect(() => {
@@ -352,8 +361,23 @@ const TaskList = () => {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
-      // Jeśli status zmienia się na "W trakcie", użyj funkcji startProduction
+      // Jeśli status zmienia się na "W trakcie", sprawdź czy zadanie ma datę ważności
       if (newStatus === 'W trakcie') {
+        // Znajdź zadanie w liście
+        const task = tasks.find(t => t.id === id);
+        
+        // Sprawdź czy zadanie ma już ustawioną datę ważności
+        if (!task?.expiryDate) {
+          // Otwórz dialog do ustawienia daty ważności
+          setStartProductionData({
+            expiryDate: null,
+            taskId: id
+          });
+          setStartProductionDialogOpen(true);
+          return;
+        }
+        
+        // Jeśli ma datę ważności, rozpocznij produkcję
         await startProduction(id, currentUser.uid);
         showSuccess('Produkcja rozpoczęta - utworzono pustą partię produktu');
       } else {
@@ -367,6 +391,36 @@ const TaskList = () => {
     } catch (error) {
       showError('Błąd podczas zmiany statusu: ' + error.message);
       console.error('Error updating task status:', error);
+    }
+  };
+
+  // Funkcja obsługująca start produkcji z datą ważności
+  const handleStartProductionWithExpiry = async () => {
+    try {
+      if (!startProductionData.expiryDate) {
+        setStartProductionError('Podaj datę ważności gotowego produktu');
+        return;
+      }
+
+      setStartProductionError(null);
+      
+      // Rozpocznij produkcję z datą ważności
+      await startProduction(startProductionData.taskId, currentUser.uid, startProductionData.expiryDate);
+      
+      showSuccess('Produkcja rozpoczęta - utworzono pustą partię produktu');
+      
+      // Zamknij dialog
+      setStartProductionDialogOpen(false);
+      setStartProductionData({
+        expiryDate: null,
+        taskId: null
+      });
+      
+      // Odśwież listę zadań
+      fetchTasks();
+    } catch (error) {
+      setStartProductionError('Błąd podczas rozpoczynania produkcji: ' + error.message);
+      console.error('Error starting production:', error);
     }
   };
 
@@ -1113,13 +1167,28 @@ const TaskList = () => {
                 <Typography variant="caption" color="text.secondary">
                   Surowce:
                 </Typography>
-                <Chip 
-                  label={task.materialsReserved || task.autoReserveMaterials ? "Zarezerwowane" : "Niezarezerwowane"} 
-                  color={task.materialsReserved || task.autoReserveMaterials ? "success" : "warning"} 
-                  size="small" 
-                  variant="outlined"
-                  sx={{ fontSize: '0.7rem', height: '20px', ml: 0.5 }}
-                />
+                {(() => {
+                  const reservationStatus = calculateMaterialReservationStatus(task);
+                  const statusColors = getReservationStatusColors(reservationStatus.status);
+                  
+                  return (
+                    <Chip 
+                      label={reservationStatus.label} 
+                      size="small" 
+                      variant="outlined"
+                      sx={{ 
+                        fontSize: '0.7rem', 
+                        height: '20px', 
+                        ml: 0.5,
+                        borderColor: statusColors.main,
+                        color: statusColors.main,
+                        '&:hover': {
+                          backgroundColor: statusColors.light + '20',
+                        }
+                      }}
+                    />
+                  );
+                })()}
               </Box>
             )}
           </Box>
@@ -1550,30 +1619,25 @@ const TaskList = () => {
                       )}
                       {visibleColumns.materialsReserved && (
                         <TableCell>
-                          {task.materials && task.materials.length > 0 ? (
-                            task.materialsReserved || task.autoReserveMaterials ? (
+                          {(() => {
+                            const reservationStatus = calculateMaterialReservationStatus(task);
+                            const statusColors = getReservationStatusColors(reservationStatus.status);
+                            
+                            return (
                               <Chip 
-                                label="Zarezerwowane" 
-                                color="success" 
+                                label={reservationStatus.label} 
                                 size="small" 
                                 variant="outlined"
+                                sx={{
+                                  borderColor: statusColors.main,
+                                  color: statusColors.main,
+                                  '&:hover': {
+                                    backgroundColor: statusColors.light + '20',
+                                  }
+                                }}
                               />
-                            ) : (
-                              <Chip 
-                                label="Niezarezerwowane" 
-                                color="warning" 
-                                size="small" 
-                                variant="outlined"
-                              />
-                            )
-                          ) : (
-                            <Chip 
-                              label="Brak materiałów" 
-                              color="default" 
-                              size="small" 
-                              variant="outlined"
-                            />
-                          )}
+                            );
+                          })()}
                         </TableCell>
                       )}
                       {visibleColumns.plannedStart && (
@@ -1745,6 +1809,67 @@ const TaskList = () => {
           <ListItemText primary={t('production.taskListColumns.actions')} />
         </MenuItem>
       </Menu>
+      
+      {/* Dialog ustawiania daty ważności przy starcie produkcji */}
+      <Dialog
+        open={startProductionDialogOpen}
+        onClose={() => setStartProductionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Rozpocznij produkcję</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Data ważności gotowego produktu jest wymagana do rozpoczęcia produkcji.
+          </DialogContentText>
+          
+          {startProductionError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {startProductionError}
+            </Alert>
+          )}
+
+          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+            <Box sx={{ my: 2 }}>
+              <DateTimePicker
+                label="Data ważności gotowego produktu *"
+                value={startProductionData.expiryDate}
+                onChange={(newValue) => setStartProductionData({
+                  ...startProductionData, 
+                  expiryDate: newValue
+                })}
+                views={['year', 'month', 'day']}
+                format="dd-MM-yyyy"
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    margin: 'dense',
+                    variant: 'outlined',
+                    helperText: "Data ważności produktu jest wymagana",
+                    error: !startProductionData.expiryDate,
+                    required: true
+                  },
+                  actionBar: {
+                    actions: ['clear', 'today']
+                  }
+                }}
+              />
+            </Box>
+          </LocalizationProvider>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStartProductionDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleStartProductionWithExpiry} 
+            variant="contained"
+            disabled={!startProductionData.expiryDate}
+          >
+            Rozpocznij produkcję
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       {/* Dialog zatrzymania produkcji */}
       <Dialog

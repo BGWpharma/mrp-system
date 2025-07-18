@@ -654,8 +654,8 @@ const CreateFromOrderPage = () => {
           productionTimePerUnit: productionTimePerUnit,
           estimatedDuration: estimatedDuration,
           autoReserveMaterials: taskForm.autoReserveMaterials, // Przekazanie informacji o automatycznej rezerwacji
-          workstationId: workstationId, // ID stanowiska produkcyjnego
-          expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)) // Domyślna data ważności - 1 rok
+          workstationId: workstationId // ID stanowiska produkcyjnego
+          // Data ważności nie jest już ustawiana domyślnie - będzie wymagana przy starcie produkcji
         };
         
         console.log(`[DEBUG-CREATE] Dane zadania do utworzenia:`, JSON.stringify({
