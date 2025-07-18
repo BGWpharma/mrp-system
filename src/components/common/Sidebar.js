@@ -55,7 +55,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
 import { useTranslation } from 'react-i18next';
-import { getUserHiddenSidebarTabs } from '../../services/userService';
+import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs } from '../../services/userService';
 
 // Styled components
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
@@ -113,6 +113,49 @@ const Sidebar = ({ onToggle }) => {
   const { currentUser } = useAuth();
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   const [hiddenTabs, setHiddenTabs] = useState([]);
+  const [hiddenSubtabs, setHiddenSubtabs] = useState([]);
+  
+  // Funkcja do mapowania podzakładek na identyfikatory
+  const getSubtabId = (parentTabId, subItem) => {
+    // Mapowanie na podstawie ścieżki - zgodnie z definicją w getAvailableSidebarTabs
+    const pathToIdMap = {
+      // Dashboard
+      '/': 'dashboard-main',
+      '/analytics': 'dashboard-analytics',
+      
+      // Hall Data
+      '/hall-data/conditions': 'hall-data-conditions',
+      '/hall-data/machines': 'hall-data-machines',
+      
+      // Sales
+      '/invoices': 'sales-invoices',
+      '/customers': 'sales-customers',
+      '/sales/price-lists': 'sales-pricelists',
+      '/production/create-from-order': 'sales-production-task',
+      '/sales/co-reports': 'sales-co-reports',
+      '/orders': 'sales-customer-orders',
+      
+      // Production
+      '/production/forms': 'production-forms',
+      '/production/calculator': 'production-calculator',
+      '/production/forecast': 'production-forecast',
+      '/production': 'production-tasks',
+      '/recipes': 'production-recipes',
+      '/production/timeline': 'production-timeline',
+      
+      // Inventory
+      '/inventory/cmr': 'inventory-cmr',
+      '/suppliers': 'inventory-suppliers',
+      '/inventory/forms': 'inventory-forms',
+      '/crm/interactions': 'inventory-purchase-interactions',
+      '/inventory/stocktaking': 'inventory-stocktaking',
+      '/inventory': 'inventory-status',
+      '/inventory/expiry-dates': 'inventory-expiry-dates',
+      '/purchase-orders': 'inventory-component-orders'
+    };
+    
+    return pathToIdMap[subItem.path] || `${parentTabId}-${subItem.path.replace(/\//g, '-')}`;
+  };
   
   // Używamy kontekstu sidebar
   const { isOpen, toggle, isMobile } = useSidebar();
@@ -159,16 +202,20 @@ const Sidebar = ({ onToggle }) => {
     }
   }, [location.pathname, t]);
   
-  // Ładowanie ukrytych zakładek użytkownika
+  // Ładowanie ukrytych zakładek i podzakładek użytkownika
   useEffect(() => {
     const loadUserHiddenTabs = async () => {
       if (currentUser?.uid) {
         try {
           const userHiddenTabs = await getUserHiddenSidebarTabs(currentUser.uid);
           setHiddenTabs(userHiddenTabs);
+          
+          const userHiddenSubtabs = await getUserHiddenSidebarSubtabs(currentUser.uid);
+          setHiddenSubtabs(userHiddenSubtabs);
         } catch (error) {
           console.error('Błąd podczas ładowania ukrytych zakładek użytkownika:', error);
           setHiddenTabs([]);
+          setHiddenSubtabs([]);
         }
       }
     };
@@ -461,7 +508,14 @@ const Sidebar = ({ onToggle }) => {
                 role="menu"
                 aria-label={`Podmenu ${item.text}`}
                 >
-                  {item.children.map((subItem) => (
+                  {item.children
+                    .filter((subItem) => {
+                      // Filtrowanie podzakładek na podstawie ukrytych podzakładek
+                      // Sprawdzamy czy podzakładka ma ID i czy nie jest ukryta
+                      const subtabId = getSubtabId(item.id, subItem);
+                      return !hiddenSubtabs.includes(subtabId);
+                    })
+                    .map((subItem) => (
                     <StyledListItem
                       component={subItem.path ? Link : 'div'}
                       key={subItem.text}

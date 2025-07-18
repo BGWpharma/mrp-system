@@ -23,7 +23,9 @@ import { useNotification } from '../../hooks/useNotification';
 import {
   getAvailableSidebarTabs,
   getUserHiddenSidebarTabs,
-  updateUserHiddenSidebarTabs
+  updateUserHiddenSidebarTabs,
+  getUserHiddenSidebarSubtabs,
+  updateUserHiddenSidebarSubtabs
 } from '../../services/userService';
 
 /**
@@ -32,6 +34,7 @@ import {
 const SidebarTabsManager = ({ open, onClose, selectedUser }) => {
   const [availableTabs, setAvailableTabs] = useState([]);
   const [hiddenTabs, setHiddenTabs] = useState([]);
+  const [hiddenSubtabs, setHiddenSubtabs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
@@ -55,6 +58,10 @@ const SidebarTabsManager = ({ open, onClose, selectedUser }) => {
       // Pobierz ukryte zakładki użytkownika
       const userHiddenTabs = await getUserHiddenSidebarTabs(selectedUser.id);
       setHiddenTabs(userHiddenTabs);
+      
+      // Pobierz ukryte podzakładki użytkownika
+      const userHiddenSubtabs = await getUserHiddenSidebarSubtabs(selectedUser.id);
+      setHiddenSubtabs(userHiddenSubtabs);
     } catch (error) {
       console.error('Błąd podczas ładowania danych zakładek:', error);
       showError('Nie udało się załadować danych o zakładkach użytkownika');
@@ -75,13 +82,30 @@ const SidebarTabsManager = ({ open, onClose, selectedUser }) => {
     });
   };
   
+  const handleSubtabToggle = (subtabId) => {
+    setHiddenSubtabs(prev => {
+      if (prev.includes(subtabId)) {
+        // Usuń z ukrytych (pokaż podzakładkę)
+        return prev.filter(id => id !== subtabId);
+      } else {
+        // Dodaj do ukrytych (ukryj podzakładkę)
+        return [...prev, subtabId];
+      }
+    });
+  };
+  
   const handleSave = async () => {
     if (!selectedUser) return;
     
     setSaving(true);
     try {
+      // Zapisz ukryte zakładki
       await updateUserHiddenSidebarTabs(selectedUser.id, hiddenTabs, currentUser.uid);
-      showSuccess(`Zaktualizowano widoczność zakładek dla użytkownika ${selectedUser.displayName || selectedUser.email}`);
+      
+      // Zapisz ukryte podzakładki
+      await updateUserHiddenSidebarSubtabs(selectedUser.id, hiddenSubtabs, currentUser.uid);
+      
+      showSuccess(`Zaktualizowano widoczność zakładek i podzakładek dla użytkownika ${selectedUser.displayName || selectedUser.email}`);
       onClose();
     } catch (error) {
       console.error('Błąd podczas zapisywania ustawień zakładek:', error);
@@ -93,6 +117,7 @@ const SidebarTabsManager = ({ open, onClose, selectedUser }) => {
   
   const handleClose = () => {
     setHiddenTabs([]);
+    setHiddenSubtabs([]);
     setAvailableTabs([]);
     onClose();
   };
@@ -143,57 +168,131 @@ const SidebarTabsManager = ({ open, onClose, selectedUser }) => {
             ) : (
               <FormGroup>
                 {availableTabs.map((tab) => {
-                  const isHidden = hiddenTabs.includes(tab.id);
+                  const isTabHidden = hiddenTabs.includes(tab.id);
                   return (
-                    <FormControlLabel
-                      key={tab.id}
-                      control={
-                        <Checkbox
-                          checked={!isHidden} // Odwrócona logika - checkbox zaznaczony = widoczny
-                          onChange={() => handleTabToggle(tab.id)}
-                          icon={<VisibilityOffIcon />}
-                          checkedIcon={<VisibilityIcon />}
-                          color="primary"
-                        />
-                      }
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography>{tab.name}</Typography>
-                          <Typography 
-                            variant="caption" 
-                            color="text.secondary" 
-                            sx={{ ml: 1 }}
-                          >
-                            ({tab.path})
-                          </Typography>
-                          {isHidden && (
+                    <Box key={tab.id} sx={{ mb: 2 }}>
+                      {/* Główna zakładka */}
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={!isTabHidden}
+                            onChange={() => handleTabToggle(tab.id)}
+                            icon={<VisibilityOffIcon />}
+                            checkedIcon={<VisibilityIcon />}
+                            color="primary"
+                          />
+                        }
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
+                              {tab.name}
+                            </Typography>
                             <Typography 
                               variant="caption" 
-                              color="error" 
-                              sx={{ ml: 1, fontWeight: 'bold' }}
+                              color="text.secondary" 
+                              sx={{ ml: 1 }}
                             >
-                              - UKRYTA
+                              ({tab.path})
                             </Typography>
-                          )}
+                            {isTabHidden && (
+                              <Typography 
+                                variant="caption" 
+                                color="error" 
+                                sx={{ ml: 1, fontWeight: 'bold' }}
+                              >
+                                - UKRYTA
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                      
+                      {/* Podzakładki */}
+                      {tab.hasSubmenu && tab.children && tab.children.length > 0 && (
+                        <Box sx={{ ml: 4, mt: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                            Podzakładki:
+                          </Typography>
+                          <FormGroup>
+                            {tab.children.map((subtab) => {
+                              const isSubtabHidden = hiddenSubtabs.includes(subtab.id);
+                              const isParentHidden = isTabHidden;
+                              
+                              return (
+                                <FormControlLabel
+                                  key={subtab.id}
+                                  control={
+                                    <Checkbox
+                                      checked={!isSubtabHidden && !isParentHidden}
+                                      onChange={() => handleSubtabToggle(subtab.id)}
+                                      icon={<VisibilityOffIcon />}
+                                      checkedIcon={<VisibilityIcon />}
+                                      color="primary"
+                                      disabled={isParentHidden}
+                                      size="small"
+                                    />
+                                  }
+                                  label={
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <Typography variant="body2">
+                                        {subtab.name}
+                                      </Typography>
+                                      <Typography 
+                                        variant="caption" 
+                                        color="text.secondary" 
+                                        sx={{ ml: 1 }}
+                                      >
+                                        ({subtab.path})
+                                      </Typography>
+                                      {(isSubtabHidden || isParentHidden) && (
+                                        <Typography 
+                                          variant="caption" 
+                                          color="error" 
+                                          sx={{ ml: 1, fontWeight: 'bold' }}
+                                        >
+                                          - UKRYTA
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  }
+                                />
+                              );
+                            })}
+                          </FormGroup>
                         </Box>
-                      }
-                    />
+                      )}
+                    </Box>
                   );
                 })}
               </FormGroup>
             )}
             
-            {hiddenTabs.length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                <Alert severity="warning">
-                  <Typography variant="body2">
-                    <strong>Ukryte zakładki ({hiddenTabs.length}):</strong><br />
-                    {availableTabs
-                      .filter(tab => hiddenTabs.includes(tab.id))
-                      .map(tab => tab.name)
-                      .join(', ')}
-                  </Typography>
-                </Alert>
+            {(hiddenTabs.length > 0 || hiddenSubtabs.length > 0) && (
+              <Box sx={{ mt: 3 }}>
+                {hiddenTabs.length > 0 && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Ukryte główne zakładki ({hiddenTabs.length}):</strong><br />
+                      {availableTabs
+                        .filter(tab => hiddenTabs.includes(tab.id))
+                        .map(tab => tab.name)
+                        .join(', ')}
+                    </Typography>
+                  </Alert>
+                )}
+                
+                {hiddenSubtabs.length > 0 && (
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      <strong>Ukryte podzakładki ({hiddenSubtabs.length}):</strong><br />
+                      {availableTabs
+                        .flatMap(tab => tab.children || [])
+                        .filter(subtab => hiddenSubtabs.includes(subtab.id))
+                        .map(subtab => subtab.name)
+                        .join(', ')}
+                    </Typography>
+                  </Alert>
+                )}
               </Box>
             )}
           </>

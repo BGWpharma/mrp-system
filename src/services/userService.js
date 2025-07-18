@@ -346,6 +346,38 @@ export const updateUserHiddenSidebarTabs = async (userId, hiddenTabs, adminId) =
 };
 
 /**
+ * Aktualizuje listę ukrytych podzakładek sidebara dla użytkownika
+ * @param {string} userId - ID użytkownika
+ * @param {Array<string>} hiddenSubtabs - Lista identyfikatorów ukrytych podzakładek
+ * @param {string} adminId - ID administratora dokonującego zmiany
+ * @returns {Promise<boolean>} - Czy operacja zakończyła się sukcesem
+ */
+export const updateUserHiddenSidebarSubtabs = async (userId, hiddenSubtabs, adminId) => {
+  try {
+    // Sprawdź czy użytkownik dokonujący zmiany jest administratorem
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do zarządzania podzakładkami użytkowników');
+    }
+    
+    // Aktualizuj listę ukrytych podzakładek
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      hiddenSidebarSubtabs: hiddenSubtabs || [],
+      updatedAt: new Date()
+    });
+    
+    // Wyczyść cache dla tego użytkownika
+    userCache.delete(userId);
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji ukrytych podzakładek użytkownika:', error);
+    throw error;
+  }
+};
+
+/**
  * Pobiera listę ukrytych zakładek sidebara dla użytkownika
  * @param {string} userId - ID użytkownika
  * @returns {Promise<Array<string>>} - Lista identyfikatorów ukrytych zakładek
@@ -356,6 +388,21 @@ export const getUserHiddenSidebarTabs = async (userId) => {
     return userData?.hiddenSidebarTabs || [];
   } catch (error) {
     console.error('Błąd podczas pobierania ukrytych zakładek użytkownika:', error);
+    return [];
+  }
+};
+
+/**
+ * Pobiera listę ukrytych podzakładek sidebara dla użytkownika
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Array<string>>} - Lista identyfikatorów ukrytych podzakładek
+ */
+export const getUserHiddenSidebarSubtabs = async (userId) => {
+  try {
+    const userData = await getUserById(userId);
+    return userData?.hiddenSidebarSubtabs || [];
+  } catch (error) {
+    console.error('Błąd podczas pobierania ukrytych podzakładek użytkownika:', error);
     return [];
   }
 };
@@ -416,17 +463,82 @@ export const updateUserProfile = async (userId, userProfile, adminId) => {
 };
 
 /**
- * Pobiera wszystkie dostępne zakładki sidebara z ich identyfikatorami
- * @returns {Array<Object>} - Lista dostępnych zakładek z ich identyfikatorami i nazwami
+ * Pobiera wszystkie dostępne zakładki sidebara z ich identyfikatorami i podzakładkami
+ * @returns {Array<Object>} - Lista dostępnych zakładek z ich identyfikatorami, nazwami i podzakładkami
  */
 export const getAvailableSidebarTabs = () => {
   return [
-    { id: 'ai-assistant', name: 'Asystent AI', path: '/ai-assistant' },
-    { id: 'dashboard', name: 'Dashboard', path: '/' },
-    { id: 'hall-data', name: 'Parametry hali', path: '/hall-data' },
-    { id: 'sales', name: 'Sprzedaż', path: '/customers' },
-    { id: 'production', name: 'Produkcja', path: '/production' },
-    { id: 'inventory', name: 'Stany', path: '/inventory' }
+    { 
+      id: 'ai-assistant', 
+      name: 'Asystent AI', 
+      path: '/ai-assistant',
+      hasSubmenu: false,
+      children: []
+    },
+    { 
+      id: 'dashboard', 
+      name: 'Dashboard', 
+      path: '/',
+      hasSubmenu: true,
+      children: [
+        { id: 'dashboard-main', name: 'Dashboard główny', path: '/' },
+        { id: 'dashboard-analytics', name: 'Analityka', path: '/analytics' }
+      ]
+    },
+    { 
+      id: 'hall-data', 
+      name: 'Parametry hali', 
+      path: '/hall-data',
+      hasSubmenu: true,
+      children: [
+        { id: 'hall-data-conditions', name: 'Warunki środowiskowe', path: '/hall-data/conditions' },
+        { id: 'hall-data-machines', name: 'Maszyny', path: '/hall-data/machines' }
+      ]
+    },
+    { 
+      id: 'sales', 
+      name: 'Sprzedaż', 
+      path: '/customers',
+      hasSubmenu: true,
+      children: [
+        { id: 'sales-invoices', name: 'Faktury', path: '/invoices' },
+        { id: 'sales-customers', name: 'Klienci', path: '/customers' },
+        { id: 'sales-pricelists', name: 'Cenniki', path: '/sales/price-lists' },
+        { id: 'sales-production-task', name: 'Nowe zadanie produkcyjne', path: '/production/create-from-order' },
+        { id: 'sales-co-reports', name: 'Raporty CO', path: '/sales/co-reports' },
+        { id: 'sales-customer-orders', name: 'Zamówienia klientów', path: '/orders' }
+      ]
+    },
+    { 
+      id: 'production', 
+      name: 'Produkcja', 
+      path: '/production',
+      hasSubmenu: true,
+      children: [
+        { id: 'production-forms', name: 'Formularze', path: '/production/forms' },
+        { id: 'production-calculator', name: 'Kalkulator', path: '/production/calculator' },
+        { id: 'production-forecast', name: 'Prognoza', path: '/production/forecast' },
+        { id: 'production-tasks', name: 'Zadania produkcyjne', path: '/production' },
+        { id: 'production-recipes', name: 'Receptury', path: '/recipes' },
+        { id: 'production-timeline', name: 'Harmonogram', path: '/production/timeline' }
+      ]
+    },
+    { 
+      id: 'inventory', 
+      name: 'Stany', 
+      path: '/inventory',
+      hasSubmenu: true,
+      children: [
+        { id: 'inventory-cmr', name: 'CMR', path: '/inventory/cmr' },
+        { id: 'inventory-suppliers', name: 'Dostawcy', path: '/suppliers' },
+        { id: 'inventory-forms', name: 'Formularze', path: '/inventory/forms' },
+        { id: 'inventory-purchase-interactions', name: 'Interakcje zakupowe', path: '/crm/interactions' },
+        { id: 'inventory-stocktaking', name: 'Inwentaryzacja', path: '/inventory/stocktaking' },
+        { id: 'inventory-status', name: 'Status stanów', path: '/inventory' },
+        { id: 'inventory-expiry-dates', name: 'Terminy ważności', path: '/inventory/expiry-dates' },
+        { id: 'inventory-component-orders', name: 'Zamówienia komponentów', path: '/purchase-orders' }
+      ]
+    }
   ];
 };
 
@@ -440,6 +552,8 @@ export default {
   checkAndUpdateAIMessageQuota,
   updateUserHiddenSidebarTabs,
   getUserHiddenSidebarTabs,
+  updateUserHiddenSidebarSubtabs,
+  getUserHiddenSidebarSubtabs,
   updateUserProfile,
   getAvailableSidebarTabs
 }; 
