@@ -116,7 +116,7 @@ const BoxLabel = ({
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
             <span style={{ color: '#1976d2' }}>CMR: {cmrData.cmrNumber}</span>
-            {boxDetails.isPartial && (
+            {!boxDetails.isFull && (
               <>
                 {' | '}
                 <span style={{ color: '#d32f2f' }}>BOX: PARTIAL</span>
@@ -304,7 +304,7 @@ const PalletLabel = ({
         <Box sx={{ flexGrow: 1 }}>
           <Typography variant="body2" sx={{ fontSize: '14px', fontWeight: 'bold' }}>
             <span style={{ color: '#2e7d32' }}>CMR: {cmrData.cmrNumber}</span>
-            {palletDetails.isPartial && (
+            {!palletDetails.isFull && (
               <>
                 {' | '}
                 <span style={{ color: '#d32f2f' }}>PALLET: PARTIAL</span>
@@ -467,7 +467,7 @@ const LabelGenerator = {
               key={`${itemDetail.itemId}-full`}
               cmrData={cmrData}
               itemData={itemDetail}
-              boxDetails={{...itemDetail.boxes.fullBox, isPartial: false}}
+              boxDetails={itemDetail.boxes.fullBox}
             />
           );
         }
@@ -479,7 +479,7 @@ const LabelGenerator = {
               key={`${itemDetail.itemId}-partial`}
               cmrData={cmrData}
               itemData={itemDetail}
-              boxDetails={{...itemDetail.boxes.partialBox, isPartial: true}}
+              boxDetails={itemDetail.boxes.partialBox}
             />
           );
         }
@@ -496,8 +496,8 @@ const LabelGenerator = {
     itemsWeightDetails.forEach(itemDetail => {
       if (itemDetail.hasDetailedData && itemDetail.pallets && itemDetail.pallets.length > 0) {
         // Znajdź pełne i niepełne palety
-        const fullPallets = itemDetail.pallets.filter(pallet => !pallet.isPartial);
-        const partialPallets = itemDetail.pallets.filter(pallet => pallet.isPartial);
+        const fullPallets = itemDetail.pallets.filter(pallet => pallet.isFull);
+        const partialPallets = itemDetail.pallets.filter(pallet => !pallet.isFull);
         
         // Jedna etykieta dla pełnych palet
         if (fullPallets.length > 0) {
@@ -506,7 +506,7 @@ const LabelGenerator = {
               key={`${itemDetail.itemId}-pallet-full`}
               cmrData={cmrData}
               itemData={itemDetail}
-              palletDetails={{...fullPallets[0], isPartial: false}}
+              palletDetails={fullPallets[0]}
             />
           );
         }
@@ -518,7 +518,7 @@ const LabelGenerator = {
               key={`${itemDetail.itemId}-pallet-partial`}
               cmrData={cmrData}
               itemData={itemDetail}
-              palletDetails={{...partialPallets[0], isPartial: true}}
+              palletDetails={partialPallets[0]}
             />
           );
         }

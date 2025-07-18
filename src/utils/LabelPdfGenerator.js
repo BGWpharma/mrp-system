@@ -274,7 +274,7 @@ class LabelPdfGenerator {
 
     // Numer CMR i oznaczenie typu
     let headerText = `CMR: ${cmrData.cmrNumber || ''}`;
-    if (boxDetails.isPartial) {
+    if (!boxDetails.isFull) {
       headerText += ' | BOX: PARTIAL';
     }
     page.drawText(headerText, {
@@ -488,7 +488,7 @@ class LabelPdfGenerator {
 
     // Numer CMR i oznaczenie typu
     let headerText = `CMR: ${cmrData.cmrNumber || ''}`;
-    if (palletDetails.isPartial) {
+    if (!palletDetails.isFull) {
       headerText += ' | PALLET: PARTIAL';
     }
     page.drawText(headerText, {
@@ -708,7 +708,7 @@ class LabelPdfGenerator {
             this.generateBoxLabel(
               cmrData,
               itemDetail,
-              {...itemDetail.boxes.fullBox, isPartial: false}
+              itemDetail.boxes.fullBox
             )
           );
         }
@@ -719,7 +719,7 @@ class LabelPdfGenerator {
             this.generateBoxLabel(
               cmrData,
               itemDetail,
-              {...itemDetail.boxes.partialBox, isPartial: true}
+              itemDetail.boxes.partialBox
             )
           );
         }
@@ -743,8 +743,8 @@ class LabelPdfGenerator {
     itemsWeightDetails.forEach(itemDetail => {
       if (itemDetail.hasDetailedData && itemDetail.pallets && itemDetail.pallets.length > 0) {
         // Znajdź pełne i niepełne palety
-        const fullPallets = itemDetail.pallets.filter(pallet => !pallet.isPartial);
-        const partialPallets = itemDetail.pallets.filter(pallet => pallet.isPartial);
+        const fullPallets = itemDetail.pallets.filter(pallet => pallet.isFull);
+        const partialPallets = itemDetail.pallets.filter(pallet => !pallet.isFull);
         
         // Jedna etykieta dla pełnych palet
         if (fullPallets.length > 0) {
@@ -752,7 +752,7 @@ class LabelPdfGenerator {
             this.generatePalletLabel(
               cmrData,
               itemDetail,
-              {...fullPallets[0], isPartial: false}
+              fullPallets[0]
             )
           );
         }
@@ -763,7 +763,7 @@ class LabelPdfGenerator {
             this.generatePalletLabel(
               cmrData,
               itemDetail,
-              {...partialPallets[0], isPartial: true}
+              partialPallets[0]
             )
           );
         }
