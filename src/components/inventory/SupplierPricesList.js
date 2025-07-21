@@ -38,7 +38,7 @@ import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplie
 import { getAllSuppliers } from '../../services/supplierService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { DEFAULT_CURRENCY } from '../../config';
+import { DEFAULT_CURRENCY, CURRENCY_OPTIONS } from '../../config';
 import SupplierPriceHistory from './SupplierPriceHistory';
 
 /**
@@ -62,6 +62,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
     minQuantity: 1,
     leadTime: 7,
     notes: '',
+    currency: DEFAULT_CURRENCY,
     isDefault: false
   });
   
@@ -121,6 +122,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         minQuantity: item.minQuantity || 1,
         leadTime: item.leadTime || 7,
         notes: item.notes || '',
+        currency: item.currency || DEFAULT_CURRENCY,
         isDefault: item.isDefault || false
       });
       setEditingId(item.id);
@@ -131,6 +133,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         minQuantity: 1,
         leadTime: 7,
         notes: '',
+        currency: DEFAULT_CURRENCY,
         isDefault: false
       });
       setEditingId(null);
@@ -175,7 +178,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
         minQuantity: parseInt(formData.minQuantity) || 1,
         leadTime: parseInt(formData.leadTime) || 7,
         notes: formData.notes,
-        currency,
+        currency: formData.currency || DEFAULT_CURRENCY,
         isDefault: formData.isDefault
       };
       
@@ -372,19 +375,33 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
               </Select>
             </FormControl>
             
-            <TextField
-              fullWidth
-              type="number"
-              label="Cena"
-              name="price"
-              value={formData.price}
-              onChange={handleInputChange}
-              InputProps={{
-                endAdornment: <InputAdornment position="end">{currency}</InputAdornment>,
-                inputProps: { min: 0 }
-              }}
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Cena"
+                name="price"
+                value={formData.price}
+                onChange={handleInputChange}
+                inputProps={{ min: 0, step: 'any' }}
+                sx={{ flex: 1 }}
+              />
+              <FormControl sx={{ minWidth: 100 }}>
+                <InputLabel>Waluta</InputLabel>
+                <Select
+                  name="currency"
+                  value={formData.currency}
+                  onChange={handleInputChange}
+                  label="Waluta"
+                >
+                  {CURRENCY_OPTIONS.map((currency) => (
+                    <MenuItem key={currency} value={currency}>
+                      {currency}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
             
             <TextField
               fullWidth

@@ -279,7 +279,8 @@ const ForecastPage = () => {
               availableQuantity: inventoryItem ? parseFloat(inventoryItem.quantity) || 0 : 0,
               tasks: [], // Lista zadań, w których materiał jest używany
               perUnitQuantity: materialQuantityPerUnit, // Zapamiętaj ilość na jednostkę
-              price: inventoryItem?.price || 0
+              price: inventoryItem?.price || 0,
+              currency: inventoryItem?.currency || 'EUR'
             };
           }
           
@@ -327,6 +328,7 @@ const ForecastPage = () => {
                 // Jeśli mamy cenę od domyślnego dostawcy, użyj jej
                 if (bestPrice.isDefault || bestPrice.price) {
                   materialRequirements[materialId].price = bestPrice.price;
+                  materialRequirements[materialId].currency = bestPrice.currency || 'EUR';
                   materialRequirements[materialId].supplier = bestPrice.supplierName || 'Nieznany dostawca';
                   materialRequirements[materialId].supplierId = bestPrice.supplierId;
                   materialRequirements[materialId].isDefaultSupplier = bestPrice.isDefault;
@@ -1484,14 +1486,14 @@ const ForecastPage = () => {
                                 <TableCell align="right">
                                   {item.price === 0 ? '-' : (
                                     <Tooltip title={item.supplier ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Cena magazynowa'}>
-                                      <span>{formatCurrency(item.price)}</span>
+                                      <span>{formatCurrency(item.price, item.currency || 'EUR')}</span>
                                     </Tooltip>
                                   )}
                                 </TableCell>
                                 <TableCell align="right">
                                   {item.cost === 0 ? '-' : (
                                     <Tooltip title={item.supplier ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Koszt na podstawie ceny magazynowej'}>
-                                      <span>{formatCurrency(item.cost)}</span>
+                                      <span>{formatCurrency(item.cost, item.currency || 'EUR')}</span>
                                     </Tooltip>
                                   )}
                                 </TableCell>

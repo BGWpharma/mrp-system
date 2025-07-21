@@ -36,7 +36,7 @@ export const DATE_TIME_FORMAT = 'DD.MM.YYYY HH:mm';
 
 // Konfiguracja waluty
 export const DEFAULT_CURRENCY = 'EUR';
-export const CURRENCY_OPTIONS = ['EUR', 'PLN', 'USD', 'GBP'];
+export const CURRENCY_OPTIONS = ['EUR', 'PLN', 'USD', 'GBP', 'CHF'];
 
 // Konfiguracja jednostek miary
 export const UNIT_OPTIONS = ['kg', 'szt.', 'caps'];
