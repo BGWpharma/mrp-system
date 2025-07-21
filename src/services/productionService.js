@@ -3003,28 +3003,42 @@ import {
   };
 
   // Rozpoczęcie produkcji
-  export const startProduction = async (taskId, userId) => {
+  export const startProduction = async (taskId, userId, expiryDate = null) => {
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
     
     try {
+      // Pobierz aktualne dane zadania aby zachować istniejące sesje produkcyjne
+      const taskDoc = await getDoc(taskRef);
+      const task = taskDoc.data();
+      
+      // Zachowaj istniejące sesje produkcyjne przy wznawianiu
+      const existingSessions = task.productionSessions || [];
+      
       // Zaktualizuj status zadania na "W trakcie"
       await updateDoc(taskRef, {
         status: 'W trakcie',
         startDate: serverTimestamp(),
-        productionSessions: [],
+        productionSessions: existingSessions, // Zachowaj istniejące sesje
         updatedAt: serverTimestamp(),
         updatedBy: userId
       });
       
       // Automatycznie utwórz pustą partię gotowego produktu
+      let batchResult = null;
       try {
-        const batchResult = await createEmptyProductBatch(taskId, userId);
+        batchResult = await createEmptyProductBatch(taskId, userId, expiryDate);
         console.log(`Utworzono pustą partię przy rozpoczynaniu produkcji: ${batchResult.message}`);
       } catch (batchError) {
         console.error('Błąd podczas tworzenia pustej partii:', batchError);
         // Nie przerywamy głównego procesu rozpoczynania produkcji jeśli utworzenie partii się nie powiedzie
         console.warn('Produkcja została rozpoczęta mimo błędu przy tworzeniu pustej partii');
+        batchResult = { success: false, message: 'Błąd podczas tworzenia partii' };
       }
+      
+      return {
+        success: true,
+        batchResult: batchResult
+      };
       
     } catch (error) {
       console.error('Błąd podczas rozpoczynania produkcji:', error);
@@ -3099,6 +3113,40 @@ import {
       totalCompletedQuantity,
       finalStatus
     };
+  };
+
+  // Wstrzymanie produkcji bez tworzenia sesji
+  export const pauseProduction = async (taskId, userId) => {
+    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    
+    try {
+      // Pobierz aktualne dane zadania
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const task = taskDoc.data();
+      
+      // Wstrzymaj produkcję bez dodawania sesji - tylko zmień status
+      const updates = {
+        status: 'Wstrzymane',
+        lastPauseDate: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+      
+      await updateDoc(taskRef, updates);
+      
+      return {
+        success: true,
+        message: 'Produkcja została wstrzymana'
+      };
+      
+    } catch (error) {
+      console.error('Błąd podczas wstrzymywania produkcji:', error);
+      throw error;
+    }
   };
 
   // Pobieranie historii produkcji dla zadania
@@ -4082,7 +4130,7 @@ import {
   };
 
   // Funkcja do tworzenia pustej partii produktu przy rozpoczynaniu zadania produkcyjnego
-  export const createEmptyProductBatch = async (taskId, userId) => {
+  export const createEmptyProductBatch = async (taskId, userId, expiryDate = null) => {
     try {
       console.log(`Tworzenie pustej partii produktu dla zadania ${taskId}`);
       
@@ -4124,13 +4172,13 @@ import {
           
           if (!inventoryItem) {
             console.warn(`Pozycja magazynowa ${inventoryItemId} z zadania nie istnieje, będę szukać innej`);
-            inventoryItemId = null;
+            inventoryItemId = null; // Wyzeruj ID, żeby wyszukać pozycję innym sposobem
           } else {
             console.log(`Używam pozycji magazynowej z zadania: ${inventoryItem.name} (ID: ${inventoryItemId})`);
           }
         } catch (error) {
           console.error('Błąd podczas sprawdzania pozycji magazynowej z zadania:', error);
-          inventoryItemId = null;
+          inventoryItemId = null; // Wyzeruj ID w przypadku błędu
         }
       }
       

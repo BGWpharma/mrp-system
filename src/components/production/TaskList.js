@@ -61,7 +61,7 @@ import {
   Download as DownloadIcon,
   Sort as SortIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, getTasksWithPagination, startProduction } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction } from '../../services/productionService';
 import { getAllWarehouses } from '../../services/inventoryService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -378,8 +378,20 @@ const TaskList = () => {
         }
         
         // Jeśli ma datę ważności, rozpocznij produkcję
-        await startProduction(id, currentUser.uid);
-        showSuccess('Produkcja rozpoczęta - utworzono pustą partię produktu');
+        const result = await startProduction(id, currentUser.uid);
+        
+        // Wyświetl komunikat na podstawie wyniku tworzenia partii
+        if (result.batchResult) {
+          if (result.batchResult.message === 'Partia już istnieje') {
+            showSuccess('Produkcja wznowiona - używa istniejącą partię produktu');
+          } else if (result.batchResult.isNewBatch === false) {
+            showSuccess('Produkcja wznowiona - dodano do istniejącej partii produktu');
+          } else {
+            showSuccess('Produkcja rozpoczęta - utworzono nową pustą partię produktu');
+          }
+        } else {
+          showSuccess('Produkcja rozpoczęta');
+        }
       } else {
         // Dla innych statusów użyj standardowej funkcji updateTaskStatus
         await updateTaskStatus(id, newStatus, currentUser.uid);
@@ -405,9 +417,20 @@ const TaskList = () => {
       setStartProductionError(null);
       
       // Rozpocznij produkcję z datą ważności
-      await startProduction(startProductionData.taskId, currentUser.uid, startProductionData.expiryDate);
+      const result = await startProduction(startProductionData.taskId, currentUser.uid, startProductionData.expiryDate);
       
-      showSuccess('Produkcja rozpoczęta - utworzono pustą partię produktu');
+      // Wyświetl komunikat na podstawie wyniku tworzenia partii
+      if (result.batchResult) {
+        if (result.batchResult.message === 'Partia już istnieje') {
+          showSuccess('Produkcja wznowiona - używa istniejącą partię produktu');
+        } else if (result.batchResult.isNewBatch === false) {
+          showSuccess('Produkcja wznowiona - dodano do istniejącej partii produktu');
+        } else {
+          showSuccess('Produkcja rozpoczęta - utworzono nową pustą partię produktu');
+        }
+      } else {
+        showSuccess('Produkcja rozpoczęta');
+      }
       
       // Zamknij dialog
       setStartProductionDialogOpen(false);
@@ -663,37 +686,16 @@ const TaskList = () => {
   // Nowa funkcja do bezpośredniego wstrzymywania produkcji bez dialogu
   const handleStopProductionDirect = async (task) => {
     try {
-      // Ustaw domyślne wartości dla wstrzymania produkcji
-      const currentTime = new Date();
-      const startTime = task.startDate ? (typeof task.startDate === 'object' && task.startDate.toDate ? task.startDate.toDate() : new Date(task.startDate)) : currentTime;
-      const endTime = currentTime;
+      // Wstrzymaj produkcję bez tworzenia sesji w historii
+      await pauseProduction(task.id, currentUser.uid);
       
-      // Oblicz czas trwania w minutach
-      const durationMs = endTime.getTime() - startTime.getTime();
-      const durationMinutes = Math.max(1, Math.round(durationMs / (1000 * 60))); // Minimum 1 minuta
-      
-      // Ustaw domyślną ilość wyprodukowaną (można to dostosować według potrzeb)
-      const defaultQuantity = 0; // Użytkownik może później edytować sesję produkcyjną
-      
-      // Wywołaj funkcję zatrzymania produkcji z domyślnymi wartościami
-      const result = await stopProduction(
-        task.id, 
-        defaultQuantity, 
-        durationMinutes, 
-        currentUser.uid,
-        {
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString()
-        }
-      );
-      
-      showSuccess('Produkcja została wstrzymana. Możesz kontynuować później lub edytować sesję produkcyjną.');
+      showSuccess('Produkcja została wstrzymana. Możesz kontynuować później.');
       
       // Odśwież listę zadań
       fetchTasks();
     } catch (error) {
       showError('Błąd podczas wstrzymywania produkcji: ' + error.message);
-      console.error('Error stopping production directly:', error);
+      console.error('Error pausing production:', error);
     }
   };
 

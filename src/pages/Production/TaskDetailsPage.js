@@ -1326,8 +1326,21 @@ const TaskDetailsPage = () => {
       }
       
       // Jeśli ma datę ważności, rozpocznij produkcję
-      await startProduction(id, currentUser.uid);
-      showSuccess('Produkcja rozpoczęta');
+      const result = await startProduction(id, currentUser.uid);
+      
+      // Wyświetl komunikat na podstawie wyniku tworzenia partii
+      if (result.batchResult) {
+        if (result.batchResult.message === 'Partia już istnieje') {
+          showSuccess('Produkcja wznowiona - używa istniejącą partię produktu');
+        } else if (result.batchResult.isNewBatch === false) {
+          showSuccess('Produkcja wznowiona - dodano do istniejącej partii produktu');
+        } else {
+          showSuccess('Produkcja rozpoczęta - utworzono nową pustą partię produktu');
+        }
+      } else {
+        showSuccess('Produkcja rozpoczęta');
+      }
+      
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);
     } catch (error) {
@@ -1346,9 +1359,20 @@ const TaskDetailsPage = () => {
       setStartProductionError(null);
       
       // Rozpocznij produkcję z datą ważności
-      await startProduction(id, currentUser.uid, startProductionData.expiryDate);
+      const result = await startProduction(id, currentUser.uid, startProductionData.expiryDate);
       
-      showSuccess('Produkcja rozpoczęta');
+      // Wyświetl komunikat na podstawie wyniku tworzenia partii
+      if (result.batchResult) {
+        if (result.batchResult.message === 'Partia już istnieje') {
+          showSuccess('Produkcja wznowiona - używa istniejącą partię produktu');
+        } else if (result.batchResult.isNewBatch === false) {
+          showSuccess('Produkcja wznowiona - dodano do istniejącej partii produktu');
+        } else {
+          showSuccess('Produkcja rozpoczęta - utworzono nową pustą partię produktu');
+        }
+      } else {
+        showSuccess('Produkcja rozpoczęta');
+      }
       
       // Zamknij dialog
       setStartProductionDialogOpen(false);

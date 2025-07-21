@@ -15,6 +15,7 @@ class PurchaseOrderPdfGenerator {
       language: 'en',
       imageQuality: 0.8,          // Jakość kompresji obrazu (0.1-1.0)
       enableCompression: true,     // Czy włączyć kompresję PDF
+      hidePricing: false,          // Czy ukryć ceny i koszty
       ...options
     };
   }
@@ -458,8 +459,16 @@ class PurchaseOrderPdfGenerator {
     doc.text('ORDER ITEMS:', leftMargin, currentY);
     currentY += 10;
 
-    // Nagłówki tabeli
-    const colWidths = [50, 15, 15, 25, 25, 15, 25];
+    // Nagłówki tabeli - dostosuj kolumny w zależności od opcji hidePricing
+    let colWidths, headers;
+    if (this.options.hidePricing) {
+      colWidths = [60, 20, 20, 60]; // Bez kolumn cenowych
+      headers = ['Product Name', 'Qty', 'Unit', 'Expected Date'];
+    } else {
+      colWidths = [50, 15, 15, 25, 25, 15, 25];
+      headers = ['Product Name', 'Qty', 'Unit', 'Unit Price', 'Value', 'VAT', 'Expected Date'];
+    }
+    
     const startX = leftMargin;
     let currentX = startX;
 
@@ -468,7 +477,6 @@ class PurchaseOrderPdfGenerator {
     doc.setFillColor(240, 240, 240);
     doc.rect(startX, currentY, colWidths.reduce((a, b) => a + b, 0), 8, 'F');
     
-    const headers = ['Product Name', 'Qty', 'Unit', 'Unit Price', 'Value', 'VAT', 'Expected Date'];
     headers.forEach((header, index) => {
       doc.text(header, currentX + 2, currentY + 6);
       currentX += colWidths[index];
@@ -510,19 +518,22 @@ class PurchaseOrderPdfGenerator {
         doc.text(this.convertPolishChars(item.unit || ''), currentX + 2, currentY + 4);
         currentX += colWidths[2];
         
-        // Cena jednostkowa
-        doc.text(formatCurrency(item.unitPrice, this.purchaseOrder.currency, 2), currentX + 2, currentY + 4);
-        currentX += colWidths[3];
+        if (!this.options.hidePricing) {
+          // Cena jednostkowa
+          doc.text(formatCurrency(item.unitPrice, this.purchaseOrder.currency, 2), currentX + 2, currentY + 4);
+          currentX += colWidths[3];
+          
+          // Wartość
+          doc.text(formatCurrency(item.totalPrice, this.purchaseOrder.currency), currentX + 2, currentY + 4);
+          currentX += colWidths[4];
+          
+          // VAT
+          doc.text(`${item.vatRate || 0}%`, currentX + 2, currentY + 4);
+          currentX += colWidths[5];
+        }
         
-        // Wartość
-        doc.text(formatCurrency(item.totalPrice, this.purchaseOrder.currency), currentX + 2, currentY + 4);
-        currentX += colWidths[4];
-        
-        // VAT
-        doc.text(`${item.vatRate || 0}%`, currentX + 2, currentY + 4);
-        currentX += colWidths[5];
-        
-        // Expected Date
+        // Expected Date - indeks zależy od tego czy ukrywamy ceny
+        const expectedDateIndex = this.options.hidePricing ? 3 : 6;
         const expectedDate = item.plannedDeliveryDate ? 
           new Date(item.plannedDeliveryDate).toLocaleDateString('en-GB') : '-';
         doc.text(expectedDate, currentX + 2, currentY + 4);
@@ -538,6 +549,11 @@ class PurchaseOrderPdfGenerator {
    * Dodaje sekcję podsumowania
    */
   addSummarySection(doc, startY, pageWidth, pageHeight, template, leftMargin) {
+    // Jeśli ukrywamy ceny, pomijamy całą sekcję podsumowania finansowego
+    if (this.options.hidePricing) {
+      return startY;
+    }
+    
     let currentY = this.checkPageBreak(doc, startY, 40, pageHeight, template, pageWidth);
     
     doc.setFont('helvetica', 'bold');
@@ -626,6 +642,7 @@ class PurchaseOrderPdfGenerator {
  *   - useTemplate: boolean (domyślnie true) - czy używać szablonu tła
  *   - imageQuality: number (0.1-1.0, domyślnie 0.8) - jakość kompresji obrazu
  *   - enableCompression: boolean (domyślnie true) - czy włączyć kompresję PDF
+ *   - hidePricing: boolean (domyślnie false) - czy ukryć ceny i koszty
  *   - templatePath: string - ścieżka do szablonu
  *   - language: string - język dokumentu
  */

@@ -5,7 +5,7 @@ import {
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
-  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu
+  List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu, ButtonGroup
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -31,7 +31,8 @@ import {
   Image as ImageIcon,
   PictureAsPdf as PdfIcon,
   Assignment as AssignmentIcon,
-  LocalShipping as LocalShippingIcon
+  LocalShipping as LocalShippingIcon,
+  ArrowDropDown as ArrowDropDownIcon
 } from '@mui/icons-material';
 import { format, parseISO, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -83,6 +84,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
   const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
   const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
+  
+  // Stany dla menu opcji PDF
+  const [pdfMenuAnchorEl, setPdfMenuAnchorEl] = useState(null);
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
   
   // Stany dla odpowiedzi formularzy rozładunku
   const [unloadingFormResponses, setUnloadingFormResponses] = useState([]);
@@ -882,24 +887,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED || 
                           purchaseOrder.status === 'delivered';
   
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (hidePricing = false) => {
     if (!purchaseOrder) {
       showError('Brak danych zamówienia do wygenerowania PDF');
       return;
     }
     
     try {
-      showSuccess('Generowanie PDF w toku...');
+      const pdfType = hidePricing ? 'bez cen' : 'standardowy';
+      showSuccess(`Generowanie PDF ${pdfType} w toku...`);
       
       // Użyj nowego komponentu do generowania PDF
       const pdfGenerator = createPurchaseOrderPdfGenerator(purchaseOrder, {
         useTemplate: true,
         templatePath: '/templates/PO-template.png',
-        language: 'en'
+        language: 'en',
+        hidePricing: hidePricing
       });
       
       await pdfGenerator.downloadPdf();
-      showSuccess('PDF został pobrany pomyślnie');
+      showSuccess(`PDF ${pdfType} został pobrany pomyślnie`);
       
     } catch (error) {
       console.error('Błąd podczas generowania PDF:', error);
@@ -915,6 +922,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const handlePaymentStatusClick = () => {
     setNewPaymentStatus(purchaseOrder?.paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID);
     setPaymentStatusDialogOpen(true);
+  };
+
+  const handlePdfMenuOpen = (event) => {
+    setPdfMenuAnchorEl(event.currentTarget);
+    setPdfMenuOpen(true);
+  };
+
+  const handlePdfMenuClose = () => {
+    setPdfMenuOpen(false);
+    setPdfMenuAnchorEl(null);
+  };
+
+  const handlePdfDownload = (hidePricing) => {
+    handlePdfMenuClose();
+    handleDownloadPDF(hidePricing);
   };
 
   const handlePaymentStatusUpdate = async () => {
@@ -1015,24 +1037,57 @@ const PurchaseOrderDetails = ({ orderId }) => {
             <Typography variant="h4" component="h1">
               Zamówienie {purchaseOrder.number}
             </Typography>
-            <Box>
-              <Button
-                variant="outlined"
-                onClick={handleDownloadPDF}
-                startIcon={<DownloadIcon />}
-                sx={{ mr: 1 }}
-              >
-                {t('purchaseOrders.downloadPdf')}
-              </Button>
-              
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ButtonGroup variant="outlined">
+                <Button
+                  onClick={() => handlePdfDownload(false)}
+                  startIcon={<DownloadIcon />}
+                  size="medium"
+                >
+                  {t('purchaseOrders.downloadPdf')}
+                </Button>
+                <Button
+                  onClick={handlePdfMenuOpen}
+                  sx={{ 
+                    minWidth: '32px',
+                    px: 1,
+                    borderLeft: '1px solid rgba(25, 118, 210, 0.5) !important'
+                  }}
+                  size="medium"
+                >
+                  <ArrowDropDownIcon />
+                </Button>
+              </ButtonGroup>
 
+              <Menu
+                anchorEl={pdfMenuAnchorEl}
+                open={pdfMenuOpen}
+                onClose={handlePdfMenuClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'left',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'left',
+                }}
+              >
+                <MenuItem onClick={() => handlePdfDownload(false)}>
+                  <PdfIcon sx={{ mr: 1 }} />
+                  PDF standardowy (z cenami)
+                </MenuItem>
+                <MenuItem onClick={() => handlePdfDownload(true)}>
+                  <PdfIcon sx={{ mr: 1 }} />
+                  PDF bez cen i kosztów
+                </MenuItem>
+              </Menu>
               
               <Button
                 component={Link}
                 to={`/purchase-orders/${orderId}/edit`}
                 variant="contained"
                 startIcon={<EditIcon />}
-                sx={{ mr: 1 }}
+                size="medium"
               >
                 {t('purchaseOrders.editOrder')}
               </Button>
