@@ -66,6 +66,7 @@ import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useTranslation } from '../../hooks/useTranslation';
 import TimelineExport from './TimelineExport';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 
@@ -145,16 +146,16 @@ const DragTimeDisplay = React.memo(({ dragInfo, themeMode }) => {
 });
 
 // Zoptymalizowany komponent Tooltip
-const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstations }) => {
+const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstations, t }) => {
   if (!visible || !task) return null;
 
   const getStatusText = (status) => {
     const statusMap = {
-      'Zaplanowane': 'Zaplanowane',
-      'W trakcie': 'W trakcie',
-      'Zakończone': 'Zakończone',
-      'Anulowane': 'Anulowane',
-      'Wstrzymane': 'Wstrzymane'
+      'Zaplanowane': t('production.timeline.statuses.scheduled'),
+      'W trakcie': t('production.timeline.statuses.inProgress'),
+      'Zakończone': t('production.timeline.statuses.completed'),
+      'Anulowane': t('production.timeline.statuses.cancelled'),
+      'Wstrzymane': t('production.timeline.statuses.onHold')
     };
     return statusMap[status] || status;
   };
@@ -168,7 +169,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
   };
 
   const getWorkstationName = () => {
-    if (!task.workstationId) return 'Bez stanowiska';
+    if (!task.workstationId) return t('production.timeline.groups.noWorkstation');
     
     // Znajdź stanowisko w tablicy workstations na podstawie workstationId
     const workstation = workstations?.find(w => w.id === task.workstationId);
@@ -271,7 +272,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       {/* Status */}
       <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
         <span style={{ marginRight: '8px', color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-          Status:
+          {t('production.timeline.tooltip.status')}:
         </span>
         <span style={{ 
           color: statusColor, 
@@ -289,7 +290,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       {task.moNumber && (
         <div style={{ marginBottom: '6px' }}>
           <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-            MO: 
+            {t('production.timeline.tooltip.moNumber')}: 
           </span>
           <span style={{ marginLeft: '8px', fontWeight: 500 }}>
             {task.moNumber}
@@ -300,7 +301,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       {/* Ilość */}
       <div style={{ marginBottom: '6px' }}>
         <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-          Ilość: 
+          {t('production.timeline.tooltip.quantity')}: 
         </span>
         <span style={{ marginLeft: '8px', fontWeight: 500 }}>
           {task.quantity} {task.unit || 'szt.'}
@@ -310,7 +311,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       {/* Stanowisko */}
       <div style={{ marginBottom: '6px' }}>
         <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-          Stanowisko: 
+          {t('production.timeline.tooltip.workstation')}: 
         </span>
         <span style={{ marginLeft: '8px', fontWeight: 500 }}>
           {getWorkstationName()}
@@ -320,7 +321,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       {/* Klient */}
       <div style={{ marginBottom: '6px' }}>
         <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-          Klient: 
+          {t('production.timeline.tooltip.customer')}: 
         </span>
         <span style={{ marginLeft: '8px', fontWeight: 500 }}>
           {getCustomerName()}
@@ -330,7 +331,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       {/* Czas trwania */}
       <div style={{ marginBottom: '6px' }}>
         <span style={{ color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-          Czas trwania: 
+          {t('production.timeline.tooltip.duration')}: 
         </span>
         <span style={{ marginLeft: '8px', fontWeight: 500 }}>
           {getDuration()}
@@ -371,10 +372,10 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
         color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)'
       }}>
         <div style={{ marginBottom: '4px' }}>
-          <strong>{task.actualStartDate ? 'Rzeczywisty start:' : 'Planowany start:'}</strong> {formatDate(task.actualStartDate || task.scheduledDate)}
+          <strong>{task.actualStartDate ? t('production.timeline.tooltip.actualStartDate') + ':' : t('production.timeline.tooltip.scheduledDate') + ':'}</strong> {formatDate(task.actualStartDate || task.scheduledDate)}
         </div>
         <div>
-          <strong>{task.actualEndDate ? 'Rzeczywiste zakończenie:' : 'Planowane zakończenie:'}</strong> {formatDate(task.actualEndDate || task.endDate)}
+          <strong>{task.actualEndDate ? t('production.timeline.tooltip.actualEndDate') + ':' : t('production.timeline.tooltip.endDate') + ':'}</strong> {formatDate(task.actualEndDate || task.endDate)}
         </div>
       </div>
     </div>
@@ -467,6 +468,7 @@ const ProductionTimeline = React.memo(() => {
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
   const { mode: themeMode } = useTheme(); // Motyw aplikacji
+  const { t } = useTranslation();
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
 
@@ -494,7 +496,7 @@ const ProductionTimeline = React.memo(() => {
       setSelectedWorkstations(initialSelected);
     } catch (error) {
       console.error('Błąd podczas pobierania stanowisk:', error);
-      showError('Błąd podczas pobierania stanowisk: ' + error.message);
+      showError(t('production.timeline.messages.loadingError') + ': ' + error.message);
     }
   };
 
@@ -511,7 +513,7 @@ const ProductionTimeline = React.memo(() => {
       setSelectedCustomers(initialSelected);
     } catch (error) {
       console.error('Błąd podczas pobierania klientów:', error);
-      showError('Błąd podczas pobierania klientów: ' + error.message);
+      showError(t('production.timeline.messages.loadingError') + ': ' + error.message);
     }
   };
 
@@ -549,7 +551,7 @@ const ProductionTimeline = React.memo(() => {
       setTasks(data);
     } catch (error) {
       console.error('Błąd podczas pobierania zadań:', error);
-      showError('Błąd podczas pobierania zadań: ' + error.message);
+      showError(t('production.timeline.messages.loadingError') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -627,7 +629,7 @@ const ProductionTimeline = React.memo(() => {
   // Funkcja cofania ostatniej akcji
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0) {
-      showError('Brak akcji do cofnięcia');
+      showError(t('production.timeline.messages.noActionsToUndo'));
       return;
     }
 
@@ -648,14 +650,14 @@ const ProductionTimeline = React.memo(() => {
         // Usuń ostatnią akcję ze stosu
         setUndoStack(prevStack => prevStack.slice(0, -1));
         
-        showSuccess('Ostatnia akcja została cofnięta');
+        showSuccess(t('production.timeline.messages.undoSuccess'));
         
         // Odśwież dane
         fetchTasks();
       }
     } catch (error) {
       console.error('Błąd podczas cofania akcji:', error);
-      showError('Błąd podczas cofania akcji: ' + error.message);
+      showError(t('production.timeline.messages.undoError') + ': ' + error.message);
     }
   }, [undoStack, showError, showSuccess, fetchTasks, currentUser.uid]);
 
@@ -744,7 +746,7 @@ const ProductionTimeline = React.memo(() => {
       if (hasTasksWithoutWorkstation && selectedWorkstations['no-workstation']) {
         workstationGroups.push({
           id: 'no-workstation',
-          title: 'Bez stanowiska',
+          title: t('production.timeline.groups.noWorkstation'),
           rightTitle: '',
           bgColor: '#f5f5f5'
         });
@@ -768,7 +770,7 @@ const ProductionTimeline = React.memo(() => {
       if (uniqueOrders.size === 0 || tasks.some(task => !task.orderId)) {
         uniqueOrders.set('no-order', {
           id: 'no-order',
-          title: 'Bez zamówienia',
+          title: t('production.timeline.groups.noOrder'),
           rightTitle: '',
           bgColor: '#f5f5f5'
         });
@@ -1079,7 +1081,7 @@ const ProductionTimeline = React.memo(() => {
 
       // Zablokuj edycję zadań zakończonych
       if (item.task?.status === 'Zakończone') {
-        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        showError(t('production.timeline.tooltip.cannotEdit'));
         return;
       }
 
@@ -1110,7 +1112,7 @@ const ProductionTimeline = React.memo(() => {
 
       // Sprawdź czy daty są poprawne przed wysłaniem do bazy
       if (isNaN(newStartTime.getTime()) || isNaN(newEndTime.getTime())) {
-        showError('Błąd podczas przetwarzania dat zadania');
+        showError(t('production.timeline.messages.taskMoveError'));
         return;
       }
 
@@ -1126,16 +1128,16 @@ const ProductionTimeline = React.memo(() => {
       addToUndoStack(previousState);
       
       if (snapToPrevious) {
-        showSuccess('Zadanie zostało zaktualizowane i dociągnięte do poprzedniego');
+        showSuccess(t('production.timeline.edit.saveSuccess'));
       } else {
-        showSuccess('Zadanie zostało zaktualizowane');
+        showSuccess(t('production.timeline.edit.saveSuccess'));
       }
       
       // Odśwież dane
       fetchTasks();
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
-      showError('Błąd podczas aktualizacji zadania: ' + error.message);
+      showError(t('production.timeline.edit.saveError') + ': ' + error.message);
     }
   }, [items, roundToMinute, snapToTask, snapToPrevious, showError, showSuccess, fetchTasks, currentUser.uid, addToUndoStack]);
 
@@ -1156,7 +1158,7 @@ const ProductionTimeline = React.memo(() => {
 
       // Zablokuj edycję zadań zakończonych
       if (item.task?.status === 'Zakończone') {
-        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        showError(t('production.timeline.tooltip.cannotEdit'));
         return;
       }
 
@@ -1179,13 +1181,13 @@ const ProductionTimeline = React.memo(() => {
       };
 
       await updateTask(itemId, updateData, currentUser.uid);
-      showSuccess('Czas trwania zadania został zaktualizowany');
+      showSuccess(t('production.timeline.edit.saveSuccess'));
       
       // Odśwież dane
       fetchTasks();
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
-      showError('Błąd podczas aktualizacji zadania: ' + error.message);
+      showError(t('production.timeline.edit.saveError') + ': ' + error.message);
     }
   };
 
@@ -1240,7 +1242,7 @@ const ProductionTimeline = React.memo(() => {
     if (editMode) {
       // Sprawdź czy zadanie można edytować (nie jest zakończone)
       if (item.task?.status === 'Zakończone') {
-        showError('Nie można edytować zadań ze statusem "Zakończone"');
+        showError(t('production.timeline.tooltip.cannotEdit'));
         return;
       }
       
@@ -1261,7 +1263,7 @@ const ProductionTimeline = React.memo(() => {
   // Obsługa zapisywania zmian w dialogu
   const handleSaveEdit = async () => {
     if (!selectedItem || !editForm.start || !editForm.end) {
-      showError('Wszystkie pola są wymagane');
+      showError('Wszystkie pola są wymagane'); // TODO: dodać klucz tłumaczenia
       return;
     }
 
@@ -1276,15 +1278,15 @@ const ProductionTimeline = React.memo(() => {
         estimatedDuration: duration
       };
 
-      await updateTask(selectedItem.id, updateData, currentUser.uid);
-      showSuccess('Zadanie zostało zaktualizowane');
+          await updateTask(selectedItem.id, updateData, currentUser.uid);
+    showSuccess(t('production.timeline.edit.saveSuccess'));
       
       setEditDialog(false);
       setSelectedItem(null);
       fetchTasks();
     } catch (error) {
       console.error('Błąd podczas zapisywania:', error);
-      showError('Błąd podczas zapisywania: ' + error.message);
+      showError(t('production.timeline.edit.saveError') + ': ' + error.message);
     }
   };
 
@@ -1987,7 +1989,7 @@ const ProductionTimeline = React.memo(() => {
       }}>
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
           <CalendarIcon sx={{ mr: 1 }} />
-          Timeline produkcji
+          {t('production.timeline.title')}
         </Typography>
         
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -1999,11 +2001,11 @@ const ProductionTimeline = React.memo(() => {
                 size="small"
               />
             }
-            label="Kolory stanowisk"
+            label={t('production.timeline.workstationColors')}
           />
           
           {editMode && (
-            <Tooltip title="Automatycznie dociąga przesuwane zadania do końca poprzedniego zadania na tym samym stanowisku" arrow>
+            <Tooltip title={t('production.timeline.snapToPreviousTooltip')} arrow>
               <FormControlLabel
                 control={
                   <Switch
@@ -2013,12 +2015,12 @@ const ProductionTimeline = React.memo(() => {
                     color="secondary"
                   />
                 }
-                label="Dociąganie"
+                label={t('production.timeline.snapToPrevious')}
               />
             </Tooltip>
           )}
           
-          <Tooltip title="Włącz tryb edycji aby móc przesuwać i zmieniać rozmiar zadań. W trybie wyłączonym możesz bezpiecznie przewijać timeline." arrow>
+          <Tooltip title={t('production.timeline.editModeTooltip')} arrow>
             <Button
               variant={editMode ? "contained" : "outlined"}
               size="small"
@@ -2033,7 +2035,7 @@ const ProductionTimeline = React.memo(() => {
                 }
               }}
             >
-              {editMode ? 'Edycja ON' : 'Edycja OFF'}
+              {editMode ? t('production.timeline.editMode') + ' ON' : t('production.timeline.editMode') + ' OFF'}
             </Button>
           </Tooltip>
           
@@ -2043,12 +2045,12 @@ const ProductionTimeline = React.memo(() => {
             onClick={() => setGroupBy(groupBy === 'workstation' ? 'order' : 'workstation')}
             startIcon={groupBy === 'workstation' ? <BusinessIcon /> : <WorkIcon />}
           >
-            {groupBy === 'workstation' ? 'Stanowiska' : 'Zamówienia'}
+            {groupBy === 'workstation' ? t('production.timeline.groupByWorkstation') : t('production.timeline.groupByOrder')}
           </Button>
           
           {/* Przyciski skali czasowej */}
           <Box sx={{ display: 'flex', gap: 0.5, border: '1px solid #ddd', borderRadius: 1 }}>
-            <Tooltip title="Widok godzinowy (3 dni)">
+            <Tooltip title={t('production.timeline.hourly') + ' (3 dni)'}>
               <IconButton 
                 size="small" 
                 onClick={() => zoomToScale('hourly')}
@@ -2059,7 +2061,7 @@ const ProductionTimeline = React.memo(() => {
               </IconButton>
             </Tooltip>
             
-            <Tooltip title="Widok dzienny (2 tygodnie)">
+            <Tooltip title={t('production.timeline.daily') + ' (2 tygodnie)'}>
               <IconButton 
                 size="small" 
                 onClick={() => zoomToScale('daily')}
@@ -2070,7 +2072,7 @@ const ProductionTimeline = React.memo(() => {
               </IconButton>
             </Tooltip>
             
-            <Tooltip title="Widok tygodniowy (2 miesiące)">
+            <Tooltip title={t('production.timeline.weekly') + ' (2 miesiące)'}>
               <IconButton 
                 size="small" 
                 onClick={() => zoomToScale('weekly')}
@@ -2081,7 +2083,7 @@ const ProductionTimeline = React.memo(() => {
               </IconButton>
             </Tooltip>
             
-            <Tooltip title="Widok miesięczny (6 miesięcy)">
+            <Tooltip title={t('production.timeline.monthly') + ' (6 miesięcy)'}>
               <IconButton 
                 size="small" 
                 onClick={() => zoomToScale('monthly')}
@@ -2095,19 +2097,19 @@ const ProductionTimeline = React.memo(() => {
           
           {/* Kontrolki zoom */}
           <Box sx={{ display: 'flex', gap: 0.5, border: '1px solid #ddd', borderRadius: 1 }}>
-            <Tooltip title="Przybliż (Ctrl + scroll)">
+            <Tooltip title={t('production.timeline.zoom.in') + ' (Ctrl + scroll)'}>
               <IconButton size="small" onClick={zoomIn} sx={{ borderRadius: 0 }}>
                 <ZoomInIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title="Oddal">
+            <Tooltip title={t('production.timeline.zoom.out')}>
               <IconButton size="small" onClick={zoomOut} sx={{ borderRadius: 0 }}>
                 <ZoomOutIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title="Reset zoom">
+            <Tooltip title={t('production.timeline.zoom.reset')}>
               <IconButton size="small" onClick={resetZoom} sx={{ borderRadius: 0 }}>
                 <ResetZoomIcon />
               </IconButton>
@@ -2139,7 +2141,7 @@ const ProductionTimeline = React.memo(() => {
             startIcon={<FilterListIcon />}
             color={(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) ? 'primary' : 'inherit'}
           >
-            Filtry {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && '✓'}
+            {t('production.timeline.filters')} {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && '✓'}
           </Button>
           
           <TimelineExport 
@@ -2172,7 +2174,7 @@ const ProductionTimeline = React.memo(() => {
         alignItems: 'center'
       }}>
         <Typography variant="caption" sx={{ mr: 1, fontWeight: 'medium' }}>
-          Legenda:
+          {t('production.timeline.legend')}
         </Typography>
         
         {useWorkstationColors ? (
@@ -2190,11 +2192,11 @@ const ProductionTimeline = React.memo(() => {
           ))
         ) : (
           <>
-            <Chip size="small" label="Zaplanowane" sx={{ bgcolor: '#3788d8', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label="W trakcie" sx={{ bgcolor: '#f39c12', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label="Zakończone" sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label="Anulowane" sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label="Wstrzymane" sx={{ bgcolor: '#757575', color: 'white', fontSize: '0.7rem' }} />
+            <Chip size="small" label={t('production.timeline.statuses.scheduled')} sx={{ bgcolor: '#3788d8', color: 'white', fontSize: '0.7rem' }} />
+            <Chip size="small" label={t('production.timeline.statuses.inProgress')} sx={{ bgcolor: '#f39c12', color: 'white', fontSize: '0.7rem' }} />
+            <Chip size="small" label={t('production.timeline.statuses.completed')} sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: '0.7rem' }} />
+            <Chip size="small" label={t('production.timeline.statuses.cancelled')} sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: '0.7rem' }} />
+            <Chip size="small" label={t('production.timeline.statuses.onHold')} sx={{ bgcolor: '#757575', color: 'white', fontSize: '0.7rem' }} />
           </>
         )}
       </Box>
@@ -2602,13 +2604,13 @@ const ProductionTimeline = React.memo(() => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Edytuj zadanie produkcyjne</DialogTitle>
+        <DialogTitle>{t('production.timeline.edit.title')}</DialogTitle>
         <DialogContent>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <DateTimePicker
-                  label="Data rozpoczęcia"
+                  label={t('production.timeline.edit.scheduledDate')}
                   value={editForm.start}
                   onChange={(newValue) => setEditForm(prev => ({ ...prev, start: newValue }))}
                   slotProps={{
@@ -2620,7 +2622,7 @@ const ProductionTimeline = React.memo(() => {
               </Grid>
               <Grid item xs={12}>
                 <DateTimePicker
-                  label="Data zakończenia"
+                  label={t('production.timeline.edit.endDate')}
                   value={editForm.end}
                   onChange={(newValue) => setEditForm(prev => ({ ...prev, end: newValue }))}
                   slotProps={{
@@ -2635,10 +2637,10 @@ const ProductionTimeline = React.memo(() => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialog(false)}>
-            Anuluj
+            {t('production.timeline.edit.cancel')}
           </Button>
           <Button onClick={handleSaveEdit} variant="contained">
-            Zapisz
+            {t('production.timeline.edit.save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2650,14 +2652,14 @@ const ProductionTimeline = React.memo(() => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Zaawansowane filtrowanie zadań</DialogTitle>
+        <DialogTitle>{t('production.timeline.advancedFilters.title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Nazwa produktu"
+                  label={t('production.timeline.advancedFilters.productName')}
                   placeholder="Wpisz nazwę produktu..."
                   value={advancedFilters.productName}
                   onChange={(e) => handleAdvancedFilterChange('productName', e.target.value)}
@@ -2669,7 +2671,7 @@ const ProductionTimeline = React.memo(() => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Numer MO"
+                  label={t('production.timeline.advancedFilters.moNumber')}
                   placeholder="Wpisz numer zlecenia produkcyjnego..."
                   value={advancedFilters.moNumber}
                   onChange={(e) => handleAdvancedFilterChange('moNumber', e.target.value)}
@@ -2681,7 +2683,7 @@ const ProductionTimeline = React.memo(() => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Numer zamówienia"
+                  label={t('production.timeline.advancedFilters.orderNumber')}
                   placeholder="Wpisz numer zamówienia..."
                   value={advancedFilters.orderNumber}
                   onChange={(e) => handleAdvancedFilterChange('orderNumber', e.target.value)}
@@ -2700,7 +2702,7 @@ const ProductionTimeline = React.memo(() => {
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DateTimePicker
-                    label="Data od"
+                    label={t('production.timeline.advancedFilters.startDate')}
                     value={advancedFilters.startDate}
                     onChange={(newValue) => handleAdvancedFilterChange('startDate', newValue)}
                     slotProps={{
@@ -2717,7 +2719,7 @@ const ProductionTimeline = React.memo(() => {
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DateTimePicker
-                    label="Data do"
+                    label={t('production.timeline.advancedFilters.endDate')}
                     value={advancedFilters.endDate}
                     onChange={(newValue) => handleAdvancedFilterChange('endDate', newValue)}
                     slotProps={{
@@ -2781,13 +2783,13 @@ const ProductionTimeline = React.memo(() => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleAdvancedFilterReset} color="warning">
-            Wyczyść
+            {t('production.timeline.advancedFilters.clear')}
           </Button>
           <Button onClick={handleAdvancedFilterClose}>
-            Anuluj
+            {t('production.timeline.edit.cancel')}
           </Button>
           <Button onClick={handleAdvancedFilterApply} variant="contained">
-            Zastosuj
+            {t('production.timeline.advancedFilters.apply')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2801,6 +2803,7 @@ const ProductionTimeline = React.memo(() => {
         visible={tooltipVisible}
         themeMode={themeMode}
         workstations={workstations}
+        t={t}
       />
 
       {/* Okienko z czasem podczas przeciągania */}

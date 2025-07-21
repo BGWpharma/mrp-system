@@ -25,15 +25,16 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import * as XLSX from 'xlsx-js-style';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Funkcja do generowania raportu Timeline w formacie XLSX
-const generateTimelineReport = (tasks, workstations, customers, startDate, endDate, groupBy, filteredTasks, selectedCustomers) => {
+const generateTimelineReport = (tasks, workstations, customers, startDate, endDate, groupBy, filteredTasks, selectedCustomers, t) => {
   try {
     console.log('Rozpoczęcie generowania raportu Timeline');
     
     // Sprawdź czy są dostępne dane
     if (!filteredTasks || filteredTasks.length === 0) {
-      throw new Error('Brak zadań do wygenerowania raportu');
+      throw new Error(t('production.timeline.export.noTasks'));
     }
 
     // Funkcja do pobrania koloru statusu dla Excela
@@ -58,15 +59,15 @@ const generateTimelineReport = (tasks, workstations, customers, startDate, endDa
     const translateStatus = (status) => {
       switch (status) {
         case 'Zaplanowane':
-          return 'Scheduled';
+          return t('production.timeline.statuses.scheduled');
         case 'W trakcie':
-          return 'In Progress';
+          return t('production.timeline.statuses.inProgress');
         case 'Zakończone':
-          return 'Completed';
+          return t('production.timeline.statuses.completed');
         case 'Anulowane':
-          return 'Cancelled';
+          return t('production.timeline.statuses.cancelled');
         case 'Wstrzymane':
-          return 'On Hold';
+          return t('production.timeline.statuses.onHold');
         default:
           return status || 'Unknown';
       }
@@ -468,7 +469,7 @@ const generateTimelineReport = (tasks, workstations, customers, startDate, endDa
     
   } catch (error) {
     console.error('Błąd podczas generowania raportu Timeline:', error);
-    throw new Error('Nie udało się wygenerować raportu: ' + error.message);
+    throw new Error(t('production.timeline.export.error') + ': ' + error.message);
   }
 };
 
@@ -483,6 +484,7 @@ const TimelineExport = ({
   showSuccess,
   showError 
 }) => {
+  const { t } = useTranslation();
   const [exportDialog, setExportDialog] = useState(false);
   const [exportFilters, setExportFilters] = useState({
     startDate: startDate ? new Date(startDate) : new Date(),
@@ -600,16 +602,16 @@ const TimelineExport = ({
     try {
       // Sprawdź czy są dostępne dane
       if (!filteredTasks || filteredTasks.length === 0) {
-        showError('Brak zadań do eksportu. Załaduj dane timeline.');
+        showError(t('production.timeline.export.noTasks'));
         return;
       }
 
       if (!workstations || workstations.length === 0) {
-        showError('Brak danych o stanowiskach. Odśwież stronę i spróbuj ponownie.');
+        showError(t('production.timeline.export.noWorkstations'));
         return;
       }
 
-      showSuccess('Rozpoczynanie generowania raportu Timeline...');
+      showSuccess(t('production.timeline.export.generating'));
       
       // Debugowanie przed filtrowaniem
       console.log('Eksport - Debugowanie przed filtrowaniem:', {
@@ -678,7 +680,7 @@ const TimelineExport = ({
       });
 
       if (filteredByDateTasks.length === 0) {
-        showError('Brak zadań w wybranym zakresie dat.');
+        showError(t('production.timeline.export.noTasksInDateRange'));
         return;
       }
 
@@ -690,21 +692,22 @@ const TimelineExport = ({
         exportFilters.endDate,
         groupBy,
         filteredByDateTasks,
-        exportFilters.selectedCustomers
+        exportFilters.selectedCustomers,
+        t
       );
 
-      showSuccess('Raport Timeline został pomyślnie wygenerowany i pobrany!');
+      showSuccess(t('production.timeline.export.success'));
       handleCloseExportDialog();
       
     } catch (error) {
       console.error('Błąd podczas generowania raportu Timeline:', error);
-      showError('Wystąpił błąd podczas generowania raportu: ' + error.message);
+      showError(t('production.timeline.export.error') + ': ' + error.message);
     }
   };
 
   return (
     <>
-      <Tooltip title="Eksportuj timeline do pliku Excel (XLSX)">
+      <Tooltip title={t('production.timeline.export.buttonText')}>
         <Button
           variant="outlined"
           size="small"
@@ -717,7 +720,7 @@ const TimelineExport = ({
             px: 1
           }}
         >
-          Eksportuj Timeline
+          {t('production.timeline.export.buttonText')}
         </Button>
       </Tooltip>
 
@@ -727,24 +730,23 @@ const TimelineExport = ({
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Eksportuj Timeline do Excel</DialogTitle>
+        <DialogTitle>{t('production.timeline.export.title')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Skonfiguruj parametry eksportu timeline. Raport będzie zawierał szczegółowy harmonogram, 
-            wizualny timeline oraz podsumowanie statystyk.
+            {t('production.timeline.export.description')}
           </Typography>
 
           <Grid container spacing={3}>
             {/* Zakres dat */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Zakres dat
+                {t('production.timeline.export.dateRange')}
               </Typography>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <DatePicker
-                      label="Data początkowa"
+                      label={t('production.timeline.export.startDate')}
                       value={exportFilters.startDate}
                       onChange={(newValue) => {
                         if (newValue) {
@@ -765,7 +767,7 @@ const TimelineExport = ({
                   </Grid>
                   <Grid item xs={6}>
                     <DatePicker
-                      label="Data końcowa"
+                      label={t('production.timeline.export.endDate')}
                       value={exportFilters.endDate}
                       onChange={(newValue) => {
                         if (newValue) {
@@ -791,7 +793,7 @@ const TimelineExport = ({
             {/* Filtry klientów */}
             <Grid item xs={12}>
               <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Filtry klientów
+                {t('production.timeline.export.customerFilters')}
               </Typography>
               
               <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
@@ -800,14 +802,14 @@ const TimelineExport = ({
                   onClick={() => handleSelectAllCustomers(true)}
                   variant="outlined"
                 >
-                  Zaznacz wszystkich
+                  {t('production.timeline.export.selectAll')}
                 </Button>
                 <Button 
                   size="small" 
                   onClick={() => handleSelectAllCustomers(false)}
                   variant="outlined"
                 >
-                  Odznacz wszystkich
+                  {t('production.timeline.export.deselectAll')}
                 </Button>
               </Box>
 
@@ -847,7 +849,7 @@ const TimelineExport = ({
                     }
                     label={
                       <Typography variant="body2" sx={{ fontSize: '0.85rem', fontStyle: 'italic' }}>
-                        Bez przypisanego klienta
+                        {t('production.timeline.export.noCustomer')}
                       </Typography>
                     }
                   />
@@ -864,13 +866,13 @@ const TimelineExport = ({
                 border: '1px solid #e0e0e0' 
               }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                  Podsumowanie eksportu
+                  {t('production.timeline.export.summary')}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  Okres: {format(exportFilters.startDate, 'dd.MM.yyyy', { locale: pl })} - {format(exportFilters.endDate, 'dd.MM.yyyy', { locale: pl })}
+                  {t('production.timeline.export.period')}: {format(exportFilters.startDate, 'dd.MM.yyyy', { locale: pl })} - {format(exportFilters.endDate, 'dd.MM.yyyy', { locale: pl })}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  Zadań do eksportu: {(() => {
+                  {t('production.timeline.export.tasksToExport')}: {(() => {
                     if (!filteredTasks || filteredTasks.length === 0) return 0;
                     
                     return filteredTasks.filter(task => {
@@ -917,7 +919,7 @@ const TimelineExport = ({
                   })()}
                 </Typography>
                 <Typography variant="body2">
-                  Grupowanie: {groupBy === 'workstation' ? 'Według stanowisk' : 'Według zamówień'}
+                  {t('production.timeline.export.grouping')}: {groupBy === 'workstation' ? t('production.timeline.export.groupingByWorkstation') : t('production.timeline.export.groupingByOrder')}
                 </Typography>
               </Box>
             </Grid>
@@ -925,7 +927,7 @@ const TimelineExport = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseExportDialog}>
-            Anuluj
+            {t('production.timeline.export.cancel')}
           </Button>
           <Button 
             onClick={handleExport}
@@ -933,7 +935,7 @@ const TimelineExport = ({
             color="primary"
             disabled={!filteredTasks || filteredTasks.length === 0}
           >
-            Eksportuj do Excel
+            {t('production.timeline.export.export')}
           </Button>
         </DialogActions>
       </Dialog>

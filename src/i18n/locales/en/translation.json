@@ -1600,6 +1600,118 @@
       "lotNumber": "Batch Number (LOT)",
       "createdAt": "Created Date",
       "createdBy": "Created By"
+    },
+    "timeline": {
+      "title": "Production Timeline",
+      "legend": "Legend:",
+      "instructionsZoom": "Shortcuts: Ctrl+mouse wheel - zoom, Shift+mouse wheel - horizontal scroll",
+      "editMode": "Edit Mode",
+      "editModeTooltip": "Enable to drag tasks in the timeline",
+      "snapToPrevious": "Snap to Previous",
+      "snapToPreviousTooltip": "Automatically snaps moved tasks to the end of the previous task on the same workstation",
+      "workstationColors": "Workstation Colors",
+      "groupBy": "Group by",
+      "groupByWorkstation": "Workstations",
+      "groupByOrder": "Orders",
+      "timeScale": "Time Scale",
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "filters": "Filters",
+      "settings": "Settings",
+      "export": "Export Timeline",
+      "refresh": "Refresh",
+      "zoom": {
+        "in": "Zoom In",
+        "out": "Zoom Out",
+        "reset": "Reset Zoom"
+      },
+      "slider": {
+        "timeRange": "Time Range: {{start}} - {{end}}"
+      },
+      "advancedFilters": {
+        "title": "Advanced Filters",
+        "productName": "Product Name",
+        "moNumber": "MO Number",
+        "orderNumber": "Order Number",
+        "startDate": "Start Date From",
+        "endDate": "Start Date To",
+        "apply": "Apply Filters",
+        "clear": "Clear Filters"
+      },
+      "edit": {
+        "title": "Edit Task",
+        "scheduledDate": "Start Date",
+        "endDate": "End Date",
+        "save": "Save Changes",
+        "cancel": "Cancel",
+        "saveSuccess": "Task has been updated",
+        "saveError": "Error saving task"
+      },
+      "tooltip": {
+        "product": "Product",
+        "moNumber": "MO Number",
+        "quantity": "Quantity",
+        "workstation": "Workstation",
+        "status": "Status",
+        "customer": "Customer",
+        "orderNumber": "Order Number",
+        "scheduledDate": "Planned Start",
+        "endDate": "Planned End",
+        "actualStartDate": "Actual Start",
+        "actualEndDate": "Actual End",
+        "duration": "Duration",
+        "priority": "Priority",
+        "description": "Description",
+        "cannotEdit": "Cannot edit - task completed"
+      },
+      "groups": {
+        "noWorkstation": "No Workstation",
+        "noOrder": "No Order"
+      },
+      "statuses": {
+        "scheduled": "Scheduled",
+        "inProgress": "In Progress",
+        "completed": "Completed",
+        "cancelled": "Cancelled",
+        "onHold": "On Hold"
+      },
+      "messages": {
+        "loadingError": "Error loading timeline data",
+        "taskMoveError": "Error moving task",
+        "noTasksFound": "No tasks to display",
+        "refreshSuccess": "Timeline data has been refreshed",
+        "undoSuccess": "Last action undone",
+        "undoError": "Cannot undo action",
+        "noActionsToUndo": "No actions to undo"
+      },
+      "export": {
+        "title": "Export Timeline to Excel",
+        "description": "Configure timeline export parameters. The report will contain detailed schedule, visual timeline and statistics summary.",
+        "dateRange": "Date Range",
+        "startDate": "Start Date",
+        "endDate": "End Date",
+        "customerFilters": "Customer Filters",
+        "selectAll": "Select All",
+        "deselectAll": "Deselect All",
+        "noCustomer": "No assigned customer",
+        "summary": "Export Summary",
+        "period": "Period",
+        "tasksToExport": "Tasks to Export",
+        "grouping": "Grouping",
+        "groupingByWorkstation": "By Workstations",
+        "groupingByOrder": "By Orders",
+        "export": "Export to Excel",
+        "cancel": "Cancel",
+        "generating": "Starting timeline report generation...",
+        "success": "Timeline report has been successfully generated and downloaded!",
+        "error": "An error occurred while generating the report",
+        "noTasks": "No tasks to export. Load timeline data.",
+        "noWorkstations": "No workstation data. Refresh the page and try again.",
+        "noTasksInDateRange": "No tasks in the selected date range.",
+        "buttonText": "Export Timeline"
+      }
     }
   },
   "recipes": {

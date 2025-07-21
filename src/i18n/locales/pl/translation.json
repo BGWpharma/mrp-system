@@ -86,7 +86,7 @@
         "forecast": "Prognoza",
         "productionTasks": "Zadania produkcyjne",
         "recipes": "Receptury",
-        "timeline": "Timeline"
+        "timeline": "Harmonogram"
       },
       "inventory": {
         "cmr": "CMR",
@@ -1514,7 +1514,7 @@
       "title": "Zadania Produkcyjne",
       "tabs": {
         "taskList": "Lista zadań",
-        "timeline": "Timeline",
+        "timeline": "Harmonogram",
         "moReport": "Raport MO",
         "forms": "Formularze",
         "forecast": "Prognoza zapotrzebowania",
@@ -1600,6 +1600,118 @@
       "lotNumber": "Numer partii (LOT)",
       "createdAt": "Data utworzenia",
       "createdBy": "Utworzony przez"
+    },
+    "timeline": {
+      "title": "Harmonogram produkcji",
+      "legend": "Legenda:",
+      "instructionsZoom": "Skróty: Ctrl+kółko myszy - zoom, Shift+kółko myszy - przewijanie poziome",
+      "editMode": "Tryb edycji",
+      "editModeTooltip": "Włącz aby móc przeciągać zadania w harmonogramie",
+      "snapToPrevious": "Dociąganie",
+      "snapToPreviousTooltip": "Automatycznie dociąga przesuwane zadania do końca poprzedniego zadania na tym samym stanowisku",
+      "workstationColors": "Kolory stanowisk",
+      "groupBy": "Grupuj według",
+      "groupByWorkstation": "Stanowisk",
+      "groupByOrder": "Zamówień",
+      "timeScale": "Skala czasu",
+      "hourly": "Godzinowa",
+      "daily": "Dzienna",
+      "weekly": "Tygodniowa",
+      "monthly": "Miesięczna",
+      "filters": "Filtry",
+      "settings": "Ustawienia",
+      "export": "Eksportuj harmonogram",
+      "refresh": "Odśwież",
+      "zoom": {
+        "in": "Powiększ",
+        "out": "Pomniejsz",
+        "reset": "Resetuj zoom"
+      },
+      "slider": {
+        "timeRange": "Zakres czasu: {{start}} - {{end}}"
+      },
+      "advancedFilters": {
+        "title": "Zaawansowane filtry",
+        "productName": "Nazwa produktu",
+        "moNumber": "Numer MO",
+        "orderNumber": "Numer zamówienia",
+        "startDate": "Data rozpoczęcia od",
+        "endDate": "Data rozpoczęcia do",
+        "apply": "Zastosuj filtry",
+        "clear": "Wyczyść filtry"
+      },
+      "edit": {
+        "title": "Edytuj zadanie",
+        "scheduledDate": "Data rozpoczęcia",
+        "endDate": "Data zakończenia",
+        "save": "Zapisz zmiany",
+        "cancel": "Anuluj",
+        "saveSuccess": "Zadanie zostało zaktualizowane",
+        "saveError": "Błąd podczas zapisywania zadania"
+      },
+      "tooltip": {
+        "product": "Produkt",
+        "moNumber": "Numer MO",
+        "quantity": "Ilość",
+        "workstation": "Stanowisko",
+        "status": "Status",
+        "customer": "Klient",
+        "orderNumber": "Nr zamówienia",
+        "scheduledDate": "Planowany start",
+        "endDate": "Planowane zakończenie",
+        "actualStartDate": "Rzeczywisty start",
+        "actualEndDate": "Rzeczywiste zakończenie",
+        "duration": "Czas trwania",
+        "priority": "Priorytet",
+        "description": "Opis",
+        "cannotEdit": "Nie można edytować - zadanie zakończone"
+      },
+      "groups": {
+        "noWorkstation": "Bez stanowiska",
+        "noOrder": "Bez zamówienia"
+      },
+      "statuses": {
+        "scheduled": "Zaplanowane",
+        "inProgress": "W trakcie",
+        "completed": "Zakończone",
+        "cancelled": "Anulowane",
+        "onHold": "Wstrzymane"
+      },
+      "messages": {
+        "loadingError": "Błąd podczas ładowania danych harmonogramu",
+        "taskMoveError": "Błąd podczas przenoszenia zadania",
+        "noTasksFound": "Brak zadań do wyświetlenia",
+        "refreshSuccess": "Dane harmonogramu zostały odświeżone",
+        "undoSuccess": "Cofnięto ostatnią akcję",
+        "undoError": "Nie można cofnąć akcji",
+        "noActionsToUndo": "Brak akcji do cofnięcia"
+      },
+      "export": {
+        "title": "Eksportuj harmonogram do Excel",
+        "description": "Skonfiguruj parametry eksportu harmonogramu. Raport będzie zawierał szczegółowy harmonogram, wizualny timeline oraz podsumowanie statystyk.",
+        "dateRange": "Zakres dat",
+        "startDate": "Data początkowa",
+        "endDate": "Data końcowa",
+        "customerFilters": "Filtry klientów",
+        "selectAll": "Zaznacz wszystkich",
+        "deselectAll": "Odznacz wszystkich",
+        "noCustomer": "Bez przypisanego klienta",
+        "summary": "Podsumowanie eksportu",
+        "period": "Okres",
+        "tasksToExport": "Zadań do eksportu",
+        "grouping": "Grupowanie",
+        "groupingByWorkstation": "Według stanowisk",
+        "groupingByOrder": "Według zamówień",
+        "export": "Eksportuj do Excel",
+        "cancel": "Anuluj",
+        "generating": "Rozpoczynanie generowania raportu harmonogramu...",
+        "success": "Raport harmonogramu został pomyślnie wygenerowany i pobrany!",
+        "error": "Wystąpił błąd podczas generowania raportu",
+        "noTasks": "Brak zadań do eksportu. Załaduj dane harmonogramu.",
+        "noWorkstations": "Brak danych o stanowiskach. Odśwież stronę i spróbuj ponownie.",
+        "noTasksInDateRange": "Brak zadań w wybranym zakresie dat.",
+        "buttonText": "Eksportuj harmonogram"
+      }
     }
   },
   "recipes": {
