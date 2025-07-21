@@ -532,7 +532,6 @@ export const getAvailableSidebarTabs = () => {
         { id: 'inventory-cmr', name: 'CMR', path: '/inventory/cmr' },
         { id: 'inventory-suppliers', name: 'Dostawcy', path: '/suppliers' },
         { id: 'inventory-forms', name: 'Formularze', path: '/inventory/forms' },
-        { id: 'inventory-purchase-interactions', name: 'Interakcje zakupowe', path: '/crm/interactions' },
         { id: 'inventory-stocktaking', name: 'Inwentaryzacja', path: '/inventory/stocktaking' },
         { id: 'inventory-status', name: 'Status stanów', path: '/inventory' },
         { id: 'inventory-expiry-dates', name: 'Terminy ważności', path: '/inventory/expiry-dates' },
