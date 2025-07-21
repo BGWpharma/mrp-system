@@ -1859,5 +1859,24 @@
         "linkError": "Error linking ingredients: {{error}}"
       }
     }
-  }
+  },
+  "formsResponsesTitle": "Production Forms Responses",
+  "formsResponsesDescription": "Browse data from completed production forms",
+  "completedMO": {
+    "tab": "Completed MO Reports",
+    "title": "Completed MO Report"
+  },
+  "productionControl": {
+    "tab": "Production Control Reports", 
+    "title": "Production Control Report"
+  },
+  "productionShift": {
+    "tab": "Production Shift Reports",
+    "title": "Production Shift Report"
+  },
+  "errorLoadingData": "Error loading data",
+  "confirmDeleteTitle": "Confirm deletion",
+  "confirmDeleteMessage": "Are you sure you want to delete this item?",
+  "cancel": "Cancel",
+  "delete": "Delete"
 }

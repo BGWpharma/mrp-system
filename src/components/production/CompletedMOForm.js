@@ -20,14 +20,40 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Print as PrintIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { getMONumbersForSelect } from '../../services/moService';
 import { db, storage } from '../../services/firebase/config';
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
+const getMODetailsById = async (moNumber) => {
+  try {
+    const tasksRef = collection(db, 'productionTasks');
+    const q = query(tasksRef, where('moNumber', '==', moNumber));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const taskDoc = querySnapshot.docs[0];
+      const taskData = taskDoc.data();
+      
+      return {
+        id: taskDoc.id,
+        ...taskData
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Błąd podczas pobierania szczegółów MO:', error);
+    return null;
+  }
+};
 
 // Komponent do wyświetlania istniejącego załącznika
 const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
@@ -121,7 +147,9 @@ const CompletedMOForm = () => {
   const [submitted, setSubmitted] = useState(false);
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
-  const [removedAttachments, setRemovedAttachments] = useState([]); // Śledzenie usuniętych załączników
+  const [removedAttachments, setRemovedAttachments] = useState([]);
+  const [currentTaskData, setCurrentTaskData] = useState(null); // Dodamy stan na dane zadania
+  const [generatingPDF, setGeneratingPDF] = useState(false); // Stan dla generowania PDF
 
   // Sprawdź, czy istnieją dane do edycji w sessionStorage
   useEffect(() => {
@@ -178,12 +206,27 @@ const CompletedMOForm = () => {
     }
   }, [currentUser]);
 
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Jeśli zmieniono numer MO, pobierz szczegóły zadania
+    if (name === 'moNumber' && value) {
+      try {
+        setLoadingMO(true);
+        const taskDetails = await getMODetailsById(value);
+        if (taskDetails) {
+          setCurrentTaskData(taskDetails);
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania szczegółów MO:', error);
+      } finally {
+        setLoadingMO(false);
+      }
+    }
     
     // Wyczyść błąd walidacji po zmianie wartości
     if (validationErrors[name]) {
@@ -381,6 +424,373 @@ const CompletedMOForm = () => {
     navigate('/production/forms/responses');
   };
 
+  // Funkcja do generowania PDF szczegółów MO i dodawania jako załącznik
+  const handlePrintMODetails = async () => {
+    if (!currentTaskData) {
+      alert('Najpierw wybierz numer MO, aby pobrać dane zadania');
+      return;
+    }
+
+    try {
+      setGeneratingPDF(true);
+
+      // Funkcja pomocnicza do formatowania dat
+      const formatDateForPrint = (dateValue) => {
+        if (!dateValue) return 'Nie określono';
+        
+        try {
+          let date;
+          if (dateValue instanceof Date) {
+            date = dateValue;
+          } else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+            date = dateValue.toDate();
+          } else if (dateValue.seconds) {
+            date = new Date(dateValue.seconds * 1000);
+          } else {
+            date = new Date(dateValue);
+          }
+          
+          if (isNaN(date.getTime())) {
+            return 'Nie określono';
+          }
+          
+          return date.toLocaleDateString('pl-PL', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        } catch (error) {
+          console.error('Błąd konwersji daty:', error);
+          return 'Nie określono';
+        }
+      };
+
+      // Przygotuj zawartość HTML (skopiowaną z TaskDetailsPage)
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; margin: 20px; background: white; padding: 20px;">
+          <div style="text-align: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+            <h1 style="margin-bottom: 5px;">Szczegóły zlecenia produkcyjnego</h1>
+            <h2>MO: ${currentTaskData.moNumber || 'Nie określono'}</h2>
+          </div>
+          
+          <div style="margin-top: 20px;">
+            <h3>Informacje podstawowe</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Nazwa zadania:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.name || 'Nie określono'}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Produkt:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.productName || 'Nie określono'}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Ilość:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.quantity || '0'} ${currentTaskData.unit || 'szt.'}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Status:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.status || 'Nie określono'}</td></tr>
+              ${(currentTaskData.recipeName || currentTaskData.recipe?.recipeName) ? `<tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Receptura:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.recipeName || currentTaskData.recipe?.recipeName}${currentTaskData.recipeVersion ? ` (wersja ${currentTaskData.recipeVersion})` : ''}</td></tr>` : ''}
+            </table>
+          </div>
+
+          <div style="margin-top: 20px; background-color: #f9f9f9; border-left: 4px solid #2196F3; padding-left: 10px;">
+            <h3>Informacje o partii produktu</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Numer LOT:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.lotNumber || 'Nie określono'}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Data ważności:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.expiryDate ? formatDateForPrint(currentTaskData.expiryDate).split(',')[0] : 'Nie określono'}</td></tr>
+            </table>
+          </div>
+
+          <div style="margin-top: 20px;">
+            <h3>Harmonogram</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Planowany start:</th><td style="border: 1px solid #ddd; padding: 8px;">${formatDateForPrint(currentTaskData.scheduledDate)}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Planowane zakończenie:</th><td style="border: 1px solid #ddd; padding: 8px;">${formatDateForPrint(currentTaskData.endDate)}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Szacowany czas produkcji:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.estimatedDuration ? (currentTaskData.estimatedDuration / 60).toFixed(2) + ' godz.' : 'Nie określono'}</td></tr>
+              <tr><th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2; width: 30%;">Czas na jednostkę:</th><td style="border: 1px solid #ddd; padding: 8px;">${currentTaskData.productionTimePerUnit ? parseFloat(currentTaskData.productionTimePerUnit).toFixed(2) + ' min./szt.' : 'Nie określono'}</td></tr>
+            </table>
+          </div>
+
+          <div style="margin-top: 20px;">
+            <h3>Materiały</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+              <thead>
+                <tr>
+                  <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Nazwa</th>
+                  <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Rzeczywista ilość</th>
+                  <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Jednostka</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${(currentTaskData.materials || []).map(material => `
+                  <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${material.name || 'Nie określono'}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${material.quantity || 0}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${material.unit || 'szt.'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          ${currentTaskData.notes ? `
+          <div style="margin-top: 20px;">
+            <h3>Notatki</h3>
+            <p>${currentTaskData.notes}</p>
+          </div>
+          ` : ''}
+
+          <div style="text-align: center; margin-top: 50px; font-size: 0.8em; border-top: 1px solid #ccc; padding-top: 10px;">
+            <p>Data wydruku: ${new Date().toLocaleDateString('pl-PL', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}</p>
+            <p>System MRP</p>
+          </div>
+        </div>
+      `;
+
+      // Utwórz tymczasowy div z HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlContent;
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.top = '0';
+      tempDiv.style.width = '794px'; // Szerokość A4 w pikselach przy 96 DPI
+      tempDiv.style.height = 'auto';
+      tempDiv.style.backgroundColor = 'white';
+      tempDiv.style.fontFamily = 'Arial, sans-serif';
+      tempDiv.style.fontSize = '14px';
+      tempDiv.style.lineHeight = '1.4';
+      tempDiv.style.color = 'black';
+      document.body.appendChild(tempDiv);
+
+      // Poczekaj na pełne renderowanie
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Konwertuj HTML na canvas z ulepszonymi opcjami
+      const canvas = await html2canvas(tempDiv, {
+        backgroundColor: '#ffffff',
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: 794,
+        height: tempDiv.scrollHeight,
+        windowWidth: 794,
+        windowHeight: tempDiv.scrollHeight,
+        onclone: (clonedDoc) => {
+          const clonedElement = clonedDoc.querySelector('div');
+          if (clonedElement) {
+            clonedElement.style.fontFamily = 'Arial, sans-serif';
+            clonedElement.style.fontSize = '14px';
+            clonedElement.style.color = 'black';
+          }
+        }
+      });
+
+      // Usuń tymczasowy div
+      document.body.removeChild(tempDiv);
+
+      // Sprawdź czy canvas zawiera dane (nie jest pusty)
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Jeśli canvas jest pusty (tylko białe tło), użyj alternatywnego podejścia
+      if (canvas.width < 100 || canvas.height < 100) {
+        console.warn('Canvas jest pusty, używam alternatywnego podejścia z jsPDF');
+        
+        // Alternatywne rozwiązanie z prostym formatowaniem jsPDF
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        let yPos = 20;
+        const lineHeight = 6;
+        const pageHeight = 280;
+
+        // Nagłówek
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Szczegóły zlecenia produkcyjnego', 105, yPos, { align: 'center' });
+        yPos += 10;
+        
+        doc.setFontSize(14);
+        doc.text(`MO: ${currentTaskData.moNumber || 'Nie określono'}`, 105, yPos, { align: 'center' });
+        yPos += 15;
+
+        // Linia
+        doc.line(20, yPos, 190, yPos);
+        yPos += 10;
+
+        // Funkcja dodająca sekcję
+        const addSection = (title, data) => {
+          if (yPos > pageHeight - 30) {
+            doc.addPage();
+            yPos = 20;
+          }
+          
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.text(title, 20, yPos);
+          yPos += 8;
+          
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          
+          data.forEach(([label, value]) => {
+            if (yPos > pageHeight - 10) {
+              doc.addPage();
+              yPos = 20;
+            }
+            doc.text(`${label}: ${value}`, 25, yPos);
+            yPos += lineHeight;
+          });
+          yPos += 5;
+        };
+
+        // Dodaj sekcje
+        addSection('Informacje podstawowe', [
+          ['Nazwa zadania', currentTaskData.name || 'Nie określono'],
+          ['Produkt', currentTaskData.productName || 'Nie określono'],
+          ['Ilość', `${currentTaskData.quantity || '0'} ${currentTaskData.unit || 'szt.'}`],
+          ['Status', currentTaskData.status || 'Nie określono']
+        ]);
+
+        if (currentTaskData.recipeName || currentTaskData.recipe?.recipeName) {
+          addSection('Receptura', [
+            ['Receptura', `${currentTaskData.recipeName || currentTaskData.recipe?.recipeName}${currentTaskData.recipeVersion ? ` (wersja ${currentTaskData.recipeVersion})` : ''}`]
+          ]);
+        }
+
+        addSection('Informacje o partii produktu', [
+          ['Numer LOT', currentTaskData.lotNumber || 'Nie określono'],
+          ['Data ważności', currentTaskData.expiryDate ? formatDateForPrint(currentTaskData.expiryDate).split(',')[0] : 'Nie określono']
+        ]);
+
+        addSection('Harmonogram', [
+          ['Planowany start', formatDateForPrint(currentTaskData.scheduledDate)],
+          ['Planowane zakończenie', formatDateForPrint(currentTaskData.endDate)],
+          ['Szacowany czas produkcji', currentTaskData.estimatedDuration ? `${(currentTaskData.estimatedDuration / 60).toFixed(2)} godz.` : 'Nie określono'],
+          ['Czas na jednostkę', currentTaskData.productionTimePerUnit ? `${parseFloat(currentTaskData.productionTimePerUnit).toFixed(2)} min./szt.` : 'Nie określono']
+        ]);
+
+        if (currentTaskData.materials && currentTaskData.materials.length > 0) {
+          // Dodaj nagłówki dla materiałów
+          if (yPos > pageHeight - 40) {
+            doc.addPage();
+            yPos = 20;
+          }
+          
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Materiały', 20, yPos);
+          yPos += 8;
+          
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Nazwa', 25, yPos);
+          doc.text('Rzeczywista ilość', 100, yPos);
+          doc.text('Jednostka', 150, yPos);
+          yPos += 6;
+          
+          // Linia pod nagłówkami
+          doc.line(25, yPos, 180, yPos);
+          yPos += 4;
+          
+          currentTaskData.materials.forEach(material => {
+            if (yPos > pageHeight - 10) {
+              doc.addPage();
+              yPos = 20;
+            }
+            doc.text(material.name || 'Nie określono', 25, yPos);
+            doc.text(String(material.quantity || 0), 100, yPos);
+            doc.text(material.unit || 'szt.', 150, yPos);
+            yPos += lineHeight;
+          });
+          yPos += 5;
+        }
+
+        if (currentTaskData.notes) {
+          addSection('Notatki', [['', currentTaskData.notes]]);
+        }
+
+        // Stopka
+        yPos = pageHeight - 15;
+        doc.setFontSize(8);
+        doc.text(`Data wydruku: ${new Date().toLocaleDateString('pl-PL', {
+          day: '2-digit',
+          month: '2-digit', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`, 105, yPos, { align: 'center' });
+        doc.text('System MRP', 105, yPos + 5, { align: 'center' });
+
+        const pdfBlob = doc.output('blob');
+        const fileName = `Szczegoly_MO_${currentTaskData.moNumber || currentTaskData.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+        const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+        
+        setFormData(prev => ({
+          ...prev,
+          mixingPlanReport: pdfFile,
+          mixingPlanReportUrl: '',
+          mixingPlanReportName: ''
+        }));
+
+        alert(`PDF "${fileName}" został wygenerowany (tryb podstawowy) i dodany jako załącznik!`);
+        return;
+      }
+
+      // Jeśli canvas jest OK, użyj oryginalnego podejścia
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 210; // A4 width w mm
+      const pageHeight = 295; // A4 height w mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+
+      let position = 0;
+
+      // Dodaj pierwszą stronę
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Dodaj kolejne strony jeśli potrzebne
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        doc.addPage();
+        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Konwertuj PDF do Blob
+      const pdfBlob = doc.output('blob');
+      
+      // Utwórz plik File z Blob
+      const fileName = `Szczegoly_MO_${currentTaskData.moNumber || currentTaskData.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      
+      // Dodaj PDF jako załącznik do formularza
+      setFormData(prev => ({
+        ...prev,
+        mixingPlanReport: pdfFile,
+        // Wyczyść istniejący URL jeśli był
+        mixingPlanReportUrl: '',
+        mixingPlanReportName: ''
+      }));
+
+      alert(`PDF "${fileName}" został wygenerowany i dodany jako załącznik do formularza!`);
+
+    } catch (error) {
+      console.error('Błąd podczas generowania PDF:', error);
+      alert('Wystąpił błąd podczas generowania PDF');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
   return (
     <Container maxWidth="md" sx={{ 
       mt: { xs: 2, sm: 4 }, 
@@ -557,11 +967,45 @@ const CompletedMOForm = () => {
                 Raport z planu mieszań:
               </Typography>
               
+              {/* Wyświetlaj istniejący załącznik z URL */}
               <ExistingAttachment
                 fileUrl={formData.mixingPlanReportUrl}
                 fileName={formData.mixingPlanReportName}
                 onRemove={handleRemoveAttachment}
               />
+              
+              {/* Wyświetlaj lokalny plik (wygenerowany PDF) */}
+              {formData.mixingPlanReport && !formData.mixingPlanReportUrl && (
+                <Box sx={{ 
+                  mt: 1, 
+                  p: 2, 
+                  border: '1px solid #e0e0e0', 
+                  borderRadius: 1, 
+                  backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2
+                }}>
+                  <AttachFileIcon color="success" />
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="body2" color="text.primary">
+                      {formData.mixingPlanReport.name}
+                    </Typography>
+                    <Typography variant="caption" color="success.main">
+                      Plik PDF wygenerowany automatycznie - gotowy do wysłania
+                    </Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => setFormData(prev => ({ ...prev, mixingPlanReport: null }))}
+                  >
+                    Usuń
+                  </Button>
+                </Box>
+              )}
               
               <input
                 type="file"
@@ -580,6 +1024,17 @@ const CompletedMOForm = () => {
                 >
                   Powrót
                 </Button>
+                {currentTaskData && (
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<PrintIcon />}
+                    onClick={handlePrintMODetails}
+                    disabled={generatingPDF}
+                  >
+                    {generatingPDF ? 'Generowanie...' : 'Załącz szczegóły MO'}
+                  </Button>
+                )}
                 <Button
                   type="submit"
                   variant="contained"

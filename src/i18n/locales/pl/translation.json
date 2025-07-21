@@ -1041,11 +1041,11 @@
     "viewResponses": "Wyświetl odpowiedzi",
     "loadingReport": {
       "title": "Raport - Załadunek towaru",
-      "description": "Formularz dokumentujący proces załadunku towaru. Zawiera identyfikację pracownika, informacje o przewoźniku i stanie technicznym pojazdu."
+      "description": "Formularz dokumentujący proces załadunku towaru. Zawiera identyfikację pracownika, informacje o przewoźniku oraz stan techniczny pojazdu."
     },
     "unloadingReport": {
-      "title": "Raport - Rozładunek towaru",
-      "description": "Formularz dokumentujący proces rozładunku towaru. Zawiera identyfikację pracownika, informacje o dostawcy i ocenę wizualną towaru."
+      "title": "Raport - Rozładunek towaru", 
+      "description": "Formularz dokumentujący proces rozładunku towaru. Zawiera identyfikację pracownika, informacje o dostawcy oraz wizualną ocenę towaru."
     }
   },
   "formsResponsesTitle": "Odpowiedzi formularzy produkcyjnych",
@@ -1057,7 +1057,7 @@
   "noProductionShiftResponses": "Brak zapisanych odpowiedzi formularzy lub brak wyników dla wybranych filtrów",
   "errorLoadingData": "Błąd podczas ładowania danych",
   "confirmDeleteTitle": "Potwierdź usunięcie",
-  "confirmDeleteMessage": "Czy na pewno chcesz usunąć tę odpowiedź formularza? Ta operacja jest nieodwracalna.",
+  "confirmDeleteMessage": "Czy na pewno chcesz usunąć ten element?",
   "cancel": "Anuluj",
   "delete": "Usuń",
   "editResponse": "Edytuj odpowiedź",
@@ -1859,5 +1859,24 @@
         "linkError": "Błąd podczas linkowania składników: {{error}}"
       }
     }
-  }
+  },
+  "formsResponsesTitle": "Odpowiedzi formularzy produkcyjnych",
+  "formsResponsesDescription": "Przeglądaj dane z wypełnionych formularzy produkcyjnych",
+  "completedMO": {
+    "tab": "Raporty zakończonych MO",
+    "title": "Raport skończone MO"
+  },
+  "productionControl": {
+    "tab": "Raporty kontroli produkcji", 
+    "title": "Raport kontroli produkcji"
+  },
+  "productionShift": {
+    "tab": "Raporty zmian produkcyjnych",
+    "title": "Raport zmiany produkcyjnej"
+  },
+  "errorLoadingData": "Błąd ładowania danych",
+  "confirmDeleteTitle": "Potwierdź usunięcie",
+  "confirmDeleteMessage": "Czy na pewno chcesz usunąć ten element?",
+  "cancel": "Anuluj",
+  "delete": "Usuń"
 }
