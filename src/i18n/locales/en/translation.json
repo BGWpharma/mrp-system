@@ -490,6 +490,21 @@
         "linkPlaceholder": "https://drive.google.com/file/d/..."
       },
       "attachments": "Attachments",
+      "coaAttachments": {
+        "title": "Certificates of Analysis (CoA)",
+        "description": "Analysis certificates from supplier",
+        "noAttachments": "No analysis certificates"
+      },
+      "invoiceAttachments": {
+        "title": "Invoice attachments",
+        "description": "Invoice files from supplier",
+        "noAttachments": "No invoice attachments"
+      },
+      "generalAttachments": {
+        "title": "Other attachments",
+        "description": "Other documents related to the order",
+        "noAttachments": "No other attachments"
+      },
       "actions": {
         "cancel": "Cancel",
         "save": "Save",

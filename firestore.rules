@@ -1,6 +1,25 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Funkcja walidacji pól załączników
+    function validateAttachmentFields(data) {
+      return (!('coaAttachments' in data) || data.coaAttachments is list) &&
+             (!('invoiceAttachments' in data) || data.invoiceAttachments is list) &&
+             (!('generalAttachments' in data) || data.generalAttachments is list) &&
+             (!('attachments' in data) || data.attachments is list);
+    }
+    
+    // Reguły dla zamówień zakupowych (Purchase Orders)
+    match /purchaseOrders/{orderId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+                    validateAttachmentFields(request.resource.data);
+      allow update: if request.auth != null && 
+                    validateAttachmentFields(request.resource.data);
+      allow delete: if request.auth != null;
+    }
+    
+    // Domyślna reguła dla pozostałych kolekcji - wymaga uwierzytelnienia
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

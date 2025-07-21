@@ -5284,13 +5284,24 @@ const TaskDetailsPage = () => {
                 const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
                 const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
                 
-                if (poData && poData.attachments && poData.attachments.length > 0) {
-                  // Dodaj załączniki z informacją o źródle
-                  const poAttachments = poData.attachments.map(attachment => ({
+                // Dla właściwości fizykochemicznych używamy tylko certyfikatów CoA
+                const coaAttachments = poData.coaAttachments || [];
+                
+                // Jeśli nie ma CoA, sprawdź stare załączniki (kompatybilność wsteczna)
+                let attachmentsToProcess = coaAttachments;
+                if (coaAttachments.length === 0 && poData.attachments && poData.attachments.length > 0) {
+                  console.log('Brak CoA, używam starych załączników dla kompatybilności:', poData.attachments);
+                  attachmentsToProcess = poData.attachments;
+                }
+                
+                if (attachmentsToProcess.length > 0) {
+                  // Dodaj załączniki CoA z informacją o źródle
+                  const poAttachments = attachmentsToProcess.map(attachment => ({
                     ...attachment,
                     poNumber: poData.number,
                     poId: poData.id,
-                    lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber
+                    lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
+                    category: coaAttachments.length > 0 ? 'CoA' : 'Legacy' // Oznacz czy to CoA czy stare załączniki
                   }));
                   
                   ingredientAttachments.push(...poAttachments);
@@ -7270,11 +7281,11 @@ const TaskDetailsPage = () => {
                   {/* 4. Physicochemical properties */}
                   <Paper sx={{ p: 3, mb: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2 }}>
-                      4. Physicochemical properties
+                      4. Physicochemical properties (CoA)
                     </Typography>
                     
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      Załączniki związane z właściwościami fizykochemicznymi składników (np. CoA) z powiązanych zamówień zakupu
+                      Certyfikaty analiz (CoA) składników z powiązanych zamówień zakupu. Jeśli brak CoA, wyświetlane są załączniki z kompatybilności wstecznej.
                     </Typography>
 
                     {/* Wyświetlanie załączników z PO pogrupowanych według składników */}
@@ -7312,13 +7323,22 @@ const TaskDetailsPage = () => {
                                     </Typography>
                                   </Box>
                                   
-                                  <Chip 
-                                    size="small" 
-                                    label={`PO: ${attachment.poNumber}`}
-                                    variant="outlined"
-                                    color="info"
-                                    sx={{ fontSize: '0.75rem' }}
-                                  />
+                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Chip 
+                                      size="small" 
+                                      label={attachment.category || 'CoA'}
+                                      variant="filled"
+                                      color={attachment.category === 'CoA' ? 'success' : 'default'}
+                                      sx={{ fontSize: '0.70rem' }}
+                                    />
+                                    <Chip 
+                                      size="small" 
+                                      label={`PO: ${attachment.poNumber}`}
+                                      variant="outlined"
+                                      color="info"
+                                      sx={{ fontSize: '0.75rem' }}
+                                    />
+                                  </Box>
                                   
                                   <Box sx={{ display: 'flex', gap: 1 }}>
                                     <Tooltip title="Pobierz">

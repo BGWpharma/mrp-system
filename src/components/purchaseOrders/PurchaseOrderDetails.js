@@ -1637,42 +1637,37 @@ const PurchaseOrderDetails = ({ orderId }) => {
             )}
           </Paper>
           
-          {/* Sekcja załączników */}
+          {/* Sekcja załączników - skategoryzowane */}
           <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
               <AttachFileIcon sx={{ mr: 1 }} />
               Załączniki
             </Typography>
             
-            {purchaseOrder.attachments && purchaseOrder.attachments.length > 0 ? (
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Załączonych plików: {purchaseOrder.attachments.length}
-                </Typography>
-                
-                <List sx={{ py: 0 }}>
-                  {purchaseOrder.attachments.map((attachment) => {
-                    // Funkcja do uzyskania ikony pliku
-                    const getFileIcon = (contentType) => {
-                      if (contentType.startsWith('image/')) {
-                        return <ImageIcon sx={{ color: 'primary.main' }} />;
-                      } else if (contentType === 'application/pdf') {
-                        return <PdfIcon sx={{ color: 'error.main' }} />;
-                      } else {
-                        return <DescriptionIcon sx={{ color: 'action.active' }} />;
-                      }
-                    };
+            {(() => {
+              // Funkcje pomocnicze do wyświetlania załączników
+              const getFileIcon = (contentType) => {
+                if (contentType.startsWith('image/')) {
+                  return <ImageIcon sx={{ color: 'primary.main' }} />;
+                } else if (contentType === 'application/pdf') {
+                  return <PdfIcon sx={{ color: 'error.main' }} />;
+                } else {
+                  return <DescriptionIcon sx={{ color: 'action.active' }} />;
+                }
+              };
 
-                    // Funkcja do formatowania rozmiaru pliku
-                    const formatFileSize = (bytes) => {
-                      if (bytes === 0) return '0 Bytes';
-                      const k = 1024;
-                      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                      const i = Math.floor(Math.log(bytes) / Math.log(k));
-                      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-                    };
+              const formatFileSize = (bytes) => {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+              };
 
-                    return (
+              const renderAttachmentsList = (attachments, emptyMessage) => (
+                attachments && attachments.length > 0 ? (
+                  <List sx={{ py: 0 }}>
+                    {attachments.map((attachment) => (
                       <ListItem
                         key={attachment.id}
                         button
@@ -1719,15 +1714,91 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           />
                         </Box>
                       </ListItem>
-                    );
-                  })}
-                </List>
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                Brak załączników do tego zamówienia
-              </Typography>
-            )}
+                    ))}
+                  </List>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', ml: 2 }}>
+                    {emptyMessage}
+                  </Typography>
+                )
+              );
+
+              // Sprawdź czy mamy nowe skategoryzowane załączniki
+              const hasCoA = purchaseOrder.coaAttachments && purchaseOrder.coaAttachments.length > 0;
+              const hasInvoices = purchaseOrder.invoiceAttachments && purchaseOrder.invoiceAttachments.length > 0;
+              const hasGeneral = purchaseOrder.generalAttachments && purchaseOrder.generalAttachments.length > 0;
+              const hasOldAttachments = purchaseOrder.attachments && purchaseOrder.attachments.length > 0;
+
+              // Jeśli są nowe skategoryzowane załączniki, wyświetl je w kategoriach
+              if (hasCoA || hasInvoices || hasGeneral) {
+                return (
+                  <Box>
+                    {/* Certyfikaty analizy (CoA) */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                        <AssignmentIcon sx={{ mr: 1, color: 'success.main' }} />
+                        Certyfikaty analiz (CoA)
+                        {hasCoA && (
+                          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                            ({purchaseOrder.coaAttachments.length})
+                          </Typography>
+                        )}
+                      </Typography>
+                      {renderAttachmentsList(purchaseOrder.coaAttachments, 'Brak certyfikatów analizy')}
+                    </Box>
+
+                    {/* Faktury */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                        <LocalShippingIcon sx={{ mr: 1, color: 'warning.main' }} />
+                        Faktury (załączniki)
+                        {hasInvoices && (
+                          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                            ({purchaseOrder.invoiceAttachments.length})
+                          </Typography>
+                        )}
+                      </Typography>
+                      {renderAttachmentsList(purchaseOrder.invoiceAttachments, 'Brak załączników faktur')}
+                    </Box>
+
+                    {/* Inne załączniki */}
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                        <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
+                        Inne załączniki
+                        {hasGeneral && (
+                          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                            ({purchaseOrder.generalAttachments.length})
+                          </Typography>
+                        )}
+                      </Typography>
+                      {renderAttachmentsList(purchaseOrder.generalAttachments, 'Brak innych załączników')}
+                    </Box>
+                  </Box>
+                );
+              }
+              
+              // W przeciwnym razie wyświetl stare załączniki (kompatybilność wsteczna)
+              else if (hasOldAttachments) {
+                return (
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Załączonych plików: {purchaseOrder.attachments.length}
+                    </Typography>
+                    {renderAttachmentsList(purchaseOrder.attachments, 'Brak załączników')}
+                  </Box>
+                );
+              }
+              
+              // Brak załączników
+              else {
+                return (
+                  <Typography variant="body2" color="text.secondary">
+                    Brak załączników do tego zamówienia
+                  </Typography>
+                );
+              }
+            })()}
           </Paper>
 
           {/* Sekcja odpowiedzi formularzy rozładunku */}

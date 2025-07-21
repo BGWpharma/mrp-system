@@ -490,6 +490,21 @@
         "linkPlaceholder": "https://drive.google.com/file/d/..."
       },
       "attachments": "Załączniki",
+      "coaAttachments": {
+        "title": "Certyfikaty analiz (CoA)",
+        "description": "Certyfikaty analizy od dostawcy",
+        "noAttachments": "Brak certyfikatów analizy"
+      },
+      "invoiceAttachments": {
+        "title": "Faktury (załączniki)",
+        "description": "Pliki faktur od dostawcy",
+        "noAttachments": "Brak załączników faktur"
+      },
+      "generalAttachments": {
+        "title": "Inne załączniki",
+        "description": "Inne dokumenty związane z zamówieniem",
+        "noAttachments": "Brak innych załączników"
+      },
       "actions": {
         "cancel": "Anuluj",
         "save": "Zapisz",

@@ -907,7 +907,12 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       notes = '',
       totalValue,
       totalGross,
-      totalVat
+      totalVat,
+      // Nowe pola dla załączników
+      attachments = [], // Stare pole dla kompatybilności
+      coaAttachments = [], // Certyfikaty analizy
+      invoiceAttachments = [], // Załączniki faktur
+      generalAttachments = [] // Ogólne załączniki
     } = purchaseOrderData;
 
     // Generuj numer zamówienia
@@ -1002,6 +1007,11 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       expectedDeliveryDate: safeConvertToDate(expectedDeliveryDate),
       deliveryAddress,
       notes,
+      // Załączniki - zarówno stare jak i nowe pola
+      attachments,
+      coaAttachments,
+      invoiceAttachments,
+      generalAttachments,
       createdBy: userId,
       updatedBy: userId,
       createdAt: serverTimestamp(),

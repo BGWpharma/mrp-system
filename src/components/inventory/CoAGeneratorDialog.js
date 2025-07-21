@@ -721,15 +721,17 @@ Produkt **ZGODNY** z wymaganiami specyfikacji.
           const selectedPOData = purchaseOrders.find(po => po.id === selectedPO);
           
           if (selectedPOData) {
-            // Dodaj nowy załącznik do istniejących
-            const updatedAttachments = [...(selectedPOData.attachments || []), newAttachment];
+            // Dodaj nowy załącznik do odpowiedniej kategorii
+            const updatedCoAAttachments = [...(selectedPOData.coaAttachments || []), newAttachment];
+            const updatedGeneralAttachments = [...(selectedPOData.attachments || []), newAttachment]; // Dla kompatybilności wstecznej
             
-            // Aktualizuj PO z nowym załącznikiem
+            // Aktualizuj PO z nowym załącznikiem CoA
             await updatePurchaseOrder(selectedPO, { 
-              attachments: updatedAttachments 
+              coaAttachments: updatedCoAAttachments,
+              attachments: updatedGeneralAttachments // Zachowaj kompatybilność
             }, currentUser?.uid);
             
-            showSuccess(`CoA zostało dodane do załączników zamówienia ${selectedPOData.number}`);
+            showSuccess(`CoA zostało dodane do certyfikatów analiz zamówienia ${selectedPOData.number}`);
           }
         } catch (error) {
           console.error('Błąd podczas dodawania CoA do PO:', error);

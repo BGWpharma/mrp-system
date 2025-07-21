@@ -31,7 +31,15 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Reguła dla załączników do zamówień zakupu - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
+    // Reguły dla załączników do zamówień zakupu - pozwalają autoryzowanym użytkownikom na przesyłanie i pobieranie
+    // Struktura: /purchase-order-attachments/{orderId}/{category}/{fileName}
+    match /purchase-order-attachments/{orderId}/{category}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+                    (category == 'coa' || category == 'invoice' || category == 'general');
+    }
+    
+    // Kompatybilność wsteczna - stara struktura bez kategorii
     match /purchase-order-attachments/{orderId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;

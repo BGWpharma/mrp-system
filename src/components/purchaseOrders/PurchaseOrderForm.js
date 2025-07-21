@@ -74,6 +74,7 @@ import {
 } from '../../services/supplierService';
 import { getExchangeRate, getExchangeRates } from '../../services/exchangeRateService';
 import PurchaseOrderFileUpload from './PurchaseOrderFileUpload';
+import PurchaseOrderCategorizedFileUpload from './PurchaseOrderCategorizedFileUpload';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { t } = useTranslation();
@@ -113,7 +114,10 @@ const PurchaseOrderForm = ({ orderId }) => {
     status: PURCHASE_ORDER_STATUSES.DRAFT,
     invoiceLink: '',
     invoiceLinks: [], // Nowe pole dla wielu linków do faktur
-    attachments: [], // Nowe pole dla załączników
+    attachments: [], // Stare pole dla kompatybilności wstecznej
+    coaAttachments: [], // Nowe pole dla certyfikatów analizy (CoA)
+    invoiceAttachments: [], // Nowe pole dla załączników faktur
+    generalAttachments: [], // Nowe pole dla ogólnych załączników
     expandedItems: {},
     expandedCostItems: {} // Nowe pole dla rozwiniętych dodatkowych kosztów
   });
@@ -158,6 +162,21 @@ const PurchaseOrderForm = ({ orderId }) => {
           // Konwersja ze starego formatu na nowy (jeśli istnieją tylko stare pola)
           let additionalCostsItems = poDetails.additionalCostsItems || [];
           
+          // Migracja załączników - jeśli istnieją nowe pola, użyj ich, w przeciwnym razie migruj stare
+          let coaAttachments = poDetails.coaAttachments || [];
+          let invoiceAttachments = poDetails.invoiceAttachments || [];
+          let generalAttachments = poDetails.generalAttachments || [];
+          
+          // Sprawdź czy nowe pola są puste (nie istnieją lub są pustymi tablicami)
+          const hasNewAttachments = (coaAttachments.length > 0) || (invoiceAttachments.length > 0) || (generalAttachments.length > 0);
+          const hasOldAttachments = poDetails.attachments && poDetails.attachments.length > 0;
+          
+          // Jeśli nie ma nowych załączników ale są stare, migruj je do generalAttachments
+          if (!hasNewAttachments && hasOldAttachments) {
+            console.log('Migrujemy stare załączniki do generalAttachments (fetchInitialData):', poDetails.attachments);
+            generalAttachments = [...poDetails.attachments];
+          }
+
           // Ustaw cały stan formularza za jednym razem, zamiast wielu wywołań setState
           setPoData({
             ...poData,
@@ -166,7 +185,10 @@ const PurchaseOrderForm = ({ orderId }) => {
             expectedDeliveryDate: formattedDeliveryDate,
             supplier: matchedSupplier,
             additionalCostsItems: additionalCostsItems,
-            attachments: poDetails.attachments || [], // Dodanie obsługi załączników
+            attachments: poDetails.attachments || [], // Stare pole dla kompatybilności
+            coaAttachments: coaAttachments,
+            invoiceAttachments: invoiceAttachments,
+            generalAttachments: generalAttachments,
           });
         }
       } catch (error) {
@@ -1953,6 +1975,21 @@ const PurchaseOrderForm = ({ orderId }) => {
           vatRate: typeof cost.vatRate === 'number' ? cost.vatRate : 0 // Domyślna stawka VAT 0%
         }));
         
+        // Migracja załączników - jeśli istnieją nowe pola, użyj ich, w przeciwnym razie migruj stare
+        let coaAttachments = poDetails.coaAttachments || [];
+        let invoiceAttachments = poDetails.invoiceAttachments || [];
+        let generalAttachments = poDetails.generalAttachments || [];
+        
+        // Sprawdź czy nowe pola są puste (nie istnieją lub są pustymi tablicami)
+        const hasNewAttachments = (coaAttachments.length > 0) || (invoiceAttachments.length > 0) || (generalAttachments.length > 0);
+        const hasOldAttachments = poDetails.attachments && poDetails.attachments.length > 0;
+        
+        // Jeśli nie ma nowych załączników ale są stare, migruj je do generalAttachments
+        if (!hasNewAttachments && hasOldAttachments) {
+          console.log('Migrujemy stare załączniki do generalAttachments (fetchData):', poDetails.attachments);
+          generalAttachments = [...poDetails.attachments];
+        }
+        
         setPoData({
           ...poDetails,
           supplier: matchedSupplier,
@@ -1960,7 +1997,12 @@ const PurchaseOrderForm = ({ orderId }) => {
           expectedDeliveryDate: formattedDeliveryDate,
           invoiceLink: poDetails.invoiceLink || '',
           items: itemsWithVatRate,
-          additionalCostsItems: costsWithVatRate
+          additionalCostsItems: costsWithVatRate,
+          // Załączniki - zarówno stare jak i nowe pola
+          attachments: poDetails.attachments || [],
+          coaAttachments: coaAttachments,
+          invoiceAttachments: invoiceAttachments,
+          generalAttachments: generalAttachments
         });
       } else if (location.state?.materialId) {
         // Jeśli mamy materialId z parametrów stanu (z prognozy zapotrzebowania),
@@ -2070,11 +2112,27 @@ const PurchaseOrderForm = ({ orderId }) => {
     }));
   };
 
-  // Obsługa załączników
+  // Obsługa załączników (stary sposób - dla kompatybilności)
   const handleAttachmentsChange = (newAttachments) => {
     setPoData(prev => ({
       ...prev,
       attachments: newAttachments
+    }));
+  };
+
+  // Obsługa skategoryzowanych załączników
+  const handleCategorizedAttachmentsChange = (newAttachments) => {
+    setPoData(prev => ({
+      ...prev,
+      coaAttachments: newAttachments.coaAttachments || [],
+      invoiceAttachments: newAttachments.invoiceAttachments || [],
+      generalAttachments: newAttachments.generalAttachments || [],
+      // Aktualizuj także stare pole dla kompatybilności
+      attachments: [
+        ...(newAttachments.coaAttachments || []),
+        ...(newAttachments.invoiceAttachments || []),
+        ...(newAttachments.generalAttachments || [])
+      ]
     }));
   };
 
@@ -3302,15 +3360,17 @@ const PurchaseOrderForm = ({ orderId }) => {
               />
             </Grid>
             
-            {/* Załączniki */}
+            {/* Załączniki - nowy skategoryzowany komponent */}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
                 {t('purchaseOrders.form.attachments')}
               </Typography>
-              <PurchaseOrderFileUpload
+              <PurchaseOrderCategorizedFileUpload
                 orderId={currentOrderId || 'temp'}
-                attachments={poData.attachments || []}
-                onAttachmentsChange={handleAttachmentsChange}
+                coaAttachments={poData.coaAttachments || []}
+                invoiceAttachments={poData.invoiceAttachments || []}
+                generalAttachments={poData.generalAttachments || []}
+                onAttachmentsChange={handleCategorizedAttachmentsChange}
                 disabled={saving}
               />
             </Grid>

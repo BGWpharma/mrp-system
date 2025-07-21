@@ -990,8 +990,8 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
 
     currentY += 10;
 
-    // 4. Physicochemical properties
-    addSectionHeader(4, 'Physicochemical properties', '#6C35EA');
+    // 4. Physicochemical properties (CoA - Certificates of Analysis)
+    addSectionHeader(4, 'Physicochemical properties (CoA)', '#6C35EA');
     
     if (Object.keys(ingredientAttachments).length > 0) {
       Object.entries(ingredientAttachments).forEach(([ingredientName, attachments]) => {
@@ -1003,9 +1003,10 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.text(ingredientName, margin, currentY);
         currentY += 6;
 
-        const physHeaders = ['File name', 'Size', 'PO Number', 'Upload date'];
+        const physHeaders = ['File name', 'Type', 'Size', 'PO Number', 'Upload date'];
         const physData = attachments.map(attachment => [
           attachment.fileName,
+          attachment.category || 'CoA',
           formatFileSize(attachment.size),
           attachment.poNumber,
           new Date(attachment.uploadedAt).toLocaleDateString('en-GB')
@@ -1023,11 +1024,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setTextColor(25, 118, 210);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('Physicochemical attachments summary:', margin, currentY);
+      doc.text('CoA certificates summary:', margin, currentY);
       doc.setTextColor(85, 85, 85);
       doc.setFont('helvetica', 'normal');
-      doc.text(`• Ingredients with attachments: ${Object.keys(ingredientAttachments).length}`, margin, currentY + 4);
-      doc.text(`• Total attachments: ${totalAttachments}`, margin, currentY + 8);
+      doc.text(`• Ingredients with CoA certificates: ${Object.keys(ingredientAttachments).length}`, margin, currentY + 4);
+      doc.text(`• Total CoA certificates: ${totalAttachments}`, margin, currentY + 8);
       doc.text(`• Related purchase orders: ${uniquePOs}`, margin, currentY + 12);
       doc.text(`• Total size: ${formatFileSize(totalSize)}`, margin, currentY + 16);
       currentY += 24;
@@ -1035,7 +1036,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       doc.setTextColor(150, 150, 150);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
-      doc.text('No physicochemical attachments from related purchase orders', margin, currentY);
+      doc.text('No CoA certificates available for ingredients from related purchase orders', margin, currentY);
       currentY += 8;
     }
 
