@@ -24,7 +24,11 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondary
+  ListItemSecondary,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -35,14 +39,16 @@ import {
   ArrowBack as ArrowBackIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Update as UpdateIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import {
   createTask,
   updateTask,
   getTaskById
 } from '../../services/productionService';
-import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion } from '../../services/recipeService';
 import {
   getAllInventoryItems,
   getInventoryItemById
@@ -98,6 +104,13 @@ const TaskForm = ({ taskId }) => {
   });
 
   const [recipeYieldError, setRecipeYieldError] = useState(false);
+  
+  // Stany dla aktualizacji receptury
+  const [recipeVersionDialogOpen, setRecipeVersionDialogOpen] = useState(false);
+  const [availableVersions, setAvailableVersions] = useState([]);
+  const [selectedVersion, setSelectedVersion] = useState(null);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [updatingRecipe, setUpdatingRecipe] = useState(false);
 
   // Funkcja do cache'owania danych w sessionStorage
   const getCachedData = useCallback((key) => {
@@ -464,6 +477,132 @@ const TaskForm = ({ taskId }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setTaskData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Funkcja sprawdzająca czy zadanie może być zaktualizowane do nowej wersji receptury
+  const canUpdateRecipeVersion = () => {
+    if (!taskId || taskId === 'new') {
+      return false; // Nie można aktualizować nowego zadania
+    }
+
+    // Sprawdź czy zadanie ma materiały z rezerwacjami
+    const hasReservations = taskData.materialBatches && 
+      Object.keys(taskData.materialBatches).length > 0 &&
+      Object.values(taskData.materialBatches).some(batches => 
+        batches && batches.length > 0 && 
+        batches.some(batch => batch.quantity > 0)
+      );
+
+    // Sprawdź czy zadanie ma potwierdzoną konsumpcję lub skonsumowane materiały
+    const hasConsumption = taskData.materialConsumptionConfirmed === true ||
+      (taskData.consumedMaterials && taskData.consumedMaterials.length > 0) ||
+      (taskData.status === 'Potwierdzenie zużycia');
+
+    return !hasReservations && !hasConsumption;
+  };
+
+  // Funkcja otwierająca dialog wyboru wersji receptury
+  const handleOpenVersionDialog = async () => {
+    if (!taskData.recipeId) {
+      showError('Brak przypisanej receptury do zadania');
+      return;
+    }
+
+    try {
+      setLoadingVersions(true);
+      const versions = await getRecipeVersions(taskData.recipeId);
+      
+      // Filtruj wersje nowsze niż aktualna
+      const currentVersion = taskData.recipeVersion || 1;
+      const newerVersions = versions.filter(v => v.version > currentVersion);
+      
+      if (newerVersions.length === 0) {
+        showWarning('Brak nowszych wersji receptury');
+        return;
+      }
+
+      setAvailableVersions(newerVersions);
+      setRecipeVersionDialogOpen(true);
+    } catch (error) {
+      console.error('Błąd podczas pobierania wersji receptury:', error);
+      showError('Nie udało się pobrać wersji receptury: ' + error.message);
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  // Funkcja aktualizująca zadanie do nowej wersji receptury
+  const handleUpdateRecipeVersion = async () => {
+    if (!selectedVersion) {
+      showError('Nie wybrano wersji receptury');
+      return;
+    }
+
+    try {
+      setUpdatingRecipe(true);
+      
+      // Pobierz dane wybranej wersji receptury
+      const versionData = await getRecipeVersion(taskData.recipeId, selectedVersion.version);
+      const recipeData = versionData.data;
+      
+      // Aktualizuj dane zadania na podstawie nowej wersji receptury
+      const updatedTaskData = {
+        ...taskData,
+        recipeVersion: selectedVersion.version,
+        recipeName: recipeData.name
+      };
+
+      // Jeśli receptura ma output, zaktualizuj dane produktu
+      if (recipeData.output && recipeData.output.name) {
+        updatedTaskData.productName = recipeData.output.name;
+        updatedTaskData.unit = recipeData.output.unit || 'szt.';
+      }
+
+      // Aktualizuj materiały z nowej wersji receptury
+      if (recipeData.ingredients && recipeData.ingredients.length > 0) {
+        updatedTaskData.materials = recipeData.ingredients.map(ingredient => ({
+          id: ingredient.inventoryItemId || ingredient.id,
+          name: ingredient.name,
+          category: ingredient.category || 'Surowce',
+          quantity: ingredient.quantity || 0,
+          unit: ingredient.unit || 'szt.',
+          inventoryItemId: ingredient.inventoryItemId || ingredient.id
+        }));
+      } else {
+        // Jeśli nowa wersja receptury nie ma składników, wyczyść materiały
+        updatedTaskData.materials = [];
+      }
+
+      // Aktualizuj czas produkcji
+      if (recipeData.productionTimePerUnit) {
+        const productionTimePerUnit = parseFloat(recipeData.productionTimePerUnit);
+        updatedTaskData.productionTimePerUnit = productionTimePerUnit;
+        
+        const quantity = parseFloat(taskData.quantity) || 0;
+        if (quantity > 0) {
+          updatedTaskData.estimatedDuration = (productionTimePerUnit * quantity).toFixed(2);
+        }
+      }
+
+      // Aktualizuj dane receptury
+      setTaskData(updatedTaskData);
+      setRecipe(recipeData);
+      
+      // Wyczyść błędy wydajności receptury
+      setRecipeYieldError(false);
+      
+      // Zamknij dialog
+      setRecipeVersionDialogOpen(false);
+      setSelectedVersion(null);
+      
+      showSuccess(`Zadanie zostało zaktualizowane do wersji ${selectedVersion.version} receptury`);
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji wersji receptury:', error);
+      showError('Nie udało się zaktualizować wersji receptury: ' + error.message);
+    } finally {
+      setUpdatingRecipe(false);
+    }
   };
 
   const handleRecipeChange = async (e) => {
@@ -859,6 +998,61 @@ const TaskForm = ({ taskId }) => {
                     </Select>
                   </FormControl>
                 </Grid>
+                
+                {/* Informacje o wersji receptury i przycisk aktualizacji - tylko w trybie edycji */}
+                {taskId && taskId !== 'new' && taskData.recipeId && (
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Aktualna wersja receptury: <strong>{taskData.recipeVersion || 1}</strong>
+                        </Typography>
+                        {taskData.recipeName && (
+                          <Typography variant="body2" color="text.secondary">
+                            Nazwa receptury: {taskData.recipeName}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        startIcon={<UpdateIcon />}
+                        onClick={handleOpenVersionDialog}
+                        disabled={!canUpdateRecipeVersion() || loadingVersions}
+                        size="small"
+                      >
+                        {loadingVersions ? 'Sprawdzam...' : 'Aktualizuj wersję'}
+                      </Button>
+                    </Box>
+                    
+                    {/* Komunikat o ograniczeniach aktualizacji */}
+                    {!canUpdateRecipeVersion() && taskId && taskId !== 'new' && (
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        <Typography variant="body2">
+                          {(() => {
+                            const hasReservations = taskData.materialBatches && 
+                              Object.keys(taskData.materialBatches).length > 0 &&
+                              Object.values(taskData.materialBatches).some(batches => 
+                                batches && batches.length > 0 && 
+                                batches.some(batch => batch.quantity > 0)
+                              );
+                            const hasConsumption = taskData.materialConsumptionConfirmed === true ||
+                              (taskData.consumedMaterials && taskData.consumedMaterials.length > 0) ||
+                              (taskData.status === 'Potwierdzenie zużycia');
+                            
+                            if (hasReservations && hasConsumption) {
+                              return 'Aktualizacja niemożliwa: zadanie ma zarezerwowane i skonsumowane materiały.';
+                            } else if (hasReservations) {
+                              return 'Aktualizacja niemożliwa: zadanie ma zarezerwowane materiały.';
+                            } else if (hasConsumption) {
+                              return 'Aktualizacja niemożliwa: zadanie ma skonsumowane materiały.';
+                            }
+                            return 'Aktualizacja wersji receptury jest możliwa tylko dla zadań bez rezerwacji i konsumpcji materiałów.';
+                          })()}
+                        </Typography>
+                      </Alert>
+                    )}
+                  </Grid>
+                )}
                 {/* Pole "Produkt z magazynu" ukryte w trybie edycji */}
                 {!taskId && (
                   <Grid item xs={12}>
@@ -1240,6 +1434,105 @@ const TaskForm = ({ taskId }) => {
           </form>
         )}
       </Paper>
+
+      {/* Dialog wyboru wersji receptury */}
+      <Dialog 
+        open={recipeVersionDialogOpen} 
+        onClose={() => {
+          setRecipeVersionDialogOpen(false);
+          setSelectedVersion(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <HistoryIcon />
+            Wybierz wersję receptury
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Aktualna wersja: <strong>{taskData.recipeVersion || 1}</strong>
+          </Typography>
+          
+          {availableVersions.length > 0 ? (
+            <FormControl fullWidth>
+              <InputLabel>Wybierz nową wersję</InputLabel>
+              <Select
+                value={selectedVersion?.version || ''}
+                onChange={(e) => {
+                  const version = availableVersions.find(v => v.version === e.target.value);
+                  setSelectedVersion(version);
+                }}
+                label="Wybierz nową wersję"
+              >
+                {availableVersions.map((version) => (
+                  <MenuItem key={version.version} value={version.version}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <Typography variant="body1">
+                        Wersja {version.version}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {(() => {
+                          try {
+                            if (!version.createdAt) return 'Brak daty';
+                            const date = version.createdAt.toDate ? version.createdAt.toDate() : new Date(version.createdAt);
+                            return date.toLocaleDateString('pl-PL', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                          } catch (error) {
+                            return 'Nieprawidłowa data';
+                          }
+                        })()}
+                      </Typography>
+                      {version.createdBy && (
+                        <Typography variant="body2" color="text.secondary">
+                          Autor: {version.createdBy}
+                        </Typography>
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : (
+            <Typography variant="body1" color="text.secondary">
+              Brak nowszych wersji receptury
+            </Typography>
+          )}
+          
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Uwaga:</strong> Aktualizacja do nowej wersji receptury zastąpi wszystkie materiały 
+              nowymi z wybranej wersji. Ta operacja jest nieodwracalna.
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setRecipeVersionDialogOpen(false);
+              setSelectedVersion(null);
+            }}
+            disabled={updatingRecipe}
+          >
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleUpdateRecipeVersion}
+            variant="contained"
+            disabled={!selectedVersion || updatingRecipe}
+            startIcon={updatingRecipe ? <CircularProgress size={16} /> : <UpdateIcon />}
+          >
+            {updatingRecipe ? 'Aktualizuję...' : 'Aktualizuj'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
