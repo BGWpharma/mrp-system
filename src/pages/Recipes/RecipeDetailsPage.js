@@ -49,6 +49,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
 import RecipeDesignAttachments from '../../components/recipes/RecipeDesignAttachments';
+import PdfMiniaturePreview from '../../components/common/PdfMiniaturePreview';
 import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventoryService';
 import { db } from '../../services/firebase/config';
 import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
@@ -587,7 +588,7 @@ const RecipeDetailsPage = () => {
             {/* Prawa kolumna - podgląd najnowszego designu */}
             <Grid item xs={12} md={4}>
               {(() => {
-                // Znajdź najnowszy załącznik designu, który jest obrazem
+                // Znajdź najnowszy załącznik designu
                 const designAttachments = recipe.designAttachments || [];
                 if (designAttachments.length === 0) return null;
                 
@@ -596,12 +597,14 @@ const RecipeDetailsPage = () => {
                   new Date(b.uploadedAt) - new Date(a.uploadedAt)
                 );
                 
-                // Znajdź pierwszy załącznik, który jest obrazem
-                const latestImageAttachment = sortedAttachments.find(attachment => 
-                  attachment.contentType && attachment.contentType.startsWith('image/')
-                );
+                // Weź najnowszy załącznik
+                const latestAttachment = sortedAttachments[0];
                 
-                if (!latestImageAttachment) return null;
+                if (!latestAttachment) return null;
+                
+                // Sprawdź czy to obraz czy PDF
+                const isImage = latestAttachment.contentType && latestAttachment.contentType.startsWith('image/');
+                const isPdf = latestAttachment.contentType && latestAttachment.contentType === 'application/pdf';
                 
                 return (
                   <Box sx={{ 
@@ -611,7 +614,7 @@ const RecipeDetailsPage = () => {
                     height: '100%'
                   }}>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ textAlign: 'center' }}>
-                      Najnowszy design produktu
+                      {t('recipes.details.latestDesign')}
                     </Typography>
                     <Paper
                       elevation={2}
@@ -619,42 +622,55 @@ const RecipeDetailsPage = () => {
                         width: '100%',
                         maxWidth: 300,
                         overflow: 'hidden',
-                        borderRadius: 2,
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          elevation: 4,
-                          transform: 'scale(1.02)'
-                        }
+                        borderRadius: 2
                       }}
-                      onClick={() => setTabValue(1)}
                     >
-                      <Box
-                        component="img"
-                        src={latestImageAttachment.downloadURL}
-                        alt={latestImageAttachment.fileName}
-                        sx={{
-                          width: '100%',
-                          height: 'auto',
-                          maxHeight: 250,
-                          objectFit: 'cover',
-                          display: 'block'
-                        }}
-                      />
+                      {isImage ? (
+                        <Box
+                          component="img"
+                          src={latestAttachment.downloadURL}
+                          alt={latestAttachment.fileName}
+                          sx={{
+                            width: '100%',
+                            height: 'auto',
+                            maxHeight: 250,
+                            objectFit: 'cover',
+                            display: 'block'
+                          }}
+                        />
+                      ) : isPdf ? (
+                        <PdfMiniaturePreview 
+                          pdfUrl={latestAttachment.downloadURL}
+                          fileName={latestAttachment.fileName}
+                          onClick={() => window.open(latestAttachment.downloadURL, '_blank')}
+                        />
+                      ) : (
+                        <Box sx={{ 
+                          height: 250, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          bgcolor: 'action.hover' 
+                        }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Nieobsługiwany format pliku
+                          </Typography>
+                        </Box>
+                      )}
                       <Box sx={{ p: 1 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ 
                           display: 'block',
                           textAlign: 'center',
                           fontSize: '0.75rem'
                         }}>
-                          {latestImageAttachment.fileName}
+                          {latestAttachment.fileName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ 
                           display: 'block',
                           textAlign: 'center',
                           fontSize: '0.7rem'
                         }}>
-                          Przesłano: {new Date(latestImageAttachment.uploadedAt).toLocaleDateString('pl-PL')}
+                          Przesłano: {new Date(latestAttachment.uploadedAt).toLocaleDateString('pl-PL')}
                         </Typography>
                       </Box>
                     </Paper>
@@ -663,7 +679,7 @@ const RecipeDetailsPage = () => {
                       textAlign: 'center',
                       fontSize: '0.75rem'
                     }}>
-                      Kliknij, aby zobaczyć wszystkie załączniki
+                      {t('recipes.designAttachments.clickToSeeAllAttachments')}
                     </Typography>
                   </Box>
                 );
@@ -675,7 +691,7 @@ const RecipeDetailsPage = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="recipe tabs">
             <Tab label={t('recipes.tabs.ingredientsAndInstructions')} id="recipe-tab-0" />
-            <Tab label="Załączniki designu" id="recipe-tab-1" />
+            <Tab label={t('recipes.tabs.designAttachments')} id="recipe-tab-1" />
             <Tab label={t('recipes.tabs.versionHistory')} id="recipe-tab-2" />
           </Tabs>
         </Box>
@@ -783,7 +799,7 @@ const RecipeDetailsPage = () => {
 
         <TabPanel value={tabValue} index={1}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Załączniki designu produktu</Typography>
+            <Typography variant="h6">{t('recipes.designAttachments.productDesignTitle')}</Typography>
             <Button
               variant="outlined"
               startIcon={<EditIcon />}
@@ -791,13 +807,13 @@ const RecipeDetailsPage = () => {
               to={`/recipes/${id}/edit`}
               size="small"
             >
-              Edytuj recepturę
+              {t('recipes.editRecipe')}
             </Button>
           </Box>
           
           {recipe.designAttachments && recipe.designAttachments.length > 0 && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              Aby dodać, edytować lub usunąć załączniki designu, przejdź do edycji receptury.
+              {t('recipes.designAttachments.editToManageAttachments')}
             </Alert>
           )}
           

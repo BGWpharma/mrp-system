@@ -79,10 +79,10 @@ const RecipeDesignAttachments = ({
   // Funkcja do sprawdzania typu pliku
   const validateFile = (file) => {
     if (!allowedTypes.includes(file.type)) {
-      throw new Error(`Nieobsługiwany typ pliku: ${file.type}. Dozwolone są obrazy (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) i dokumenty PDF.`);
+      throw new Error(t('recipes.designAttachments.messages.unsupportedFileType', { type: file.type }));
     }
     if (file.size > maxFileSize) {
-      throw new Error(`Plik jest zbyt duży (${(file.size / 1024 / 1024).toFixed(2)} MB). Maksymalny rozmiar to 20 MB.`);
+      throw new Error(t('recipes.designAttachments.messages.fileTooLarge', { size: (file.size / 1024 / 1024).toFixed(2) }));
     }
   };
 
@@ -215,10 +215,10 @@ const RecipeDesignAttachments = ({
           <Box sx={{ textAlign: 'center' }}>
             <CloudUploadIcon sx={{ fontSize: 48, color: disabled ? 'grey.400' : 'primary.main', mb: 1 }} />
             <Typography variant="h6" color={disabled ? 'text.disabled' : 'text.primary'} gutterBottom>
-              {uploading ? 'Przesyłanie designu...' : 'Dodaj design produktu'}
+              {uploading ? t('recipes.designAttachments.uploading') : t('recipes.designAttachments.upload')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Przeciągnij pliki designu tutaj lub wybierz z dysku/aparatu
+              {t('recipes.designAttachments.description')}
             </Typography>
             
             <FileOrCameraInput
@@ -227,12 +227,15 @@ const RecipeDesignAttachments = ({
                 handleFileSelect(files);
               }}
               accept="image/*,.pdf,.svg"
-              label="Wybierz design lub zrób zdjęcie"
+              label={t('recipes.designAttachments.selectOrTakePhoto')}
               disabled={disabled || uploading}
+              showCamera={false}
+              maxWidth="sm"
+              maxHeight="60vh"
             />
             
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              Dozwolone: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, PDF (maks. 20 MB)
+              {t('recipes.designAttachments.supportedFormats')}
             </Typography>
           </Box>
           
@@ -246,7 +249,7 @@ const RecipeDesignAttachments = ({
           {attachments.map((attachment) => (
             <Grid item xs={12} sm={6} md={4} key={attachment.id}>
               <Card>
-                {isImage(attachment.contentType) && (
+                {isImage(attachment.contentType) ? (
                   <CardMedia
                     component="img"
                     height="200"
@@ -255,6 +258,64 @@ const RecipeDesignAttachments = ({
                     sx={{ objectFit: 'cover', cursor: 'pointer' }}
                     onClick={() => handlePreviewFile(attachment)}
                   />
+                ) : attachment.contentType === 'application/pdf' ? (
+                  <Box 
+                    sx={{ 
+                      height: 200, 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      bgcolor: 'action.hover',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        bgcolor: 'action.selected',
+                        transform: 'scale(1.02)'
+                      }
+                    }}
+                    onClick={() => handlePreviewFile(attachment)}
+                  >
+                    <Box sx={{ 
+                      width: 80, 
+                      height: 80, 
+                      bgcolor: 'error.main', 
+                      borderRadius: 2, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      mb: 2,
+                      boxShadow: 2,
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <Typography variant="h4" color="white" fontWeight="bold">
+                        PDF
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.primary" fontWeight="medium" textAlign="center">
+                      {t('recipes.designAttachments.designPdf')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" textAlign="center">
+                      {t('recipes.designAttachments.preview')}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box 
+                    sx={{ 
+                      height: 200, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      bgcolor: 'action.hover',
+                      cursor: 'pointer' 
+                    }}
+                    onClick={() => handlePreviewFile(attachment)}
+                  >
+                    {getFileIcon(attachment.contentType)}
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                      {attachment.contentType}
+                    </Typography>
+                  </Box>
                 )}
                 
                 <CardContent>
@@ -281,7 +342,7 @@ const RecipeDesignAttachments = ({
                 </CardContent>
                 
                 <CardActions>
-                  <Tooltip title="Podgląd">
+                  <Tooltip title={t('recipes.designAttachments.preview')}>
                     <IconButton 
                       size="small" 
                       onClick={() => handlePreviewFile(attachment)}
@@ -290,7 +351,7 @@ const RecipeDesignAttachments = ({
                     </IconButton>
                   </Tooltip>
                   
-                  <Tooltip title="Pobierz">
+                  <Tooltip title={t('recipes.designAttachments.download')}>
                     <IconButton 
                       size="small" 
                       onClick={() => handleDownloadFile(attachment)}
@@ -301,7 +362,7 @@ const RecipeDesignAttachments = ({
                   
                   {!viewOnly && (
                     <>
-                      <Tooltip title="Edytuj opis">
+                      <Tooltip title={t('recipes.designAttachments.editDescription')}>
                         <IconButton 
                           size="small" 
                           onClick={() => handleEditDescription(attachment)}
@@ -311,7 +372,7 @@ const RecipeDesignAttachments = ({
                         </IconButton>
                       </Tooltip>
                       
-                      <Tooltip title="Usuń">
+                      <Tooltip title={t('recipes.designAttachments.delete')}>
                         <IconButton 
                           size="small" 
                           color="error"
@@ -384,18 +445,49 @@ const RecipeDesignAttachments = ({
                   alt={previewAttachment.fileName}
                   style={{ maxWidth: '100%', maxHeight: '70vh' }}
                 />
+              ) : previewAttachment.contentType === 'application/pdf' ? (
+                <Box sx={{ width: '100%', height: '70vh' }}>
+                  <iframe
+                    src={`${previewAttachment.downloadURL}#toolbar=1&navpanes=1&scrollbar=1`}
+                    width="100%"
+                    height="100%"
+                    style={{ border: 'none', borderRadius: '8px' }}
+                    title={previewAttachment.fileName}
+                  />
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'center' }}>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => handleDownloadFile(previewAttachment)}
+                      startIcon={<DownloadIcon />}
+                      size="small"
+                    >
+                      {t('recipes.designAttachments.downloadPdf')}
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => window.open(previewAttachment.downloadURL, '_blank')}
+                      startIcon={<VisibilityIcon />}
+                      size="small"
+                                          >
+                        {t('recipes.designAttachments.openInNewTab')}
+                      </Button>
+                  </Box>
+                </Box>
               ) : (
                 <Box sx={{ p: 4 }}>
-                  <PdfIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
+                  <DescriptionIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
                   <Typography variant="h6" gutterBottom>
-                    Podgląd PDF niedostępny
+                    {t('recipes.designAttachments.previewNotAvailable')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Typ pliku: {previewAttachment.contentType}
                   </Typography>
                   <Button 
                     variant="contained" 
                     onClick={() => handleDownloadFile(previewAttachment)}
                     startIcon={<DownloadIcon />}
                   >
-                    Pobierz i otwórz plik
+                    {t('recipes.designAttachments.downloadAndOpen')}
                   </Button>
                 </Box>
               )}

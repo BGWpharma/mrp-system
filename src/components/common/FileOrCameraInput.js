@@ -17,13 +17,18 @@ import {
   CameraAlt as CameraAltIcon,
   Flip as FlipIcon
 } from '@mui/icons-material';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const FileOrCameraInput = ({ 
   onChange, 
   accept = "image/*", 
   label = "Wybierz plik lub zrób zdjęcie",
+  showCamera = true,
+  maxWidth = "md",
+  maxHeight = "80vh",
   ...inputProps 
 }) => {
+  const { t } = useTranslation();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState(null);
   const [facingMode, setFacingMode] = useState('environment'); // 'user' dla przedniej, 'environment' dla tylnej
@@ -151,44 +156,56 @@ const FileOrCameraInput = ({
       />
       
       {/* Przyciski wyboru */}
-      <Grid container spacing={1}>
-        <Grid item xs={6}>
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<FileIcon />}
-            onClick={openFilePicker}
-            size="small"
-          >
-            Wybierz plik
-          </Button>
+      {showCamera ? (
+        <Grid container spacing={1}>
+          <Grid item xs={6}>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<FileIcon />}
+              onClick={openFilePicker}
+              size="small"
+            >
+              {t('common.selectFile')}
+            </Button>
+          </Grid>
+          <Grid item xs={6}>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<CameraIcon />}
+              onClick={openCamera}
+              size="small"
+              color="secondary"
+            >
+              {t('common.takePhoto')}
+            </Button>
+          </Grid>
         </Grid>
-        <Grid item xs={6}>
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<CameraIcon />}
-            onClick={openCamera}
-            size="small"
-            color="secondary"
-          >
-            Zrób zdjęcie
-          </Button>
-        </Grid>
-      </Grid>
+      ) : (
+        <Button
+          variant="outlined"
+          fullWidth
+          startIcon={<FileIcon />}
+          onClick={openFilePicker}
+          size="small"
+        >
+          {t('common.selectFile')}
+        </Button>
+      )}
 
       {/* Dialog aparatu */}
       <Dialog
         open={cameraOpen}
         onClose={closeCamera}
-        maxWidth="md"
+        maxWidth={maxWidth}
         fullWidth
         PaperProps={{
-          sx: { height: '80vh' }
+          sx: { height: maxHeight }
         }}
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Zrób zdjęcie</Typography>
+          <Typography variant="h6">{t('common.takePhoto')}</Typography>
           <Box>
             <IconButton onClick={switchCamera} color="primary">
               <FlipIcon />
@@ -230,7 +247,7 @@ const FileOrCameraInput = ({
               fontSize: '1.1rem'
             }}
           >
-            Zrób zdjęcie
+            {t('common.takePhoto')}
           </Button>
         </DialogActions>
       </Dialog>

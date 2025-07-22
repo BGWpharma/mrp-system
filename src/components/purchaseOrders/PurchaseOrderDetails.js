@@ -1035,7 +1035,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
               {t('purchaseOrders.backToList')}
             </Button>
             <Typography variant="h4" component="h1">
-              Zamówienie {purchaseOrder.number}
+              {t('purchaseOrders.details.orderTitle', { number: purchaseOrder.number })}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <ButtonGroup variant="outlined">
@@ -1696,7 +1696,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
               <AttachFileIcon sx={{ mr: 1 }} />
-              Załączniki
+              {t('purchaseOrders.details.attachments')}
             </Typography>
             
             {(() => {
@@ -1757,7 +1757,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                 {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL')}
                               </Typography>
                               <Typography variant="caption" color="primary.main" sx={{ fontStyle: 'italic' }}>
-                                Kliknij aby otworzyć
+                                {t('purchaseOrders.details.clickToOpen')}
                               </Typography>
                             </Box>
                           }
@@ -1792,42 +1792,42 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                         <AssignmentIcon sx={{ mr: 1, color: 'success.main' }} />
-                        Certyfikaty analiz (CoA)
+                        {t('purchaseOrders.details.coaAttachments.title')}
                         {hasCoA && (
                           <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
                             ({purchaseOrder.coaAttachments.length})
                           </Typography>
                         )}
                       </Typography>
-                      {renderAttachmentsList(purchaseOrder.coaAttachments, 'Brak certyfikatów analizy')}
+                      {renderAttachmentsList(purchaseOrder.coaAttachments, t('purchaseOrders.details.coaAttachments.noAttachments'))}
                     </Box>
 
                     {/* Faktury */}
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                         <LocalShippingIcon sx={{ mr: 1, color: 'warning.main' }} />
-                        Faktury (załączniki)
+                        {t('purchaseOrders.details.invoiceAttachments.title')}
                         {hasInvoices && (
                           <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
                             ({purchaseOrder.invoiceAttachments.length})
                           </Typography>
                         )}
                       </Typography>
-                      {renderAttachmentsList(purchaseOrder.invoiceAttachments, 'Brak załączników faktur')}
+                      {renderAttachmentsList(purchaseOrder.invoiceAttachments, t('purchaseOrders.details.invoiceAttachments.noAttachments'))}
                     </Box>
 
                     {/* Inne załączniki */}
                     <Box sx={{ mb: 1 }}>
                       <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                         <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
-                        Inne załączniki
+                        {t('purchaseOrders.details.generalAttachments.title')}
                         {hasGeneral && (
                           <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
                             ({purchaseOrder.generalAttachments.length})
                           </Typography>
                         )}
                       </Typography>
-                      {renderAttachmentsList(purchaseOrder.generalAttachments, 'Brak innych załączników')}
+                      {renderAttachmentsList(purchaseOrder.generalAttachments, t('purchaseOrders.details.generalAttachments.noAttachments'))}
                     </Box>
                   </Box>
                 );
@@ -1838,9 +1838,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 return (
                   <Box>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Załączonych plików: {purchaseOrder.attachments.length}
+                      {t('purchaseOrders.details.attachedFiles', { count: purchaseOrder.attachments.length })}
                     </Typography>
-                    {renderAttachmentsList(purchaseOrder.attachments, 'Brak załączników')}
+                    {renderAttachmentsList(purchaseOrder.attachments, t('purchaseOrders.details.noAttachments'))}
                   </Box>
                 );
               }
@@ -1849,7 +1849,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
               else {
                 return (
                   <Typography variant="body2" color="text.secondary">
-                    Brak załączników do tego zamówienia
+                    {t('purchaseOrders.details.noAttachmentsForOrder')}
                   </Typography>
                 );
               }
@@ -1860,7 +1860,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           <Paper sx={{ mb: 3, p: 2, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
               <LocalShippingIcon sx={{ mr: 1 }} />
-              Raporty rozładunku towaru
+              {t('purchaseOrders.details.unloadingReports')}
               {unloadingFormResponsesLoading && (
                 <CircularProgress size={20} sx={{ ml: 2 }} />
               )}
@@ -1869,7 +1869,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
             {unloadingFormResponses.length > 0 ? (
               <Box>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Znaleziono {unloadingFormResponses.length} raport(ów) rozładunku dla PO: {purchaseOrder.number}
+                  {t('purchaseOrders.details.foundUnloadingReports', { count: unloadingFormResponses.length, number: purchaseOrder.number })}
                 </Typography>
                 
                 {unloadingFormResponses.map((report, index) => (
@@ -1889,11 +1889,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
                       <AssignmentIcon sx={{ mr: 1, color: 'primary.main', fontSize: '1.2rem' }} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        Raport rozładunku #{index + 1}
+                        {t('purchaseOrders.details.unloadingReport', { number: index + 1 })}
                       </Typography>
                       <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <Chip 
-                          label={`${report.fillDate ? safeFormatDate(report.fillDate, 'dd.MM HH:mm') : 'Brak daty'}`}
+                          label={`${report.fillDate ? safeFormatDate(report.fillDate, 'dd.MM HH:mm') : t('purchaseOrders.details.noDate')}`}
                           size="small"
                           color="primary"
                           variant="outlined"
@@ -1903,7 +1903,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           size="small"
                           color="primary"
                           onClick={() => handleEditUnloadingReport(report)}
-                          title="Edytuj raport rozładunku"
+                          title={t('purchaseOrders.details.editUnloadingReport')}
                           sx={{ p: 0.5 }}
                         >
                           <EditIcon fontSize="small" />
@@ -1915,28 +1915,28 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       {/* Informacje podstawowe */}
                       <Grid item xs={6} sm={4} md={2}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                          Email pracownika
+                          {t('purchaseOrders.details.employeeEmail')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-                          {report.email || 'Nie podano'}
+                          {report.email || t('purchaseOrders.details.notProvided')}
                         </Typography>
                       </Grid>
                       
                       <Grid item xs={6} sm={4} md={2}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                          Pracownik
+                          {t('purchaseOrders.details.employee')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-                          {report.employeeName || 'Nie podano'}
+                          {report.employeeName || t('purchaseOrders.details.notProvided')}
                         </Typography>
                       </Grid>
                       
                       <Grid item xs={6} sm={4} md={2}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                          Stanowisko
+                          {t('purchaseOrders.details.position')}
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-                          {report.position || 'Nie podano'}
+                          {report.position || t('purchaseOrders.details.notProvided')}
                         </Typography>
                       </Grid>
                       
@@ -2171,8 +2171,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
             ) : (
               <Typography variant="body2" color="text.secondary">
                 {unloadingFormResponsesLoading 
-                  ? 'Szukanie raportów rozładunku...'
-                  : `Brak raportów rozładunku dla PO: ${purchaseOrder?.number || 'Nieznany'}`
+                  ? t('purchaseOrders.details.searchingUnloadingReports')
+                  : t('purchaseOrders.details.noUnloadingReports', { number: purchaseOrder?.number || t('purchaseOrders.details.unknown') })
                 }
               </Typography>
             )}

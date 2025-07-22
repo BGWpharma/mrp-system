@@ -41,7 +41,9 @@
     "rows": "Rows",
     "rowsPerPage": "Rows per page",
     "displayedRows": "{{from}}-{{to}} of {{count}}",
-    "close": "Close"
+    "close": "Close",
+    "selectFile": "Select file",
+    "takePhoto": "Take photo"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -526,6 +528,7 @@
     },
     "details": {
       "orderNumber": "Order {{number}}",
+      "orderTitle": "Order {{number}}",
       "orderDate": "Order date",
       "expectedDeliveryDate": "Expected delivery date",
       "deliveryDate": "Delivery date",
@@ -594,7 +597,36 @@
         "noBatchesAssigned": "No batches assigned to this item",
         "received": "Received",
         "warehouse": "Warehouse"
-      }
+      },
+      "attachments": "Attachments",
+      "unloadingReports": "Unloading Reports",
+      "foundUnloadingReports": "Found {{count}} unloading report(s) for PO: {{number}}",
+      "searchingUnloadingReports": "Searching for unloading reports...",
+      "noUnloadingReports": "No unloading reports for PO: {{number}}",
+      "unknown": "Unknown",
+      "clickToOpen": "Click to open",
+      "attachedFiles": "Attached files: {{count}}",
+      "noAttachments": "No attachments",
+      "noAttachmentsForOrder": "No attachments for this order",
+      "coaAttachments": {
+        "title": "Certificates of Analysis (CoA)",
+        "noAttachments": "No analysis certificates"
+      },
+      "invoiceAttachments": {
+        "title": "Invoice attachments",
+        "noAttachments": "No invoice attachments"
+      },
+      "generalAttachments": {
+        "title": "Other attachments",
+        "noAttachments": "No other attachments"
+      },
+      "unloadingReport": "Unloading Report #{{number}}",
+      "noDate": "No date",
+      "editUnloadingReport": "Edit unloading report",
+      "employeeEmail": "Employee email",
+      "employee": "Employee",
+      "position": "Position",
+      "notProvided": "Not provided"
     }
   },
   "cmr": {
@@ -1718,6 +1750,7 @@
     "title": "Recipes",
     "newRecipe": "New Recipe",
     "editRecipe": "Edit Recipe",
+    "additionalNotes": "Additional Notes",
     "addNewRecipe": "Add New Recipe",
     "recipeDetails": "Recipe Details",
     "basicData": "Basic Data",
@@ -1780,9 +1813,9 @@
     "designAttachments": {
       "title": "Product Design Attachments",
       "upload": "Add Product Design",
-      "description": "Drag design files here or select from disk/camera",
+      "description": "Drag design files here or select from disk",
       "supportedFormats": "Allowed: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, PDF (max 20 MB)",
-      "selectOrTakePhoto": "Select design or take photo",
+      "selectOrTakePhoto": "Select design",
       "uploading": "Uploading design...",
       "noAttachments": "No design attachments. Add the first product design above.",
       "preview": "Preview",
@@ -1798,12 +1831,21 @@
       "previewTitle": "Preview: {{fileName}}",
       "pdfPreviewNotAvailable": "PDF preview not available",
       "downloadAndOpen": "Download and open file",
+      "loadingPreview": "Loading PDF preview...",
+      "cannotLoadPreview": "Cannot load preview",
+      "designPdf": "Design PDF",
+      "previewNotAvailable": "Preview not available",
+      "downloadPdf": "Download PDF",
+      "openInNewTab": "Open in new tab",
+      "productDesignTitle": "Product Design Attachments",
+      "editToManageAttachments": "To add, edit or remove design attachments, go to recipe editing.",
+      "clickToSeeAllAttachments": "Click to see all attachments",
       "messages": {
         "uploadSuccess": "Design \"{{fileName}}\" uploaded successfully",
         "uploadError": "Error uploading file \"{{fileName}}\": {{error}}",
         "deleteSuccess": "Design \"{{fileName}}\" was deleted",
         "deleteError": "Error deleting file: {{error}}",
-        "descriptionUpdated": "Attachment description updated",
+          "descriptionUpdated": "Attachment description updated",
         "fileTooLarge": "File is too large ({{size}} MB). Maximum size is 20 MB.",
         "unsupportedFileType": "Unsupported file type: {{type}}. Allowed are images (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) and PDF documents."
       }
@@ -1927,8 +1969,11 @@
       "priceLists": "Price lists:",
       "noPriceLists": "Recipe is not added to any price list",
       "inactive": "(inactive)",
-      "additionalNotes": "Additional Notes",
-      "noAdditionalNotes": "No additional notes",
+              "additionalNotes": "Additional Notes",
+        "noAdditionalNotes": "No additional notes",
+        "latestDesign": "Latest Product Design",
+        "clickToOpenPdf": "Click to open in new tab",
+        "clickForFullPreview": "Click to see full preview",
       "ingredients": {
         "title": "Ingredients",
         "ingredient": "Ingredient",

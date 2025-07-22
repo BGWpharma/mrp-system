@@ -2158,12 +2158,12 @@ const RecipeForm = ({ recipeId }) => {
           }}
         >
           <EditIcon color="primary" />
-          <Typography variant="h6" fontWeight="500">Notatki dodatkowe</Typography>
+          <Typography variant="h6" fontWeight="500">{t('recipes.additionalNotes')}</Typography>
         </Box>
         
         <Box sx={{ p: 3 }}>
           <TextField
-            label="Notatki"
+            label={t('common.notes')}
             name="notes"
             value={recipeData.notes || ''}
             onChange={handleChange}
