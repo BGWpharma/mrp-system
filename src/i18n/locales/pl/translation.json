@@ -43,7 +43,11 @@
     "displayedRows": "{{from}}-{{to}} z {{count}}",
     "close": "Zamknij",
     "selectFile": "Wybierz plik",
-    "takePhoto": "Zrób zdjęcie"
+    "takePhoto": "Zrób zdjęcie",
+    "price": "Cena",
+    "status": "Status",
+    "quantity": "Ilość",
+    "product": "Produkt"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1553,6 +1557,74 @@
         "calculator": "Kalkulator",
         "workstations": "Stanowiska produkcyjne"
       }
+    },
+    "forecast": {
+      "title": "Prognoza zapotrzebowania materiałów",
+      "refresh": "Odśwież",
+      "generateReport": "Generuj raport CSV",
+      "search": "Szukaj",
+      "timeRange": "Zakres czasowy",
+      "startDate": "Data początkowa",
+      "endDate": "Data końcowa",
+      "searchMaterial": "Szukaj materiału",
+      "filterByCategory": "Filtruj po kategorii",
+      "allCategories": "Wszystkie kategorie",
+      "selectDateRange": "Wybierz zakres dat i kliknij \"Szukaj\", aby wyświetlić prognozę zapotrzebowania materiałów.",
+      "forecastPeriod": "Prognoza na okres: {{startDate}} - {{endDate}}",
+      "totalMaterials": "Łączna liczba materiałów",
+      "materialsRequiringPurchase": "Materiały wymagające zakupu",
+      "materialsWithShortageAfterDeliveries": "Materiały z niedoborem po dostawach",
+      "estimatedTotalCost": "Szacowany koszt całkowity",
+      "shortageValue": "Wartość niedoborów",
+      "shortageValueAfterDeliveries": "Wartość niedoborów po dostawach",
+      "calculating": "Obliczanie prognozy zapotrzebowania...",
+      "calculatingSteps": {
+        "preparing": "Przygotowywanie danych...",
+        "processing": "Przetwarzanie zadań produkcyjnych...",
+        "fetchingPrices": "Pobieranie cen dostawców...",
+        "checkingOrders": "Sprawdzanie zamówień...",
+        "finalizing": "Finalizowanie wyników..."
+      },
+      "successMessage": "Prognoza została pomyślnie wygenerowana!",
+      "materialDetails": "Szczegóły materiału",
+      "close": "Zamknij",
+      "orderMaterial": "Zamów materiał",
+      "table": {
+        "material": "Materiał",
+        "availableQuantity": "Dostępna ilość",
+        "requiredQuantity": "Potrzebna ilość",
+        "balance": "Bilans",
+        "expectedDeliveries": "Oczekiwane dostawy",
+        "balanceAfterDeliveries": "Bilans z dostawami",
+        "estimatedCost": "Szacowany koszt",
+        "status": "Status",
+        "actions": "Akcje"
+      },
+      "thirtyDays": "30 dni",
+      "category": "Kategoria",
+      "noCategory": "Bez kategorii",
+      "expectedDeliveriesDetails": "Oczekiwane dostawy ({{total}} {{unit}})",
+      "tasksUsingMaterial": "Zadania używające tego materiału",
+      "poNumber": "Numer PO",
+      "deliveryDate": "Data dostawy",
+      "noDate": "Brak daty",
+      "taskName": "Zadanie",
+      "moNumber": "Numer MO",
+      "productQuantity": "Ilość produktu",
+      "materialPerUnit": "Materiału na jedn.",
+      "executionDate": "Data wykonania",
+      "statusLabels": {
+        "sufficient": "Wystarczająca ilość",
+        "almostSufficient": "Prawie wystarczająca",
+        "insufficient": "Niewystarczająca ilość"
+      },
+      "tooltips": {
+        "showDetails": "Pokaż szczegóły",
+        "orderMaterial": "Zamów materiał"
+      },
+      "productionTasksInPeriod": "Zadania produkcyjne w wybranym okresie",
+      "startDate": "Data rozpoczęcia",
+      "taskWithoutName": "Zadanie bez nazwy"
     },
     "taskDetails": {
       "tabs": {

@@ -43,7 +43,11 @@
     "displayedRows": "{{from}}-{{to}} of {{count}}",
     "close": "Close",
     "selectFile": "Select file",
-    "takePhoto": "Take photo"
+    "takePhoto": "Take photo",
+    "price": "Price",
+    "status": "Status",
+    "quantity": "Quantity",
+    "product": "Product"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -1553,6 +1557,74 @@
         "calculator": "Calculator",
         "workstations": "Workstations"
       }
+    },
+    "forecast": {
+      "title": "Materials Demand Forecast",
+      "refresh": "Refresh",
+      "generateReport": "Generate CSV Report",
+      "search": "Search",
+      "timeRange": "Time Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "searchMaterial": "Search Material",
+      "filterByCategory": "Filter by Category",
+      "allCategories": "All Categories",
+      "selectDateRange": "Select date range and click \"Search\" to display materials demand forecast.",
+      "forecastPeriod": "Forecast for period: {{startDate}} - {{endDate}}",
+      "totalMaterials": "Total Number of Materials",
+      "materialsRequiringPurchase": "Materials Requiring Purchase",
+      "materialsWithShortageAfterDeliveries": "Materials with Shortage After Deliveries",
+      "estimatedTotalCost": "Estimated Total Cost",
+      "shortageValue": "Shortage Value",
+      "shortageValueAfterDeliveries": "Shortage Value After Deliveries",
+      "calculating": "Calculating demand forecast...",
+      "calculatingSteps": {
+        "preparing": "Preparing data...",
+        "processing": "Processing production tasks...",
+        "fetchingPrices": "Fetching supplier prices...",
+        "checkingOrders": "Checking orders...",
+        "finalizing": "Finalizing results..."
+      },
+      "successMessage": "Forecast has been successfully generated!",
+      "materialDetails": "Material Details",
+      "close": "Close",
+      "orderMaterial": "Order Material",
+      "table": {
+        "material": "Material",
+        "availableQuantity": "Available Quantity",
+        "requiredQuantity": "Required Quantity",
+        "balance": "Balance",
+        "expectedDeliveries": "Expected Deliveries",
+        "balanceAfterDeliveries": "Balance with Deliveries",
+        "estimatedCost": "Estimated Cost",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "thirtyDays": "30 days",
+      "category": "Category",
+      "noCategory": "No category",
+      "expectedDeliveriesDetails": "Expected deliveries ({{total}} {{unit}})",
+      "tasksUsingMaterial": "Tasks using this material",
+      "poNumber": "PO Number",
+      "deliveryDate": "Delivery Date",
+      "noDate": "No date",
+      "taskName": "Task",
+      "moNumber": "MO Number",
+      "productQuantity": "Product Quantity",
+      "materialPerUnit": "Material per Unit",
+      "executionDate": "Execution Date",
+      "statusLabels": {
+        "sufficient": "Sufficient Quantity",
+        "almostSufficient": "Nearly Sufficient",
+        "insufficient": "Insufficient Quantity"
+      },
+      "tooltips": {
+        "showDetails": "Show Details",
+        "orderMaterial": "Order Material"
+      },
+      "productionTasksInPeriod": "Production Tasks in Selected Period",
+      "startDate": "Start Date",
+      "taskWithoutName": "Task without name"
     },
     "taskDetails": {
       "tabs": {
