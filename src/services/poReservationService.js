@@ -408,8 +408,14 @@ export const convertPOReservationToStandard = async (reservationId, selectedBatc
       throw new Error('Można konwertować tylko dostarczone rezerwacje');
     }
     
-    if (quantityToConvert > (reservation.deliveredQuantity - reservation.convertedQuantity)) {
-      throw new Error('Ilość do konwersji przekracza dostępną ilość');
+    // Sprawdź czy ilość do konwersji nie przekracza zarezerwowanej ilości
+    const maxAvailableToConvert = Math.min(
+      reservation.reservedQuantity - reservation.convertedQuantity,
+      reservation.deliveredQuantity - reservation.convertedQuantity
+    );
+    
+    if (quantityToConvert > maxAvailableToConvert) {
+      throw new Error(`Ilość do konwersji przekracza dostępną ilość. Maksymalnie można przekształcić: ${maxAvailableToConvert} ${reservation.unit}`);
     }
     
     // Sprawdź czy wybrana partia istnieje w powiązanych partiach
@@ -482,10 +488,10 @@ export const convertPOReservationToStandard = async (reservationId, selectedBatc
  */
 export const getAvailablePOItems = async (materialId) => {
   try {
-    // Pobierz wszystkie PO które mają status draft, ordered lub partial
+    // Pobierz wszystkie PO które mają dozwolone statusy dla rezerwacji
     const poQuery = query(
       collection(db, PURCHASE_ORDERS_COLLECTION),
-      where('status', 'in', ['draft', 'ordered', 'partial'])
+      where('status', 'in', ['draft', 'pending', 'approved', 'ordered', 'partial', 'shipped'])
     );
     
     const poSnapshot = await getDocs(poQuery);

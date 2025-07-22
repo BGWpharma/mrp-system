@@ -174,8 +174,11 @@ const POReservationDialog = ({
   const renderPOStatus = (status) => {
     const statusConfig = {
       draft: { color: 'default', label: 'Szkic' },
+      pending: { color: 'default', label: 'Oczekujące' },
+      approved: { color: 'warning', label: 'Zatwierdzone' },
       ordered: { color: 'primary', label: 'Zamówione' },
       partial: { color: 'warning', label: 'Częściowo' },
+      shipped: { color: 'info', label: 'Wysłane' },
       delivered: { color: 'success', label: 'Dostarczone' }
     };
     
@@ -342,50 +345,88 @@ const POReservationDialog = ({
                           <List dense>
                             {poGroup.items.map((item, index) => (
                               <React.Fragment key={`${item.poId}-${item.poItemId}`}>
-                                <ListItemButton
-                                  selected={selectedPOItem?.poId === item.poId && 
-                                           selectedPOItem?.poItemId === item.poItemId}
-                                  onClick={() => handlePOItemSelect(item)}
-                                  disabled={item.availableQuantity <= 0}
-                                >
-                                  <ListItemIcon>
-                                    {item.availableQuantity > 0 ? (
-                                      <AvailableIcon color="success" />
-                                    ) : (
-                                      <WarningIcon color="warning" />
-                                    )}
-                                  </ListItemIcon>
-                                  <ListItemText
-                                    primary={
-                                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                                        <Typography variant="body1">
-                                          {item.materialName}
-                                        </Typography>
-                                        <Box display="flex" alignItems="center" gap={1}>
-                                          <Chip 
-                                            label={`${item.availableQuantity} / ${item.totalQuantity} ${item.unit}`}
-                                            size="small"
-                                            color={item.availableQuantity > 0 ? 'success' : 'warning'}
-                                            variant="outlined"
-                                          />
-                                          <Typography variant="body2" fontWeight="bold">
-                                            {formatCurrency(item.unitPrice, item.currency)} / {item.unit}
+                                <Box>
+                                  <ListItemButton
+                                    selected={selectedPOItem?.poId === item.poId && 
+                                             selectedPOItem?.poItemId === item.poItemId}
+                                    onClick={() => handlePOItemSelect(item)}
+                                    disabled={item.availableQuantity <= 0}
+                                  >
+                                    <ListItemIcon>
+                                      {item.availableQuantity > 0 ? (
+                                        <AvailableIcon color="success" />
+                                      ) : (
+                                        <WarningIcon color="warning" />
+                                      )}
+                                    </ListItemIcon>
+                                    <ListItemText
+                                      primary={
+                                        <Box display="flex" justifyContent="space-between" alignItems="center">
+                                          <Typography variant="body1">
+                                            {item.materialName}
+                                          </Typography>
+                                          <Box display="flex" alignItems="center" gap={1}>
+                                            <Chip 
+                                              label={`${item.availableQuantity} / ${item.totalQuantity} ${item.unit}`}
+                                              size="small"
+                                              color={item.availableQuantity > 0 ? 'success' : 'warning'}
+                                              variant="outlined"
+                                            />
+                                            <Typography variant="body2" fontWeight="bold">
+                                              {formatCurrency(item.unitPrice, item.currency)} / {item.unit}
+                                            </Typography>
+                                          </Box>
+                                        </Box>
+                                      }
+                                      secondary={
+                                        <Box>
+                                          <Typography variant="caption">
+                                            Dostępne: {item.availableQuantity} {item.unit} z {item.totalQuantity} {item.unit}
+                                            {item.reservedQuantity > 0 && (
+                                              <> • Zarezerwowane: {item.reservedQuantity} {item.unit}</>
+                                            )}
                                           </Typography>
                                         </Box>
-                                      </Box>
-                                    }
-                                    secondary={
-                                      <Box>
-                                        <Typography variant="caption">
-                                          Dostępne: {item.availableQuantity} {item.unit} z {item.totalQuantity} {item.unit}
-                                          {item.reservedQuantity > 0 && (
-                                            <> • Zarezerwowane: {item.reservedQuantity} {item.unit}</>
-                                          )}
-                                        </Typography>
-                                      </Box>
-                                    }
-                                  />
-                                </ListItemButton>
+                                      }
+                                    />
+                                  </ListItemButton>
+                                  
+                                  {/* Formularz ilości dla wybranej pozycji */}
+                                  {selectedPOItem?.poId === item.poId && selectedPOItem?.poItemId === item.poItemId && (
+                                    <Box sx={{ px: 2, pb: 2, bgcolor: 'action.hover', borderRadius: 1, mx: 1, mb: 1 }}>
+                                      <Typography variant="subtitle2" sx={{ pt: 2, pb: 1, fontWeight: 'bold' }}>
+                                        Ilość do zarezerwowania:
+                                      </Typography>
+                                      
+                                      <TextField
+                                        label="Ilość"
+                                        type="number"
+                                        value={reservationQuantity}
+                                        onChange={(e) => setReservationQuantity(e.target.value)}
+                                        fullWidth
+                                        size="small"
+                                        variant="outlined"
+                                        inputProps={{ 
+                                          min: 0, 
+                                          max: item.availableQuantity,
+                                          step: 'any'
+                                        }}
+                                        helperText={`Dostępne: ${item.availableQuantity} ${item.unit} • Potrzebne: ${selectedMaterial.quantity} ${selectedMaterial.unit}`}
+                                      />
+                                      
+                                      {reservationQuantity && (
+                                        <Box sx={{ mt: 1 }}>
+                                          <Typography variant="body2" color="primary" fontWeight="bold">
+                                            Wartość rezerwacji: {formatCurrency(
+                                              parseFloat(reservationQuantity) * item.unitPrice, 
+                                              item.currency
+                                            )}
+                                          </Typography>
+                                        </Box>
+                                      )}
+                                    </Box>
+                                  )}
+                                </Box>
                                 {index < poGroup.items.length - 1 && <Divider />}
                               </React.Fragment>
                             ))}
@@ -399,56 +440,7 @@ const POReservationDialog = ({
             </Grid>
           )}
           
-          {/* Formularz ilości */}
-          {selectedPOItem && (
-            <Grid item xs={12}>
-              <Card sx={{ bgcolor: 'primary.light', color: 'primary.contrastText' }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Wybrana pozycja: {selectedPOItem.materialName}
-                  </Typography>
-                  <Typography variant="body2">
-                    PO: {selectedPOItem.poNumber} • 
-                    Dostępne: {selectedPOItem.availableQuantity} {selectedPOItem.unit} • 
-                    Cena: {formatCurrency(selectedPOItem.unitPrice, selectedPOItem.currency)}
-                  </Typography>
-                  
-                  <Box sx={{ mt: 2 }}>
-                    <TextField
-                      label="Ilość do zarezerwowania"
-                      type="number"
-                      value={reservationQuantity}
-                      onChange={(e) => setReservationQuantity(e.target.value)}
-                      fullWidth
-                      variant="outlined"
-                      inputProps={{ 
-                        min: 0, 
-                        max: selectedPOItem.availableQuantity,
-                        step: 'any'
-                      }}
-                      helperText={`Dostępne: ${selectedPOItem.availableQuantity} ${selectedPOItem.unit} • Potrzebne w zadaniu: ${selectedMaterial.quantity} ${selectedMaterial.unit}`}
-                      sx={{
-                        '& .MuiOutlinedInput-root': {
-                          backgroundColor: 'rgba(255,255,255,0.9)'
-                        }
-                      }}
-                    />
-                  </Box>
-                  
-                  {reservationQuantity && (
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="body2">
-                        Wartość rezerwacji: {formatCurrency(
-                          parseFloat(reservationQuantity) * selectedPOItem.unitPrice, 
-                          selectedPOItem.currency
-                        )}
-                      </Typography>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+
         </Grid>
       </DialogContent>
       

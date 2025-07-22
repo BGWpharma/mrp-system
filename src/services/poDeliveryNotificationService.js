@@ -182,7 +182,7 @@ const sendDeliveryNotification = async (userId, po, reservations, updatedReserva
 export const shouldSendDeliveryNotification = (oldStatus, newStatus) => {
   // Powiadomienia wysyłamy gdy PO zmienia status na 'delivered' lub 'completed'
   const deliveryStatuses = ['delivered', 'completed'];
-  const nonDeliveryStatuses = ['draft', 'ordered', 'partial'];
+  const nonDeliveryStatuses = ['draft', 'pending', 'approved', 'ordered', 'partial', 'shipped'];
   
   return nonDeliveryStatuses.includes(oldStatus) && deliveryStatuses.includes(newStatus);
 };

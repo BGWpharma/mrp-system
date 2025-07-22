@@ -249,12 +249,12 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
   const handleOpenConvertDialog = (reservation) => {
     setSelectedReservation(reservation);
     setSelectedBatch(null);
-    setConversionQuantity(
-      Math.min(
-        reservation.deliveredQuantity - reservation.convertedQuantity,
-        reservation.deliveredQuantity
-      ).toString()
+    // Ustaw domyślną ilość na podstawie zarezerwowanej ilości, a nie dostarczonej
+    const availableToConvert = Math.min(
+      reservation.reservedQuantity - reservation.convertedQuantity,
+      reservation.deliveredQuantity - reservation.convertedQuantity
     );
+    setConversionQuantity(Math.max(0, availableToConvert).toString());
     setDialogType('convert');
     setDialogOpen(true);
   };
@@ -721,40 +721,78 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                   <List>
                     {availablePOItems.map((item, index) => (
                       <React.Fragment key={index}>
-                        <ListItem
-                          button
-                          selected={selectedPOItem?.poId === item.poId && selectedPOItem?.poItemId === item.poItemId}
-                          onClick={() => handlePOItemSelect(item)}
-                        >
-                          <ListItemText
-                            primary={
-                              <Box display="flex" alignItems="center" gap={1}>
-                                <Chip label={item.poNumber} size="small" color="primary" />
-                                <Typography>{item.supplier?.name}</Typography>
-                                <Chip 
-                                  label={item.status} 
-                                  size="small" 
-                                  color={item.status === 'draft' ? 'default' : 'success'} 
-                                />
-                              </Box>
-                            }
-                            secondary={
-                              <Box>
-                                <Typography variant="body2">
-                                  Dostępne: {item.availableQuantity} {item.unit} z {item.totalQuantity} {item.unit}
-                                </Typography>
-                                <Typography variant="body2">
-                                  Cena: {formatCurrency(item.unitPrice, item.currency)} / {item.unit}
-                                </Typography>
-                                {item.expectedDeliveryDate && (
-                                  <Typography variant="body2" color="text.secondary">
-                                    Planowana dostawa: {formatDateTime(item.expectedDeliveryDate).split(',')[0]}
+                        <Box>
+                          <ListItem
+                            button
+                            selected={selectedPOItem?.poId === item.poId && selectedPOItem?.poItemId === item.poItemId}
+                            onClick={() => handlePOItemSelect(item)}
+                          >
+                            <ListItemText
+                              primary={
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  <Chip label={item.poNumber} size="small" color="primary" />
+                                  <Typography>{item.supplier?.name}</Typography>
+                                  <Chip 
+                                    label={item.status} 
+                                    size="small" 
+                                    color={item.status === 'draft' ? 'default' : 'success'} 
+                                  />
+                                </Box>
+                              }
+                              secondary={
+                                <Box>
+                                  <Typography variant="body2">
+                                    Dostępne: {item.availableQuantity} {item.unit} z {item.totalQuantity} {item.unit}
                                   </Typography>
-                                )}
-                              </Box>
-                            }
-                          />
-                        </ListItem>
+                                  <Typography variant="body2">
+                                    Cena: {formatCurrency(item.unitPrice, item.currency)} / {item.unit}
+                                  </Typography>
+                                  {item.expectedDeliveryDate && (
+                                    <Typography variant="body2" color="text.secondary">
+                                      Planowana dostawa: {formatDateTime(item.expectedDeliveryDate).split(',')[0]}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              }
+                            />
+                          </ListItem>
+                          
+                          {/* Formularz ilości dla wybranej pozycji */}
+                          {selectedPOItem?.poId === item.poId && selectedPOItem?.poItemId === item.poItemId && (
+                            <Box sx={{ px: 3, pb: 2, bgcolor: 'action.hover', mx: 2, mb: 1, borderRadius: 1 }}>
+                              <Typography variant="subtitle2" sx={{ pt: 2, pb: 1, fontWeight: 'bold' }}>
+                                Ilość do zarezerwowania:
+                              </Typography>
+                              
+                              <TextField
+                                label="Ilość"
+                                type="number"
+                                value={reservationQuantity}
+                                onChange={(e) => setReservationQuantity(e.target.value)}
+                                fullWidth
+                                size="small"
+                                variant="outlined"
+                                inputProps={{ 
+                                  min: 0, 
+                                  max: item.availableQuantity,
+                                  step: 'any'
+                                }}
+                                helperText={`Dostępne: ${item.availableQuantity} ${item.unit} • Potrzebne: ${selectedMaterial.quantity} ${selectedMaterial.unit}`}
+                              />
+                              
+                              {reservationQuantity && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Typography variant="body2" color="primary" fontWeight="bold">
+                                    Wartość rezerwacji: {formatCurrency(
+                                      parseFloat(reservationQuantity) * item.unitPrice, 
+                                      item.currency
+                                    )}
+                                  </Typography>
+                                </Box>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
                         {index < availablePOItems.length - 1 && <Divider />}
                       </React.Fragment>
                     ))}
@@ -762,24 +800,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                 )}
               </Grid>
             )}
-            
-            {selectedPOItem && (
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Ilość do zarezerwowania"
-                  type="number"
-                  value={reservationQuantity}
-                  onChange={(e) => setReservationQuantity(e.target.value)}
-                  fullWidth
-                  inputProps={{ 
-                    min: 0, 
-                    max: selectedPOItem.availableQuantity,
-                    step: 'any'
-                  }}
-                  helperText={`Dostępne: ${selectedPOItem.availableQuantity} ${selectedPOItem.unit}`}
-                />
-              </Grid>
-            )}
+
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -804,9 +825,13 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                 <Alert severity="info">
                   <AlertTitle>Rezerwacja z PO {selectedReservation.poNumber}</AlertTitle>
                   Materiał: {selectedReservation.materialName}<br/>
+                  Zarezerwowane: {selectedReservation.reservedQuantity} {selectedReservation.unit}<br/>
                   Dostarczone: {selectedReservation.deliveredQuantity} {selectedReservation.unit}<br/>
                   Już przekształcone: {selectedReservation.convertedQuantity} {selectedReservation.unit}<br/>
-                  Dostępne do przekształcenia: {selectedReservation.deliveredQuantity - selectedReservation.convertedQuantity} {selectedReservation.unit}
+                  Dostępne do przekształcenia: {Math.min(
+                    selectedReservation.reservedQuantity - selectedReservation.convertedQuantity,
+                    selectedReservation.deliveredQuantity - selectedReservation.convertedQuantity
+                  )} {selectedReservation.unit}
                 </Alert>
               </Grid>
               
@@ -845,9 +870,16 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                   fullWidth
                   inputProps={{ 
                     min: 0, 
-                    max: selectedReservation.deliveredQuantity - selectedReservation.convertedQuantity,
+                    max: Math.min(
+                      selectedReservation.reservedQuantity - selectedReservation.convertedQuantity,
+                      selectedReservation.deliveredQuantity - selectedReservation.convertedQuantity
+                    ),
                     step: 'any'
                   }}
+                  helperText={`Zarezerwowano: ${Math.min(
+                    selectedReservation.reservedQuantity - selectedReservation.convertedQuantity,
+                    selectedReservation.deliveredQuantity - selectedReservation.convertedQuantity
+                  )} ${selectedReservation.unit}`}
                 />
               </Grid>
             </Grid>
