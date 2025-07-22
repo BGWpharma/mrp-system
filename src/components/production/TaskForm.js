@@ -560,11 +560,12 @@ const TaskForm = ({ taskId }) => {
 
       // Aktualizuj materiały z nowej wersji receptury
       if (recipeData.ingredients && recipeData.ingredients.length > 0) {
+        const taskQuantity = parseFloat(taskData.quantity) || 1;
         updatedTaskData.materials = recipeData.ingredients.map(ingredient => ({
           id: ingredient.inventoryItemId || ingredient.id,
           name: ingredient.name,
           category: ingredient.category || 'Surowce',
-          quantity: ingredient.quantity || 0,
+          quantity: (ingredient.quantity || 0) * taskQuantity,
           unit: ingredient.unit || 'szt.',
           inventoryItemId: ingredient.inventoryItemId || ingredient.id
         }));
@@ -659,11 +660,12 @@ const TaskForm = ({ taskId }) => {
       
       // Przygotuj listę materiałów z receptury
       if (selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0) {
+        const taskQuantity = parseFloat(taskData.quantity) || 1;
         const materials = selectedRecipe.ingredients.map(ingredient => ({
           id: ingredient.id,
           name: ingredient.name,
           category: ingredient.category || 'Surowce',
-          quantity: ingredient.quantity || 0,
+          quantity: (ingredient.quantity || 0) * taskQuantity,
           unit: ingredient.unit || 'szt.'
         }));
         
@@ -1002,7 +1004,7 @@ const TaskForm = ({ taskId }) => {
                 {/* Informacje o wersji receptury i przycisk aktualizacji - tylko w trybie edycji */}
                 {taskId && taskId !== 'new' && taskData.recipeId && (
                   <Grid item xs={12}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
                       <Box sx={{ flex: 1 }}>
                         <Typography variant="body2" color="text.secondary">
                           Aktualna wersja receptury: <strong>{taskData.recipeVersion || 1}</strong>
