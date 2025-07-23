@@ -834,7 +834,13 @@ const InvoiceForm = ({ invoiceId }) => {
       if (invoiceId) {
         await updateInvoice(invoiceId, invoiceToSubmit, currentUser.uid);
         submittedInvoiceId = invoiceId;
-        showSuccess('Faktura została zaktualizowana');
+        
+        // Sprawdź czy PDF został zaktualizowany
+        if (['issued', 'sent', 'paid', 'partially_paid', 'overdue'].includes(invoiceToSubmit.status)) {
+          showSuccess('Faktura została zaktualizowana i PDF został wygenerowany');
+        } else {
+          showSuccess('Faktura została zaktualizowana');
+        }
       } else {
         if (selectedOrderId) {
           submittedInvoiceId = await createInvoiceFromOrder(
@@ -942,7 +948,11 @@ const InvoiceForm = ({ invoiceId }) => {
           type="submit"
           disabled={saving}
         >
-          {saving ? 'Zapisywanie...' : 'Zapisz fakturę'}
+          {saving ? (
+            invoiceId && ['issued', 'sent', 'paid', 'partially_paid', 'overdue'].includes(invoice.status) 
+              ? 'Zapisywanie i regenerowanie PDF...' 
+              : 'Zapisywanie...'
+          ) : 'Zapisz fakturę'}
         </Button>
       </Box>
 

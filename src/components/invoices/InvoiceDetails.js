@@ -64,6 +64,7 @@ const InvoiceDetails = () => {
   const [relatedInvoices, setRelatedInvoices] = useState([]);
   const [loadingRelatedInvoices, setLoadingRelatedInvoices] = useState(false);
   const [proformaUsageInfo, setProformaUsageInfo] = useState(null);
+  const [issuingInvoice, setIssuingInvoice] = useState(false);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -161,12 +162,26 @@ const InvoiceDetails = () => {
   
   const handleUpdateStatus = async (newStatus) => {
     try {
+      // Jeśli wystawiamy fakturę, pokaż loading
+      if (newStatus === 'issued') {
+        setIssuingInvoice(true);
+      }
+      
       await updateInvoiceStatus(invoiceId, newStatus, currentUser.uid);
       // Odśwież dane faktury po aktualizacji
-      fetchInvoice();
-      showSuccess('Status faktury został zaktualizowany');
+      await fetchInvoice();
+      
+      if (newStatus === 'issued') {
+        showSuccess('Faktura została wystawiona i PDF został wygenerowany');
+      } else {
+        showSuccess('Status faktury został zaktualizowany');
+      }
     } catch (error) {
       showError('Błąd podczas aktualizacji statusu faktury: ' + error.message);
+    } finally {
+      if (newStatus === 'issued') {
+        setIssuingInvoice(false);
+      }
     }
   };
   
@@ -301,10 +316,11 @@ const InvoiceDetails = () => {
             <Button
               variant="contained"
               color="primary"
-              startIcon={<ReceiptIcon />}
+              startIcon={issuingInvoice ? <CircularProgress size={20} color="inherit" /> : <ReceiptIcon />}
               onClick={() => handleUpdateStatus('issued')}
+              disabled={issuingInvoice}
             >
-              Wystaw fakturę
+              {issuingInvoice ? 'Wystawianie...' : 'Wystaw fakturę'}
             </Button>
           )}
         </Box>
@@ -927,6 +943,47 @@ const InvoiceDetails = () => {
           <Typography variant="body1">
             {invoice.notes}
           </Typography>
+        </Paper>
+      )}
+      
+      {/* Sekcja załączników PDF */}
+      {invoice.pdfAttachment && (
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Załączniki
+          </Typography>
+          <Card variant="outlined" sx={{ mb: 2 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <AssignmentIcon color="primary" />
+                  <Box>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {invoice.pdfAttachment.fileName}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      PDF • {invoice.pdfAttachment.size ? (invoice.pdfAttachment.size / 1024).toFixed(1) + ' KB' : 'Nieznany rozmiar'}
+                    </Typography>
+                    {invoice.pdfAttachment.generatedAt && (
+                      <Typography variant="body2" color="text.secondary">
+                        Wygenerowano: {format(new Date(invoice.pdfAttachment.generatedAt), 'dd.MM.yyyy HH:mm')}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+                <Box>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
+                    onClick={() => window.open(invoice.pdfAttachment.downloadURL, '_blank')}
+                    size="small"
+                  >
+                    Pobierz
+                  </Button>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
         </Paper>
       )}
       

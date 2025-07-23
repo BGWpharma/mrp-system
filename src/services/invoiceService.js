@@ -12,7 +12,8 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { db } from './firebase/config';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from './firebase/config';
 import { formatDateForInput } from '../utils/dateUtils';
 
 const INVOICES_COLLECTION = 'invoices';
@@ -440,6 +441,26 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     
     await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updatedInvoice);
     
+    // Jeśli faktura jest już wystawiona (status 'issued' lub wyżej), regeneruj PDF z nowymi danymi
+    if (invoiceData.status && ['issued', 'sent', 'paid', 'partially_paid', 'overdue'].includes(invoiceData.status)) {
+      try {
+        console.log('Regenerowanie PDF faktury po edycji...');
+        const pdfInfo = await generateAndSaveInvoicePdf(invoiceId, userId);
+        if (pdfInfo) {
+          // Zaktualizuj dokument faktury o nowe informacje PDF
+          await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), {
+            pdfAttachment: pdfInfo,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          });
+          console.log('PDF faktury został zaktualizowany po edycji');
+        }
+      } catch (pdfError) {
+        console.error('Błąd podczas regenerowania PDF faktury po edycji:', pdfError);
+        // Nie przerywamy procesu aktualizacji faktury z powodu błędu PDF
+      }
+    }
+    
     // Jeśli zmieniono wykorzystanie proformy, zaktualizuj proformę
     if (!invoiceData.isProforma && invoiceData.orderId && oldSettledAdvancePayments !== settledAdvancePayments) {
       try {
@@ -477,6 +498,18 @@ export const deleteInvoice = async (invoiceId) => {
     // Pobierz dane faktury przed usunięciem
     const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
     const invoiceData = invoiceDoc.exists() ? invoiceDoc.data() : null;
+    
+    // Usuń plik PDF jeśli istnieje
+    if (invoiceData?.pdfAttachment?.storagePath) {
+      try {
+        const pdfFileRef = ref(storage, invoiceData.pdfAttachment.storagePath);
+        await deleteObject(pdfFileRef);
+        console.log('Usunięto plik PDF faktury:', invoiceData.pdfAttachment.storagePath);
+      } catch (pdfError) {
+        console.warn('Nie można usunąć pliku PDF faktury (może już nie istnieć):', pdfError);
+        // Kontynuuj proces usuwania faktury nawet jeśli usunięcie pliku się nie powiodło
+      }
+    }
     
     // Jeśli faktura wykorzystywała proformę, usuń to wykorzystanie
     if (invoiceData && !invoiceData.isProforma && invoiceData.orderId && invoiceData.settledAdvancePayments > 0) {
@@ -525,10 +558,95 @@ export const updateInvoiceStatus = async (invoiceId, status, userId) => {
       updateData.paymentStatus = 'paid';
     }
     
+    // Jeśli status zmienia się na 'issued', wygeneruj i zapisz PDF
+    if (status === 'issued') {
+      try {
+        const pdfInfo = await generateAndSaveInvoicePdf(invoiceId, userId);
+        if (pdfInfo) {
+          updateData.pdfAttachment = pdfInfo;
+        }
+      } catch (pdfError) {
+        console.error('Błąd podczas generowania PDF faktury:', pdfError);
+        // Nie przerywamy procesu zmiany statusu, tylko logujemy błąd
+      }
+    }
+    
     await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updateData);
     return true;
   } catch (error) {
     console.error('Błąd podczas aktualizacji statusu faktury:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generuje PDF faktury i zapisuje w Firebase Storage
+ */
+export const generateAndSaveInvoicePdf = async (invoiceId, userId) => {
+  try {
+    // Pobierz dane faktury
+    const invoice = await getInvoiceById(invoiceId);
+    
+    // Usuń poprzedni plik PDF jeśli istnieje
+    if (invoice.pdfAttachment?.storagePath) {
+      try {
+        const oldFileRef = ref(storage, invoice.pdfAttachment.storagePath);
+        await deleteObject(oldFileRef);
+        console.log('Usunięto poprzedni plik PDF:', invoice.pdfAttachment.storagePath);
+      } catch (deleteError) {
+        console.warn('Nie można usunąć poprzedniego pliku PDF (może już nie istnieć):', deleteError);
+        // Kontynuuj proces nawet jeśli usunięcie się nie powiodło
+      }
+    }
+    
+    // Pobierz dane firmy
+    const { getCompanyInfo } = await import('./companyService');
+    const companyInfo = await getCompanyInfo();
+    
+    // Dynamicznie importuj generator PDF
+    const { createInvoicePdfGenerator } = await import('../components/invoices/InvoicePdfGenerator');
+    
+    // Stwórz generator PDF
+    const pdfGenerator = createInvoicePdfGenerator(invoice, companyInfo, 'en', {
+      useTemplate: true,
+      imageQuality: 0.95,
+      enableCompression: true
+    });
+    
+    // Wygeneruj PDF
+    const pdfDoc = await pdfGenerator.generate('en');
+    
+    // Konwertuj PDF na Blob
+    const pdfBlob = pdfDoc.output('blob');
+    
+    // Przygotuj stałą nazwę pliku (bez timestamp)
+    const cleanInvoiceNumber = invoice.number.replace(/[\/\\:*?"<>|]/g, '_');
+    const fileName = invoice.isProforma 
+      ? `Invoice_Proforma_${cleanInvoiceNumber}.pdf`
+      : `Invoice_${cleanInvoiceNumber}.pdf`;
+    
+    // Ścieżka w Firebase Storage
+    const storagePath = `invoices/${invoiceId}/${fileName}`;
+    
+    // Przesyłaj do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, pdfBlob);
+    
+    // Pobierz URL do pobrania
+    const downloadURL = await getDownloadURL(fileRef);
+    
+    // Zwróć informacje o pliku
+    return {
+      fileName,
+      storagePath,
+      downloadURL,
+      contentType: 'application/pdf',
+      size: pdfBlob.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: userId
+    };
+  } catch (error) {
+    console.error('Błąd podczas generowania i zapisywania PDF faktury:', error);
     throw error;
   }
 };
@@ -1015,4 +1133,4 @@ export const getInvoicePayments = async (invoiceId) => {
     console.error('Błąd podczas pobierania płatności faktury:', error);
     throw error;
   }
-}; 
+};
