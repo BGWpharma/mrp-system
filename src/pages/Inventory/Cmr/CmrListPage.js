@@ -67,7 +67,6 @@ const translations = {
     reportTitle: 'Raport CMR',
     cmrNumber: 'Numer CMR',
     issueDate: 'Data wystawienia',
-    sender: 'Nadawca',
     recipient: 'Odbiorca',
     loadingPlace: 'Miejsce załadunku',
     deliveryPlace: 'Miejsce dostawy',
@@ -96,7 +95,6 @@ const translations = {
     reportTitle: 'CMR Report',
     cmrNumber: 'CMR Number',
     issueDate: 'Issue Date',
-    sender: 'Sender',
     recipient: 'Recipient',
     loadingPlace: 'Loading Place',
     deliveryPlace: 'Delivery Place',
@@ -155,7 +153,6 @@ const CmrListPage = () => {
   const [reportFilters, setReportFilters] = useState({
     startDate: format(new Date(new Date().setMonth(new Date().getMonth() - 1)), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
-    sender: '',
     recipient: '',
     status: '',
     includeItems: true,
@@ -394,7 +391,7 @@ const CmrListPage = () => {
   const handleRecipientChange = (event, newValue) => {
     setReportFilters(prev => ({ 
       ...prev, 
-      recipient: newValue ? newValue.name : '' 
+      recipient: newValue && newValue.id !== '' ? newValue.name : '' 
     }));
   };
   
@@ -449,7 +446,6 @@ const CmrListPage = () => {
     const headers = [
       t.cmrNumber,
       t.issueDate,
-      t.sender,
       t.recipient,
       t.loadingPlace,
       t.deliveryPlace,
@@ -464,7 +460,6 @@ const CmrListPage = () => {
       rows.push([
         doc.cmrNumber,
         doc.issueDate ? format(doc.issueDate, 'dd.MM.yyyy', { locale: reportFilters.language === 'en' ? enUS : pl }) : '',
-        doc.sender,
         doc.recipient,
         doc.loadingPlace,
         doc.deliveryPlace,
@@ -722,20 +717,15 @@ const CmrListPage = () => {
                 />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label={reportFilters.language === 'en' ? 'Sender' : 'Nadawca'}
-                  name="sender"
-                  value={reportFilters.sender}
-                  onChange={handleReportFilterChange}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
                 <Autocomplete
-                  options={customers}
+                  options={[
+                    { id: '', name: reportFilters.language === 'en' ? 'All recipients' : 'Wszyscy odbiorcy' },
+                    ...customers
+                  ]}
                   getOptionLabel={(option) => option.name || ''}
                   isOptionEqualToValue={(option, value) => option.id === value.id}
                   loading={loadingCustomers}
+                  value={reportFilters.recipient ? customers.find(c => c.name === reportFilters.recipient) || null : { id: '', name: reportFilters.language === 'en' ? 'All recipients' : 'Wszyscy odbiorcy' }}
                   onChange={handleRecipientChange}
                   renderInput={(params) => (
                     <TextField
@@ -756,14 +746,16 @@ const CmrListPage = () => {
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
-                  <InputLabel>{reportFilters.language === 'en' ? 'Status' : 'Status'}</InputLabel>
+                  <InputLabel shrink={true}>{reportFilters.language === 'en' ? 'Status' : 'Status'}</InputLabel>
                   <Select
                     name="status"
-                    value={reportFilters.status}
+                    value={reportFilters.status || ''}
                     label={reportFilters.language === 'en' ? 'Status' : 'Status'}
                     onChange={handleReportFilterChange}
+                    displayEmpty
+                    notched={true}
                   >
-                    <MenuItem value="">{reportFilters.language === 'en' ? 'All' : 'Wszystkie'}</MenuItem>
+                    <MenuItem value="">{reportFilters.language === 'en' ? 'All statuses' : 'Wszystkie statusy'}</MenuItem>
                     {Object.entries(CMR_STATUSES).map(([key, status]) => (
                       <MenuItem key={status} value={status}>
                         {translateStatus(status)}
@@ -852,7 +844,6 @@ const CmrListPage = () => {
                         <TableRow>
                           <TableCell>{t.cmrNumber}</TableCell>
                           <TableCell>{t.issueDate}</TableCell>
-                          <TableCell>{t.sender}</TableCell>
                           <TableCell>{t.recipient}</TableCell>
                           <TableCell>{t.status}</TableCell>
                         </TableRow>
@@ -866,7 +857,6 @@ const CmrListPage = () => {
                               : '-'
                             }
                           </TableCell>
-                          <TableCell>{doc.sender}</TableCell>
                           <TableCell>{doc.recipient}</TableCell>
                           <TableCell>{translateStatus(doc.status)}</TableCell>
                         </TableRow>

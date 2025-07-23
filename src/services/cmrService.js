@@ -1181,49 +1181,106 @@ export const getCmrDocumentsByOrderId = async (orderId) => {
 // Generowanie raportu z dokumentów CMR
 export const generateCmrReport = async (filters = {}) => {
   try {
-    // Budowanie zapytania z filtrami
+    console.log('generateCmrReport - otrzymane filtry:', filters);
+    
+    // Pobierz wszystkie dokumenty CMR bez filtrów
     const cmrRef = collection(db, CMR_COLLECTION);
-    let q = query(cmrRef, orderBy('issueDate', 'desc'));
+    const q = query(cmrRef, orderBy('issueDate', 'desc'));
     
-    // Dodawanie filtrów do zapytania
-    if (filters.startDate && filters.endDate) {
-      const startDate = Timestamp.fromDate(new Date(filters.startDate));
-      const endDate = Timestamp.fromDate(new Date(filters.endDate));
-      q = query(q, where('issueDate', '>=', startDate), where('issueDate', '<=', endDate));
-    }
-    
-    if (filters.sender) {
-      q = query(q, where('sender', '==', filters.sender));
-    }
-    
-    if (filters.recipient) {
-      q = query(q, where('recipient', '==', filters.recipient));
-    }
-    
-    if (filters.status) {
-      q = query(q, where('status', '==', filters.status));
-    }
-    
-    // Pobierz dokumenty CMR według filtrów
+    // Pobierz dokumenty CMR
     const snapshot = await getDocs(q);
     
+    console.log('generateCmrReport - znaleziono wszystkich dokumentów:', snapshot.docs.length);
+    
+    // Funkcja pomocnicza do konwersji pól czasowych (podobna do tej w getAllCmrDocuments)
+    const convertTimestamp = (field) => {
+      if (!field) return null;
+      // Sprawdź czy pole jest obiektem Timestamp z metodą toDate
+      if (field && typeof field.toDate === 'function') {
+        return field.toDate();
+      }
+      // Sprawdź czy pole jest obiektem z polami seconds i nanoseconds (deserializowany Firestore Timestamp)
+      if (field && typeof field === 'object' && typeof field.seconds === 'number') {
+        return new Date(field.seconds * 1000 + (field.nanoseconds || 0) / 1000000);
+      }
+      // Jeśli jest stringiem lub numerem, spróbuj konwertować na Date
+      if (typeof field === 'string' || typeof field === 'number') {
+        try {
+          return new Date(field);
+        } catch (e) {
+          console.warn('Nie można skonwertować pola na Date:', field);
+          return null;
+        }
+      }
+      return null;
+    };
+
     // Mapowanie dokumentów do raportu
-    const cmrDocuments = snapshot.docs.map(doc => {
+    const allCmrDocuments = snapshot.docs.map(doc => {
       const data = doc.data();
+      
+      const convertedIssueDate = convertTimestamp(data.issueDate);
+      
+      console.log('generateCmrReport - przetwarzanie dokumentu:', {
+        cmrNumber: data.cmrNumber,
+        issueDate: data.issueDate,
+        issueDateType: typeof data.issueDate,
+        issueDateConverted: convertedIssueDate
+      });
+      
       return {
         id: doc.id,
         cmrNumber: data.cmrNumber,
-        issueDate: data.issueDate ? data.issueDate.toDate() : null,
-        deliveryDate: data.deliveryDate ? data.deliveryDate.toDate() : null,
+        issueDate: convertedIssueDate,
+        deliveryDate: convertTimestamp(data.deliveryDate),
         sender: data.sender,
         recipient: data.recipient,
         loadingPlace: data.loadingPlace,
         deliveryPlace: data.deliveryPlace,
         status: data.status,
         items: [], // Zostawiamy puste, pobierzemy później jeśli potrzeba
-        createdAt: data.createdAt ? data.createdAt.toDate() : null
+        createdAt: convertTimestamp(data.createdAt)
       };
     });
+    
+    console.log('generateCmrReport - wszystkie dokumenty po mapowaniu:', allCmrDocuments.length);
+    
+    // Filtrowanie na poziomie aplikacji
+    let cmrDocuments = allCmrDocuments;
+    
+    // Filtrowanie według dat
+    if (filters.startDate && filters.endDate) {
+      const startDate = new Date(filters.startDate);
+      const endDateObj = new Date(filters.endDate);
+      endDateObj.setHours(23, 59, 59, 999);
+      
+      console.log('generateCmrReport - filtrowanie według dat (aplikacja):', {
+        originalStartDate: filters.startDate,
+        originalEndDate: filters.endDate,
+        startDate: startDate,
+        endDate: endDateObj
+      });
+      
+      cmrDocuments = cmrDocuments.filter(doc => {
+        if (!doc.issueDate) return false;
+        const docDate = new Date(doc.issueDate);
+        const inRange = docDate >= startDate && docDate <= endDateObj;
+        console.log(`Dokument ${doc.cmrNumber} (${docDate.toISOString()}) - ${inRange ? 'WŁĄCZONY' : 'WYKLUCZONY'}`);
+        return inRange;
+      });
+    }
+    
+    // Filtrowanie według odbiorcy
+    if (filters.recipient) {
+      cmrDocuments = cmrDocuments.filter(doc => doc.recipient === filters.recipient);
+    }
+    
+    // Filtrowanie według statusu
+    if (filters.status) {
+      cmrDocuments = cmrDocuments.filter(doc => doc.status === filters.status);
+    }
+    
+    console.log('generateCmrReport - dokumenty po filtrowaniu:', cmrDocuments.length);
     
     // Opcjonalnie pobieramy elementy dla każdego dokumentu
     if (filters.includeItems) {
@@ -1248,7 +1305,6 @@ export const generateCmrReport = async (filters = {}) => {
     const statistics = {
       totalDocuments: cmrDocuments.length,
       byStatus: {},
-      bySender: {},
       byRecipient: {}
     };
     
@@ -1259,12 +1315,6 @@ export const generateCmrReport = async (filters = {}) => {
         statistics.byStatus[doc.status] = 0;
       }
       statistics.byStatus[doc.status]++;
-      
-      // Statystyki według nadawcy
-      if (!statistics.bySender[doc.sender]) {
-        statistics.bySender[doc.sender] = 0;
-      }
-      statistics.bySender[doc.sender]++;
       
       // Statystyki według odbiorcy
       if (!statistics.byRecipient[doc.recipient]) {
