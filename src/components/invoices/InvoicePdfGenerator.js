@@ -12,7 +12,7 @@ class InvoicePdfGenerator {
     this.translations = translations;
     this.options = {
       useTemplate: true,           // Czy używać szablonu tła
-      imageQuality: 0.8,          // Jakość kompresji obrazu (0.1-1.0)
+      imageQuality: 0.95,          // Jakość kompresji obrazu (0.1-1.0) - zwiększono dla lepszej jakości
       enableCompression: true,     // Czy włączyć kompresję PDF
       ...options
     };
@@ -159,8 +159,7 @@ class InvoicePdfGenerator {
       currentY += 5;
     }
     
-    // Dane bankowe
-    this.addBankingInfo(doc, currentY, t);
+    // Usunięto wywołanie addBankingInfo - dane bankowe będą wyświetlane tylko na dole faktury
     
     return currentY;
   }
@@ -224,16 +223,41 @@ class InvoicePdfGenerator {
     doc.text(this.convertPolishChars(buyerInfo.name || 'Brak nazwy klienta'), rightColX, buyerY);
     buyerY += 5;
     
-    // Adres odbiorcy
-    const buyerAddress = this.invoice.billingAddress || buyerInfo.address || buyerInfo.street || '';
-    if (buyerAddress) {
-      doc.text(this.convertPolishChars(buyerAddress), rightColX, buyerY);
-      buyerY += 5;
+    // Adres odbiorcy - priorytet dla billingAddress z faktury, potem z klienta
+    let buyerAddress = '';
+    if (this.invoice.billingAddress) {
+      buyerAddress = this.invoice.billingAddress;
+    } else if (buyerInfo.billingAddress) {
+      buyerAddress = buyerInfo.billingAddress;
+    } else if (buyerInfo.address || buyerInfo.street) {
+      buyerAddress = buyerInfo.address || buyerInfo.street;
     }
     
-    // Kod pocztowy i miasto odbiorcy
-    const buyerPostalCode = this.invoice.billingPostalCode || buyerInfo.zipCode || buyerInfo.postalCode || '';
-    const buyerCity = this.invoice.billingCity || buyerInfo.city || '';
+    if (buyerAddress) {
+      // Dzielimy adres na linie jeśli jest długi
+      const addressLines = doc.splitTextToSize(this.convertPolishChars(buyerAddress), 70);
+      addressLines.forEach(line => {
+        doc.text(line, rightColX, buyerY);
+        buyerY += 5;
+      });
+    }
+    
+    // Kod pocztowy i miasto odbiorcy - priorytet dla danych z faktury
+    let buyerPostalCode = '';
+    let buyerCity = '';
+    
+    if (this.invoice.billingPostalCode) {
+      buyerPostalCode = this.invoice.billingPostalCode;
+    } else if (buyerInfo.zipCode || buyerInfo.postalCode) {
+      buyerPostalCode = buyerInfo.zipCode || buyerInfo.postalCode;
+    }
+    
+    if (this.invoice.billingCity) {
+      buyerCity = this.invoice.billingCity;
+    } else if (buyerInfo.city) {
+      buyerCity = buyerInfo.city;
+    }
+    
     const buyerCityLine = `${buyerPostalCode} ${buyerCity}`.trim();
     if (buyerCityLine) {
       doc.text(this.convertPolishChars(buyerCityLine), rightColX, buyerY);
@@ -248,15 +272,9 @@ class InvoicePdfGenerator {
     }
     
     // NIP/VAT ID odbiorcy
-    if (buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId) {
-      const vatNumber = buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId;
+    if (buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId || buyerInfo.vatEu) {
+      const vatNumber = buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId || buyerInfo.vatEu;
       doc.text(`NIP/VAT: ${vatNumber}`, rightColX, buyerY);
-      buyerY += 5;
-    }
-    
-    // VAT-EU jeśli istnieje
-    if (buyerInfo.vatEu) {
-      doc.text(`${t.vatEu} ${buyerInfo.vatEu}`, rightColX, buyerY);
       buyerY += 5;
     }
     
@@ -268,6 +286,12 @@ class InvoicePdfGenerator {
     
     if (buyerInfo.phone) {
       doc.text(`${t.phone} ${buyerInfo.phone}`, rightColX, buyerY);
+      buyerY += 5;
+    }
+    
+    // Dodatkowe informacje jeśli są dostępne
+    if (buyerInfo.supplierVatEu && buyerInfo.supplierVatEu !== buyerInfo.vatEu) {
+      doc.text(`VAT-EU dostawcy: ${buyerInfo.supplierVatEu}`, rightColX, buyerY);
       buyerY += 5;
     }
     
@@ -649,47 +673,50 @@ class InvoicePdfGenerator {
       doc.text('INVOICE', 20, 30);
     }
     
-    // Numer faktury
+    // Typ faktury (proforma) jeśli dotyczy - na lewej stronie
+    if (this.invoice.isProforma) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text('PROFORMA', 14, this.options.useTemplate ? 45 : 25);
+    }
+    
+    // Numer faktury - na lewej stronie
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(`${t.invoiceNumber}: ${this.invoice.number}`, pageWidth - 20, this.options.useTemplate ? 55 : 30, { align: 'right' });
+    doc.text(`${t.invoiceNumber}: ${this.invoice.number}`, 14, this.options.useTemplate ? 55 : 35);
     
-    // Typ faktury (proforma) jeśli dotyczy
-    if (this.invoice.isProforma) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.text('PROFORMA', pageWidth - 20, this.options.useTemplate ? 65 : 40, { align: 'right' });
-    }
-    
-    // Dane faktury w prawej kolumnie
-    const rightColX = 120;
-    let currentY = this.options.useTemplate ? 75 : 50;
+    // Dane faktury - na lewej stronie
+    let leftColumnY = this.options.useTemplate ? 65 : 45;
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text(`${t.issueDate}`, rightColX, currentY);
+    doc.text(`${t.issueDate}`, 14, leftColumnY);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${this.formatDate(this.invoice.issueDate)}`, rightColX + 50, currentY);
+    doc.text(`${this.formatDate(this.invoice.issueDate)}`, 64, leftColumnY);
     
-    currentY += 6;
+    leftColumnY += 6;
     doc.setFont('helvetica', 'bold');
-    doc.text(`${t.dueDate}`, rightColX, currentY);
+    doc.text(`${t.dueDate}`, 14, leftColumnY);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${this.formatDate(this.invoice.dueDate)}`, rightColX + 50, currentY);
+    doc.text(`${this.formatDate(this.invoice.dueDate)}`, 64, leftColumnY);
     
     // Sprawdź czy jest to faktura do zamówienia zakupowego
     const isPurchaseInvoice = this.invoice.invoiceType === 'purchase' || this.invoice.originalOrderType === 'purchase';
     
+    // Ustaw pozycję startową Y dla Seller i Buyer - musi być poniżej informacji o fakturze
+    const sellerBuyerStartY = this.options.useTemplate ? 90 : 70;
+    
     // Dodaj informacje o sprzedawcy
-    currentY = this.addSellerInfo(doc, isPurchaseInvoice, this.options.useTemplate ? 80 : 60);
+    const sellerFinalY = this.addSellerInfo(doc, isPurchaseInvoice, sellerBuyerStartY);
     
-    // Dodaj informacje o nabywcy
-    const buyerY = this.addBuyerInfo(doc, isPurchaseInvoice, rightColX, this.options.useTemplate ? 90 : 70);
+    // Dodaj informacje o nabywcy - zaczynają w tej samej linii co Seller
+    const rightColX = 120; // Pozycja prawej kolumny dla Buyer
+    const buyerFinalY = this.addBuyerInfo(doc, isPurchaseInvoice, rightColX, sellerBuyerStartY);
     
-    // Tabela pozycji
-    const tableStartY = Math.max(currentY, buyerY) + 20;
+    // Tabela pozycji - pozycja zależy od tego, która sekcja (Seller/Buyer) jest dłuższa
+    const tableStartY = Math.max(sellerFinalY, buyerFinalY) + 20;
     const { totalNetto, finalY } = this.addItemsTable(doc, tableStartY);
     
     // Podsumowanie po tabeli
@@ -763,16 +790,20 @@ class InvoicePdfGenerator {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Ustaw rozmiar canvas na rozmiar PDF (A4: 210x297mm przy 72 DPI)
+            // Ustaw rozmiar canvas na rozmiar PDF (A4: 210x297mm przy wyższej rozdzielczości)
             const pageWidth = doc.internal.pageSize.getWidth();
             const pageHeight = doc.internal.pageSize.getHeight();
             
-            // Konwertuj jednostki PDF na piksele (72 DPI)
-            const canvasWidth = Math.round(pageWidth * 2.83); // 72 DPI to ~2.83 px/mm
-            const canvasHeight = Math.round(pageHeight * 2.83);
+            // Konwertuj jednostki PDF na piksele (150 DPI dla lepszej jakości)
+            const canvasWidth = Math.round(pageWidth * 5.91); // 150 DPI to ~5.91 px/mm
+            const canvasHeight = Math.round(pageHeight * 5.91);
             
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
+            
+            // Ustaw wysoką jakość renderowania
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             
             // Narysuj obraz na canvas z odpowiednim skalowaniem
             ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
@@ -851,7 +882,7 @@ class InvoicePdfGenerator {
  * @param {string} language - język ('pl' lub 'en')
  * @param {Object} options - opcje optymalizacji:
  *   - useTemplate: boolean (domyślnie true) - czy używać szablonu tła
- *   - imageQuality: number (0.1-1.0, domyślnie 0.8) - jakość kompresji obrazu
+ *   - imageQuality: number (0.1-1.0, domyślnie 0.95) - jakość kompresji obrazu
  *   - enableCompression: boolean (domyślnie true) - czy włączyć kompresję PDF
  */
 export const createInvoicePdfGenerator = (invoice, companyInfo, language = 'pl', options = {}) => {

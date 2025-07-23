@@ -41,7 +41,7 @@ const pdfGenerator = createInvoicePdfGenerator(invoice, companyInfo, 'pl', {
 const pdfGenerator = createInvoicePdfGenerator(invoice, companyInfo, 'pl', {
   useTemplate: true,           // Pełny szablon
   enableCompression: true,     // Kompresja włączona
-  imageQuality: 0.8           // Wysoka jakość
+  imageQuality: 0.95          // Najwyższa jakość (domyślne)
 });
 ```
 
@@ -57,7 +57,7 @@ Funkcja pomocnicza do tworzenia instancji generatora PDF.
 - `language` - język ('pl' lub 'en')
 - `options` - opcje optymalizacji (opcjonalne):
   - `useTemplate: boolean` - czy używać szablonu tła (domyślnie true)
-  - `imageQuality: number` - jakość kompresji obrazu 0.1-1.0 (domyślnie 0.8)
+  - `imageQuality: number` - jakość kompresji obrazu 0.1-1.0 (domyślnie 0.95)
   - `enableCompression: boolean` - czy włączyć kompresję PDF (domyślnie true)
 
 #### Zwraca:

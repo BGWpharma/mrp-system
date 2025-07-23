@@ -32,7 +32,8 @@ import {
   Save as SaveIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  Person as PersonIcon
+  Person as PersonIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { 
   createInvoice, 
@@ -82,6 +83,7 @@ const InvoiceForm = ({ invoiceId }) => {
   const [relatedInvoices, setRelatedInvoices] = useState([]);
   const [loadingRelatedInvoices, setLoadingRelatedInvoices] = useState(false);
   const [availableProformaAmount, setAvailableProformaAmount] = useState(null);
+  const [refreshingCustomer, setRefreshingCustomer] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -497,6 +499,50 @@ const InvoiceForm = ({ invoiceId }) => {
       
       // Pobierz zamówienia klienta, jeśli klient jest wybrany
       fetchCustomerOrders(selectedCustomer.id);
+    }
+  };
+
+  // Funkcja do odświeżania danych wybranego klienta
+  const refreshCustomerData = async () => {
+    if (!invoice.customer?.id) {
+      showError('Nie wybrano klienta do odświeżenia');
+      return;
+    }
+
+    setRefreshingCustomer(true);
+    try {
+      // Pobierz aktualne dane klienta z bazy danych
+      const updatedCustomer = await getCustomerById(invoice.customer.id);
+      
+      // Zaktualizuj dane klienta w fakturze
+      setInvoice(prev => ({
+        ...prev,
+        customer: {
+          id: updatedCustomer.id,
+          name: updatedCustomer.name,
+          email: updatedCustomer.email,
+          phone: updatedCustomer.phone,
+          address: updatedCustomer.address || '',
+          vatEu: updatedCustomer.vatEu || '',
+          billingAddress: updatedCustomer.billingAddress || updatedCustomer.address || '',
+          shippingAddress: updatedCustomer.shippingAddress || updatedCustomer.address || '',
+          supplierVatEu: updatedCustomer.supplierVatEu || '',
+          nip: updatedCustomer.nip || '',
+          taxId: updatedCustomer.taxId || ''
+        },
+        billingAddress: updatedCustomer.billingAddress || updatedCustomer.address || '',
+        shippingAddress: updatedCustomer.shippingAddress || updatedCustomer.address || ''
+      }));
+
+      // Odśwież również listę klientów aby mieć najnowsze dane
+      await fetchCustomers();
+      
+      showSuccess('Dane klienta zostały odświeżone');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych klienta:', error);
+      showError('Nie udało się odświeżyć danych klienta: ' + error.message);
+    } finally {
+      setRefreshingCustomer(false);
     }
   };
 
@@ -1021,14 +1067,29 @@ const InvoiceForm = ({ invoiceId }) => {
                   <Typography variant="subtitle1">
                     Klient
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    startIcon={<PersonIcon />}
-                    onClick={() => setCustomerDialogOpen(true)}
-                    size="small"
-                  >
-                    Wybierz klienta
-                  </Button>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<PersonIcon />}
+                      onClick={() => setCustomerDialogOpen(true)}
+                      size="small"
+                    >
+                      Wybierz klienta
+                    </Button>
+                    {invoice.customer?.id && (
+                      <Button
+                        variant="outlined"
+                        startIcon={refreshingCustomer ? <CircularProgress size={16} /> : <RefreshIcon />}
+                        onClick={refreshCustomerData}
+                        disabled={refreshingCustomer}
+                        size="small"
+                        color="secondary"
+                        title="Odśwież dane klienta"
+                      >
+                        {refreshingCustomer ? 'Odświeżanie...' : 'Odśwież'}
+                      </Button>
+                    )}
+                  </Box>
                 </Box>
                 
                 {invoice.customer?.id ? (
