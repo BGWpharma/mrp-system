@@ -1836,6 +1836,8 @@
     "productionTime": "Production time per {{unit}} (min.)",
     "defaultWorkstation": "Default production workstation",
     "workstationHelpText": "Workstation will be automatically assigned when generating MO from CO",
+    "density": "Density (g/ml)",
+    "densityHelpText": "Product density expressed in grams per milliliter",
     "none": "None",
     "ingredients": {
       "title": "Ingredients",

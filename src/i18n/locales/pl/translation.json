@@ -1836,6 +1836,8 @@
     "productionTime": "Czas produkcji na {{unit}} (min.)",
     "defaultWorkstation": "Domyślne stanowisko produkcyjne",
     "workstationHelpText": "Stanowisko będzie automatycznie przypisywane podczas generowania MO z CO",
+    "density": "Gęstość (g/ml)",
+    "densityHelpText": "Gęstość produktu wyrażona w gramach na mililitr",
     "none": "Brak",
     "ingredients": {
       "title": "Składniki",

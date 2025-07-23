@@ -95,7 +95,8 @@ const RecipeForm = ({ recipeId }) => {
     processingCostPerUnit: 0,
     productionTimePerUnit: 0,
     defaultWorkstationId: '',
-    nutritionalBasis: '1 caps' // Nowe pole dla podstawy składników odżywczych
+    nutritionalBasis: '1 caps', // Nowe pole dla podstawy składników odżywczych
+    density: '' // Nowe pole dla gęstości produktu
   });
 
   // Dodajemy stan dla składników z magazynu
@@ -1384,7 +1385,7 @@ const RecipeForm = ({ recipeId }) => {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6}>
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
                 <InputLabel>{t('recipes.defaultWorkstation')}</InputLabel>
                 <Select
@@ -1405,6 +1406,30 @@ const RecipeForm = ({ recipeId }) => {
                 </Select>
                 <FormHelperText>{t('recipes.workstationHelpText')}</FormHelperText>
               </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                name="density"
+                label={t('recipes.density')}
+                value={recipeData.density}
+                onChange={handleChange}
+                fullWidth
+                type="number"
+                inputProps={{
+                  step: "0.01",
+                  min: "0"
+                }}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                helperText={t('recipes.densityHelpText')}
+                InputProps={{
+                  startAdornment: (
+                    <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
+                      <ScienceIcon fontSize="small" />
+                    </Box>
+                  ),
+                }}
+              />
             </Grid>
             
             {/* Ukrywamy pola wydajności, dodajemy ukryte pole input */}
@@ -2096,7 +2121,7 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
       </Paper>
 
-      {/* Sekcja załączników designu */}
+      {/* Sekcja załączników designu - kompaktowa */}
       <Paper 
         elevation={3} 
         sx={{ 
@@ -2108,7 +2133,7 @@ const RecipeForm = ({ recipeId }) => {
       >
         <Box 
           sx={{ 
-            p: 2, 
+            p: 1.5, 
             display: 'flex', 
             alignItems: 'center', 
             gap: 1,
@@ -2119,17 +2144,18 @@ const RecipeForm = ({ recipeId }) => {
               : 'rgba(245, 247, 250, 0.8)'
           }}
         >
-          <PhotoCameraIcon color="primary" />
-          <Typography variant="h6" fontWeight="500">Załączniki designu produktu</Typography>
+          <PhotoCameraIcon color="primary" sx={{ fontSize: 20 }} />
+          <Typography variant="subtitle1" fontWeight="500">Załączniki designu produktu</Typography>
         </Box>
         
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: 2 }}>
           <RecipeDesignAttachments
             recipeId={recipeId || 'temp'}
             attachments={designAttachments}
             onAttachmentsChange={setDesignAttachments}
             disabled={saving}
             showTitle={false}
+            compact={true}
           />
         </Box>
       </Paper>

@@ -260,6 +260,7 @@ const RecipeDetailsPage = () => {
         Description: recipe.description || '',
         'Time/piece (min)': timePerPiece.toFixed(2),
         'Cost/piece (EUR)': recipe.processingCostPerUnit ? recipe.processingCostPerUnit.toFixed(2) : '0.00',
+        'Density (g/cm³)': recipe.density ? parseFloat(recipe.density).toFixed(2) : '0.00',
         Workstation: workstation ? workstation.name : '',
         Status: translateStatus(recipe.status)
       };
@@ -274,7 +275,7 @@ const RecipeDetailsPage = () => {
       })) : [];
 
       // Utwórz nagłówki dla podstawowych danych receptury
-      const recipeHeaders = ['SKU', 'Description', 'Time/piece (min)', 'Cost/piece (EUR)', 'Workstation', 'Status'];
+      const recipeHeaders = ['SKU', 'Description', 'Time/piece (min)', 'Cost/piece (EUR)', 'Density (g/cm³)', 'Workstation', 'Status'];
       
       // Utwórz nagłówki dla składników
       const ingredientHeaders = ['Ingredient Name', 'Quantity', 'Unit', 'CAS Number', 'Notes'];
@@ -534,6 +535,13 @@ const RecipeDetailsPage = () => {
                   <Typography variant="subtitle2" color="text.secondary">
                     {recipe.processingCostPerUnit ? 
                       t('recipes.details.costPerUnit', { cost: recipe.processingCostPerUnit.toFixed(2) }) : 
+                      t('recipes.details.notSpecified')}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {recipe.density ? 
+                      `${t('recipes.density')}: ${parseFloat(recipe.density).toFixed(2)} g/ml` : 
                       t('recipes.details.notSpecified')}
                   </Typography>
                 </Grid>

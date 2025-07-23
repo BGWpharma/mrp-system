@@ -48,7 +48,8 @@ const RecipeDesignAttachments = ({
   onAttachmentsChange, 
   disabled = false,
   showTitle = true,
-  viewOnly = false
+  viewOnly = false,
+  compact = false
 }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -204,22 +205,32 @@ const RecipeDesignAttachments = ({
       {!viewOnly && (
         <Paper
           sx={{
-            p: 2,
+            p: compact ? 1.5 : 2,
             border: dragOver ? '2px dashed #1976d2' : '2px dashed #ccc',
             backgroundColor: dragOver ? 'rgba(25, 118, 210, 0.08)' : 'rgba(0, 0, 0, 0.02)',
             cursor: disabled ? 'not-allowed' : 'pointer',
             transition: 'all 0.3s ease',
-            mb: 2
+            mb: compact ? 1.5 : 2
           }}
         >
           <Box sx={{ textAlign: 'center' }}>
-            <CloudUploadIcon sx={{ fontSize: 48, color: disabled ? 'grey.400' : 'primary.main', mb: 1 }} />
-            <Typography variant="h6" color={disabled ? 'text.disabled' : 'text.primary'} gutterBottom>
+            <CloudUploadIcon sx={{ 
+              fontSize: compact ? 32 : 48, 
+              color: disabled ? 'grey.400' : 'primary.main', 
+              mb: compact ? 0.5 : 1 
+            }} />
+            <Typography 
+              variant={compact ? "subtitle1" : "h6"} 
+              color={disabled ? 'text.disabled' : 'text.primary'} 
+              gutterBottom
+            >
               {uploading ? t('recipes.designAttachments.uploading') : t('recipes.designAttachments.upload')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {t('recipes.designAttachments.description')}
-            </Typography>
+            {!compact && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t('recipes.designAttachments.description')}
+              </Typography>
+            )}
             
             <FileOrCameraInput
               onChange={(event) => {
@@ -234,25 +245,25 @@ const RecipeDesignAttachments = ({
               maxHeight="60vh"
             />
             
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: compact ? 0.5 : 1 }}>
               {t('recipes.designAttachments.supportedFormats')}
             </Typography>
           </Box>
           
-          {uploading && <LinearProgress sx={{ mt: 2 }} />}
+          {uploading && <LinearProgress sx={{ mt: compact ? 1 : 2 }} />}
         </Paper>
       )}
 
       {/* Lista załączonych plików w formie kartek */}
       {attachments.length > 0 && (
-        <Grid container spacing={2}>
+        <Grid container spacing={compact ? 1 : 2}>
           {attachments.map((attachment) => (
-            <Grid item xs={12} sm={6} md={4} key={attachment.id}>
-              <Card>
+            <Grid item xs={12} sm={compact ? 4 : 6} md={compact ? 3 : 4} key={attachment.id}>
+              <Card sx={{ height: '100%' }}>
                 {isImage(attachment.contentType) ? (
                   <CardMedia
                     component="img"
-                    height="200"
+                    height={compact ? "120" : "200"}
                     image={attachment.downloadURL}
                     alt={attachment.fileName}
                     sx={{ objectFit: 'cover', cursor: 'pointer' }}
@@ -261,7 +272,7 @@ const RecipeDesignAttachments = ({
                 ) : attachment.contentType === 'application/pdf' ? (
                   <Box 
                     sx={{ 
-                      height: 200, 
+                      height: compact ? 120 : 200, 
                       display: 'flex', 
                       flexDirection: 'column', 
                       alignItems: 'center', 
@@ -277,32 +288,34 @@ const RecipeDesignAttachments = ({
                     onClick={() => handlePreviewFile(attachment)}
                   >
                     <Box sx={{ 
-                      width: 80, 
-                      height: 80, 
+                      width: compact ? 50 : 80, 
+                      height: compact ? 50 : 80, 
                       bgcolor: 'error.main', 
                       borderRadius: 2, 
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
-                      mb: 2,
+                      mb: compact ? 1 : 2,
                       boxShadow: 2,
                       transition: 'all 0.3s ease'
                     }}>
-                      <Typography variant="h4" color="white" fontWeight="bold">
+                      <Typography variant={compact ? "h6" : "h4"} color="white" fontWeight="bold">
                         PDF
                       </Typography>
                     </Box>
-                    <Typography variant="body2" color="text.primary" fontWeight="medium" textAlign="center">
+                    <Typography variant={compact ? "caption" : "body2"} color="text.primary" fontWeight="medium" textAlign="center">
                       {t('recipes.designAttachments.designPdf')}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" textAlign="center">
-                      {t('recipes.designAttachments.preview')}
-                    </Typography>
+                    {!compact && (
+                      <Typography variant="caption" color="text.secondary" textAlign="center">
+                        {t('recipes.designAttachments.preview')}
+                      </Typography>
+                    )}
                   </Box>
                 ) : (
                   <Box 
                     sx={{ 
-                      height: 200, 
+                      height: compact ? 120 : 200, 
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center',
@@ -318,10 +331,10 @@ const RecipeDesignAttachments = ({
                   </Box>
                 )}
                 
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <CardContent sx={{ p: compact ? 1 : 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: compact ? 0.5 : 1 }}>
                     {getFileIcon(attachment.contentType)}
-                    <Typography variant="subtitle2" sx={{ ml: 1, flexGrow: 1 }} noWrap>
+                    <Typography variant={compact ? "caption" : "subtitle2"} sx={{ ml: 1, flexGrow: 1 }} noWrap>
                       {attachment.fileName}
                     </Typography>
                   </Box>
@@ -330,24 +343,26 @@ const RecipeDesignAttachments = ({
                     {formatFileSize(attachment.size)}
                   </Typography>
                   
-                  {attachment.description && (
+                  {attachment.description && !compact && (
                     <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
                       {attachment.description}
                     </Typography>
                   )}
                   
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                    Przesłano: {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL')}
-                  </Typography>
+                  {!compact && (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                      Przesłano: {new Date(attachment.uploadedAt).toLocaleDateString('pl-PL')}
+                    </Typography>
+                  )}
                 </CardContent>
                 
-                <CardActions>
+                <CardActions sx={{ p: compact ? 0.5 : 1 }}>
                   <Tooltip title={t('recipes.designAttachments.preview')}>
                     <IconButton 
                       size="small" 
                       onClick={() => handlePreviewFile(attachment)}
                     >
-                      <VisibilityIcon />
+                      <VisibilityIcon fontSize={compact ? "small" : "medium"} />
                     </IconButton>
                   </Tooltip>
                   
@@ -356,7 +371,7 @@ const RecipeDesignAttachments = ({
                       size="small" 
                       onClick={() => handleDownloadFile(attachment)}
                     >
-                      <DownloadIcon />
+                      <DownloadIcon fontSize={compact ? "small" : "medium"} />
                     </IconButton>
                   </Tooltip>
                   
@@ -368,7 +383,7 @@ const RecipeDesignAttachments = ({
                           onClick={() => handleEditDescription(attachment)}
                           disabled={disabled}
                         >
-                          <EditIcon />
+                          <EditIcon fontSize={compact ? "small" : "medium"} />
                         </IconButton>
                       </Tooltip>
                       
@@ -379,7 +394,7 @@ const RecipeDesignAttachments = ({
                           onClick={() => handleDeleteFile(attachment)}
                           disabled={disabled}
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize={compact ? "small" : "medium"} />
                         </IconButton>
                       </Tooltip>
                     </>
@@ -392,7 +407,7 @@ const RecipeDesignAttachments = ({
       )}
 
       {attachments.length === 0 && (
-        <Alert severity="info" sx={{ mt: 2 }}>
+        <Alert severity="info" sx={{ mt: compact ? 1 : 2 }}>
           {viewOnly 
             ? "Brak załączników designu dla tej receptury." 
             : "Brak załączników designu. Dodaj pierwszy design produktu powyżej."

@@ -42,6 +42,7 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
       { key: 'prepTime', label: 'Czas przygotowania' },
       { key: 'productionTimePerUnit', label: 'Czas/sztuka' },
       { key: 'processingCostPerUnit', label: 'Koszt/sztuka' },
+      { key: 'density', label: 'Gęstość' },
       { key: 'status', label: 'Status' },
       { key: 'notes', label: 'Notatki' }
     ];
@@ -61,6 +62,9 @@ const RecipeVersionComparison = ({ currentVersion, previousVersion }) => {
         } else if (field.key === 'processingCostPerUnit') {
           formattedOldValue = oldValue ? `${parseFloat(oldValue).toFixed(2)} EUR` : '(brak)';
           formattedNewValue = newValue ? `${parseFloat(newValue).toFixed(2)} EUR` : '(brak)';
+        } else if (field.key === 'density') {
+          formattedOldValue = oldValue ? `${parseFloat(oldValue).toFixed(2)} g/cm³` : '(brak)';
+          formattedNewValue = newValue ? `${parseFloat(newValue).toFixed(2)} g/cm³` : '(brak)';
         }
         
         basicDiffs.push({
