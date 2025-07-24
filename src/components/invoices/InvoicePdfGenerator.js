@@ -19,6 +19,32 @@ class InvoicePdfGenerator {
   }
 
   /**
+   * Funkcja do tłumaczenia jednostek miary na angielski
+   */
+  translateUnit(unit) {
+    const unitTranslations = {
+      'szt.': 'pcs',
+      'kg': 'kg',
+      'g': 'g',
+      'l': 'l',
+      'ml': 'ml',
+      'caps': 'caps',
+      'm': 'm',
+      'cm': 'cm',
+      'mm': 'mm',
+      't': 't',
+      'op.': 'pack',
+      'komplet': 'set',
+      'para': 'pair',
+      'pudełko': 'box',
+      'butelka': 'bottle',
+      'torebka': 'bag'
+    };
+    
+    return unitTranslations[unit] || unit || 'pcs';
+  }
+
+  /**
    * Funkcja do konwersji polskich znaków
    */
   convertPolishChars(text) {
@@ -351,7 +377,7 @@ class InvoicePdfGenerator {
       tableRows.push({
         description: fullDescription,
         cnCode: item.cnCode || '-',
-        quantity: `${quantity} ${item.unit || 'szt.'}`,
+        quantity: `${quantity} ${this.translateUnit(item.unit)}`,
         unitPrice: `${price.toFixed(2)} ${this.invoice.currency}`,
         vat: vatDisplay,
         netValue: `${netValue.toFixed(2)} ${this.invoice.currency}`,

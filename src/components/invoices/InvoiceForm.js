@@ -948,7 +948,9 @@ const InvoiceForm = ({ invoiceId }) => {
           return false;
         }
         
-        if (allocation.amount > proforma.amountInfo.available) {
+        // Dodaj tolerancję dla różnic zaokrągleń (1 grosz = 0.01)
+        const tolerance = 0.01;
+        if (allocation.amount > (proforma.amountInfo.available + tolerance)) {
           showError(`Kwota do rozliczenia z proformy ${allocation.proformaNumber} (${allocation.amount.toFixed(2)}) przekracza dostępną kwotę (${proforma.amountInfo.available.toFixed(2)})`);
           return false;
         }
@@ -957,7 +959,7 @@ const InvoiceForm = ({ invoiceId }) => {
     
     // Compatibility: sprawdź stary system selectedProformaId
     else if (!invoice.isProforma && invoice.settledAdvancePayments > 0 && invoice.selectedProformaId) {
-      if (availableProformaAmount && invoice.settledAdvancePayments > availableProformaAmount.available) {
+      if (availableProformaAmount && invoice.settledAdvancePayments > (availableProformaAmount.available + 0.01)) {
         const selectedProforma = availableProformas.find(p => p.id === invoice.selectedProformaId);
         const proformaNumber = selectedProforma?.number || 'nieznana';
         showError(`Kwota zaliczek (${invoice.settledAdvancePayments}) przekracza dostępną kwotę z proformy ${proformaNumber} (${availableProformaAmount.available.toFixed(2)})`);
@@ -1686,12 +1688,12 @@ const InvoiceForm = ({ invoiceId }) => {
                               inputProps: { 
                                 min: 0, 
                                 step: 0.01,
-                                max: proforma.amountInfo.available
+                                max: proforma.amountInfo.available + 0.01
                               }
                             }}
-                            error={allocatedAmount > proforma.amountInfo.available}
+                            error={allocatedAmount > (proforma.amountInfo.available + 0.01)}
                             helperText={
-                              allocatedAmount > proforma.amountInfo.available 
+                              allocatedAmount > (proforma.amountInfo.available + 0.01)
                                 ? `Przekracza dostępną kwotę (${proforma.amountInfo.available.toFixed(2)})`
                                 : null
                             }
