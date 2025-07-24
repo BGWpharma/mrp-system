@@ -786,16 +786,7 @@ export const DEFAULT_INVOICE = {
   paymentDate: null,
   payments: [], // Lista płatności
   totalPaid: 0, // Suma wszystkich płatności
-  items: [{
-    id: '',
-    name: '',
-    description: '',
-    quantity: 1,
-    unit: 'szt.',
-    price: 0,
-    netValue: 0,
-    vat: 0
-  }],
+  items: [],
   total: 0,
   currency: 'EUR',
   selectedBankAccount: '',

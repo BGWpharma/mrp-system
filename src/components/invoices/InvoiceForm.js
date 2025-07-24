@@ -25,7 +25,13 @@ import {
   Checkbox,
   Switch,
   ToggleButton,
-  ToggleButtonGroup
+  ToggleButtonGroup,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -33,7 +39,8 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Person as PersonIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { 
   createInvoice, 
@@ -91,6 +98,10 @@ const InvoiceForm = ({ invoiceId }) => {
   const [availableProformaAmount, setAvailableProformaAmount] = useState(null);
   const [availableProformas, setAvailableProformas] = useState([]);
   const [refreshingCustomer, setRefreshingCustomer] = useState(false);
+  // Stany dla dialogu wyboru pozycji z zamówienia
+  const [orderItemsDialogOpen, setOrderItemsDialogOpen] = useState(false);
+  const [availableOrderItems, setAvailableOrderItems] = useState([]);
+  const [selectedOrderItems, setSelectedOrderItems] = useState([]);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -390,6 +401,82 @@ const InvoiceForm = ({ invoiceId }) => {
   // Funkcja do obliczania łącznej kwoty alokacji
   const getTotalAllocatedAmount = () => {
     return (invoice.proformAllocation || []).reduce((sum, allocation) => sum + allocation.amount, 0);
+  };
+
+  // Funkcje do obsługi wyboru pozycji z zamówienia
+  const handleOpenOrderItemsDialog = (orderItems) => {
+    // Przygotuj pozycje z obliconymi cenami (jak w oryginalnej logice)
+    const mappedItems = (orderItems || []).map(item => {
+      let finalPrice;
+      
+      // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
+      if (invoice.isProforma && item.lastUsageInfo && item.lastUsageInfo.cost && parseFloat(item.lastUsageInfo.cost) > 0) {
+        finalPrice = parseFloat(item.lastUsageInfo.cost);
+      } else {
+        // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
+        const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
+        
+        // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
+        finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
+          ? parseFloat(item.fullProductionUnitCost)
+          : parseFloat(item.price || 0);
+      }
+
+      return {
+        ...item,
+        price: finalPrice,
+        netValue: parseFloat(item.quantity || 0) * finalPrice,
+        selected: false // Domyślnie nie zaznaczone
+      };
+    });
+    
+    setAvailableOrderItems(mappedItems);
+    setSelectedOrderItems([]);
+    setOrderItemsDialogOpen(true);
+  };
+
+  const handleToggleOrderItem = (itemIndex) => {
+    setAvailableOrderItems(prev => 
+      prev.map((item, index) => 
+        index === itemIndex ? { ...item, selected: !item.selected } : item
+      )
+    );
+  };
+
+  const handleSelectAllOrderItems = () => {
+    const allSelected = availableOrderItems.every(item => item.selected);
+    setAvailableOrderItems(prev => 
+      prev.map(item => ({ ...item, selected: !allSelected }))
+    );
+  };
+
+  const handleConfirmOrderItemsSelection = () => {
+    const selectedItems = availableOrderItems.filter(item => item.selected);
+    
+    if (selectedItems.length === 0) {
+      showError('Wybierz przynajmniej jedną pozycję do dodania');
+      return;
+    }
+    
+    // Dodaj wybrane pozycje do faktury
+    const newItems = selectedItems.map(item => ({
+      id: item.id || '',
+      name: item.name,
+      description: item.description || '',
+      quantity: item.quantity,
+      unit: item.unit || 'szt.',
+      price: item.price,
+      netValue: item.netValue,
+      vat: item.vat || 0
+    }));
+    
+    setInvoice(prev => ({
+      ...prev,
+      items: [...prev.items, ...newItems]
+    }));
+    
+    setOrderItemsDialogOpen(false);
+    showSuccess(`Dodano ${selectedItems.length} pozycji z zamówienia`);
   };
 
   const handleChange = (e) => {
@@ -778,39 +865,15 @@ const InvoiceForm = ({ invoiceId }) => {
           console.error('Nieprawidłowa wartość zamówienia:', finalTotal);
         }
         
-        // Mapowanie pozycji z uwzględnieniem kosztów z produkcji i ostatniego kosztu dla PROFORMA
-        const mappedItems = (selectedOrder.items || []).map(item => {
-          let finalPrice;
-          
-          // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
-          if (invoice.isProforma && item.lastUsageInfo && item.lastUsageInfo.cost && parseFloat(item.lastUsageInfo.cost) > 0) {
-            finalPrice = parseFloat(item.lastUsageInfo.cost);
-            console.log(`PROFORMA: Używam ostatniego kosztu ${finalPrice} dla ${item.name}`);
-          } else {
-            // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
-            const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
-            
-            // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
-            finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
-              ? parseFloat(item.fullProductionUnitCost)
-              : parseFloat(item.price || 0);
-          }
-
-          return {
-            ...item,
-            price: finalPrice,
-            netValue: parseFloat(item.quantity || 0) * finalPrice
-          };
-        });
-
         setInvoice(prev => ({
           ...prev,
-          customer: selectedOrder.customer,
-          items: mappedItems,
+          // Zachowaj już wybranego klienta, nie nadpisuj go danymi z zamówienia
+          customer: prev.customer?.id ? prev.customer : selectedOrder.customer,
+          // NIE dodawaj automatycznie pozycji - użytkownik je wybierze
           orderNumber: selectedOrder.orderNumber,
-          billingAddress: selectedOrder.customer?.billingAddress || selectedOrder.customer?.address || '',
-          shippingAddress: selectedOrder.shippingAddress || selectedOrder.customer?.address || '',
-          total: finalTotal,
+          // Używaj adresów z już wybranego klienta jeśli istnieje, w przeciwnym razie z zamówienia
+          billingAddress: prev.customer?.billingAddress || prev.customer?.address || selectedOrder.customer?.billingAddress || selectedOrder.customer?.address || '',
+          shippingAddress: prev.customer?.shippingAddress || selectedOrder.shippingAddress || prev.customer?.address || selectedOrder.customer?.address || '',
           currency: selectedOrder.currency || 'EUR',
           orderId: orderId,
           shippingInfo: shippingCost > 0 ? {
@@ -820,8 +883,9 @@ const InvoiceForm = ({ invoiceId }) => {
           linkedPurchaseOrders: selectedOrder.linkedPurchaseOrders || []
         }));
         
-        if (selectedOrder.customer?.id) {
-      setSelectedCustomerId(selectedOrder.customer.id);
+        // Ustaw selectedCustomerId tylko jeśli nie ma już wybranego klienta
+        if (selectedOrder.customer?.id && !selectedCustomerId && !invoice.customer?.id) {
+          setSelectedCustomerId(selectedOrder.customer.id);
         }
       }
       
@@ -1303,13 +1367,25 @@ const InvoiceForm = ({ invoiceId }) => {
           <Typography variant="h6">
             Pozycje faktury
           </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={handleAddItem}
-          >
-            Dodaj pozycję
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {selectedOrder && selectedOrderType === 'customer' && selectedOrder.items && selectedOrder.items.length > 0 && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AssignmentIcon />}
+                onClick={() => handleOpenOrderItemsDialog(selectedOrder.items)}
+              >
+                Wybierz z zamówienia
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={handleAddItem}
+            >
+              Dodaj pozycję
+            </Button>
+          </Box>
         </Box>
 
         {invoice.items.map((item, index) => (
@@ -1877,6 +1953,133 @@ const InvoiceForm = ({ invoiceId }) => {
             disabled={!selectedCustomerId}
           >
             Wybierz
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wyboru pozycji z zamówienia */}
+      <Dialog
+        open={orderItemsDialogOpen}
+        onClose={() => setOrderItemsDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">
+              Wybierz pozycje z zamówienia {selectedOrder?.orderNumber}
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleSelectAllOrderItems}
+            >
+              {availableOrderItems.every(item => item.selected) ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+            </Button>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox">Wybierz</TableCell>
+                  <TableCell>Nazwa</TableCell>
+                  <TableCell>Opis</TableCell>
+                  <TableCell align="right">Ilość</TableCell>
+                  <TableCell>J.m.</TableCell>
+                  <TableCell align="right">Cena</TableCell>
+                  <TableCell align="right">Wartość netto</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {availableOrderItems.map((item, index) => (
+                  <TableRow 
+                    key={index}
+                    hover
+                    sx={{ 
+                      '&:hover': { backgroundColor: 'action.hover' },
+                      backgroundColor: item.selected ? 'action.selected' : 'inherit'
+                    }}
+                  >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={item.selected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleOrderItem(index);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.name}
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.description || '-'}
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.quantity}
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.unit || 'szt.'}
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.price?.toFixed(2)} {invoice.currency || 'EUR'}
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {availableOrderItems.filter(item => item.selected).length > 0 && (
+            <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+              <Typography variant="subtitle2">
+                Wybrane pozycje: {availableOrderItems.filter(item => item.selected).length}
+              </Typography>
+              <Typography variant="body2">
+                Łączna wartość: {availableOrderItems
+                  .filter(item => item.selected)
+                  .reduce((sum, item) => sum + (item.netValue || 0), 0)
+                  .toFixed(2)} {invoice.currency || 'EUR'}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOrderItemsDialogOpen(false)}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmOrderItemsSelection}
+            variant="contained"
+            disabled={availableOrderItems.filter(item => item.selected).length === 0}
+          >
+            Dodaj wybrane pozycje ({availableOrderItems.filter(item => item.selected).length})
           </Button>
         </DialogActions>
       </Dialog>
