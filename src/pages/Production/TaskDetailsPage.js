@@ -273,6 +273,7 @@ const TaskDetailsPage = () => {
   const [rawMaterialsItems, setRawMaterialsItems] = useState([]);
   const [loadingRawMaterials, setLoadingRawMaterials] = useState(false);
   const [searchRawMaterials, setSearchRawMaterials] = useState('');
+  const [materialCategoryTab, setMaterialCategoryTab] = useState(0); // 0 = Surowce, 1 = Opakowania jednostkowe
 
   // Stany dla sekcji 5. Production w raporcie
   const [companyData, setCompanyData] = useState(null);
@@ -2759,10 +2760,13 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do pobierania dostępnych surowców
-  const fetchAvailableRawMaterials = async () => {
+  // Funkcja do pobierania dostępnych materiałów dla wybranej kategorii
+  const fetchAvailableRawMaterials = async (category = null) => {
     try {
       setLoadingRawMaterials(true);
+      
+      // Określ kategorię do pobrania
+      const targetCategory = category || (materialCategoryTab === 0 ? 'Surowce' : 'Opakowania jednostkowe');
       
       // Pobierz wszystkie pozycje magazynowe z odpowiednią strukturą danych zawierającą stany magazynowe
       const result = await getAllInventoryItems();
@@ -2770,12 +2774,12 @@ const TaskDetailsPage = () => {
       // Upewniamy się, że mamy dostęp do właściwych danych
       const allItems = Array.isArray(result) ? result : result.items || [];
       
-      // Filtrujemy tylko surowce
+      // Filtrujemy tylko pozycje z wybranej kategorii
       const rawMaterialsItems = allItems.filter(item => 
-        item.category === 'Surowce'
+        item.category === targetCategory
       );
       
-      console.log('Pobrane surowce:', rawMaterialsItems);
+      console.log(`Pobrane materiały z kategorii "${targetCategory}":`, rawMaterialsItems);
       
       setRawMaterialsItems(rawMaterialsItems.map(item => ({
         ...item,
@@ -2786,8 +2790,8 @@ const TaskDetailsPage = () => {
         unitPrice: item.unitPrice || item.price || 0
       })));
     } catch (error) {
-      console.error('Błąd podczas pobierania surowców:', error);
-      showError('Nie udało się pobrać listy surowców: ' + error.message);
+      console.error('Błąd podczas pobierania materiałów:', error);
+      showError('Nie udało się pobrać listy materiałów: ' + error.message);
     } finally {
       setLoadingRawMaterials(false);
     }
@@ -2795,7 +2799,9 @@ const TaskDetailsPage = () => {
   
   // Obsługa otwierania dialogu surowców
   const handleOpenRawMaterialsDialog = () => {
-    fetchAvailableRawMaterials();
+    setMaterialCategoryTab(0); // Resetuj do pierwszej zakładki
+    setSearchRawMaterials(''); // Wyczyść wyszukiwanie
+    fetchAvailableRawMaterials('Surowce'); // Pobierz surowce jako domyślną kategorię
     setRawMaterialsDialogOpen(true);
   };
   
@@ -2833,7 +2839,7 @@ const TaskDetailsPage = () => {
       const rawMaterialsToAdd = rawMaterialsItems.filter(item => item.selected && item.quantity > 0);
       
       if (rawMaterialsToAdd.length === 0) {
-        showError('Nie wybrano żadnych surowców do dodania');
+        showError('Nie wybrano żadnych materiałów do dodania');
         return;
       }
       
@@ -2879,11 +2885,11 @@ const TaskDetailsPage = () => {
       // Odśwież dane zadania
       fetchTask();
       
-      showSuccess('Surowce zostały dodane do zadania produkcyjnego');
+      showSuccess('Materiały zostały dodane do zadania produkcyjnego');
       setRawMaterialsDialogOpen(false);
     } catch (error) {
-      console.error('Błąd podczas dodawania surowców:', error);
-      showError('Nie udało się dodać surowców do zadania: ' + error.message);
+      console.error('Błąd podczas dodawania materiałów:', error);
+      showError('Nie udało się dodać materiałów do zadania: ' + error.message);
     } finally {
       setLoadingRawMaterials(false);
     }
@@ -4254,7 +4260,7 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja do filtrowania surowców na podstawie wyszukiwania
+  // Funkcja do filtrowania materiałów na podstawie wyszukiwania
   const filteredRawMaterialsItems = rawMaterialsItems.filter(item => 
     item.name.toLowerCase().includes(searchRawMaterials.toLowerCase())
   );
@@ -8921,16 +8927,32 @@ const TaskDetailsPage = () => {
             <DialogTitle>Dodaj surowiec do zadania</DialogTitle>
             <DialogContent>
               <DialogContentText sx={{ mb: 2 }}>
-                Wybierz surowiec, który chcesz dodać do zadania produkcyjnego.
+                Wybierz surowiec lub opakowanie jednostkowe, które chcesz dodać do zadania produkcyjnego.
                 <br />
                 <strong>Uwaga:</strong> Możesz dodać dowolną ilość - to jest tylko planowanie, nie rezerwacja materiałów.
               </DialogContentText>
               
-              {/* Pasek wyszukiwania surowców */}
+              {/* Zakładki kategorii materiałów */}
+              <Tabs 
+                value={materialCategoryTab} 
+                onChange={async (e, newValue) => {
+                  setMaterialCategoryTab(newValue);
+                  setSearchRawMaterials(''); // Wyczyść wyszukiwanie przy zmianie zakładki
+                  // Pobierz materiały dla nowej kategorii
+                  const targetCategory = newValue === 0 ? 'Surowce' : 'Opakowania jednostkowe';
+                  await fetchAvailableRawMaterials(targetCategory);
+                }}
+                sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+              >
+                <Tab label="Surowce" />
+                <Tab label="Opakowania jednostkowe" />
+              </Tabs>
+              
+              {/* Pasek wyszukiwania materiałów */}
               <TextField
                 fullWidth
                 margin="normal"
-                label="Wyszukaj surowiec"
+                label={materialCategoryTab === 0 ? "Wyszukaj surowiec" : "Wyszukaj opakowanie jednostkowe"}
                 variant="outlined"
                 value={searchRawMaterials}
                 onChange={(e) => setSearchRawMaterials(e.target.value)}
@@ -8955,7 +8977,6 @@ const TaskDetailsPage = () => {
                       <TableRow>
                         <TableCell padding="checkbox">Wybierz</TableCell>
                         <TableCell>Nazwa</TableCell>
-                        <TableCell>Kategoria</TableCell>
                         <TableCell>Dostępna ilość</TableCell>
                         <TableCell>Ilość do dodania</TableCell>
                       </TableRow>
@@ -8963,9 +8984,9 @@ const TaskDetailsPage = () => {
                     <TableBody>
                       {filteredRawMaterialsItems.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} align="center">
+                          <TableCell colSpan={4} align="center">
                             {rawMaterialsItems.length === 0 
-                              ? "Brak dostępnych surowców"
+                              ? "Brak dostępnych materiałów"
                               : "Brak wyników dla podanego wyszukiwania"}
                           </TableCell>
                         </TableRow>
@@ -8979,7 +9000,6 @@ const TaskDetailsPage = () => {
                               />
                             </TableCell>
                             <TableCell>{item.name}</TableCell>
-                            <TableCell>{item.category}</TableCell>
                             <TableCell>
                               <Box>
                                 <Typography variant="body2">
@@ -9028,7 +9048,7 @@ const TaskDetailsPage = () => {
                 color="secondary"
                 disabled={loadingRawMaterials || rawMaterialsItems.filter(item => item.selected && item.quantity > 0).length === 0}
               >
-                {loadingRawMaterials ? <CircularProgress size={24} /> : 'Dodaj wybrane surowce'}
+                {loadingRawMaterials ? <CircularProgress size={24} /> : 'Dodaj wybrane materiały'}
               </Button>
             </DialogActions>
           </Dialog>
