@@ -44,7 +44,11 @@ import {
   calculateInvoiceTotal,
   generateProformaNumber,
   getInvoicesByOrderId,
-  getAvailableProformaAmount
+  getAvailableProformaAmount,
+  getAvailableProformasForOrder,
+  getAvailableProformasForOrderWithExclusion,
+  updateMultipleProformasUsage,
+  removeMultipleProformasUsage
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -62,7 +66,9 @@ const InvoiceForm = ({ invoiceId }) => {
   const customerId = searchParams.get('customerId');
   const [invoice, setInvoice] = useState({ 
     ...DEFAULT_INVOICE,
-    settledAdvancePayments: 0
+    settledAdvancePayments: 0,
+    selectedProformaId: null,
+    proformAllocation: []
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -83,6 +89,7 @@ const InvoiceForm = ({ invoiceId }) => {
   const [relatedInvoices, setRelatedInvoices] = useState([]);
   const [loadingRelatedInvoices, setLoadingRelatedInvoices] = useState(false);
   const [availableProformaAmount, setAvailableProformaAmount] = useState(null);
+  const [availableProformas, setAvailableProformas] = useState([]);
   const [refreshingCustomer, setRefreshingCustomer] = useState(false);
 
   const { currentUser } = useAuth();
@@ -154,7 +161,11 @@ const InvoiceForm = ({ invoiceId }) => {
     setLoading(true);
     try {
       const fetchedInvoice = await getInvoiceById(id);
-      setInvoice(fetchedInvoice);
+      // Zapewnij że wszystkie nowe pola są zdefiniowane
+      setInvoice({
+        ...fetchedInvoice,
+        proformAllocation: fetchedInvoice.proformAllocation || []
+      });
 
       // Ustaw wartości wybrane w formularzach
       if (fetchedInvoice.customer?.id) {
@@ -301,6 +312,7 @@ const InvoiceForm = ({ invoiceId }) => {
     if (!orderId) {
       setRelatedInvoices([]);
       setAvailableProformaAmount(null);
+      setAvailableProformas([]);
       return;
     }
     
@@ -311,14 +323,19 @@ const InvoiceForm = ({ invoiceId }) => {
       const filteredInvoices = invoices.filter(inv => inv.id !== invoiceId);
       setRelatedInvoices(filteredInvoices);
       
-      // Znajdź proformę i pobierz dostępną kwotę
-      const proforma = filteredInvoices.find(inv => inv.isProforma);
-      if (proforma) {
-        try {
-          const amountInfo = await getAvailableProformaAmount(proforma.id);
-          setAvailableProformaAmount(amountInfo);
-        } catch (error) {
-          console.error('Błąd podczas pobierania dostępnej kwoty proformy:', error);
+      // Pobierz wszystkie dostępne proformy z ich kwotami
+      // Jeśli edytujemy istniejącą fakturę, uwzględnij to przy obliczaniu dostępnych kwot
+      const proformasWithAmounts = await getAvailableProformasForOrderWithExclusion(orderId, invoiceId);
+      // Filtruj proformy inne niż obecna faktura (jeśli edytujemy proformę)
+      const filteredProformas = proformasWithAmounts.filter(proforma => proforma.id !== invoiceId);
+      setAvailableProformas(filteredProformas);
+      
+      // Jeśli jest już wybrana proforma, zaktualizuj jej dostępną kwotę
+      if (invoice.selectedProformaId) {
+        const selectedProforma = filteredProformas.find(p => p.id === invoice.selectedProformaId);
+        if (selectedProforma) {
+          setAvailableProformaAmount(selectedProforma.amountInfo);
+        } else {
           setAvailableProformaAmount(null);
         }
       } else {
@@ -328,9 +345,51 @@ const InvoiceForm = ({ invoiceId }) => {
       console.error('Błąd podczas pobierania powiązanych faktur:', error);
       setRelatedInvoices([]);
       setAvailableProformaAmount(null);
+      setAvailableProformas([]);
     } finally {
       setLoadingRelatedInvoices(false);
     }
+  };
+
+  // Funkcja do obsługi zmiany alokacji proform
+  const handleProformaAllocationChange = (proformaId, amount, proformaNumber) => {
+    setInvoice(prev => {
+      const newAllocation = [...(prev.proformAllocation || [])];
+      const existingIndex = newAllocation.findIndex(a => a.proformaId === proformaId);
+      
+      if (amount > 0) {
+        const allocation = {
+          proformaId,
+          amount,
+          proformaNumber
+        };
+        
+        if (existingIndex >= 0) {
+          newAllocation[existingIndex] = allocation;
+        } else {
+          newAllocation.push(allocation);
+        }
+      } else {
+        // Usuń alokację jeśli kwota jest 0
+        if (existingIndex >= 0) {
+          newAllocation.splice(existingIndex, 1);
+        }
+      }
+      
+      // Oblicz łączną kwotę zaliczek
+      const totalAllocated = newAllocation.reduce((sum, a) => sum + a.amount, 0);
+      
+      return {
+        ...prev,
+        proformAllocation: newAllocation,
+        settledAdvancePayments: totalAllocated
+      };
+    });
+  };
+  
+  // Funkcja do obliczania łącznej kwoty alokacji
+  const getTotalAllocatedAmount = () => {
+    return (invoice.proformAllocation || []).reduce((sum, allocation) => sum + allocation.amount, 0);
   };
 
   const handleChange = (e) => {
@@ -342,6 +401,23 @@ const InvoiceForm = ({ invoiceId }) => {
         ...prev,
         [name]: parseFloat(value) || 0
       }));
+    } else if (name === 'selectedProformaId') {
+      // Obsługa zmiany wybranej proformy
+      setInvoice(prev => ({
+        ...prev,
+        [name]: value,
+        settledAdvancePayments: 0 // Resetuj zaliczki przy zmianie proformy
+      }));
+      
+      // Zaktualizuj dostępną kwotę dla nowej proformy
+      if (value) {
+        const selectedProforma = availableProformas.find(p => p.id === value);
+        if (selectedProforma) {
+          setAvailableProformaAmount(selectedProforma.amountInfo);
+        }
+      } else {
+        setAvailableProformaAmount(null);
+      }
     } else if (type === 'checkbox') {
       // Obsługa checkboxów (np. isProforma)
       if (name === 'isProforma' && checked) {
@@ -349,8 +425,11 @@ const InvoiceForm = ({ invoiceId }) => {
         setInvoice(prev => ({
           ...prev,
           [name]: checked,
-          settledAdvancePayments: 0
+          settledAdvancePayments: 0,
+          selectedProformaId: null,
+          proformAllocation: []
         }));
+        setAvailableProformaAmount(null);
       } else {
         setInvoice(prev => ({
           ...prev,
@@ -794,10 +873,30 @@ const InvoiceForm = ({ invoiceId }) => {
       return false;
     }
     
-    // Sprawdź czy kwota zaliczek nie przekracza dostępnej kwoty z proformy
-    if (!invoice.isProforma && availableProformaAmount && invoice.settledAdvancePayments > availableProformaAmount.available) {
-      showError(`Kwota zaliczek (${invoice.settledAdvancePayments}) przekracza dostępną kwotę z proformy (${availableProformaAmount.available.toFixed(2)})`);
-      return false;
+    // Sprawdź czy kwoty alokacji proform nie przekraczają dostępnych kwot
+    if (!invoice.isProforma && (invoice.proformAllocation || []).length > 0) {
+      for (const allocation of (invoice.proformAllocation || [])) {
+        const proforma = availableProformas.find(p => p.id === allocation.proformaId);
+        if (!proforma) {
+          showError(`Nie znaleziono proformy ${allocation.proformaNumber}`);
+          return false;
+        }
+        
+        if (allocation.amount > proforma.amountInfo.available) {
+          showError(`Kwota do rozliczenia z proformy ${allocation.proformaNumber} (${allocation.amount.toFixed(2)}) przekracza dostępną kwotę (${proforma.amountInfo.available.toFixed(2)})`);
+          return false;
+        }
+      }
+    }
+    
+    // Compatibility: sprawdź stary system selectedProformaId
+    else if (!invoice.isProforma && invoice.settledAdvancePayments > 0 && invoice.selectedProformaId) {
+      if (availableProformaAmount && invoice.settledAdvancePayments > availableProformaAmount.available) {
+        const selectedProforma = availableProformas.find(p => p.id === invoice.selectedProformaId);
+        const proformaNumber = selectedProforma?.number || 'nieznana';
+        showError(`Kwota zaliczek (${invoice.settledAdvancePayments}) przekracza dostępną kwotę z proformy ${proformaNumber} (${availableProformaAmount.available.toFixed(2)})`);
+        return false;
+      }
     }
     
     return true;
@@ -1420,7 +1519,7 @@ const InvoiceForm = ({ invoiceId }) => {
         <Divider sx={{ my: 3 }} />
 
         <Grid container spacing={2} justifyContent="flex-end">
-          <Grid item xs={12} sm={6} md={4}>
+          <Grid item xs={12} sm={8} md={6}>
             <Typography variant="body1" fontWeight="bold">
               Razem netto: {invoice.items.reduce((sum, item) => {
                 const quantity = Number(item.quantity) || 0;
@@ -1447,40 +1546,105 @@ const InvoiceForm = ({ invoiceId }) => {
             </Typography>
             
             {/* Dodanie pola dla rozliczonych zaliczek/przedpłat - ukryte dla proform */}
-            {!invoice.isProforma && (
+            {!invoice.isProforma && availableProformas.length > 0 && (
               <Box sx={{ mt: 2, mb: 2 }}>
-                <TextField
-                  fullWidth
-                  label="Rozliczone zaliczki/przedpłaty"
-                  type="number"
-                  name="settledAdvancePayments"
-                  value={invoice.settledAdvancePayments || 0}
-                  onChange={handleChange}
-                  InputProps={{
-                    endAdornment: <Typography>{invoice.currency || 'EUR'}</Typography>,
-                    inputProps: { 
-                      min: 0, 
-                      step: 0.01,
-                      max: availableProformaAmount?.available || undefined
-                    }
-                  }}
-                  helperText={
-                    availableProformaAmount 
-                      ? `Kwota zostanie odliczona od wartości brutto. Dostępne z proformy: ${availableProformaAmount.available.toFixed(2)} ${invoice.currency || 'EUR'}`
-                      : "Kwota zostanie odliczona od wartości brutto"
-                  }
-                  error={availableProformaAmount && invoice.settledAdvancePayments > availableProformaAmount.available}
-                />
-                {availableProformaAmount && (
-                  <Box sx={{ mt: 1, p: 1, bgcolor: 'info.light', borderRadius: 1 }}>
-                    <Typography variant="caption">
-                      📋 Proforma: {availableProformaAmount.total.toFixed(2)} {invoice.currency || 'EUR'} | 
-                      Wykorzystane: {availableProformaAmount.used.toFixed(2)} {invoice.currency || 'EUR'} | 
-                      <strong>Dostępne: {availableProformaAmount.available.toFixed(2)} {invoice.currency || 'EUR'}</strong>
+                <Typography variant="subtitle1" gutterBottom>
+                  Rozliczenie z proform
+                </Typography>
+                
+                {availableProformas.map((proforma) => {
+                  const allocation = (invoice.proformAllocation || []).find(a => a.proformaId === proforma.id);
+                  const allocatedAmount = allocation ? allocation.amount : 0;
+                  
+                  return (
+                    <Card key={proforma.id} variant="outlined" sx={{ mb: 2, p: 2 }}>
+                      <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} md={5}>
+                          <Typography variant="body1" fontWeight="bold">
+                            📋 Proforma {proforma.number}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Data: {proforma.issueDate ? 
+                              (proforma.issueDate.seconds ? 
+                                new Date(proforma.issueDate.seconds * 1000).toLocaleDateString() 
+                                : new Date(proforma.issueDate).toLocaleDateString()
+                              ) : 'Brak daty'}
+                          </Typography>
+                        </Grid>
+                        
+                        <Grid item xs={12} md={3}>
+                          <Typography variant="body2">
+                            <strong>Dostępne:</strong> {proforma.amountInfo.available.toFixed(2)} {proforma.currency || 'EUR'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            z {proforma.amountInfo.total.toFixed(2)} {proforma.currency || 'EUR'} 
+                            (wykorzystane: {proforma.amountInfo.used.toFixed(2)})
+                          </Typography>
+                        </Grid>
+                        
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="Kwota do rozliczenia"
+                            type="number"
+                            value={allocatedAmount}
+                            onChange={(e) => {
+                              const amount = parseFloat(e.target.value) || 0;
+                              handleProformaAllocationChange(proforma.id, amount, proforma.number);
+                            }}
+                            InputProps={{
+                              endAdornment: <Typography variant="caption">{invoice.currency || 'EUR'}</Typography>,
+                              inputProps: { 
+                                min: 0, 
+                                step: 0.01,
+                                max: proforma.amountInfo.available
+                              }
+                            }}
+                            error={allocatedAmount > proforma.amountInfo.available}
+                            helperText={
+                              allocatedAmount > proforma.amountInfo.available 
+                                ? `Przekracza dostępną kwotę (${proforma.amountInfo.available.toFixed(2)})`
+                                : null
+                            }
+                            disabled={proforma.amountInfo.available <= 0}
+                          />
+                        </Grid>
+                      </Grid>
+                      
+                      {proforma.amountInfo.available <= 0 && (
+                        <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+                          ⚠️ Ta proforma została całkowicie wykorzystana
+                        </Typography>
+                      )}
+                    </Card>
+                  );
+                })}
+                
+                {/* Podsumowanie rozliczenia */}
+                {(invoice.proformAllocation || []).length > 0 && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Podsumowanie rozliczenia:
+                    </Typography>
+                    {(invoice.proformAllocation || []).map((allocation) => (
+                      <Typography key={allocation.proformaId} variant="body2">
+                        • Proforma {allocation.proformaNumber}: {allocation.amount.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                    ))}
+                    <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>
+                      Łączna kwota zaliczek: {getTotalAllocatedAmount().toFixed(2)} {invoice.currency || 'EUR'}
                     </Typography>
                   </Box>
                 )}
               </Box>
+            )}
+            
+            {/* Informacja gdy brak proform */}
+            {!invoice.isProforma && availableProformas.length === 0 && relatedInvoices.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mt: 2 }}>
+                Brak dostępnych proform dla tego zamówienia do rozliczenia zaliczek.
+              </Typography>
             )}
             
             {/* Wyświetl dodatkowe koszty, jeśli istnieją */}
@@ -1532,33 +1696,57 @@ const InvoiceForm = ({ invoiceId }) => {
               </Box>
             )}
             
-            <Typography variant="h6" fontWeight="bold" color="primary">
-              Razem brutto: {(
-                // Obliczenie wartości netto
-                parseFloat(invoice.items.reduce((sum, item) => {
-                  const quantity = Number(item.quantity) || 0;
-                  const price = Number(item.price) || 0;
-                  return sum + (quantity * price);
-                }, 0)) + 
-                // Dodanie VAT do wartości netto
-                parseFloat(invoice.items.reduce((sum, item) => {
-                  const quantity = Number(item.quantity) || 0;
-                  const price = Number(item.price) || 0;
+            {/* Obliczenie wartości brutto bez przedpłat */}
+            {(() => {
+              const nettoValue = parseFloat(invoice.items.reduce((sum, item) => {
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                return sum + (quantity * price);
+              }, 0));
+              
+              const vatValue = parseFloat(invoice.items.reduce((sum, item) => {
+                const quantity = Number(item.quantity) || 0;
+                const price = Number(item.price) || 0;
+                
+                let vatRate = 0;
+                if (typeof item.vat === 'number') {
+                  vatRate = item.vat;
+                } else if (item.vat !== "ZW" && item.vat !== "NP") {
+                  vatRate = parseFloat(item.vat) || 0;
+                }
+                
+                return sum + (quantity * price * (vatRate / 100));
+              }, 0));
+              
+              const bruttoValue = nettoValue + vatValue;
+              const totalAdvancePayments = invoice.isProforma ? 0 : getTotalAllocatedAmount();
+              const finalAmount = bruttoValue - totalAdvancePayments;
+              
+              return (
+                <>
+                  <Typography variant="h6" fontWeight="bold" color="primary">
+                    Razem brutto: {bruttoValue.toFixed(2)} {invoice.currency || 'EUR'}
+                  </Typography>
                   
-                  // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
-                  let vatRate = 0;
-                  if (typeof item.vat === 'number') {
-                    vatRate = item.vat;
-                  } else if (item.vat !== "ZW" && item.vat !== "NP") {
-                    vatRate = parseFloat(item.vat) || 0;
-                  }
+                  {!invoice.isProforma && totalAdvancePayments > 0 && (
+                    <>
+                      <Typography variant="body1" color="warning.main" sx={{ mt: 1 }}>
+                        Przedpłaty z proform: -{totalAdvancePayments.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                      <Typography variant="h5" fontWeight="bold" color="success.main" sx={{ mt: 1 }}>
+                        Do zapłaty: {finalAmount.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                    </>
+                  )}
                   
-                  return sum + (quantity * price * (vatRate / 100));
-                }, 0)) - 
-                // Odejmowanie zaliczek/przedpłat - tylko dla zwykłych faktur, nie dla proform
-                (invoice.isProforma ? 0 : parseFloat(invoice.settledAdvancePayments || 0))
-              ).toFixed(2)} {invoice.currency || 'EUR'}
-            </Typography>
+                  {!invoice.isProforma && totalAdvancePayments === 0 && (
+                    <Typography variant="h6" fontWeight="bold" color="success.main" sx={{ mt: 1 }}>
+                      Do zapłaty: {bruttoValue.toFixed(2)} {invoice.currency || 'EUR'}
+                    </Typography>
+                  )}
+                </>
+              );
+            })()}
           </Grid>
         </Grid>
       </Paper>

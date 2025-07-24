@@ -389,8 +389,29 @@ const InvoiceDetails = () => {
                     Status płatności
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {invoice.paymentStatus === 'paid' ? 'Opłacona' : 
-                     invoice.paymentStatus === 'partially_paid' ? 'Częściowo opłacona' : 'Nieopłacona'}
+                    {(() => {
+                      // Oblicz łączne płatności (gotówkowe + proformy)
+                      const totalPaid = parseFloat(invoice.totalPaid || 0);
+                      
+                      // Oblicz przedpłaty z proform
+                      let advancePayments = 0;
+                      if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+                        advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+                      } else {
+                        advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+                      }
+                      
+                      const invoiceTotal = parseFloat(invoice.total || 0);
+                      const totalSettled = totalPaid + advancePayments;
+                      
+                      if (totalSettled >= invoiceTotal) {
+                        return 'Opłacona';
+                      } else if (totalSettled > 0) {
+                        return 'Częściowo opłacona';
+                      } else {
+                        return 'Nieopłacona';
+                      }
+                    })()}
                   </Typography>
                 </Grid>
                 {invoice.paymentDate && (
@@ -919,7 +940,20 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="h6" fontWeight="bold" align="right" color="primary">
-                {(parseFloat(invoice.total) - parseFloat(invoice.settledAdvancePayments || 0)).toFixed(2)} {invoice.currency}
+                {(() => {
+                  const total = parseFloat(invoice.total || 0);
+                  
+                  // Oblicz przedpłaty z proform
+                  let advancePayments = 0;
+                  if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+                    advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+                  } else {
+                    advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+                  }
+                  
+                  const remaining = total - advancePayments;
+                  return `${remaining.toFixed(2)} ${invoice.currency}`;
+                })()}
               </Typography>
             </Grid>
           </Grid>

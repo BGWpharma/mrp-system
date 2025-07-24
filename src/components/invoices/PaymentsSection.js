@@ -190,19 +190,32 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
     return payments.reduce((sum, payment) => sum + payment.amount, 0);
   };
 
+  const getTotalAdvancePayments = () => {
+    // Nowy system - suma z proformAllocation
+    if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+      return invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+    }
+    
+    // Stary system - settledAdvancePayments
+    return parseFloat(invoice.settledAdvancePayments || 0);
+  };
+
   const getRemainingAmount = () => {
     const total = parseFloat(invoice.total || 0);
     const paid = getTotalPaid();
-    return Math.max(0, total - paid);
+    const advancePayments = getTotalAdvancePayments();
+    return Math.max(0, total - paid - advancePayments);
   };
 
   const getPaymentStatusChip = () => {
     const totalPaid = getTotalPaid();
+    const advancePayments = getTotalAdvancePayments();
     const invoiceTotal = parseFloat(invoice.total || 0);
+    const totalSettled = totalPaid + advancePayments;
     
-    if (totalPaid >= invoiceTotal) {
+    if (totalSettled >= invoiceTotal) {
       return <Chip label="Opłacona" color="success" size="small" />;
-    } else if (totalPaid > 0) {
+    } else if (totalSettled > 0) {
       return <Chip label="Częściowo opłacona" color="warning" size="small" />;
     } else {
       return <Chip label="Nieopłacona" color="error" size="small" />;
@@ -252,6 +265,18 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
             </Typography>
           </Paper>
         </Grid>
+        {getTotalAdvancePayments() > 0 && (
+          <Grid item xs={12} md={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Przedpłaty z proform
+              </Typography>
+              <Typography variant="h6" color="warning.main">
+                {formatCurrency(getTotalAdvancePayments(), invoice.currency)}
+              </Typography>
+            </Paper>
+          </Grid>
+        )}
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">

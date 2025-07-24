@@ -627,14 +627,52 @@ const InvoicesList = () => {
                               </Box>
                             ) : (
                               // Dla zwykłych faktur wyświetl kwotę do zapłaty
-                              formatCurrency(
-                                invoice.total - (invoice.totalPaid || 0), 
-                                invoice.currency
-                              )
+                              (() => {
+                                const total = parseFloat(invoice.total || 0);
+                                const paid = parseFloat(invoice.totalPaid || 0);
+                                
+                                // Oblicz przedpłaty z proform
+                                let advancePayments = 0;
+                                if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+                                  advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+                                } else {
+                                  advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+                                }
+                                
+                                const remaining = Math.max(0, total - paid - advancePayments);
+                                return formatCurrency(remaining, invoice.currency);
+                              })()
                             )}
                           </TableCell>
                           <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
-                          <TableCell>{renderPaymentStatus(invoice.paymentStatus)}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              // Oblicz status płatności uwzględniając przedpłaty z proform
+                              const totalPaid = parseFloat(invoice.totalPaid || 0);
+                              
+                              // Oblicz przedpłaty z proform
+                              let advancePayments = 0;
+                              if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+                                advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+                              } else {
+                                advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+                              }
+                              
+                              const invoiceTotal = parseFloat(invoice.total || 0);
+                              const totalSettled = totalPaid + advancePayments;
+                              
+                              let calculatedStatus;
+                              if (totalSettled >= invoiceTotal) {
+                                calculatedStatus = 'paid';
+                              } else if (totalSettled > 0) {
+                                calculatedStatus = 'partially_paid';
+                              } else {
+                                calculatedStatus = 'unpaid';
+                              }
+                              
+                              return renderPaymentStatus(calculatedStatus);
+                            })()}
+                          </TableCell>
                           <TableCell align="right">
                             <Box sx={{ 
                               display: 'flex', 
