@@ -697,6 +697,7 @@ const InvoiceDetails = () => {
               <TableRow>
                 <TableCell sx={{ minWidth: 140 }}>Nazwa</TableCell>
                 <TableCell sx={{ minWidth: 140 }}>Opis</TableCell>
+                <TableCell sx={{ minWidth: 100 }}>CN Code</TableCell>
                 <TableCell align="right" sx={{ width: 70 }}>Ilość</TableCell>
                 <TableCell sx={{ width: 60 }}>J.m.</TableCell>
                 <TableCell align="right" sx={{ width: 100 }}>Cena netto</TableCell>
@@ -728,6 +729,7 @@ const InvoiceDetails = () => {
                   <TableRow key={index}>
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{item.description || '-'}</TableCell>
+                    <TableCell>{item.cnCode || '-'}</TableCell>
                     <TableCell align="right">{quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
                     <TableCell align="right">{price.toFixed(2)} {invoice.currency}</TableCell>

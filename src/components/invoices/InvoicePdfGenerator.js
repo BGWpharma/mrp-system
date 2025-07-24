@@ -305,10 +305,13 @@ class InvoicePdfGenerator {
     const t = this.translations;
     
     const tableColumns = [
-      { header: t.lp, dataKey: 'description', width: 85 },
-      { header: t.quantity, dataKey: 'quantity', width: 25 },
-      { header: t.unitPrice, dataKey: 'unitPrice', width: 35 },
-      { header: t.amount, dataKey: 'amount', width: 35 }
+      { header: t.lp, dataKey: 'description', width: 50 },
+      { header: t.cnCode, dataKey: 'cnCode', width: 22 },
+      { header: t.quantity, dataKey: 'quantity', width: 18 },
+      { header: t.unitPrice, dataKey: 'unitPrice', width: 22 },
+      { header: t.vat, dataKey: 'vat', width: 15 },
+      { header: t.netValue, dataKey: 'netValue', width: 22 },
+      { header: t.grossValue, dataKey: 'grossValue', width: 22 }
     ];
     
     // Przygotuj dane do tabeli
@@ -318,15 +321,41 @@ class InvoicePdfGenerator {
     this.invoice.items.forEach((item) => {
       const quantity = Number(item.quantity) || 0;
       const price = Number(item.price) || 0;
-      const netValue = Number(item.netValue) || 0;
-      const amount = netValue || (quantity * price);
-      totalNetto += amount;
+      const netValue = Number(item.netValue) || (quantity * price);
+      
+      // Obsługa VAT - może być liczbą lub stringiem "ZW"/"NP"
+      let vatRate = 0;
+      let vatDisplay = '0%';
+      if (typeof item.vat === 'number') {
+        vatRate = item.vat;
+        vatDisplay = `${vatRate}%`;
+      } else if (item.vat === 'ZW' || item.vat === 'NP') {
+        vatDisplay = item.vat;
+        vatRate = 0;
+      } else {
+        vatRate = parseFloat(item.vat) || 0;
+        vatDisplay = `${vatRate}%`;
+      }
+      
+      const vatValue = netValue * (vatRate / 100);
+      const grossValue = netValue + vatValue;
+      
+      totalNetto += netValue;
+      
+      // Przygotuj opis z nazwą i opisem w nawiasach
+      let fullDescription = item.name;
+      if (item.description && item.description.trim()) {
+        fullDescription += `\n(${item.description.trim()})`;
+      }
       
       tableRows.push({
-        description: item.name,
-        quantity: quantity.toString(),
+        description: fullDescription,
+        cnCode: item.cnCode || '-',
+        quantity: `${quantity} ${item.unit || 'szt.'}`,
         unitPrice: `${price.toFixed(2)} ${this.invoice.currency}`,
-        amount: `${amount.toFixed(2)} ${this.invoice.currency}`
+        vat: vatDisplay,
+        netValue: `${netValue.toFixed(2)} ${this.invoice.currency}`,
+        grossValue: `${grossValue.toFixed(2)} ${this.invoice.currency}`
       });
     });
     
@@ -336,26 +365,34 @@ class InvoicePdfGenerator {
       head: [tableColumns.map(col => col.header)],
       body: tableRows.map(row => [
         row.description,
+        row.cnCode,
         row.quantity,
         row.unitPrice,
-        row.amount
+        row.vat,
+        row.netValue,
+        row.grossValue
       ]),
       theme: 'grid',
       styles: { 
-        fontSize: 10,
-        cellPadding: 4,
+        fontSize: 8,
+        cellPadding: 2,
         halign: 'left'
       },
       columnStyles: {
-        0: { cellWidth: 85 },
-        1: { cellWidth: 25, halign: 'center' },
-        2: { cellWidth: 35, halign: 'right' },
-        3: { cellWidth: 35, halign: 'right' }
+        0: { cellWidth: 50, halign: 'left' },     // Opis
+        1: { cellWidth: 22, halign: 'center' },   // CN Code
+        2: { cellWidth: 18, halign: 'center' },   // Ilość
+        3: { cellWidth: 22, halign: 'right' },    // Cena jednostkowa
+        4: { cellWidth: 15, halign: 'center' },   // VAT %
+        5: { cellWidth: 22, halign: 'right' },    // Wartość netto
+        6: { cellWidth: 22, halign: 'right' }     // Wartość brutto
       },
       headStyles: { 
         fillColor: [139, 69, 255],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
+        fontSize: 9,
+        cellPadding: 2,
         halign: 'center'
       }
     });
@@ -904,8 +941,12 @@ export const createInvoicePdfGenerator = (invoice, companyInfo, language = 'pl',
       accountNumber: 'Nr konta:',
       swift: 'SWIFT:',
       lp: 'Opis',
-      quantity: 'Ilość',
+      cnCode: 'CN Code',
+      quantity: 'Ilość/j.m.',
       unitPrice: 'Cena jednostkowa',
+      vat: 'VAT %',
+      netValue: 'Wartość netto',
+      grossValue: 'Wartość brutto',
       amount: 'Kwota',
       totalPartial: 'Suma częściowa',
       total: 'Suma',
@@ -941,8 +982,12 @@ export const createInvoicePdfGenerator = (invoice, companyInfo, language = 'pl',
       accountNumber: 'Account Number:',
       swift: 'SWIFT:',
       lp: 'Description',
-      quantity: 'Quantity',
+      cnCode: 'CN Code',
+      quantity: 'Qty/Unit',
       unitPrice: 'Unit Price',
+      vat: 'VAT %',
+      netValue: 'Net Value',
+      grossValue: 'Gross Value',
       amount: 'Amount',
       totalPartial: 'Subtotal',
       total: 'Total',

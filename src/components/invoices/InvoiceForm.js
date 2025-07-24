@@ -467,7 +467,8 @@ const InvoiceForm = ({ invoiceId }) => {
       unit: item.unit || 'szt.',
       price: item.price,
       netValue: item.netValue,
-      vat: item.vat || 0
+      vat: item.vat || 0,
+      cnCode: item.cnCode || ''
     }));
     
     setInvoice(prev => ({
@@ -608,7 +609,8 @@ const InvoiceForm = ({ invoiceId }) => {
       unit: 'szt.',
       price: 0,
       netValue: 0,
-      vat: 0
+      vat: 0,
+      cnCode: ''
     };
     
     const updatedItems = [...invoice.items, newItem];
@@ -1400,12 +1402,22 @@ const InvoiceForm = ({ invoiceId }) => {
                   required
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={4}>
                 <TextField
                   fullWidth
                   label="Opis"
                   value={item.description || ''}
                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <TextField
+                  fullWidth
+                  label="CN Code"
+                  value={item.cnCode || ''}
+                  onChange={(e) => handleItemChange(index, 'cnCode', e.target.value)}
+                  placeholder="np. 1234.56.78.90"
+                  helperText="Kod klasyfikacji towarowej"
                 />
               </Grid>
               <Grid item xs={6} sm={2}>
@@ -1986,6 +1998,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   <TableCell padding="checkbox">Wybierz</TableCell>
                   <TableCell>Nazwa</TableCell>
                   <TableCell>Opis</TableCell>
+                  <TableCell>CN Code</TableCell>
                   <TableCell align="right">Ilość</TableCell>
                   <TableCell>J.m.</TableCell>
                   <TableCell align="right">Cena</TableCell>
@@ -2022,6 +2035,12 @@ const InvoiceForm = ({ invoiceId }) => {
                       sx={{ cursor: 'pointer' }}
                     >
                       {item.description || '-'}
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => handleToggleOrderItem(index)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      {item.cnCode || '-'}
                     </TableCell>
                     <TableCell 
                       align="right"
