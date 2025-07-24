@@ -624,23 +624,93 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       currentY += 5;
     };
 
-    // Introduction text
+    // Introduction text with company information
     const productName = task?.recipeName || task?.productName || 'the manufactured product';
-    const introductionText = `This report constitutes a comprehensive technical and quality documentation concerning the finished product ${productName}. It has been prepared based on production data, ingredient specifications, quality control records, and bibliographic research documentation. Its purpose is to ensure full transparency and compliance of the manufacturing process with the internal standards of BGW Pharma Sp. z o.o., as well as with the quality standards applicable to dietary supplements.`;
     
-    checkPageBreak(50); // Zwiększono dla większej zawartości
+    // Prepare company information for introduction with Polish character normalization
+    const companyName = normalizePolishChars(companyData?.name || 'BGW Pharma Sp. z o.o.');
+    const companyAddress = companyData?.address ? normalizePolishChars(`${companyData.address}`) : '';
+    const companyCity = companyData?.city ? normalizePolishChars(companyData.city) : '';
+    const companyFullAddress = [companyAddress, companyCity].filter(Boolean).join(', ');
+    const companyNip = companyData?.nip || '';
+    const companyRegon = companyData?.regon || '';
+    const companyEmail = companyData?.email || '';
+    const companyPhone = companyData?.phone || '';
+    const companyWebsite = companyData?.website || '';
+    
+    checkPageBreak(80); // Zwiększono dla większej zawartości z danymi firmy
     doc.setTextColor(85, 85, 85);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.text('Introduction:', margin, currentY);
     currentY += 8;
+    
+    // Company information section
     doc.setTextColor(85, 85, 85);
-    doc.setFontSize(11);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Company Information:', margin, currentY);
+    currentY += 6;
+    
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
+    
+    // Add company details
+    if (companyName) {
+      doc.text(`Company Name: ${companyName}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (companyFullAddress) {
+      const addressLines = doc.splitTextToSize(`Address: ${companyFullAddress}`, contentWidth);
+      doc.text(addressLines, margin, currentY);
+      currentY += Math.max(5, addressLines.length * 4);
+    }
+    
+    if (companyNip) {
+      doc.text(`NIP: ${companyNip}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (companyRegon) {
+      doc.text(`REGON: ${companyRegon}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (companyEmail) {
+      doc.text(`Email: ${companyEmail}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (companyPhone) {
+      doc.text(`Phone: ${companyPhone}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    if (companyWebsite) {
+      doc.text(`Website: ${companyWebsite}`, margin, currentY);
+      currentY += 5;
+    }
+    
+    currentY += 8;
+    
+    // Product report description
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Report Description:', margin, currentY);
+    currentY += 6;
+    
+    doc.setTextColor(85, 85, 85);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    const introductionText = `This report constitutes a comprehensive technical and quality documentation concerning the finished product ${productName}. It has been prepared based on production data, ingredient specifications, quality control records, and bibliographic research documentation. Its purpose is to ensure full transparency and compliance of the manufacturing process with the internal standards of ${companyName}, as well as with the quality standards applicable to dietary supplements.`;
     
     const introLines = doc.splitTextToSize(introductionText, contentWidth);
     doc.text(introLines, margin, currentY);
-    currentY += Math.max(20, introLines.length * 5);
+    currentY += Math.max(15, introLines.length * 5);
     
     // Add detailed information section
     currentY += 8;
