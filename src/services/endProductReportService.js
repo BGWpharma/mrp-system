@@ -233,14 +233,35 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       ingredientAttachments = {},
       ingredientBatchAttachments = {},
       materials = [],
-      currentUser = {}
+      currentUser = {},
+      options = {}
     } = additionalData;
 
-    // Create PDF document in A4 format
+    // PDF optimization options (similar to invoice generator)
+    const pdfOptions = {
+      useTemplate: true,              // Whether to use template background
+      imageQuality: 0.85,             // Image compression quality (0.1-1.0)
+      enableCompression: true,        // Enable PDF compression
+      precision: 2,                   // Limit precision to 2 decimal places
+      ...options
+    };
+
+    // Create PDF document in A4 format with optimizations
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: 'a4'
+      format: 'a4',
+      compress: pdfOptions.enableCompression,    // Enable PDF compression
+      precision: pdfOptions.precision            // Limit precision for smaller file size
+    });
+
+    // Set document properties for better optimization
+    doc.setProperties({
+      title: `End Product Report - MO ${task.moNumber || task.id}`,
+      subject: 'End Product Quality Report',
+      author: companyData?.name || 'BGW Pharma Sp. z o.o.',
+      creator: 'MRP System',
+      keywords: 'quality, report, production, end product'
     });
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -248,8 +269,8 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     const margin = 20;
     const contentWidth = pageWidth - 2 * margin;
 
-    // Load template background image
-    const templateImg = await loadBackgroundTemplate();
+    // Load template background image with optimization
+    const templateImg = pdfOptions.useTemplate ? await loadBackgroundTemplate(pdfOptions.imageQuality) : null;
     
     let currentY = margin;
     let pageNumber = 1;
@@ -260,12 +281,13 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.addPage();
       }
       
-      // Add template background if available
-      if (templateImg) {
-        doc.addImage(templateImg, 'PNG', 0, 0, pageWidth, pageHeight);
+      // Add template background if available and enabled
+      if (templateImg && pdfOptions.useTemplate) {
+        // Use JPEG format for better compression (already optimized in loadBackgroundTemplate)
+        doc.addImage(templateImg, 'JPEG', 0, 0, pageWidth, pageHeight);
       }
       
-      currentY = margin + 30; // Leave space for template header
+      currentY = pdfOptions.useTemplate ? margin + 30 : margin; // Adjust spacing based on template usage
       pageNumber++;
     };
 
@@ -1614,8 +1636,8 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
   }
 };
 
-// Helper function to load background template
-const loadBackgroundTemplate = async () => {
+// Helper function to load background template with optimization
+const loadBackgroundTemplate = async (imageQuality = 0.95) => {
   try {
     const response = await fetch('/templates/end-product-raport-template.png');
     if (!response.ok) {
@@ -1624,11 +1646,61 @@ const loadBackgroundTemplate = async () => {
     }
     
     const blob = await response.blob();
+    
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          // Create canvas for image optimization
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Set canvas size to PDF dimensions (A4: 210x297mm at 150 DPI for good quality)
+          const canvasWidth = Math.round(210 * 5.91); // 150 DPI ≈ 5.91 px/mm
+          const canvasHeight = Math.round(297 * 5.91);
+          
+          canvas.width = canvasWidth;
+          canvas.height = canvasHeight;
+          
+          // Set high quality rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          // Draw image on canvas with proper scaling
+          ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+          
+          // Convert to JPEG with compression (quality from options)
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', imageQuality);
+          
+          console.log('End Product Report template optimized for PDF size');
+          resolve(compressedDataUrl);
+          
+        } catch (error) {
+          console.warn('Error during template image optimization, using original:', error);
+          // Fallback - create data URL from original blob
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }
+      };
+      
+      img.onerror = () => {
+        console.warn('Could not load template image');
+        resolve(null);
+      };
+      
+      // Create object URL from blob and load image
+      const objectUrl = URL.createObjectURL(blob);
+      
+      // Store original onload before setting src
+      const originalOnload = img.onload;
+      img.onload = () => {
+        originalOnload();
+        URL.revokeObjectURL(objectUrl);
+      };
+      
+      img.src = objectUrl;
     });
   } catch (error) {
     console.warn('Could not load template image:', error);

@@ -897,12 +897,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
       const pdfType = hidePricing ? 'bez cen' : 'standardowy';
       showSuccess(`Generowanie PDF ${pdfType} w toku...`);
       
-      // Użyj nowego komponentu do generowania PDF
+      // Użyj nowego komponentu do generowania PDF z optymalizacją rozmiaru
       const pdfGenerator = createPurchaseOrderPdfGenerator(purchaseOrder, {
         useTemplate: true,
         templatePath: '/templates/PO-template.png',
         language: 'en',
-        hidePricing: hidePricing
+        hidePricing: hidePricing,
+        imageQuality: 0.95,         // Jakość kompresji obrazu dla zbalansowanego rozmiaru i jakości
+        enableCompression: true,    // Włącz kompresję PDF
+        precision: 2,               // Ogranicz precyzję do 2 miejsc po przecinku
+        dpi: 150                    // Wyższa jakość renderowania obrazu
       });
       
       await pdfGenerator.downloadPdf();

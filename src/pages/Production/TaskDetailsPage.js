@@ -6009,7 +6009,7 @@ const TaskDetailsPage = () => {
 
       console.log('Załączniki do dodania do raportu:', uniqueAttachments);
 
-      // Przygotowanie danych dodatkowych dla raportu
+      // Przygotowanie danych dodatkowych dla raportu z opcjami optymalizacji PDF
       const additionalData = {
         companyData,
         workstationData,
@@ -6022,7 +6022,13 @@ const TaskDetailsPage = () => {
         materials,
         currentUser,
         selectedAllergens,
-        attachments: uniqueAttachments // Dodajemy załączniki w odpowiednim formacie
+        attachments: uniqueAttachments, // Dodajemy załączniki w odpowiednim formacie
+        options: {
+          useTemplate: true,           // Użyj szablon tła (można zmienić na false dla oszczędności miejsca)
+          imageQuality: 0.85,          // Jakość kompresji obrazu (0.1-1.0) - zbalansowane dla jakości i rozmiaru
+          enableCompression: true,     // Włącz kompresję PDF
+          precision: 2                 // Ogranicz precyzję do 2 miejsc po przecinku
+        }
       };
 
       // Generowanie raportu PDF

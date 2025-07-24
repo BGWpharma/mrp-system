@@ -13,9 +13,11 @@ class PurchaseOrderPdfGenerator {
       useTemplate: true,
       templatePath: '/templates/PO-template.png',
       language: 'en',
-      imageQuality: 0.8,          // Jakość kompresji obrazu (0.1-1.0)
-      enableCompression: true,     // Czy włączyć kompresję PDF
-      hidePricing: false,          // Czy ukryć ceny i koszty
+      imageQuality: 0.85,         // Jakość kompresji obrazu (0.1-1.0) - podwyższono dla lepszej jakości
+      enableCompression: true,    // Czy włączyć kompresję PDF
+      precision: 2,               // Ogranicz precyzję do 2 miejsc po przecinku
+      hidePricing: false,         // Czy ukryć ceny i koszty
+      dpi: 150,                   // DPI dla renderowania obrazu (podwyższono z 72 do 150)
       ...options
     };
   }
@@ -33,16 +35,17 @@ class PurchaseOrderPdfGenerator {
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
-        compress: this.options.enableCompression, // Włącz kompresję PDF
-        precision: 2    // Ogranicz precyzję do 2 miejsc po przecinku
+        compress: this.options.enableCompression,    // Włącz kompresję PDF
+        precision: this.options.precision            // Ogranicz precyzję (z opcji)
       });
 
       // Ustaw właściwości dokumentu dla lepszej optymalizacji
       doc.setProperties({
         title: `Purchase Order ${this.purchaseOrder.number}`,
         subject: 'Purchase Order',
-        author: 'BGW Pharma',
-        creator: 'MRP System'
+        author: companyData?.name || 'BGW Pharma Sp. z o.o.',
+        creator: 'MRP System',
+        keywords: 'purchase order, procurement, supplier'
       });
 
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -113,12 +116,17 @@ class PurchaseOrderPdfGenerator {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
-          // Ustaw rozmiar canvas na rozmiar PDF (A4: 210x297mm przy 72 DPI)
-          const canvasWidth = Math.round(210 * 2.83); // 72 DPI to ~2.83 px/mm
-          const canvasHeight = Math.round(297 * 2.83);
+          // Ustaw rozmiar canvas na rozmiar PDF (A4: 210x297mm z konfigurowalnymi DPI)
+          const dpiMultiplier = this.options.dpi / 25.4; // Konwersja DPI na px/mm
+          const canvasWidth = Math.round(210 * dpiMultiplier);
+          const canvasHeight = Math.round(297 * dpiMultiplier);
           
           canvas.width = canvasWidth;
           canvas.height = canvasHeight;
+          
+          // Ustaw wysoką jakość renderowania
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           
           // Narysuj obraz na canvas z odpowiednim skalowaniem
           ctx.drawImage(templateImg, 0, 0, canvasWidth, canvasHeight);
@@ -640,8 +648,10 @@ class PurchaseOrderPdfGenerator {
  * @param {Object} purchaseOrder - obiekt zamówienia zakupowego
  * @param {Object} options - opcje optymalizacji:
  *   - useTemplate: boolean (domyślnie true) - czy używać szablonu tła
- *   - imageQuality: number (0.1-1.0, domyślnie 0.8) - jakość kompresji obrazu
+ *   - imageQuality: number (0.1-1.0, domyślnie 0.85) - jakość kompresji obrazu
  *   - enableCompression: boolean (domyślnie true) - czy włączyć kompresję PDF
+ *   - precision: number (domyślnie 2) - precyzja liczb (miejsca po przecinku)
+ *   - dpi: number (domyślnie 150) - rozdzielczość renderowania obrazu
  *   - hidePricing: boolean (domyślnie false) - czy ukryć ceny i koszty
  *   - templatePath: string - ścieżka do szablonu
  *   - language: string - język dokumentu
