@@ -1801,12 +1801,12 @@ const ProductionTimeline = React.memo(() => {
       
       // Dostosuj czułość zoom dla touchpada vs mysz
       const zoomFactor = isTouchpad 
-        ? (delta > 0 ? 0.8 : 1.25)  // Łagodniejszy zoom dla touchpada
+        ? (delta > 0 ? 0.9 : 1.1)   // Jeszcze łagodniejszy zoom dla touchpada (było 0.8/1.25)
         : (delta > 0 ? 0.4 : 2.5);   // Standardowy zoom dla myszki
         
       const newRange = range * zoomFactor;
       const newZoomLevel = isTouchpad
-        ? (delta > 0 ? Math.min(zoomLevel * 1.25, 25) : Math.max(zoomLevel / 1.25, 0.04))
+        ? (delta > 0 ? Math.min(zoomLevel * 1.1, 25) : Math.max(zoomLevel / 1.1, 0.04)) // Zmniejszone z 1.25 do 1.1
         : (delta > 0 ? Math.min(zoomLevel * 2.5, 25) : Math.max(zoomLevel / 2.5, 0.04));
       
       // Nie pozwól na zoom out poza canvas
@@ -1890,11 +1890,11 @@ const ProductionTimeline = React.memo(() => {
          const center = (visibleTimeStart + visibleTimeEnd) / 2;
          const range = (visibleTimeEnd - visibleTimeStart) / 2;
         
-        // Bardzo płynny zoom dla touchpada (małe zmiany)
-        const zoomFactor = delta > 0 ? 0.95 : 1.05;
+        // Bardzo płynny zoom dla touchpada (jeszcze mniejsze zmiany)
+        const zoomFactor = delta > 0 ? 0.98 : 1.02; // Zmniejszona czułość z 0.95/1.05 do 0.98/1.02
         const newRange = range * zoomFactor;
         
-        // Nie pozwól na zoom out poza canvas
+        // Nie pozwół na zoom out poza canvas
         if (delta < 0) {
           const maxRange = (canvasTimeEnd - canvasTimeStart) / 2;
           if (newRange > maxRange) return;
@@ -1904,8 +1904,8 @@ const ProductionTimeline = React.memo(() => {
         const newEnd = Math.min(center + newRange, canvasTimeEnd);
         
         const newZoomLevel = delta > 0 ? 
-          Math.min(zoomLevel * 1.05, 25) : 
-          Math.max(zoomLevel / 1.05, 0.04);
+          Math.min(zoomLevel * 1.02, 25) : // Zmniejszona czułość z 1.05 do 1.02
+          Math.max(zoomLevel / 1.02, 0.04); // Zmniejszona czułość z 1.05 do 1.02
         
         setZoomLevel(newZoomLevel);
         setVisibleTimeStart(newStart);
