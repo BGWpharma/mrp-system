@@ -962,8 +962,11 @@ const ProductionTimeline = React.memo(() => {
 
   // Funkcja do znajdowania poprzedzającego zadania na tym samym stanowisku
   const findPreviousTask = (movedTask, allTasks, targetGroup) => {
+    // Pobierz ID zadania - może być w różnych polach
+    const movedTaskId = movedTask.id || movedTask.task?.id;
+    
     const tasksInGroup = allTasks.filter(task => 
-      getGroupByValue(task) === targetGroup && task.id !== movedTask.id
+      getGroupByValue(task) === targetGroup && task.id !== movedTaskId
     );
     
     // Sortuj zadania według daty zakończenia, obsługując różne formaty dat
@@ -998,6 +1001,44 @@ const ProductionTimeline = React.memo(() => {
     return previousTask;
   };
 
+  // Funkcja do znajdowania następnego zadania na tym samym stanowisku
+  const findNextTask = (movedTask, allTasks, targetGroup) => {
+    // Pobierz ID zadania - może być w różnych polach
+    const movedTaskId = movedTask.id || movedTask.task?.id;
+    
+    const tasksInGroup = allTasks.filter(task => 
+      getGroupByValue(task) === targetGroup && task.id !== movedTaskId
+    );
+    
+    // Sortuj zadania według daty rozpoczęcia, obsługując różne formaty dat
+    const sortedTasks = tasksInGroup.sort((a, b) => {
+      const getStartDate = (task) => {
+        if (!task.scheduledDate) return new Date(0);
+        if (task.scheduledDate instanceof Date) return task.scheduledDate;
+        if (task.scheduledDate.toDate) return task.scheduledDate.toDate();
+        return new Date(task.scheduledDate);
+      };
+      
+      return getStartDate(a) - getStartDate(b);
+    });
+    
+    // Znajdź pierwsze zadanie które zaczyna się po nowym końcu
+    const movedEndDate = new Date(movedTask.endDate);
+    
+    for (const task of sortedTasks) {
+      const taskStartDate = task.scheduledDate ? 
+        (task.scheduledDate instanceof Date ? task.scheduledDate :
+         task.scheduledDate.toDate ? task.scheduledDate.toDate() :
+         new Date(task.scheduledDate)) : null;
+      
+      if (taskStartDate && taskStartDate >= movedEndDate) {
+        return task;
+      }
+    }
+    
+    return null;
+  };
+
   // Funkcja pomocnicza do pobierania ID grupy dla zadania
   const getGroupByValue = (task) => {
     if (groupBy === 'workstation') {
@@ -1007,24 +1048,39 @@ const ProductionTimeline = React.memo(() => {
     }
   };
 
-  // Funkcja do dociągania do poprzedzającego zadania
+  // Funkcja do dociągania do najbliższego zadania (poprzedniego lub następnego)
   const snapToTask = (movedTask, targetGroup, newStartTime, newEndTime) => {
     if (!snapToPrevious) return { newStartTime, newEndTime };
 
-    const previousTask = findPreviousTask(
-      { 
-        ...movedTask, 
-        startDate: newStartTime, 
-        endDate: newEndTime 
-      }, 
-      tasks, 
-      targetGroup
-    );
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 Snapping enabled! Target group:', targetGroup);
+    }
+    
+    const duration = newEndTime - newStartTime;
+    const taskData = { 
+      ...movedTask, 
+      startDate: newStartTime, 
+      endDate: newEndTime 
+    };
 
+    const previousTask = findPreviousTask(taskData, tasks, targetGroup);
+    const nextTask = findNextTask(taskData, tasks, targetGroup);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📋 Found tasks:', { 
+        previousTask: previousTask?.id, 
+        nextTask: nextTask?.id,
+        totalTasksInGroup: tasks.filter(t => getGroupByValue(t) === targetGroup).length
+      });
+    }
+
+    let snapToPreviousResult = null;
+    let snapToNextResult = null;
+    let distanceToPrevious = Infinity;
+    let distanceToNext = Infinity;
+
+    // Oblicz odległość do poprzedniego zadania (do jego końca)
     if (previousTask && previousTask.endDate) {
-      const duration = newEndTime - newStartTime;
-      
-      // Bezpieczna konwersja daty zakończenia poprzedniego zadania
       let previousEndDate;
       if (previousTask.endDate instanceof Date) {
         previousEndDate = previousTask.endDate;
@@ -1034,20 +1090,72 @@ const ProductionTimeline = React.memo(() => {
         previousEndDate = new Date(previousTask.endDate);
       }
       
-      // Sprawdź czy data jest poprawna
-      if (isNaN(previousEndDate.getTime())) {
-        return { newStartTime, newEndTime };
+      if (!isNaN(previousEndDate.getTime())) {
+        distanceToPrevious = Math.abs(newStartTime.getTime() - previousEndDate.getTime());
+        const snappedStartTime = roundToMinute(previousEndDate);
+        const snappedEndTime = new Date(snappedStartTime.getTime() + duration);
+        snapToPreviousResult = {
+          newStartTime: snappedStartTime,
+          newEndTime: roundToMinute(snappedEndTime)
+        };
       }
-      
-      const snappedStartTime = roundToMinute(previousEndDate);
-      const snappedEndTime = new Date(snappedStartTime.getTime() + duration);
-      
-      return { 
-        newStartTime: snappedStartTime, 
-        newEndTime: roundToMinute(snappedEndTime) 
-      };
     }
 
+    // Oblicz odległość do następnego zadania (do jego początku)
+    if (nextTask && nextTask.scheduledDate) {
+      let nextStartDate;
+      if (nextTask.scheduledDate instanceof Date) {
+        nextStartDate = nextTask.scheduledDate;
+      } else if (nextTask.scheduledDate.toDate && typeof nextTask.scheduledDate.toDate === 'function') {
+        nextStartDate = nextTask.scheduledDate.toDate();
+      } else {
+        nextStartDate = new Date(nextTask.scheduledDate);
+      }
+      
+      if (!isNaN(nextStartDate.getTime())) {
+        distanceToNext = Math.abs(newEndTime.getTime() - nextStartDate.getTime());
+        const snappedEndTime = roundToMinute(nextStartDate);
+        const snappedStartTime = new Date(snappedEndTime.getTime() - duration);
+        snapToNextResult = {
+          newStartTime: roundToMinute(snappedStartTime),
+          newEndTime: snappedEndTime
+        };
+      }
+    }
+
+    // Wybierz najbliższy kafelek
+    if (snapToPreviousResult && snapToNextResult) {
+      // Jeśli oba są dostępne, wybierz ten bliższy
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎲 Both options available:', { 
+          distanceToPrevious, 
+          distanceToNext,
+          chosen: distanceToPrevious <= distanceToNext ? 'previous' : 'next'
+        });
+      }
+      if (distanceToPrevious <= distanceToNext) {
+        return snapToPreviousResult;
+      } else {
+        return snapToNextResult;
+      }
+    } else if (snapToPreviousResult) {
+      // Tylko poprzedni jest dostępny
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✨ Snapping to PREVIOUS task');
+      }
+      return snapToPreviousResult;
+    } else if (snapToNextResult) {
+      // Tylko następny jest dostępny
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✨ Snapping to NEXT task');
+      }
+      return snapToNextResult;
+    }
+
+    // Brak zadań do dociągnięcia
+    if (process.env.NODE_ENV === 'development') {
+      console.log('❌ No tasks to snap to');
+    }
     return { newStartTime, newEndTime };
   };
 
@@ -1104,7 +1212,25 @@ const ProductionTimeline = React.memo(() => {
 
       // Zastosuj logikę dociągania jeśli tryb jest włączony
       const task = item.task; // Obiekt zadania z pełnymi danymi
-      const targetGroup = newGroupId || item.group;
+      let targetGroup = newGroupId || item.group;
+      
+      // Jeśli targetGroup to indeks, konwertuj na ID grupy
+      if (typeof targetGroup === 'number' && groups[targetGroup]) {
+        targetGroup = groups[targetGroup].id;
+      }
+      
+      // Debug logging (można wyłączyć w produkcji)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚀 HandleItemMove - preparing snap:', {
+          taskId: task?.id,
+          itemId: item.id,
+          targetGroup,
+          itemGroup: item.group,
+          newGroupId,
+          snapEnabled: snapToPrevious,
+          allGroups: groups.map(g => ({ id: g.id, title: g.title }))
+        });
+      }
       
       const snappedTimes = snapToTask(task, targetGroup, newStartTime, newEndTime);
       newStartTime = snappedTimes.newStartTime;
@@ -1630,6 +1756,41 @@ const ProductionTimeline = React.memo(() => {
   const handleWheel = useCallback((event) => {
     const isTouchpad = detectTouchpad(event);
     
+    // Dla Shift + scroll - poziome przewijanie
+    if (event.shiftKey) {
+      event.preventDefault();
+      
+      const range = visibleTimeEnd - visibleTimeStart;
+      // Używaj deltaY (pionowy scroll) dla poziomego przewijania przy Shift
+      const scrollSensitivity = isTouchpad ? 0.001 : 0.002; // Zmniejszona czułość
+      const scrollAmount = event.deltaY * range * scrollSensitivity;
+      
+      const newStart = Math.max(
+        Math.min(visibleTimeStart + scrollAmount, canvasTimeEnd - range),
+        canvasTimeStart
+      );
+      const newEnd = Math.min(newStart + range, canvasTimeEnd);
+      
+      setVisibleTimeStart(newStart);
+      setVisibleTimeEnd(newEnd);
+      
+      // Aktualizuj suwak poziomy
+      try {
+        const newSliderValue = calculateSliderValue();
+        if (isFinite(newSliderValue)) {
+          setSliderValue(newSliderValue);
+        }
+      } catch (error) {
+        console.warn('Błąd podczas obliczania wartości suwaka:', error);
+      }
+      
+      if (updateScrollCanvasRef.current) {
+        updateScrollCanvasRef.current(newStart, newEnd);
+      }
+      
+      return;
+    }
+
     // Dla Ctrl/Cmd + scroll - zoom (zarówno mysz jak i touchpad)
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
