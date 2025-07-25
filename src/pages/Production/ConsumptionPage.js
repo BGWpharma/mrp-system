@@ -577,11 +577,11 @@ const ConsumptionPage = () => {
   };
 
   // Walidacja konsumpcji poprocesowej
-  const validatePostProductionConsumption = () => {
+  const validatePostProductionConsumption = (taskData = task, consumptionDataToValidate = consumptionData) => {
     const validationErrors = [];
     const validationWarnings = [];
 
-    if (!task || !task.materials) {
+    if (!taskData || !taskData.materials) {
       return { 
         isValid: false, 
         errors: ['Brak danych o materiałach w zadaniu'], 
@@ -590,7 +590,7 @@ const ConsumptionPage = () => {
     }
 
     // Sprawdzenie każdego materiału w zadaniu
-    for (const material of task.materials) {
+    for (const material of taskData.materials) {
       const materialId = material.inventoryItemId || material.id;
       const materialName = material.name || 'Nieznany materiał';
       
@@ -598,18 +598,18 @@ const ConsumptionPage = () => {
       const requiredQuantity = material.quantity || 0;
       
       // Skonsumowana ilość materiału
-      const consumedQuantity = consumptionData
+      const consumedQuantity = consumptionDataToValidate
         .filter(consumption => consumption.materialId === materialId)
         .reduce((total, consumption) => total + Number(consumption.quantity || 0), 0);
       
       // Sprawdzenie czy materiał ma jeszcze aktywne rezerwacje
-      const hasActiveReservations = task.materialBatches && 
-                                   task.materialBatches[materialId] && 
-                                   task.materialBatches[materialId].length > 0;
+      const hasActiveReservations = taskData.materialBatches && 
+                                   taskData.materialBatches[materialId] && 
+                                   taskData.materialBatches[materialId].length > 0;
       
       // Walidacja 1: Sprawdzenie czy pozostały aktywne rezerwacje (BŁĄD KRYTYCZNY)
       if (hasActiveReservations) {
-        const totalReservedQuantity = task.materialBatches[materialId]
+        const totalReservedQuantity = taskData.materialBatches[materialId]
           .reduce((total, batch) => total + Number(batch.quantity || 0), 0);
         
         if (totalReservedQuantity > 0) {
@@ -655,12 +655,12 @@ const ConsumptionPage = () => {
     }
 
     // Sprawdzenie czy są materiały skonsumowane które nie były w oryginalnym zadaniu
-    const taskMaterialIds = new Set(task.materials.map(m => m.inventoryItemId || m.id));
-    const consumedMaterialIds = new Set(consumptionData.map(c => c.materialId));
+    const taskMaterialIds = new Set(taskData.materials.map(m => m.inventoryItemId || m.id));
+    const consumedMaterialIds = new Set(consumptionDataToValidate.map(c => c.materialId));
     
     for (const consumedMaterialId of consumedMaterialIds) {
       if (!taskMaterialIds.has(consumedMaterialId)) {
-        const consumedMaterial = consumptionData.find(c => c.materialId === consumedMaterialId);
+        const consumedMaterial = consumptionDataToValidate.find(c => c.materialId === consumedMaterialId);
         validationWarnings.push(
           `Skonsumowano materiał "${consumedMaterial?.materialName || 'Nieznany'}" który nie był pierwotnie przewidziany w zadaniu`
         );
@@ -674,6 +674,73 @@ const ConsumptionPage = () => {
       errors: validationErrors,
       warnings: validationWarnings
     };
+  };
+
+  // Funkcja do usuwania pozostałych rezerwacji
+  const handleClearRemainingReservations = async () => {
+    try {
+      setConfirmLoading(true);
+      
+      if (!task || !task.materials) {
+        throw new Error('Brak danych o materiałach w zadaniu');
+      }
+
+      // Import funkcji do czyszczenia rezerwacji
+      const { cleanupTaskReservations } = await import('../../services/inventoryService');
+      
+      // Znajdź materiały z aktywnymi rezerwacjami
+      const materialsWithReservations = [];
+      for (const material of task.materials) {
+        const materialId = material.inventoryItemId || material.id;
+        const hasActiveReservations = task.materialBatches && 
+                                     task.materialBatches[materialId] && 
+                                     task.materialBatches[materialId].length > 0;
+        
+        if (hasActiveReservations) {
+          const totalReservedQuantity = task.materialBatches[materialId]
+            .reduce((total, batch) => total + Number(batch.quantity || 0), 0);
+          
+          if (totalReservedQuantity > 0) {
+            materialsWithReservations.push(materialId);
+          }
+        }
+      }
+
+      if (materialsWithReservations.length === 0) {
+        showSuccess('Brak rezerwacji do usunięcia.');
+        return;
+      }
+
+      // Usuń rezerwacje dla materiałów z pozostałymi rezerwacjami
+      await cleanupTaskReservations(taskId, materialsWithReservations);
+      
+      showSuccess(`Usunięto pozostałe rezerwacje dla ${materialsWithReservations.length} materiałów.`);
+      
+      // Odśwież dane zadania i pobierz zaktualizowane dane
+      await fetchTaskData();
+      
+      // Pobierz najnowsze dane zadania i konsumpcji
+      const updatedTaskData = await getTaskById(taskId);
+      let updatedConsumptionData = [];
+      if (updatedTaskData?.consumedMaterials?.length > 0) {
+        updatedConsumptionData = updatedTaskData.consumedMaterials;
+      }
+      
+      // Ponownie wykonaj walidację z przekazanymi aktualnymi danymi
+      const newValidation = validatePostProductionConsumption(updatedTaskData, updatedConsumptionData);
+      setValidationResults(newValidation);
+      
+      // Jeśli walidacja przeszła pomyślnie, pokaż komunikat
+      if (newValidation.isValid) {
+        showSuccess('Walidacja przeszła pomyślnie. Możesz teraz zatwierdzić zadanie.');
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas usuwania pozostałych rezerwacji:', error);
+      showError('Nie udało się usunąć pozostałych rezerwacji: ' + error.message);
+    } finally {
+      setConfirmLoading(false);
+    }
   };
 
   const handleConfirmTask = async () => {
@@ -1187,6 +1254,22 @@ const ConsumptionPage = () => {
           }}>
             Anuluj
           </Button>
+          
+          {/* Przycisk do usuwania pozostałych rezerwacji - pokazuj tylko gdy są błędy związane z rezerwacjami */}
+          {validationResults && !validationResults.isValid && 
+           validationResults.errors.some(error => error.includes('pozostała nierozliczona rezerwacja')) && (
+            <Button 
+              onClick={handleClearRemainingReservations}
+              variant="outlined" 
+              color="warning"
+              disabled={confirmLoading}
+                             startIcon={<DeleteIcon />}
+              sx={{ mr: 1 }}
+            >
+              Usuń pozostałe rezerwacje
+            </Button>
+          )}
+          
           <Button 
             onClick={handleConfirmTask} 
             variant="contained" 

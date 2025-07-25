@@ -747,6 +747,52 @@ const TaskDetailsPage = () => {
     );
   };
 
+  // Funkcja do obliczania czy materiał ma wystarczające pokrycie rezerwacji
+  const calculateMaterialReservationCoverage = (material, materialId) => {
+    // 1. Wymagana ilość (bazowa ilość materiału)
+    const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
+    
+    // 2. Skonsumowana ilość
+    const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+    
+    // 3. Standardowe rezerwacje magazynowe
+    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+    const standardReservationsTotal = reservedBatches ? reservedBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0) : 0;
+    
+    // 4. Rezerwacje z PO (tylko aktywne)
+    const allPOReservations = getPOReservationsForMaterial(materialId);
+    const activePOReservationsTotal = allPOReservations
+      .filter(reservation => {
+        // Uwzględnij tylko pending i delivered (ale nie w pełni przekształcone)
+        if (reservation.status === 'pending') return true;
+        if (reservation.status === 'delivered') {
+          const convertedQuantity = reservation.convertedQuantity || 0;
+          const reservedQuantity = reservation.reservedQuantity || 0;
+          return convertedQuantity < reservedQuantity;
+        }
+        return false;
+      })
+      .reduce((sum, reservation) => {
+        const convertedQuantity = reservation.convertedQuantity || 0;
+        const reservedQuantity = reservation.reservedQuantity || 0;
+        return sum + (reservedQuantity - convertedQuantity);
+      }, 0);
+    
+    // 5. Całkowite pokrycie = skonsumowana ilość + standardowe rezerwacje + aktywne rezerwacje PO
+    const totalCoverage = consumedQuantity + standardReservationsTotal + activePOReservationsTotal;
+    
+    // 6. Sprawdź czy pokrycie jest wystarczające
+    return {
+      requiredQuantity,
+      consumedQuantity,
+      standardReservationsTotal,
+      activePOReservationsTotal,
+      totalCoverage,
+      hasFullCoverage: totalCoverage >= requiredQuantity,
+      coveragePercentage: requiredQuantity > 0 ? (totalCoverage / requiredQuantity) * 100 : 100
+    };
+  };
+
   // Funkcja do odświeżania tylko podstawowych danych zadania (dla POReservationManager)
   const fetchTaskBasicData = async () => {
     try {
@@ -1648,8 +1694,8 @@ const TaskDetailsPage = () => {
       // Użyj funkcji uwzględniającej konsumpcję
       const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
       
-      // Jeśli wymagana ilość jest 0 lub mniejsza, pomiń walidację dla tego materiału
-      if (requiredQuantity <= 0) {
+      // POPRAWKA: Pomiń walidację tylko gdy konsumpcja została potwierdzona i nie ma wymaganej ilości
+      if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
         continue;
       }
       
@@ -1680,8 +1726,8 @@ const TaskDetailsPage = () => {
     // Użyj funkcji uwzględniającej konsumpcję
     const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
     
-    // Jeśli wymagana ilość jest 0 lub mniejsza, uznaj walidację za poprawną
-    if (requiredQuantity <= 0) {
+    // POPRAWKA: Jeśli konsumpcja została potwierdzona i wymagana ilość jest 0, uznaj walidację za poprawną
+    if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
       return { valid: true };
     }
     
@@ -1710,9 +1756,18 @@ const TaskDetailsPage = () => {
       : material.quantity;
     
     const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
-    const remainingQuantity = Math.max(0, baseQuantity - consumedQuantity);
-
-    return remainingQuantity;
+    
+    // POPRAWKA: Nie blokuj rezerwacji gdy materiał jest w pełni skonsumowany
+    // Pozwól na rezerwację dodatkowej ilości - zwróć zawsze przynajmniej bazową ilość
+    // jeśli nie ma jeszcze formalnego potwierdzenia konsumpcji
+    if (!task.materialConsumptionConfirmed) {
+      // Jeśli konsumpcja nie została potwierdzona, pozwól na rezerwację bazowej ilości
+      return baseQuantity;
+    } else {
+      // Jeśli konsumpcja została potwierdzona, oblicz pozostałą ilość
+      const remainingQuantity = Math.max(0, baseQuantity - consumedQuantity);
+      return remainingQuantity;
+    }
   };
 
   // Zmodyfikowana funkcja do rezerwacji materiałów z obsługą ręcznego wyboru partii
@@ -1776,9 +1831,9 @@ const TaskDetailsPage = () => {
           // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
           const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
           
-          // Jeśli pozostała ilość do rezerwacji jest równa 0 lub mniejsza, pomiń ten materiał
-          if (requiredQuantity <= 0) {
-            console.log(`Materiał ${material.name} został już w pełni skonsumowany, pomijam rezerwację`);
+          // POPRAWKA: Blokuj rezerwację tylko gdy konsumpcja została potwierdzona i nie ma pozostałej ilości
+          if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
+            console.log(`Materiał ${material.name} został już w pełni skonsumowany i potwierdzony, pomijam rezerwację`);
             continue;
           }
             
@@ -1820,9 +1875,9 @@ const TaskDetailsPage = () => {
           // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
           const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
           
-          // Jeśli pozostała ilość do rezerwacji jest równa 0 lub mniejsza, pomiń ten materiał
-          if (requiredQuantity <= 0) {
-            console.log(`Materiał ${material.name} został już w pełni skonsumowany, pomijam rezerwację`);
+          // POPRAWKA: Blokuj automatyczną rezerwację tylko gdy konsumpcja została potwierdzona
+          if (task.materialConsumptionConfirmed && requiredQuantity <= 0) {
+            console.log(`Materiał ${material.name} został już w pełni skonsumowany i potwierdzony, pomijam automatyczną rezerwację`);
             continue;
           }
           
@@ -1943,7 +1998,7 @@ const TaskDetailsPage = () => {
                       size="small"
                       sx={{ mr: 1 }}
                     />
-                    {requiredQuantity <= 0 && (
+                    {requiredQuantity <= 0 && task.materialConsumptionConfirmed && (
                       <Chip
                         label="W pełni skonsumowany"
                         color="success"
@@ -6304,8 +6359,23 @@ const TaskDetailsPage = () => {
                           const quantity = materialQuantities[material.id] || material.quantity || 0;
                           const unitPrice = material.unitPrice || 0;
                           const cost = quantity * unitPrice;
+                          
+                          // Oblicz pokrycie rezerwacji dla kolorowania wiersza
+                          const reservationCoverage = calculateMaterialReservationCoverage(material, materialId);
+                          const rowBackgroundColor = reservationCoverage.hasFullCoverage ? 'rgba(76, 175, 80, 0.08)' : 'transparent';
+                          
                           return (
-                            <TableRow key={material.id}>
+                            <TableRow 
+                              key={material.id}
+                              sx={{ 
+                                backgroundColor: rowBackgroundColor,
+                                '&:hover': { 
+                                  backgroundColor: reservationCoverage.hasFullCoverage 
+                                    ? 'rgba(76, 175, 80, 0.12)' 
+                                    : 'rgba(0, 0, 0, 0.04)' 
+                                }
+                              }}
+                            >
                               <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
                               <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
                               <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
