@@ -183,6 +183,20 @@ const InvoiceForm = ({ invoiceId }) => {
     }
   }, [invoice.selectedBankAccount, companyInfo?.bankAccounts]);
 
+  // Efekt do automatycznego ustawienia selectedOrder gdy dane są dostępne podczas edycji faktury
+  useEffect(() => {
+    if (selectedOrderId && selectedOrderType && !selectedOrder) {
+      const isCustomerOrder = selectedOrderType === 'customer';
+      const ordersList = isCustomerOrder ? orders : purchaseOrders;
+      const isLoading = isCustomerOrder ? ordersLoading : purchaseOrdersLoading;
+      
+      // Sprawdź czy dane zamówień są już załadowane i lista nie jest pusta
+      if (!isLoading && ordersList.length > 0) {
+        handleOrderSelect(selectedOrderId, selectedOrderType);
+      }
+    }
+  }, [selectedOrderId, selectedOrderType, orders, purchaseOrders, ordersLoading, purchaseOrdersLoading, selectedOrder]);
+
   const fetchInvoice = async (id) => {
     setLoading(true);
     try {
@@ -200,9 +214,7 @@ const InvoiceForm = ({ invoiceId }) => {
       
       if (fetchedInvoice.orderId) {
         setSelectedOrderId(fetchedInvoice.orderId);
-        // Ustaw selectedOrder aby przycisk "Wybierz z zamówienia" był widoczny
-        const orderType = fetchedInvoice.invoiceType === 'purchase' ? 'purchase' : 'customer';
-        await handleOrderSelect(fetchedInvoice.orderId, orderType);
+        setSelectedOrderType(fetchedInvoice.invoiceType === 'purchase' ? 'purchase' : 'customer');
         // Pobierz powiązane faktury dla tego zamówienia
         await fetchRelatedInvoices(fetchedInvoice.orderId);
       }
@@ -879,10 +891,9 @@ const InvoiceForm = ({ invoiceId }) => {
         // Używamy zapisanej wartości zamówienia jeśli istnieje, w przeciwnym razie obliczonej
         const finalTotal = parseFloat(selectedOrder.total) || orderTotal;
         
-        // Dodaj sprawdzenie na wypadek, gdyby wartość zamówienia była nadal niepoprawna
+        // Sprawdź czy wartość zamówienia jest poprawna - jeśli nie, wyświetl ostrzeżenie
         if (isNaN(finalTotal) || finalTotal <= 0) {
-          showError('Nie można ustalić poprawnej wartości zamówienia. Sprawdź wartości w zamówieniu.');
-          console.error('Nieprawidłowa wartość zamówienia:', finalTotal);
+          console.warn('Zamówienie ma wartość 0 - pozycje mogą mieć nieokreślone ceny:', finalTotal);
         }
         
         setInvoice(prev => ({

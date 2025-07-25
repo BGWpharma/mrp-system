@@ -3229,6 +3229,20 @@ const OrderForm = ({ orderId }) => {
               Suma: {formatCurrency(calculateTotalItemsValue())}
             </Typography>
           </Box>
+          
+          {/* Dodatkowy przycisk dodaj produkt na dole */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Button 
+              variant="contained" 
+              startIcon={<AddIcon />} 
+              onClick={addItem}
+              color="secondary"
+              size="large"
+              sx={{ borderRadius: 2, px: 4 }}
+            >
+              Dodaj produkt
+            </Button>
+          </Box>
         </Paper>
 
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
