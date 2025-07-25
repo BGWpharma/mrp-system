@@ -1996,9 +1996,21 @@ const TaskDetailsPage = () => {
 
     return (
       <Box sx={{ mt: 2 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Wybierz partie dla każdego materiału:
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="subtitle1">
+            Wybierz partie dla każdego materiału:
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<RefreshIcon />}
+            onClick={fetchBatchesForMaterialsOptimized}
+            disabled={materialBatchesLoading}
+            sx={{ minWidth: 'auto' }}
+          >
+            Odśwież partie
+          </Button>
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           💡 Możesz zarezerwować mniejszą ilość niż wymagana. Niezarezerwowane materiały można uzupełnić później.
         </Typography>
