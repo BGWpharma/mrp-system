@@ -1056,6 +1056,7 @@ export const DEFAULT_ORDER = {
     {
       id: '',
       name: '',
+      description: '',
       quantity: 1,
       unit: 'szt.',
       price: 0

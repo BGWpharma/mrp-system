@@ -168,6 +168,21 @@ const InvoiceForm = ({ invoiceId }) => {
     }
   }, [companyInfo, invoiceId, invoice.selectedBankAccount]);
 
+  // Efekt do sprawdzania czy wybrany rachunek bankowy nadal istnieje
+  useEffect(() => {
+    if (invoice.selectedBankAccount && companyInfo?.bankAccounts) {
+      const accountExists = companyInfo.bankAccounts.some(account => account.id === invoice.selectedBankAccount);
+      
+      if (!accountExists) {
+        console.warn(`Rachunek bankowy ${invoice.selectedBankAccount} nie istnieje w dostępnych rachunkach. Czyszczenie wartości.`);
+        setInvoice(prev => ({
+          ...prev,
+          selectedBankAccount: ''
+        }));
+      }
+    }
+  }, [invoice.selectedBankAccount, companyInfo?.bankAccounts]);
+
   const fetchInvoice = async (id) => {
     setLoading(true);
     try {
@@ -185,6 +200,9 @@ const InvoiceForm = ({ invoiceId }) => {
       
       if (fetchedInvoice.orderId) {
         setSelectedOrderId(fetchedInvoice.orderId);
+        // Ustaw selectedOrder aby przycisk "Wybierz z zamówienia" był widoczny
+        const orderType = fetchedInvoice.invoiceType === 'purchase' ? 'purchase' : 'customer';
+        await handleOrderSelect(fetchedInvoice.orderId, orderType);
         // Pobierz powiązane faktury dla tego zamówienia
         await fetchRelatedInvoices(fetchedInvoice.orderId);
       }
@@ -1220,7 +1238,12 @@ const InvoiceForm = ({ invoiceId }) => {
                   <InputLabel>Rachunek bankowy</InputLabel>
                   <Select
                     name="selectedBankAccount"
-                    value={invoice.selectedBankAccount || ''}
+                    value={
+                      invoice.selectedBankAccount && 
+                      companyInfo?.bankAccounts?.some(account => account.id === invoice.selectedBankAccount)
+                        ? invoice.selectedBankAccount 
+                        : ''
+                    }
                     onChange={handleChange}
                     label="Rachunek bankowy"
                   >

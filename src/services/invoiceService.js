@@ -307,6 +307,7 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
 
         return {
           ...item,
+          description: item.description || '', // Kopiuj opis z pozycji CO
           price: finalPrice,
           netValue: parseFloat(item.quantity || 0) * finalPrice,
           totalPrice: parseFloat(item.quantity || 0) * finalPrice
