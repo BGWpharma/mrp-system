@@ -830,7 +830,7 @@ const TaskDetailsPage = () => {
     const reservedBatches = task.materialBatches && task.materialBatches[materialId];
     const standardReservationsTotal = reservedBatches ? reservedBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0) : 0;
     
-    // 4. Rezerwacje z PO (tylko aktywne)
+    // 4. Rezerwacje z PO (tylko aktywne) - WYŁĄCZONE z wyliczeń kolorowania
     const allPOReservations = getPOReservationsForMaterial(materialId);
     const activePOReservationsTotal = allPOReservations
       .filter(reservation => {
@@ -849,8 +849,8 @@ const TaskDetailsPage = () => {
         return sum + (reservedQuantity - convertedQuantity);
       }, 0);
     
-    // 5. Całkowite pokrycie = skonsumowana ilość + standardowe rezerwacje + aktywne rezerwacje PO
-    const totalCoverage = consumedQuantity + standardReservationsTotal + activePOReservationsTotal;
+    // 5. Całkowite pokrycie = skonsumowana ilość + standardowe rezerwacje (BEZ rezerwacji PO)
+    const totalCoverage = consumedQuantity + standardReservationsTotal;
     
     // 6. Sprawdź czy pokrycie jest wystarczające
     return {
