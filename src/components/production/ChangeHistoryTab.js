@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
   Grid,
   Paper,
@@ -79,4 +79,4 @@ const ChangeHistoryTab = ({ task, getUserName }) => {
   );
 };
 
-export default ChangeHistoryTab; 
+export default memo(ChangeHistoryTab); 

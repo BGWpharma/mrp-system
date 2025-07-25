@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
   Grid,
   Paper,
@@ -408,4 +408,4 @@ const FormsTab = ({
   );
 };
 
-export default FormsTab; 
+export default memo(FormsTab); 

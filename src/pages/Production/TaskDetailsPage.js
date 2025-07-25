@@ -22,7 +22,7 @@
  * - Lepsze UX i mniejsze obciążenie bazy danych
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Typography,
@@ -144,16 +144,18 @@ import ProductionControlFormDialog from '../../components/production/ProductionC
 import CompletedMOFormDialog from '../../components/production/CompletedMOFormDialog';
 import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
 import POReservationManager from '../../components/production/POReservationManager';
-import EndProductReportTab from '../../components/production/EndProductReportTab';
-import ChangeHistoryTab from '../../components/production/ChangeHistoryTab';
-import FormsTab from '../../components/production/FormsTab';
-import ProductionPlanTab from '../../components/production/ProductionPlanTab';
 import { useTranslation } from 'react-i18next';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial } from '../../utils/productionUtils';
+
+// ✅ Lazy loading komponentów zakładek dla lepszej wydajności
+const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
+const ChangeHistoryTab = lazy(() => import('../../components/production/ChangeHistoryTab'));
+const FormsTab = lazy(() => import('../../components/production/FormsTab'));
+const ProductionPlanTab = lazy(() => import('../../components/production/ProductionPlanTab'));
 
 const TaskDetailsPage = () => {
   const { t } = useTranslation();
@@ -378,10 +380,123 @@ const TaskDetailsPage = () => {
 
   // Stan dla głównej zakładki
   const [mainTab, setMainTab] = useState(0);
+  
+  // ✅ Selective Data Loading - tracking załadowanych danych dla każdej zakładki
+  const [loadedTabs, setLoadedTabs] = useState({
+    productionPlan: false,     // Historia produkcji, plan mieszań
+    forms: false,              // Formularze produkcyjne
+    changeHistory: false,      // Historia zmian
+    endProductReport: false    // Raport gotowego produktu
+  });
 
-  // Funkcja do zmiany głównej zakładki
+  // ✅ Selective Data Loading - funkcje ładowania danych dla konkretnych zakładek
+  const loadProductionPlanData = useCallback(async () => {
+    if (loadedTabs.productionPlan || !task?.id) return;
+    
+    try {
+      console.log('🔄 Loading Production Plan data...');
+      
+      // Historia produkcji
+      const history = await getProductionHistory(task.id);
+      setProductionHistory(history || []);
+      
+      // Dostępne maszyny (jeśli nie zostały załadowane)
+      if (availableMachines.length === 0) {
+        await fetchAvailableMachines();
+      }
+      
+      setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
+      console.log('✅ Production Plan data loaded');
+    } catch (error) {
+      console.error('❌ Error loading Production Plan data:', error);
+    }
+  }, [loadedTabs.productionPlan, task?.id, availableMachines.length]);
+
+  const loadFormsData = useCallback(async () => {
+    if (loadedTabs.forms || !task?.moNumber) return;
+    
+    try {
+      console.log('🔄 Loading Forms data...');
+      
+      const responses = await fetchFormResponsesOptimized(task.moNumber);
+      setFormResponses(responses);
+      
+      setLoadedTabs(prev => ({ ...prev, forms: true }));
+      console.log('✅ Forms data loaded');
+    } catch (error) {
+      console.error('❌ Error loading Forms data:', error);
+      setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
+    }
+  }, [loadedTabs.forms, task?.moNumber]);
+
+  const loadChangeHistoryData = useCallback(async () => {
+    if (loadedTabs.changeHistory || !task?.statusHistory?.length) return;
+    
+    try {
+      console.log('🔄 Loading Change History data...');
+      
+      // Pobierz nazwy użytkowników dla historii zmian (jeśli nie zostały załadowane)
+      const userIds = task.statusHistory.map(change => change.changedBy).filter(id => id);
+      const uniqueUserIds = [...new Set(userIds)];
+      
+      if (uniqueUserIds.length > 0 && Object.keys(userNames).length === 0) {
+        const names = await getUsersDisplayNames(uniqueUserIds);
+        setUserNames(names);
+      }
+      
+      setLoadedTabs(prev => ({ ...prev, changeHistory: true }));
+      console.log('✅ Change History data loaded');
+    } catch (error) {
+      console.error('❌ Error loading Change History data:', error);
+    }
+  }, [loadedTabs.changeHistory, task?.statusHistory, userNames]);
+
+  const loadEndProductReportData = useCallback(async () => {
+    if (loadedTabs.endProductReport) return;
+    
+    try {
+      console.log('🔄 Loading End Product Report data...');
+      
+      // Dane firmy (jeśli nie zostały załadowane)
+      if (!companyData) {
+        const company = await getCompanyData();
+        setCompanyData(company);
+      }
+      
+      // Dane stanowiska pracy (jeśli nie zostały załadowane)
+      if (!workstationData && task?.workstationId) {
+        const workstation = await getWorkstationById(task.workstationId);
+        setWorkstationData(workstation);
+      }
+      
+      setLoadedTabs(prev => ({ ...prev, endProductReport: true }));
+      console.log('✅ End Product Report data loaded');
+    } catch (error) {
+      console.error('❌ Error loading End Product Report data:', error);
+    }
+  }, [loadedTabs.endProductReport, companyData, workstationData, task?.workstationId]);
+
+  // Funkcja do zmiany głównej zakładki z selective loading
   const handleMainTabChange = (event, newValue) => {
     setMainTab(newValue);
+    
+    // ✅ Selective Data Loading - ładuj dane tylko dla aktywnej zakładki
+    switch (newValue) {
+      case 2: // Produkcja i Plan
+        loadProductionPlanData();
+        break;
+      case 3: // Formularze
+        loadFormsData();
+        break;
+      case 4: // Historia zmian
+        loadChangeHistoryData();
+        break;
+      case 5: // Raport gotowego produktu
+        loadEndProductReportData();
+        break;
+      default:
+        break;
+    }
   };
 
   // ✅ ETAP 2 OPTYMALIZACJI: Zastąpienie starych useEffect hooks jednym zoptymalizowanym
@@ -595,21 +710,11 @@ const TaskDetailsPage = () => {
         }
       }
       
-      // KROK 3: ✅ OPTYMALIZACJA ETAP 2: Równoległe pobieranie wszystkich pozostałych danych
+      // KROK 3: ✅ OPTYMALIZACJA ETAP 3: Ładowanie tylko podstawowych danych (Selective Data Loading)
       const dataLoadingPromises = [];
       
-      // Historia produkcji - jeśli zadanie ma ID
+      // Rezerwacje PO - zawsze potrzebne dla zakładki materiałów
       if (fetchedTask?.id) {
-        dataLoadingPromises.push(
-          getProductionHistory(fetchedTask.id)
-            .then(history => ({ type: 'productionHistory', data: history || [] }))
-            .catch(error => {
-              console.error('Błąd podczas pobierania historii produkcji:', error);
-              return { type: 'productionHistory', data: [] };
-            })
-        );
-        
-        // Rezerwacje PO - dodane równolegle
         dataLoadingPromises.push(
           import('../../services/poReservationService')
             .then(module => module.getPOReservationsForTask(fetchedTask.id))
@@ -621,7 +726,7 @@ const TaskDetailsPage = () => {
         );
       }
       
-      // Dane wersji receptury - jeśli zadanie ma recipeId i recipeVersion
+      // Dane wersji receptury - potrzebne dla podstawowych informacji
       if (fetchedTask?.recipeId && fetchedTask?.recipeVersion) {
         dataLoadingPromises.push(
           getRecipeVersion(fetchedTask.recipeId, fetchedTask.recipeVersion)
@@ -633,36 +738,7 @@ const TaskDetailsPage = () => {
         );
       }
       
-      // Dane użytkowników - jeśli zadanie ma historię statusów
-      if (fetchedTask?.statusHistory?.length > 0) {
-        const userIds = fetchedTask.statusHistory.map(change => change.changedBy).filter(id => id);
-        const uniqueUserIds = [...new Set(userIds)];
-        
-        if (uniqueUserIds.length > 0) {
-          dataLoadingPromises.push(
-            getUsersDisplayNames(uniqueUserIds)
-              .then(names => ({ type: 'userNames', data: names }))
-              .catch(error => {
-                console.error('Błąd podczas pobierania nazw użytkowników:', error);
-                return { type: 'userNames', data: {} };
-              })
-          );
-        }
-      }
-      
-      // ✅ NOWA OPTYMALIZACJA: Odpowiedzi formularzy - jeśli zadanie ma moNumber
-      if (fetchedTask?.moNumber) {
-        dataLoadingPromises.push(
-          fetchFormResponsesOptimized(fetchedTask.moNumber)
-            .then(responses => ({ type: 'formResponses', data: responses }))
-            .catch(error => {
-              console.error('Błąd podczas pobierania odpowiedzi formularzy:', error);
-              return { type: 'formResponses', data: { completedMO: [], productionControl: [], productionShift: [] } };
-            })
-        );
-      }
-      
-      // ✅ NOWA OPTYMALIZACJA: Oczekujące zamówienia dla materiałów - jeśli zadanie ma materiały
+      // Oczekujące zamówienia dla materiałów - potrzebne dla zakładki materiałów
       if (fetchedTask?.materials?.length > 0) {
         dataLoadingPromises.push(
           fetchAwaitingOrdersForMaterials()
@@ -680,15 +756,9 @@ const TaskDetailsPage = () => {
         
 
         
-        // Przetwórz wyniki i ustaw stany
+        // Przetwórz wyniki i ustaw stany (tylko podstawowe dane)
         results.forEach(result => {
           switch (result.type) {
-            case 'productionHistory':
-              setProductionHistory(result.data);
-              break;
-            case 'userNames':
-              setUserNames(result.data);
-              break;
             case 'recipeVersion':
               if (result.data && result.data.data) {
                 // Dodaj dane wersji receptury do obiektu task
@@ -697,9 +767,6 @@ const TaskDetailsPage = () => {
                   recipe: result.data.data // result.data.data zawiera pełne dane receptury z tej wersji
                 }));
               }
-              break;
-            case 'formResponses':
-              setFormResponses(result.data);
               break;
             case 'awaitingOrders':
               // Oczekujące zamówienia są już ustawione w funkcji fetchAwaitingOrdersForMaterials
@@ -6573,83 +6640,107 @@ const TaskDetailsPage = () => {
           )}
 
           {mainTab === 2 && ( // Zakładka "Produkcja i Plan"
-            <ProductionPlanTab
-              task={task}
-              setTask={setTask}
-              productionHistory={productionHistory}
-              enrichedProductionHistory={enrichedProductionHistory}
-              selectedMachineId={selectedMachineId}
-              setSelectedMachineId={setSelectedMachineId}
-              availableMachines={availableMachines}
-              editingHistoryItem={editingHistoryItem}
-              editedHistoryItem={editedHistoryItem}
-              setEditedHistoryItem={setEditedHistoryItem}
-              warehouses={warehouses}
-              getUserName={getUserName}
-              onAddHistoryItem={(editedItem, historyData) => {
-                setEditedHistoryItem(editedItem);
-                setHistoryInventoryData(historyData);
-                setAddHistoryDialogOpen(true);
-              }}
-              onEditHistoryItem={handleEditHistoryItem}
-              onSaveHistoryItemEdit={handleSaveHistoryItemEdit}
-              onCancelHistoryItemEdit={handleCancelHistoryItemEdit}
-              onDeleteHistoryItem={handleDeleteHistoryItem}
-              toLocalDateTimeString={toLocalDateTimeString}
-              fromLocalDateTimeString={fromLocalDateTimeString}
-              onChecklistItemUpdate={handleChecklistItemUpdate}
-            />
+            <Suspense fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                <CircularProgress />
+              </Box>
+            }>
+              <ProductionPlanTab
+                task={task}
+                setTask={setTask}
+                productionHistory={productionHistory}
+                enrichedProductionHistory={enrichedProductionHistory}
+                selectedMachineId={selectedMachineId}
+                setSelectedMachineId={setSelectedMachineId}
+                availableMachines={availableMachines}
+                editingHistoryItem={editingHistoryItem}
+                editedHistoryItem={editedHistoryItem}
+                setEditedHistoryItem={setEditedHistoryItem}
+                warehouses={warehouses}
+                getUserName={getUserName}
+                onAddHistoryItem={(editedItem, historyData) => {
+                  setEditedHistoryItem(editedItem);
+                  setHistoryInventoryData(historyData);
+                  setAddHistoryDialogOpen(true);
+                }}
+                onEditHistoryItem={handleEditHistoryItem}
+                onSaveHistoryItemEdit={handleSaveHistoryItemEdit}
+                onCancelHistoryItemEdit={handleCancelHistoryItemEdit}
+                onDeleteHistoryItem={handleDeleteHistoryItem}
+                toLocalDateTimeString={toLocalDateTimeString}
+                fromLocalDateTimeString={fromLocalDateTimeString}
+                onChecklistItemUpdate={handleChecklistItemUpdate}
+              />
+            </Suspense>
           )}
 
           {mainTab === 3 && ( // Zakładka "Formularze"
-            <FormsTab
-              task={task}
-              formTab={formTab}
-              setFormTab={setFormTab}
-              formResponses={formResponses}
-              loadingFormResponses={loadingFormResponses}
-              setCompletedMODialogOpen={setCompletedMODialogOpen}
-              setProductionControlDialogOpen={setProductionControlDialogOpen}
-              setProductionShiftDialogOpen={setProductionShiftDialogOpen}
-            />
+            <Suspense fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                <CircularProgress />
+              </Box>
+            }>
+              <FormsTab
+                task={task}
+                formTab={formTab}
+                setFormTab={setFormTab}
+                formResponses={formResponses}
+                loadingFormResponses={loadingFormResponses}
+                setCompletedMODialogOpen={setCompletedMODialogOpen}
+                setProductionControlDialogOpen={setProductionControlDialogOpen}
+                setProductionShiftDialogOpen={setProductionShiftDialogOpen}
+              />
+            </Suspense>
           )}
 
           {mainTab === 4 && ( // Zakładka "Historia zmian"
-            <ChangeHistoryTab task={task} getUserName={getUserName} />
+            <Suspense fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                <CircularProgress />
+              </Box>
+            }>
+              <ChangeHistoryTab task={task} getUserName={getUserName} />
+            </Suspense>
           )}
 
           {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
-            <EndProductReportTab
-              task={task}
-              materials={materials}
-              productionHistory={productionHistory}
-              formResponses={formResponses}
-              companyData={companyData}
-              workstationData={workstationData}
-              clinicalAttachments={clinicalAttachments}
-              setClinicalAttachments={setClinicalAttachments}
-              additionalAttachments={additionalAttachments}
-              setAdditionalAttachments={setAdditionalAttachments}
-              ingredientAttachments={ingredientAttachments}
-              selectedAllergens={selectedAllergens}
-              setSelectedAllergens={setSelectedAllergens}
-              availableAllergens={availableAllergens}
-              onFixRecipeData={handleFixRecipeData}
-              fixingRecipeData={fixingRecipeData}
-              uploadingClinical={uploadingClinical}
-              uploadingAdditional={uploadingAdditional}
-              onClinicalFileSelect={handleClinicalFileSelect}
-              onAdditionalFileSelect={handleAdditionalFileSelect}
-              onDownloadClinicalFile={handleDownloadClinicalFile}
-              onDeleteClinicalFile={handleDeleteClinicalFile}
-              onDownloadAdditionalFile={handleDownloadAdditionalFile}
-              onDeleteAdditionalFile={handleDeleteAdditionalFile}
-              getClinicalFileIcon={getClinicalFileIcon}
-              formatClinicalFileSize={formatClinicalFileSize}
-              getAdaptiveBackgroundStyle={getAdaptiveBackgroundStyle}
-              sortIngredientsByQuantity={sortIngredientsByQuantity}
-              ingredientBatchAttachments={ingredientBatchAttachments}
-            />
+            <Suspense fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+                <CircularProgress />
+              </Box>
+            }>
+              <EndProductReportTab
+                task={task}
+                materials={materials}
+                productionHistory={productionHistory}
+                formResponses={formResponses}
+                companyData={companyData}
+                workstationData={workstationData}
+                clinicalAttachments={clinicalAttachments}
+                setClinicalAttachments={setClinicalAttachments}
+                additionalAttachments={additionalAttachments}
+                setAdditionalAttachments={setAdditionalAttachments}
+                ingredientAttachments={ingredientAttachments}
+                selectedAllergens={selectedAllergens}
+                setSelectedAllergens={setSelectedAllergens}
+                availableAllergens={availableAllergens}
+                onFixRecipeData={handleFixRecipeData}
+                fixingRecipeData={fixingRecipeData}
+                uploadingClinical={uploadingClinical}
+                uploadingAdditional={uploadingAdditional}
+                onClinicalFileSelect={handleClinicalFileSelect}
+                onAdditionalFileSelect={handleAdditionalFileSelect}
+                onDownloadClinicalFile={handleDownloadClinicalFile}
+                onDeleteClinicalFile={handleDeleteClinicalFile}
+                onDownloadAdditionalFile={handleDownloadAdditionalFile}
+                onDeleteAdditionalFile={handleDeleteAdditionalFile}
+                getClinicalFileIcon={getClinicalFileIcon}
+                formatClinicalFileSize={formatClinicalFileSize}
+                getAdaptiveBackgroundStyle={getAdaptiveBackgroundStyle}
+                sortIngredientsByQuantity={sortIngredientsByQuantity}
+                ingredientBatchAttachments={ingredientBatchAttachments}
+              />
+            </Suspense>
           )}
 
           {/* Wszystkie dialogi pozostają bez zmian na końcu komponentu */}

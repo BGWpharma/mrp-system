@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
   Grid,
   Paper,
@@ -449,4 +449,4 @@ const ProductionPlanTab = ({
   );
 };
 
-export default ProductionPlanTab; 
+export default memo(ProductionPlanTab); 
