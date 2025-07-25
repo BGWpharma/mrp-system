@@ -509,6 +509,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const [linkedOrders, setLinkedOrders] = useState([]);
   const [availableOrderItems, setAvailableOrderItems] = useState([]);
   const [orderItemsSelectorOpen, setOrderItemsSelectorOpen] = useState(false);
+  const [orderItemsSearchQuery, setOrderItemsSearchQuery] = useState('');
   
   // Stany dla kalkulatora wagi
   const [weightCalculatorOpen, setWeightCalculatorOpen] = useState(false);
@@ -2994,8 +2995,29 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
               Wybierz pozycje z zamówień klienta, które chcesz dodać do dokumentu CMR:
             </Typography>
             
+            {/* Pole wyszukiwania */}
+            <TextField
+              fullWidth
+              placeholder="Wyszukaj pozycje..."
+              value={orderItemsSearchQuery}
+              onChange={(e) => setOrderItemsSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1 }} />
+              }}
+              sx={{ mb: 2 }}
+            />
+            
             <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
-              {availableOrderItems.map((orderItem, index) => (
+              {availableOrderItems.filter(orderItem => {
+                if (!orderItemsSearchQuery.trim()) return true;
+                const searchTerm = orderItemsSearchQuery.toLowerCase();
+                return (
+                  (orderItem.name || '').toLowerCase().includes(searchTerm) ||
+                  (orderItem.description || '').toLowerCase().includes(searchTerm) ||
+                  (orderItem.orderNumber || '').toLowerCase().includes(searchTerm) ||
+                  (orderItem.unit || '').toLowerCase().includes(searchTerm)
+                );
+              }).map((orderItem, index) => (
                 <Box 
                   key={index}
                   sx={{ 
@@ -3044,15 +3066,38 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 </Box>
               ))}
               
-              {availableOrderItems.length === 0 && (
+              {availableOrderItems.filter(orderItem => {
+                if (!orderItemsSearchQuery.trim()) return true;
+                const searchTerm = orderItemsSearchQuery.toLowerCase();
+                return (
+                  (orderItem.name || '').toLowerCase().includes(searchTerm) ||
+                  (orderItem.description || '').toLowerCase().includes(searchTerm) ||
+                  (orderItem.orderNumber || '').toLowerCase().includes(searchTerm) ||
+                  (orderItem.unit || '').toLowerCase().includes(searchTerm)
+                );
+              }).length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                  Brak dostępnych pozycji w zamówieniu
+                  {orderItemsSearchQuery.trim() 
+                    ? `Brak pozycji pasujących do wyszukiwania "${orderItemsSearchQuery}"`
+                    : 'Brak dostępnych pozycji w zamówieniu'
+                  }
                 </Typography>
               )}
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOrderItemsSelectorOpen(false)}>
+            {orderItemsSearchQuery.trim() && (
+              <Button 
+                onClick={() => setOrderItemsSearchQuery('')}
+                color="inherit"
+              >
+                Wyczyść wyszukiwanie
+              </Button>
+            )}
+            <Button onClick={() => {
+              setOrderItemsSearchQuery('');
+              setOrderItemsSelectorOpen(false);
+            }}>
               Zamknij
             </Button>
           </DialogActions>
