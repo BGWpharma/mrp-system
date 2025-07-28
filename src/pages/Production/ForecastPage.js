@@ -67,6 +67,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateTime } from '../../utils/formatters';
+import { getExchangeRate } from '../../services/exchangeRateService';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { toast } from 'react-hot-toast';
 
@@ -323,21 +324,48 @@ const ForecastPage = () => {
             const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
             
             // Aktualizuj ceny i koszty w materialRequirements na podstawie domyślnych dostawców
+            // NOWE: Przygotuj datę dla kursu walut (dzień poprzedzający dzisiejszy)
+            const exchangeRateDate = new Date();
+            exchangeRateDate.setDate(exchangeRateDate.getDate() - 1);
+            
             for (const materialId of batchIds) {
               if (bestPrices[materialId]) {
                 const bestPrice = bestPrices[materialId];
                 
                 // Jeśli mamy cenę od domyślnego dostawcy, użyj jej
                 if (bestPrice.isDefault || bestPrice.price) {
-                  materialRequirements[materialId].price = bestPrice.price;
-                  materialRequirements[materialId].currency = bestPrice.currency || 'EUR';
+                  let priceInEUR = bestPrice.price;
+                  let originalPrice = bestPrice.price;
+                  let originalCurrency = bestPrice.currency || 'EUR';
+                  let exchangeRate = 1;
+                  let priceConverted = false;
+                  
+                  // NOWE: Przelicz walutę na EUR jeśli to nie EUR
+                  if (originalCurrency && originalCurrency !== 'EUR') {
+                    try {
+                      exchangeRate = await getExchangeRate(originalCurrency, 'EUR', exchangeRateDate);
+                      priceInEUR = originalPrice * exchangeRate;
+                      priceConverted = true;
+                      console.log(`Przeliczono cenę materiału ${materialId}: ${originalPrice} ${originalCurrency} → ${priceInEUR.toFixed(4)} EUR (kurs: ${exchangeRate})`);
+                    } catch (error) {
+                      console.warn(`Nie udało się przeliczić waluty ${originalCurrency} na EUR dla materiału ${materialId}:`, error);
+                      // W przypadku błędu zostaw oryginalną cenę i walutę
+                    }
+                  }
+                  
+                  materialRequirements[materialId].price = priceInEUR;
+                  materialRequirements[materialId].currency = 'EUR'; // Zawsze EUR po przeliczeniu
+                  materialRequirements[materialId].originalPrice = originalPrice;
+                  materialRequirements[materialId].originalCurrency = originalCurrency;
+                  materialRequirements[materialId].exchangeRate = exchangeRate;
+                  materialRequirements[materialId].priceConverted = priceConverted;
                   materialRequirements[materialId].supplier = bestPrice.supplierName || 'Nieznany dostawca';
                   materialRequirements[materialId].supplierId = bestPrice.supplierId;
                   materialRequirements[materialId].isDefaultSupplier = bestPrice.isDefault;
                 }
               }
               
-              // Zawsze obliczaj koszt - albo na podstawie ceny dostawcy, albo magazynowej
+              // Zawsze obliczaj koszt - teraz zawsze w EUR
               materialRequirements[materialId].cost = materialRequirements[materialId].price * 
                 materialRequirements[materialId].requiredQuantity;
             }
@@ -1487,15 +1515,45 @@ const ForecastPage = () => {
                                 </TableCell>
                                 <TableCell align="right">
                                   {item.price === 0 ? '-' : (
-                                    <Tooltip title={item.supplier ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Cena magazynowa'}>
-                                      <span>{formatCurrency(item.price, item.currency || 'EUR')}</span>
+                                    <Tooltip title={
+                                      item.supplier 
+                                        ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}${
+                                            item.priceConverted 
+                                              ? `\nOryginalnie: ${formatCurrency(item.originalPrice, item.originalCurrency)}\nKurs: ${item.exchangeRate?.toFixed(4)} (${item.originalCurrency}/EUR)`
+                                              : ''
+                                          }`
+                                        : 'Cena magazynowa'
+                                    }>
+                                      <span>
+                                        {formatCurrency(item.price, 'EUR')}
+                                        {item.priceConverted && (
+                                          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.7 }}>
+                                            (z {item.originalCurrency})
+                                          </Typography>
+                                        )}
+                                      </span>
                                     </Tooltip>
                                   )}
                                 </TableCell>
                                 <TableCell align="right">
                                   {item.cost === 0 ? '-' : (
-                                    <Tooltip title={item.supplier ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Koszt na podstawie ceny magazynowej'}>
-                                      <span>{formatCurrency(item.cost, item.currency || 'EUR')}</span>
+                                    <Tooltip title={
+                                      item.supplier 
+                                        ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}${
+                                            item.priceConverted 
+                                              ? `\nOryginalny koszt: ${formatCurrency(item.originalPrice * item.requiredQuantity, item.originalCurrency)}\nPrzeliczono na EUR z kursem: ${item.exchangeRate?.toFixed(4)}`
+                                              : ''
+                                          }`
+                                        : 'Koszt na podstawie ceny magazynowej'
+                                    }>
+                                      <span>
+                                        {formatCurrency(item.cost, 'EUR')}
+                                        {item.priceConverted && (
+                                          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.7 }}>
+                                            (przeliczone z {item.originalCurrency})
+                                          </Typography>
+                                        )}
+                                      </span>
                                     </Tooltip>
                                   )}
                                 </TableCell>
