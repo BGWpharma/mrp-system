@@ -871,6 +871,28 @@ const CmrDetailsPage = () => {
               ).join('');
               addTextToField(svgDoc, 'field-goods', goodsText, '7px');
               
+              // Numer Statystyczny (pole 10) - numer CO z którego pochodzi pozycja
+              let statisticalNumberText = items.map((item, index) => {
+                let coNumber = '';
+                
+                // Sprawdź czy pozycja ma informacje o zamówieniu z którego pochodzi
+                if (item.originalOrderItem && item.originalOrderItem.orderNumber) {
+                  coNumber = item.originalOrderItem.orderNumber;
+                } else if (item.orderNumber) {
+                  coNumber = item.orderNumber;
+                } else {
+                  // Fallback - użyj pierwszego numeru z linkedOrderNumbers jeśli dostępny
+                  if (cmrData.linkedOrderNumbers && cmrData.linkedOrderNumbers.length > 0) {
+                    coNumber = cmrData.linkedOrderNumbers[0];
+                  } else if (cmrData.linkedOrders && cmrData.linkedOrders.length > 0) {
+                    coNumber = cmrData.linkedOrders[0].orderNumber || '';
+                  }
+                }
+                
+                return index === 0 ? coNumber : '\n\n\n' + coNumber;
+              }).join('');
+              addTextToField(svgDoc, 'field-statistical-number', statisticalNumberText, '7px');
+              
               // Waga brutto (pole 11)
               let weightsText = items.map((item, index) => 
                 index === 0 ? item.weight?.toString() || '' : '\n\n\n' + (item.weight?.toString() || '')
