@@ -88,7 +88,14 @@ const FormsTab = ({
           ) : (
             <Box sx={{ width: '100%' }}>
               <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-                <Tabs value={formTab || 0} onChange={(e, newValue) => setFormTab(newValue)} aria-label="Zakładki formularzy">
+                <Tabs 
+                  value={formTab || 0} 
+                  onChange={(e, newValue) => setFormTab(newValue)} 
+                  aria-label="Zakładki formularzy"
+                  variant="scrollable" 
+                  scrollButtons="auto"
+                  allowScrollButtonsMobile
+                >
                   <Tab label={`${t('production.taskDetails.formTabs.completedMO')} (${formResponses.completedMO.length})`} />
                   <Tab label={`${t('production.taskDetails.formTabs.productionControl')} (${formResponses.productionControl.length})`} />
                   <Tab label={`${t('production.taskDetails.formTabs.productionShift')} (${formResponses.productionShift.length})`} />
@@ -115,6 +122,7 @@ const FormsTab = ({
                             <TableCell>Straty opakowania</TableCell>
                             <TableCell>Straty wieczka</TableCell>
                             <TableCell>Straty surowca</TableCell>
+                            <TableCell>Waga netto kapsułek</TableCell>
                             <TableCell>Raport mieszań</TableCell>
                             <TableCell>Akcje</TableCell>
                           </TableRow>
@@ -134,6 +142,7 @@ const FormsTab = ({
                               <TableCell>{form.packagingLoss || '-'}</TableCell>
                               <TableCell>{form.bulkLoss || '-'}</TableCell>
                               <TableCell>{form.rawMaterialLoss || '-'}</TableCell>
+                              <TableCell>{form.netCapsuleWeight || '-'}</TableCell>
                               <TableCell>
                                 {form.mixingPlanReportUrl ? (
                                   <IconButton 

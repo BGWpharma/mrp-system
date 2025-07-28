@@ -51,6 +51,7 @@ const CompletedMOFormDialog = ({
     packagingLoss: '',
     bulkLoss: '',
     rawMaterialLoss: '',
+    netCapsuleWeight: '', // Nowe pole - waga netto kapsułek
     mixingPlanReport: null
   });
 
@@ -156,6 +157,10 @@ const CompletedMOFormDialog = ({
       errors.rawMaterialLoss = 'Podaj wartość liczbową';
     }
     
+    if (formData.netCapsuleWeight && isNaN(formData.netCapsuleWeight)) {
+      errors.netCapsuleWeight = 'Podaj wartość liczbową';
+    }
+    
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -180,6 +185,7 @@ const CompletedMOFormDialog = ({
           packagingLoss: formData.packagingLoss,
           bulkLoss: formData.bulkLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
+          netCapsuleWeight: formData.netCapsuleWeight, // Nowe pole
           createdAt: serverTimestamp()
         };
         
@@ -226,6 +232,7 @@ const CompletedMOFormDialog = ({
       packagingLoss: '',
       bulkLoss: '',
       rawMaterialLoss: '',
+      netCapsuleWeight: '', // Nowe pole
       mixingPlanReport: null
     });
     setValidationErrors({});
@@ -804,6 +811,20 @@ const CompletedMOFormDialog = ({
                 onChange={handleChange}
                 error={!!validationErrors.rawMaterialLoss}
                 helperText={validationErrors.rawMaterialLoss}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Waga netto kapsułek (opcjonalne)"
+                name="netCapsuleWeight"
+                type="number"
+                value={formData.netCapsuleWeight}
+                onChange={handleChange}
+                error={!!validationErrors.netCapsuleWeight}
+                helperText={validationErrors.netCapsuleWeight || "Podaj wagę netto kapsułek w gramach lub kilogramach"}
                 inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>

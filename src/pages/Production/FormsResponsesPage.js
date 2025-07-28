@@ -416,6 +416,7 @@ const FormsResponsesPage = () => {
                 <TableCell align="right">{t('packagingLoss')}</TableCell>
                 <TableCell align="right">{t('bulkLoss')}</TableCell>
                 <TableCell align="right">{t('rawMaterialLoss')}</TableCell>
+                <TableCell align="right">Waga netto kapsułek</TableCell>
                 <TableCell>{t('mixingPlanReport')}</TableCell>
                 <TableCell align="center">{t('actions')}</TableCell>
               </TableRow>
@@ -431,6 +432,7 @@ const FormsResponsesPage = () => {
                   <TableCell align="right">{row.packagingLoss || '-'}</TableCell>
                   <TableCell align="right">{row.bulkLoss || '-'}</TableCell>
                   <TableCell align="right">{row.rawMaterialLoss || '-'}</TableCell>
+                  <TableCell align="right">{row.netCapsuleWeight || '-'}</TableCell>
                   <TableCell>
                     {row.mixingPlanReportUrl ? (
                       <Button 

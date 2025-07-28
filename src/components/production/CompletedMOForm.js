@@ -137,6 +137,7 @@ const CompletedMOForm = () => {
     packagingLoss: '',
     bulkLoss: '',
     rawMaterialLoss: '',
+    netCapsuleWeight: '', // Nowe pole - waga netto kapsułek
     mixingPlanReport: null,
     mixingPlanReportUrl: '',
     mixingPlanReportName: ''
@@ -170,6 +171,7 @@ const CompletedMOForm = () => {
           packagingLoss: editData.packagingLoss || '',
           bulkLoss: editData.bulkLoss || '',
           rawMaterialLoss: editData.rawMaterialLoss || '',
+          netCapsuleWeight: editData.netCapsuleWeight || '', // Nowe pole
           mixingPlanReport: null,
           mixingPlanReportUrl: editData.mixingPlanReportUrl || '',
           mixingPlanReportName: editData.mixingPlanReportName || ''
@@ -305,6 +307,10 @@ const CompletedMOForm = () => {
       errors.rawMaterialLoss = 'Podaj wartość liczbową';
     }
     
+    if (formData.netCapsuleWeight && isNaN(formData.netCapsuleWeight)) {
+      errors.netCapsuleWeight = 'Podaj wartość liczbową';
+    }
+    
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -329,6 +335,7 @@ const CompletedMOForm = () => {
           packagingLoss: formData.packagingLoss,
           bulkLoss: formData.bulkLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
+          netCapsuleWeight: formData.netCapsuleWeight, // Nowe pole
           createdAt: serverTimestamp()
         };
         
@@ -403,6 +410,7 @@ const CompletedMOForm = () => {
           packagingLoss: '',
           bulkLoss: '',
           rawMaterialLoss: '',
+          netCapsuleWeight: '', // Nowe pole
           mixingPlanReport: null,
           mixingPlanReportUrl: '',
           mixingPlanReportName: ''
@@ -959,6 +967,21 @@ const CompletedMOForm = () => {
                 helperText={validationErrors.rawMaterialLoss}
                 multiline
                 rows={5}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Waga netto kapsułek (opcjonalne)"
+                name="netCapsuleWeight"
+                value={formData.netCapsuleWeight}
+                onChange={handleChange}
+                placeholder="Podaj wagę netto kapsułek w gramach lub kilogramach"
+                type="number"
+                inputProps={{ step: "0.01", min: "0" }}
+                error={!!validationErrors.netCapsuleWeight}
+                helperText={validationErrors.netCapsuleWeight}
               />
             </Grid>
             
