@@ -41,7 +41,8 @@ import {
   Delete as DeleteIcon,
   Link as LinkIcon,
   Update as UpdateIcon,
-  History as HistoryIcon
+  History as HistoryIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import {
   createTask,
@@ -501,6 +502,28 @@ const TaskForm = ({ taskId }) => {
     return !hasReservations && !hasConsumption;
   };
 
+  // Funkcja sprawdzająca czy można przeliczać materiały
+  const canRecalculateMaterials = () => {
+    if (!taskId || taskId === 'new') {
+      return true; // Nowe zadania mogą być przeliczane
+    }
+
+    // Sprawdź czy zadanie ma materiały z rezerwacjami
+    const hasReservations = taskData.materialBatches && 
+      Object.keys(taskData.materialBatches).length > 0 &&
+      Object.values(taskData.materialBatches).some(batches => 
+        batches && batches.length > 0 && 
+        batches.some(batch => batch.quantity > 0)
+      );
+
+    // Sprawdź czy zadanie ma potwierdzoną konsumpcję lub skonsumowane materiały
+    const hasConsumption = taskData.materialConsumptionConfirmed === true ||
+      (taskData.consumedMaterials && taskData.consumedMaterials.length > 0) ||
+      (taskData.status === 'Potwierdzenie zużycia');
+
+    return !hasReservations && !hasConsumption;
+  };
+
   // Funkcja otwierająca dialog wyboru wersji receptury
   const handleOpenVersionDialog = async () => {
     if (!taskData.recipeId) {
@@ -897,6 +920,47 @@ const TaskForm = ({ taskId }) => {
     }));
   };
 
+  // Funkcja do ręcznego przeliczania materiałów
+  const handleRecalculateMaterials = () => {
+    if (!canRecalculateMaterials()) {
+      showError('Nie można przeliczyć materiałów: zadanie ma zarezerwowane lub skonsumowane materiały');
+      return;
+    }
+
+    if (!recipe || !taskData.quantity) {
+      showWarning('Aby przeliczyć materiały, wybierz recepturę i podaj ilość');
+      return;
+    }
+
+    const newQuantity = parseFloat(taskData.quantity);
+    
+    if (isNaN(newQuantity) || newQuantity <= 0) {
+      showError('Podaj prawidłową ilość (większą od 0)');
+      return;
+    }
+
+    // Przelicz materiały na podstawie receptury i nowej ilości
+    if (recipe.ingredients && recipe.ingredients.length > 0) {
+      const updatedMaterials = recipe.ingredients.map(ingredient => ({
+        id: ingredient.id,
+        name: ingredient.name,
+        category: ingredient.category || 'Surowce',
+        quantity: (ingredient.quantity || 0) * newQuantity,
+        unit: ingredient.unit || 'szt.',
+        inventoryItemId: ingredient.inventoryItemId || ingredient.id
+      }));
+      
+      setTaskData(prev => ({
+        ...prev,
+        materials: updatedMaterials
+      }));
+      
+      showSuccess(`Przeliczono materiały dla ilości: ${newQuantity} ${taskData.unit}`);
+    } else {
+      showWarning('Receptura nie zawiera składników do przeliczenia');
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="md">
@@ -1128,17 +1192,65 @@ const TaskForm = ({ taskId }) => {
                   </FormControl>
                 </Grid>
                 <Grid item xs={12}>
-                  <TextField
-                    label="Ilość"
-                    name="quantity"
-                    type="number"
-                    value={taskData.quantity || ''}
-                    onChange={handleQuantityChange}
-                    fullWidth
-                    required
-                    variant="outlined"
-                    inputProps={{ min: 0, step: 0.01 }}
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <TextField
+                      label="Ilość"
+                      name="quantity"
+                      type="number"
+                      value={taskData.quantity || ''}
+                      onChange={handleQuantityChange}
+                      fullWidth
+                      required
+                      variant="outlined"
+                      inputProps={{ min: 0, step: 0.01 }}
+                      sx={{ flexGrow: 1 }}
+                    />
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={handleRecalculateMaterials}
+                      startIcon={<CalculateIcon />}
+                      disabled={!recipe || !taskData.quantity || !canRecalculateMaterials()}
+                      sx={{ 
+                        height: 56, 
+                        minWidth: 160,
+                        whiteSpace: 'nowrap'
+                      }}
+                      title={!canRecalculateMaterials() ? 
+                        "Nie można przeliczyć materiałów: zadanie ma zarezerwowane lub skonsumowane materiały" : 
+                        "Przelicz materiały na podstawie ilości i receptury"
+                      }
+                    >
+                      Przelicz materiały
+                    </Button>
+                  </Box>
+                  {/* Komunikat o ograniczeniach przeliczania - tylko w trybie edycji */}
+                  {taskId && taskId !== 'new' && !canRecalculateMaterials() && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        {(() => {
+                          const hasReservations = taskData.materialBatches && 
+                            Object.keys(taskData.materialBatches).length > 0 &&
+                            Object.values(taskData.materialBatches).some(batches => 
+                              batches && batches.length > 0 && 
+                              batches.some(batch => batch.quantity > 0)
+                            );
+                          const hasConsumption = taskData.materialConsumptionConfirmed === true ||
+                            (taskData.consumedMaterials && taskData.consumedMaterials.length > 0) ||
+                            (taskData.status === 'Potwierdzenie zużycia');
+                          
+                          if (hasReservations && hasConsumption) {
+                            return 'Przeliczanie materiałów niemożliwe: zadanie ma zarezerwowane i skonsumowane materiały.';
+                          } else if (hasReservations) {
+                            return 'Przeliczanie materiałów niemożliwe: zadanie ma zarezerwowane materiały.';
+                          } else if (hasConsumption) {
+                            return 'Przeliczanie materiałów niemożliwe: zadanie ma skonsumowane materiały.';
+                          }
+                          return 'Przeliczanie materiałów jest możliwe tylko dla zadań bez rezerwacji i konsumpcji materiałów.';
+                        })()}
+                      </Typography>
+                    </Alert>
+                  )}
                 </Grid>
               </Grid>
             </Paper>
