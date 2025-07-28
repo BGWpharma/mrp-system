@@ -477,8 +477,8 @@ const CmrListPage = () => {
             '', '', 
             (index + 1).toString(), 
             item.description, 
-            item.numberOfPackages, 
-            item.packagingMethod, 
+            item.quantity || item.numberOfPackages, 
+            item.unit || item.packagingMethod, 
             item.weight, 
             item.volume
           ]);
@@ -882,8 +882,8 @@ const CmrListPage = () => {
                             <TableRow key={item.id || index}>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell>{item.description}</TableCell>
-                              <TableCell>{item.numberOfPackages}</TableCell>
-                              <TableCell>{item.packagingMethod}</TableCell>
+                              <TableCell>{item.quantity || item.numberOfPackages}</TableCell>
+                              <TableCell>{item.unit || item.packagingMethod}</TableCell>
                               <TableCell>{item.weight}</TableCell>
                               <TableCell>{item.volume}</TableCell>
                             </TableRow>
