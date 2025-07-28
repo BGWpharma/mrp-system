@@ -389,9 +389,7 @@ const OrdersList = () => {
     switch (status) {
       case 'Nowe': return '#1976d2'; // oryginalny niebieski
       case 'W realizacji': return '#2196f3'; // oryginalny jasnoniebieski
-      case 'Gotowe do wysyłki': return '#ff9800'; // oryginalny pomarańczowy
-      case 'Wysłane': return '#9c27b0'; // oryginalny fioletowy
-      case 'Dostarczone': return '#4caf50'; // oryginalny zielony
+      case 'Zakończone': return '#4caf50'; // oryginalny zielony
       case 'Anulowane': return '#f44336'; // oryginalny czerwony
       default: return '#757575'; // oryginalny szary
     }
@@ -1853,7 +1851,7 @@ const OrdersList = () => {
                                           <TableRow>
                                             <TableCell>Produkt</TableCell>
                                             <TableCell align="right">Ilość</TableCell>
-                                            <TableCell align="right">Wysłane</TableCell>
+                                            <TableCell align="right">Zarezerwowane</TableCell>
                                             <TableCell align="right">Cena</TableCell>
                                             <TableCell align="right">Wartość</TableCell>
                                             <TableCell>MO</TableCell>

@@ -138,9 +138,7 @@ const Dashboard = () => {
     switch (status) {
       case 'Nowe': return 'info';
       case 'W realizacji': return 'warning';
-      case 'Gotowe do wysyłki': return 'success';
-      case 'Wysłane': return 'primary';
-      case 'Dostarczone': return 'success';
+      case 'Zakończone': return 'success';
       case 'Anulowane': return 'error';
       default: return 'default';
     }
@@ -297,8 +295,7 @@ const Dashboard = () => {
                       {recentOrders.slice(0, 5).map((order) => (
                         <ListItem key={order.id} divider>
                           <ListItemIcon>
-                            {order.status === 'Dostarczone' ? <CompletedIcon color="success" /> : 
-                             order.status === 'Wysłane' ? <ShippingIcon color="primary" /> : 
+                                          {order.status === 'Zakończone' ? <CompletedIcon color="success" /> : 
                              <PendingIcon color="warning" />}
                           </ListItemIcon>
                           <ListItemText

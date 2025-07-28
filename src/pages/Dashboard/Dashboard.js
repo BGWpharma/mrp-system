@@ -698,12 +698,8 @@ const Dashboard = () => {
       'New': 'info',
       'W realizacji': 'warning', 
       'In Progress': 'warning',
-      'Gotowe do wysyłki': 'success',
-      'Ready to Ship': 'success',
-      'Wysłane': 'primary',
-      'Shipped': 'primary',
-      'Dostarczone': 'success',
-      'Delivered': 'success',
+      'Zakończone': 'success',
+      'Completed': 'success',
       'Anulowane': 'error',
       'Cancelled': 'error'
     };

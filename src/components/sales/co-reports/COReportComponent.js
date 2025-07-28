@@ -35,18 +35,12 @@ const COReportComponent = ({ orders, loading, title }) => {
   // Określa kolor chipa na podstawie statusu zamówienia
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Zrealizowane':
-        return '#4caf50'; // oryginalny zielony
-      case 'Dostarczone':
+      case 'Zakończone':
         return '#4caf50'; // oryginalny zielony
       case 'Nowe':
         return '#1976d2'; // oryginalny niebieski
       case 'W realizacji':
         return '#2196f3'; // oryginalny jasnoniebieski
-      case 'Gotowe do wysyłki':
-        return '#ff9800'; // oryginalny pomarańczowy
-      case 'Wysłane':
-        return '#9c27b0'; // oryginalny fioletowy
       case 'Anulowane':
         return '#f44336'; // oryginalny czerwony
       default:

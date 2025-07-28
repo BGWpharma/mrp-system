@@ -529,9 +529,7 @@ const OrderDetails = () => {
     switch (status) {
       case 'Nowe': return 'primary';
       case 'W realizacji': return 'info';
-      case 'Gotowe do wysyłki': return 'warning';
-      case 'Wysłane': return 'secondary';
-      case 'Dostarczone': return 'success';
+      case 'Zakończone': return 'success';
       case 'Anulowane': return 'error';
       default: return 'default';
     }
@@ -1013,7 +1011,7 @@ const OrderDetails = () => {
               {order.deliveryDate && (
                 <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
                   <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
-                  Dostarczone: {formatTimestamp(order.deliveryDate, true)}
+                  Zakończone: {formatTimestamp(order.deliveryDate, true)}
                 </Typography>
               )}
             </Grid>

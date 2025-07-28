@@ -119,7 +119,7 @@ export const getKpiData = async (options = { sales: true, inventory: true, produ
           totalOrders: fetchedData.ordersStats?.total || 0,
           totalValue: fetchedData.ordersStats?.totalValue || 0,
           ordersInProgress: fetchedData.ordersStats?.byStatus?.['W realizacji'] || 0,
-          completedOrders: fetchedData.ordersStats?.byStatus?.['Dostarczone'] || 0
+          completedOrders: fetchedData.ordersStats?.byStatus?.['Zakończone'] || 0
         };
       }
       

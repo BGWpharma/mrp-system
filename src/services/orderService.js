@@ -719,8 +719,8 @@ export const updateOrderStatus = async (orderId, status, userId) => {
         updatedBy: userId,
         updatedAt: serverTimestamp(),
         statusHistory: [...statusHistory, statusChange],
-        // Jeśli status to "Dostarczone", ustaw datę dostawy
-        ...(status === 'Dostarczone' ? { deliveryDate: serverTimestamp() } : {})
+            // Jeśli status to "Zakończone", ustaw datę dostawy
+    ...(status === 'Zakończone' ? { deliveryDate: serverTimestamp() } : {})
       };
       
       await updateDoc(orderRef, updateData);
@@ -860,9 +860,7 @@ export const getOrdersStats = async (forDashboard = false) => {
         byStatus: {
           'Nowe': 0,
           'W realizacji': 0,
-          'Gotowe do wysyłki': 0,
-          'Wysłane': 0,
-          'Dostarczone': 0,
+                'Zakończone': 0,
           'Anulowane': 0
         },
         byMonth: {},
@@ -1023,9 +1021,7 @@ export const calculateOrderTotal = (items, shippingCost = 0, additionalCostsItem
 export const ORDER_STATUSES = [
   { value: 'Nowe', label: 'Nowe' },
   { value: 'W realizacji', label: 'W realizacji' },
-  { value: 'Gotowe do wysyłki', label: 'Gotowe do wysyłki' },
-  { value: 'Wysłane', label: 'Wysłane' },
-  { value: 'Dostarczone', label: 'Dostarczone' },
+  { value: 'Zakończone', label: 'Zakończone' },
   { value: 'Anulowane', label: 'Anulowane' }
 ];
 
