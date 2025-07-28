@@ -28,7 +28,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Tooltip
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -112,6 +113,7 @@ const TaskForm = ({ taskId }) => {
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [updatingRecipe, setUpdatingRecipe] = useState(false);
+  const [availableRecipeVersions, setAvailableRecipeVersions] = useState([]);
 
   // Funkcja do cache'owania danych w sessionStorage
   const getCachedData = useCallback((key) => {
@@ -379,14 +381,45 @@ const TaskForm = ({ taskId }) => {
       // Jeśli zadanie ma przypisaną recepturę, pobierz jej szczegóły
       if (task.recipeId) {
         additionalDataPromises.push(
-          getRecipeById(task.recipeId).then(recipeData => {
-            if (recipeData) {
-              setRecipe(recipeData);
+          (async () => {
+            try {
+              let recipeData;
+              
+              // Sprawdź czy zadanie ma określoną wersję receptury
+              if (task.recipeVersion) {
+                console.log(`Ładowanie wersji ${task.recipeVersion} receptury dla MO`);
+                try {
+                  const versionData = await getRecipeVersion(task.recipeId, task.recipeVersion);
+                  recipeData = versionData.data;
+                  console.log(`Załadowano wersję ${task.recipeVersion} receptury:`, recipeData);
+                } catch (versionError) {
+                  console.warn(`Nie udało się pobrać wersji ${task.recipeVersion} receptury:`, versionError);
+                  // Fallback do najnowszej wersji
+                  recipeData = await getRecipeById(task.recipeId);
+                  console.log('Załadowano najnowszą wersję receptury jako fallback');
+                }
+              } else {
+                // Brak wersji w zadaniu - użyj najnowszej
+                recipeData = await getRecipeById(task.recipeId);
+                console.log('Zadanie nie ma określonej wersji - załadowano najnowszą wersję receptury');
+              }
+              
+              if (recipeData) {
+                setRecipe(recipeData);
+                
+                // Pobierz dostępne wersje receptury dla edycji wersji
+                try {
+                  const versions = await getRecipeVersions(task.recipeId);
+                  setAvailableRecipeVersions(versions);
+                } catch (versionsError) {
+                  console.warn('Nie udało się pobrać wersji receptury:', versionsError);
+                }
+              }
+            } catch (recipeError) {
+              console.error('Błąd podczas pobierania receptury:', recipeError);
+              showError('Nie udało się pobrać danych receptury');
             }
-          }).catch(recipeError => {
-            console.error('Błąd podczas pobierania receptury:', recipeError);
-            showError('Nie udało się pobrać danych receptury');
-          })
+          })()
         );
       }
       
@@ -813,6 +846,78 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  // Funkcja do automatycznego przeliczenia czasu pracy z receptury
+  const handleCalculateTimeFromRecipe = async () => {
+    if (!recipe) {
+      showError('Najpierw wybierz recepturę');
+      return;
+    }
+
+    if (!taskData.quantity || taskData.quantity <= 0) {
+      showError('Najpierw wprowadź prawidłową ilość do wyprodukowania');
+      return;
+    }
+
+    try {
+      // Receptura jest już załadowana w odpowiedniej wersji przez fetchTask
+      let recipeToUse = recipe;
+      let versionInfo = '';
+
+      // Określ wersję receptury do wyświetlenia
+      if (taskData.recipeVersion) {
+        versionInfo = ` (wersja ${taskData.recipeVersion})`;
+      } else if (recipe.version) {
+        versionInfo = ` (wersja ${recipe.version})`;
+      }
+
+      console.log(`Przeliczam czas z receptury${versionInfo}:`, {
+        recipeVersion: recipe.version,
+        taskRecipeVersion: taskData.recipeVersion,
+        productionTimePerUnit: recipe.productionTimePerUnit
+      });
+
+      // Pobierz czas produkcji na jednostkę z odpowiedniej wersji receptury
+      let productionTimePerUnit = 0;
+      if (recipeToUse.productionTimePerUnit) {
+        productionTimePerUnit = parseFloat(recipeToUse.productionTimePerUnit);
+      } else if (recipeToUse.preparationTime) {
+        productionTimePerUnit = parseFloat(recipeToUse.preparationTime);
+      } else if (recipeToUse.prepTime) {
+        productionTimePerUnit = parseFloat(recipeToUse.prepTime);
+      }
+
+      if (productionTimePerUnit <= 0) {
+        showWarning(`Receptura${versionInfo} nie ma zdefiniowanego czasu produkcji na jednostkę`);
+        return;
+      }
+
+      // Oblicz całkowity czas produkcji
+      const totalProductionTime = productionTimePerUnit * taskData.quantity;
+
+      // Zaktualizuj formularz
+      setTaskData(prev => ({
+        ...prev,
+        productionTimePerUnit: productionTimePerUnit,
+        estimatedDuration: totalProductionTime
+      }));
+
+      // Zaktualizuj datę zakończenia
+      if (taskData.scheduledDate) {
+        const startDate = new Date(taskData.scheduledDate);
+        const endDate = new Date(startDate.getTime() + (totalProductionTime * 60 * 1000));
+        setTaskData(prev => ({
+          ...prev,
+          endDate
+        }));
+      }
+
+      showSuccess(`Przeliczono czas pracy${versionInfo}: ${productionTimePerUnit} min/szt. × ${taskData.quantity} szt. = ${totalProductionTime.toFixed(2)} minut (${(totalProductionTime / 60).toFixed(2)} godzin)`);
+    } catch (error) {
+      console.error('Błąd podczas przeliczania czasu z receptury:', error);
+      showError('Błąd podczas przeliczania czasu z receptury');
+    }
+  };
+
   // Funkcja do aktualizacji kosztów przy zmianie ilości
   const handleQuantityChange = (e) => {
     const newQuantity = e.target.value === '' ? '' : Number(e.target.value);
@@ -1069,14 +1174,45 @@ const TaskForm = ({ taskId }) => {
                 {taskId && taskId !== 'new' && taskData.recipeId && (
                   <Grid item xs={12}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Aktualna wersja receptury: <strong>{taskData.recipeVersion || 1}</strong>
-                        </Typography>
+                      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Tooltip 
+                          title={
+                            availableRecipeVersions.length > 0 ?
+                              `Dostępne wersje receptury: ${availableRecipeVersions.map(v => v.version).sort((a, b) => a - b).join(', ')}. Wybierz wersję która była aktualna w momencie tworzenia MO.` :
+                              "Wpisz numer wersji receptury która była aktualna w momencie tworzenia MO"
+                          }
+                          arrow
+                        >
+                          <TextField
+                            label="Wersja receptury"
+                            type="number"
+                            value={taskData.recipeVersion || ''}
+                            onChange={(e) => {
+                              const version = e.target.value ? parseInt(e.target.value) : undefined;
+                              setTaskData(prev => ({
+                                ...prev,
+                                recipeVersion: version
+                              }));
+                            }}
+                            size="small"
+                            sx={{ width: 150 }}
+                            inputProps={{ min: 1 }}
+                            helperText={
+                              !taskData.recipeVersion ? 
+                                "Brak przypisanej wersji" : 
+                                availableRecipeVersions.length > 0 ?
+                                  `Dostępne: ${availableRecipeVersions.map(v => v.version).sort((a, b) => a - b).join(', ')}` :
+                                  ""
+                            }
+                            error={!taskData.recipeVersion}
+                          />
+                        </Tooltip>
                         {taskData.recipeName && (
-                          <Typography variant="body2" color="text.secondary">
-                            Nazwa receptury: {taskData.recipeName}
-                          </Typography>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Nazwa receptury: {taskData.recipeName}
+                            </Typography>
+                          </Box>
                         )}
                       </Box>
                       <Button
@@ -1089,6 +1225,20 @@ const TaskForm = ({ taskId }) => {
                         {loadingVersions ? 'Sprawdzam...' : 'Aktualizuj wersję'}
                       </Button>
                     </Box>
+                    
+                    {/* Alert o braku wersji receptury */}
+                    {!taskData.recipeVersion && (
+                      <Alert severity="warning" sx={{ mt: 1 }}>
+                        <Typography variant="body2">
+                          <strong>Uwaga:</strong> To MO nie ma przypisanej wersji receptury. 
+                          Prawdopodobnie zostało utworzone przed wprowadzeniem wersjonowania. 
+                          Przeliczanie czasu będzie używać najnowszej wersji receptury.
+                          {availableRecipeVersions.length > 0 && (
+                            <span> Dostępne wersje: {availableRecipeVersions.map(v => v.version).sort((a, b) => a - b).join(', ')}</span>
+                          )}
+                        </Typography>
+                      </Alert>
+                    )}
                     
                     {/* Komunikat o ograniczeniach aktualizacji */}
                     {!canUpdateRecipeVersion() && taskId && taskId !== 'new' && (
@@ -1295,17 +1445,54 @@ const TaskForm = ({ taskId }) => {
                   </LocalizationProvider>
                 </Grid>
                 <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Czas produkcji na jednostkę (min)"
-                    name="productionTimePerUnit"
-                    value={taskData.productionTimePerUnit}
-                    onChange={handleProductionTimePerUnitChange}
-                    type="number"
-                    variant="outlined"
-                    InputProps={{ inputProps: { min: 0, step: 0.01 } }}
-                    helperText="Czas produkcji dla 1 sztuki w minutach"
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <TextField
+                      label="Czas produkcji na jednostkę (min)"
+                      name="productionTimePerUnit"
+                      value={taskData.productionTimePerUnit}
+                      onChange={handleProductionTimePerUnitChange}
+                      type="number"
+                      variant="outlined"
+                      InputProps={{ inputProps: { min: 0, step: 0.01 } }}
+                      helperText="Czas produkcji dla 1 sztuki w minutach"
+                      sx={{ flexGrow: 1 }}
+                    />
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={() => handleCalculateTimeFromRecipe().catch(error => {
+                        console.error('Błąd w handleCalculateTimeFromRecipe:', error);
+                        showError('Wystąpił błąd podczas przeliczania czasu');
+                      })}
+                      startIcon={<CalculateIcon />}
+                      disabled={!recipe || !taskData.quantity}
+                      sx={{ 
+                        height: 56, 
+                        minWidth: 180,
+                        whiteSpace: 'nowrap'
+                      }}
+                      title={!recipe ? 
+                        "Najpierw wybierz recepturę" : 
+                        !taskData.quantity ? 
+                        "Najpierw wprowadź ilość" :
+                        "Przelicz czas pracy na podstawie konkretnej wersji receptury powiązanej z MO (czas z receptury × ilość)"
+                      }
+                    >
+                      Przelicz czas z receptury
+                    </Button>
+                  </Box>
+                                    {/* Wyświetl dodatkowe informacje o przeliczeniu */}
+                  {taskData.productionTimePerUnit && taskData.quantity && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        Szacowany całkowity czas produkcji: {(taskData.productionTimePerUnit * taskData.quantity).toFixed(2)} minut
+                        ({((taskData.productionTimePerUnit * taskData.quantity) / 60).toFixed(2)} godzin)
+                        {recipe && recipe.productionTimePerUnit && (
+                          <span> | Czas z receptury wersja {taskData.recipeVersion || recipe.version || '?'}: {parseFloat(recipe.productionTimePerUnit).toFixed(2)} min/szt.</span>
+                        )}
+                      </Typography>
+                    </Alert>
+                  )}
                 </Grid>
               </Grid>
             </Paper>
