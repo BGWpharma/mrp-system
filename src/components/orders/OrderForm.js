@@ -906,7 +906,7 @@ const OrderForm = ({ orderId }) => {
                       };
                     }
                     
-                                         console.log(`Obliczono szacowany koszt materiałów: ${estimatedCost.totalCost}€`, estimatedCost.details);
+                                         console.log(`Obliczono szacowany koszt materiałów: ${estimatedCost.totalCost} EUR${estimatedCost.hasCurrencyConversion ? ' (przeliczone z różnych walut)' : ''}`, estimatedCost.details);
                      
                      // Zapamiętaj szacowany koszt w obiekcie lastUsageInfo - zostanie zapisany podczas zapisu zamówienia
                      console.log('Szacowany koszt zostanie zapisany podczas zapisu zamówienia');
@@ -2547,7 +2547,7 @@ const OrderForm = ({ orderId }) => {
             
             updatedItems++;
             
-            console.log(`Obliczono szacowany koszt dla pozycji ${index}: ${estimatedCost.totalCost}€`);
+            console.log(`Obliczono szacowany koszt dla pozycji ${index}: ${estimatedCost.totalCost} EUR${estimatedCost.hasCurrencyConversion ? ' (przeliczone z różnych walut)' : ''}`);
           }
         } catch (error) {
           console.error(`Błąd podczas obliczania kosztu dla pozycji ${index}:`, error);
@@ -3173,7 +3173,11 @@ const OrderForm = ({ orderId }) => {
                                   {item.lastUsageInfo ? (
                                     <Tooltip title={
                                       item.lastUsageInfo.estimatedCost 
-                                        ? `Szacowany koszt materiałów: ${formatCurrency(item.lastUsageInfo.cost)} (na podstawie ${item.lastUsageInfo.costDetails?.length || 0} materiałów)`
+                                        ? `Szacowany koszt materiałów: ${formatCurrency(item.lastUsageInfo.cost)} EUR (na podstawie ${item.lastUsageInfo.costDetails?.length || 0} materiałów)${
+                                            item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) 
+                                              ? '\n\nUwaga: Niektóre ceny zostały przeliczone z innych walut na EUR według kursów NBP'
+                                              : ''
+                                          }`
                                         : `Data: ${formatDateToDisplay(item.lastUsageInfo.date)}, Ostatni koszt: ${formatCurrency(item.lastUsageInfo.cost)}`
                                     }>
                                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -3191,6 +3195,11 @@ const OrderForm = ({ orderId }) => {
                                           {item.lastUsageInfo.estimatedCost && (
                                             <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
                                               (est.)
+                                            </Typography>
+                                          )}
+                                          {item.lastUsageInfo.estimatedCost && item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) && (
+                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.7, color: 'warning.main' }}>
+                                              (przeliczone z innych walut)
                                             </Typography>
                                           )}
                                         </Typography>

@@ -7,6 +7,8 @@
  * - Rentowność zamówień klientów
  */
 
+import { getExchangeRate } from '../services/exchangeRateService';
+
 /**
  * Oblicza koszt materiałów na podstawie listy składników i mapy cen
  * @param {Array} ingredients - Lista składników z ilościami
@@ -469,6 +471,10 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
       }
     }
     
+    // Przygotuj datę dla kursu walut (dzień poprzedzający dzisiejszy)
+    const exchangeRateDate = new Date();
+    exchangeRateDate.setDate(exchangeRateDate.getDate() - 1);
+    
     // Oblicz koszt każdego materiału
     for (const material of materials) {
       const materialId = material.id || material.materialId;
@@ -477,14 +483,34 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
       if (!materialId || quantity <= 0) continue;
       
       let unitPrice = 0;
+      let originalPrice = 0;
+      let originalCurrency = 'EUR';
+      let exchangeRate = 1;
+      let priceConverted = false;
       let priceSource = 'brak';
       
       // Sprawdź ceny w kolejności priorytetów
       if (bestPrices[materialId]) {
         const bestPrice = bestPrices[materialId];
         if (bestPrice.price > 0) {
-          unitPrice = bestPrice.price;
+          originalPrice = bestPrice.price;
+          originalCurrency = bestPrice.currency || 'EUR';
           priceSource = bestPrice.isDefault ? 'dostawca domyślny' : 'dostawca';
+          
+          // Przelicz walutę na EUR jeśli to nie EUR
+          if (originalCurrency && originalCurrency !== 'EUR') {
+            try {
+              exchangeRate = await getExchangeRate(originalCurrency, 'EUR', exchangeRateDate);
+              unitPrice = originalPrice * exchangeRate;
+              priceConverted = true;
+              console.log(`Przeliczono cenę materiału ${materialId}: ${originalPrice} ${originalCurrency} → ${unitPrice.toFixed(4)} EUR (kurs: ${exchangeRate})`);
+            } catch (error) {
+              console.warn(`Nie udało się przeliczać waluty ${originalCurrency} na EUR dla materiału ${materialId}:`, error);
+              unitPrice = originalPrice; // W przypadku błędu zostaw oryginalną cenę
+            }
+          } else {
+            unitPrice = originalPrice;
+          }
         }
       }
       
@@ -492,8 +518,24 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
       if (unitPrice === 0 && inventoryItems.has(materialId)) {
         const inventoryItem = inventoryItems.get(materialId);
         if (inventoryItem.price > 0) {
-          unitPrice = parseFloat(inventoryItem.price);
+          originalPrice = parseFloat(inventoryItem.price);
+          originalCurrency = inventoryItem.currency || 'EUR';
           priceSource = 'magazyn';
+          
+          // Przelicz walutę magazynową na EUR jeśli to nie EUR
+          if (originalCurrency && originalCurrency !== 'EUR') {
+            try {
+              exchangeRate = await getExchangeRate(originalCurrency, 'EUR', exchangeRateDate);
+              unitPrice = originalPrice * exchangeRate;
+              priceConverted = true;
+              console.log(`Przeliczono cenę magazynową materiału ${materialId}: ${originalPrice} ${originalCurrency} → ${unitPrice.toFixed(4)} EUR (kurs: ${exchangeRate})`);
+            } catch (error) {
+              console.warn(`Nie udało się przeliczać waluty magazynowej ${originalCurrency} na EUR dla materiału ${materialId}:`, error);
+              unitPrice = originalPrice; // W przypadku błędu zostaw oryginalną cenę
+            }
+          } else {
+            unitPrice = originalPrice;
+          }
         }
       }
       
@@ -506,6 +548,10 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
         quantity,
         unit: material.unit || 'szt.',
         unitPrice,
+        originalPrice,
+        originalCurrency,
+        exchangeRate,
+        priceConverted,
         totalCost: materialCost,
         priceSource
       });
@@ -516,7 +562,9 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
       materials: parseFloat(totalCost.toFixed(2)),
       details,
       source: 'estimated',
-      materialsCount: details.length
+      materialsCount: details.length,
+      currency: 'EUR', // Zawsze EUR po przeliczeniu
+      hasCurrencyConversion: details.some(detail => detail.priceConverted)
     };
   } catch (error) {
     console.error('Błąd podczas obliczania szacowanego kosztu materiałów:', error);
