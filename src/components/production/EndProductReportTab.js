@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, memo } from 'react';
 import {
   Grid,
   Paper,
@@ -78,13 +78,81 @@ const EndProductReportTab = ({
   ingredientBatchAttachments
 }) => {
   const { showSuccess, showError, showInfo } = useNotification();
-  const { currentUser } = useAuth();
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const { currentUser } = useAuth();
 
   // Funkcja do obsługi zmiany alergenów
   const handleAllergenChange = (event, newValue) => {
     setSelectedAllergens(newValue);
   };
+
+  // Grupowanie konsumpcji według materiału i numeru partii (LOT)
+  const groupedConsumptions = useMemo(() => {
+    const grouped = {};
+    
+    if (!task?.consumedMaterials) return grouped;
+    
+    task.consumedMaterials.forEach(consumed => {
+      // Znajdź materiał w liście materiałów zadania aby pobrać nazwę i jednostkę
+      const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+      
+      // Pobierz nazwę materiału
+      const materialName = consumed.materialName || material?.name || 'Nieznany materiał';
+      
+      // Pobierz jednostkę materiału
+      const materialUnit = consumed.unit || material?.unit || '-';
+      
+      // Pobierz numer partii
+      let batchNumber = consumed.batchNumber || consumed.lotNumber || '-';
+      
+      // Jeśli nie ma numeru partii w konsumpcji, spróbuj znaleźć w task.materialBatches
+      if (batchNumber === '-' && task.materialBatches && task.materialBatches[consumed.materialId]) {
+        const batch = task.materialBatches[consumed.materialId].find(b => b.batchId === consumed.batchId);
+        if (batch && batch.batchNumber) {
+          batchNumber = batch.batchNumber;
+        }
+      }
+      
+      // Pobierz datę ważności - najpierw z konsumpcji, potem spróbuj z partii
+      let expiryDate = consumed.expiryDate;
+      let formattedExpiryDate = 'Nie określono';
+      
+      if (expiryDate) {
+        const expiry = expiryDate instanceof Date 
+          ? expiryDate 
+          : expiryDate.toDate 
+            ? expiryDate.toDate() 
+            : new Date(expiryDate);
+        
+        formattedExpiryDate = expiry.toLocaleDateString('pl-PL', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+      
+      // Klucz grupowania: materialId + batchNumber
+      const groupKey = `${consumed.materialId}_${batchNumber}`;
+      
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          materialName,
+          batchNumber,
+          quantity: 0,
+          unit: materialUnit,
+          expiryDate: formattedExpiryDate,
+          hasExpiryDate: !!consumed.expiryDate,
+          materialId: consumed.materialId
+        };
+      }
+      
+      // Sumuj ilości z tego samego LOTu
+      const quantity = parseFloat(consumed.quantity || consumed.consumedQuantity || 0);
+      grouped[groupKey].quantity += quantity;
+    });
+    
+    return grouped;
+  }, [task?.consumedMaterials, materials, task?.materialBatches]);
 
   // Funkcja do generowania raportu PDF
   const handleGenerateEndProductReport = async () => {
@@ -148,31 +216,20 @@ const EndProductReportTab = ({
         });
       }
 
-      // Przygotowanie danych produktu
+      // Przygotowanie danych do PDF
       const productData = {
-        id: task.id,
-        moNumber: task.moNumber,
-        recipeName: task.recipeName || task.productName,
-        recipeDescription: task.recipe?.description || task.description,
-        recipeVersion: task.recipeVersion || '1',
-        quantity: task.quantity,
-        unit: task.unit || 'szt',
-        expiryDate: task.expiryDate,
-        lotNumber: task.lotNumber,
-        workstationName: workstationData?.name || 'Nie przypisano stanowiska',
-        productionTimePerUnit: task.productionTimePerUnit || task.recipe?.productionTimePerUnit,
-        startDate: productionHistory && productionHistory.length > 0 ? productionHistory[0].startTime : null,
-        endDate: productionHistory && productionHistory.length > 0 ? productionHistory[productionHistory.length - 1].endTime : null,
-        
-        // Dane receptury
-        micronutrients: task.recipe?.micronutrients || [],
-        ingredients: task.recipe?.ingredients || [],
-        nutritionalBasis: task.recipe?.nutritionalBasis || '1 caps',
-        
-        // Dane firmy
-        companyName: companyData?.name || '',
-        companyAddress: companyData?.address || companyData ? `${companyData.address || ''} ${companyData.city || ''}`.trim() : '',
-        
+        companyData,
+        workstationData,
+        productionHistory,
+        formResponses,
+        clinicalAttachments,
+        additionalAttachments,
+        ingredientAttachments,
+        ingredientBatchAttachments,
+        materials, // Dodaję brakujące materiały
+        currentUser,
+        selectedAllergens,
+
         // Historia produkcji
         productionHistory: productionHistory || [],
         
@@ -598,77 +655,51 @@ const EndProductReportTab = ({
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {task.consumedMaterials.map((consumed, index) => {
-                        // Znajdź materiał w liście materiałów zadania aby pobrać nazwę i jednostkę
-                        const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
-                        
-                        // Pobierz nazwę materiału
-                        const materialName = consumed.materialName || material?.name || 'Nieznany materiał';
-                        
-                        // Pobierz jednostkę materiału
-                        const materialUnit = consumed.unit || material?.unit || '-';
-                        
-                        // Pobierz numer partii
-                        let batchNumber = consumed.batchNumber || consumed.lotNumber || '-';
-                        
-                        // Jeśli nie ma numeru partii w konsumpcji, spróbuj znaleźć w task.materialBatches
-                        if (batchNumber === '-' && task.materialBatches && task.materialBatches[consumed.materialId]) {
-                          const batch = task.materialBatches[consumed.materialId].find(b => b.batchId === consumed.batchId);
-                          if (batch && batch.batchNumber) {
-                            batchNumber = batch.batchNumber;
-                          }
-                        }
-                        
-                        // Pobierz datę ważności - najpierw z konsumpcji, potem spróbuj z partii
-                        let expiryDate = consumed.expiryDate;
-                        let formattedExpiryDate = 'Nie określono';
-                        
-                        if (expiryDate) {
-                          const expiry = expiryDate instanceof Date 
-                            ? expiryDate 
-                            : expiryDate.toDate 
-                              ? expiryDate.toDate() 
-                              : new Date(expiryDate);
-                          
-                          formattedExpiryDate = expiry.toLocaleDateString('pl-PL', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                          });
-                        }
-                        
-                        return (
+                      {(() => {
+                        // Konwertuj zgrupowane dane na wiersze tabeli
+                        return Object.values(groupedConsumptions).map((group, index) => (
                           <TableRow key={index} sx={{ '&:nth-of-type(even)': { backgroundColor: 'action.hover' } }}>
                             <TableCell sx={{ fontWeight: 'medium' }}>
-                              {materialName}
+                              {group.materialName}
                             </TableCell>
                             <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
-                              {batchNumber}
+                              {group.batchNumber}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'medium' }}>
-                              {consumed.quantity || consumed.consumedQuantity || '-'}
+                              {group.quantity % 1 === 0 ? group.quantity.toString() : group.quantity.toFixed(3)}
                             </TableCell>
                             <TableCell>
-                              {materialUnit}
+                              {group.unit}
                             </TableCell>
                             <TableCell sx={{ fontWeight: 'medium' }}>
-                              {formattedExpiryDate}
+                              {group.expiryDate}
                             </TableCell>
                           </TableRow>
-                        );
-                      })}
+                        ));
+                      })()}
                     </TableBody>
                   </Table>
                   
                   {/* Podsumowanie dat ważności */}
                   <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      Podsumowanie: {task.consumedMaterials.length} skonsumowanych materiałów
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      • Z datą ważności: {task.consumedMaterials.filter(m => m.expiryDate).length}<br/>
-                      • Użyte partie: {[...new Set(task.consumedMaterials.map(m => m.batchNumber || m.lotNumber || m.batchId).filter(Boolean))].length}
-                    </Typography>
+                    {(() => {
+                      // Użyj zgrupowanych danych z tabeli
+                      const groupedData = groupedConsumptions || {};
+                      const totalGroups = Object.keys(groupedData).length;
+                      const withExpiryDate = Object.values(groupedData).filter(g => g.hasExpiryDate).length;
+                      
+                      return (
+                        <>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                            Podsumowanie: {totalGroups} skonsumowanych materiałów
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            • Z datą ważności: {withExpiryDate}<br/>
+                            • Użyte partie: {totalGroups}
+                          </Typography>
+                        </>
+                      );
+                    })()}
                   </Box>
                 </TableContainer>
             </Paper>

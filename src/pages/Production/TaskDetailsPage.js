@@ -120,7 +120,8 @@ import {
   Factory as ProductionIcon,
   Assignment as FormIcon,
   Timeline as TimelineIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
@@ -4781,9 +4782,11 @@ const TaskDetailsPage = () => {
             
             return {
               materialId,
+              materialName: material ? material.name : undefined, // Dodaj nazwę materiału
               batchId: batch.batchId,
               batchNumber: batchNumber, // Zapisz numer partii
               quantity: batch.quantity,
+              unit: material ? material.unit : undefined, // Dodaj jednostkę materiału
               unitPrice: unitPrice, // Zapisz cenę jednostkową
               timestamp: batch.timestamp,
               userId: batch.userId,

@@ -987,7 +987,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       addSubsectionHeaderWithPageBreak('3.2', 'Expiration date of materials', expirySubsectionHeight, '#6C35EA');
       
       const expiryHeaders = ['Material name', 'Batch', 'Quantity', 'Unit', 'Expiration date'];
-      const expiryData = task.consumedMaterials.map(consumed => {
+      
+      // Grupowanie konsumpcji według materiału i numeru partii (LOT)
+      const groupedConsumptions = {};
+      
+      task.consumedMaterials.forEach(consumed => {
         const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
         const materialName = consumed.materialName || material?.name || 'Unknown material';
         const materialUnit = consumed.unit || material?.unit || '-';
@@ -1010,26 +1014,45 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
           formattedExpiryDate = expiry.toLocaleDateString('en-GB');
         }
         
-        return [
-          materialName,
-          batchNumber,
-          (consumed.quantity || consumed.consumedQuantity || '-').toString(),
-          materialUnit,
-          formattedExpiryDate
-        ];
+        // Klucz grupowania: materialId + batchNumber
+        const groupKey = `${consumed.materialId}_${batchNumber}`;
+        
+        if (!groupedConsumptions[groupKey]) {
+          groupedConsumptions[groupKey] = {
+            materialName,
+            batchNumber,
+            quantity: 0,
+            unit: materialUnit,
+            expiryDate: formattedExpiryDate,
+            materialId: consumed.materialId
+          };
+        }
+        
+        // Sumuj ilości z tego samego LOTu
+        const quantity = parseFloat(consumed.quantity || consumed.consumedQuantity || 0);
+        groupedConsumptions[groupKey].quantity += quantity;
       });
+      
+      // Konwertuj zgrupowane dane na format tabeli
+      const expiryData = Object.values(groupedConsumptions).map(group => [
+        group.materialName,
+        group.batchNumber,
+        group.quantity % 1 === 0 ? group.quantity.toString() : group.quantity.toFixed(3),
+        group.unit,
+        group.expiryDate
+      ]);
 
       addTable(expiryHeaders, expiryData);
 
-      // Summary
+      // Summary - zaktualizowane podsumowanie
       doc.setTextColor(25, 118, 210);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Summary: ${task.consumedMaterials.length} consumed materials`, margin, currentY);
+      doc.text(`Summary: ${Object.keys(groupedConsumptions).length} consumed materials`, margin, currentY);
       doc.setTextColor(85, 85, 85);
       doc.setFont('helvetica', 'normal');
-      doc.text(`• With expiration date: ${task.consumedMaterials.filter(m => m.expiryDate).length}`, margin, currentY + 4);
-      doc.text(`• Used batches: ${[...new Set(task.consumedMaterials.map(m => m.batchNumber || m.lotNumber || m.batchId).filter(Boolean))].length}`, margin, currentY + 8);
+      doc.text(`• With expiration date: ${Object.values(groupedConsumptions).filter(m => m.expiryDate !== 'Not specified').length}`, margin, currentY + 4);
+      doc.text(`• Used batches: ${Object.values(groupedConsumptions).length}`, margin, currentY + 8);
       currentY += 16;
     }
 
