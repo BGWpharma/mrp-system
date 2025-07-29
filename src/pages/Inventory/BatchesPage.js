@@ -999,6 +999,18 @@ const BatchesPage = () => {
                               </IconButton>
                             </Tooltip>
                             
+                            {warehouses.filter(wh => wh.id !== batch.warehouseId).length > 0 && (
+                              <Tooltip title={t('inventory.batches.transferBatch')}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => openTransferDialog(batch)}
+                                  color="primary"
+                                >
+                                  <SwapHorizIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            
                             <Tooltip title={t('common.edit')}>
                               <IconButton
                                 size="small"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Container, 
   Paper, 
@@ -14,7 +14,6 @@ import {
   Chip,
   IconButton,
   CircularProgress,
-  Alert,
   Dialog,
   DialogActions,
   DialogContent,
@@ -30,7 +29,6 @@ import {
   Checkbox,
   Autocomplete,
   Switch,
-  Tooltip,
   Pagination,
   useTheme,
   useMediaQuery
@@ -187,11 +185,8 @@ const CmrListPage = () => {
   
   useEffect(() => {
     fetchCmrDocuments();
-  }, [page, limit, sortField, sortOrder, searchTerm, statusFilter]);
-
-  useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [page, limit, sortField, sortOrder, searchTerm, statusFilter]);
   
   const fetchCmrDocuments = async () => {
     try {
