@@ -943,7 +943,28 @@ const InvoiceDetails = () => {
             <Grid item xs={6}>
               <Typography variant="h6" fontWeight="bold" align="right" color="primary">
                 {(() => {
-                  const total = parseFloat(invoice.total || 0);
+                  // Oblicz wartość brutto faktury (netto + VAT)
+                  const nettoValue = parseFloat(invoice.items.reduce((sum, item) => {
+                    const quantity = Number(item.quantity) || 0;
+                    const price = Number(item.price) || 0;
+                    return sum + (quantity * price);
+                  }, 0));
+                  
+                  const vatValue = parseFloat(invoice.items.reduce((sum, item) => {
+                    const quantity = Number(item.quantity) || 0;
+                    const price = Number(item.price) || 0;
+                    
+                    let vatRate = 0;
+                    if (typeof item.vat === 'number') {
+                      vatRate = item.vat;
+                    } else if (item.vat !== "ZW" && item.vat !== "NP") {
+                      vatRate = parseFloat(item.vat) || 0;
+                    }
+                    
+                    return sum + (quantity * price * (vatRate / 100));
+                  }, 0));
+                  
+                  const total = nettoValue + vatValue;
                   
                   // Oblicz przedpłaty z proform
                   let advancePayments = 0;

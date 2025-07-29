@@ -636,9 +636,8 @@ class InvoicePdfGenerator {
     doc.line(summaryX, summaryY + 2, summaryX + summaryWidth, summaryY + 2);
     summaryY += 8;
     
-    // Kwota należna (pogrubiona)
-    const invoiceTotal = parseFloat(this.invoice.total) || totalBrutto;
-    const finalAmountCalculated = invoiceTotal - settledAdvancePaymentsCalculated;
+    // Kwota należna (pogrubiona) - używaj zawsze obliczonej wartości brutto
+    const finalAmountCalculated = totalBrutto - settledAdvancePaymentsCalculated;
     
     doc.setFont('helvetica', 'bold');
     doc.text(`${t.total}`, summaryX, summaryY);

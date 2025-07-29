@@ -704,7 +704,7 @@ const validateInvoiceData = (invoiceData) => {
 };
 
 /**
- * Oblicza łączną wartość faktury na podstawie pozycji
+ * Oblicza łączną wartość netto faktury na podstawie pozycji
  */
 export const calculateInvoiceTotal = (items) => {
   if (!items || !Array.isArray(items)) return 0;
@@ -714,6 +714,33 @@ export const calculateInvoiceTotal = (items) => {
     const netValue = Number(item.netValue) || 0;
     const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
     return total + (netValue || calculatedValue);
+  }, 0);
+};
+
+/**
+ * Oblicza łączną wartość brutto faktury na podstawie pozycji (netto + VAT)
+ */
+export const calculateInvoiceTotalGross = (items) => {
+  if (!items || !Array.isArray(items)) return 0;
+  
+  return items.reduce((total, item) => {
+    // Oblicz wartość netto
+    const netValue = Number(item.netValue) || 0;
+    const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
+    const baseValue = netValue || calculatedValue;
+    
+    // Oblicz VAT
+    let vatRate = 0;
+    if (typeof item.vat === 'number') {
+      vatRate = item.vat;
+    } else if (item.vat !== "ZW" && item.vat !== "NP") {
+      vatRate = parseFloat(item.vat) || 0;
+    }
+    
+    const vatValue = baseValue * (vatRate / 100);
+    const grossValue = baseValue + vatValue;
+    
+    return total + grossValue;
   }, 0);
 };
 

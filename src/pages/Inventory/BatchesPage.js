@@ -55,7 +55,8 @@ import {
   transferBatch, 
   deleteBatch,
   uploadBatchCertificate,
-  deleteBatchCertificate
+  deleteBatchCertificate,
+  getBatchReservations
 } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -63,6 +64,7 @@ import { formatDate, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { auth } from '../../services/firebase/config';
+import { getTaskById } from '../../services/productionService';
 import LabelDialog from '../../components/inventory/LabelDialog';
 
 const BatchesPage = () => {
@@ -98,6 +100,8 @@ const BatchesPage = () => {
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [selectedCertificateForPreview, setSelectedCertificateForPreview] = useState(null);
+  const [batchReservations, setBatchReservations] = useState([]);
+  const [loadingReservations, setLoadingReservations] = useState(false);
   const fileInputRef = React.useRef(null);
 
   // Dodaję wykrywanie urządzeń mobilnych
@@ -293,18 +297,61 @@ const BatchesPage = () => {
     return null;
   };
 
-  const openTransferDialog = (batch) => {
+  const openTransferDialog = async (batch) => {
     console.log('Otwieranie dialogu dla partii:', batch);
     setSelectedBatch(batch);
     setTransferQuantity(batch.quantity.toString());
     setTargetWarehouseId('');
     setTransferErrors({});
+    setBatchReservations([]);
+    setLoadingReservations(true);
     setTransferDialogOpen(true);
+    
+    // Pobierz rezerwacje dla tej partii
+    try {
+      const reservations = await getBatchReservations(batch.id);
+      
+      // Wzbogać dane o szczegóły zadań produkcyjnych
+      const enrichedReservations = await Promise.all(
+        reservations.map(async (reservation) => {
+          try {
+            const taskId = reservation.taskId || reservation.referenceId;
+            if (taskId) {
+              const taskDetails = await getTaskById(taskId);
+              return {
+                ...reservation,
+                taskDetails: taskDetails,
+                moNumber: taskDetails?.moNumber || reservation.moNumber || 'Brak numeru MO'
+              };
+            }
+            return {
+              ...reservation,
+              moNumber: reservation.moNumber || 'Brak numeru MO'
+            };
+          } catch (error) {
+            console.warn('Nie można pobrać szczegółów zadania:', error);
+            return {
+              ...reservation,
+              moNumber: reservation.moNumber || 'Brak numeru MO'
+            };
+          }
+        })
+      );
+      
+      setBatchReservations(enrichedReservations);
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji partii:', error);
+      showError('Nie można pobrać informacji o rezerwacjach partii');
+    } finally {
+      setLoadingReservations(false);
+    }
   };
 
   const closeTransferDialog = () => {
     setTransferDialogOpen(false);
     setSelectedBatch(null);
+    setBatchReservations([]);
+    setLoadingReservations(false);
   };
 
   const validateTransferForm = () => {
@@ -333,6 +380,16 @@ const BatchesPage = () => {
         errors.transferQuantity = t('inventory.batches.quantityMustBeGreaterThanZero');
       } else if (qty > selectedBatch.quantity) {
         errors.transferQuantity = t('inventory.batches.maxAvailableQuantityIs', { quantity: selectedBatch.quantity });
+      }
+    }
+    
+    // Sprawdź czy partia ma aktywne rezerwacje i czy ilość do przeniesienia wpłynie na nie
+    if (batchReservations && batchReservations.length > 0) {
+      const totalReserved = batchReservations.reduce((sum, res) => sum + (parseFloat(res.quantity) || 0), 0);
+      const availableForTransfer = selectedBatch.quantity - totalReserved;
+      
+      if (parseFloat(transferQuantity) > availableForTransfer) {
+        errors.transferQuantity = `Nie można przenieść więcej niż ${availableForTransfer.toFixed(3)} ${item?.unit || 'szt.'} z powodu aktywnych rezerwacji MO (zarezerwowano: ${totalReserved.toFixed(3)} ${item?.unit || 'szt.'})`;
       }
     }
     
@@ -1076,6 +1133,15 @@ const BatchesPage = () => {
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>{t('inventory.batches.availableQuantity')}:</strong> {selectedBatch.quantity} {item?.unit || selectedBatch.unit || t('common.pieces')}
+                {batchReservations.length > 0 && (
+                  <Box component="span" sx={{ ml: 1, color: 'warning.main', fontSize: '0.9em' }}>
+                    ({(() => {
+                      const totalReserved = batchReservations.reduce((sum, res) => sum + (parseFloat(res.quantity) || 0), 0);
+                      const availableForTransfer = selectedBatch.quantity - totalReserved;
+                      return `dostępne do przeniesienia: ${availableForTransfer.toFixed(3)} ${item?.unit || 'szt.'}`;
+                    })()})
+                  </Box>
+                )}
               </Typography>
               
               {/* Dodaj informacje o cenie jednostkowej z rozbiciem na bazową i dodatkowe koszty */}
@@ -1186,6 +1252,83 @@ const BatchesPage = () => {
                     </>
                   )}
                 </>
+              )}
+              
+              {/* Sekcja z rezerwacjami partii przez MO */}
+              {(loadingReservations || batchReservations.length > 0) && (
+                <Box sx={{ mt: 2, mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                    Rezerwacje tej partii:
+                  </Typography>
+                  
+                  {loadingReservations ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                      <CircularProgress size={20} sx={{ mr: 2 }} />
+                      <Typography variant="body2">Ładowanie rezerwacji...</Typography>
+                    </Box>
+                  ) : batchReservations.length > 0 ? (
+                    <Box sx={{ maxHeight: '200px', overflowY: 'auto', bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                      {batchReservations.map((reservation, index) => (
+                        <Box 
+                          key={reservation.id} 
+                          sx={{ 
+                            p: 2, 
+                            borderBottom: index < batchReservations.length - 1 ? 1 : 0, 
+                            borderColor: 'divider',
+                            '&:hover': { bgcolor: 'action.hover' }
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                                MO: {reservation.moNumber}
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
+                                Zarezerwowano: {parseFloat(reservation.quantity || 0).toFixed(3)} {item?.unit || 'szt.'}
+                              </Typography>
+                              {reservation.taskDetails?.clientName && (
+                                <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
+                                  Klient: {reservation.taskDetails.clientName}
+                                </Typography>
+                              )}
+                              {reservation.createdAt && (
+                                <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
+                                  Data: {formatDate(reservation.createdAt?.seconds ? reservation.createdAt.toDate() : new Date(reservation.createdAt))}
+                                </Typography>
+                              )}
+                            </Box>
+                            
+                            {(reservation.taskId || reservation.referenceId) && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                component={Link}
+                                to={`/production/tasks/${reservation.taskId || reservation.referenceId}`}
+                                sx={{ 
+                                  ml: 2, 
+                                  minWidth: 'auto',
+                                  fontSize: '0.75rem',
+                                  py: 0.5,
+                                  px: 1
+                                }}
+                                onClick={closeTransferDialog}
+                              >
+                                Szczegóły MO
+                              </Button>
+                            )}
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Box sx={{ p: 2, bgcolor: 'success.light', color: 'success.contrastText', borderRadius: 1, border: 1, borderColor: 'success.main' }}>
+                      <Typography variant="body2">
+                        Ta partia nie ma aktywnych rezerwacji.
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
               )}
               
               <Box sx={{ mt: 3, mb: 2 }}>

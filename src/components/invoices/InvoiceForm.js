@@ -49,6 +49,7 @@ import {
   createInvoiceFromOrder,
   DEFAULT_INVOICE,
   calculateInvoiceTotal,
+  calculateInvoiceTotalGross,
   generateProformaNumber,
   getInvoicesByOrderId,
   getAvailableProformaAmount,
@@ -572,8 +573,8 @@ const InvoiceForm = ({ invoiceId }) => {
 
   // Funkcja pomocnicza do obliczania całkowitej wartości faktury z zaliczkami
   const calculateTotalWithAdvancePayments = (items) => {
-    // Oblicz wartość zamówienia na podstawie pozycji
-    let totalValue = calculateInvoiceTotal(items);
+    // Oblicz wartość zamówienia na podstawie pozycji (BRUTTO z VAT)
+    let totalValue = calculateInvoiceTotalGross(items);
     
     // Dodaj wartości zaliczek/przedpłat jeśli istnieją
     if (selectedOrder && selectedOrder.linkedPurchaseOrders && selectedOrder.linkedPurchaseOrders.length > 0) {
