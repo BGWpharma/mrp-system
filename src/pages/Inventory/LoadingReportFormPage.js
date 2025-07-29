@@ -26,14 +26,13 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Save as SaveIcon, ArrowBack as ArrowBackIcon, CloudUpload as CloudUploadIcon, Search as SearchIcon, AttachFile as AttachFileIcon, Delete as DeleteIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { Save as SaveIcon, ArrowBack as ArrowBackIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
 import { getAllCmrDocuments, getCmrDocumentById } from '../../services/cmrService';
-import { db, storage } from '../../services/firebase/config';
+import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../../hooks/useAuth';
 
 const LoadingReportFormPage = () => {
@@ -83,10 +82,7 @@ const LoadingReportFormPage = () => {
     weight: '',
     goodsNotes: '',
     
-    // Załączniki
-    documentsFile: null,
-    documentsUrl: '',
-    documentsName: '',
+
     
     // Dostępne numery zamówień dla danego CMR
     availableOrderNumbers: []
@@ -145,10 +141,7 @@ const LoadingReportFormPage = () => {
           palletProductName: editData.palletProductName || '',
           palletQuantity: editData.palletQuantity || '',
           weight: editData.weight || '',
-          goodsNotes: editData.goodsNotes || '',
-          documentsFile: null,
-          documentsUrl: editData.documentsUrl || '',
-          documentsName: editData.documentsName || ''
+          goodsNotes: editData.goodsNotes || ''
         });
         
         setEditId(editData.id);
@@ -214,13 +207,7 @@ const LoadingReportFormPage = () => {
     }));
   };
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    setFormData(prev => ({
-      ...prev,
-      documentsFile: file
-    }));
-  };
+
 
   // Funkcja pomocnicza do pobierania pełnych danych CMR z pozycjami
   const handleCmrSelectionWithDetails = async (basicCmrData) => {
@@ -446,20 +433,7 @@ const LoadingReportFormPage = () => {
         type: 'loading-report'
       };
 
-      // Obsługa załączników
-      if (formData.documentsFile) {
-        const cmrNumber = formData.cmrNumber || 'brak-cmr';
-        const sanitizedCmrNumber = cmrNumber.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const storageRef = ref(storage, `forms/zaladunek-towaru/${sanitizedCmrNumber}/${Date.now()}-${formData.documentsFile.name}`);
-        await uploadBytes(storageRef, formData.documentsFile);
-        const fileUrl = await getDownloadURL(storageRef);
-        odpowiedzData.documentsUrl = fileUrl;
-        odpowiedzData.documentsName = formData.documentsFile.name;
-      } else if (formData.documentsUrl) {
-        // Zachowaj istniejące załączniki w trybie edycji
-        odpowiedzData.documentsUrl = formData.documentsUrl;
-        odpowiedzData.documentsName = formData.documentsName;
-      }
+
 
       if (isEditMode && editId) {
         // Aktualizuj istniejący dokument
@@ -497,10 +471,7 @@ const LoadingReportFormPage = () => {
           palletProductName: '',
           palletQuantity: '',
           weight: '',
-          goodsNotes: '',
-          documentsFile: null,
-          documentsUrl: '',
-          documentsName: ''
+          goodsNotes: ''
         });
       }
       
@@ -649,7 +620,7 @@ const LoadingReportFormPage = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Nr CMR *"
+                    label="Nr CMR"
                     variant="outlined"
                     placeholder="Wpisz numer CMR, nazwę klienta..."
                     required
@@ -695,7 +666,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.employeeName}>
-                <FormLabel component="legend">Imię i nazwisko: *</FormLabel>
+                <FormLabel component="legend">Imię i nazwisko: </FormLabel>
                 <RadioGroup
                   value={formData.employeeName}
                   onChange={handleInputChange('employeeName')}
@@ -718,7 +689,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.position}>
-                <FormLabel component="legend">Stanowisko: *</FormLabel>
+                <FormLabel component="legend">Stanowisko: </FormLabel>
                 <RadioGroup
                   value={formData.position}
                   onChange={handleInputChange('position')}
@@ -741,7 +712,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data wypełnienia *"
+                label="Data wypełnienia"
                 value={formData.fillDate}
                 onChange={handleDateChange('fillDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -788,7 +759,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data załadunku *"
+                label="Data załadunku"
                 value={formData.loadingDate}
                 onChange={handleDateChange('loadingDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -811,7 +782,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa przewoźnika *"
+                label="Nazwa przewoźnika"
                 value={formData.carrierName}
                 onChange={handleInputChange('carrierName')}
                 fullWidth
@@ -824,7 +795,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nr rejestracyjny samochodu *"
+                label="Nr rejestracyjny samochodu"
                 value={formData.vehicleRegistration}
                 onChange={handleInputChange('vehicleRegistration')}
                 fullWidth
@@ -837,7 +808,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.vehicleTechnicalCondition}>
-                <FormLabel component="legend">Stan techniczny samochodu: *</FormLabel>
+                <FormLabel component="legend">Stan techniczny samochodu:</FormLabel>
                 <RadioGroup
                   value={formData.vehicleTechnicalCondition}
                   onChange={handleInputChange('vehicleTechnicalCondition')}
@@ -894,7 +865,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa klienta *"
+                label="Nazwa klienta"
                 value={formData.clientName}
                 onChange={handleInputChange('clientName')}
                 fullWidth
@@ -908,11 +879,11 @@ const LoadingReportFormPage = () => {
             <Grid item xs={12} sm={6}>
               {formData.availableOrderNumbers && formData.availableOrderNumbers.length > 1 ? (
                 <FormControl fullWidth required error={!!errors.orderNumber}>
-                  <InputLabel>Numer zamówienia *</InputLabel>
+                  <InputLabel>Numer zamówienia</InputLabel>
                   <Select
                     value={formData.orderNumber}
                     onChange={handleInputChange('orderNumber')}
-                    label="Numer zamówienia *"
+                    label="Numer zamówienia"
                   >
                     <MenuItem value="">
                       <em>Wybierz numer zamówienia</em>
@@ -937,7 +908,7 @@ const LoadingReportFormPage = () => {
                 </FormControl>
               ) : (
                 <TextField
-                  label="Numer zamówienia *"
+                  label="Numer zamówienia"
                   value={formData.orderNumber}
                   onChange={handleInputChange('orderNumber')}
                   fullWidth
@@ -956,7 +927,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Paleta/nazwa produktu *"
+                label="Paleta/nazwa produktu"
                 value={formData.palletProductName}
                 onChange={handleInputChange('palletProductName')}
                 fullWidth
@@ -969,7 +940,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Ilość palet *"
+                label="Ilość palet"
                 value={formData.palletQuantity}
                 onChange={handleInputChange('palletQuantity')}
                 fullWidth
@@ -982,7 +953,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Waga *"
+                label="Waga"
                 value={formData.weight}
                 onChange={handleInputChange('weight')}
                 fullWidth
@@ -1003,101 +974,7 @@ const LoadingReportFormPage = () => {
               />
             </Grid>
             
-            <Grid item xs={12}>
-              <Typography variant="body1" gutterBottom>
-                Skan dokumentów wysyłki:
-              </Typography>
-              <Button
-                variant="outlined"
-                component="label"
-                startIcon={<CloudUploadIcon />}
-                sx={{ mb: 1 }}
-                fullWidth
-              >
-                {formData.documentsFile ? 'Zmień załącznik' : 'Dodaj plik'}
-                <input
-                  type="file"
-                  hidden
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                />
-              </Button>
-              {formData.documentsFile && (
-                <Box sx={{ 
-                  mt: 2, 
-                  p: 2, 
-                  border: '1px solid #e0e0e0', 
-                  borderRadius: 1, 
-                  backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2
-                }}>
-                  <AttachFileIcon color="action" />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2" color="text.primary">
-                      {formData.documentsFile.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {(formData.documentsFile.size / 1024 / 1024).toFixed(2)} MB
-                    </Typography>
-                  </Box>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setFormData(prev => ({ ...prev, documentsFile: null }))}
-                  >
-                    Usuń
-                  </Button>
-                </Box>
-              )}
-              
-              {/* Wyświetl istniejące załączniki z serwera (tryb edycji) */}
-              {!formData.documentsFile && formData.documentsUrl && (
-                <Box sx={{ 
-                  mt: 2, 
-                  p: 2, 
-                  border: '1px solid #e0e0e0', 
-                  borderRadius: 1, 
-                  backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2
-                }}>
-                  <AttachFileIcon color="action" />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2" color="text.primary">
-                      {formData.documentsName || 'Załącznik'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Istniejący plik
-                    </Typography>
-                  </Box>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<VisibilityIcon />}
-                    onClick={() => window.open(formData.documentsUrl, '_blank')}
-                  >
-                    Zobacz
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setFormData(prev => ({ ...prev, documentsUrl: '', documentsName: '' }))}
-                  >
-                    Usuń
-                  </Button>
-                </Box>
-              )}
-              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
-                Dodaj plik PDF, JPG lub PNG zawierający skan dokumentów wysyłki
-              </Typography>
-            </Grid>
+
 
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>

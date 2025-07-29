@@ -2745,29 +2745,7 @@ const CmrDetailsPage = () => {
                                 </>
                               )}
                               
-                              {/* Załączniki */}
-                              {report.documentsUrl && (
-                                <>
-                                  <Grid item xs={12}>
-                                    <Divider sx={{ my: 2 }} />
-                                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-                                      Załączniki
-                                    </Typography>
-                                  </Grid>
-                                  
-                                  <Grid item xs={12}>
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      href={report.documentsUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      {report.documentsName || 'Pobierz załącznik'}
-                                    </Button>
-                                  </Grid>
-                                </>
-                              )}
+
                             </Grid>
                           </Paper>
                         </Grid>

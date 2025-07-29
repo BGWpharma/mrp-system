@@ -265,8 +265,8 @@ const InventoryFormsResponsesPage = () => {
           throw new Error('Nieznany typ formularza');
       }
       
-      // Usuń załączniki z Firebase Storage jeśli istnieją
-      if (item.documentsUrl) {
+      // Usuń załączniki z Firebase Storage jeśli istnieją (tylko dla raportów rozładunku)
+      if (item.documentsUrl && formType !== 'loadingReport') {
         try {
           const storagePath = extractStoragePathFromUrl(item.documentsUrl);
           if (storagePath) {
@@ -379,7 +379,6 @@ const InventoryFormsResponsesPage = () => {
                 <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
                 <TableCell>{t('inventory.forms.loadingNotes')}</TableCell>
                 <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
-                <TableCell>{t('inventory.forms.documents')}</TableCell>
                 <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
               </TableRow>
             </TableHead>
@@ -403,18 +402,6 @@ const InventoryFormsResponsesPage = () => {
                   <TableCell align="right">{row.weight}</TableCell>
                   <TableCell>{row.notes || '-'}</TableCell>
                   <TableCell>{row.goodsNotes || '-'}</TableCell>
-                  <TableCell>
-                    {row.documentsUrl ? (
-                      <Button 
-                        size="small" 
-                        href={row.documentsUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                      >
-                        {row.documentsName || t('inventory.forms.download')}
-                      </Button>
-                    ) : '-'}
-                  </TableCell>
                   <TableCell align="center">
                     <Tooltip title={t('inventory.forms.editResponse')}>
                       <IconButton 
