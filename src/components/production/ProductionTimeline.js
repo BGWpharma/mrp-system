@@ -1436,6 +1436,20 @@ const ProductionTimeline = React.memo(() => {
   };
 
   const handleAdvancedFilterChange = (field, value) => {
+    // Dla pól dat sprawdź czy wartość jest prawidłowa
+    if ((field === 'startDate' || field === 'endDate') && value !== null) {
+      try {
+        const testDate = new Date(value);
+        if (isNaN(testDate.getTime())) {
+          console.warn(`Nieprawidłowa data dla pola ${field}:`, value);
+          return; // Nie zapisuj nieprawidłowej daty
+        }
+      } catch (error) {
+        console.warn(`Błąd przy sprawdzaniu daty dla pola ${field}:`, error);
+        return; // Nie zapisuj nieprawidłowej daty
+      }
+    }
+    
     setAdvancedFilters(prev => ({
       ...prev,
       [field]: value
@@ -2897,7 +2911,13 @@ const ProductionTimeline = React.memo(() => {
             
             {/* Podgląd aktywnych filtrów */}
             {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.startDate || advancedFilters.endDate) && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+              <Box sx={{ 
+                mt: 2, 
+                p: 2, 
+                bgcolor: themeMode === 'dark' ? '#1e293b' : '#f5f5f5', 
+                borderRadius: 1,
+                border: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : 'none'
+              }}>
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
                   Aktywne filtry:
                 </Typography>
@@ -2922,22 +2942,40 @@ const ProductionTimeline = React.memo(() => {
                     sx={{ mr: 1, mb: 1 }} 
                   />
                 )}
-                {advancedFilters.startDate && (
-                  <Chip 
-                    label={`Od: ${format(new Date(advancedFilters.startDate), 'dd.MM.yyyy', { locale: pl })}`} 
-                    size="small" 
-                    sx={{ mr: 1, mb: 1 }} 
-                    color="primary"
-                  />
-                )}
-                {advancedFilters.endDate && (
-                  <Chip 
-                    label={`Do: ${format(new Date(advancedFilters.endDate), 'dd.MM.yyyy', { locale: pl })}`} 
-                    size="small" 
-                    sx={{ mr: 1, mb: 1 }} 
-                    color="primary"
-                  />
-                )}
+                {advancedFilters.startDate && (() => {
+                  try {
+                    const date = new Date(advancedFilters.startDate);
+                    if (isNaN(date.getTime())) return null;
+                    return (
+                      <Chip 
+                        label={`Od: ${format(date, 'dd.MM.yyyy', { locale: pl })}`} 
+                        size="small" 
+                        sx={{ mr: 1, mb: 1 }} 
+                        color="primary"
+                      />
+                    );
+                  } catch (error) {
+                    console.warn('Błąd formatowania daty startDate:', error);
+                    return null;
+                  }
+                })()}
+                {advancedFilters.endDate && (() => {
+                  try {
+                    const date = new Date(advancedFilters.endDate);
+                    if (isNaN(date.getTime())) return null;
+                    return (
+                      <Chip 
+                        label={`Do: ${format(date, 'dd.MM.yyyy', { locale: pl })}`} 
+                        size="small" 
+                        sx={{ mr: 1, mb: 1 }} 
+                        color="primary"
+                      />
+                    );
+                  } catch (error) {
+                    console.warn('Błąd formatowania daty endDate:', error);
+                    return null;
+                  }
+                })()}
               </Box>
             )}
           </Box>
