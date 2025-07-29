@@ -1097,9 +1097,9 @@ const RecipeForm = ({ recipeId }) => {
     setAddToPriceListDialogOpen(false);
     setPriceListData({ priceListId: '', price: 0, notes: '' });
     
-    // Przekieruj do strony szczegółów receptury
+    // Przekieruj do strony edycji receptury z parametrem do automatycznego otwarcia dialogu produktu
     if (newRecipeId) {
-      navigate(`/recipes/${newRecipeId}`);
+      navigate(`/recipes/${newRecipeId}/edit`, { state: { openProductDialog: true } });
     }
   };
 
