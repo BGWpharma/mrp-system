@@ -121,7 +121,8 @@ import {
   Assignment as FormIcon,
   Timeline as TimelineIcon,
   Refresh as RefreshIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
@@ -1839,6 +1840,108 @@ const TaskDetailsPage = () => {
       // Jeśli konsumpcja została potwierdzona, oblicz pozostałą ilość
       const remainingQuantity = Math.max(0, baseQuantity - consumedQuantity);
       return remainingQuantity;
+    }
+  };
+
+  // Funkcja do usuwania pojedynczej rezerwacji partii
+  const handleDeleteSingleReservation = async (materialId, batchId, batchNumber) => {
+    try {
+      setLoading(true);
+      
+      console.log('handleDeleteSingleReservation wywołane z:', { materialId, batchId, batchNumber, taskId: task.id });
+      
+      // Importuj potrzebne funkcje
+      const { deleteReservation } = await import('../../services/inventoryService');
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../../services/firebase/config');
+      
+      // Szukaj rezerwacji bezpośrednio (podobnie jak w handleQuantityChange)
+      const transactionsRef = collection(db, 'inventoryTransactions');
+      
+      // Pierwsza próba - po referenceId
+      let reservationQuery = query(
+        transactionsRef,
+        where('type', '==', 'booking'),
+        where('referenceId', '==', task.id),
+        where('itemId', '==', materialId),
+        where('batchId', '==', batchId)
+      );
+      
+      let reservationSnapshot = await getDocs(reservationQuery);
+      
+      // Jeśli nie znaleziono, spróbuj po taskId
+      if (reservationSnapshot.empty) {
+        console.log('Nie znaleziono po referenceId, próbuję po taskId...');
+        reservationQuery = query(
+          transactionsRef,
+          where('type', '==', 'booking'),
+          where('taskId', '==', task.id),
+          where('itemId', '==', materialId),
+          where('batchId', '==', batchId)
+        );
+        
+        reservationSnapshot = await getDocs(reservationQuery);
+      }
+      
+      if (reservationSnapshot.empty) {
+        console.log('Brak rezerwacji w bazie danych, próbuję usunąć bezpośrednio z task.materialBatches...');
+        
+        // Jeśli nie ma w bazie, usuń bezpośrednio z struktury zadania
+        if (task.materialBatches && task.materialBatches[materialId]) {
+          const updatedMaterialBatches = { ...task.materialBatches };
+          
+          // Usuń partię z listy
+          updatedMaterialBatches[materialId] = updatedMaterialBatches[materialId].filter(
+            batch => batch.batchId !== batchId
+          );
+          
+          // Jeśli nie zostały żadne partie dla tego materiału, usuń cały klucz
+          if (updatedMaterialBatches[materialId].length === 0) {
+            delete updatedMaterialBatches[materialId];
+          }
+          
+          // Sprawdź, czy zostały jakiekolwiek zarezerwowane materiały
+          const hasAnyReservations = Object.keys(updatedMaterialBatches).length > 0;
+          
+          // Aktualizuj zadanie produkcyjne
+          const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
+          const taskRef = doc(db, 'productionTasks', task.id);
+          
+          await updateDoc(taskRef, {
+            materialBatches: updatedMaterialBatches,
+            materialsReserved: hasAnyReservations,
+            updatedAt: serverTimestamp(),
+            updatedBy: currentUser.uid
+          });
+          
+          // Odśwież dane zadania
+          await fetchAllTaskData();
+          
+          showSuccess(`Usunięto rezerwację partii ${batchNumber} (bezpośrednia aktualizacja zadania)`);
+          return;
+        } else {
+          showError('Nie znaleziono rezerwacji do usunięcia');
+          return;
+        }
+      }
+      
+      // Jeśli znaleziono rezerwację w bazie danych
+      const reservationDoc = reservationSnapshot.docs[0];
+      console.log('Znaleziono rezerwację:', reservationDoc.id, reservationDoc.data());
+      
+      // Usuń rezerwację
+      await deleteReservation(reservationDoc.id, currentUser.uid);
+      
+      // Odśwież dane zadania
+      await fetchAllTaskData();
+      
+      showSuccess(`Usunięto rezerwację partii ${batchNumber}`);
+      
+    } catch (error) {
+      console.error('Błąd podczas usuwania pojedynczej rezerwacji:', error);
+      showError('Błąd podczas usuwania rezerwacji: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -6545,8 +6648,23 @@ const TaskDetailsPage = () => {
                                           label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} 
                                           color="info" 
                                           variant="outlined" 
-                                          sx={{ mr: 0.5, mb: 0.5, cursor: 'pointer' }} 
-                                          onClick={() => navigate(`/inventory/${materialId}/batches`)} 
+                                          sx={{ 
+                                            mr: 0.5, 
+                                            mb: 0.5, 
+                                            cursor: 'pointer',
+                                            '& .MuiChip-deleteIcon': {
+                                              fontSize: '16px',
+                                              '&:hover': {
+                                                color: 'error.main'
+                                              }
+                                            }
+                                          }} 
+                                          onClick={() => navigate(`/inventory/${materialId}/batches`)}
+                                          onDelete={(e) => {
+                                            e.stopPropagation(); // Zapobiega wywołaniu onClick
+                                            handleDeleteSingleReservation(materialId, batch.batchId, batch.batchNumber);
+                                          }}
+                                          deleteIcon={<CloseIcon />}
                                         />
                                       ))}
                                       

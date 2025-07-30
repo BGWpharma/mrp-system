@@ -4673,6 +4673,66 @@ import {
     }
   };
 
+  // Funkcja do znajdowania rezerwacji dla konkretnego zadania, materiału i partii
+  export const getReservationsForTaskAndMaterial = async (taskId, materialId, batchId) => {
+    try {
+      console.log(`Szukam rezerwacji dla taskId: ${taskId}, materialId: ${materialId}, batchId: ${batchId}`);
+      
+      // Pierwsza próba - szukaj po referenceId (nowszy format)
+      let reservationsQuery = query(
+        collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+        where('type', '==', 'booking'),
+        where('referenceId', '==', taskId),
+        where('itemId', '==', materialId),
+        where('batchId', '==', batchId)
+      );
+      
+      let querySnapshot = await getDocs(reservationsQuery);
+      let reservations = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        // Sprawdź czy rezerwacja nie jest już spełniona (fulfilled)
+        if (!data.fulfilled) {
+          reservations.push({
+            id: doc.id,
+            ...data
+          });
+        }
+      });
+      
+      // Jeśli nie znaleziono, spróbuj też po taskId (starszy format)
+      if (reservations.length === 0) {
+        console.log('Nie znaleziono po referenceId, szukam po taskId...');
+        reservationsQuery = query(
+          collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+          where('type', '==', 'booking'),
+          where('taskId', '==', taskId),
+          where('itemId', '==', materialId),
+          where('batchId', '==', batchId)
+        );
+        
+        querySnapshot = await getDocs(reservationsQuery);
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          // Sprawdź czy rezerwacja nie jest już spełniona (fulfilled)
+          if (!data.fulfilled) {
+            reservations.push({
+              id: doc.id,
+              ...data
+            });
+          }
+        });
+      }
+      
+      console.log(`Znaleziono ${reservations.length} rezerwacji:`, reservations);
+      return reservations;
+    } catch (error) {
+      console.error('Błąd podczas pobierania rezerwacji:', error);
+      throw error;
+    }
+  };
+
   // Funkcja do usuwania wszystkich rezerwacji związanych z konkretnym zadaniem
   export const cleanupTaskReservations = async (taskId, itemIds = null) => {
     try {
