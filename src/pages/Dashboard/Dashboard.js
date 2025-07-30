@@ -53,6 +53,12 @@ import { getTasksByStatus } from '../../services/productionService';
 import { getAllRecipes } from '../../services/recipeService';
 import { getOrdersStats } from '../../services/orderService';
 import { getKpiData } from '../../services/analyticsService';
+import { 
+  getDashboardData, 
+  refreshDashboardSection, 
+  clearDashboardCache,
+  getDashboardCacheInfo 
+} from '../../services/dashboardService';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { formatCurrency } from '../../utils/formatUtils';
@@ -535,57 +541,96 @@ const Dashboard = () => {
     setIsEditingAnnouncement(false);
   }, []);
 
-  // Odświeżanie pojedynczej sekcji danych
-  const refreshSection = useCallback((section) => {
+  // Odświeżanie pojedynczej sekcji danych - zoptymalizowane
+  const refreshSection = useCallback(async (section) => {
     // Zapobiegaj próbom odświeżenia podczas ładowania
     if (loading) return;
     
-    switch (section) {
-      case 'tasks':
-        if (!tasksLoading) fetchTasks();
-        break;
-      case 'recipes':
-        if (!recipesLoading) fetchRecipes();
-        break;
-      case 'orders':
-        if (!ordersLoading) fetchOrderStats();
-        break;
-      case 'analytics':
-        if (!analyticsLoading) fetchAnalytics();
-        break;
-      default:
-        break;
+    try {
+      console.log(`Odświeżam sekcję Dashboard: ${section}`);
+      const freshData = await refreshDashboardSection(section);
+      
+      // Aktualizuj odpowiedni stan
+      switch (section) {
+        case 'tasks':
+          if (freshData) {
+            setTasks(freshData);
+            setDataLoadStatus(prev => ({ ...prev, tasks: true }));
+          }
+          break;
+        case 'recipes':
+          if (freshData) {
+            setRecipes(freshData);
+            setDataLoadStatus(prev => ({ ...prev, recipes: true }));
+          }
+          break;
+        case 'orders':
+          if (freshData) {
+            setOrderStats(freshData);
+            setDataLoadStatus(prev => ({ ...prev, orders: true }));
+          }
+          break;
+        case 'analytics':
+          if (freshData) {
+            setAnalyticsData(freshData);
+            setDataLoadStatus(prev => ({ ...prev, analytics: true }));
+          }
+          break;
+        default:
+          console.warn(`Nieznana sekcja: ${section}`);
+          break;
+      }
+    } catch (error) {
+      console.error(`Błąd podczas odświeżania sekcji ${section}:`, error);
     }
-  }, [fetchTasks, fetchRecipes, fetchOrderStats, fetchAnalytics, loading, tasksLoading, recipesLoading, ordersLoading, analyticsLoading]);
+  }, [loading]);
 
-  // Odświeżanie wszystkich sekcji danych naraz za pomocą Promise.all
+  // Odświeżanie wszystkich sekcji danych naraz - zoptymalizowane
   const refreshAllData = useCallback(async () => {
     if (loading) return; // Zapobiegaj równoległym odświeżeniom
     
     try {
       setLoading(true);
+      console.log('Odświeżam wszystkie dane Dashboard...');
       
-      // Uruchamiamy wszystkie zapytania równolegle (bez ogłoszeń)
-      await Promise.all([
-        fetchRecipes(),
-        fetchOrderStats(),
-        fetchAnalytics(),
-        fetchTasks()
-      ]);
+      // Wyczyść cache i pobierz świeże dane
+      clearDashboardCache();
+      const dashboardData = await getDashboardData();
       
-      console.log('Wszystkie dane zostały pobrane równolegle');
+      // Aktualizuj wszystkie stany
+      if (dashboardData.recipes) {
+        setRecipes(dashboardData.recipes);
+        setDataLoadStatus(prev => ({ ...prev, recipes: true }));
+      }
       
-      // Pobieramy ogłoszenia z opóźnieniem aby nie przerywać animacji odświeżania
+      if (dashboardData.orderStats) {
+        setOrderStats(dashboardData.orderStats);
+        setDataLoadStatus(prev => ({ ...prev, orders: true }));
+      }
+      
+      if (dashboardData.analytics) {
+        setAnalyticsData(dashboardData.analytics);
+        setDataLoadStatus(prev => ({ ...prev, analytics: true }));
+      }
+      
+      if (dashboardData.tasks) {
+        setTasks(dashboardData.tasks);
+        setDataLoadStatus(prev => ({ ...prev, tasks: true }));
+      }
+      
+      console.log('Wszystkie dane Dashboard zostały odświeżone');
+      
+      // Pobieramy ogłoszenia z opóźnieniem
       setTimeout(() => {
         fetchAnnouncement();
       }, 500);
       
     } catch (error) {
-      console.error('Błąd podczas odświeżania danych dashboardu:', error);
+      console.error('Błąd podczas odświeżania danych Dashboard:', error);
     } finally {
       setLoading(false);
     }
-  }, [fetchRecipes, fetchOrderStats, fetchAnalytics, fetchTasks, fetchAnnouncement, loading]);
+  }, [loading, fetchAnnouncement]);
 
   // Pierwsze ładowanie danych - tylko raz przy montowaniu komponentu
   useEffect(() => {
@@ -596,69 +641,37 @@ const Dashboard = () => {
         if (!isMounted) return;
         setLoading(true);
         
-        // Uruchamiamy wszystkie zapytania równolegle (bez ogłoszeń)
-        const [recipesData, ordersStatsData, analyticsData, tasksData] = await Promise.all([
-          getAllRecipes().catch(err => {
-            console.error('Błąd podczas pobierania receptur:', err);
-            return [];
-          }),
-          getOrdersStats(true).catch(err => {
-            console.error('Błąd podczas pobierania statystyk zamówień:', err);
-            return null;
-          }),
-          getKpiData().catch(err => {
-            console.error('Błąd podczas pobierania danych KPI:', err);
-            return null;
-          }),
-          getTasksByStatus('W trakcie').catch(err => {
-            console.error('Błąd podczas pobierania zadań:', err);
-            return [];
-          })
-        ]);
+        // Używamy zoptymalizowanego serwisu Dashboard z cache'owaniem
+        console.log('Ładowanie danych Dashboard z optymalizacją...');
+        const dashboardData = await getDashboardData();
         
         // Zaktualizuj stan tylko jeśli komponent jest nadal zamontowany
         if (!isMounted) return;
         
-        console.log('Wszystkie dane zostały załadowane równolegle');
+        console.log('Dane Dashboard załadowane z cache/optymalizacji');
         
-        // Aktualizuj stany tylko jeśli dane są dostępne
-        if (recipesData) {
-          console.log('Wszystkie receptury:', recipesData);
-          setRecipes(recipesData);
+        // Aktualizuj stany na podstawie danych z dashboardService
+        if (dashboardData.recipes) {
+          console.log('Receptury Dashboard:', dashboardData.recipes.length);
+          setRecipes(dashboardData.recipes);
           setDataLoadStatus(prev => ({ ...prev, recipes: true }));
         }
         
-        if (ordersStatsData) {
-          console.log('Statystyki zamówień:', ordersStatsData);
-          setOrderStats(ordersStatsData);
+        if (dashboardData.orderStats) {
+          console.log('Statystyki zamówień Dashboard:', dashboardData.orderStats);
+          setOrderStats(dashboardData.orderStats);
           setDataLoadStatus(prev => ({ ...prev, orders: true }));
         }
         
-        if (analyticsData) {
-          console.log('Dane KPI:', analyticsData);
-          setAnalyticsData(analyticsData);
+        if (dashboardData.analytics) {
+          console.log('Dane KPI Dashboard:', dashboardData.analytics);
+          setAnalyticsData(dashboardData.analytics);
           setDataLoadStatus(prev => ({ ...prev, analytics: true }));
         }
         
-        if (tasksData) {
-          if (tasksData.length === 0) {
-            console.log('Brak zadań w trakcie, sprawdzam zadania zaplanowane...');
-            try {
-              const plannedTasks = await getTasksByStatus('Zaplanowane');
-              if (!isMounted) return;
-              
-              if (plannedTasks && plannedTasks.length > 0) {
-                console.log('Znaleziono zadania zaplanowane, ale brak zadań w trakcie');
-              } else {
-                console.log('Brak jakichkolwiek zadań produkcyjnych w bazie');
-              }
-            } catch (error) {
-              console.error('Błąd podczas pobierania zaplanowanych zadań:', error);
-            }
-          } else {
-            console.log(`Ustawiam ${tasksData.length} zadań w trakcie`);
-          }
-          setTasks(tasksData);
+        if (dashboardData.tasks) {
+          console.log(`Zadania Dashboard: ${dashboardData.tasks.length}`);
+          setTasks(dashboardData.tasks);
           setDataLoadStatus(prev => ({ ...prev, tasks: true }));
         }
         

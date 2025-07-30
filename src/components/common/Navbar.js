@@ -45,18 +45,20 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
 import { 
-  getAllPurchaseOrders, 
-  getPurchaseOrderById 
-} from '../../services/purchaseOrderService';
-import { getAllOrders, getOrderById } from '../../services/orderService';
-import { getAllTasks } from '../../services/productionService';
-import NotificationsMenu from './NotificationsMenu';
-import { getAllInventoryItems } from '../../services/inventoryService';
-import { getDocs, collection } from 'firebase/firestore';
+  collection,
+  query,
+  orderBy,
+  startAt,
+  endAt,
+  limit,
+  getDocs
+} from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import NotificationsMenu from './NotificationsMenu';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
 import LanguageSwitcher from './LanguageSwitcher';
+import debounce from 'lodash.debounce';
 
 // Funkcja zwracająca kolor dla danego typu wyszukiwania
 const getTypeColor = (type) => {
@@ -122,21 +124,13 @@ const Navbar = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
   const navigate = useNavigate();
-  const searchTimeout = useRef(null);
   const searchResultsRef = useRef(null);
   
   // Używamy kontekstu sidebara
   const { isOpen, toggle } = useSidebar();
   
-  // Dodajemy cache do przechowywania danych
-  const dataCache = useRef({
-    purchaseOrders: null,
-    customerOrders: null,
-    productionTasks: null,
-    inventoryItems: null,
-    batches: null,
-    lastFetchTime: null
-  });
+  // Cache dla wyników wyszukiwania
+  const searchCache = useRef(new Map());
   
   // Czas ważności cache (5 minut)
   const CACHE_EXPIRY_TIME = 5 * 60 * 1000;
@@ -157,12 +151,11 @@ const Navbar = () => {
     console.log('Przełączenie sidebara na urządzeniu mobilnym');
   };
 
-  // Funkcja do usuwania widgetu tłumaczenia
-
-
   const handleLogout = async () => {
     try {
       await logout();
+      // Wyczyść cache przy wylogowaniu
+      searchCache.current.clear();
     } catch (error) {
       console.error('Błąd podczas wylogowywania:', error);
     }
@@ -182,226 +175,206 @@ const Navbar = () => {
     };
   }, []);
 
-  // Funkcja do pobierania danych z cache lub z bazy danych
-  const fetchDataWithCache = async () => {
-    const currentTime = Date.now();
-    const isCacheValid = dataCache.current.lastFetchTime && 
-                          (currentTime - dataCache.current.lastFetchTime) < CACHE_EXPIRY_TIME;
-    
-    // Jeśli cache jest ważny i zawiera dane, użyj go
-    if (isCacheValid && 
-        dataCache.current.purchaseOrders && 
-        dataCache.current.customerOrders && 
-        dataCache.current.productionTasks && 
-        dataCache.current.inventoryItems) {
-      return [
-        dataCache.current.purchaseOrders,
-        dataCache.current.customerOrders,
-        dataCache.current.productionTasks,
-        dataCache.current.inventoryItems,
-        dataCache.current.batches
-      ];
-    }
-    
-    // W przeciwnym razie pobierz dane z bazy
+  // Sprawdza czy wynik w cache jest ważny
+  const isCacheValid = (cacheEntry) => {
+    return cacheEntry && (Date.now() - cacheEntry.timestamp) < CACHE_EXPIRY_TIME;
+  };
+
+  // Funkcja do wyszukiwania w pojedynczej kolekcji z optymalizacją Firebase
+  const searchInCollection = async (collectionName, searchTerm, fieldName = 'code') => {
     try {
-      const [purchaseOrders, customerOrders, productionTasks, inventoryItems] = await Promise.all([
-        getAllPurchaseOrders(),
-        getAllOrders(),
-        getAllTasks(),
-        getAllInventoryItems()
-      ]);
+      const collectionRef = collection(db, collectionName);
+      const q = query(
+        collectionRef,
+        orderBy(fieldName),
+        startAt(searchTerm),
+        endAt(searchTerm + '\uf8ff'),
+        limit(10)
+      );
       
-      const batchesSnapshot = await getDocs(collection(db, 'inventoryBatches'));
-      const batches = batchesSnapshot.docs.map(doc => ({
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      
-      // Zapisz dane w cache
-      dataCache.current = {
-        purchaseOrders,
-        customerOrders,
-        productionTasks,
-        inventoryItems,
-        batches,
-        lastFetchTime: currentTime
-      };
-      
-      return [purchaseOrders, customerOrders, productionTasks, inventoryItems, batches];
     } catch (error) {
-      console.error('Błąd podczas pobierania danych:', error);
-      // W przypadku błędu zwróć dane z cache (nawet jeśli są nieaktualne) lub puste tablice
-      if (dataCache.current.lastFetchTime) {
-        return [
-          dataCache.current.purchaseOrders || [],
-          dataCache.current.customerOrders || [],
-          dataCache.current.productionTasks || [],
-          dataCache.current.inventoryItems || [],
-          dataCache.current.batches || []
-        ];
-      }
-      return [[], [], [], [], []];
+      console.error(`Błąd podczas wyszukiwania w kolekcji ${collectionName}:`, error);
+      return [];
     }
   };
 
-  // Nowa funkcja do inteligentnego przeszukiwania danych
-  const searchData = (data, query, fields) => {
-    const queryLower = query.toLowerCase();
-    const queryTerms = queryLower.split(/\s+/).filter(term => term.length > 0);
-    
-    // Jeśli nie ma terminów do wyszukiwania, zwróć pustą tablicę
-    if (queryTerms.length === 0) return [];
-    
-    return data.filter(item => {
-      // Sprawdź, czy przedmiot pasuje do wszystkich terminów
-      return queryTerms.every(term => {
-        // Sprawdź, czy term występuje w którymkolwiek z pól
-        return fields.some(field => {
-          const fieldPath = field.split('.');
-          let value = item;
-          
-          // Obsłuż zagnieżdżone pola (np. supplier.name)
-          for (const path of fieldPath) {
-            if (value == null) return false;
-            value = value[path];
-          }
-          
-          if (typeof value === 'string') {
-            return value.toLowerCase().includes(term);
-          }
-          return false;
-        });
-      });
-    });
-  };
+  // Funkcja do mapowania wyników z różnych kolekcji
+  const mapSearchResults = (purchaseOrders, customerOrders, productionTasks, inventoryBatches) => {
+    const results = [];
 
-  const handleSearch = async (query) => {
-    if (query.trim() === '') {
-      setSearchResults([]);
-      return;
-    }
-    
-    setIsSearching(true);
-    
-    try {
-      // Pobierz dane z cache lub bazy danych
-      const [purchaseOrders, customerOrders, productionTasks, inventoryItems, batches] = await fetchDataWithCache();
-      
-      // Inteligentne przeszukiwanie danych
-      const filteredPOs = searchData(purchaseOrders, query, ['number', 'supplier.name'])
-        .map(po => ({
+    // Mapowanie Purchase Orders
+    purchaseOrders.forEach(po => {
+      if (po.number || po.code) {
+        results.push({
           id: po.id,
-          number: po.number,
-          title: `PO: ${po.number} - ${po.supplier?.name || 'Dostawca nieznany'}`,
+          number: po.number || po.code,
+          title: `PO: ${po.number || po.code} - ${po.supplier?.name || 'Dostawca nieznany'}`,
           type: 'purchaseOrder',
           date: po.orderDate || po.createdAt,
           status: po.status
-        }));
-      
-      const filteredCOs = searchData(customerOrders, query, ['orderNumber', 'customer.name'])
-        .map(co => ({
+        });
+      }
+    });
+
+    // Mapowanie Customer Orders
+    customerOrders.forEach(co => {
+      if (co.orderNumber || co.code) {
+        results.push({
           id: co.id,
-          number: co.orderNumber,
-          title: `CO: ${co.orderNumber} - ${co.customer?.name || 'Klient nieznany'}`,
+          number: co.orderNumber || co.code,
+          title: `CO: ${co.orderNumber || co.code} - ${co.customer?.name || 'Klient nieznany'}`,
           type: 'customerOrder',
           date: co.orderDate || co.createdAt,
           status: co.status
-        }));
-      
-      const filteredMOs = searchData(productionTasks, query, ['moNumber', 'name', 'productName', 'lotNumber'])
-        .map(mo => ({
+        });
+      }
+    });
+
+    // Mapowanie Production Tasks
+    productionTasks.forEach(mo => {
+      if (mo.moNumber || mo.code) {
+        results.push({
           id: mo.id,
-          number: mo.moNumber,
-          title: `MO: ${mo.moNumber} - ${mo.productName || mo.name || 'Produkt nieznany'}`,
+          number: mo.moNumber || mo.code,
+          title: `MO: ${mo.moNumber || mo.code} - ${mo.productName || mo.name || 'Produkt nieznany'}`,
           type: 'productionTask',
           date: mo.scheduledDate || mo.createdAt,
           status: mo.status,
           lotInfo: mo.lotNumber ? `LOT: ${mo.lotNumber}` : null
-        }));
-      
-      const filteredBatches = searchData(batches, query, ['lotNumber', 'batchNumber', 'itemName'])
-        .map(batch => {
-          const item = inventoryItems.find(item => item.id === batch.itemId);
-          return {
-            id: batch.id,
-            itemId: batch.itemId,
-            number: batch.lotNumber || batch.batchNumber,
-            title: `LOT: ${batch.lotNumber || batch.batchNumber} - ${batch.itemName || 'Produkt nieznany'}`,
-            type: 'inventoryBatch',
-            date: batch.receivedDate || batch.createdAt,
-            quantity: batch.quantity,
-            unit: item?.unit || 'szt.',
-            expiryDate: batch.expiryDate
-          };
         });
-      
-      // Ustawienie priorytetu wyników - dokładne dopasowania na górze
+      }
+    });
+
+    // Mapowanie Inventory Batches
+    inventoryBatches.forEach(batch => {
+      if (batch.lotNumber || batch.batchNumber || batch.code) {
+        results.push({
+          id: batch.id,
+          itemId: batch.itemId,
+          number: batch.lotNumber || batch.batchNumber || batch.code,
+          title: `LOT: ${batch.lotNumber || batch.batchNumber || batch.code} - ${batch.itemName || 'Produkt nieznany'}`,
+          type: 'inventoryBatch',
+          date: batch.receivedDate || batch.createdAt,
+          quantity: batch.quantity,
+          unit: batch.unit || 'szt.',
+          expiryDate: batch.expiryDate
+        });
+      }
+    });
+
+    return results;
+  };
+
+  // Główna funkcja wyszukiwania
+  const performSearch = async (searchTerm) => {
+    if (!searchTerm || searchTerm.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    // Sprawdź cache
+    const cacheKey = searchTerm.toLowerCase();
+    const cachedResult = searchCache.current.get(cacheKey);
+    
+    if (isCacheValid(cachedResult)) {
+      console.log('Używam cache dla zapytania:', searchTerm);
+      setSearchResults(cachedResult.results);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    console.log('Wykonuję wyszukiwanie dla:', searchTerm);
+
+    try {
+      // Wyszukiwanie równoległe we wszystkich kolekcjach
+      const [purchaseOrders, customerOrders, productionTasks, inventoryBatches] = await Promise.all([
+        searchInCollection('purchaseOrders', searchTerm, 'number'),
+        searchInCollection('orders', searchTerm, 'orderNumber'), 
+        searchInCollection('productionTasks', searchTerm, 'moNumber'),
+        searchInCollection('inventoryBatches', searchTerm, 'lotNumber')
+      ]);
+
+      // Mapowanie wyników
+      const mappedResults = mapSearchResults(purchaseOrders, customerOrders, productionTasks, inventoryBatches);
+
+      // Sortowanie wyników - dokładne dopasowania na górze
       const exactMatches = [];
       const partialMatches = [];
-      
-      const queryLower = query.toLowerCase();
-      
-      [...filteredPOs, ...filteredCOs, ...filteredMOs, ...filteredBatches].forEach(result => {
-        if (result.number?.toLowerCase() === queryLower || 
-            result.title?.toLowerCase().includes(queryLower + ' -')) {
+      const searchTermLower = searchTerm.toLowerCase();
+
+      mappedResults.forEach(result => {
+        if (result.number?.toLowerCase() === searchTermLower) {
           exactMatches.push(result);
         } else {
           partialMatches.push(result);
         }
       });
-      
-      // Połącz wyniki z zachowaniem priorytetu i ogranicz liczbę
-      const combinedResults = [...exactMatches, ...partialMatches]
-        .sort((a, b) => {
-          // Najpierw sortuj według dokładności dopasowania
-          const aExact = exactMatches.includes(a);
-          const bExact = exactMatches.includes(b);
-          if (aExact && !bExact) return -1;
-          if (!aExact && bExact) return 1;
-          
-          // Następnie sortuj według daty
-          return new Date(b.date) - new Date(a.date);
-        })
+
+      const finalResults = [...exactMatches, ...partialMatches]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 15);
-      
-      setSearchResults(combinedResults);
+
+      // Zapisz w cache
+      searchCache.current.set(cacheKey, {
+        results: finalResults,
+        timestamp: Date.now()
+      });
+
+      setSearchResults(finalResults);
     } catch (error) {
       console.error('Błąd podczas wyszukiwania:', error);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
   };
-  
-  // Zoptymalizowana wersja funkcji obsługującej zmiany w polu wyszukiwania
+
+  // Debounced search function z 400ms opóźnieniem
+  const debouncedSearch = useMemo(
+    () => debounce(performSearch, 400),
+    []
+  );
+
+  // Cleanup debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [debouncedSearch]);
+
+  // Handler dla zmian w polu wyszukiwania
   const handleSearchChange = (event) => {
     const query = event.target.value;
     setSearchQuery(query);
     
-    // Anuluj poprzednie wyszukiwanie
-    if (searchTimeout.current) {
-      clearTimeout(searchTimeout.current);
+    // Jeśli pole jest puste lub ma mniej niż 2 znaki, wyczyść wyniki
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      debouncedSearch.cancel();
+      return;
     }
-    
-    // Opóźnij wyszukiwanie, aby zmniejszyć obciążenie systemu
-    // Krótsze opóźnienie dla krótkich zapytań
-    const delay = query.length <= 2 ? 500 : 300;
-    
-    searchTimeout.current = setTimeout(() => {
-      handleSearch(query);
-    }, delay);
+
+    // Uruchom debounced search
+    debouncedSearch(query);
   };
   
   const handleSearchFocus = () => {
     setIsSearchFocused(true);
-    if (searchQuery.trim() !== '') {
-      handleSearch(searchQuery);
-    }
+    // Nie wykonuj automatycznego wyszukiwania przy focus
   };
 
   const handleSearchKeyPress = (event) => {
-    if (event.key === 'Enter' && searchQuery.trim() !== '') {
-      handleSearch(searchQuery);
+    if (event.key === 'Enter' && searchQuery.trim() !== '' && searchQuery.length >= 2) {
+      // Anuluj debounced search i wykonaj natychmiast
+      debouncedSearch.cancel();
+      performSearch(searchQuery);
       
       // Jeśli jest tylko jeden wynik, przejdź do niego automatycznie
       if (searchResults.length === 1) {
@@ -413,11 +386,14 @@ const Navbar = () => {
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
+    setIsSearching(false);
+    debouncedSearch.cancel();
   };
   
   const handleResultClick = (result) => {
     setIsSearchFocused(false);
     setSearchQuery('');
+    setSearchResults([]);
     
     // Nawiguj do odpowiedniego detalu
     if (result.type === 'purchaseOrder') {
@@ -504,7 +480,7 @@ const Navbar = () => {
               <SearchIcon />
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder={isMobile ? "Szukaj..." : "Szukaj PO, CO, MO, LOT..."}
+              placeholder={isMobile ? "Szukaj..." : "Szukaj PO, CO, MO, LOT... (min. 2 znaki)"}
               inputProps={{ 'aria-label': 'search' }}
               value={searchQuery}
               onChange={handleSearchChange}
@@ -617,6 +593,27 @@ const Navbar = () => {
                     </ListItem>
                   ))}
                 </List>
+              </Paper>
+            )}
+
+            {/* Informacja o minimalnej liczbie znaków */}
+            {isSearchFocused && searchQuery.length > 0 && searchQuery.length < 2 && (
+              <Paper
+                sx={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 1000,
+                  mt: 1,
+                  p: 2,
+                  boxShadow: 3,
+                  bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+                }}
+              >
+                <Typography variant="body2" color="text.secondary" align="center">
+                  Wpisz co najmniej 2 znaki aby rozpocząć wyszukiwanie
+                </Typography>
               </Paper>
             )}
           </Box>
