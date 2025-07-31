@@ -56,7 +56,11 @@ import {
   deleteBatch,
   uploadBatchCertificate,
   deleteBatchCertificate,
-  getBatchReservations
+  getBatchReservations,
+  debugReservationTransfer,
+  debugMaterialBatches,
+  debugDuplicateBatches,
+  debugAndCleanDuplicateReservations
 } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -66,6 +70,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { auth } from '../../services/firebase/config';
 import { getTaskById } from '../../services/productionService';
 import LabelDialog from '../../components/inventory/LabelDialog';
+import BatchVisualization from '../../components/inventory/BatchVisualization';
 
 const BatchesPage = () => {
   const { id } = useParams();
@@ -102,6 +107,8 @@ const BatchesPage = () => {
   const [selectedCertificateForPreview, setSelectedCertificateForPreview] = useState(null);
   const [batchReservations, setBatchReservations] = useState([]);
   const [loadingReservations, setLoadingReservations] = useState(false);
+  const [selectedTransferSource, setSelectedTransferSource] = useState(''); // 'free' lub ID rezerwacji
+  const [availableTransferQuantity, setAvailableTransferQuantity] = useState(0);
   const fileInputRef = React.useRef(null);
 
   // Dodaję wykrywanie urządzeń mobilnych
@@ -185,6 +192,21 @@ const BatchesPage = () => {
       setFilteredBatches(filtered);
     }
   }, [searchTerm, batches]);
+
+  // Dodaj funkcje debugowania do globalnego zakresu (TYLKO DLA TESTÓW)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.debugReservationTransfer = debugReservationTransfer;
+      window.debugMaterialBatches = debugMaterialBatches;
+      window.debugDuplicateBatches = debugDuplicateBatches;
+      window.debugAndCleanDuplicateReservations = debugAndCleanDuplicateReservations;
+      console.log('🔧 [DEBUG] Funkcje debugowania dostępne w konsoli:');
+      console.log('  - window.debugReservationTransfer(batchId)');
+      console.log('  - window.debugMaterialBatches(batchId)');
+      console.log('  - window.debugDuplicateBatches(taskId)');
+      console.log('  - window.debugAndCleanDuplicateReservations(batchId)');
+    }
+  }, []);
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -300,11 +322,13 @@ const BatchesPage = () => {
   const openTransferDialog = async (batch) => {
     console.log('Otwieranie dialogu dla partii:', batch);
     setSelectedBatch(batch);
-    setTransferQuantity(batch.quantity.toString());
+    setTransferQuantity('');
     setTargetWarehouseId('');
     setTransferErrors({});
     setBatchReservations([]);
     setLoadingReservations(true);
+    setSelectedTransferSource('');
+    setAvailableTransferQuantity(0);
     setTransferDialogOpen(true);
     
     // Pobierz rezerwacje dla tej partii
@@ -352,6 +376,29 @@ const BatchesPage = () => {
     setSelectedBatch(null);
     setBatchReservations([]);
     setLoadingReservations(false);
+    setSelectedTransferSource('');
+    setAvailableTransferQuantity(0);
+    setTransferQuantity('');
+  };
+
+  const handleTransferSourceChange = (sourceId) => {
+    setSelectedTransferSource(sourceId);
+    setTransferQuantity('');
+    
+    if (sourceId === 'free') {
+      // Część wolna
+      const totalReserved = batchReservations.reduce((sum, res) => sum + (parseFloat(res.quantity) || 0), 0);
+      const freeQuantity = Math.max(0, selectedBatch.quantity - totalReserved);
+      setAvailableTransferQuantity(freeQuantity);
+    } else if (sourceId) {
+      // Konkretna rezerwacja
+      const reservation = batchReservations.find(res => res.id === sourceId);
+      if (reservation) {
+        setAvailableTransferQuantity(parseFloat(reservation.quantity) || 0);
+      }
+    } else {
+      setAvailableTransferQuantity(0);
+    }
   };
 
   const validateTransferForm = () => {
@@ -361,13 +408,17 @@ const BatchesPage = () => {
       errors.targetWarehouseId = t('inventory.batches.selectTargetWarehouse');
     }
     
+    if (!selectedTransferSource) {
+      errors.transferSource = 'Wybierz źródło transferu (część wolną lub konkretną rezerwację MO)';
+    }
+    
     // Pobierz sourceWarehouseId z partii - musi być zdefiniowany
     const sourceWarehouseId = selectedBatch.warehouseId;
     
     if (!sourceWarehouseId) {
       errors.general = t('inventory.batches.cannotDetermineSourceWarehouse');
     } else if (sourceWarehouseId === targetWarehouseId) {
-              errors.targetWarehouseId = t('inventory.batches.targetWarehouseMustBeDifferent');
+      errors.targetWarehouseId = t('inventory.batches.targetWarehouseMustBeDifferent');
     }
     
     if (!transferQuantity) {
@@ -378,18 +429,8 @@ const BatchesPage = () => {
         errors.transferQuantity = t('inventory.batches.enterValidNumericValue');
       } else if (qty <= 0) {
         errors.transferQuantity = t('inventory.batches.quantityMustBeGreaterThanZero');
-      } else if (qty > selectedBatch.quantity) {
-        errors.transferQuantity = t('inventory.batches.maxAvailableQuantityIs', { quantity: selectedBatch.quantity });
-      }
-    }
-    
-    // Sprawdź czy partia ma aktywne rezerwacje i czy ilość do przeniesienia wpłynie na nie
-    if (batchReservations && batchReservations.length > 0) {
-      const totalReserved = batchReservations.reduce((sum, res) => sum + (parseFloat(res.quantity) || 0), 0);
-      const availableForTransfer = selectedBatch.quantity - totalReserved;
-      
-      if (parseFloat(transferQuantity) > availableForTransfer) {
-        errors.transferQuantity = `Nie można przenieść więcej niż ${availableForTransfer.toFixed(3)} ${item?.unit || 'szt.'} z powodu aktywnych rezerwacji MO (zarezerwowano: ${totalReserved.toFixed(3)} ${item?.unit || 'szt.'})`;
+      } else if (qty > availableTransferQuantity) {
+        errors.transferQuantity = `Maksymalna dostępna ilość z wybranego źródła: ${availableTransferQuantity.toFixed(3)} ${item?.unit || 'szt.'}`;
       }
     }
     
@@ -413,13 +454,26 @@ const BatchesPage = () => {
       // Używamy wielu źródeł danych użytkownika aby zapewnić, że zawsze mamy dostęp do poprawnych danych
       const effectiveUser = localUser || currentUser || auth.currentUser;
       
+      // Przygotuj informacje o źródle transferu
+      let sourceInfo = '';
+      if (selectedTransferSource === 'free') {
+        sourceInfo = 'z części wolnej';
+      } else {
+        const sourceReservation = batchReservations.find(res => res.id === selectedTransferSource);
+        if (sourceReservation) {
+          sourceInfo = `z rezerwacji MO: ${sourceReservation.moNumber || 'N/A'}`;
+        }
+      }
+
       const userData = {
         userId: effectiveUser?.uid || 'unknown',
         userName: effectiveUser?.displayName || effectiveUser?.email || 'Nieznany użytkownik',
-        notes: `Przeniesienie partii ${selectedBatch.batchNumber || selectedBatch.lotNumber || 'bez numeru'}`
+        notes: `Przeniesienie partii ${selectedBatch.batchNumber || selectedBatch.lotNumber || 'bez numeru'} (${transferQuantity} ${item?.unit || 'szt.'} ${sourceInfo})`,
+        transferSource: selectedTransferSource,
+        transferSourceType: selectedTransferSource === 'free' ? 'free' : 'reservation'
       };
       
-      await transferBatch(
+      const transferResult = await transferBatch(
         selectedBatch.id,
         sourceWarehouseId,
         targetWarehouseId,
@@ -427,7 +481,15 @@ const BatchesPage = () => {
         userData
       );
       
-              showSuccess(t('inventory.batches.batchTransferredSuccessfully'));
+      // Pokaż sukces z dodatkową informacją o rezerwacjach jeśli dostępna
+      let successMessage = t('inventory.batches.batchTransferredSuccessfully');
+      if (selectedTransferSource && selectedTransferSource !== 'free') {
+        successMessage += ' Rezerwacje zostały automatycznie zaktualizowane.';
+      } else if (batchReservations.length > 0) {
+        successMessage += ' Rezerwacje pozostają w partii źródłowej.';
+      }
+      
+      showSuccess(successMessage);
       closeTransferDialog();
       
       const batchesData = await getItemBatches(id);
@@ -1115,11 +1177,11 @@ const BatchesPage = () => {
         />
       </Paper>
 
-      <Dialog open={transferDialogOpen} onClose={closeTransferDialog} maxWidth="sm" fullWidth>
+      <Dialog open={transferDialogOpen} onClose={closeTransferDialog} maxWidth="lg" fullWidth>
         <DialogTitle>
           {t('inventory.batches.transferBatchToWarehouse')}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ px: 3, py: 2 }}>
           {selectedBatch && (
             <Box sx={{ pt: 1 }}>
               <Typography variant="subtitle1" gutterBottom>
@@ -1254,6 +1316,19 @@ const BatchesPage = () => {
                 </>
               )}
               
+              {/* Wizualizacja partii z podziałem na rezerwacje i część wolną */}
+              <Box sx={{ my: 3 }}>
+                <BatchVisualization 
+                  batch={selectedBatch}
+                  reservations={batchReservations}
+                  unit={item?.unit || selectedBatch.unit || 'szt.'}
+                  height={100}
+                  showLabels={true}
+                  selectedSource={selectedTransferSource}
+                  onSourceSelect={handleTransferSourceChange}
+                />
+              </Box>
+              
               {/* Sekcja z rezerwacjami partii przez MO */}
               {(loadingReservations || batchReservations.length > 0) && (
                 <Box sx={{ mt: 2, mb: 2 }}>
@@ -1267,7 +1342,7 @@ const BatchesPage = () => {
                       <Typography variant="body2">Ładowanie rezerwacji...</Typography>
                     </Box>
                   ) : batchReservations.length > 0 ? (
-                    <Box sx={{ maxHeight: '200px', overflowY: 'auto', bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                    <Box sx={{ maxHeight: '300px', overflowY: 'auto', bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                       {batchReservations.map((reservation, index) => (
                         <Box 
                           key={reservation.id} 
@@ -1334,6 +1409,63 @@ const BatchesPage = () => {
               <Box sx={{ mt: 3, mb: 2 }}>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
+                    <FormControl fullWidth error={!!transferErrors.transferSource}>
+                      <InputLabel>Źródło transferu</InputLabel>
+                      <Select
+                        value={selectedTransferSource}
+                        onChange={(e) => handleTransferSourceChange(e.target.value)}
+                        label="Źródło transferu"
+                      >
+                        {/* Opcja dla części wolnej */}
+                        {(() => {
+                          const totalReserved = batchReservations.reduce((sum, res) => sum + (parseFloat(res.quantity) || 0), 0);
+                          const freeQuantity = Math.max(0, selectedBatch.quantity - totalReserved);
+                          if (freeQuantity > 0) {
+                            return (
+                              <MenuItem value="free">
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50', borderRadius: 0.5 }} />
+                                  <Typography>
+                                    Część wolna ({freeQuantity.toFixed(3)} {item?.unit || 'szt.'})
+                                  </Typography>
+                                </Box>
+                              </MenuItem>
+                            );
+                          }
+                          return null;
+                        })()}
+                        
+                        {/* Opcje dla rezerwacji MO */}
+                        {batchReservations.map((reservation, index) => {
+                          const moColors = [
+                            '#ff9800', '#e91e63', '#9c27b0', '#3f51b5', '#2196f3', '#00bcd4',
+                            '#009688', '#8bc34a', '#ffeb3b', '#ff5722', '#795548', '#607d8b'
+                          ];
+                          const color = moColors[index % moColors.length];
+                          
+                          return (
+                            <MenuItem key={reservation.id} value={reservation.id}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ width: 12, height: 12, backgroundColor: color, borderRadius: 0.5 }} />
+                                <Typography>
+                                  {reservation.moNumber || `MO ${index + 1}`} ({parseFloat(reservation.quantity || 0).toFixed(3)} {item?.unit || 'szt.'})
+                                </Typography>
+                                {reservation.taskDetails?.customerName && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    - {reservation.taskDetails.customerName}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </MenuItem>
+                          );
+                        })}
+                      </Select>
+                      {transferErrors.transferSource && (
+                        <FormHelperText>{transferErrors.transferSource}</FormHelperText>
+                      )}
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
                     <FormControl fullWidth error={!!transferErrors.targetWarehouseId}>
                       <InputLabel>{t('inventory.batches.targetWarehouse')}</InputLabel>
                       <Select
@@ -1358,15 +1490,15 @@ const BatchesPage = () => {
                   <Grid item xs={12}>
                     <TextField
                       fullWidth
-                      label={t('inventory.batches.quantityToTransfer')}
+                      label={`Ilość do przeniesienia${selectedTransferSource ? ` (dostępne: ${availableTransferQuantity.toFixed(3)} ${item?.unit || 'szt.'})` : ''}`}
                       type="number"
                       value={transferQuantity}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value);
                         // Walidacja bezpośrednio przy zmianie wartości
                         if (!isNaN(value)) {
-                          // Ograniczamy wartość do przedziału (0, selectedBatch.quantity]
-                          const validatedValue = Math.min(Math.max(0, value), selectedBatch.quantity);
+                          // Ograniczamy wartość do przedziału (0, availableTransferQuantity]
+                          const validatedValue = Math.min(Math.max(0, value), availableTransferQuantity);
                           setTransferQuantity(validatedValue.toString());
                         } else {
                           setTransferQuantity(e.target.value);
@@ -1374,11 +1506,12 @@ const BatchesPage = () => {
                       }}
                       inputProps={{ 
                         min: 0.00001, 
-                        max: selectedBatch.quantity, 
+                        max: availableTransferQuantity, 
                         step: 'any' 
                       }}
                       error={!!transferErrors.transferQuantity}
-                      helperText={transferErrors.transferQuantity || t('inventory.batches.maxAvailableQuantity', { quantity: selectedBatch.quantity })}
+                      helperText={transferErrors.transferQuantity || (selectedTransferSource ? `Maksymalna dostępna ilość: ${availableTransferQuantity.toFixed(3)} ${item?.unit || 'szt.'}` : 'Najpierw wybierz źródło transferu')}
+                      disabled={!selectedTransferSource}
                     />
                   </Grid>
                 </Grid>

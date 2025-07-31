@@ -3064,11 +3064,43 @@ import {
         // Kontynuuj mimo błędu - transfer partii jest ważniejszy
       }
       
+      // AKTUALIZACJA REZERWACJI PO TRANSFERZE
+      try {
+        console.log('🔄 Rozpoczynam aktualizację rezerwacji po transferze partii...');
+        
+        // Określ typ transferu
+        let transferType = 'partial';
+        if (isFullTransfer) {
+          transferType = isNewBatch ? 'full' : 'merge';
+        }
+        
+        // Pobierz dodatkowe informacje z userData jeśli dostępne
+        const selectedTransferSource = userData.transferSource || null;
+        const sourceRemainingQuantity = isFullTransfer ? 0 : (availableQuantity - transferQuantity);
+        
+        const reservationUpdateResult = await updateReservationsOnBatchTransfer(
+          batchId, // sourceBatchId
+          targetBatchId, // targetBatchId  
+          transferQuantity,
+          sourceRemainingQuantity,
+          selectedTransferSource,
+          userId,
+          transferType
+        );
+        
+        console.log('✅ Aktualizacja rezerwacji zakończona:', reservationUpdateResult);
+        
+      } catch (reservationError) {
+        console.error('❌ Błąd podczas aktualizacji rezerwacji - kontynuuję mimo błędu:', reservationError);
+        // Transfer partii się udał, więc nie przerywamy procesu z powodu błędu rezerwacji
+      }
+      
       return {
         success: true,
         sourceWarehouseId,
         targetWarehouseId,
         quantity: transferQuantity,
+        targetBatchId: targetBatchId, // Dodano dla debugowania
         message: isFullTransfer 
           ? 'Transfer całej partii zakończony pomyślnie - partia źródłowa została usunięta'
           : 'Transfer zakończony pomyślnie'
@@ -6046,3 +6078,1185 @@ export const deleteBatchCertificate = async (batchId, userId) => {
       throw error;
     }
   };
+
+  // Aktualizacja rezerwacji przy transferze partii
+  export const updateReservationsOnBatchTransfer = async (
+    sourceBatchId, 
+    targetBatchId, 
+    transferQuantity, 
+    sourceRemainingQuantity, 
+    selectedTransferSource, 
+    userId,
+    transferType = 'partial' // 'partial', 'full', 'merge'
+  ) => {
+    try {
+      console.log(`🔄 Rozpoczynam aktualizację rezerwacji przy transferze partii...`);
+      console.log(`Source: ${sourceBatchId}, Target: ${targetBatchId}, Qty: ${transferQuantity}, Type: ${transferType}`);
+      console.log(`Selected source: ${selectedTransferSource}`);
+      
+      // Pobierz wszystkie aktywne rezerwacje dla partii źródłowej
+      const sourceReservations = await getBatchReservations(sourceBatchId);
+      
+      if (sourceReservations.length === 0) {
+        console.log('✅ Brak rezerwacji do aktualizacji');
+        return { success: true, message: 'Brak rezerwacji do aktualizacji' };
+      }
+      
+      console.log(`📋 Znaleziono ${sourceReservations.length} rezerwacji do aktualizacji`);
+      
+      const batch = writeBatch(db);
+      const results = [];
+      const errors = [];
+      
+      // Sprawdź czy transfer dotyczy konkretnej rezerwacji czy części wolnej
+      if (selectedTransferSource && selectedTransferSource !== 'free') {
+        // Transfer konkretnej rezerwacji MO
+        await handleSpecificReservationTransfer(
+          sourceBatchId, 
+          targetBatchId, 
+          selectedTransferSource, 
+          transferQuantity, 
+          userId, 
+          batch, 
+          results, 
+          errors
+        );
+      } else {
+        // Transfer części wolnej lub pełny transfer
+        await handleGeneralBatchTransfer(
+          sourceBatchId,
+          targetBatchId,
+          transferQuantity,
+          sourceRemainingQuantity,
+          transferType,
+          sourceReservations,
+          userId,
+          batch,
+          results,
+          errors
+        );
+      }
+      
+      // Wykonaj wszystkie aktualizacje transakcji w jednej transakcji
+      if (batch._mutations && batch._mutations.length > 0) {
+        await batch.commit();
+        console.log(`✅ Zaktualizowano ${results.length} transakcji rezerwacji`);
+      }
+      
+      // AKTUALIZACJA MATERIALBATCHES W ZADANIACH PRODUKCYJNYCH
+      try {
+        console.log(`🔄 Rozpoczynam aktualizację materialBatches w zadaniach MO...`);
+        const materialBatchesUpdateResult = await updateMaterialBatchesOnTransfer(
+          sourceBatchId,
+          targetBatchId,
+          transferQuantity,
+          selectedTransferSource,
+          transferType,
+          results
+        );
+        console.log(`✅ Aktualizacja materialBatches zakończona:`, materialBatchesUpdateResult);
+      } catch (materialBatchesError) {
+        console.error(`❌ Błąd podczas aktualizacji materialBatches:`, materialBatchesError);
+        errors.push(`Błąd aktualizacji materialBatches: ${materialBatchesError.message}`);
+      }
+      
+      return {
+        success: true,
+        message: `Zaktualizowano ${results.length} rezerwacji i materialBatches w zadaniach MO`,
+        results,
+        errors
+      };
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas aktualizacji rezerwacji przy transferze:', error);
+      throw error;
+    }
+  };
+  
+  // Obsługa transferu konkretnej rezerwacji MO
+  const handleSpecificReservationTransfer = async (
+    sourceBatchId, 
+    targetBatchId, 
+    reservationId, 
+    transferQuantity, 
+    userId, 
+    batch, 
+    results, 
+    errors
+  ) => {
+    try {
+      console.log(`🎯 Obsługuję transfer konkretnej rezerwacji: ${reservationId}`);
+      
+             // Znajdź konkretną rezerwację w transakcjach
+       // Najpierw spróbuj bezpośrednio po ID dokumentu
+       let reservationDoc = null;
+       let reservationData = null;
+       
+       try {
+         const directDocRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservationId);
+         const directDoc = await getDoc(directDocRef);
+         
+         if (directDoc.exists() && directDoc.data().type === 'booking' && directDoc.data().batchId === sourceBatchId) {
+           reservationDoc = directDoc;
+           reservationData = directDoc.data();
+           console.log(`✅ Znaleziono rezerwację bezpośrednio po ID: ${reservationId}`);
+         }
+       } catch (error) {
+         console.log('Nie udało się znaleźć rezerwacji bezpośrednio po ID, szukam w kolekcji...');
+       }
+       
+       // Jeśli nie znaleziono bezpośrednio, przeszukaj wszystkie rezerwacje dla tej partii
+       if (!reservationDoc) {
+         const transactionsRef = collection(db, INVENTORY_TRANSACTIONS_COLLECTION);
+         const reservationQuery = query(
+           transactionsRef,
+           where('type', '==', 'booking'),
+           where('batchId', '==', sourceBatchId)
+         );
+         
+         const querySnapshot = await getDocs(reservationQuery);
+         const foundReservation = querySnapshot.docs.find(doc => 
+           doc.id === reservationId || 
+           doc.data().referenceId === reservationId ||
+           doc.data().taskId === reservationId
+         );
+         
+         if (foundReservation) {
+           reservationDoc = foundReservation;
+           reservationData = foundReservation.data();
+           console.log(`✅ Znaleziono rezerwację w kolekcji: ${foundReservation.id}`);
+         }
+       }
+      
+      if (!reservationDoc || !reservationData) {
+        errors.push(`Nie znaleziono rezerwacji ${reservationId} dla partii ${sourceBatchId}`);
+        return;
+      }
+      
+      const reservedQuantity = parseFloat(reservationData.quantity || 0);
+      const transferQty = parseFloat(transferQuantity);
+      
+      console.log(`📊 Rezerwacja: ${reservedQuantity}, Transfer: ${transferQty}`);
+      
+      if (transferQty >= reservedQuantity) {
+        // Przenosimy całą rezerwację - sprawdź czy istnieje już podobna w partii docelowej
+        console.log(`🔍 Sprawdzam czy istnieje już rezerwacja dla tego MO w partii docelowej ${targetBatchId}`);
+        
+        // Pobierz istniejące rezerwacje w partii docelowej dla tego samego MO i materiału
+        // Sprawdź oba pola: taskId i referenceId (dla kompatybilności)
+        const taskIdentifier = reservationData.taskId || reservationData.referenceId;
+        
+        // Pierwsza próba - po referenceId
+        let targetReservationsQuery = query(
+          collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+          where('batchId', '==', targetBatchId),
+          where('type', '==', 'booking'),
+          where('referenceId', '==', taskIdentifier),
+          where('itemId', '==', reservationData.itemId)
+        );
+        
+        let targetReservationsSnapshot = await getDocs(targetReservationsQuery);
+        let existingReservations = targetReservationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ref: doc.ref,
+          ...doc.data()
+        }));
+        
+        // Jeśli nie znaleziono, spróbuj po taskId (starszy format)
+        if (existingReservations.length === 0) {
+          console.log(`📋 Nie znaleziono po referenceId, sprawdzam po taskId...`);
+          targetReservationsQuery = query(
+            collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+            where('batchId', '==', targetBatchId),
+            where('type', '==', 'booking'),
+            where('taskId', '==', taskIdentifier),
+            where('itemId', '==', reservationData.itemId)
+          );
+          
+          targetReservationsSnapshot = await getDocs(targetReservationsQuery);
+          existingReservations = targetReservationsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ref: doc.ref,
+            ...doc.data()
+          }));
+        }
+        
+        console.log(`📊 Znaleziono ${existingReservations.length} istniejących rezerwacji dla tego MO w partii docelowej`);
+        
+        if (existingReservations.length > 0) {
+          // Istnieje już rezerwacja - połącz z nią
+          const existingReservation = existingReservations[0]; // Bierzemy pierwszą
+          const newTotalQuantity = parseFloat(existingReservation.quantity || 0) + reservedQuantity;
+          
+          console.log(`🔗 Łączę rezerwacje: ${existingReservation.quantity} + ${reservedQuantity} = ${newTotalQuantity}`);
+          
+          // Aktualizuj istniejącą rezerwację w partii docelowej
+          batch.update(existingReservation.ref, {
+            quantity: newTotalQuantity,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            notes: (existingReservation.notes || '') + `\n[${new Date().toISOString()}] Połączono z rezerwacją ${reservationDoc.id} z partii ${sourceBatchId} (dodano ${reservedQuantity})`,
+            lastMergeAt: serverTimestamp(),
+            mergedFromReservation: reservationDoc.id,
+            mergedFromBatch: sourceBatchId
+          });
+          
+          // Usuń oryginalną rezerwację
+          batch.delete(reservationDoc.ref);
+          
+          results.push({
+            reservationId: reservationDoc.id,
+            action: 'merged_into_existing',
+            quantity: reservedQuantity,
+            mergedIntoReservation: existingReservation.id,
+            newTotalQuantity,
+            fromBatch: sourceBatchId,
+            toBatch: targetBatchId
+          });
+          
+          results.push({
+            reservationId: existingReservation.id,
+            action: 'updated_with_merged_quantity',
+            originalQuantity: parseFloat(existingReservation.quantity || 0),
+            addedQuantity: reservedQuantity,
+            newTotalQuantity,
+            fromBatch: sourceBatchId,
+            toBatch: targetBatchId
+          });
+          
+          console.log(`✅ Połączono rezerwację ${reservationDoc.id} z istniejącą ${existingReservation.id}`);
+          
+        } else {
+          // Brak istniejącej rezerwacji - po prostu przenieś
+          batch.update(reservationDoc.ref, {
+            batchId: targetBatchId,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            notes: (reservationData.notes || '') + `\n[${new Date().toISOString()}] Przeniesiono całą rezerwację (${reservedQuantity}) z partii ${sourceBatchId} do ${targetBatchId}`,
+            lastTransferAt: serverTimestamp()
+          });
+          
+          results.push({
+            reservationId: reservationDoc.id,
+            action: 'moved_full',
+            quantity: reservedQuantity,
+            fromBatch: sourceBatchId,
+            toBatch: targetBatchId
+          });
+          
+          console.log(`✅ Przeniesiono całą rezerwację ${reservationDoc.id} bez łączenia`);
+        }
+      } else {
+        // Dzielimy rezerwację - część zostaje, część się przenosi
+        const remainingQuantity = reservedQuantity - transferQty;
+        
+        // Aktualizuj oryginalną rezerwację (zmniejsz ilość)
+        batch.update(reservationDoc.ref, {
+          quantity: remainingQuantity,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+          notes: (reservationData.notes || '') + `\n[${new Date().toISOString()}] Podzielono rezerwację: ${remainingQuantity} pozostało w partii ${sourceBatchId}, ${transferQty} przeniesiono do ${targetBatchId}`,
+          lastTransferAt: serverTimestamp()
+        });
+        
+        // Sprawdź czy istnieje już rezerwacja dla tego MO w partii docelowej przed utworzeniem nowej
+        console.log(`🔍 Sprawdzam czy istnieje już rezerwacja dla tego MO w partii docelowej ${targetBatchId} (przy podziale)`);
+        
+        // Sprawdź oba pola: taskId i referenceId (dla kompatybilności) - przy podziale
+        const taskIdentifier = reservationData.taskId || reservationData.referenceId;
+        
+        console.log(`🔍 [SPLIT] Szukam istniejących rezerwacji dla:`);
+        console.log(`   - batchId: ${targetBatchId}`);
+        console.log(`   - taskIdentifier: ${taskIdentifier}`);
+        console.log(`   - itemId: ${reservationData.itemId}`);
+        console.log(`   - transferQty: ${transferQty}`);
+        console.log(`   - reservedQuantity: ${reservedQuantity}`);
+        
+        // Pierwsza próba - po referenceId
+        let targetReservationsQuery = query(
+          collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+          where('batchId', '==', targetBatchId),
+          where('type', '==', 'booking'),
+          where('referenceId', '==', taskIdentifier),
+          where('itemId', '==', reservationData.itemId)
+        );
+        
+        let targetReservationsSnapshot = await getDocs(targetReservationsQuery);
+        let existingReservations = targetReservationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ref: doc.ref,
+          ...doc.data()
+        }));
+        
+        // Jeśli nie znaleziono, spróbuj po taskId (starszy format)
+        if (existingReservations.length === 0) {
+          console.log(`📋 Nie znaleziono po referenceId przy podziale, sprawdzam po taskId...`);
+          targetReservationsQuery = query(
+            collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+            where('batchId', '==', targetBatchId),
+            where('type', '==', 'booking'),
+            where('taskId', '==', taskIdentifier),
+            where('itemId', '==', reservationData.itemId)
+          );
+          
+          targetReservationsSnapshot = await getDocs(targetReservationsQuery);
+          existingReservations = targetReservationsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ref: doc.ref,
+            ...doc.data()
+          }));
+        }
+        
+        console.log(`📊 Znaleziono ${existingReservations.length} istniejących rezerwacji dla tego MO w partii docelowej (przy podziale)`);
+        
+        if (existingReservations.length > 0) {
+          console.log(`🔍 [SPLIT] Szczegóły znalezionych rezerwacji:`);
+          existingReservations.forEach((res, idx) => {
+            console.log(`   ${idx + 1}. ID: ${res.id}, quantity: ${res.quantity}, taskId: ${res.taskId}, referenceId: ${res.referenceId}`);
+          });
+          // Istnieje już rezerwacja - dodaj do niej przeniesioną ilość
+          const existingReservation = existingReservations[0];
+          const newTotalQuantity = parseFloat(existingReservation.quantity || 0) + transferQty;
+          
+          console.log(`🔗 Łączę przy podziale: ${existingReservation.quantity} + ${transferQty} = ${newTotalQuantity}`);
+          
+          // Aktualizuj istniejącą rezerwację
+          batch.update(existingReservation.ref, {
+            quantity: newTotalQuantity,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            notes: (existingReservation.notes || '') + `\n[${new Date().toISOString()}] Dodano ${transferQty} z podzielonej rezerwacji ${reservationDoc.id}`,
+            lastMergeAt: serverTimestamp(),
+            mergedFromSplitReservation: reservationDoc.id
+          });
+          
+          results.push({
+            originalReservationId: reservationDoc.id,
+            existingReservationId: existingReservation.id,
+            action: 'split_and_merged',
+            remainingQuantity,
+            transferredQuantity: transferQty,
+            newTotalQuantity,
+            fromBatch: sourceBatchId,
+            toBatch: targetBatchId
+          });
+          
+          console.log(`✂️🔗 Podzieliłem rezerwację ${reservationDoc.id} i połączyłem ${transferQty} z istniejącą ${existingReservation.id}`);
+          
+        } else {
+          // Brak istniejącej rezerwacji - utwórz nową
+          const newReservationData = {
+            ...reservationData,
+            quantity: transferQty,
+            batchId: targetBatchId,
+            createdAt: serverTimestamp(),
+            createdBy: userId,
+            notes: `Utworzono przez podział rezerwacji ${reservationDoc.id}. Przeniesiono ${transferQty} do partii ${targetBatchId}`,
+            originalReservationId: reservationDoc.id,
+            splitFromReservation: true,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId
+          };
+          
+          const newReservationRef = doc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION));
+          batch.set(newReservationRef, newReservationData);
+          
+          results.push({
+            originalReservationId: reservationDoc.id,
+            newReservationId: newReservationRef.id,
+            action: 'split',
+            remainingQuantity,
+            transferredQuantity: transferQty,
+            fromBatch: sourceBatchId,
+            toBatch: targetBatchId
+          });
+          
+          console.log(`✂️ Podzieliłem rezerwację ${reservationDoc.id}: ${remainingQuantity} zostaje, ${transferQty} przenosi się (nowa rezerwacja)`);
+        }
+      }
+      
+    } catch (error) {
+      console.error(`❌ Błąd podczas obsługi rezerwacji ${reservationId}:`, error);
+      errors.push(`Błąd rezerwacji ${reservationId}: ${error.message}`);
+    }
+  };
+  
+  // Obsługa ogólnego transferu partii (część wolna lub pełny transfer)
+  const handleGeneralBatchTransfer = async (
+    sourceBatchId,
+    targetBatchId,
+    transferQuantity,
+    sourceRemainingQuantity,
+    transferType,
+    sourceReservations,
+    userId,
+    batch,
+    results,
+    errors
+  ) => {
+    try {
+      console.log(`🔄 Obsługuję ogólny transfer: ${transferType}`);
+      
+      if (transferType === 'full') {
+        // Pełny transfer - wszystkie rezerwacje przechodzą na nową partię
+        console.log(`📦 Pełny transfer - przenoszę ${sourceReservations.length} rezerwacji`);
+        
+        for (const reservation of sourceReservations) {
+          const reservationRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, reservation.id);
+          
+          batch.update(reservationRef, {
+            batchId: targetBatchId,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            notes: (reservation.notes || '') + `\n[${new Date().toISOString()}] Przeniesiono przez pełny transfer partii z ${sourceBatchId} do ${targetBatchId}`,
+            lastTransferAt: serverTimestamp()
+          });
+          
+          results.push({
+            reservationId: reservation.id,
+            action: 'moved_full_batch',
+            quantity: reservation.quantity,
+            fromBatch: sourceBatchId,
+            toBatch: targetBatchId
+          });
+        }
+      } else if (transferType === 'partial') {
+        // Częściowy transfer części wolnej - rezerwacje pozostają w partii źródłowej
+        // (nie wymagają aktualizacji, ponieważ transfer dotyczy tylko części wolnej)
+        console.log('ℹ️ Transfer części wolnej - rezerwacje pozostają w partii źródłowej');
+        
+        results.push({
+          action: 'free_part_transfer',
+          message: `Przeniesiono ${transferQuantity} z części wolnej. Rezerwacje pozostają w partii źródłowej.`,
+          fromBatch: sourceBatchId,
+          toBatch: targetBatchId
+        });
+      } else if (transferType === 'merge') {
+        // Łączenie partii - sprawdź czy istnieją już rezerwacje w partii docelowej i połącz je
+        console.log(`🔗 Łączenie partii - sprawdzam rezerwacje w partii docelowej i źródłowej`);
+        
+        // Pobierz istniejące rezerwacje w partii docelowej
+        const targetReservationsQuery = query(
+          collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
+          where('batchId', '==', targetBatchId),
+          where('type', '==', 'booking')
+        );
+        
+        const targetReservationsSnapshot = await getDocs(targetReservationsQuery);
+        const targetReservations = targetReservationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        console.log(`📊 Znaleziono ${targetReservations.length} istniejących rezerwacji w partii docelowej`);
+        console.log(`📊 Przenoszę ${sourceReservations.length} rezerwacji z partii źródłowej`);
+        
+        // Grupuj rezerwacje według klucza (taskId/referenceId + inne parametry)
+        const mergeGroups = {};
+        
+        // Dodaj istniejące rezerwacje do grup
+        targetReservations.forEach(reservation => {
+          const key = `${reservation.taskId || reservation.referenceId}_${reservation.itemId}`;
+          if (!mergeGroups[key]) {
+            mergeGroups[key] = { target: null, sources: [] };
+          }
+          mergeGroups[key].target = reservation;
+        });
+        
+        // Dodaj source rezerwacje do grup
+        sourceReservations.forEach(reservation => {
+          const key = `${reservation.taskId || reservation.referenceId}_${reservation.itemId}`;
+          if (!mergeGroups[key]) {
+            mergeGroups[key] = { target: null, sources: [] };
+          }
+          mergeGroups[key].sources.push(reservation);
+        });
+        
+        console.log(`🗂️ Utworzono ${Object.keys(mergeGroups).length} grup do łączenia`);
+        
+        // Przetwórz każdą grupę
+        for (const [groupKey, group] of Object.entries(mergeGroups)) {
+          console.log(`🔄 Przetwarzam grupę: ${groupKey}`);
+          
+          if (group.target && group.sources.length > 0) {
+            // Istnieje rezerwacja docelowa - połącz z nią source rezerwacje
+            console.log(`🎯 Łączę ${group.sources.length} rezerwacji źródłowych z istniejącą docelową`);
+            
+            const totalSourceQuantity = group.sources.reduce((sum, res) => sum + parseFloat(res.quantity || 0), 0);
+            const newTotalQuantity = parseFloat(group.target.quantity || 0) + totalSourceQuantity;
+            
+            // Aktualizuj rezerwację docelową
+            const targetRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, group.target.id);
+            batch.update(targetRef, {
+              quantity: newTotalQuantity,
+              updatedAt: serverTimestamp(),
+              updatedBy: userId,
+              notes: (group.target.notes || '') + `\n[${new Date().toISOString()}] Połączono z ${group.sources.length} rezerwacjami z partii ${sourceBatchId} (dodano ${totalSourceQuantity})`,
+              lastMergeAt: serverTimestamp(),
+              mergedFromBatch: sourceBatchId,
+              mergedReservationsCount: group.sources.length
+            });
+            
+            // Usuń source rezerwacje
+            group.sources.forEach(sourceRes => {
+              const sourceRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, sourceRes.id);
+              batch.delete(sourceRef);
+              
+              results.push({
+                reservationId: sourceRes.id,
+                action: 'merged_and_deleted',
+                quantity: sourceRes.quantity,
+                mergedIntoReservation: group.target.id,
+                fromBatch: sourceBatchId,
+                toBatch: targetBatchId
+              });
+            });
+            
+            results.push({
+              reservationId: group.target.id,
+              action: 'updated_with_merge',
+              originalQuantity: parseFloat(group.target.quantity || 0),
+              addedQuantity: totalSourceQuantity,
+              newTotalQuantity,
+              mergedReservationsCount: group.sources.length,
+              fromBatch: sourceBatchId,
+              toBatch: targetBatchId
+            });
+            
+          } else if (group.sources.length > 0 && !group.target) {
+            // Brak rezerwacji docelowej - przenieś source rezerwacje zmieniając batchId
+            console.log(`📦 Brak docelowej rezerwacji - przenoszę ${group.sources.length} rezerwacji źródłowych`);
+            
+            if (group.sources.length === 1) {
+              // Jedna rezerwacja - po prostu zmień batchId
+              const sourceRes = group.sources[0];
+              const sourceRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, sourceRes.id);
+              
+              batch.update(sourceRef, {
+                batchId: targetBatchId,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId,
+                notes: (sourceRes.notes || '') + `\n[${new Date().toISOString()}] Przeniesiono przez łączenie partii z ${sourceBatchId} do ${targetBatchId}`,
+                lastTransferAt: serverTimestamp()
+              });
+              
+              results.push({
+                reservationId: sourceRes.id,
+                action: 'moved_merge',
+                quantity: sourceRes.quantity,
+                fromBatch: sourceBatchId,
+                toBatch: targetBatchId
+              });
+              
+            } else {
+              // Wiele rezerwacji - połącz je w jedną
+              console.log(`🔗 Łączę ${group.sources.length} rezerwacji źródłowych w jedną`);
+              
+              const totalQuantity = group.sources.reduce((sum, res) => sum + parseFloat(res.quantity || 0), 0);
+              const primaryRes = group.sources[0];
+              const primaryRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, primaryRes.id);
+              
+              // Aktualizuj pierwszą rezerwację
+              batch.update(primaryRef, {
+                batchId: targetBatchId,
+                quantity: totalQuantity,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId,
+                notes: (primaryRes.notes || '') + `\n[${new Date().toISOString()}] Połączono ${group.sources.length} rezerwacji przy łączeniu partii ${sourceBatchId} -> ${targetBatchId} (łączna ilość: ${totalQuantity})`,
+                lastTransferAt: serverTimestamp(),
+                mergedReservationsCount: group.sources.length,
+                originalReservations: group.sources.map(res => ({ id: res.id, quantity: res.quantity }))
+              });
+              
+              // Usuń pozostałe rezerwacje
+              for (let i = 1; i < group.sources.length; i++) {
+                const sourceRef = doc(db, INVENTORY_TRANSACTIONS_COLLECTION, group.sources[i].id);
+                batch.delete(sourceRef);
+                
+                results.push({
+                  reservationId: group.sources[i].id,
+                  action: 'merged_and_deleted',
+                  quantity: group.sources[i].quantity,
+                  mergedIntoReservation: primaryRes.id,
+                  fromBatch: sourceBatchId,
+                  toBatch: targetBatchId
+                });
+              }
+              
+              results.push({
+                reservationId: primaryRes.id,
+                action: 'updated_as_merged_primary',
+                totalQuantity,
+                mergedReservationsCount: group.sources.length,
+                fromBatch: sourceBatchId,
+                toBatch: targetBatchId
+              });
+            }
+          }
+        }
+        
+        console.log(`✅ Zakończono łączenie rezerwacji dla transferu typu merge`);
+      }
+      
+         } catch (error) {
+       console.error('❌ Błąd podczas ogólnej obsługi transferu:', error);
+       errors.push(`Błąd ogólnej obsługi: ${error.message}`);
+     }
+   };
+
+   // Funkcja testowa/debugowania dla aktualizacji rezerwacji (TYLKO DLA TESTÓW)
+   export const debugReservationTransfer = async (batchId) => {
+     try {
+       console.log('🔍 [DEBUG] Sprawdzam rezerwacje dla partii:', batchId);
+       
+       const reservations = await getBatchReservations(batchId);
+       console.log('📋 [DEBUG] Znalezione rezerwacje:', reservations);
+       
+       if (reservations.length > 0) {
+         console.log('📊 [DEBUG] Szczegóły rezerwacji:');
+         reservations.forEach((res, index) => {
+           console.log(`  ${index + 1}. ID: ${res.id}, Ilość: ${res.quantity}, Task: ${res.taskId || res.referenceId}, MO: ${res.taskNumber}`);
+         });
+       }
+       
+       return {
+         batchId,
+         reservationsCount: reservations.length,
+         reservations: reservations.map(res => ({
+           id: res.id,
+           quantity: res.quantity,
+           taskId: res.taskId || res.referenceId,
+           moNumber: res.taskNumber
+         }))
+       };
+       
+           } catch (error) {
+        console.error('❌ [DEBUG] Błąd podczas debugowania rezerwacji:', error);
+        throw error;
+      }
+    };
+
+    // Aktualizacja materialBatches w zadaniach produkcyjnych po transferze partii
+    const updateMaterialBatchesOnTransfer = async (
+      sourceBatchId,
+      targetBatchId,
+      transferQuantity,
+      selectedTransferSource,
+      transferType,
+      transactionResults
+    ) => {
+      try {
+        console.log(`🔍 Szukam zadań MO z materialBatches zawierającymi partię: ${sourceBatchId}`);
+        
+        // Pobierz wszystkie zadania produkcyjne które zawierają referencje do sourceBatchId w materialBatches
+        const tasksRef = collection(db, 'productionTasks');
+        const tasksSnapshot = await getDocs(tasksRef);
+        
+        const tasksToUpdate = [];
+        const tasksData = [];
+        
+        // Znajdź zadania które zawierają sourceBatchId w materialBatches
+        tasksSnapshot.docs.forEach(doc => {
+          const taskData = doc.data();
+          if (taskData.materialBatches) {
+            // Sprawdź każdy materiał w materialBatches
+            Object.entries(taskData.materialBatches).forEach(([materialId, batches]) => {
+              const hasBatch = batches.some(batch => batch.batchId === sourceBatchId);
+              if (hasBatch) {
+                tasksToUpdate.push({
+                  id: doc.id,
+                  ref: doc.ref,
+                  materialId,
+                  taskData
+                });
+                tasksData.push({
+                  id: doc.id,
+                  moNumber: taskData.moNumber,
+                  materialId
+                });
+              }
+            });
+          }
+        });
+        
+        console.log(`📋 Znaleziono ${tasksToUpdate.length} zadań MO do aktualizacji:`, tasksData);
+        
+        if (tasksToUpdate.length === 0) {
+          return { success: true, message: 'Brak zadań MO do aktualizacji' };
+        }
+        
+        // Przygotuj batch do aktualizacji zadań MO
+        const tasksBatch = writeBatch(db);
+        const updateResults = [];
+        
+        for (const task of tasksToUpdate) {
+          const { taskData, materialId, ref } = task;
+          let materialBatches = { ...taskData.materialBatches };
+          let batchesArray = [...materialBatches[materialId]];
+          
+          console.log(`🔧 Aktualizuję materialBatches dla MO ${taskData.moNumber}, materiał ${materialId}`);
+          
+          if (selectedTransferSource && selectedTransferSource !== 'free') {
+            // Transfer konkretnej rezerwacji MO
+            await updateSpecificMOReservation(
+              batchesArray, 
+              sourceBatchId, 
+              targetBatchId, 
+              transferQuantity, 
+              transferType,
+              task,
+              updateResults
+            );
+          } else {
+            // Transfer ogólny - aktualizuj wszystkie wystąpienia sourceBatchId
+            await updateGeneralMOReservation(
+              batchesArray,
+              sourceBatchId,
+              targetBatchId,
+              transferType,
+              task,
+              updateResults
+            );
+          }
+          
+          // Zaktualizuj materialBatches w zadaniu
+          materialBatches[materialId] = batchesArray;
+          
+          tasksBatch.update(ref, {
+            materialBatches,
+            updatedAt: serverTimestamp(),
+            lastBatchTransferUpdate: serverTimestamp()
+          });
+        }
+        
+        // Wykonaj aktualizację wszystkich zadań MO
+        await tasksBatch.commit();
+        console.log(`✅ Zaktualizowano materialBatches w ${tasksToUpdate.length} zadaniach MO`);
+        
+        return {
+          success: true,
+          message: `Zaktualizowano materialBatches w ${tasksToUpdate.length} zadaniach MO`,
+          updatedTasks: updateResults
+        };
+        
+      } catch (error) {
+        console.error('❌ Błąd podczas aktualizacji materialBatches w zadaniach MO:', error);
+        throw error;
+      }
+    };
+    
+    // Aktualizacja konkretnej rezerwacji MO w materialBatches
+    const updateSpecificMOReservation = async (
+      batchesArray,
+      sourceBatchId,
+      targetBatchId,
+      transferQuantity,
+      transferType,
+      task,
+      updateResults
+    ) => {
+      const batchIndex = batchesArray.findIndex(batch => batch.batchId === sourceBatchId);
+      
+      if (batchIndex >= 0) {
+        const originalBatch = batchesArray[batchIndex];
+        const originalQuantity = parseFloat(originalBatch.quantity || 0);
+        const transferQty = parseFloat(transferQuantity);
+        
+                 if (transferQty >= originalQuantity) {
+           // Pełny transfer rezerwacji - zmień batchId
+           const updatedBatch = {
+             ...originalBatch,
+             batchId: targetBatchId,
+             quantity: originalQuantity,
+             transferNotes: `Przeniesiono całą rezerwację z ${sourceBatchId}`,
+             lastTransferAt: new Date().toISOString()
+           };
+           
+           // Sprawdź czy istnieje już wpis z targetBatchId - jeśli tak, połącz
+           const existingTargetIndex = batchesArray.findIndex((batch, idx) => 
+             idx !== batchIndex && batch.batchId === targetBatchId
+           );
+           
+           if (existingTargetIndex >= 0) {
+             console.log(`🔗 Znaleziono istniejący wpis dla batchId ${targetBatchId} - łączę`);
+             
+             // Połącz z istniejącym wpisem
+             const existingBatch = batchesArray[existingTargetIndex];
+             const combinedQuantity = parseFloat(existingBatch.quantity) + parseFloat(originalQuantity);
+             
+             batchesArray[existingTargetIndex] = {
+               ...existingBatch,
+               quantity: combinedQuantity,
+               transferNotes: `Połączono z przeniesioną rezerwacją z ${sourceBatchId} (${originalQuantity})`,
+               lastTransferAt: new Date().toISOString()
+             };
+             
+             // Usuń oryginalny wpis
+             batchesArray.splice(batchIndex, 1);
+             
+             updateResults.push({
+               taskId: task.id,
+               moNumber: task.taskData.moNumber,
+               action: 'moved_and_merged_mo_reservation',
+               originalQuantity,
+               combinedQuantity,
+               fromBatch: sourceBatchId,
+               toBatch: targetBatchId
+             });
+             
+             console.log(`✅ Połączono rezerwacje: ${originalQuantity} + ${parseFloat(existingBatch.quantity)} = ${combinedQuantity}`);
+           } else {
+             // Nie ma istniejącego wpisu - po prostu zaktualizuj
+             batchesArray[batchIndex] = updatedBatch;
+             
+             updateResults.push({
+               taskId: task.id,
+               moNumber: task.taskData.moNumber,
+               action: 'moved_full_mo_reservation',
+               originalQuantity,
+               fromBatch: sourceBatchId,
+               toBatch: targetBatchId
+             });
+             
+             console.log(`✅ Przeniesiono rezerwację bez łączenia`);
+           }
+          
+        } else {
+          // Częściowy transfer - podziel rezerwację
+          const remainingQuantity = originalQuantity - transferQty;
+          
+          // Aktualizuj oryginalną pozycję (zostaje w partii źródłowej)
+          batchesArray[batchIndex] = {
+            ...originalBatch,
+            quantity: remainingQuantity,
+            transferNotes: `Podzielono: ${remainingQuantity} zostało w ${sourceBatchId}`,
+            lastTransferAt: new Date().toISOString()
+          };
+          
+          // Sprawdź czy istnieje już wpis z targetBatchId - jeśli tak, połącz
+          const existingTargetIndex = batchesArray.findIndex((batch, idx) => 
+            idx !== batchIndex && batch.batchId === targetBatchId
+          );
+          
+          if (existingTargetIndex >= 0) {
+            console.log(`🔗 [SPLIT] Znaleziono istniejący wpis dla batchId ${targetBatchId} - łączę ${transferQty} z istniejącą ${batchesArray[existingTargetIndex].quantity}`);
+            
+            // Połącz z istniejącym wpisem
+            const existingBatch = batchesArray[existingTargetIndex];
+            const combinedQuantity = parseFloat(existingBatch.quantity) + transferQty;
+            
+            batchesArray[existingTargetIndex] = {
+              ...existingBatch,
+              quantity: combinedQuantity,
+              transferNotes: `Połączono z podzieloną rezerwacją z ${sourceBatchId} (dodano ${transferQty})`,
+              lastTransferAt: new Date().toISOString(),
+              mergedFromSplit: sourceBatchId
+            };
+            
+            updateResults.push({
+              taskId: task.id,
+              moNumber: task.taskData.moNumber,
+              action: 'split_and_merged_mo_reservation',
+              originalQuantity,
+              remainingQuantity,
+              transferredQuantity: transferQty,
+              combinedQuantity,
+              fromBatch: sourceBatchId,
+              toBatch: targetBatchId
+            });
+            
+            console.log(`✅ [SPLIT] Połączono rezerwację w materialBatches: ${existingBatch.quantity} + ${transferQty} = ${combinedQuantity}`);
+            
+          } else {
+            // Brak istniejącego wpisu - dodaj nową pozycję
+            console.log(`📦 [SPLIT] Brak istniejącego wpisu dla ${targetBatchId} - tworzę nową pozycję`);
+            
+            batchesArray.push({
+              ...originalBatch,
+              batchId: targetBatchId,
+              quantity: transferQty,
+              transferNotes: `Utworzono przez podział z ${sourceBatchId}`,
+              lastTransferAt: new Date().toISOString(),
+              splitFromBatch: sourceBatchId
+            });
+            
+            updateResults.push({
+              taskId: task.id,
+              moNumber: task.taskData.moNumber,
+              action: 'split_mo_reservation',
+              originalQuantity,
+              remainingQuantity,
+              transferredQuantity: transferQty,
+              fromBatch: sourceBatchId,
+              toBatch: targetBatchId
+            });
+            
+            console.log(`✅ [SPLIT] Utworzono nową pozycję w materialBatches`);
+          }
+        }
+      }
+    };
+    
+        // Aktualizacja ogólnej rezerwacji MO w materialBatches
+    const updateGeneralMOReservation = async (
+      batchesArray,
+      sourceBatchId,
+      targetBatchId,
+      transferType,
+      task,
+      updateResults
+    ) => {
+      console.log(`🔍 Aktualizuję ogólną rezerwację MO, transfer type: ${transferType}`);
+      console.log(`📊 Batches array przed aktualizacją:`, batchesArray.map(b => ({ batchId: b.batchId, quantity: b.quantity })));
+      
+      // Znajdź wszystkie wystąpienia sourceBatchId i zaktualizuj je
+      let updatedCount = 0;
+      
+      for (let i = 0; i < batchesArray.length; i++) {
+        if (batchesArray[i].batchId === sourceBatchId) {
+          if (transferType === 'full' || transferType === 'merge') {
+            // Pełny transfer lub łączenie - zmień batchId
+            batchesArray[i] = {
+              ...batchesArray[i],
+              batchId: targetBatchId,
+              transferNotes: `${transferType === 'full' ? 'Pełny transfer' : 'Łączenie partii'} z ${sourceBatchId}`,
+              lastTransferAt: new Date().toISOString()
+            };
+            updatedCount++;
+          }
+          // Dla 'partial' przy transferze części wolnej - nie zmieniamy nic
+        }
+      }
+      
+      // DODATKOWA LOGIKA: Dla transferu typu "merge" - połącz identyczne wpisy z tym samym batchId
+      if (transferType === 'merge' && updatedCount > 0) {
+        console.log(`🔗 Transfer typu merge - sprawdzam czy trzeba połączyć identyczne wpisy`);
+        
+        // Grupuj wpisy po batchId
+        const groupedByBatchId = {};
+        const toRemove = [];
+        
+        for (let i = 0; i < batchesArray.length; i++) {
+          const batch = batchesArray[i];
+          const batchId = batch.batchId;
+          
+          if (!groupedByBatchId[batchId]) {
+            groupedByBatchId[batchId] = [];
+          }
+          groupedByBatchId[batchId].push({ index: i, batch });
+        }
+        
+        // Sprawdź czy targetBatchId ma więcej niż jeden wpis
+        if (groupedByBatchId[targetBatchId] && groupedByBatchId[targetBatchId].length > 1) {
+          console.log(`🔄 Znaleziono ${groupedByBatchId[targetBatchId].length} wpisów dla batchId: ${targetBatchId} - łączę`);
+          
+          const entries = groupedByBatchId[targetBatchId];
+          let totalQuantity = 0;
+          const firstEntry = entries[0];
+          
+          // Oblicz łączną ilość
+          entries.forEach(entry => {
+            totalQuantity += parseFloat(entry.batch.quantity || 0);
+          });
+          
+          // Aktualizuj pierwszy wpis z łączną ilością
+          batchesArray[firstEntry.index] = {
+            ...firstEntry.batch,
+            quantity: totalQuantity,
+            transferNotes: `Połączono ${entries.length} wpisów (łączna ilość: ${totalQuantity})`,
+            lastTransferAt: new Date().toISOString(),
+            mergedEntries: entries.length
+          };
+          
+          // Oznacz pozostałe wpisy do usunięcia (w odwrotnej kolejności żeby indeksy się nie przesunęły)
+          for (let i = entries.length - 1; i > 0; i--) {
+            toRemove.push(entries[i].index);
+          }
+          
+          console.log(`📝 Pierwszy wpis zaktualizowany na ilość: ${totalQuantity}`);
+          console.log(`🗑️ Oznaczono do usunięcia ${toRemove.length} duplikatów`);
+        }
+        
+        // Usuń duplikaty (w odwrotnej kolejności)
+        toRemove.sort((a, b) => b - a).forEach(index => {
+          console.log(`🗑️ Usuwam duplikat na pozycji ${index}`);
+          batchesArray.splice(index, 1);
+        });
+        
+        if (toRemove.length > 0) {
+          updateResults.push({
+            taskId: task.id,
+            moNumber: task.taskData.moNumber,
+            action: 'merged_duplicate_entries',
+            mergedCount: toRemove.length + 1,
+            totalQuantity: groupedByBatchId[targetBatchId] ? 
+              groupedByBatchId[targetBatchId].reduce((sum, entry) => sum + parseFloat(entry.batch.quantity || 0), 0) : 0,
+            targetBatchId
+          });
+        }
+      }
+      
+      console.log(`📊 Batches array po aktualizacji:`, batchesArray.map(b => ({ batchId: b.batchId, quantity: b.quantity })));
+      
+      if (updatedCount > 0) {
+        updateResults.push({
+          taskId: task.id,
+          moNumber: task.taskData.moNumber,
+          action: `${transferType}_mo_update`,
+          updatedReservations: updatedCount,
+          fromBatch: sourceBatchId,
+          toBatch: targetBatchId
+        });
+      }
+    };
+
+     // Funkcja testowa do sprawdzenia materialBatches w zadaniach MO (TYLKO DLA TESTÓW)
+     export const debugMaterialBatches = async (batchId) => {
+       try {
+         console.log('🔍 [DEBUG] Sprawdzam materialBatches dla partii:', batchId);
+         
+         // Pobierz wszystkie zadania produkcyjne
+         const tasksRef = collection(db, 'productionTasks');
+         const tasksSnapshot = await getDocs(tasksRef);
+         
+         const foundTasks = [];
+         
+         tasksSnapshot.docs.forEach(doc => {
+           const taskData = doc.data();
+           if (taskData.materialBatches) {
+             Object.entries(taskData.materialBatches).forEach(([materialId, batches]) => {
+               const relevantBatches = batches.filter(batch => batch.batchId === batchId);
+               if (relevantBatches.length > 0) {
+                 foundTasks.push({
+                   taskId: doc.id,
+                   moNumber: taskData.moNumber,
+                   materialId,
+                   batches: relevantBatches
+                 });
+               }
+             });
+           }
+         });
+         
+         console.log(`📋 [DEBUG] Znaleziono ${foundTasks.length} zadań MO z partią ${batchId}:`, foundTasks);
+         
+         return {
+           batchId,
+           tasksCount: foundTasks.length,
+           tasks: foundTasks
+         };
+         
+       } catch (error) {
+         console.error('❌ [DEBUG] Błąd podczas sprawdzania materialBatches:', error);
+         throw error;
+       }
+     };
+
+     // Funkcja do sprawdzania zduplikowanych wpisów w materialBatches (TYLKO DLA TESTÓW)
+     export const debugDuplicateBatches = async (taskId) => {
+       try {
+         console.log('🔍 [DEBUG] Sprawdzam duplikaty w materialBatches dla zadania:', taskId);
+         
+         const taskRef = doc(db, 'productionTasks', taskId);
+         const taskDoc = await getDoc(taskRef);
+         
+         if (!taskDoc.exists()) {
+           return { error: 'Zadanie nie istnieje' };
+         }
+         
+         const taskData = taskDoc.data();
+         if (!taskData.materialBatches) {
+           return { message: 'Brak materialBatches' };
+         }
+         
+         const duplicates = {};
+         
+         Object.entries(taskData.materialBatches).forEach(([materialId, batches]) => {
+           const batchIdCounts = {};
+           
+           batches.forEach((batch, index) => {
+             const batchId = batch.batchId;
+             if (!batchIdCounts[batchId]) {
+               batchIdCounts[batchId] = [];
+             }
+             batchIdCounts[batchId].push({ index, batch });
+           });
+           
+           // Znajdź duplikaty
+           Object.entries(batchIdCounts).forEach(([batchId, entries]) => {
+             if (entries.length > 1) {
+               if (!duplicates[materialId]) {
+                 duplicates[materialId] = [];
+               }
+               duplicates[materialId].push({
+                 batchId,
+                 count: entries.length,
+                 entries: entries.map(e => ({ quantity: e.batch.quantity, index: e.index })),
+                 totalQuantity: entries.reduce((sum, e) => sum + parseFloat(e.batch.quantity || 0), 0)
+               });
+             }
+           });
+         });
+         
+         console.log('📋 [DEBUG] Znalezione duplikaty:', duplicates);
+         
+         return {
+           taskId,
+           moNumber: taskData.moNumber,
+           duplicates,
+           hasDuplicates: Object.keys(duplicates).length > 0
+         };
+         
+       } catch (error) {
+         console.error('❌ [DEBUG] Błąd podczas sprawdzania duplikatów:', error);
+         throw error;
+       }
+     };
+
+     // Funkcja do sprawdzania i czyszczenia duplikowanych rezerwacji (TYLKO DLA TESTÓW)
+     export const debugAndCleanDuplicateReservations = async (batchId) => {
+       try {
+         console.log('🔍 [DEBUG] Sprawdzam duplikowane rezerwacje dla partii:', batchId);
+         
+         const reservations = await getBatchReservations(batchId);
+         console.log(`📋 Znaleziono ${reservations.length} rezerwacji`);
+         
+         if (reservations.length <= 1) {
+           return { message: 'Brak duplikatów', reservations };
+         }
+         
+         // Grupuj według klucza
+         const groups = {};
+         reservations.forEach(res => {
+           const key = `${res.taskId || res.referenceId}_${res.itemId}`;
+           if (!groups[key]) {
+             groups[key] = [];
+           }
+           groups[key].push(res);
+         });
+         
+         const duplicates = {};
+         Object.entries(groups).forEach(([key, group]) => {
+           if (group.length > 1) {
+             duplicates[key] = {
+               count: group.length,
+               reservations: group,
+               totalQuantity: group.reduce((sum, res) => sum + parseFloat(res.quantity || 0), 0)
+             };
+           }
+         });
+         
+         console.log('🔍 [DEBUG] Znalezione duplikaty:', duplicates);
+         
+         return {
+           batchId,
+           totalReservations: reservations.length,
+           duplicateGroups: duplicates,
+           hasDuplicates: Object.keys(duplicates).length > 0
+         };
+         
+       } catch (error) {
+         console.error('❌ [DEBUG] Błąd podczas sprawdzania duplikatów rezerwacji:', error);
+         throw error;
+       }
+     };
