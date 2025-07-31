@@ -97,7 +97,7 @@ const BatchVisualization = ({
               key={index}
               title={
                 section.type === 'reservation' 
-                  ? `MO: ${section.reservation.moNumber || 'N/A'} | Ilość: ${section.quantity.toFixed(3)} ${unit} (${section.percentage.toFixed(1)}%) | Klient: ${section.reservation.taskDetails?.customerName || 'N/A'}`
+                  ? `MO: ${section.reservation.moNumber || 'N/A'} | Ilość: ${section.quantity.toFixed(3)} ${unit} (${section.percentage.toFixed(1)}%) | Produkt: ${section.reservation.taskDetails?.productName || 'N/A'}`
                   : `Wolne: ${section.quantity.toFixed(3)} ${unit} (${section.percentage.toFixed(1)}%)`
               }
               arrow
@@ -214,9 +214,9 @@ const BatchVisualization = ({
                     <Typography variant="caption">
                       {parseFloat(reservation.quantity || 0).toFixed(1)} {unit}
                     </Typography>
-                    {reservation.taskDetails?.customerName && (
+                    {reservation.taskDetails?.productName && (
                       <Typography variant="caption" color="text.secondary">
-                        | {reservation.taskDetails.customerName}
+                        | {reservation.taskDetails.productName}
                       </Typography>
                     )}
                   </Box>
