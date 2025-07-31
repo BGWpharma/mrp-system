@@ -53,6 +53,7 @@ import {
   updateStocktakingItem,
   deleteStocktakingItem,
   completeStocktaking,
+  completeCorrectedStocktaking,
   getAllInventoryItems,
   getItemBatches
 } from '../../services/inventoryService';
@@ -352,11 +353,20 @@ const StocktakingDetailsPage = () => {
   
   const confirmComplete = async () => {
     try {
-      await completeStocktaking(id, confirmAdjustInventory, currentUser.uid);
+      // Sprawdź czy to korekta czy normalne zakończenie
+      if (stocktaking.status === 'W korekcie') {
+        await completeCorrectedStocktaking(id, confirmAdjustInventory, currentUser.uid);
+      } else {
+        await completeStocktaking(id, confirmAdjustInventory, currentUser.uid);
+      }
       
       const message = confirmAdjustInventory
-        ? 'Inwentaryzacja zakończona i stany magazynowe zaktualizowane'
-        : 'Inwentaryzacja zakończona bez aktualizacji stanów magazynowych';
+        ? (stocktaking.status === 'W korekcie' 
+           ? 'Korekta inwentaryzacji zakończona i stany magazynowe zaktualizowane'
+           : 'Inwentaryzacja zakończona i stany magazynowe zaktualizowane')
+        : (stocktaking.status === 'W korekcie'
+           ? 'Korekta inwentaryzacji zakończona bez aktualizacji stanów magazynowych'
+           : 'Inwentaryzacja zakończona bez aktualizacji stanów magazynowych');
       
       showSuccess(message);
       setConfirmDialogOpen(false);
@@ -388,6 +398,9 @@ const StocktakingDetailsPage = () => {
       case 'Zakończona':
         color = 'success';
         break;
+      case 'W korekcie':
+        color = 'warning';
+        break;
       default:
         color = 'default';
     }
@@ -396,6 +409,7 @@ const StocktakingDetailsPage = () => {
   };
   
   const isCompleted = stocktaking && stocktaking.status === 'Zakończona';
+  const isInCorrection = stocktaking && stocktaking.status === 'W korekcie';
   
   if (loading) {
     return (
@@ -458,16 +472,16 @@ const StocktakingDetailsPage = () => {
           {t('stocktaking.detailsTitle')}
         </Typography>
         <Box>
-          {!isCompleted && (
+          {(!isCompleted || isInCorrection) && (
             <Button
               variant="contained"
-              color="primary"
+              color={isInCorrection ? "warning" : "primary"}
               startIcon={<EditIcon />}
               component={Link}
               to={`/inventory/stocktaking/${id}/edit`}
               sx={{ mr: 1 }}
             >
-              {t('stocktaking.edit')}
+              {isInCorrection ? 'Kontynuuj korekty' : t('stocktaking.edit')}
             </Button>
           )}
           <Button
@@ -539,7 +553,7 @@ const StocktakingDetailsPage = () => {
           {t('stocktaking.products', { count: items.length })}
         </Typography>
         <Box>
-          {!isCompleted && (
+          {(!isCompleted || isInCorrection) && (
             <Button
               variant="contained"
               color="primary"
@@ -550,14 +564,14 @@ const StocktakingDetailsPage = () => {
               {t('stocktaking.addProduct')}
             </Button>
           )}
-          {!isCompleted && items.length > 0 && (
+          {(!isCompleted || isInCorrection) && items.length > 0 && (
             <Button
               variant="contained"
               color="success"
               startIcon={<DoneIcon />}
               onClick={handleCompleteStocktaking}
             >
-              Zakończ inwentaryzację
+              {isInCorrection ? 'Zakończ korekty' : 'Zakończ inwentaryzację'}
             </Button>
           )}
         </Box>
@@ -602,7 +616,7 @@ const StocktakingDetailsPage = () => {
                 <TableCell align="right">Cena jedn.</TableCell>
                 <TableCell align="right">Wartość różnicy</TableCell>
                 <TableCell>Uwagi</TableCell>
-                {!isCompleted && <TableCell align="center">Akcje</TableCell>}
+                {(!isCompleted || isInCorrection) && <TableCell align="center">Akcje</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -697,7 +711,7 @@ const StocktakingDetailsPage = () => {
                         }
                       </TableCell>
                       <TableCell>{item.notes || '-'}</TableCell>
-                      {!isCompleted && (
+                      {(!isCompleted || isInCorrection) && (
                         <TableCell align="center">
                           <IconButton color="primary" onClick={() => handleEditItem(item.id)} size="small">
                             <EditIcon />

@@ -1040,7 +1040,8 @@
     "statusValues": {
       "otwarta": "Open",
       "wtrakcie": "In progress",
-      "zakończona": "Completed"
+      "zakończona": "Completed",
+      "wkorekcie": "In correction"
     },
     "loadError": "An error occurred while loading stocktaking",
     "warehousesLoadError": "Failed to load warehouses list",

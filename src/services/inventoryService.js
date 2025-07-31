@@ -3182,9 +3182,9 @@ import {
       // Pobierz aktualne dane
       const currentStocktaking = await getStocktakingById(stocktakingId);
       
-      // Sprawdź, czy inwentaryzacja nie jest już zakończona
-      if (currentStocktaking.status === 'Zakończona' && stocktakingData.status !== 'Zakończona') {
-        throw new Error('Nie można modyfikować zakończonej inwentaryzacji');
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona (chyba że to korekta)
+      if (currentStocktaking.status === 'Zakończona' && stocktakingData.status !== 'Zakończona' && !stocktakingData.allowCorrection) {
+        throw new Error('Nie można modyfikować zakończonej inwentaryzacji. Użyj funkcji korekty.');
       }
       
       const updatedData = {
@@ -3192,6 +3192,11 @@ import {
         updatedAt: serverTimestamp(),
         updatedBy: userId
       };
+      
+      // Usuń flagę allowCorrection z danych do zapisu
+      if (updatedData.allowCorrection) {
+        delete updatedData.allowCorrection;
+      }
       
       // Jeśli status jest zmieniany na "Zakończona", dodaj datę zakończenia
       if (stocktakingData.status === 'Zakończona' && currentStocktaking.status !== 'Zakończona') {
@@ -3206,6 +3211,235 @@ import {
       };
     } catch (error) {
       console.error('Błąd podczas aktualizacji inwentaryzacji:', error);
+      throw error;
+    }
+  };
+
+  // Ponowne otwarcie zakończonej inwentaryzacji do korekty
+  export const reopenStocktakingForCorrection = async (stocktakingId, userId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      if (!stocktaking) {
+        throw new Error('Inwentaryzacja nie istnieje');
+      }
+      
+      if (stocktaking.status !== 'Zakończona') {
+        throw new Error('Można ponownie otwierać tylko zakończone inwentaryzacje');
+      }
+      
+      // Dodaj wpis w historii transakcji dokumentujący ponowne otwarcie
+      const transactionRef = doc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION));
+      await setDoc(transactionRef, {
+        type: 'stocktaking-reopen',
+        reason: 'Ponowne otwarcie inwentaryzacji do korekty',
+        reference: `Inwentaryzacja: ${stocktaking.name || stocktakingId}`,
+        notes: `Ponownie otwarto zakończoną inwentaryzację "${stocktaking.name}" do wprowadzenia korekt.`,
+        date: serverTimestamp(),
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        stocktakingId: stocktakingId,
+        stocktakingName: stocktaking.name
+      });
+      
+      // Zmień status inwentaryzacji na "W korekcie"
+      const stocktakingRef = doc(db, INVENTORY_STOCKTAKING_COLLECTION, stocktakingId);
+      const now = new Date();
+      await updateDoc(stocktakingRef, {
+        status: 'W korekcie',
+        correctionStartedAt: serverTimestamp(),
+        correctionStartedBy: userId,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        originalCompletedAt: stocktaking.completedAt, // Zachowaj oryginalną datę zakończenia
+        correctionHistory: [
+          ...(stocktaking.correctionHistory || []),
+          {
+            reopenedAt: now.toISOString(),
+            reopenedBy: userId,
+            reason: 'Korekta inwentaryzacji'
+          }
+        ]
+      });
+      
+      return {
+        success: true,
+        message: 'Inwentaryzacja została ponownie otwarta do korekty'
+      };
+      
+    } catch (error) {
+      console.error('Błąd podczas ponownego otwierania inwentaryzacji:', error);
+      throw error;
+    }
+  };
+
+  // Zakończenie korekty inwentaryzacji
+  export const completeCorrectedStocktaking = async (stocktakingId, adjustInventory = true, userId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      if (!stocktaking) {
+        throw new Error('Inwentaryzacja nie istnieje');
+      }
+      
+      if (stocktaking.status !== 'W korekcie') {
+        throw new Error('Można zakończyć tylko inwentaryzacje w stanie korekty');
+      }
+      
+      // Wykonaj korekty stanów magazynowych tak samo jak przy normalnym zakończeniu
+      if (adjustInventory) {
+        // Pobierz wszystkie elementy inwentaryzacji
+        const items = await getStocktakingItems(stocktakingId);
+        
+        // Grupuj elementy według produktu
+        const itemsByProduct = {};
+        for (const item of items) {
+          const productId = item.inventoryItemId;
+          if (!itemsByProduct[productId]) {
+            itemsByProduct[productId] = [];
+          }
+          itemsByProduct[productId].push(item);
+        }
+        
+        // Aktualizujemy stany dla każdego produktu
+        for (const productId in itemsByProduct) {
+          const productItems = itemsByProduct[productId];
+          let needsRecalculation = false;
+          
+          // Dla każdego elementu inwentaryzacji danego produktu
+          for (const item of productItems) {
+            // Jeśli to inwentaryzacja LOTu/partii
+            if (item.batchId) {
+              needsRecalculation = true;
+              const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, item.batchId);
+              
+              // Pobierz aktualny stan partii
+              const batchDoc = await getDoc(batchRef);
+              if (!batchDoc.exists()) {
+                console.error(`Partia ${item.batchId} nie istnieje`);
+                continue;
+              }
+              
+              const batchData = batchDoc.data();
+              
+              // Aktualizuj stan partii
+              await updateDoc(batchRef, {
+                quantity: item.countedQuantity,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              // Oblicz różnicę dla tej partii
+              const adjustment = item.countedQuantity - batchData.quantity;
+              
+              // Automatycznie odśwież rezerwacje PO po zmianie ilości w partii
+              if (adjustment !== 0) {
+                try {
+                  const { refreshLinkedBatchesQuantities } = await import('./poReservationService');
+                  await refreshLinkedBatchesQuantities(item.batchId);
+                  console.log(`Automatycznie odświeżono rezerwacje PO dla partii ${item.batchId} po korekcie inwentaryzacji`);
+                } catch (error) {
+                  console.error('Błąd podczas automatycznego odświeżania rezerwacji PO po korekcie inwentaryzacji:', error);
+                }
+              }
+              
+              // Dodaj transakcję korygującą
+              const transactionData = {
+                itemId: item.inventoryItemId,
+                itemName: item.name,
+                type: adjustment > 0 ? 'correction-add' : 'correction-remove',
+                quantity: Math.abs(adjustment),
+                date: serverTimestamp(),
+                reason: 'Korekta po ponownej inwentaryzacji',
+                reference: `Korekta inwentaryzacji #${stocktakingId}`,
+                notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po ponownej inwentaryzacji. ${item.notes || ''}`,
+                warehouseId: item.location || batchData.warehouseId,
+                batchId: item.batchId,
+                lotNumber: item.lotNumber || batchData.lotNumber,
+                unitPrice: item.unitPrice || batchData.unitPrice,
+                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)),
+                createdBy: userId,
+                createdAt: serverTimestamp()
+              };
+              
+              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+            } else {
+              // Oryginalna logika dla pozycji magazynowych
+              const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
+              
+              // Pobierz aktualny stan
+              const inventoryItem = await getInventoryItemById(item.inventoryItemId);
+              
+              // Aktualizuj stan magazynowy
+              const adjustment = item.countedQuantity - inventoryItem.quantity;
+              
+              await updateDoc(inventoryItemRef, {
+                quantity: item.countedQuantity,
+                updatedAt: serverTimestamp(),
+                updatedBy: userId
+              });
+              
+              // Dodaj transakcję korygującą
+              const transactionData = {
+                itemId: item.inventoryItemId,
+                itemName: item.name,
+                type: adjustment > 0 ? 'correction-add' : 'correction-remove',
+                quantity: Math.abs(adjustment),
+                date: serverTimestamp(),
+                reason: 'Korekta po ponownej inwentaryzacji',
+                reference: `Korekta inwentaryzacji #${stocktakingId}`,
+                notes: item.notes || 'Korekta stanu po ponownej inwentaryzacji',
+                unitPrice: item.unitPrice || inventoryItem.unitPrice || 0,
+                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)),
+                createdBy: userId,
+                createdAt: serverTimestamp()
+              };
+              
+              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+            }
+          }
+          
+          // Jeśli były aktualizowane partie, przelicz łączną ilość produktu
+          if (needsRecalculation) {
+            await recalculateItemQuantity(productId);
+          }
+        }
+      }
+      
+      // Zaktualizuj status inwentaryzacji
+      const stocktakingRef = doc(db, INVENTORY_STOCKTAKING_COLLECTION, stocktakingId);
+      await updateDoc(stocktakingRef, {
+        status: 'Zakończona',
+        correctionCompletedAt: serverTimestamp(),
+        correctionCompletedBy: userId,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      // Dodaj wpis w historii o zakończeniu korekty
+      const transactionRef = doc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION));
+      await setDoc(transactionRef, {
+        type: 'stocktaking-correction-completed',
+        reason: 'Zakończenie korekty inwentaryzacji',
+        reference: `Inwentaryzacja: ${stocktaking.name || stocktakingId}`,
+        notes: `Zakończono korekty inwentaryzacji "${stocktaking.name}".`,
+        date: serverTimestamp(),
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        stocktakingId: stocktakingId,
+        stocktakingName: stocktaking.name
+      });
+      
+      return {
+        success: true,
+        message: adjustInventory 
+          ? 'Korekta inwentaryzacji zakończona i stany magazynowe zaktualizowane' 
+          : 'Korekta inwentaryzacji zakończona bez aktualizacji stanów magazynowych'
+      };
+    } catch (error) {
+      console.error('Błąd podczas kończenia korekty inwentaryzacji:', error);
       throw error;
     }
   };

@@ -30,11 +30,12 @@ import {
   Search as SearchIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  SettingsBackupRestore as CorrectionIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { getAllStocktakings, deleteStocktaking, deleteCompletedStocktaking } from '../../services/inventoryService';
+import { getAllStocktakings, deleteStocktaking, deleteCompletedStocktaking, reopenStocktakingForCorrection } from '../../services/inventoryService';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -51,7 +52,9 @@ const StocktakingPage = () => {
   const [error, setError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [forceDeleteDialogOpen, setForceDeleteDialogOpen] = useState(false);
+  const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
   const [stocktakingToDelete, setStocktakingToDelete] = useState(null);
+  const [stocktakingToCorrect, setStocktakingToCorrect] = useState(null);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation();
@@ -136,6 +139,9 @@ const StocktakingPage = () => {
       case 'Zakończona':
         color = 'success';
         break;
+      case 'W korekcie':
+        color = 'warning';
+        break;
       default:
         color = 'default';
     }
@@ -152,6 +158,11 @@ const StocktakingPage = () => {
   const handleForceDeleteStocktaking = (stocktaking) => {
     setStocktakingToDelete(stocktaking);
     setForceDeleteDialogOpen(true);
+  };
+
+  const handleCorrectStocktaking = (stocktaking) => {
+    setStocktakingToCorrect(stocktaking);
+    setCorrectionDialogOpen(true);
   };
 
   const confirmDeleteStocktaking = async () => {
@@ -196,6 +207,28 @@ const StocktakingPage = () => {
   const cancelForceDeleteStocktaking = () => {
     setForceDeleteDialogOpen(false);
     setStocktakingToDelete(null);
+  };
+
+  const confirmCorrectStocktaking = async () => {
+    if (!stocktakingToCorrect) return;
+    
+    try {
+      await reopenStocktakingForCorrection(stocktakingToCorrect.id, currentUser.uid);
+      showSuccess('Inwentaryzacja została otwarta do korekty');
+      setCorrectionDialogOpen(false);
+      setStocktakingToCorrect(null);
+      
+      // Odśwież listę inwentaryzacji
+      fetchStocktakings();
+    } catch (error) {
+      console.error('Błąd podczas otwierania inwentaryzacji do korekty:', error);
+      showError(`Błąd podczas otwierania do korekty: ${error.message}`);
+    }
+  };
+
+  const cancelCorrectStocktaking = () => {
+    setCorrectionDialogOpen(false);
+    setStocktakingToCorrect(null);
   };
 
   return (
@@ -296,16 +329,36 @@ const StocktakingPage = () => {
                           <DeleteIcon />
                         </IconButton>
                       </>
-                    ) : (
+                    ) : stocktaking.status === 'Zakończona' ? (
+                      <>
+                        <IconButton
+                          onClick={() => handleCorrectStocktaking(stocktaking)}
+                          color="warning"
+                          size="small"
+                          title="Otwórz do korekty"
+                        >
+                          <CorrectionIcon />
+                        </IconButton>
+                        <IconButton
+                          onClick={() => handleForceDeleteStocktaking(stocktaking)}
+                          color="error"
+                          size="small"
+                          title="Usuń bez cofania korekt"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </>
+                    ) : stocktaking.status === 'W korekcie' ? (
                       <IconButton
-                        onClick={() => handleForceDeleteStocktaking(stocktaking)}
-                        color="error"
+                        component={Link}
+                        to={`/inventory/stocktaking/${stocktaking.id}/edit`}
+                        color="warning"
                         size="small"
-                        title="Usuń bez cofania korekt"
+                        title="Kontynuuj korekty"
                       >
-                        <DeleteIcon />
+                        <EditIcon />
                       </IconButton>
-                    )}
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}
@@ -345,6 +398,26 @@ const StocktakingPage = () => {
           <Button onClick={cancelForceDeleteStocktaking}>Anuluj</Button>
           <Button onClick={confirmForceDeleteStocktaking} color="error">
             Usuń bez cofania korekt
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia korekty inwentaryzacji */}
+      <Dialog open={correctionDialogOpen} onClose={cancelCorrectStocktaking}>
+        <DialogTitle>Otwórz inwentaryzację do korekty</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz otworzyć inwentaryzację "{stocktakingToCorrect?.name}" do korekty?
+          </DialogContentText>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <strong>Informacja:</strong> Inwentaryzacja zostanie przełączona w tryb korekty. 
+            Będziesz mógł wprowadzać zmiany w pozycjach i ponownie zakończyć inwentaryzację.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelCorrectStocktaking}>Anuluj</Button>
+          <Button onClick={confirmCorrectStocktaking} color="warning">
+            Otwórz do korekty
           </Button>
         </DialogActions>
       </Dialog>

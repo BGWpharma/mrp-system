@@ -1040,7 +1040,8 @@
     "statusValues": {
       "otwarta": "Otwarta",
       "wtrakcie": "W trakcie",
-      "zakończona": "Zakończona"
+      "zakończona": "Zakończona",
+      "wkorekcie": "W korekcie"
     },
     "loadError": "Wystąpił błąd podczas ładowania inwentaryzacji",
     "warehousesLoadError": "Nie udało się pobrać listy magazynów",
