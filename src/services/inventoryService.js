@@ -3411,14 +3411,14 @@ import {
   };
   
   // Usuwanie całej inwentaryzacji
-  export const deleteStocktaking = async (stocktakingId) => {
+  export const deleteStocktaking = async (stocktakingId, forceDelete = false) => {
     try {
       // Pobierz informacje o inwentaryzacji
       const stocktaking = await getStocktakingById(stocktakingId);
       
-      // Sprawdź, czy inwentaryzacja nie jest już zakończona
-      if (stocktaking.status === 'Zakończona') {
-        throw new Error('Nie można usunąć zakończonej inwentaryzacji');
+      // Sprawdź, czy inwentaryzacja nie jest już zakończona (chyba że force delete)
+      if (stocktaking.status === 'Zakończona' && !forceDelete) {
+        throw new Error('Nie można usunąć zakończonej inwentaryzacji. Użyj opcji "Usuń bez cofania korekt" jeśli chcesz usunąć inwentaryzację zachowując wprowadzone korekty.');
       }
       
       // Pobierz wszystkie elementy inwentaryzacji
@@ -3438,14 +3438,57 @@ import {
       
       return { 
         success: true,
-        message: 'Inwentaryzacja została usunięta' 
+        message: forceDelete ? 
+          'Inwentaryzacja została usunięta (korekty zachowane)' : 
+          'Inwentaryzacja została usunięta' 
       };
     } catch (error) {
       console.error('Błąd podczas usuwania inwentaryzacji:', error);
       throw error;
     }
   };
-  
+
+  // Usuwanie zakończonej inwentaryzacji bez cofania korekt
+  export const deleteCompletedStocktaking = async (stocktakingId, userId) => {
+    try {
+      // Pobierz informacje o inwentaryzacji
+      const stocktaking = await getStocktakingById(stocktakingId);
+      
+      if (!stocktaking) {
+        throw new Error('Inwentaryzacja nie istnieje');
+      }
+      
+      if (stocktaking.status !== 'Zakończona') {
+        throw new Error('Można usuwać tylko zakończone inwentaryzacje');
+      }
+      
+      // Pobierz wszystkie elementy inwentaryzacji dla logowania
+      const items = await getStocktakingItems(stocktakingId);
+      
+      // Dodaj wpis w historii transakcji dokumentujący usunięcie inwentaryzacji
+      const transactionRef = doc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION));
+      await setDoc(transactionRef, {
+        type: 'stocktaking-deletion',
+        reason: 'Usunięcie zakończonej inwentaryzacji',
+        reference: `Inwentaryzacja: ${stocktaking.name || stocktakingId}`,
+        notes: `Usunięto zakończoną inwentaryzację "${stocktaking.name}" z ${items.length} pozycjami. Korekty pozostały bez zmian.`,
+        date: serverTimestamp(),
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        stocktakingId: stocktakingId,
+        stocktakingName: stocktaking.name,
+        itemsCount: items.length
+      });
+      
+      // Użyj funkcji deleteStocktaking z parametrem forceDelete
+      return await deleteStocktaking(stocktakingId, true);
+      
+    } catch (error) {
+      console.error('Błąd podczas usuwania zakończonej inwentaryzacji:', error);
+      throw error;
+    }
+  };
+
   // Zakończenie inwentaryzacji i aktualizacja stanów magazynowych
   export const completeStocktaking = async (stocktakingId, adjustInventory = true, userId) => {
     try {

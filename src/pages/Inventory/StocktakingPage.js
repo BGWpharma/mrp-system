@@ -34,7 +34,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { getAllStocktakings, deleteStocktaking } from '../../services/inventoryService';
+import { getAllStocktakings, deleteStocktaking, deleteCompletedStocktaking } from '../../services/inventoryService';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -50,6 +50,7 @@ const StocktakingPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [forceDeleteDialogOpen, setForceDeleteDialogOpen] = useState(false);
   const [stocktakingToDelete, setStocktakingToDelete] = useState(null);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -148,6 +149,11 @@ const StocktakingPage = () => {
     setDeleteDialogOpen(true);
   };
 
+  const handleForceDeleteStocktaking = (stocktaking) => {
+    setStocktakingToDelete(stocktaking);
+    setForceDeleteDialogOpen(true);
+  };
+
   const confirmDeleteStocktaking = async () => {
     if (!stocktakingToDelete) return;
     
@@ -165,8 +171,30 @@ const StocktakingPage = () => {
     }
   };
 
+  const confirmForceDeleteStocktaking = async () => {
+    if (!stocktakingToDelete) return;
+    
+    try {
+      await deleteCompletedStocktaking(stocktakingToDelete.id, currentUser.uid);
+      showSuccess('Inwentaryzacja została usunięta (korekty zachowane)');
+      setForceDeleteDialogOpen(false);
+      setStocktakingToDelete(null);
+      
+      // Odśwież listę inwentaryzacji
+      fetchStocktakings();
+    } catch (error) {
+      console.error('Błąd podczas usuwania zakończonej inwentaryzacji:', error);
+      showError(`Błąd podczas usuwania: ${error.message}`);
+    }
+  };
+
   const cancelDeleteStocktaking = () => {
     setDeleteDialogOpen(false);
+    setStocktakingToDelete(null);
+  };
+
+  const cancelForceDeleteStocktaking = () => {
+    setForceDeleteDialogOpen(false);
     setStocktakingToDelete(null);
   };
 
@@ -250,7 +278,7 @@ const StocktakingPage = () => {
                     >
                       <ViewIcon />
                     </IconButton>
-                    {stocktaking.status !== 'Zakończona' && (
+                    {stocktaking.status !== 'Zakończona' ? (
                       <>
                         <IconButton
                           component={Link}
@@ -268,6 +296,15 @@ const StocktakingPage = () => {
                           <DeleteIcon />
                         </IconButton>
                       </>
+                    ) : (
+                      <IconButton
+                        onClick={() => handleForceDeleteStocktaking(stocktaking)}
+                        color="error"
+                        size="small"
+                        title="Usuń bez cofania korekt"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
                     )}
                   </TableCell>
                 </TableRow>
@@ -289,6 +326,26 @@ const StocktakingPage = () => {
         <DialogActions>
           <Button onClick={cancelDeleteStocktaking}>{t('stocktaking.deleteCancel')}</Button>
           <Button onClick={confirmDeleteStocktaking} color="error">{t('stocktaking.deleteConfirm')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia usunięcia zakończonej inwentaryzacji */}
+      <Dialog open={forceDeleteDialogOpen} onClose={cancelForceDeleteStocktaking}>
+        <DialogTitle>Usuń zakończoną inwentaryzację</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Czy na pewno chcesz usunąć inwentaryzację "{stocktakingToDelete?.name}"?
+          </DialogContentText>
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <strong>Uwaga:</strong> Ta akcja usunie inwentaryzację, ale zachowa wszystkie korekty które zostały wprowadzone do magazynu. 
+            Nie można cofnąć tej operacji.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelForceDeleteStocktaking}>Anuluj</Button>
+          <Button onClick={confirmForceDeleteStocktaking} color="error">
+            Usuń bez cofania korekt
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>
