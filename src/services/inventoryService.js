@@ -3324,18 +3324,18 @@ import {
               
               const batchData = batchDoc.data();
               
-              // Aktualizuj stan partii
-              await updateDoc(batchRef, {
-                quantity: item.countedQuantity,
-                updatedAt: serverTimestamp(),
-                updatedBy: userId
-              });
-              
               // Oblicz różnicę dla tej partii
               const adjustment = item.countedQuantity - batchData.quantity;
               
-              // Automatycznie odśwież rezerwacje PO po zmianie ilości w partii
+              // Aktualizuj stan partii TYLKO jeśli jest różnica
               if (adjustment !== 0) {
+                await updateDoc(batchRef, {
+                  quantity: item.countedQuantity,
+                  updatedAt: serverTimestamp(),
+                  updatedBy: userId
+                });
+                
+                // Automatycznie odśwież rezerwacje PO po zmianie ilości w partii
                 try {
                   const { refreshLinkedBatchesQuantities } = await import('./poReservationService');
                   await refreshLinkedBatchesQuantities(item.batchId);
@@ -3343,28 +3343,31 @@ import {
                 } catch (error) {
                   console.error('Błąd podczas automatycznego odświeżania rezerwacji PO po korekcie inwentaryzacji:', error);
                 }
+                
+                // Dodaj transakcję korygującą TYLKO gdy jest różnica
+                const transactionData = {
+                  itemId: item.inventoryItemId,
+                  itemName: item.name,
+                  type: adjustment > 0 ? 'correction-add' : 'correction-remove',
+                  quantity: Math.abs(adjustment),
+                  date: serverTimestamp(),
+                  reason: 'Korekta po ponownej inwentaryzacji',
+                  reference: `Korekta inwentaryzacji #${stocktakingId}`,
+                  notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po ponownej inwentaryzacji. ${item.notes || ''}`,
+                  warehouseId: item.location || batchData.warehouseId,
+                  batchId: item.batchId,
+                  lotNumber: item.lotNumber || batchData.lotNumber,
+                  unitPrice: item.unitPrice || batchData.unitPrice,
+                  differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)),
+                  createdBy: userId,
+                  createdAt: serverTimestamp()
+                };
+                
+                await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+                console.log(`Zastosowano korektę partii ${item.batchId}: ${batchData.quantity} → ${item.countedQuantity} (różnica: ${adjustment})`);
+              } else {
+                console.log(`Partia ${item.batchId} bez zmian: ${item.countedQuantity} (brak korekty)`);
               }
-              
-              // Dodaj transakcję korygującą
-              const transactionData = {
-                itemId: item.inventoryItemId,
-                itemName: item.name,
-                type: adjustment > 0 ? 'correction-add' : 'correction-remove',
-                quantity: Math.abs(adjustment),
-                date: serverTimestamp(),
-                reason: 'Korekta po ponownej inwentaryzacji',
-                reference: `Korekta inwentaryzacji #${stocktakingId}`,
-                notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po ponownej inwentaryzacji. ${item.notes || ''}`,
-                warehouseId: item.location || batchData.warehouseId,
-                batchId: item.batchId,
-                lotNumber: item.lotNumber || batchData.lotNumber,
-                unitPrice: item.unitPrice || batchData.unitPrice,
-                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)),
-                createdBy: userId,
-                createdAt: serverTimestamp()
-              };
-              
-              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
             } else {
               // Oryginalna logika dla pozycji magazynowych
               const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
@@ -3372,32 +3375,38 @@ import {
               // Pobierz aktualny stan
               const inventoryItem = await getInventoryItemById(item.inventoryItemId);
               
-              // Aktualizuj stan magazynowy
+              // Oblicz różnicę
               const adjustment = item.countedQuantity - inventoryItem.quantity;
               
-              await updateDoc(inventoryItemRef, {
-                quantity: item.countedQuantity,
-                updatedAt: serverTimestamp(),
-                updatedBy: userId
-              });
-              
-              // Dodaj transakcję korygującą
-              const transactionData = {
-                itemId: item.inventoryItemId,
-                itemName: item.name,
-                type: adjustment > 0 ? 'correction-add' : 'correction-remove',
-                quantity: Math.abs(adjustment),
-                date: serverTimestamp(),
-                reason: 'Korekta po ponownej inwentaryzacji',
-                reference: `Korekta inwentaryzacji #${stocktakingId}`,
-                notes: item.notes || 'Korekta stanu po ponownej inwentaryzacji',
-                unitPrice: item.unitPrice || inventoryItem.unitPrice || 0,
-                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)),
-                createdBy: userId,
-                createdAt: serverTimestamp()
-              };
-              
-              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+              // Aktualizuj stan magazynowy TYLKO jeśli jest różnica
+              if (adjustment !== 0) {
+                await updateDoc(inventoryItemRef, {
+                  quantity: item.countedQuantity,
+                  updatedAt: serverTimestamp(),
+                  updatedBy: userId
+                });
+                
+                // Dodaj transakcję korygującą TYLKO gdy jest różnica
+                const transactionData = {
+                  itemId: item.inventoryItemId,
+                  itemName: item.name,
+                  type: adjustment > 0 ? 'correction-add' : 'correction-remove',
+                  quantity: Math.abs(adjustment),
+                  date: serverTimestamp(),
+                  reason: 'Korekta po ponownej inwentaryzacji',
+                  reference: `Korekta inwentaryzacji #${stocktakingId}`,
+                  notes: item.notes || 'Korekta stanu po ponownej inwentaryzacji',
+                  unitPrice: item.unitPrice || inventoryItem.unitPrice || 0,
+                  differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)),
+                  createdBy: userId,
+                  createdAt: serverTimestamp()
+                };
+                
+                await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+                console.log(`Zastosowano korektę pozycji ${item.inventoryItemId}: ${inventoryItem.quantity} → ${item.countedQuantity} (różnica: ${adjustment})`);
+              } else {
+                console.log(`Pozycja ${item.inventoryItemId} bez zmian: ${item.countedQuantity} (brak korekty)`);
+              }
             }
           }
           
@@ -3772,18 +3781,18 @@ import {
               
               const batchData = batchDoc.data();
               
-              // Aktualizuj stan partii
-              await updateDoc(batchRef, {
-                quantity: item.countedQuantity,
-                updatedAt: serverTimestamp(),
-                updatedBy: userId
-              });
-              
               // Oblicz różnicę dla tej partii
               const adjustment = item.countedQuantity - batchData.quantity;
               
-              // Automatycznie odśwież rezerwacje PO po zmianie ilości w partii
+              // Aktualizuj stan partii TYLKO jeśli jest różnica
               if (adjustment !== 0) {
+                await updateDoc(batchRef, {
+                  quantity: item.countedQuantity,
+                  updatedAt: serverTimestamp(),
+                  updatedBy: userId
+                });
+                
+                // Automatycznie odśwież rezerwacje PO po zmianie ilości w partii
                 try {
                   const { refreshLinkedBatchesQuantities } = await import('./poReservationService');
                   await refreshLinkedBatchesQuantities(item.batchId);
@@ -3792,28 +3801,31 @@ import {
                   console.error('Błąd podczas automatycznego odświeżania rezerwacji PO po inwentaryzacji:', error);
                   // Nie przerywaj procesu
                 }
+                
+                // Dodaj transakcję korygującą TYLKO gdy jest różnica
+                const transactionData = {
+                  itemId: item.inventoryItemId,
+                  itemName: item.name,
+                  type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+                  quantity: Math.abs(adjustment),
+                  date: serverTimestamp(),
+                  reason: 'Korekta z inwentaryzacji',
+                  reference: `Inwentaryzacja #${stocktakingId}`,
+                  notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po inwentaryzacji. ${item.notes || ''}`,
+                  warehouseId: item.location || batchData.warehouseId, // Dodajemy identyfikator magazynu
+                  batchId: item.batchId, // Dodajemy ID partii
+                  lotNumber: item.lotNumber || batchData.lotNumber, // Dodajemy numer LOT
+                  unitPrice: item.unitPrice || batchData.unitPrice, // Dodajemy cenę jednostkową
+                  differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)), // Dodajemy wartość różnicy
+                  createdBy: userId,
+                  createdAt: serverTimestamp()
+                };
+                
+                await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+                console.log(`Zastosowano korektę partii ${item.batchId}: ${batchData.quantity} → ${item.countedQuantity} (różnica: ${adjustment})`);
+              } else {
+                console.log(`Partia ${item.batchId} bez zmian: ${item.countedQuantity} (brak korekty)`);
               }
-              
-              // Dodaj transakcję korygującą
-              const transactionData = {
-                itemId: item.inventoryItemId,
-                itemName: item.name,
-                type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
-                quantity: Math.abs(adjustment),
-                date: serverTimestamp(),
-                reason: 'Korekta z inwentaryzacji',
-                reference: `Inwentaryzacja #${stocktakingId}`,
-                notes: `Korekta stanu partii ${item.lotNumber || item.batchNumber} po inwentaryzacji. ${item.notes || ''}`,
-                warehouseId: item.location || batchData.warehouseId, // Dodajemy identyfikator magazynu
-                batchId: item.batchId, // Dodajemy ID partii
-                lotNumber: item.lotNumber || batchData.lotNumber, // Dodajemy numer LOT
-                unitPrice: item.unitPrice || batchData.unitPrice, // Dodajemy cenę jednostkową
-                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || batchData.unitPrice || 0)), // Dodajemy wartość różnicy
-                createdBy: userId,
-                createdAt: serverTimestamp()
-              };
-              
-              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
             } else {
               // Oryginalna logika dla pozycji magazynowych
               const inventoryItemRef = doc(db, INVENTORY_COLLECTION, item.inventoryItemId);
@@ -3821,32 +3833,38 @@ import {
               // Pobierz aktualny stan
               const inventoryItem = await getInventoryItemById(item.inventoryItemId);
               
-              // Aktualizuj stan magazynowy
+              // Oblicz różnicę
               const adjustment = item.countedQuantity - inventoryItem.quantity;
               
-              await updateDoc(inventoryItemRef, {
-                quantity: item.countedQuantity,
-                updatedAt: serverTimestamp(),
-                updatedBy: userId
-              });
-              
-              // Dodaj transakcję korygującą
-              const transactionData = {
-                itemId: item.inventoryItemId,
-                itemName: item.name,
-                type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
-                quantity: Math.abs(adjustment),
-                date: serverTimestamp(),
-                reason: 'Korekta z inwentaryzacji',
-                reference: `Inwentaryzacja #${stocktakingId}`,
-                notes: item.notes || 'Korekta stanu po inwentaryzacji',
-                unitPrice: item.unitPrice || inventoryItem.unitPrice || 0, // Dodajemy cenę jednostkową
-                differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)), // Dodajemy wartość różnicy
-                createdBy: userId,
-                createdAt: serverTimestamp()
-              };
-              
-              await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+              // Aktualizuj stan magazynowy TYLKO jeśli jest różnica
+              if (adjustment !== 0) {
+                await updateDoc(inventoryItemRef, {
+                  quantity: item.countedQuantity,
+                  updatedAt: serverTimestamp(),
+                  updatedBy: userId
+                });
+                
+                // Dodaj transakcję korygującą TYLKO gdy jest różnica
+                const transactionData = {
+                  itemId: item.inventoryItemId,
+                  itemName: item.name,
+                  type: adjustment > 0 ? 'adjustment-add' : 'adjustment-remove',
+                  quantity: Math.abs(adjustment),
+                  date: serverTimestamp(),
+                  reason: 'Korekta z inwentaryzacji',
+                  reference: `Inwentaryzacja #${stocktakingId}`,
+                  notes: item.notes || 'Korekta stanu po inwentaryzacji',
+                  unitPrice: item.unitPrice || inventoryItem.unitPrice || 0, // Dodajemy cenę jednostkową
+                  differenceValue: item.differenceValue || (adjustment * (item.unitPrice || inventoryItem.unitPrice || 0)), // Dodajemy wartość różnicy
+                  createdBy: userId,
+                  createdAt: serverTimestamp()
+                };
+                
+                await addDoc(collection(db, INVENTORY_TRANSACTIONS_COLLECTION), transactionData);
+                console.log(`Zastosowano korektę pozycji ${item.inventoryItemId}: ${inventoryItem.quantity} → ${item.countedQuantity} (różnica: ${adjustment})`);
+              } else {
+                console.log(`Pozycja ${item.inventoryItemId} bez zmian: ${item.countedQuantity} (brak korekty)`);
+              }
             }
             
             // Aktualizuj status elementu inwentaryzacji
