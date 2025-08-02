@@ -54,7 +54,7 @@ import {
   PhotoCamera as PhotoCameraIcon
 } from '@mui/icons-material';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
-import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventoryService';
+import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventory';
 import { getAllPriceLists, addPriceListItem } from '../../services/priceListService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

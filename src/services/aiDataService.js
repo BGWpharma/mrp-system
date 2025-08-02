@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { getAllCustomers } from './customerService';
 import { getOrdersStats } from './orderService';
-import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventoryService';
+import { getAllInventoryItems, getExpiredBatches, getExpiringBatches, getInventoryTransactionsPaginated } from './inventory';
 import { getAllTasks, getTasksByStatus } from './productionService';
 import { getAllTests } from './qualityService';
 

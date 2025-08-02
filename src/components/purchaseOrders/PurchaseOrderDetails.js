@@ -49,7 +49,7 @@ import {
   translateStatus,
   translatePaymentStatus
 } from '../../services/purchaseOrderService';
-import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventoryService';
+import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventory';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { db } from '../../services/firebase/config';
@@ -717,7 +717,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
 
   const handleUpdateSupplierPrices = async () => {
     try {
-      const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventoryService');
+      const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventory');
       const result = await updateSupplierPricesFromCompletedPO(orderId, currentUser.uid);
       
       if (result.success) {
@@ -746,7 +746,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       // Jeśli użytkownik chce zaktualizować ceny dostawców
       if (updatePrices) {
         try {
-          const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventoryService');
+          const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventory');
           const result = await updateSupplierPricesFromCompletedPO(pendingStatusUpdate.orderId, currentUser.uid);
           
           if (result.success && result.updated > 0) {

@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import InventoryLabel from './InventoryLabel';
 import { getAllCustomers } from '../../services/customerService';
-import { updateInventoryItem } from '../../services/inventoryService';
+import { updateInventoryItem } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 

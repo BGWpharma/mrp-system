@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { getOrdersStats } from './orderService';
-import { getAllInventoryItems, getExpiredBatches, getExpiringBatches } from './inventoryService';
+import { getAllInventoryItems, getExpiredBatches, getExpiringBatches } from './inventory';
 import { getAllTasks, getTasksByStatus } from './productionService';
 import { getAllTests } from './qualityService';
 

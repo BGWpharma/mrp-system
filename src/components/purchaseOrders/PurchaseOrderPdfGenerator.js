@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import { formatCurrency } from '../../utils/formatUtils';
-import { getWarehouseById } from '../../services/inventoryService';
+import { getWarehouseById } from '../../services/inventory';
 import { getCompanyInfo } from '../../services/companyService';
 
 /**

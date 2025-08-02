@@ -64,9 +64,10 @@ import {
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
   Clear as ClearIcon,
-  Assignment as CoAIcon
+  Assignment as CoAIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventoryService';
+import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatQuantity } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
@@ -214,8 +215,8 @@ const InventoryList = () => {
     fetchExpiryData();
     
     // Dodaj nasłuchiwanie na zdarzenie aktualizacji stanów
-    const handleInventoryUpdate = () => {
-      console.log('Wykryto aktualizację stanów, odświeżam dane...');
+    const handleInventoryUpdate = (event) => {
+      console.log('📨 Wykryto aktualizację stanów, odświeżam dane...');
       fetchInventoryItems(tableSort.field, tableSort.order);
     };
     
@@ -399,8 +400,10 @@ const InventoryList = () => {
       const sortOrderToUse = newSortOrder || tableSort.order;
       
       // Wywołaj getAllInventoryItems z parametrami paginacji, wyszukiwania i sortowania
+      // W głównej zakładce "Stany" nie filtrujemy po magazynie - pokazujemy wszystkie pozycje
+      const warehouseFilter = currentTab === 0 ? null : (selectedWarehouse || null);
       const result = await getAllInventoryItems(
-        selectedWarehouse || null, 
+        warehouseFilter, 
         page, 
         pageSize, 
         debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
@@ -1434,6 +1437,26 @@ const InventoryList = () => {
     setMenuAnchorEl(null);
   };
 
+  const handleRefreshList = () => {
+    console.log('🔄 Ręczne odświeżanie listy pozycji magazynowych...');
+    // Odśwież dane w zależności od aktywnej zakładki
+    if (currentTab === 0) {
+      // Zakładka "Stany"
+      fetchInventoryItems(tableSort.field, tableSort.order);
+      fetchExpiryData();
+    } else if (currentTab === 1 && selectedWarehouse) {
+      // Zakładka "Lokalizacje" 
+      fetchWarehouseItems(selectedWarehouse.id, warehouseItemsSort.field, warehouseItemsSort.order);
+    } else if (currentTab === 1) {
+      // Zakładka "Lokalizacje" bez wybranego magazynu
+      fetchWarehouses();
+    } else if (currentTab === 3) {
+      // Zakładka "Rezerwacje"
+      fetchAllReservations();
+    }
+    showSuccess('Lista została odświeżona');
+  };
+
   const handleMenuItemClick = (action) => {
     handleMoreMenuClose();
     switch (action) {
@@ -1445,6 +1468,9 @@ const InventoryList = () => {
         break;
       case 'coa':
         handleCoAGenerator();
+        break;
+      case 'refresh':
+        handleRefreshList();
         break;
       default:
         break;
@@ -1535,6 +1561,12 @@ const InventoryList = () => {
             sx: { mt: 1 }
           }}
         >
+          <MenuItem onClick={() => handleMenuItemClick('refresh')}>
+            <ListItemIcon>
+              <RefreshIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Odśwież listę</ListItemText>
+          </MenuItem>
           <MenuItem onClick={() => handleMenuItemClick('pdf')}>
             <ListItemIcon>
               <PdfIcon fontSize="small" />

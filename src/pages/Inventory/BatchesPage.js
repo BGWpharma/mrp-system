@@ -61,7 +61,7 @@ import {
   debugMaterialBatches,
   debugDuplicateBatches,
   debugAndCleanDuplicateReservations
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatQuantity } from '../../utils/formatters';

@@ -41,7 +41,7 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { addTestResult, getTestById } from '../../services/qualityService';
-import { getAllInventoryItems } from '../../services/inventoryService';
+import { getAllInventoryItems } from '../../services/inventory';
 import { getProductionTasks } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

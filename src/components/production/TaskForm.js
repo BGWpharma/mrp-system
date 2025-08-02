@@ -54,7 +54,7 @@ import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion } fro
 import {
   getAllInventoryItems,
   getInventoryItemById
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

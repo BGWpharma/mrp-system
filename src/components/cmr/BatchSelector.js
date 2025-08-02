@@ -22,7 +22,7 @@ import {
   Autocomplete,
   Grid
 } from '@mui/material';
-import { getItemBatches, getAllInventoryItems, getAllWarehouses, getInventoryItemByRecipeId } from '../../services/inventoryService';
+import { getItemBatches, getAllInventoryItems, getAllWarehouses, getInventoryItemByRecipeId } from '../../services/inventory';
 import { getAllRecipes } from '../../services/recipeService';
 
 /**

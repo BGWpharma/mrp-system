@@ -25,7 +25,7 @@ import {
   Delete as DeleteIcon,
   Warehouse as WarehouseIcon
 } from '@mui/icons-material';
-import { getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from '../../services/inventoryService';
+import { getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 

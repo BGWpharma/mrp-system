@@ -37,7 +37,7 @@ import {
 import { getAllOrders, getOrderById, addProductionTaskToOrder, updateOrder } from '../../services/orderService';
 import { createTask, reserveMaterialsForTask } from '../../services/productionService';
 import { getAllRecipes, getRecipeById, getRecipesByCustomer } from '../../services/recipeService';
-import { getIngredientPrices, getInventoryItemById } from '../../services/inventoryService';
+import { getIngredientPrices, getInventoryItemById } from '../../services/inventory';
 import { calculateManufacturingOrderCosts } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

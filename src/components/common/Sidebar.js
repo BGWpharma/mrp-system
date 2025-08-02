@@ -48,7 +48,7 @@ import {
   PrecisionManufacturing as PrecisionManufacturingIcon,
   BugReport as BugReportIcon
 } from '@mui/icons-material';
-import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
+import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';

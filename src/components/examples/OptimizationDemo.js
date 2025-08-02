@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import OptimizedInventoryList from './OptimizedInventoryList';
 import { useEffect } from 'react';
-import { getAllInventoryItems } from '../../services/inventoryService';
+import { getAllInventoryItems } from '../../services/inventory';
 
 /**
  * Komponent demonstracyjny pokazujący optymalizacje:

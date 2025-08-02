@@ -16,7 +16,7 @@ import {
 } from '../../services/purchaseOrderService';
 import { getSuppliers } from '../../services/supplierService';
 import { getWarehouseLocations } from '../../services/warehouseService';
-import { searchItems } from '../../services/inventoryService';
+import { searchItems } from '../../services/inventory';
 import PurchaseOrderItemsTable from '../../components/purchaseOrders/PurchaseOrderItemsTable';
 import PurchaseOrderForm from '../../components/purchaseOrders/PurchaseOrderForm';
 import ConfirmationDialog from '../../components/common/ConfirmationDialog';

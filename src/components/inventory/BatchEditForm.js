@@ -23,7 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, ShoppingCart as ShoppingCartIcon } from '@mui/icons-material';
-import { getInventoryItemById, getItemBatches, updateBatch, getInventoryBatch } from '../../services/inventoryService';
+import { getInventoryItemById, getItemBatches, updateBatch, getInventoryBatch } from '../../services/inventory';
 import { getLimitedPurchaseOrdersForBatchEdit, getPurchaseOrderById } from '../../services/purchaseOrderService';
 import { updateBatchesForPurchaseOrder } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';

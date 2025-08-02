@@ -29,7 +29,7 @@ import {
   Warning as WarningIcon,
   Error as ErrorIcon
 } from '@mui/icons-material';
-import { getExpiringBatches, getExpiredBatches } from '../../services/inventoryService';
+import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from 'react-i18next';
 import { useDebounce } from '../../hooks/useDebounce';

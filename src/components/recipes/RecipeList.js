@@ -57,7 +57,7 @@ import {
   Sync as SyncIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
-import { getInventoryItemByRecipeId } from '../../services/inventoryService';
+import { getInventoryItemByRecipeId } from '../../services/inventory';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

@@ -1,0 +1,5 @@
+---
+description: porównuj wystepujące błędy, i sprawdź czy nie występują one po przeprowadzonej refaktoryzacji inventoryService do /services/inventory
+globs:
+alwaysApply: false
+---

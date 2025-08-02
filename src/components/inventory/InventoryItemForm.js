@@ -31,7 +31,7 @@ import {
   updateInventoryItem, 
   getInventoryItemById,
   getAllInventoryItems
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import SupplierPricesList from './SupplierPricesList';
@@ -106,7 +106,10 @@ const InventoryItemForm = ({ itemId }) => {
       } else {
         const newItem = await createInventoryItem(itemData, currentUser.uid);
         showSuccess('Pozycja została utworzona');
-        navigate('/inventory');
+        // Małe opóźnienie żeby dać czas na odświeżenie listy
+        setTimeout(() => {
+          navigate('/inventory');
+        }, 100);
       }
     } catch (error) {
       showError('Błąd podczas zapisywania pozycji: ' + error.message);

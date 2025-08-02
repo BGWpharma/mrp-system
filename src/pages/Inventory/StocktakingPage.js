@@ -35,7 +35,7 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { getAllStocktakings, deleteStocktaking, deleteCompletedStocktaking, reopenStocktakingForCorrection } from '../../services/inventoryService';
+import { getAllStocktakings, deleteStocktaking, deleteCompletedStocktaking, reopenStocktakingForCorrection } from '../../services/inventory';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

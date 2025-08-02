@@ -75,7 +75,7 @@ import {
   deleteDeliveryProof,
   calculateOrderTotal
 } from '../../services/orderService';
-import { getAllInventoryItems, getIngredientPrices } from '../../services/inventoryService';
+import { getAllInventoryItems, getIngredientPrices } from '../../services/inventory';
 import { getAllCustomers, createCustomer } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -91,13 +91,13 @@ import { getPriceForCustomerProduct } from '../../services/priceListService';
 import { 
   getInventoryItemByName as findProductByName, 
   getInventoryItemById as getProductById 
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { 
   getRecipeById as getRecipeByProductId 
 } from '../../services/recipeService';
 import { 
   getAllInventoryItems as getAllProducts 
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { getExchangeRate } from '../../services/exchangeRateService';
 import { getLastRecipeUsageInfo } from '../../services/orderService';
 

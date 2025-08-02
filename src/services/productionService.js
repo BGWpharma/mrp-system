@@ -33,7 +33,7 @@ import {
     getItemBatches,
     recalculateItemQuantity,
     getInventoryBatch
-  } from './inventoryService';
+  } from './inventory';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
@@ -1053,7 +1053,7 @@ import {
       
       // OPTYMALIZACJA 2: Usuń redundantne czyszczenie - tylko konkretne rezerwacje dla tego zadania
       try {
-        const { cleanupTaskReservations } = await import('./inventoryService');
+        const { cleanupTaskReservations } = await import('./inventory');
         
         // Wyczyść tylko konkretne rezerwacje dla tego zadania (bez globalnego czyszczenia)
         await cleanupTaskReservations(taskId);
@@ -1277,7 +1277,7 @@ import {
       // Jeśli zadanie ma przypisane inventoryProductId, sprawdź czy pozycja rzeczywiście istnieje
       if (inventoryItemId) {
         try {
-          const { getInventoryItemById } = await import('./inventoryService');
+          const { getInventoryItemById } = await import('./inventory');
           inventoryItem = await getInventoryItemById(inventoryItemId);
           
           if (!inventoryItem) {
@@ -1299,7 +1299,7 @@ import {
           
           try {
             // Importuj funkcję do pobierania pozycji magazynowej powiązanej z recepturą
-            const { getInventoryItemByRecipeId } = await import('./inventoryService');
+            const { getInventoryItemByRecipeId } = await import('./inventory');
             const recipeInventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
             
             if (recipeInventoryItem) {
@@ -2848,7 +2848,7 @@ import {
             console.log(`Rezerwowanie ${reserveAmount} ${requiredMaterial.unit || 'szt.'} z partii ${batch.batchId}`);
             
             // Użyj funkcji bookInventoryForTask z inventoryService
-            const { bookInventoryForTask } = await import('../services/inventoryService');
+            const { bookInventoryForTask } = await import('../services/inventory');
             const bookingResult = await bookInventoryForTask(
               requiredMaterial.id,
               reserveAmount,
@@ -4167,7 +4167,7 @@ import {
       // Jeśli zadanie ma przypisane inventoryProductId, sprawdź czy pozycja rzeczywiście istnieje
       if (inventoryItemId) {
         try {
-          const { getInventoryItemById } = await import('./inventoryService');
+          const { getInventoryItemById } = await import('./inventory');
           inventoryItem = await getInventoryItemById(inventoryItemId);
           
           if (!inventoryItem) {
@@ -4188,7 +4188,7 @@ import {
           console.log(`Sprawdzanie pozycji magazynowej powiązanej z recepturą ${taskData.recipeId}`);
           
           try {
-            const { getInventoryItemByRecipeId } = await import('./inventoryService');
+            const { getInventoryItemByRecipeId } = await import('./inventory');
             const recipeInventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
             
             if (recipeInventoryItem) {

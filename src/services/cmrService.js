@@ -707,7 +707,7 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
 
     // Jeśli przechodzi na status "Dostarczone", anuluj rezerwacje i wydaj produkty
     if (newStatus === CMR_STATUSES.DELIVERED) {
-      console.log('Dostarczenie CMR - anulowanie rezerwacji i wydanie produktów...');
+      console.log('Dostarczenie CMR - usuwanie rezerwacji i wydanie produktów...');
       try {
         deliveryResult = await processCmrDelivery(cmrId, userId);
         console.log('Rezultat dostarczenia:', deliveryResult);
@@ -718,6 +718,23 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           success: false,
           message: `Błąd przetwarzania dostarczenia: ${deliveryError.message}`,
           errors: [{ error: deliveryError.message }]
+        };
+      }
+    }
+    
+    // Jeśli przechodzi na status "Zakończone", usuń rezerwacje (jak deleteTask)
+    if (newStatus === CMR_STATUSES.COMPLETED) {
+      console.log('Zakończenie CMR - usuwanie rezerwacji...');
+      try {
+        deliveryResult = await cancelCmrReservations(cmrId, userId);
+        console.log('Rezultat zakończenia:', deliveryResult);
+      } catch (completionError) {
+        console.error('Błąd podczas zakończenia CMR:', completionError);
+        // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
+        deliveryResult = {
+          success: false,
+          message: `Błąd zakończenia CMR: ${completionError.message}`,
+          errors: [{ error: completionError.message }]
         };
       }
     }
@@ -788,7 +805,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
       return { success: true, message: 'Brak elementów do rezerwacji' };
     }
     
-    const { bookInventoryForTask } = await import('./inventoryService');
+    const { bookInventoryForTask } = await import('./inventory');
     const reservationResults = [];
     const errors = [];
     
@@ -901,7 +918,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
   }
 };
 
-// Funkcja do przetwarzania dostarczenia CMR - anuluje rezerwacje i wydaje produkty
+// Funkcja do przetwarzania dostarczenia CMR - usuwa rezerwacje i wydaje produkty (jak deleteTask)
 export const processCmrDelivery = async (cmrId, userId) => {
   try {
     console.log(`Rozpoczynanie procesu dostarczenia CMR ${cmrId}...`);
@@ -914,7 +931,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
       return { success: true, message: 'Brak elementów do przetworzenia' };
     }
     
-    const { cancelBooking, issueInventory } = await import('./inventoryService');
+    const { cleanupTaskReservations, issueInventory } = await import('./inventory');
     const deliveryResults = [];
     const errors = [];
     
@@ -923,7 +940,21 @@ export const processCmrDelivery = async (cmrId, userId) => {
     
     console.log(`Przetwarzanie dostarczenia dla taskId: ${cmrTaskId}`);
     
-    // Dla każdego elementu CMR z powiązanymi partiami
+    // Usuń wszystkie rezerwacje związane z tym CMR (jak w deleteTask)
+    try {
+      console.log(`Usuwanie wszystkich rezerwacji dla CMR ${cmrTaskId} przy dostarczeniu...`);
+      const cleanupResult = await cleanupTaskReservations(cmrTaskId);
+      console.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
+    } catch (error) {
+      console.error(`Błąd podczas usuwania rezerwacji dla CMR ${cmrTaskId}:`, error);
+      errors.push({
+        operation: 'cleanup_reservations',
+        error: error.message
+      });
+      // Kontynuuj mimo błędu - wydanie produktów może się udać
+    }
+    
+    // Oblicz całkowitą ilość we wszystkich powiązanych partiach dla każdego elementu
     for (const item of cmrData.items) {
       if (!item.linkedBatches || item.linkedBatches.length === 0) {
         console.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
@@ -944,29 +975,6 @@ export const processCmrDelivery = async (cmrId, userId) => {
       if (totalBatchQuantity <= 0) {
         console.log(`Element "${item.description}" ma powiązane partie z zerową ilością - pomijam`);
         continue;
-      }
-      
-      // Anuluj rezerwację dla tego produktu
-      try {
-        console.log(`Anulowanie rezerwacji dla produktu ${item.linkedBatches[0].itemName} - ${cmrItemQuantity} ${item.unit}`);
-        
-        const cancelResult = await cancelBooking(
-          item.linkedBatches[0].itemId,  // ID produktu w magazynie
-          cmrItemQuantity,               // Ilość do anulowania (ta z CMR)
-          cmrTaskId,                     // Identyfikator zadania CMR
-          userId                         // Użytkownik wykonujący operację
-        );
-        
-        console.log(`Pomyślnie anulowano rezerwację dla ${item.linkedBatches[0].itemName}:`, cancelResult);
-        
-      } catch (error) {
-        console.error(`Błąd podczas anulowania rezerwacji dla ${item.linkedBatches[0].itemName}:`, error);
-        errors.push({
-          operation: 'cancel_reservation',
-          itemName: item.linkedBatches[0].itemName,
-          error: error.message
-        });
-        // Kontynuuj mimo błędu anulowania rezerwacji
       }
       
       // Wydaj produkty z konkretnych partii
@@ -1608,16 +1616,15 @@ export const findCmrDocumentsByOrderNumber = async (orderNumber) => {
   }
 };
 
-// Funkcja do anulowania rezerwacji partii magazynowych dla dokumentu CMR (wzorowana na deleteTask z productionService)
+// Funkcja do usuwania rezerwacji partii magazynowych dla dokumentu CMR (identyczna logika jak deleteTask)
 // 
 // UŻYCIE:
-// 1. Automatyczne wywoływanie przy zmianie statusu CMR na "Anulowany"
+// 1. Automatyczne wywoływanie przy zmianie statusu CMR na "Anulowany" lub "Zakończony"
 // 2. Można wywołać ręcznie: await cancelCmrReservations(cmrId, userId)
 //
-// MECHANIZM (wzorowany na deleteTask z productionService.js):
-// 1. Anuluje konkretne rezerwacje dla każdego produktu (cancelBooking)
-// 2. Czyści wszystkie pozostałe rezerwacje dla CMR (cleanupTaskReservations)  
-// 3. Anuluje ilości wysłane w powiązanych zamówieniach
+// MECHANIZM (identyczny jak deleteTask z productionService.js):
+// 1. Fizycznie usuwa wszystkie rezerwacje związane z CMR (cleanupTaskReservations)
+// 2. Anuluje ilości wysłane w powiązanych zamówieniach
 //
 export const cancelCmrReservations = async (cmrId, userId) => {
   try {
@@ -1631,67 +1638,35 @@ export const cancelCmrReservations = async (cmrId, userId) => {
       return { success: true, message: 'Brak elementów do anulowania rezerwacji' };
     }
 
-    const { cancelBooking, cleanupTaskReservations } = await import('./inventoryService');
+    const { cleanupTaskReservations } = await import('./inventory');
     const cancellationResults = [];
     const errors = [];
     
     // Identyfikator zadania CMR używany do rezerwacji
     const cmrTaskId = `CMR-${cmrData.cmrNumber}-${cmrId}`;
     
-    console.log(`Anulowanie rezerwacji dla taskId: ${cmrTaskId}`);
+    console.log(`Usuwanie wszystkich rezerwacji dla CMR taskId: ${cmrTaskId} (jak w deleteTask)`);
     
-    // KROK 1: Anuluj konkretne rezerwacje dla każdego elementu CMR (podobnie jak w deleteTask)
-    const itemCancellationPromises = [];
-    
-    for (const item of cmrData.items) {
-      if (!item.linkedBatches || item.linkedBatches.length === 0) {
-        console.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
-        continue;
-      }
-      
-      // Pobierz ilość z pozycji CMR
-      const cmrItemQuantity = parseFloat(item.quantity) || 0;
-      
-      if (cmrItemQuantity <= 0) {
-        console.log(`Element "${item.description}" ma zerową ilość - pomijam`);
-        continue;
-      }
-      
-      // Dodaj do promises zamiast await w pętli (optymalizacja jak w deleteTask)
-      const itemId = item.linkedBatches[0].itemId; // Użyj pierwszej partii dla ID produktu
-      itemCancellationPromises.push(
-        cancelBooking(itemId, cmrItemQuantity, cmrTaskId, userId)
-          .then(() => {
-            console.log(`Anulowano rezerwację dla produktu ${item.linkedBatches[0].itemName} - ${cmrItemQuantity} ${item.unit}`);
-            cancellationResults.push({
-              item: item.description,
-              quantity: cmrItemQuantity,
-              unit: item.unit,
-              success: true
-            });
-          })
-          .catch(error => {
-            console.error(`Błąd przy anulowaniu rezerwacji dla ${item.linkedBatches[0].itemName}:`, error);
-            errors.push({
-              item: item.description,
-              error: error.message
-            });
-          })
-      );
-    }
-    
-    // Wykonaj wszystkie anulowania równolegle
-    if (itemCancellationPromises.length > 0) {
-      await Promise.allSettled(itemCancellationPromises);
-    }
-    
-    // KROK 2: Wyczyść wszystkie pozostałe rezerwacje związane z tym CMR (podobnie jak cleanupTaskReservations)
+    // Usuń wszystkie rezerwacje związane z tym CMR (identycznie jak deleteTask)
     try {
-      console.log(`Czyszczenie wszystkich rezerwacji związanych z CMR ${cmrTaskId}...`);
       const cleanupResult = await cleanupTaskReservations(cmrTaskId);
-      console.log(`Rezultat czyszczenia rezerwacji:`, cleanupResult);
+      console.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
+      
+      // Dodaj informacje o usuniętych rezerwacjach do wyników
+      if (cleanupResult && cleanupResult.cleanedReservations > 0) {
+        // Grupuj po pozycjach CMR dla raportowania
+        for (const item of cmrData.items) {
+          cancellationResults.push({
+            item: item.description,
+            quantity: parseFloat(item.quantity) || 0,
+            unit: item.unit,
+            success: true,
+            operation: 'deleted' // Fizycznie usunięte (jak w deleteTask)
+          });
+        }
+      }
     } catch (error) {
-      console.error(`Błąd podczas czyszczenia rezerwacji dla CMR ${cmrTaskId}:`, error);
+      console.error(`Błąd podczas usuwania rezerwacji dla CMR ${cmrTaskId}:`, error);
       errors.push({
         operation: 'cleanup',
         error: error.message

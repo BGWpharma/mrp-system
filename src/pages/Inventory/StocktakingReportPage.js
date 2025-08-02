@@ -31,7 +31,7 @@ import {
   getStocktakingById,
   getStocktakingItems,
   generateStocktakingReport
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatCurrency } from '../../utils/formatters';
 

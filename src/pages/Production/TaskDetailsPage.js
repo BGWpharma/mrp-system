@@ -127,7 +127,7 @@ import {
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
 import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
 import { getRecipeVersion, sortIngredientsByQuantity } from '../../services/recipeService';
-import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventoryService';
+import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatCurrency, formatDateTime } from '../../utils/formatters';
@@ -992,7 +992,7 @@ const TaskDetailsPage = () => {
   const fetchWarehouses = async () => {
     try {
       setWarehousesLoading(true);
-      const { getAllWarehouses } = await import('../../services/inventoryService');
+      const { getAllWarehouses } = await import('../../services/inventory');
       const warehousesList = await getAllWarehouses();
       setWarehouses(warehousesList);
       
@@ -1307,7 +1307,7 @@ const TaskDetailsPage = () => {
       if (!inventoryProductId && task.recipeId) {
         try {
           console.log(`Sprawdzanie pozycji magazynowej dla receptury ${task.recipeId}`);
-          const { getInventoryItemByRecipeId } = await import('../../services/inventoryService');
+          const { getInventoryItemByRecipeId } = await import('../../services/inventory');
           const recipeInventoryItem = await getInventoryItemByRecipeId(task.recipeId);
           
           if (recipeInventoryItem) {
@@ -1565,7 +1565,7 @@ const TaskDetailsPage = () => {
       const initialSelectedBatches = {};
       
       // KROK 1: Pobierz wszystkie magazyny na początku (już zoptymalizowane)
-      const { getAllWarehouses, getBatchesForMultipleItems, getReservationsForMultipleBatches } = await import('../../services/inventoryService');
+      const { getAllWarehouses, getBatchesForMultipleItems, getReservationsForMultipleBatches } = await import('../../services/inventory');
       const allWarehouses = await getAllWarehouses();
       // Stwórz mapę magazynów dla szybkiego dostępu po ID
       const warehousesMap = {};
@@ -1731,13 +1731,14 @@ const TaskDetailsPage = () => {
       
       if (existingBatchIndex >= 0) {
         // Aktualizuj istniejącą partię
-        if (numericQuantity <= 0) {
-          // Usuń partię, jeśli ilość jest 0 lub ujemna
+        if (numericQuantity < 0) {
+          // Usuń partię tylko jeśli ilość jest ujemna (nie gdy jest 0)
           materialBatches.splice(existingBatchIndex, 1);
         } else {
+          // Zachowaj partię nawet z quantity = 0 dla dalszej obróbki (usunięcie rezerwacji)
           materialBatches[existingBatchIndex].quantity = numericQuantity;
         }
-      } else if (numericQuantity > 0) {
+      } else if (numericQuantity >= 0) {
         // Dodaj nową partię
         const batch = batches[materialId].find(b => b.id === batchId);
         if (batch) {
@@ -1851,7 +1852,7 @@ const TaskDetailsPage = () => {
       console.log('handleDeleteSingleReservation wywołane z:', { materialId, batchId, batchNumber, taskId: task.id });
       
       // Importuj potrzebne funkcje
-      const { deleteReservation } = await import('../../services/inventoryService');
+      const { deleteReservation } = await import('../../services/inventory');
       const { collection, query, where, getDocs } = await import('firebase/firestore');
       const { db } = await import('../../services/firebase/config');
       
@@ -1959,7 +1960,7 @@ const TaskDetailsPage = () => {
         if (task.materialBatches && task.materialBatches[materialId] && task.materialBatches[materialId].length > 0) {
           try {
             // Importuj funkcję do czyszczenia rezerwacji dla zadania
-            const { cleanupTaskReservations } = await import('../../services/inventoryService');
+            const { cleanupTaskReservations } = await import('../../services/inventory');
             console.log(`Usuwanie istniejących rezerwacji dla materiału ${materialId} w zadaniu ${id}`);
             await cleanupTaskReservations(id, [materialId]);
           } catch (error) {
@@ -2000,8 +2001,17 @@ const TaskDetailsPage = () => {
           const materialId = material.inventoryItemId || material.id;
           if (!materialId) continue;
           
-          // Najpierw anuluj istniejące rezerwacje dla tego materiału
-          await cancelExistingReservations(materialId);
+          // Sprawdź czy są partie z quantity = 0 (oznaczające usunięcie)
+          const selectedMaterialBatches = selectedBatches[materialId] || [];
+          const hasZeroQuantityBatches = selectedMaterialBatches.some(batch => batch.quantity === 0);
+          
+          // Anuluj istniejące rezerwacje tylko jeśli nie ma partii z quantity = 0
+          // (bo w przeciwnym razie bookInventoryForTask sam obsłuży aktualizację/usunięcie)
+          if (!hasZeroQuantityBatches) {
+            await cancelExistingReservations(materialId);
+          } else {
+            console.log(`Pomijam anulowanie rezerwacji dla materiału ${materialId} - zawiera partie do usunięcia (quantity=0)`);
+          }
           
           // Oblicz wymaganą ilość do rezerwacji uwzględniając skonsumowane materiały
           const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
@@ -2012,15 +2022,13 @@ const TaskDetailsPage = () => {
             continue;
           }
             
-          // Pobierz wybrane partie
-          const selectedMaterialBatches = selectedBatches[materialId] || [];
-          
-          // Dla każdej wybranej partii wykonaj rezerwację
+          // Dla każdej wybranej partii wykonaj rezerwację (lub usuń jeśli quantity = 0)
           for (const batch of selectedMaterialBatches) {
-            if (batch.quantity <= 0) continue;
+            // Nie pomijamy partii z quantity = 0, bo może to oznaczać usunięcie rezerwacji
             
-            // Utwórz rezerwację dla konkretnej partii
-            await bookInventoryForTask(
+            // Utwórz/zaktualizuj/usuń rezerwację dla konkretnej partii
+            console.log('🔄 [TASK] Wywołanie bookInventoryForTask:', { materialId, quantity: batch.quantity, taskId: id, batchId: batch.batchId });
+            const result = await bookInventoryForTask(
               materialId,
               batch.quantity,
               id, // ID zadania
@@ -2028,6 +2036,7 @@ const TaskDetailsPage = () => {
               'manual', // Metoda ręczna
               batch.batchId // ID konkretnej partii
             );
+            console.log('✅ [TASK] Rezultat bookInventoryForTask:', result);
           }
         }
         
@@ -3571,7 +3580,7 @@ const TaskDetailsPage = () => {
     if (!task?.consumedMaterials || task.consumedMaterials.length === 0) return;
     
     try {
-      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const { getInventoryBatch } = await import('../../services/inventory');
       let hasChanges = false;
       const updatedConsumedMaterials = [...task.consumedMaterials];
 
@@ -4251,7 +4260,7 @@ const TaskDetailsPage = () => {
         if (!materialId) continue;
         
         try {
-          const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventoryService');
+          const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
           const materialOrders = await getAwaitingOrdersForInventoryItem(materialId);
           
 
@@ -4688,13 +4697,13 @@ const TaskDetailsPage = () => {
       });
 
       // Zaktualizuj stany magazynowe - zmniejsz ilości w wybranych partiach
-      const { updateBatch } = await import('../../services/inventoryService');
+      const { updateBatch } = await import('../../services/inventory');
       
       for (const [materialId, batches] of Object.entries(consumptionData)) {
         for (const batchData of batches) {
           try {
             // Pobierz aktualne dane partii
-            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const { getInventoryBatch } = await import('../../services/inventory');
             const currentBatch = await getInventoryBatch(batchData.batchId);
             
             if (currentBatch) {
@@ -4723,7 +4732,7 @@ const TaskDetailsPage = () => {
 
       // Aktualizuj rezerwacje - zmniejsz ilość zarezerwowaną o ilość skonsumowaną
       try {
-        const { updateReservation } = await import('../../services/inventoryService');
+        const { updateReservation } = await import('../../services/inventory');
         
         // Pobierz aktualne rezerwacje dla tego zadania
         const transactionsRef = collection(db, 'inventoryTransactions');
@@ -4784,7 +4793,7 @@ const TaskDetailsPage = () => {
                 );
               } else {
                 // Jeśli ilość rezerwacji spadła do 0, usuń rezerwację
-                const { deleteReservation } = await import('../../services/inventoryService');
+                const { deleteReservation } = await import('../../services/inventory');
                 await deleteReservation(reservationDoc.id, currentUser.uid);
               }
             } else {
@@ -4975,8 +4984,8 @@ const TaskDetailsPage = () => {
       const quantityDifference = editedQuantity - selectedConsumption.quantity;
 
       // Aktualizuj stan magazynowy
-      const { updateBatch } = await import('../../services/inventoryService');
-      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const { updateBatch } = await import('../../services/inventory');
+      const { getInventoryBatch } = await import('../../services/inventory');
       
       const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
       if (currentBatch) {
@@ -5006,7 +5015,7 @@ const TaskDetailsPage = () => {
 
       // Aktualizuj rezerwacje - skoryguj ilość zarezerwowaną
       try {
-        const { updateReservation } = await import('../../services/inventoryService');
+        const { updateReservation } = await import('../../services/inventory');
         const transactionsRef = collection(db, 'inventoryTransactions');
         
         // Znajdź rezerwację dla tego materiału, partii i zadania
@@ -5061,7 +5070,7 @@ const TaskDetailsPage = () => {
               currentUser.uid
             );
           } else {
-            const { deleteReservation } = await import('../../services/inventoryService');
+            const { deleteReservation } = await import('../../services/inventory');
             await deleteReservation(reservationDoc.id, currentUser.uid);
           }
         }
@@ -5159,8 +5168,8 @@ const TaskDetailsPage = () => {
       }
 
       // Przywróć stan magazynowy
-      const { updateBatch } = await import('../../services/inventoryService');
-      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const { updateBatch } = await import('../../services/inventory');
+      const { getInventoryBatch } = await import('../../services/inventory');
       
       const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
       if (currentBatch) {
@@ -5184,7 +5193,7 @@ const TaskDetailsPage = () => {
       // Przywróć rezerwację tylko jeśli użytkownik tego chce
       if (restoreReservation) {
         try {
-          const { updateReservation, bookInventoryForTask } = await import('../../services/inventoryService');
+          const { updateReservation, bookInventoryForTask } = await import('../../services/inventory');
           const transactionsRef = collection(db, 'inventoryTransactions');
           
           // Znajdź rezerwację dla tego materiału, partii i zadania
@@ -5273,7 +5282,7 @@ const TaskDetailsPage = () => {
             updatedMaterialBatches[materialId][batchIndex].quantity = currentReservedQuantity + consumedQuantity;
           } else {
             // Jeśli partia nie istnieje, dodaj ją
-            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const { getInventoryBatch } = await import('../../services/inventory');
             const batchInfo = await getInventoryBatch(selectedConsumption.batchId);
             
             updatedMaterialBatches[materialId].push({
@@ -5335,7 +5344,7 @@ const TaskDetailsPage = () => {
     }
 
     try {
-      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const { getInventoryBatch } = await import('../../services/inventory');
       const batchPrices = {};
       let needsTaskUpdate = false;
       let needsCostUpdate = false;
@@ -5472,7 +5481,7 @@ const TaskDetailsPage = () => {
         // Pobierz dane z partii magazynowej jeśli brakuje informacji
         if (consumed.batchId && (!consumed.expiryDate || !consumed.materialName || !consumed.unit)) {
           try {
-            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const { getInventoryBatch } = await import('../../services/inventory');
             const batchData = await getInventoryBatch(consumed.batchId);
             
             if (batchData) {
@@ -5489,7 +5498,7 @@ const TaskDetailsPage = () => {
               // Pobierz nazwę materiału i jednostkę z pozycji magazynowej
               if (batchData.inventoryItemId && (!enrichedConsumed.materialName || !enrichedConsumed.unit)) {
                 try {
-                  const { getInventoryItemById } = await import('../../services/inventoryService');
+                  const { getInventoryItemById } = await import('../../services/inventory');
                   const inventoryItem = await getInventoryItemById(batchData.inventoryItemId);
                   
                   if (inventoryItem) {
@@ -5550,7 +5559,7 @@ const TaskDetailsPage = () => {
           if (consumed.batchId) {
             try {
               // Pobierz dane partii magazynowej
-              const { getInventoryBatch } = await import('../../services/inventoryService');
+              const { getInventoryBatch } = await import('../../services/inventory');
               const batchData = await getInventoryBatch(consumed.batchId);
               
               if (batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
@@ -5901,7 +5910,7 @@ const TaskDetailsPage = () => {
           if (consumed.batchId) {
             try {
               // Pobierz dane partii magazynowej
-              const { getInventoryBatch } = await import('../../services/inventoryService');
+              const { getInventoryBatch } = await import('../../services/inventory');
               const batchData = await getInventoryBatch(consumed.batchId);
               
               // Sprawdź czy partia ma załączniki lub certyfikat

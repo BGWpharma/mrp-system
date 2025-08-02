@@ -23,7 +23,7 @@ import {
   History as HistoryIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
-import { getSupplierPriceHistory } from '../../services/inventoryService';
+import { getSupplierPriceHistory } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatters';
 import { formatTimestamp } from '../../utils/dateUtils';

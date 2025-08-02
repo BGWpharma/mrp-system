@@ -56,7 +56,7 @@ import {
   completeCorrectedStocktaking,
   getAllInventoryItems,
   getItemBatches
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

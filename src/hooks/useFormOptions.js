@@ -57,7 +57,7 @@ export const useProductOptionsForPrinting = () => {
         setError(null);
         
         // Import funkcji do pobierania pozycji magazynowych
-        const { getAllInventoryItems } = await import('../services/inventoryService');
+        const { getAllInventoryItems } = await import('../services/inventory');
         
         // Pobierz wszystkie pozycje magazynowe
         const allItems = await getAllInventoryItems();

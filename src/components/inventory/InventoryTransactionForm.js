@@ -38,7 +38,7 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
-import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses, getExistingBatchForPOItem } from '../../services/inventoryService';
+import { getInventoryItemById, receiveInventory, issueInventory, getItemBatches, getAllWarehouses, getExistingBatchForPOItem } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';

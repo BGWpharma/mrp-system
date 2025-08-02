@@ -282,7 +282,7 @@ const PurchaseOrderList = () => {
       // Jeśli użytkownik chce zaktualizować ceny dostawców
       if (updatePrices) {
         try {
-          const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventoryService');
+          const { updateSupplierPricesFromCompletedPO } = await import('../../services/inventory');
           const result = await updateSupplierPricesFromCompletedPO(pendingStatusUpdate.purchaseOrder.id, currentUser.uid);
           
           if (result.success && result.updated > 0) {

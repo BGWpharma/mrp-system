@@ -554,7 +554,7 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             if (matchingInventoryItemIds.size === 0) {
               try {
                 // Importuj i użyj funkcji wyszukiwania pozycji magazynowych
-                const { getAllInventoryItems } = await import('./inventoryService');
+                const { getAllInventoryItems } = await import('./inventory');
                 const inventorySearchResult = await getAllInventoryItems(
                   null, // warehouseId - wszystkie magazyny
                   1, // page - pierwsza strona
@@ -1476,7 +1476,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     // Jeśli nie znaleziono po ID, spróbuj znaleźć element po nazwie produktu
     if (!itemWasUpdated) {
       try {
-        const { getInventoryItemById } = await import('./inventoryService');
+        const { getInventoryItemById } = await import('./inventory');
         const inventoryItem = await getInventoryItemById(itemId);
         
         if (inventoryItem && inventoryItem.name) {
@@ -1526,7 +1526,7 @@ export const updatePurchaseOrderReceivedQuantity = async (purchaseOrderId, itemI
     if (!itemWasUpdated && poData.items.length > 0) {
       try {
         // Pobierz informacje o produkcie z magazynu
-        const { getInventoryItemById } = await import('./inventoryService');
+        const { getInventoryItemById } = await import('./inventory');
         const inventoryItem = await getInventoryItemById(itemId);
         
         if (inventoryItem && inventoryItem.sku) {

@@ -17,7 +17,7 @@ import {
   Divider
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
-import { createStocktaking, getStocktakingById, updateStocktaking, getAllWarehouses } from '../../services/inventoryService';
+import { createStocktaking, getStocktakingById, updateStocktaking, getAllWarehouses } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';

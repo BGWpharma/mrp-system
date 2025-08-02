@@ -1,4 +1,4 @@
-// src/services/inventoryService.js
+// src/services/inventory.js
 import { 
     collection, 
     doc, 

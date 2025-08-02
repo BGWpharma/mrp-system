@@ -425,7 +425,7 @@ export const convertPOReservationToStandard = async (reservationId, selectedBatc
     }
     
     // Utwórz standardową rezerwację magazynową
-    const { bookInventoryForTask } = await import('./inventoryService');
+    const { bookInventoryForTask } = await import('./inventory');
     const bookingResult = await bookInventoryForTask(
       reservation.materialId,
       quantityToConvert,

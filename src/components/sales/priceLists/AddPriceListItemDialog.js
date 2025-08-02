@@ -20,7 +20,7 @@ import {
   addPriceListItem, 
   DEFAULT_PRICE_LIST_ITEM 
 } from '../../../services/priceListService';
-import * as inventoryService from '../../../services/inventoryService';
+import * as inventoryService from '../../../services/inventory';
 import { getAllRecipes } from '../../../services/recipeService';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';

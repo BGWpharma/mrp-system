@@ -62,7 +62,7 @@ import {
   Sort as SortIcon
 } from '@mui/icons-material';
 import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction } from '../../services/productionService';
-import { getAllWarehouses } from '../../services/inventoryService';
+import { getAllWarehouses } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/dateUtils';

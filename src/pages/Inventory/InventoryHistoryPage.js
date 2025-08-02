@@ -14,7 +14,7 @@ import {
   TableRow
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions } from '../../services/inventoryService';
+import { getInventoryItemById, getItemTransactions } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate } from '../../utils/formatters';
 

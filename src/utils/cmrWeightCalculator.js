@@ -158,7 +158,7 @@ export const getInventoryDataFromBatches = async (linkedBatches) => {
   
   try {
     // Importuj dynamicznie, aby uniknąć cyklicznych zależności
-    const { getInventoryItemById, getInventoryBatch } = await import('../services/inventoryService');
+    const { getInventoryItemById, getInventoryBatch } = await import('../services/inventory');
     
     if (!firstBatch.itemId) {
       return null;
@@ -208,7 +208,7 @@ export const getPackageData = async (parentPackageItemId) => {
   
   try {
     // Importuj dynamicznie, aby uniknąć cyklicznych zależności
-    const { getInventoryItemById } = await import('../services/inventoryService');
+    const { getInventoryItemById } = await import('../services/inventory');
     
     const packageItem = await getInventoryItemById(parentPackageItemId);
     

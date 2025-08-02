@@ -61,7 +61,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
 import { format, addDays, parseISO } from 'date-fns';
 import { getTasksByDateRangeOptimized, generateMaterialsReport } from '../../services/productionService';
-import { getAllInventoryItems } from '../../services/inventoryService';
+import { getAllInventoryItems } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -304,7 +304,7 @@ const ForecastPage = () => {
       const batchSize = 50; // Pobierz ceny dla 20 materiałów na raz
       
       try {
-        const { getBestSupplierPricesForItems, getAwaitingOrdersForInventoryItem } = await import('../../services/inventoryService');
+        const { getBestSupplierPricesForItems, getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
         
         // Obliczanie kosztów na podstawie cen domyślnych dostawców
         for (let i = 0; i < materialIds.length; i += batchSize) {
@@ -321,7 +321,7 @@ const ForecastPage = () => {
           
           if (itemsToCheck.length > 0) {
             // Pobierz najlepsze ceny od dostawców, priorytetyzując domyślnych dostawców
-            const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
+            const bestPrices = await getBestSupplierPricesForItems(itemsToCheck, { includeSupplierNames: true });
             
             // Aktualizuj ceny i koszty w materialRequirements na podstawie domyślnych dostawców
             // NOWE: Przygotuj datę dla kursu walut (dzień poprzedzający dzisiejszy)
@@ -363,11 +363,27 @@ const ForecastPage = () => {
                   materialRequirements[materialId].supplierId = bestPrice.supplierId;
                   materialRequirements[materialId].isDefaultSupplier = bestPrice.isDefault;
                 }
+              } else {
+                const currentPrice = materialRequirements[materialId].price || 0;
+                
+                // Jeśli nie ma ceny magazynowej, sprawdź czy da się znaleźć w pozycjach
+                if (currentPrice === 0) {
+                  const inventoryItem = itemsData.find(item => item.id === materialId);
+                  
+                  if (inventoryItem && inventoryItem.price && inventoryItem.price > 0) {
+                    materialRequirements[materialId].price = inventoryItem.price;
+                    materialRequirements[materialId].currency = inventoryItem.currency || 'EUR';
+                    materialRequirements[materialId].supplier = 'Cena magazynowa';
+                  }
+                } else {
+                  materialRequirements[materialId].supplier = 'Cena magazynowa';
+                }
               }
               
               // Zawsze obliczaj koszt - teraz zawsze w EUR
-              materialRequirements[materialId].cost = materialRequirements[materialId].price * 
-                materialRequirements[materialId].requiredQuantity;
+              const currentPrice = materialRequirements[materialId].price || 0;
+              const requiredQty = materialRequirements[materialId].requiredQuantity || 0;
+              materialRequirements[materialId].cost = currentPrice * requiredQty;
             }
           }
         }

@@ -1199,7 +1199,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     try {
       // Import potrzebnych funkcji
       const { getAllRecipes } = await import('../../../services/recipeService');
-      const { getInventoryItemByRecipeId } = await import('../../../services/inventoryService');
+      const { getInventoryItemByRecipeId } = await import('../../../services/inventory');
       
       // Pobierz receptury
       const recipes = await getAllRecipes();

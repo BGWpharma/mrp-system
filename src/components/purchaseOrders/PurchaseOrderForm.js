@@ -60,7 +60,7 @@ import {
 import { 
   getAllInventoryItems,
   getAllWarehouses
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 import { CURRENCY_OPTIONS } from '../../config';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatNumberClean } from '../../utils/formatters';

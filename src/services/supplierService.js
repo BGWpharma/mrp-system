@@ -12,7 +12,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase/config';
-import { getBestSupplierPriceForItem as getBestSupplierPriceForItemFromInventory } from './inventoryService';
+import { getBestSupplierPriceForItem as getBestSupplierPriceForItemFromInventory } from './inventory';
 
 // Stałe dla kolekcji w Firebase
 const SUPPLIERS_COLLECTION = 'suppliers';

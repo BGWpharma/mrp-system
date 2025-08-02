@@ -437,7 +437,7 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
     
     // Pobierz pozycje magazynowe jeśli nie zostały przekazane
     if (!inventoryItems) {
-      const { getAllInventoryItems } = await import('../services/inventoryService');
+      const { getAllInventoryItems } = await import('../services/inventory');
       const items = await getAllInventoryItems();
       inventoryItems = new Map();
       items.forEach(item => {
@@ -453,7 +453,7 @@ export const calculateEstimatedMaterialsCost = async (recipe, inventoryItems = n
     }
 
     // Pobierz najlepsze ceny od dostawców
-    const { getBestSupplierPricesForItems } = await import('../services/inventoryService');
+    const { getBestSupplierPricesForItems } = await import('../services/inventory');
     
     // Przygotuj listę materiałów do sprawdzenia cen
     const materials = recipe.ingredients || recipe.components || [];

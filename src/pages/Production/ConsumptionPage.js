@@ -98,7 +98,7 @@ const ConsumptionPage = () => {
             // Pobierz rzeczywistą cenę z partii magazynowej
             if (consumption.batchId) {
               try {
-                const { getInventoryBatch } = await import('../../services/inventoryService');
+                const { getInventoryBatch } = await import('../../services/inventory');
                 const batchData = await getInventoryBatch(consumption.batchId);
                 
                 if (batchData && batchData.unitPrice !== undefined) {
@@ -193,7 +193,7 @@ const ConsumptionPage = () => {
       let actualUnitPrice = selectedConsumption.unitPrice;
       if (selectedConsumption.batchId) {
         try {
-          const { getInventoryBatch } = await import('../../services/inventoryService');
+          const { getInventoryBatch } = await import('../../services/inventory');
           const batchData = await getInventoryBatch(selectedConsumption.batchId);
           
           if (batchData && batchData.unitPrice !== undefined) {
@@ -209,8 +209,8 @@ const ConsumptionPage = () => {
       const quantityDifference = quantity - selectedConsumption.quantity;
 
       // Aktualizuj stan magazynowy
-      const { updateBatch } = await import('../../services/inventoryService');
-      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const { updateBatch } = await import('../../services/inventory');
+      const { getInventoryBatch } = await import('../../services/inventory');
       
       const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
       if (currentBatch) {
@@ -240,7 +240,7 @@ const ConsumptionPage = () => {
 
       // Aktualizuj rezerwacje - skoryguj ilość zarezerwowaną
       try {
-        const { updateReservation } = await import('../../services/inventoryService');
+        const { updateReservation } = await import('../../services/inventory');
         const transactionsRef = collection(db, 'inventoryTransactions');
         
         // Znajdź rezerwację dla tego materiału, partii i zadania
@@ -295,7 +295,7 @@ const ConsumptionPage = () => {
               currentUser.uid
             );
           } else {
-            const { deleteReservation } = await import('../../services/inventoryService');
+            const { deleteReservation } = await import('../../services/inventory');
             await deleteReservation(reservationDoc.id, currentUser.uid);
           }
         }
@@ -394,8 +394,8 @@ const ConsumptionPage = () => {
       }
 
       // Przywróć stan magazynowy
-      const { updateBatch } = await import('../../services/inventoryService');
-      const { getInventoryBatch } = await import('../../services/inventoryService');
+      const { updateBatch } = await import('../../services/inventory');
+      const { getInventoryBatch } = await import('../../services/inventory');
       
       const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
       if (currentBatch) {
@@ -419,7 +419,7 @@ const ConsumptionPage = () => {
       // Przywróć rezerwację tylko jeśli użytkownik tego chce
       if (restoreReservation) {
         try {
-          const { updateReservation, bookInventoryForTask } = await import('../../services/inventoryService');
+          const { updateReservation, bookInventoryForTask } = await import('../../services/inventory');
           const transactionsRef = collection(db, 'inventoryTransactions');
           
           // Znajdź rezerwację dla tego materiału, partii i zadania
@@ -508,7 +508,7 @@ const ConsumptionPage = () => {
             updatedMaterialBatches[materialId][batchIndex].quantity = currentReservedQuantity + consumedQuantity;
           } else {
             // Jeśli partia nie istnieje, dodaj ją
-            const { getInventoryBatch } = await import('../../services/inventoryService');
+            const { getInventoryBatch } = await import('../../services/inventory');
             const batchInfo = await getInventoryBatch(selectedConsumption.batchId);
             
             updatedMaterialBatches[materialId].push({
@@ -686,7 +686,7 @@ const ConsumptionPage = () => {
       }
 
       // Import funkcji do czyszczenia rezerwacji
-      const { cleanupTaskReservations } = await import('../../services/inventoryService');
+      const { cleanupTaskReservations } = await import('../../services/inventory');
       
       // Znajdź materiały z aktywnymi rezerwacjami
       const materialsWithReservations = [];

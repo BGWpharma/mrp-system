@@ -50,7 +50,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
 import RecipeDesignAttachments from '../../components/recipes/RecipeDesignAttachments';
 import PdfMiniaturePreview from '../../components/common/PdfMiniaturePreview';
-import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventoryService';
+import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventory';
 import { db } from '../../services/firebase/config';
 import { collection, query, where, limit, getDocs, doc, getDoc, updateDoc, orderBy } from 'firebase/firestore';
 import { getAllWorkstations } from '../../services/workstationService';

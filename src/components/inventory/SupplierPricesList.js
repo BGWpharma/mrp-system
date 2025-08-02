@@ -34,7 +34,7 @@ import {
   Cancel as CancelIcon,
   Check as CheckIcon
 } from '@mui/icons-material';
-import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice, setDefaultSupplierPrice, unsetDefaultSupplierPrice } from '../../services/inventoryService';
+import { getSupplierPrices, addSupplierPrice, updateSupplierPrice, deleteSupplierPrice, setDefaultSupplierPrice, unsetDefaultSupplierPrice } from '../../services/inventory';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';

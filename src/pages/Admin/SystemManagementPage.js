@@ -33,7 +33,7 @@ import {
   migrateInventoryItemsFromV1toV2, 
   checkInventoryIntegrityAndFix,
   bulkUpdateSupplierPricesFromCompletedPOs
-} from '../../services/inventoryService';
+} from '../../services/inventory';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem

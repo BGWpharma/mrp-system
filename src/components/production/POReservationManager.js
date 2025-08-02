@@ -448,7 +448,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
           for (const batch of reservation.linkedBatches) {
             if (!quantities[batch.batchId]) {
               // Pobierz rezerwacje dla tej partii
-              const { getBatchReservations } = await import('../../services/inventoryService');
+              const { getBatchReservations } = await import('../../services/inventory');
               const batchReservations = await getBatchReservations(batch.batchId);
               
               const totalReserved = batchReservations.reduce((sum, res) => sum + (res.quantity || 0), 0);
