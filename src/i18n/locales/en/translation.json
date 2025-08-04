@@ -2478,5 +2478,156 @@
         "cancel": "Cancel"
       }
     }
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "language": "Change language"
+  },
+  "orderForm": {
+    "title": {
+      "new": "New Order",
+      "edit": "Edit Order"
+    },
+    "buttons": {
+      "back": "Back",
+      "save": "Save",
+      "saving": "Saving...",
+      "addProduct": "Add Product",
+      "calculating": "Calculating...",
+      "calculateEstimatedCosts": "Calculate Estimated Costs",
+      "generating": "Generating...",
+      "generatePurchaseOrders": "Generate Purchase Orders",
+      "creating": "Creating...",
+      "createPurchaseOrders": "Create Purchase Orders",
+      "addCost": "Add Cost",
+      "addDiscount": "Add Discount",
+      "uploading": "Uploading...",
+      "addFile": "Add File",
+      "addGoogleDriveLink": "Add Google Drive Link",
+      "addInvoice": "Add Invoice",
+      "cancel": "Cancel",
+      "add": "Add",
+      "refreshPurchaseOrders": "Refresh PO Data",
+      "assignExistingPO": "Assign Existing PO",
+      "assign": "Assign"
+    },
+    "labels": {
+      "orderNumber": "Customer Order Number",
+      "orderStatus": "Order Status",
+      "client": "Client",
+      "orderDate": "Order Date",
+      "clientEmail": "Client Email",
+      "clientPhone": "Client Phone",
+      "shippingAddress": "Shipping Address",
+      "expectedDeliveryDate": "Expected Delivery Date",
+      "paymentMethod": "Payment Method",
+      "paymentStatus": "Payment Status",
+      "deliveryMethod": "Delivery Method",
+      "deliveryCost": "Delivery Cost",
+      "currency": "Currency",
+      "deliveryProof": "Delivery Proof",
+      "googleDriveLink": "Google Drive Link",
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date"
+    },
+    "sections": {
+      "basicData": "Basic Data",
+      "products": "Products",
+      "paymentAndDelivery": "Payment and Delivery",
+      "notes": "Notes",
+      "deliveryProof": "Delivery Proof",
+      "orderSummary": "Order Value Summary",
+      "additionalCosts": "Additional Costs",
+      "relatedPurchaseOrders": "Related Purchase Orders",
+      "invoices": "Invoices"
+    },
+    "table": {
+      "productRecipe": "Product / Recipe",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "priceEUR": "Price EUR",
+      "value": "Value",
+      "totalCostPerUnit": "Total Cost/Unit",
+      "fullProductionCostPerUnit": "Full Prod. Cost/Unit"
+    },
+    "tooltips": {
+      "addNewClient": "Add New Client",
+      "fullProductionCostPerUnit": "Full production cost per unit (all materials regardless of 'include' flag)"
+    },
+    "placeholders": {
+      "deliveryMethod": "e.g. Courier, Personal pickup",
+      "notes": "Additional information, notes...",
+      "invoiceNumber": "Invoice Number",
+      "enterInvoiceNumber": "Enter invoice number",
+      "addItemDescription": "Add item description..."
+    },
+    "summary": {
+      "productsValue": "Products Value",
+      "deliveryCost": "Delivery Cost",
+      "additionalCosts": "Additional Costs",
+      "discounts": "Discounts",
+      "totalOrderValue": "Total Order Value",
+      "purchaseOrdersValue": "Purchase Orders Value",
+      "total": "Total"
+    },
+    "messages": {
+      "documentNotDisplayable": "Document in a format that cannot be displayed in the browser. Click the \"Open\" button to view the document.",
+      "noDeliveryProof": "No delivery proof attached. Add a scan, photo, or link to a document confirming delivery.",
+      "noPurchaseOrders": "No related purchase orders. Click \"Generate Purchase Orders\" to automatically create orders for recipe materials.",
+      "noInvoices": "No invoices. Use the button above to add an invoice.",
+      "noAdditionalCosts": "No additional costs or discounts. Use the buttons above to add them."
+    },
+    "dialogs": {
+      "generatePurchaseOrders": {
+        "title": "Generate Purchase Orders",
+        "description": "The system will generate purchase orders for materials needed to produce order items that have recipes. Purchase orders will be created and linked to this customer order.",
+        "materialsLabel": "Materials to order"
+      },
+      "addClient": {
+        "title": "Add New Client"
+      },
+      "addGoogleDriveLink": {
+        "title": "Add Google Drive Link"
+      },
+      "assignPurchaseOrder": {
+        "title": "Assign Purchase Order"
+      }
+    },
+    "invoices": {
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date",
+      "status": "Status",
+      "amount": "Amount",
+      "paidAmount": "Paid Amount"
+    },
+    "additionalCosts": {
+      "description": "Description",
+      "amount": "Amount",
+      "currency": "Currency",
+      "vat": "VAT",
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date",
+      "exchangeRate": "Exchange Rate"
+    },
+    "helperText": {
+      "invoiceDate": "Invoice issue date"
+    },
+    "itemDetails": {
+      "title": "Item Details",
+      "description": "Description",
+      "fromPriceList": "From Price List",
+      "productionTask": "Production Task",
+      "productionCost": "Production Cost",
+      "profit": "Profit",
+      "lastCost": "Last Cost",
+      "totalItemValue": "Total Item Value",
+      "estimated": "Estimated",
+      "estimatedMaterialsCost": "Estimated materials cost",
+      "basedOnMaterials": "based on {{count}} materials",
+      "currencyConversionWarning": "Note: Some prices have been converted from other currencies to EUR according to NBP exchange rates",
+      "date": "Date",
+      "convertedFromOtherCurrencies": "converted from other currencies"
+    }
   }
 }

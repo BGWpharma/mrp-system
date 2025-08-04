@@ -2478,5 +2478,156 @@
         "cancel": "Anuluj"
       }
     }
+  },
+  "common": {
+    "yes": "Tak",
+    "no": "Nie",
+    "language": "Zmień język"
+  },
+  "orderForm": {
+    "title": {
+      "new": "Nowe zamówienie",
+      "edit": "Edytuj zamówienie"
+    },
+    "buttons": {
+      "back": "Powrót",
+      "save": "Zapisz",
+      "saving": "Zapisywanie...",
+      "addProduct": "Dodaj produkt",
+      "calculating": "Obliczam...",
+      "calculateEstimatedCosts": "Oblicz szacowane koszty",
+      "generating": "Generowanie...",
+      "generatePurchaseOrders": "Generuj zamówienia zakupu",
+      "creating": "Tworzenie...",
+      "createPurchaseOrders": "Utwórz zamówienia zakupu",
+      "addCost": "Dodaj koszt",
+      "addDiscount": "Dodaj rabat",
+      "uploading": "Przesyłanie...",
+      "addFile": "Dodaj plik",
+      "addGoogleDriveLink": "Dodaj link Google Drive",
+      "addInvoice": "Dodaj fakturę",
+      "cancel": "Anuluj",
+      "add": "Dodaj",
+      "refreshPurchaseOrders": "Odśwież dane PO",
+      "assignExistingPO": "Przypisz istniejące PO",
+      "assign": "Przypisz"
+    },
+    "labels": {
+      "orderNumber": "Numer zamówienia klienta",
+      "orderStatus": "Status zamówienia",
+      "client": "Klient",
+      "orderDate": "Data zamówienia",
+      "clientEmail": "Email klienta",
+      "clientPhone": "Telefon klienta",
+      "shippingAddress": "Adres dostawy",
+      "expectedDeliveryDate": "Oczekiwana data dostawy",
+      "paymentMethod": "Metoda płatności",
+      "paymentStatus": "Status płatności",
+      "deliveryMethod": "Metoda dostawy",
+      "deliveryCost": "Koszt dostawy",
+      "currency": "Waluta",
+      "deliveryProof": "Dowód dostawy",
+      "googleDriveLink": "Link do Google Drive",
+      "invoiceNumber": "Nr faktury",
+      "invoiceDate": "Data faktury"
+    },
+    "sections": {
+      "basicData": "Dane podstawowe",
+      "products": "Produkty",
+      "paymentAndDelivery": "Płatność i dostawa",
+      "notes": "Uwagi",
+      "deliveryProof": "Dowód dostawy",
+      "orderSummary": "Podsumowanie wartości zamówienia",
+      "additionalCosts": "Dodatkowe koszty",
+      "relatedPurchaseOrders": "Zamówienia zakupu powiązane",
+      "invoices": "Faktury"
+    },
+    "table": {
+      "productRecipe": "Produkt / Receptura",
+      "quantity": "Ilość",
+      "unit": "Jedn.",
+      "priceEUR": "Cena EUR",
+      "value": "Wartość",
+      "totalCostPerUnit": "Koszt całk./szt.",
+      "fullProductionCostPerUnit": "Pełny koszt prod./szt."
+    },
+    "tooltips": {
+      "addNewClient": "Dodaj nowego klienta",
+      "fullProductionCostPerUnit": "Pełny koszt produkcji na jednostkę (wszystkie materiały niezależnie od flagi 'wliczaj')"
+    },
+    "placeholders": {
+      "deliveryMethod": "np. Kurier, Odbiór osobisty",
+      "notes": "Dodatkowe informacje, uwagi...",
+      "invoiceNumber": "Nr faktury",
+      "enterInvoiceNumber": "Wprowadź numer faktury",
+      "addItemDescription": "Dodaj opis pozycji..."
+    },
+    "summary": {
+      "productsValue": "Wartość produktów",
+      "deliveryCost": "Koszt dostawy",
+      "additionalCosts": "Dodatkowe koszty",
+      "discounts": "Rabaty",
+      "totalOrderValue": "Wartość całkowita zamówienia",
+      "purchaseOrdersValue": "Wartość zamówień zakupu",
+      "total": "Razem"
+    },
+    "messages": {
+      "documentNotDisplayable": "Dokument w formacie, który nie może być wyświetlony w przeglądarce. Kliknij przycisk \"Otwórz\", aby wyświetlić dokument.",
+      "noDeliveryProof": "Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.",
+      "noPurchaseOrders": "Brak powiązanych zamówień zakupu. Kliknij \"Generuj zamówienia zakupu\", aby automatycznie utworzyć zamówienia dla materiałów z receptur.",
+      "noInvoices": "Brak faktur. Użyj przycisku powyżej, aby dodać fakturę.",
+      "noAdditionalCosts": "Brak dodatkowych kosztów lub rabatów. Użyj przycisków powyżej, aby je dodać."
+    },
+    "dialogs": {
+      "generatePurchaseOrders": {
+        "title": "Generowanie zamówień zakupu",
+        "description": "System wygeneruje zamówienia zakupu dla materiałów potrzebnych do produkcji pozycji zamówienia, które posiadają receptury. Zamówienia zakupu zostaną utworzone i powiązane z tym zamówieniem klienta.",
+        "materialsLabel": "Materiały do zamówienia"
+      },
+      "addClient": {
+        "title": "Dodaj nowego klienta"
+      },
+      "addGoogleDriveLink": {
+        "title": "Dodaj link do Google Drive"
+      },
+      "assignPurchaseOrder": {
+        "title": "Przypisz zamówienie zakupowe"
+      }
+    },
+    "invoices": {
+      "invoiceNumber": "Nr faktury",
+      "invoiceDate": "Data faktury",
+      "status": "Status",
+      "amount": "Kwota",
+      "paidAmount": "Kwota opłacona"
+    },
+    "additionalCosts": {
+      "description": "Opis",
+      "amount": "Kwota",
+      "currency": "Waluta",
+      "vat": "VAT",
+      "invoiceNumber": "Nr faktury",
+      "invoiceDate": "Data faktury",
+      "exchangeRate": "Kurs"
+    },
+    "helperText": {
+      "invoiceDate": "Data wystawienia faktury"
+    },
+    "itemDetails": {
+      "title": "Szczegóły pozycji",
+      "description": "Opis",
+      "fromPriceList": "Z listy cenowej",
+      "productionTask": "Zadanie produkcyjne",
+      "productionCost": "Koszt produkcji",
+      "profit": "Profit",
+      "lastCost": "Ostatni koszt",
+      "totalItemValue": "Suma wartości pozycji",
+      "estimated": "Szacowany",
+      "estimatedMaterialsCost": "Szacowany koszt materiałów",
+      "basedOnMaterials": "na podstawie {{count}} materiałów",
+      "currencyConversionWarning": "Uwaga: Niektóre ceny zostały przeliczone z innych walut na EUR według kursów NBP",
+      "date": "Data",
+      "convertedFromOtherCurrencies": "przeliczone z innych walut"
+    }
   }
 }

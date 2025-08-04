@@ -79,6 +79,7 @@ import { getAllInventoryItems, getIngredientPrices } from '../../services/invent
 import { getAllCustomers, createCustomer } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateForInput, formatDate, safeParseDate, ensureDateInputFormat } from '../../utils/dateUtils';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
@@ -162,6 +163,7 @@ const OrderForm = ({ orderId }) => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = React.useRef(null);
@@ -2597,10 +2599,10 @@ const OrderForm = ({ orderId }) => {
             startIcon={<ArrowBackIcon />} 
             onClick={() => navigate('/orders')}
           >
-            Powrót
+            {t('orderForm.buttons.back')}
           </Button>
           <Typography variant="h5">
-            {orderId ? 'Edytuj zamówienie' : 'Nowe zamówienie'}
+            {orderId ? t('orderForm.title.edit') : t('orderForm.title.new')}
           </Typography>
           <Button 
             type="submit" 
@@ -2609,14 +2611,14 @@ const OrderForm = ({ orderId }) => {
             disabled={saving}
             startIcon={<SaveIcon />}
           >
-            {saving ? 'Zapisywanie...' : 'Zapisz'}
+            {saving ? t('orderForm.buttons.saving') : t('orderForm.buttons.save')}
           </Button>
         </Box>
 
         {orderData.orderNumber && (
           <Box sx={{ mb: 3, p: 2, bgcolor: 'primary.light', borderRadius: 1, color: 'primary.contrastText', boxShadow: 1 }}>
             <Typography variant="subtitle1" fontWeight="bold">
-              Numer zamówienia klienta: {orderData.orderNumber}
+              {t('orderForm.labels.orderNumber')}: {orderData.orderNumber}
             </Typography>
           </Box>
         )}
@@ -2624,15 +2626,15 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <PersonIcon sx={{ mr: 1 }} /> Dane podstawowe
+              <PersonIcon sx={{ mr: 1 }} /> {t('orderForm.sections.basicData')}
             </Typography>
             <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Status zamówienia</InputLabel>
+              <InputLabel>{t('orderForm.labels.orderStatus')}</InputLabel>
               <Select
                 name="status"
                 value={orderData.status}
                 onChange={handleChange}
-                label="Status zamówienia"
+                label={t('orderForm.labels.orderStatus')}
                 sx={{ minWidth: { xs: '120px', sm: '200px' } }}
               >
                 {ORDER_STATUSES.map(status => (
@@ -2658,7 +2660,7 @@ const OrderForm = ({ orderId }) => {
                     renderInput={(params) => (
                       <TextField 
                         {...params} 
-                        label="Klient" 
+                        label={t('orderForm.labels.client')} 
                         required
                         error={!!validationErrors.customerName}
                         helperText={validationErrors.customerName}
@@ -2668,7 +2670,7 @@ const OrderForm = ({ orderId }) => {
                     )}
                   />
                 </FormControl>
-                <Tooltip title="Dodaj nowego klienta">
+                <Tooltip title={t('orderForm.tooltips.addNewClient')}>
                   <IconButton 
                     color="primary" 
                     onClick={handleAddCustomer}
@@ -2682,7 +2684,7 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 type="date"
-                label="Data zamówienia"
+                label={t('orderForm.labels.orderDate')}
                 name="orderDate"
                 value={ensureDateInputFormat(orderData.orderDate)}
                 onChange={handleChange}
@@ -2698,7 +2700,7 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 name="customer_email"
-                label="Email klienta"
+                label={t('orderForm.labels.clientEmail')}
                 value={orderData.customer.email || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
@@ -2712,7 +2714,7 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 name="customer_phone"
-                label="Telefon klienta"
+                label={t('orderForm.labels.clientPhone')}
                 value={orderData.customer.phone || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
@@ -2726,7 +2728,7 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12}>
               <TextField
                 name="customer_shippingAddress"
-                label="Adres dostawy"
+                label={t('orderForm.labels.shippingAddress')}
                 value={orderData.customer.shippingAddress || ''}
                 onChange={handleCustomerDetailChange}
                 fullWidth
@@ -2743,7 +2745,7 @@ const OrderForm = ({ orderId }) => {
               {/* Pole deadline jest używane w UI, ale w bazie danych zapisywane jako expectedDeliveryDate */}
               <TextField
                 type="date"
-                label="Oczekiwana data dostawy"
+                label={t('orderForm.labels.expectedDeliveryDate')}
                 name="deadline"
                 value={ensureDateInputFormat(orderData.deadline)}
                 onChange={handleChange}
@@ -2760,7 +2762,7 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <ShoppingCartIcon sx={{ mr: 1 }} /> Produkty
+              <ShoppingCartIcon sx={{ mr: 1 }} /> {t('orderForm.sections.products')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button 
@@ -2770,7 +2772,7 @@ const OrderForm = ({ orderId }) => {
                 color="secondary"
                 sx={{ borderRadius: 2 }}
               >
-                Dodaj produkt
+                {t('orderForm.buttons.addProduct')}
               </Button>
               <Button
                 variant="outlined"
@@ -2780,7 +2782,7 @@ const OrderForm = ({ orderId }) => {
                 color="info"
                 sx={{ borderRadius: 2 }}
               >
-                {calculatingCosts ? 'Obliczam...' : 'Oblicz szacowane koszty'}
+                {calculatingCosts ? t('orderForm.buttons.calculating') : t('orderForm.buttons.calculateEstimatedCosts')}
               </Button>
             </Box>
           </Box>
@@ -2792,15 +2794,15 @@ const OrderForm = ({ orderId }) => {
               <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                 <TableRow>
                   <TableCell width="5%" sx={tableCellSx}></TableCell>
-                  <TableCell width="25%" sx={tableCellSx}>Produkt / Receptura</TableCell>
-                  <TableCell width="10%" sx={tableCellSx}>Ilość</TableCell>
-                  <TableCell width="8%" sx={tableCellSx}>Jedn.</TableCell>
-                  <TableCell width="12%" sx={tableCellSx}>Cena EUR</TableCell>
-                  <TableCell width="12%" sx={tableCellSx}>Wartość</TableCell>
-                  <TableCell width="14%" sx={tableCellSx}>Koszt całk./szt.</TableCell>
+                  <TableCell width="25%" sx={tableCellSx}>{t('orderForm.table.productRecipe')}</TableCell>
+                  <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.quantity')}</TableCell>
+                  <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.unit')}</TableCell>
+                  <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.priceEUR')}</TableCell>
+                  <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.value')}</TableCell>
+                  <TableCell width="14%" sx={tableCellSx}>{t('orderForm.table.totalCostPerUnit')}</TableCell>
                   <TableCell width="14%" sx={tableCellSx}>
-                    <Tooltip title="Pełny koszt produkcji na jednostkę (wszystkie materiały niezależnie od flagi 'wliczaj')">
-                      Pełny koszt prod./szt.
+                    <Tooltip title={t('orderForm.tooltips.fullProductionCostPerUnit')}>
+                      {t('orderForm.table.fullProductionCostPerUnit')}
                     </Tooltip>
                   </TableCell>
                   <TableCell width="5%" sx={tableCellSx}></TableCell>
@@ -3054,13 +3056,13 @@ const OrderForm = ({ orderId }) => {
                         <Collapse in={expandedRows[index]} timeout="auto" unmountOnExit>
                           <Box sx={{ margin: 1 }}>
                             <Typography variant="h6" gutterBottom component="div" sx={{ color: 'primary.main' }}>
-                              Szczegóły pozycji
+                              {t('orderForm.itemDetails.title')}
                             </Typography>
                             <Grid container spacing={2}>
                               {/* Opis */}
                               <Grid item xs={12} md={6}>
                                 <TextField
-                                  label="Opis"
+                                  label={t('orderForm.itemDetails.description')}
                                   value={item.description || ''}
                                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                   fullWidth
@@ -3068,7 +3070,7 @@ const OrderForm = ({ orderId }) => {
                                   rows={3}
                                   size="small"
                                   variant="outlined"
-                                  placeholder="Dodaj opis pozycji..."
+                                  placeholder={t('orderForm.placeholders.addItemDescription')}
                                 />
                               </Grid>
                               
@@ -3076,10 +3078,10 @@ const OrderForm = ({ orderId }) => {
                               <Grid item xs={12} md={3}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                   <Typography variant="subtitle2" color="text.secondary">
-                                    Z listy cenowej
+                                    {t('orderForm.itemDetails.fromPriceList')}
                                   </Typography>
                                   <Chip 
-                                    label={item.fromPriceList ? "Tak" : "Nie"} 
+                                    label={item.fromPriceList ? t('common.yes') : t('common.no')} 
                                     size="small" 
                                     color={item.fromPriceList ? "success" : "default"}
                                     variant={item.fromPriceList ? "filled" : "outlined"}
@@ -3093,7 +3095,7 @@ const OrderForm = ({ orderId }) => {
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Typography variant="subtitle2" color="text.secondary">
-                                      Zadanie produkcyjne
+                                      {t('orderForm.itemDetails.productionTask')}
                                     </Typography>
                                     <Tooltip title="Odśwież status zadań produkcyjnych">
                                       <IconButton 
@@ -3133,7 +3135,7 @@ const OrderForm = ({ orderId }) => {
                               <Grid item xs={12} md={3}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                   <Typography variant="subtitle2" color="text.secondary">
-                                    Koszt produkcji
+                                    {t('orderForm.itemDetails.productionCost')}
                                   </Typography>
                                   {item.productionTaskId && item.productionCost !== undefined ? (
                                     <Box sx={{ fontWeight: 'medium', color: 'text.secondary' }}>
@@ -3149,7 +3151,7 @@ const OrderForm = ({ orderId }) => {
                               <Grid item xs={12} md={3}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                   <Typography variant="subtitle2" color="text.secondary">
-                                    Profit
+                                    {t('orderForm.itemDetails.profit')}
                                   </Typography>
                                   {item.fromPriceList && parseFloat(item.price || 0) > 0 && item.productionCost !== undefined ? (
                                     <Box sx={{ 
@@ -3168,21 +3170,21 @@ const OrderForm = ({ orderId }) => {
                               <Grid item xs={12} md={3}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                   <Typography variant="subtitle2" color="text.secondary">
-                                    Ostatni koszt
+                                    {t('orderForm.itemDetails.lastCost')}
                                   </Typography>
                                   {item.lastUsageInfo ? (
                                     <Tooltip title={
                                       item.lastUsageInfo.estimatedCost 
-                                        ? `Szacowany koszt materiałów: ${formatCurrency(item.lastUsageInfo.cost)} EUR (na podstawie ${item.lastUsageInfo.costDetails?.length || 0} materiałów)${
+                                        ? `${t('orderForm.itemDetails.estimatedMaterialsCost')}: ${formatCurrency(item.lastUsageInfo.cost)} EUR (${t('orderForm.itemDetails.basedOnMaterials', { count: item.lastUsageInfo.costDetails?.length || 0 })})${
                                             item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) 
-                                              ? '\n\nUwaga: Niektóre ceny zostały przeliczone z innych walut na EUR według kursów NBP'
+                                              ? `\n\n${t('orderForm.itemDetails.currencyConversionWarning')}`
                                               : ''
                                           }`
-                                        : `Data: ${formatDateToDisplay(item.lastUsageInfo.date)}, Ostatni koszt: ${formatCurrency(item.lastUsageInfo.cost)}`
+                                        : `${t('orderForm.itemDetails.date')}: ${formatDateToDisplay(item.lastUsageInfo.date)}, ${t('orderForm.itemDetails.lastCost')}: ${formatCurrency(item.lastUsageInfo.cost)}`
                                     }>
                                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                         <Typography variant="caption" color="text.secondary">
-                                          {item.lastUsageInfo.estimatedCost ? 'Szacowany' : formatDateToDisplay(item.lastUsageInfo.date)}
+                                          {item.lastUsageInfo.estimatedCost ? t('orderForm.itemDetails.estimated') : formatDateToDisplay(item.lastUsageInfo.date)}
                                         </Typography>
                                         <Typography 
                                           variant="body2" 
@@ -3199,7 +3201,7 @@ const OrderForm = ({ orderId }) => {
                                           )}
                                           {item.lastUsageInfo.estimatedCost && item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) && (
                                             <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.7, color: 'warning.main' }}>
-                                              (przeliczone z innych walut)
+                                              ({t('orderForm.itemDetails.convertedFromOtherCurrencies')})
                                             </Typography>
                                           )}
                                         </Typography>
@@ -3215,7 +3217,7 @@ const OrderForm = ({ orderId }) => {
                               <Grid item xs={12} md={3}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                   <Typography variant="subtitle2" color="text.secondary">
-                                    Suma wartości pozycji
+                                    {t('orderForm.itemDetails.totalItemValue')}
                                   </Typography>
                                   <Box sx={{ fontWeight: 'bold', color: 'success.main' }}>
                                     {formatCurrency(calculateItemTotalValue(item))}
@@ -3249,26 +3251,26 @@ const OrderForm = ({ orderId }) => {
               size="large"
               sx={{ borderRadius: 2, px: 4 }}
             >
-              Dodaj produkt
+              {t('orderForm.buttons.addProduct')}
             </Button>
           </Box>
         </Paper>
 
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-            <LocalShippingIcon sx={{ mr: 1 }} /> Płatność i dostawa
+            <LocalShippingIcon sx={{ mr: 1 }} /> {t('orderForm.sections.paymentAndDelivery')}
           </Typography>
           <Divider sx={{ mb: 3 }} />
           
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Metoda płatności</InputLabel>
+                <InputLabel>{t('orderForm.labels.paymentMethod')}</InputLabel>
                 <Select
                   name="paymentMethod"
                   value={orderData.paymentMethod || 'Przelew'}
                   onChange={handleChange}
-                  label="Metoda płatności"
+                  label={t('orderForm.labels.paymentMethod')}
                   variant="outlined"
                   sx={inputSx}
                 >
@@ -3282,12 +3284,12 @@ const OrderForm = ({ orderId }) => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
-                <InputLabel>Status płatności</InputLabel>
+                <InputLabel>{t('orderForm.labels.paymentStatus')}</InputLabel>
                 <Select
                   name="paymentStatus"
                   value={orderData.paymentStatus || 'Nieopłacone'}
                   onChange={handleChange}
-                  label="Status płatności"
+                  label={t('orderForm.labels.paymentStatus')}
                   variant="outlined"
                   sx={inputSx}
                 >
@@ -3300,11 +3302,11 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 name="shippingMethod"
-                label="Metoda dostawy"
+                label={t('orderForm.labels.deliveryMethod')}
                 value={orderData.shippingMethod || ''}
                 onChange={handleChange}
                 fullWidth
-                placeholder="np. Kurier, Odbiór osobisty"
+                placeholder={t('orderForm.placeholders.deliveryMethod')}
                 variant="outlined"
                 sx={inputSx}
                 InputProps={{
@@ -3316,7 +3318,7 @@ const OrderForm = ({ orderId }) => {
               <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                 <TextField
                   name="shippingCost"
-                  label="Koszt dostawy"
+                  label={t('orderForm.labels.deliveryCost')}
                   type="number"
                   value={orderData.shippingCostOriginal !== undefined ? orderData.shippingCostOriginal : orderData.shippingCost || 0}
                   onChange={(e) => {
@@ -3345,7 +3347,7 @@ const OrderForm = ({ orderId }) => {
                   sx={{ flex: 1, mr: 1, ...inputSx }}
                 />
                 <FormControl variant="outlined" sx={{ minWidth: 80 }}>
-                  <InputLabel>Waluta</InputLabel>
+                  <InputLabel>{t('orderForm.labels.currency')}</InputLabel>
                   <Select
                     value={orderData.shippingCurrency || 'EUR'}
                     onChange={(e) => {
@@ -3432,11 +3434,11 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 name="invoiceNumber"
-                label="Nr faktury"
+                label={t('orderForm.labels.invoiceNumber')}
                 value={orderData.invoiceNumber || ''}
                 onChange={handleChange}
                 fullWidth
-                placeholder="Wprowadź numer faktury"
+                placeholder={t('orderForm.placeholders.enterInvoiceNumber')}
                 variant="outlined"
                 sx={inputSx}
                 InputProps={{
@@ -3447,14 +3449,14 @@ const OrderForm = ({ orderId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 type="date"
-                label="Data faktury"
+                label={t('orderForm.labels.invoiceDate')}
                 name="invoiceDate"
                 value={orderData.invoiceDate || ''}
                 onChange={handleChange}
                 fullWidth
                 InputLabelProps={{ shrink: true }}
                 variant="outlined"
-                helperText="Data wystawienia faktury"
+                helperText={t('orderForm.helperText.invoiceDate')}
                 sx={inputSx}
               />
             </Grid>
@@ -3462,10 +3464,10 @@ const OrderForm = ({ orderId }) => {
           
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, alignItems: 'center', bgcolor: 'background.paper', p: 2, borderRadius: 2, boxShadow: 1 }}>
             <Typography variant="subtitle1" sx={{ mr: 2 }}>
-              Koszt dostawy: {formatCurrency(parseFloat(orderData.shippingCost) || 0)}
+              {t('orderForm.summary.deliveryCost')}: {formatCurrency(parseFloat(orderData.shippingCost) || 0)}
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              Razem: {formatCurrency(calculateTotal())}
+              {t('orderForm.summary.total')}: {formatCurrency(calculateTotal())}
             </Typography>
           </Box>
         </Paper>
@@ -3474,7 +3476,7 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <AttachMoneyIcon sx={{ mr: 1 }} /> Dodatkowe koszty
+              <AttachMoneyIcon sx={{ mr: 1 }} /> {t('orderForm.sections.additionalCosts')}
             </Typography>
             <Box>
               <Button
@@ -3484,7 +3486,7 @@ const OrderForm = ({ orderId }) => {
                 size="small"
                 sx={{ mr: 1, borderRadius: 2 }}
               >
-                Dodaj koszt
+                {t('orderForm.buttons.addCost')}
               </Button>
               <Button
                 startIcon={<AddIcon />}
@@ -3494,7 +3496,7 @@ const OrderForm = ({ orderId }) => {
                 color="secondary"
                 sx={{ borderRadius: 2 }}
               >
-                Dodaj rabat
+                {t('orderForm.buttons.addDiscount')}
               </Button>
             </Box>
           </Box>
@@ -3503,20 +3505,20 @@ const OrderForm = ({ orderId }) => {
           
           {!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
-              Brak dodatkowych kosztów lub rabatów. Użyj przycisków powyżej, aby je dodać.
+              {t('orderForm.messages.noAdditionalCosts')}
             </Typography>
           ) : (
             <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={tableCellSx}>Opis</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>Kwota</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>Waluta</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>VAT</TableCell>
-                    <TableCell sx={tableCellSx}>Nr faktury</TableCell>
-                    <TableCell sx={tableCellSx}>Data faktury</TableCell>
-                    <TableCell sx={tableCellSx}>Kurs</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.description')}</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.additionalCosts.amount')}</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.additionalCosts.currency')}</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.additionalCosts.vat')}</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.invoiceNumber')}</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.invoiceDate')}</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.exchangeRate')}</TableCell>
                     <TableCell width="50px" sx={tableCellSx}></TableCell>
                   </TableRow>
                 </TableHead>
@@ -3647,7 +3649,7 @@ const OrderForm = ({ orderId }) => {
         </Paper>
         
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderForm.sections.notes')}</Typography>
           <TextField
             name="notes"
             value={orderData.notes || ''}
@@ -3655,13 +3657,13 @@ const OrderForm = ({ orderId }) => {
             fullWidth
             multiline
             rows={4}
-            placeholder="Dodatkowe informacje, uwagi..."
+            placeholder={t('orderForm.placeholders.notes')}
             sx={inputSx}
           />
         </Paper>
 
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Dowód dostawy</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderForm.sections.deliveryProof')}</Typography>
           <Divider sx={{ mb: 2 }} />
           
           {orderData.deliveryProof ? (
@@ -3670,7 +3672,7 @@ const OrderForm = ({ orderId }) => {
                 <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
                   <img 
                     src={orderData.deliveryProof} 
-                    alt="Dowód dostawy" 
+                    alt={t('orderForm.labels.deliveryProof')} 
                     style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
                   />
                 </Box>
@@ -3678,7 +3680,7 @@ const OrderForm = ({ orderId }) => {
                 <Box sx={{ width: '100%', maxWidth: 600, mb: 2, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
                   <Typography variant="h6" align="center" gutterBottom>
                     <LinkIcon color="primary" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                    Link do Google Drive
+                    {t('orderForm.labels.googleDriveLink')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" gutterBottom align="center">
                     {orderData.deliveryProof}
@@ -3687,8 +3689,7 @@ const OrderForm = ({ orderId }) => {
               ) : (
                 <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
                   <Alert severity="info">
-                    Dokument w formacie, który nie może być wyświetlony w przeglądarce. 
-                    Kliknij przycisk "Otwórz", aby wyświetlić dokument.
+                    {t('orderForm.messages.documentNotDisplayable')}
                   </Alert>
                 </Box>
               )}
@@ -3716,7 +3717,7 @@ const OrderForm = ({ orderId }) => {
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant="body1" sx={{ mb: 2 }}>
-                Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.
+                {t('orderForm.messages.noDeliveryProof')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <input
@@ -3734,7 +3735,7 @@ const OrderForm = ({ orderId }) => {
                     startIcon={<UploadIcon />}
                     disabled={uploading}
                   >
-                    {uploading ? 'Przesyłanie...' : 'Dodaj plik'}
+                    {uploading ? t('orderForm.buttons.uploading') : t('orderForm.buttons.addFile')}
                   </Button>
                 </label>
                 <Button
@@ -3742,7 +3743,7 @@ const OrderForm = ({ orderId }) => {
                   startIcon={<LinkIcon />}
                   onClick={handleDriveLinkDialogOpen}
                 >
-                  Dodaj link Google Drive
+                  {t('orderForm.buttons.addGoogleDriveLink')}
                 </Button>
               </Box>
             </Box>
@@ -3751,7 +3752,7 @@ const OrderForm = ({ orderId }) => {
 
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Zamówienia zakupu powiązane</Typography>
+            <Typography variant="h6">{t('orderForm.sections.relatedPurchaseOrders')}</Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="outlined"
@@ -3760,7 +3761,7 @@ const OrderForm = ({ orderId }) => {
                 onClick={handleRefreshPurchaseOrders}
                 disabled={!orderId}
               >
-                Odśwież dane PO
+                {t('orderForm.buttons.refreshPurchaseOrders')}
               </Button>
               <Button
                 variant="outlined"
@@ -3769,7 +3770,7 @@ const OrderForm = ({ orderId }) => {
                 onClick={handleAssignPurchaseOrder}
                 disabled={!orderId}
               >
-                Przypisz istniejące PO
+                {t('orderForm.buttons.assignExistingPO')}
               </Button>
               <Button
                 variant="outlined"
@@ -3777,7 +3778,7 @@ const OrderForm = ({ orderId }) => {
                 onClick={generatePurchaseOrder}
                 disabled={isGeneratingPO || !orderId}
               >
-                {isGeneratingPO ? 'Generowanie...' : 'Generuj zamówienia zakupu'}
+                {isGeneratingPO ? t('orderForm.buttons.generating') : t('orderForm.buttons.generatePurchaseOrders')}
               </Button>
             </Box>
           </Box>
@@ -3857,7 +3858,7 @@ const OrderForm = ({ orderId }) => {
             </>
           ) : (
             <Typography variant="body2" color="text.secondary">
-              Brak powiązanych zamówień zakupu. Kliknij "Generuj zamówienia zakupu", aby automatycznie utworzyć zamówienia dla materiałów z receptur.
+              {t('orderForm.messages.noPurchaseOrders')}
             </Typography>
           )}
         </Paper>
@@ -3865,7 +3866,7 @@ const OrderForm = ({ orderId }) => {
         {/* Podsumowanie wartości zamówienia na końcu formularza */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Podsumowanie wartości zamówienia</Typography>
+            <Typography variant="h6">{t('orderForm.sections.orderSummary')}</Typography>
           </Box>
           
           <Divider sx={{ mb: 2 }} />
@@ -3873,39 +3874,39 @@ const OrderForm = ({ orderId }) => {
           <Grid container spacing={2}>
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Wartość produktów:</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.productsValue')}:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal())}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Koszt dostawy:</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.deliveryCost')}:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(parseFloat(orderData.shippingCost) || 0)}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Dodatkowe koszty:</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.additionalCosts')}:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateAdditionalCosts())}</Typography>
               </Paper>
             </Grid>
             {calculateDiscounts() > 0 && (
               <Grid item xs={12} md={3}>
                 <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Rabaty:</Typography>
+                  <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.discounts')}:</Typography>
                   <Typography variant="h6" fontWeight="bold" color="secondary">- {formatCurrency(calculateDiscounts())}</Typography>
                 </Paper>
               </Grid>
             )}
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Wartość całkowita zamówienia:</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.totalOrderValue')}:</Typography>
                 <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateTotal())}</Typography>
               </Paper>
             </Grid>
             <Grid item xs={12} md={3}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">Wartość zamówień zakupu:</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.purchaseOrdersValue')}:</Typography>
                 <Typography variant="h6" fontWeight="bold" color="warning.main">{formatCurrency(calculatePurchaseOrdersTotal())}</Typography>
               </Paper>
             </Grid>
@@ -3916,7 +3917,7 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <ReceiptIcon sx={{ mr: 1 }} /> Faktury
+              <ReceiptIcon sx={{ mr: 1 }} /> {t('orderForm.sections.invoices')}
             </Typography>
             <Button
               startIcon={<AddIcon />}
@@ -3925,24 +3926,24 @@ const OrderForm = ({ orderId }) => {
               size="small"
               sx={{ borderRadius: 2 }}
             >
-              Dodaj fakturę
+                              {t('orderForm.buttons.addInvoice')}
             </Button>
           </Box>
           <Divider sx={{ mb: 3 }} />
           {invoices.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
-              Brak faktur. Użyj przycisku powyżej, aby dodać fakturę.
+              {t('orderForm.messages.noInvoices')}
             </Typography>
           ) : (
             <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={tableCellSx}>Nr faktury</TableCell>
-                    <TableCell sx={tableCellSx}>Data faktury</TableCell>
-                    <TableCell sx={tableCellSx}>Status</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>Kwota</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>Kwota opłacona</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.invoices.invoiceNumber')}</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.invoices.invoiceDate')}</TableCell>
+                    <TableCell sx={tableCellSx}>{t('orderForm.invoices.status')}</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.invoices.amount')}</TableCell>
+                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.invoices.paidAmount')}</TableCell>
                     <TableCell width="50px" sx={tableCellSx}></TableCell>
                   </TableRow>
                 </TableHead>
@@ -3955,7 +3956,7 @@ const OrderForm = ({ orderId }) => {
                           onChange={e => handleInvoiceChange(inv.id, 'number', e.target.value)}
                           variant="standard"
                           fullWidth
-                          placeholder="Nr faktury"
+                          placeholder={t('orderForm.placeholders.invoiceNumber')}
                         />
                       </TableCell>
                       <TableCell>
@@ -4014,14 +4015,13 @@ const OrderForm = ({ orderId }) => {
       </Box>
       
       <Dialog open={isPODialogOpen} onClose={() => setIsPODialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Generowanie zamówień zakupu</DialogTitle>
+        <DialogTitle>{t('orderForm.dialogs.generatePurchaseOrders.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 3 }}>
-            System wygeneruje zamówienia zakupu dla materiałów potrzebnych do produkcji pozycji zamówienia, które posiadają receptury.
-            Zamówienia zakupu zostaną utworzone i powiązane z tym zamówieniem klienta.
+            {t('orderForm.dialogs.generatePurchaseOrders.description')}
           </DialogContentText>
           
-          <Typography variant="subtitle1" sx={{ mb: 2 }}>Materiały do zamówienia:</Typography>
+          <Typography variant="subtitle1" sx={{ mb: 2 }}>{t('orderForm.dialogs.generatePurchaseOrders.materialsLabel')}:</Typography>
           
           <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
             <Table>
@@ -4085,7 +4085,7 @@ const OrderForm = ({ orderId }) => {
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setIsPODialogOpen(false)} variant="outlined">
-            Anuluj
+                            {t('orderForm.buttons.cancel')}
           </Button>
           <Button 
             onClick={createNewPurchaseOrder} 
@@ -4094,13 +4094,13 @@ const OrderForm = ({ orderId }) => {
             disabled={isGeneratingPO}
             startIcon={<ShoppingCartIcon />}
           >
-            {isGeneratingPO ? 'Tworzenie...' : 'Utwórz zamówienia zakupu'}
+            {isGeneratingPO ? t('orderForm.buttons.creating') : t('orderForm.buttons.createPurchaseOrders')}
           </Button>
         </DialogActions>
       </Dialog>
       
       <Dialog open={isCustomerDialogOpen} onClose={handleCloseCustomerDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Dodaj nowego klienta</DialogTitle>
+        <DialogTitle>{t('orderForm.dialogs.addClient.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 3 }}>
             Wprowadź dane nowego klienta. Klient zostanie dodany do bazy danych.
@@ -4182,7 +4182,7 @@ const OrderForm = ({ orderId }) => {
           </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={handleCloseCustomerDialog} variant="outlined">Anuluj</Button>
+          <Button onClick={handleCloseCustomerDialog} variant="outlined">{t('orderForm.buttons.cancel')}</Button>
           <Button 
             onClick={handleSaveNewCustomer} 
             variant="contained"
@@ -4196,7 +4196,7 @@ const OrderForm = ({ orderId }) => {
 
       {/* Dialog wyboru zamówienia zakupowego */}
       <Dialog open={isAssignPODialogOpen} onClose={handleCloseAssignPODialog} maxWidth="md" fullWidth>
-        <DialogTitle>Przypisz zamówienie zakupowe</DialogTitle>
+        <DialogTitle>{t('orderForm.dialogs.assignPurchaseOrder.title')}</DialogTitle>
         <DialogContent>
           {loadingPurchaseOrders ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -4227,20 +4227,20 @@ const OrderForm = ({ orderId }) => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAssignPODialog}>Anuluj</Button>
+          <Button onClick={handleCloseAssignPODialog}>{t('orderForm.buttons.cancel')}</Button>
           <Button 
             onClick={handleAssignSelected} 
             variant="contained" 
             disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
           >
-            Przypisz
+            {t('orderForm.buttons.assign')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Dialog do wprowadzania linku Google Drive */}
       <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
-        <DialogTitle>Dodaj link do Google Drive</DialogTitle>
+        <DialogTitle>{t('orderForm.dialogs.addGoogleDriveLink.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
             Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.
@@ -4261,8 +4261,8 @@ const OrderForm = ({ orderId }) => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDriveLinkDialogClose}>Anuluj</Button>
-          <Button onClick={handleDriveLinkSubmit} variant="contained">Dodaj</Button>
+          <Button onClick={handleDriveLinkDialogClose}>{t('orderForm.buttons.cancel')}</Button>
+          <Button onClick={handleDriveLinkSubmit} variant="contained">{t('orderForm.buttons.add')}</Button>
         </DialogActions>
       </Dialog>
     </>
