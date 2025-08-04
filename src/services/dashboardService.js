@@ -54,8 +54,8 @@ const setCacheData = (cacheKey, data) => {
 };
 
 /**
- * Pobiera zoptymalizowane dane receptur dla Dashboard
- * Tylko najważniejsze pola + limit 50 najnowszych
+ * Pobiera dane receptur dla Dashboard
+ * UWAGA: Pobiera wszystkie receptury dla prawidłowego licznika
  */
 export const getDashboardRecipes = async () => {
   const cacheKey = 'recipes';
@@ -67,13 +67,13 @@ export const getDashboardRecipes = async () => {
   }
   
   try {
-    console.log('Pobieram zoptymalizowane dane receptur dla Dashboard...');
+    console.log('Pobieram dane receptur dla Dashboard...');
     
     const recipesRef = collection(db, 'recipes');
     const q = query(
       recipesRef, 
-      orderBy('updatedAt', 'desc'),
-      limit(50) // Tylko 50 najnowszych receptur zamiast wszystkich
+      orderBy('updatedAt', 'desc')
+      // POPRAWKA: Usunięto limit(50) aby pokazywać rzeczywistą liczbę receptur w licznikach
     );
     
     const querySnapshot = await getDocs(q);
@@ -95,7 +95,7 @@ export const getDashboardRecipes = async () => {
     });
     
     setCacheData(cacheKey, recipes);
-    console.log(`Pobrano ${recipes.length} receptur dla Dashboard (z cache)`);
+    console.log(`Pobrano ${recipes.length} receptur dla Dashboard (wszystkie dla prawidłowego licznika)`);
     
     return recipes;
   } catch (error) {
