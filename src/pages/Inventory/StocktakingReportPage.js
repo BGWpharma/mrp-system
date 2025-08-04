@@ -319,41 +319,41 @@ const StocktakingReportPage = () => {
             </Typography>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body1">
-                <strong>ID:</strong> {stocktaking.id}
+                <strong>{t('stocktaking.reportLabels.id')}:</strong> {stocktaking.id}
               </Typography>
               <Typography variant="body1">
-                <strong>Nazwa:</strong> {stocktaking.name}
+                <strong>{t('stocktaking.reportLabels.name')}:</strong> {stocktaking.name}
               </Typography>
               <Typography variant="body1">
-                <strong>Lokalizacja:</strong> {stocktaking.location || 'Wszystkie lokalizacje'}
+                <strong>{t('stocktaking.reportLabels.location')}:</strong> {stocktaking.location || t('stocktaking.reportLabels.allLocations')}
               </Typography>
               <Typography variant="body1">
-                <strong>Status:</strong> {stocktaking.status}
+                <strong>{t('stocktaking.reportLabels.status')}:</strong> {stocktaking.status}
               </Typography>
               <Typography variant="body1">
-                <strong>Data planowana:</strong> {stocktaking.scheduledDate ? formatDate(stocktaking.scheduledDate) : '-'}
+                <strong>{t('stocktaking.reportLabels.scheduledDate')}:</strong> {stocktaking.scheduledDate ? formatDate(stocktaking.scheduledDate) : '-'}
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle1" gutterBottom>
-              Daty inwentaryzacji
+              {t('stocktaking.reportSections.stocktakingDates')}
             </Typography>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body1">
-                <strong>Data utworzenia:</strong> {stocktaking.createdAt ? formatDate(stocktaking.createdAt) : '-'}
+                <strong>{t('stocktaking.reportLabels.createdAt')}:</strong> {stocktaking.createdAt ? formatDate(stocktaking.createdAt) : '-'}
               </Typography>
               <Typography variant="body1">
-                <strong>Utworzona przez:</strong> {stocktaking.createdBy || '-'}
+                <strong>{t('stocktaking.reportLabels.createdBy')}:</strong> {stocktaking.createdBy || '-'}
               </Typography>
               {stocktaking.completedAt && (
                 <Typography variant="body1">
-                  <strong>Data zakończenia:</strong> {formatDate(stocktaking.completedAt)}
+                  <strong>{t('stocktaking.reportLabels.completedAt')}:</strong> {formatDate(stocktaking.completedAt)}
                 </Typography>
               )}
               {stocktaking.notes && (
                 <Typography variant="body1">
-                  <strong>Uwagi:</strong> {stocktaking.notes}
+                  <strong>{t('stocktaking.reportLabels.notes')}:</strong> {stocktaking.notes}
                 </Typography>
               )}
             </Box>
@@ -367,7 +367,7 @@ const StocktakingReportPage = () => {
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Wszystkie produkty
+                {t('stocktaking.reportSections.allProducts')}
               </Typography>
               <Typography variant="h4">
                 {report.totalItems}
@@ -379,13 +379,15 @@ const StocktakingReportPage = () => {
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Zgodne
+                {t('stocktaking.reportSections.matching')}
               </Typography>
               <Typography variant="h4" color="success.main">
                 {report.matchingItems}
               </Typography>
               <Typography variant="body2">
-                {report.totalItems > 0 ? Math.round((report.matchingItems / report.totalItems) * 100) : 0}% produktów
+                {t('stocktaking.reportSections.percentageProducts', { 
+                  percent: report.totalItems > 0 ? Math.round((report.matchingItems / report.totalItems) * 100) : 0 
+                })}
               </Typography>
             </CardContent>
           </Card>
@@ -394,13 +396,15 @@ const StocktakingReportPage = () => {
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Nadwyżki
+                {t('stocktaking.reportSections.surplus')}
               </Typography>
               <Typography variant="h4" color="primary.main">
                 {report.surplusItems}
               </Typography>
               <Typography variant="body2">
-                {report.totalItems > 0 ? Math.round((report.surplusItems / report.totalItems) * 100) : 0}% produktów
+                {t('stocktaking.reportSections.percentageProducts', { 
+                  percent: report.totalItems > 0 ? Math.round((report.surplusItems / report.totalItems) * 100) : 0 
+                })}
               </Typography>
             </CardContent>
           </Card>
@@ -409,13 +413,15 @@ const StocktakingReportPage = () => {
           <Card>
             <CardContent>
               <Typography color="textSecondary" gutterBottom>
-                Braki
+                {t('stocktaking.reportSections.deficit')}
               </Typography>
               <Typography variant="h4" color="error.main">
                 {report.deficitItems}
               </Typography>
               <Typography variant="body2">
-                {report.totalItems > 0 ? Math.round((report.deficitItems / report.totalItems) * 100) : 0}% produktów
+                {t('stocktaking.reportSections.percentageProducts', { 
+                  percent: report.totalItems > 0 ? Math.round((report.deficitItems / report.totalItems) * 100) : 0 
+                })}
               </Typography>
             </CardContent>
           </Card>
@@ -425,12 +431,12 @@ const StocktakingReportPage = () => {
       {/* Podsumowanie wartości */}
       <Paper sx={{ p: 3, mb: 3 }} className="print-visible">
         <Typography variant="h6" gutterBottom>
-          Podsumowanie wartości
+          {t('stocktaking.reportSections.valueSummary')}
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
             <Typography variant="subtitle2" color="textSecondary">
-              Wartość systemowa
+              {t('stocktaking.reportSections.systemValue')}
             </Typography>
             <Typography variant="h5">
               {formatCurrency(report.totalSystemValue)}
@@ -438,7 +444,7 @@ const StocktakingReportPage = () => {
           </Grid>
           <Grid item xs={12} md={4}>
             <Typography variant="subtitle2" color="textSecondary">
-              Wartość rzeczywista
+              {t('stocktaking.reportSections.actualValue')}
             </Typography>
             <Typography variant="h5">
               {formatCurrency(report.totalCountedValue)}
@@ -446,7 +452,7 @@ const StocktakingReportPage = () => {
           </Grid>
           <Grid item xs={12} md={4}>
             <Typography variant="subtitle2" color="textSecondary">
-              Różnica wartości
+              {t('stocktaking.reportSections.valueDifference')}
             </Typography>
             <Typography variant="h5" color={report.totalDifferenceValue >= 0 ? 'primary.main' : 'error.main'}>
               {formatCurrency(report.totalDifferenceValue)}
@@ -461,20 +467,20 @@ const StocktakingReportPage = () => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                {renderSortableTableCell('Nazwa produktu', 'name')}
-                {renderSortableTableCell('Kategoria', 'category')}
-                {renderSortableTableCell('Stan systemowy', 'systemQuantity')}
-                {renderSortableTableCell('Stan policzony', 'countedQuantity')}
-                {renderSortableTableCell('Różnica', 'discrepancy')}
-                {renderSortableTableCell('Różnica wartości', 'value')}
-                <TableCell>Uwagi</TableCell>
+                {renderSortableTableCell(t('stocktaking.tableHeaders.productName'), 'name')}
+                {renderSortableTableCell(t('stocktaking.tableHeaders.category'), 'category')}
+                {renderSortableTableCell(t('stocktaking.tableHeaders.systemQuantity'), 'systemQuantity')}
+                {renderSortableTableCell(t('stocktaking.tableHeaders.countedQuantity'), 'countedQuantity')}
+                {renderSortableTableCell(t('stocktaking.tableHeaders.difference'), 'discrepancy')}
+                {renderSortableTableCell(t('stocktaking.tableHeaders.valueDifference'), 'value')}
+                <TableCell>{t('stocktaking.tableHeaders.notes')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {sortedItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
-                    Brak produktów w inwentaryzacji
+                    {t('stocktaking.reportSections.noProductsInStocktaking')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -505,7 +511,7 @@ const StocktakingReportPage = () => {
       
       <Box sx={{ mt: 4, textAlign: 'center' }} className="print-visible print-footer">
         <Typography variant="body2" color="textSecondary">
-          Raport wygenerowany z systemu MRP • {formatDate(new Date())}
+          {t('stocktaking.reportSections.reportGenerated')} • {formatDate(new Date())}
         </Typography>
       </Box>
       

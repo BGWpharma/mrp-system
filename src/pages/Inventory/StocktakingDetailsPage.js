@@ -632,7 +632,7 @@ const StocktakingDetailsPage = () => {
               startIcon={<DoneIcon />}
               onClick={handleCompleteStocktaking}
             >
-              {isInCorrection ? 'Zakończ korekty' : 'Zakończ inwentaryzację'}
+              {isInCorrection ? t('stocktaking.finishCorrections') : t('stocktaking.finishStocktaking')}
             </Button>
           )}
         </Box>
@@ -644,7 +644,7 @@ const StocktakingDetailsPage = () => {
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Szukaj produktów..."
+              placeholder={t('stocktaking.searchPlaceholderProducts')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -661,23 +661,23 @@ const StocktakingDetailsPage = () => {
       
       {items.length === 0 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Brak produktów w inwentaryzacji. {!isCompleted && 'Możesz dodać produkty klikając przycisk "Dodaj produkt".'}
+          {t('stocktaking.noProductsMessage')} {!isCompleted && t('stocktaking.noProductsAddHint')}
         </Alert>
       ) : (
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Nazwa produktu</TableCell>
-                <TableCell>LOT/Partia</TableCell>
-                <TableCell>Kategoria</TableCell>
-                <TableCell align="right">Stan systemowy</TableCell>
-                <TableCell align="right">Stan policzony</TableCell>
-                <TableCell align="right">Różnica</TableCell>
-                <TableCell align="right">Cena jedn.</TableCell>
-                <TableCell align="right">Wartość różnicy</TableCell>
-                <TableCell>Uwagi</TableCell>
-                {(!isCompleted || isInCorrection) && <TableCell align="center">Akcje</TableCell>}
+                <TableCell>{t('stocktaking.tableHeaders.productName')}</TableCell>
+                <TableCell>{t('stocktaking.tableHeaders.lotBatch')}</TableCell>
+                <TableCell>{t('stocktaking.tableHeaders.category')}</TableCell>
+                <TableCell align="right">{t('stocktaking.tableHeaders.systemQuantity')}</TableCell>
+                <TableCell align="right">{t('stocktaking.tableHeaders.countedQuantity')}</TableCell>
+                <TableCell align="right">{t('stocktaking.tableHeaders.difference')}</TableCell>
+                <TableCell align="right">{t('stocktaking.tableHeaders.unitPrice')}</TableCell>
+                <TableCell align="right">{t('stocktaking.tableHeaders.valueDifference')}</TableCell>
+                <TableCell>{t('stocktaking.tableHeaders.notes')}</TableCell>
+                {(!isCompleted || isInCorrection) && <TableCell align="center">{t('stocktaking.tableHeaders.actions')}</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -793,7 +793,7 @@ const StocktakingDetailsPage = () => {
       
       {/* Dialog dodawania produktu */}
       <Dialog open={addItemDialogOpen} onClose={() => setAddItemDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Dodaj produkt do inwentaryzacji</DialogTitle>
+        <DialogTitle>{t('stocktaking.addProductDialog.title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             {/* Przełącznik trybu LOT/Pozycja magazynowa */}
@@ -810,7 +810,7 @@ const StocktakingDetailsPage = () => {
                   color="primary"
                 />
               }
-              label={isLotMode ? "Tryb inwentaryzacji LOT" : "Tryb inwentaryzacji pozycji magazynowej"}
+              label={isLotMode ? t('stocktaking.addProductDialog.lotMode') : t('stocktaking.addProductDialog.itemMode')}
               sx={{ mb: 2 }}
             />
             
@@ -822,7 +822,7 @@ const StocktakingDetailsPage = () => {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Wybierz produkt z magazynu"
+                  label={t('stocktaking.addProductDialog.selectProduct')}
                   fullWidth
                   required
                   margin="normal"
@@ -882,12 +882,12 @@ const StocktakingDetailsPage = () => {
             {/* Wyświetl informację o cenie jednostkowej dla wybranej partii */}
             {isLotMode && selectedBatch && selectedBatch.unitPrice > 0 && (
               <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
-                Cena jednostkowa partii: {selectedBatch.unitPrice.toFixed(2)} EUR
+                {t('stocktaking.addProductDialog.batchUnitPrice', { price: selectedBatch.unitPrice.toFixed(2) })}
               </Alert>
             )}
             
             <TextField
-              label="Stan policzony"
+              label={t('stocktaking.addProductDialog.countedQuantityLabel')}
               type="number"
               fullWidth
               required
@@ -903,13 +903,18 @@ const StocktakingDetailsPage = () => {
                 severity={Number(countedQuantity) === selectedBatch.quantity ? "success" : Number(countedQuantity) > selectedBatch.quantity ? "info" : "warning"}
                 sx={{ mt: 1, mb: 1 }}
               >
-                Różnica: {Number(countedQuantity) - selectedBatch.quantity} {selectedItem?.unit}
-                {selectedBatch.unitPrice > 0 && ` | Wartość różnicy: ${((Number(countedQuantity) - selectedBatch.quantity) * selectedBatch.unitPrice).toFixed(2)} EUR`}
+                {t('stocktaking.addProductDialog.differenceAlert', { 
+                  difference: Number(countedQuantity) - selectedBatch.quantity, 
+                  unit: selectedItem?.unit 
+                })}
+                {selectedBatch.unitPrice > 0 && t('stocktaking.addProductDialog.valueDifferenceAlert', { 
+                  value: ((Number(countedQuantity) - selectedBatch.quantity) * selectedBatch.unitPrice).toFixed(2) 
+                })}
               </Alert>
             )}
             
             <TextField
-              label="Uwagi"
+              label={t('stocktaking.addProductDialog.notesLabel')}
               fullWidth
               multiline
               rows={2}
@@ -946,15 +951,15 @@ const StocktakingDetailsPage = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Zakończ inwentaryzację</DialogTitle>
+        <DialogTitle>{t('stocktaking.completeDialog.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz zakończyć tę inwentaryzację? Po zakończeniu, nie będzie można dodawać ani edytować produktów.
+            {t('stocktaking.completeDialog.confirmQuestion')}
           </DialogContentText>
           
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
-              Dostosuj stany magazynowe?
+              {t('stocktaking.completeDialog.adjustInventory')}?
             </Typography>
             <FormControlLabel
               control={
@@ -964,7 +969,7 @@ const StocktakingDetailsPage = () => {
                   color="primary"
                 />
               }
-              label={confirmAdjustInventory ? "Tak, dostosuj stany magazynowe" : "Nie, tylko zakończ inwentaryzację"}
+              label={confirmAdjustInventory ? t('stocktaking.completeDialog.adjustInventoryHelp') : "Nie, tylko zakończ inwentaryzację"}
             />
           </Box>
 
@@ -973,7 +978,7 @@ const StocktakingDetailsPage = () => {
             <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
               <CircularProgress size={20} />
               <Typography variant="body2">
-                Sprawdzanie wpływu korekt na rezerwacje...
+                {t('stocktaking.completeDialog.checkingReservations')}
               </Typography>
             </Box>
           )}
@@ -983,10 +988,10 @@ const StocktakingDetailsPage = () => {
             <Box sx={{ mt: 2 }}>
               <Alert severity="warning" sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  ⚠️ Korekty wpłyną na rezerwacje
+                  {t('stocktaking.completeDialog.warningTitle')}
                 </Typography>
                 <Typography variant="body2">
-                  {reservationWarnings.length} partii z niedoborami po korekcie:
+                  {t('stocktaking.completeDialog.batchesWithShortages', { count: reservationWarnings.length })}
                 </Typography>
               </Alert>
 
@@ -1010,14 +1015,19 @@ const StocktakingDetailsPage = () => {
                       color: (theme) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
                       mb: 1
                     }}>
-                      {warning.itemName} - Partia: {warning.batchNumber}
+                      {t('stocktaking.completeDialog.batchInfo', { itemName: warning.itemName, batchNumber: warning.batchNumber })}
                     </Typography>
                     <Typography variant="body2" sx={{ 
                       color: (theme) => theme.palette.mode === 'dark' ? 'text.secondary' : 'warning.dark',
                       mb: 1
                     }}>
-                      {warning.currentQuantity} → {warning.newQuantity} {warning.unit} 
-                      (zarezerwowano: {warning.totalReserved}, niedobór: {warning.shortage})
+                      {t('stocktaking.completeDialog.quantityChange', { 
+                        currentQuantity: warning.currentQuantity, 
+                        newQuantity: warning.newQuantity, 
+                        unit: warning.unit,
+                        totalReserved: warning.totalReserved,
+                        shortage: warning.shortage
+                      })}
                     </Typography>
                     
                     {warning.reservations.length > 0 && (
@@ -1028,7 +1038,7 @@ const StocktakingDetailsPage = () => {
                           display: 'block',
                           mb: 0.5
                         }}>
-                          Rezerwacje:
+                          {t('stocktaking.completeDialog.reservationsLabel')}
                         </Typography>
                         <Box sx={{ ml: 1, mt: 0.5 }}>
                           {warning.reservations.map((res, resIndex) => (
@@ -1050,7 +1060,7 @@ const StocktakingDetailsPage = () => {
                                 fontWeight: 'bold', 
                                 color: (theme) => theme.palette.mode === 'dark' ? 'error.light' : 'error.main'
                               }}>
-                                Ilość: {res.quantity} {warning.unit}
+                                {t('stocktaking.completeDialog.quantityLabel', { quantity: res.quantity, unit: warning.unit })}
                               </Typography>
                             </Box>
                           ))}
@@ -1063,7 +1073,7 @@ const StocktakingDetailsPage = () => {
 
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="body2">
-                  Możesz zakończyć inwentaryzację. Rozważ kontakt z zespołem produkcji.
+                  {t('stocktaking.completeDialog.canCompleteWithWarning')}
                 </Typography>
               </Alert>
             </Box>
@@ -1073,7 +1083,7 @@ const StocktakingDetailsPage = () => {
           {confirmAdjustInventory && !checkingReservations && reservationWarnings.length === 0 && (
             <Alert severity="success" sx={{ mt: 2 }}>
               <Typography variant="body2">
-                ✅ Brak konfliktów z rezerwacjami.
+                {t('stocktaking.completeDialog.noConflicts')}
               </Typography>
             </Alert>
           )}
@@ -1093,7 +1103,7 @@ const StocktakingDetailsPage = () => {
                 : 'primary.light'
             }}>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                🔧 Opcje rozwiązania:
+                {t('stocktaking.completeDialog.optionsTitle')}
               </Typography>
               
               <FormControlLabel
@@ -1107,10 +1117,10 @@ const StocktakingDetailsPage = () => {
                 label={
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      Anuluj zagrożone rezerwacje
+                      {t('stocktaking.completeDialog.cancelThreatenedReservations')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Usuwa rezerwacje z niedoborami.
+                      {t('stocktaking.completeDialog.cancelReservationsHelp')}
                     </Typography>
                   </Box>
                 }
@@ -1120,7 +1130,7 @@ const StocktakingDetailsPage = () => {
               {cancelReservations && (
                 <Alert severity="info" sx={{ mt: 1 }}>
                   <Typography variant="body2">
-                    ℹ️ Anulowanie {reservationWarnings.length} partii.
+                    {t('stocktaking.completeDialog.cancellingBatches', { count: reservationWarnings.length })}
                   </Typography>
                 </Alert>
               )}
@@ -1128,12 +1138,12 @@ const StocktakingDetailsPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={() => setConfirmDialogOpen(false)}>{t('stocktaking.completeDialog.buttonCancel')}</Button>
           
           {cancellingReservations ? (
             <Button disabled>
               <CircularProgress size={20} sx={{ mr: 1 }} />
-              Anulowanie rezerwacji...
+              {t('stocktaking.completeDialog.cancellingReservations')}
             </Button>
           ) : (
             <Button 
@@ -1142,8 +1152,8 @@ const StocktakingDetailsPage = () => {
               variant={reservationWarnings.length > 0 ? "outlined" : "contained"}
             >
               {reservationWarnings.length > 0 
-                ? (cancelReservations ? 'Anuluj rezerwacje i zakończ' : 'Zakończ mimo ostrzeżeń')
-                : 'Zakończ inwentaryzację'
+                ? (cancelReservations ? t('stocktaking.completeDialog.buttonCancelReservationsAndComplete') : t('stocktaking.completeDialog.buttonCompleteWithWarnings'))
+                : t('stocktaking.completeDialog.buttonComplete')
               }
             </Button>
           )}

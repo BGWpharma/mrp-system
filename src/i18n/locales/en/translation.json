@@ -30,7 +30,7 @@
     "quantity": "Quantity",
     "price": "Price",
     "total": "Total",
-    "language": "Language",
+    "language": "Change language",
     "pieces": "pcs",
     "days": "days",
     "notes": "Notes",
@@ -41,12 +41,8 @@
     "rows": "Rows",
     "rowsPerPage": "Rows per page",
     "displayedRows": "{{from}}-{{to}} of {{count}}",
-    "close": "Close",
     "selectFile": "Select file",
     "takePhoto": "Take photo",
-    "price": "Price",
-    "status": "Status",
-    "quantity": "Quantity",
     "product": "Product"
   },
   "navigation": {
@@ -545,7 +541,6 @@
       "orderElements": "Order elements",
       "additionalCostsDetails": "Additional costs",
       "relatedBatches": "Related batches",
-      "unloadingReports": "Unloading reports",
       "deleteOrder": "Delete order",
       "receive": "Receive",
       "notInReport": "Not in report",
@@ -1063,7 +1058,61 @@
     "exportPDF": "Export PDF",
     "reportFor": "Stocktaking Report: {{name}}",
     "generatedOn": "Generated: {{date}}",
-    "stocktakingInfo": "Stocktaking information"
+    "stocktakingInfo": "Stocktaking information",
+    "searchPlaceholderProducts": "Search products...",
+    "noProductsMessage": "No products in stocktaking.",
+    "noProductsAddHint": "You can add products by clicking the \"Add product\" button.",
+    "tableHeaders": {
+      "productName": "Product name",
+      "lotBatch": "LOT/Batch",
+      "category": "Category",
+      "systemQuantity": "System quantity",
+      "countedQuantity": "Counted quantity",
+      "difference": "Difference",
+      "unitPrice": "Unit price",
+      "valueDifference": "Value difference",
+      "notes": "Notes",
+      "actions": "Actions"
+    },
+    "finishCorrections": "Finish corrections",
+    "finishStocktaking": "Complete stocktaking",
+    "addProductDialog": {
+      "title": "Add product to stocktaking",
+      "lotMode": "LOT stocktaking mode",
+      "itemMode": "Inventory item stocktaking mode",
+      "selectProduct": "Select product from warehouse",
+      "countedQuantityLabel": "Counted quantity",
+      "notesLabel": "Notes",
+      "batchUnitPrice": "Batch unit price: {{price}} EUR",
+      "differenceAlert": "Difference: {{difference}} {{unit}}",
+      "valueDifferenceAlert": " | Value difference: {{value}} EUR"
+    },
+    "reportSections": {
+      "stocktakingDates": "Stocktaking dates",
+      "allProducts": "All products",
+      "matching": "Matching",
+      "surplus": "Surplus",
+      "deficit": "Deficit",
+      "valueSummary": "Value summary",
+      "systemValue": "System value",
+      "actualValue": "Actual value",
+      "valueDifference": "Value difference",
+      "percentageProducts": "{{percent}}% of products",
+      "noProductsInStocktaking": "No products in stocktaking",
+      "reportGenerated": "Report generated from MRP system"
+    },
+    "reportLabels": {
+      "id": "ID",
+      "name": "Name",
+      "location": "Location",
+      "status": "Status",
+      "scheduledDate": "Scheduled date",
+      "createdAt": "Created at",
+      "createdBy": "Created by",
+      "completedAt": "Completed at",
+      "notes": "Notes",
+      "allLocations": "All locations"
+    }
   },
   "productionForms": {
     "title": "Production Forms",
@@ -1624,7 +1673,6 @@
         "orderMaterial": "Order Material"
       },
       "productionTasksInPeriod": "Production Tasks in Selected Period",
-      "startDate": "Start Date",
       "taskWithoutName": "Task without name"
     },
     "taskDetails": {
@@ -1725,7 +1773,7 @@
       "monthly": "Monthly",
       "filters": "Filters",
       "settings": "Settings",
-      "export": "Export Timeline",
+      "exportTimeline": "Export Timeline",
       "refresh": "Refresh",
       "zoom": {
         "in": "Zoom In",
@@ -1888,7 +1936,7 @@
     "designAttachments": {
       "title": "Product Design Attachments",
       "upload": "Add Product Design",
-      "description": "Drag design files here or select from disk",
+      "uploadDescription": "Drag design files here or select from disk",
       "supportedFormats": "Allowed: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, PDF (max 20 MB)",
       "selectOrTakePhoto": "Select design",
       "uploading": "Uploading design...",
@@ -2107,25 +2155,6 @@
       }
     }
   },
-  "formsResponsesTitle": "Production Forms Responses",
-  "formsResponsesDescription": "Browse data from completed production forms",
-  "completedMO": {
-    "tab": "Completed MO Reports",
-    "title": "Completed MO Report"
-  },
-  "productionControl": {
-    "tab": "Production Control Reports", 
-    "title": "Production Control Report"
-  },
-  "productionShift": {
-    "tab": "Production Shift Reports",
-    "title": "Production Shift Report"
-  },
-  "errorLoadingData": "Error loading data",
-  "confirmDeleteTitle": "Confirm deletion",
-  "confirmDeleteMessage": "Are you sure you want to delete this item?",
-  "cancel": "Cancel",
-  "delete": "Delete",
   "orders": {
     "title": "Customer Orders",
     "newOrder": "New Order",
@@ -2133,7 +2162,6 @@
     "searchOrders": "Search orders...",
     "exportCsv": "Export CSV",
     "exporting": "Exporting...",
-    "filters": "Filters",
     "filtersToggle": "Filters",
     "refreshValues": "Refresh Values",
     "refreshing": "Refreshing...",
@@ -2192,7 +2220,6 @@
       "valueSummary": "Value Summary:",
       "productsValue": "Products Value:",
       "deliveryCost": "Delivery Cost:",
-      "poValue": "PO Value:",
       "totalValue": "Total Value:",
       "withoutPO": "(without PO value)",
       "changeStatus": "Change Status:"
@@ -2269,11 +2296,8 @@
       "status": "Status",
       "deliveryProof": "Delivery Proof",
       "comments": "Comments",
-      "relatedPurchaseOrders": "Related Purchase Orders",
-      "productionTasks": "Production Tasks",
       "relatedInvoices": "Invoices related to order",
-      "relatedCmrDocuments": "CMR documents related to order",
-      "statusHistory": "Status Change History"
+      "relatedCmrDocuments": "CMR documents related to order"
     },
     "customerInfo": {
       "noCustomerName": "No customer name",
@@ -2478,11 +2502,6 @@
         "cancel": "Cancel"
       }
     }
-  },
-  "common": {
-    "yes": "Yes",
-    "no": "No",
-    "language": "Change language"
   },
   "orderForm": {
     "title": {

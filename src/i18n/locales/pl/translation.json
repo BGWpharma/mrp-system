@@ -30,7 +30,7 @@
     "quantity": "Ilość",
     "price": "Cena",
     "total": "Suma",
-    "language": "Język",
+    "language": "Zmień język",
     "pieces": "szt.",
     "days": "dni",
     "notes": "Notatki",
@@ -41,12 +41,8 @@
     "rows": "Wierszy",
     "rowsPerPage": "Wierszy na stronę",
     "displayedRows": "{{from}}-{{to}} z {{count}}",
-    "close": "Zamknij",
     "selectFile": "Wybierz plik",
     "takePhoto": "Zrób zdjęcie",
-    "price": "Cena",
-    "status": "Status",
-    "quantity": "Ilość",
     "product": "Produkt"
   },
   "navigation": {
@@ -545,7 +541,6 @@
       "orderElements": "Elementy zamówienia",
       "additionalCostsDetails": "Dodatkowe koszty",
       "relatedBatches": "Powiązane partie",
-      "unloadingReports": "Raporty rozładunku",
       "deleteOrder": "Usuń zamówienie",
       "receive": "Przyjmij",
       "notInReport": "Brak w raporcie",
@@ -1063,7 +1058,85 @@
     "exportPDF": "Eksportuj PDF",
     "reportFor": "Raport inwentaryzacji: {{name}}",
     "generatedOn": "Wygenerowano: {{date}}",
-    "stocktakingInfo": "Informacje o inwentaryzacji"
+    "stocktakingInfo": "Informacje o inwentaryzacji",
+    "searchPlaceholderProducts": "Szukaj produktów...",
+    "noProductsMessage": "Brak produktów w inwentaryzacji.",
+    "noProductsAddHint": "Możesz dodać produkty klikając przycisk \"Dodaj produkt\".",
+    "tableHeaders": {
+      "productName": "Nazwa produktu",
+      "lotBatch": "LOT/Partia",
+      "category": "Kategoria", 
+      "systemQuantity": "Stan systemowy",
+      "countedQuantity": "Stan policzony",
+      "difference": "Różnica",
+      "unitPrice": "Cena jedn.",
+      "valueDifference": "Wartość różnicy",
+      "notes": "Uwagi",
+      "actions": "Akcje"
+    },
+    "finishCorrections": "Zakończ korekty",
+    "finishStocktaking": "Zakończ inwentaryzację",
+    "addProductDialog": {
+      "title": "Dodaj produkt do inwentaryzacji",
+      "lotMode": "Tryb inwentaryzacji LOT",
+      "itemMode": "Tryb inwentaryzacji pozycji magazynowej",
+      "selectProduct": "Wybierz produkt z magazynu",
+      "countedQuantityLabel": "Stan policzony",
+      "notesLabel": "Uwagi",
+      "batchUnitPrice": "Cena jednostkowa partii: {{price}} EUR",
+      "differenceAlert": "Różnica: {{difference}} {{unit}}",
+      "valueDifferenceAlert": " | Wartość różnicy: {{value}} EUR"
+    },
+    "reportSections": {
+      "stocktakingDates": "Daty inwentaryzacji",
+      "allProducts": "Wszystkie produkty",
+      "matching": "Zgodne",
+      "surplus": "Nadwyżki", 
+      "deficit": "Braki",
+      "valueSummary": "Podsumowanie wartości",
+      "systemValue": "Wartość systemowa",
+      "actualValue": "Wartość rzeczywista",
+      "valueDifference": "Różnica wartości",
+      "percentageProducts": "{{percent}}% produktów",
+      "noProductsInStocktaking": "Brak produktów w inwentaryzacji",
+      "reportGenerated": "Raport wygenerowany z systemu MRP"
+    },
+    "reportLabels": {
+      "id": "ID",
+      "name": "Nazwa",
+      "location": "Lokalizacja",
+      "status": "Status",
+      "scheduledDate": "Data planowana",
+      "createdAt": "Data utworzenia",
+      "createdBy": "Utworzona przez",
+      "completedAt": "Data zakończenia",
+      "notes": "Uwagi",
+      "allLocations": "Wszystkie lokalizacje"
+    },
+    "completeDialog": {
+      "title": "Zakończ inwentaryzację",
+      "confirmQuestion": "Czy na pewno chcesz zakończyć tę inwentaryzację? Po zakończeniu, nie będzie można dodawać ani edytować produktów.",
+      "adjustInventory": "Dostosuj stany magazynowe",
+      "adjustInventoryHelp": "Tak, dostosuj stany magazynowe",
+      "warningTitle": "⚠️ Korekty wpłyną na rezerwacje",
+      "batchesWithShortages": "{{count}} partii z niedoborami po korekcie:",
+      "noConflicts": "✅ Brak konfliktów z rezerwacjami.",
+      "canCompleteWithWarning": "Możesz zakończyć inwentaryzację. Rozważ kontakt z zespołem produkcji.",
+      "batchInfo": "{{itemName}} - Partia: {{batchNumber}}",
+      "quantityChange": "{{currentQuantity}} → {{newQuantity}} {{unit}} (zarezerwowano: {{totalReserved}}, niedobór: {{shortage}})",
+      "reservationsLabel": "Rezerwacje:",
+      "quantityLabel": "Ilość: {{quantity}} {{unit}}",
+      "optionsTitle": "🔧 Opcje rozwiązania:",
+      "cancelThreatenedReservations": "Anuluj zagrożone rezerwacje",
+      "cancelReservationsHelp": "Usuwa rezerwacje z niedoborami.",
+      "cancellingBatches": "ℹ️ Anulowanie {{count}} partii.",
+      "buttonCancel": "Anuluj",
+      "buttonComplete": "Zakończ inwentaryzację",
+      "buttonCompleteWithWarnings": "Zakończ mimo ostrzeżeń",
+      "buttonCancelReservationsAndComplete": "Anuluj rezerwacje i zakończ",
+      "cancellingReservations": "Anulowanie rezerwacji...",
+      "checkingReservations": "Sprawdzanie wpływu na rezerwacje..."
+    }
   },
   "productionForms": {
     "title": "Formularze produkcyjne",
@@ -1624,7 +1697,6 @@
         "orderMaterial": "Zamów materiał"
       },
       "productionTasksInPeriod": "Zadania produkcyjne w wybranym okresie",
-      "startDate": "Data rozpoczęcia",
       "taskWithoutName": "Zadanie bez nazwy"
     },
     "taskDetails": {
@@ -1725,7 +1797,7 @@
       "monthly": "Miesięczna",
       "filters": "Filtry",
       "settings": "Ustawienia",
-      "export": "Eksportuj harmonogram",
+      "exportTimeline": "Eksportuj harmonogram",
       "refresh": "Odśwież",
       "zoom": {
         "in": "Powiększ",
@@ -1888,7 +1960,7 @@
     "designAttachments": {
       "title": "Załączniki designu produktu",
       "upload": "Dodaj design produktu",
-      "description": "Przeciągnij pliki designu tutaj lub wybierz z dysku",
+      "uploadDescription": "Przeciągnij pliki designu tutaj lub wybierz z dysku",
       "supportedFormats": "Dozwolone: JPG, PNG, GIF, WebP, BMP, TIFF, SVG, PDF (maks. 20 MB)",
       "selectOrTakePhoto": "Wybierz design",
       "uploading": "Przesyłanie designu...",
@@ -2107,25 +2179,6 @@
       }
     }
   },
-  "formsResponsesTitle": "Odpowiedzi formularzy produkcyjnych",
-  "formsResponsesDescription": "Przeglądaj dane z wypełnionych formularzy produkcyjnych",
-  "completedMO": {
-    "tab": "Raporty zakończonych MO",
-    "title": "Raport skończone MO"
-  },
-  "productionControl": {
-    "tab": "Raporty kontroli produkcji", 
-    "title": "Raport kontroli produkcji"
-  },
-  "productionShift": {
-    "tab": "Raporty zmian produkcyjnych",
-    "title": "Raport zmiany produkcyjnej"
-  },
-  "errorLoadingData": "Błąd ładowania danych",
-  "confirmDeleteTitle": "Potwierdź usunięcie",
-  "confirmDeleteMessage": "Czy na pewno chcesz usunąć ten element?",
-  "cancel": "Anuluj",
-  "delete": "Usuń",
   "orders": {
     "title": "Zamówienia klientów",
     "newOrder": "Nowe zamówienie",
@@ -2133,7 +2186,6 @@
     "searchOrders": "Szukaj zamówień...",
     "exportCsv": "Eksportuj CSV",
     "exporting": "Eksportowanie...",
-    "filters": "Filtry",
     "filtersToggle": "Filtry",
     "refreshValues": "Odśwież wartości",
     "refreshing": "Odświeżanie...",
@@ -2192,7 +2244,6 @@
       "valueSummary": "Podsumowanie wartości:",
       "productsValue": "Wartość produktów:",
       "deliveryCost": "Koszt dostawy:",
-      "poValue": "Wartość PO:",
       "totalValue": "Łączna wartość:",
       "withoutPO": "(bez wartości PO)",
       "changeStatus": "Zmień status:"
@@ -2269,11 +2320,8 @@
       "status": "Status",
       "deliveryProof": "Dowód dostawy",
       "comments": "Uwagi",
-      "relatedPurchaseOrders": "Powiązane zamówienia zakupu",
-      "productionTasks": "Zadania produkcyjne",
       "relatedInvoices": "Faktury powiązane z zamówieniem",
-      "relatedCmrDocuments": "Dokumenty CMR powiązane z zamówieniem",
-      "statusHistory": "Historia zmian statusu"
+      "relatedCmrDocuments": "Dokumenty CMR powiązane z zamówieniem"
     },
     "customerInfo": {
       "noCustomerName": "Brak nazwy klienta",
@@ -2478,11 +2526,6 @@
         "cancel": "Anuluj"
       }
     }
-  },
-  "common": {
-    "yes": "Tak",
-    "no": "Nie",
-    "language": "Zmień język"
   },
   "orderForm": {
     "title": {
