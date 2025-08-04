@@ -275,9 +275,13 @@ export const calculateCustomerOrderProfitability = (customerOrder, productCostsM
  * Oblicza szacowany czas trwania zadania produkcyjnego na podstawie receptury
  * @param {Object} recipe - Obiekt receptury
  * @param {Number} taskQuantity - Ilość produktu do wyprodukowania w zadaniu
+ * @param {Object} options - Opcje obliczania
+ * @param {Boolean} options.excludeWeekends - Czy pomijać weekendy (domyślnie true)
  * @returns {Number} - Szacowany czas trwania w minutach
  */
-export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1) => {
+export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1, options = {}) => {
+  const { excludeWeekends = true } = options;
+
   if (!recipe) {
     return 0;
   }
@@ -293,7 +297,18 @@ export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1) => {
   }
 
   // Oblicz szacowany czas na podstawie czasu przygotowania i ilości produktu
-  const estimatedTime = prepTime * taskQuantity;
+  let estimatedTime = prepTime * taskQuantity;
+
+  // Jeśli ma pomijać weekendy, zastosuj odpowiednią funkcję
+  if (excludeWeekends && estimatedTime > 0) {
+    // Import funkcji z dateUtils
+    try {
+      const { calculateProductionTimeExcludingWeekends } = require('./dateUtils');
+      estimatedTime = calculateProductionTimeExcludingWeekends(estimatedTime);
+    } catch (error) {
+      console.warn('Nie udało się zaimportować funkcji dateUtils, używam podstawowego czasu:', error);
+    }
+  }
 
   return estimatedTime;
 };

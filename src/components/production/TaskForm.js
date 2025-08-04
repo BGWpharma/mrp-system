@@ -60,6 +60,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
 import { generateLOTNumber } from '../../utils/numberGenerators';
+import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends } from '../../utils/dateUtils';
 
 const TaskForm = ({ taskId }) => {
   const [loading, setLoading] = useState(!!taskId);
@@ -771,22 +772,20 @@ const TaskForm = ({ taskId }) => {
       // Pobierz aktualny czas produkcji w minutach
       const productionTimeMinutes = prev.estimatedDuration || 0;
       
-      // Oblicz nową datę zakończenia na podstawie daty rozpoczęcia i czasu produkcji
-      const endDate = new Date(newDate.getTime() + (productionTimeMinutes * 60 * 1000));
+      // Oblicz nową datę zakończenia pomijając weekendy
+      const endDateExcludingWeekends = calculateEndDateExcludingWeekends(newDate, productionTimeMinutes);
       
       return {
         ...prev,
         scheduledDate: newDate,
-        endDate: endDate
+        endDate: endDateExcludingWeekends
       };
     });
   };
 
   const handleEndDateChange = (newDate) => {
-    // Oblicz czas produkcji w minutach na podstawie różnicy między datą rozpoczęcia a zakończenia
-    const startTime = taskData.scheduledDate.getTime();
-    const endTime = newDate.getTime();
-    const durationInMinutes = Math.max(0, (endTime - startTime) / (60 * 1000));
+    // Oblicz czas produkcji pomijając weekendy
+    const durationInMinutes = calculateProductionTimeBetweenExcludingWeekends(taskData.scheduledDate, newDate);
     
     setTaskData({
       ...taskData,
@@ -813,13 +812,13 @@ const TaskForm = ({ taskId }) => {
         estimatedDuration: estimatedTimeMinutes
       }));
       
-      // Zaktualizuj datę zakończenia
+      // Zaktualizuj datę zakończenia pomijając weekendy
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
+        const endDateExcludingWeekends = calculateEndDateExcludingWeekends(startDate, estimatedTimeMinutes);
         setTaskData(prev => ({
           ...prev,
-          endDate
+          endDate: endDateExcludingWeekends
         }));
       }
     }
@@ -832,11 +831,13 @@ const TaskForm = ({ taskId }) => {
       const durationInMinutes = durationInHours * 60;
       
       // Aktualizacja endDate na podstawie scheduledDate i podanego czasu trwania w minutach
-      const endDate = new Date(taskData.scheduledDate.getTime() + durationInMinutes * 60 * 1000);
+      // Oblicz datę zakończenia pomijając weekendy
+      const endDateExcludingWeekends = calculateEndDateExcludingWeekends(taskData.scheduledDate, durationInMinutes);
+      
       setTaskData(prev => ({
         ...prev,
         estimatedDuration: durationInMinutes,
-        endDate: endDate
+        endDate: endDateExcludingWeekends
       }));
     } else {
       setTaskData(prev => ({
@@ -901,13 +902,13 @@ const TaskForm = ({ taskId }) => {
         estimatedDuration: totalProductionTime
       }));
 
-      // Zaktualizuj datę zakończenia
+      // Zaktualizuj datę zakończenia pomijając weekendy
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDate = new Date(startDate.getTime() + (totalProductionTime * 60 * 1000));
+        const endDateExcludingWeekends = calculateEndDateExcludingWeekends(startDate, totalProductionTime);
         setTaskData(prev => ({
           ...prev,
-          endDate
+          endDate: endDateExcludingWeekends
         }));
       }
 
@@ -941,13 +942,13 @@ const TaskForm = ({ taskId }) => {
         estimatedDuration: estimatedTimeMinutes
       }));
       
-      // Zaktualizuj datę zakończenia
+      // Zaktualizuj datę zakończenia pomijając weekendy
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDate = new Date(startDate.getTime() + (estimatedTimeMinutes * 60 * 1000));
+        const endDateExcludingWeekends = calculateEndDateExcludingWeekends(startDate, estimatedTimeMinutes);
         setTaskData(prev => ({
           ...prev,
-          endDate
+          endDate: endDateExcludingWeekends
         }));
       }
       

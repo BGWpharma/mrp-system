@@ -77,6 +77,7 @@ import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
+import { extendPeriodForWeekends } from '../../utils/dateUtils';
 import { 
   format, 
   parseISO, 
@@ -1148,14 +1149,18 @@ const ProductionCalendar = () => {
       
       // Oblicz czas trwania w minutach na podstawie różnicy między datami
       let durationInMinutes = '';
+      let finalEndDate = editDateForm.endDate || editDateForm.scheduledDate;
+      
       if (editDateForm.scheduledDate && editDateForm.endDate) {
-        durationInMinutes = Math.round((editDateForm.endDate - editDateForm.scheduledDate) / (1000 * 60));
+        // Zastosuj logikę rozszerzania o weekendy - nie zmieniamy godzin, tylko wydłużamy okres
+        finalEndDate = extendPeriodForWeekends(editDateForm.scheduledDate, editDateForm.endDate);
+        durationInMinutes = Math.round((finalEndDate - editDateForm.scheduledDate) / (1000 * 60));
       }
       
       // Przygotuj dane do aktualizacji - tak jak w handleEventDrop
       const updatedData = {
         scheduledDate: editDateForm.scheduledDate,
-        endDate: editDateForm.endDate || editDateForm.scheduledDate,
+        endDate: finalEndDate,
         estimatedDuration: durationInMinutes || task.estimatedDuration
       };
 
@@ -1170,7 +1175,7 @@ const ProductionCalendar = () => {
           ...task,
           // Ale upewnij się, że daty i czas trwania są zaktualizowane
           scheduledDate: editDateForm.scheduledDate,
-          endDate: editDateForm.endDate || editDateForm.scheduledDate,
+          endDate: finalEndDate,
           estimatedDuration: durationInMinutes || task.estimatedDuration,
           lastModified: new Date()
         }

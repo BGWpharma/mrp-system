@@ -41,7 +41,7 @@ import { getIngredientPrices, getInventoryItemById } from '../../services/invent
 import { calculateManufacturingOrderCosts } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, addProductionTime, isWeekend, isWorkingDay, calculateEndDateExcludingWeekends } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getPriceForCustomerProduct } from '../../services/priceListService';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -601,17 +601,27 @@ const CreateFromOrderPage = () => {
         const currentTime = new Date();
         startDate.setHours(currentTime.getHours(), currentTime.getMinutes(), 0, 0);
         
+        // Jeśli data rozpoczęcia przypada na weekend, przenieś do następnego dnia roboczego
+        while (isWeekend(startDate)) {
+          startDate.setDate(startDate.getDate() + 1);
+          startDate.setHours(8, 0, 0, 0); // Rozpocznij o 8:00 w dniu roboczym
+        }
+        
         // Formatuj datę rozpoczęcia z godziną
         const formattedStartDate = startDate.toISOString();
         
-        // Oblicz datę zakończenia na podstawie szacowanego czasu trwania
-        let endDate = new Date(startDate);
+        // Oblicz datę zakończenia na podstawie szacowanego czasu trwania, uwzględniając dni robocze
+        let endDate;
         if (estimatedDuration > 0) {
-          // Jeśli mamy szacowany czas trwania, dodaj go do daty rozpoczęcia
-          endDate.setMinutes(endDate.getMinutes() + estimatedDuration);
+          // Użyj tej samej funkcji co w edycji zadań - pomija weekendy ale liczy 24h/dzień
+          endDate = calculateEndDateExcludingWeekends(startDate, estimatedDuration);
         } else {
-          // Jeśli nie ma czasu produkcji, domyślnie zadanie trwa 1 dzień
+          // Jeśli nie ma czasu produkcji, dodaj 1 dzień roboczy
+          endDate = new Date(startDate);
           endDate.setDate(endDate.getDate() + 1);
+          while (isWeekend(endDate)) {
+            endDate.setDate(endDate.getDate() + 1);
+          }
         }
         
         // Formatuj datę zakończenia z godziną
@@ -879,7 +889,13 @@ const CreateFromOrderPage = () => {
           const unit = orderItem.unit || 'szt.';
           
           // Sprawdź, czy mamy datę dla tego produktu, jeśli nie - użyj domyślnej
-          const orderItemDate = productDates[itemId] || new Date();
+          let orderItemDate = productDates[itemId] || new Date();
+          
+          // Upewnij się, że data rozpoczęcia przypada na dzień roboczy
+          while (isWeekend(orderItemDate)) {
+            orderItemDate.setDate(orderItemDate.getDate() + 1);
+            orderItemDate.setHours(8, 0, 0, 0); // Rozpocznij o 8:00 w dniu roboczym
+          }
           
           // Tworzenie nazwy zadania
           const taskName = `${orderItem.name} (${selectedOrder.orderNumber || selectedOrder.id.substring(0, 8)})`;
@@ -897,6 +913,20 @@ const CreateFromOrderPage = () => {
           let estimatedDuration = 0;
           if (productionTimePerUnit > 0) {
             estimatedDuration = productionTimePerUnit * orderItem.quantity;
+          }
+          
+          // Oblicz datę zakończenia uwzględniając dni robocze
+          let endDate;
+          if (estimatedDuration > 0) {
+            // Użyj tej samej funkcji co w edycji zadań - pomija weekendy ale liczy 24h/dzień
+            endDate = calculateEndDateExcludingWeekends(orderItemDate, estimatedDuration);
+          } else {
+            // Jeśli nie ma czasu produkcji, dodaj 1 dzień roboczy
+            endDate = new Date(orderItemDate);
+            endDate.setDate(endDate.getDate() + 1);
+            while (isWeekend(endDate)) {
+              endDate.setDate(endDate.getDate() + 1);
+            }
           }
           
           // Sprawdź, czy dla tego elementu zostało wybrane stanowisko produkcyjne
@@ -917,8 +947,8 @@ const CreateFromOrderPage = () => {
             productName: orderItem.name,
             quantity: orderItem.quantity,
             unit: unit,
-            scheduledDate: new Date(orderItemDate),
-            endDate: new Date(new Date(orderItemDate).getTime() + (estimatedDuration * 60 * 1000)), // Dodaj szacowany czas trwania
+            scheduledDate: orderItemDate,
+            endDate: endDate,
             estimatedDuration: estimatedDuration,
             productionTimePerUnit: productionTimePerUnit,
             priority: taskForm.priority || 'Normalny',

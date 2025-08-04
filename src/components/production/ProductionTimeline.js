@@ -69,6 +69,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import TimelineExport from './TimelineExport';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
+import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend } from '../../utils/dateUtils';
 
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
@@ -931,6 +932,9 @@ const ProductionTimeline = React.memo(() => {
       // Sprawdź czy zadanie można edytować - zablokuj edycję dla zadań zakończonych
       const canEditTask = editMode && task.status !== 'Zakończone';
 
+      // Oblicz rzeczywisty czas produkcji (pomijając weekendy)
+      const productionTimeMinutes = task.estimatedDuration || Math.round((endTime - startTime) / (1000 * 60));
+      
       return {
         id: task.id,
         group: groupId,
@@ -942,7 +946,9 @@ const ProductionTimeline = React.memo(() => {
         canChangeGroup: false,
         // Dodatkowe dane
         task: taskForTooltip,
-        backgroundColor: getItemColor(task)
+        backgroundColor: getItemColor(task),
+        // Metadane do zachowania rozmiaru podczas przeciągania
+        originalDuration: productionTimeMinutes
       };
     });
     
@@ -1207,8 +1213,38 @@ const ProductionTimeline = React.memo(() => {
       };
 
       let newStartTime = roundToMinute(new Date(dragTime));
-      const duration = item.end_time - item.start_time;
-      let newEndTime = roundToMinute(new Date(dragTime + duration));
+      
+      // KOREKTA WEEKENDU: Jeśli nowy początek wypada na weekend, przesuń do poniedziałku
+      if (isWeekend(newStartTime)) {
+        const originalHour = newStartTime.getHours();
+        const originalMinute = newStartTime.getMinutes();
+        
+        console.log('🔧 Weekend detected in handleItemMove - adjusting to Monday:', {
+          originalStart: newStartTime.toLocaleString('pl-PL'),
+          itemId
+        });
+        
+        // Przesuń do następnego poniedziałku
+        while (isWeekend(newStartTime)) {
+          newStartTime.setDate(newStartTime.getDate() + 1);
+        }
+        
+        // Zachowaj oryginalną godzinę
+        newStartTime.setHours(originalHour, originalMinute, 0, 0);
+        
+        console.log('🔧 Adjusted to:', {
+          adjustedStart: newStartTime.toLocaleString('pl-PL'),
+          itemId
+        });
+      }
+      
+      // Użyj oryginalnego czasu produkcji z metadanych lub oblicz z różnicy dat
+      const originalDurationMinutes = item.originalDuration || item.task?.estimatedDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
+      
+      // Oblicz nową datę zakończenia pomijając weekendy - zachowaj oryginalny czas produkcji (timeline version)
+      let newEndTime = calculateEndDateForTimeline(newStartTime, originalDurationMinutes);
+      
+      // Zachowano oryginalny czas produkcji podczas przesunięcia
 
       // Zastosuj logikę dociągania jeśli tryb jest włączony
       const task = item.task; // Obiekt zadania z pełnymi danymi
@@ -1245,10 +1281,30 @@ const ProductionTimeline = React.memo(() => {
       const updateData = {
         scheduledDate: newStartTime,
         endDate: newEndTime,
-        estimatedDuration: Math.round(duration / (1000 * 60))
+        estimatedDuration: originalDurationMinutes // Zachowaj oryginalny czas produkcji (bez weekendów)
       };
+      
+      // Debug log można usunąć w produkcji
+      if (process.env.NODE_ENV === 'development') {
+        console.log('updateData w handleItemMove:', updateData);
+      }
 
       await updateTask(itemId, updateData, currentUser.uid);
+      
+      // Natychmiast zaktualizuj lokalny stan tasks, żeby kafelek wrócił do oryginalnego rozmiaru
+      setTasks(prevTasks => {
+        return prevTasks.map(prevTask => {
+          if (prevTask.id === itemId) {
+            return {
+              ...prevTask,
+              scheduledDate: newStartTime,
+              endDate: newEndTime,
+              estimatedDuration: originalDurationMinutes
+            };
+          }
+          return prevTask;
+        });
+      });
       
       // Dodaj akcję do undo stack po udanej aktualizacji
       addToUndoStack(previousState);
@@ -1259,8 +1315,8 @@ const ProductionTimeline = React.memo(() => {
         showSuccess(t('production.timeline.edit.saveSuccess'));
       }
       
-      // Odśwież dane
-      fetchTasks();
+      // Odśwież dane w tle (może być opóźnione)
+      setTimeout(() => fetchTasks(), 100);
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
       showError(t('production.timeline.edit.saveError') + ': ' + error.message);
@@ -1288,17 +1344,24 @@ const ProductionTimeline = React.memo(() => {
         return;
       }
 
-      let newStartTime, newEndTime;
+      let newStartTime, newEndTime, duration;
 
       if (edge === 'left') {
+        // Zmieniamy datę rozpoczęcia - obliczamy nowy czas produkcji pomijając weekendy
         newStartTime = roundToMinute(new Date(time));
         newEndTime = roundToMinute(new Date(item.end_time));
+        duration = calculateProductionTimeBetweenExcludingWeekends(newStartTime, newEndTime);
       } else {
+        // Zmieniamy datę zakończenia - obliczamy nową datę zakończenia pomijając weekendy
         newStartTime = roundToMinute(new Date(item.start_time));
-        newEndTime = roundToMinute(new Date(time));
+        const requestedEndTime = roundToMinute(new Date(time));
+        
+        // Oblicz czas produkcji do żądanej daty zakończenia
+        duration = calculateProductionTimeBetweenExcludingWeekends(newStartTime, requestedEndTime);
+        
+        // Przelicz datę zakończenia na podstawie czasu produkcji pomijając weekendy (timeline version)
+        newEndTime = calculateEndDateForTimeline(newStartTime, duration);
       }
-
-      const duration = Math.round((newEndTime - newStartTime) / (1000 * 60));
 
       const updateData = {
         scheduledDate: newStartTime,
@@ -2407,14 +2470,47 @@ const ProductionTimeline = React.memo(() => {
           onTimeChange={handleTimeChange}
           onItemMove={handleItemMove}
           onItemSelect={handleItemSelect}
+          moveResizeValidator={(action, item, time, resizeEdge) => {
+            // Podczas przeciągania zachowaj oryginalny rozmiar zadania BEZ korekty weekendu
+            if (action === 'move') {
+              const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
+              const newStartTime = roundToMinute(new Date(time));
+              const newEndTime = calculateEndDateForTimeline(newStartTime, originalDurationMinutes);
+              
+              // Pozwól na płynne przeciąganie - korekta weekendu nastąpi w handleItemMove
+              
+              // Zwróć oryginalny czas bez korekty - pozwól na płynne przeciąganie
+              return newStartTime.getTime();
+            }
+            
+            if (action === 'resize') {
+              // Blokuj resize - nie zmieniaj rozmiaru
+              return false;
+            }
+            
+            return time;
+          }}
           onItemDrag={({ itemId, time, edge }) => {
             setIsDragging(true);
             
             const item = items.find(i => i.id === itemId);
             if (item) {
-              const duration = item.end_time - item.start_time;
+              // Zachowaj oryginalny czas produkcji w minutach (pomijając weekendy)
+              const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
               const newStartTime = roundToMinute(new Date(time));
-              const newEndTime = roundToMinute(new Date(time + duration));
+              
+              // Oblicz nową datę zakończenia pomijając weekendy (timeline version)
+              const newEndTime = calculateEndDateForTimeline(newStartTime, originalDurationMinutes);
+              
+              // Debug log można usunąć w produkcji
+              if (process.env.NODE_ENV === 'development') {
+                console.log('onItemDrag:', {
+                  itemId,
+                  originalDuration: originalDurationMinutes,
+                  newStart: newStartTime,
+                  newEnd: newEndTime
+                });
+              }
               
               setDragInfo({
                 isDragging: true,
@@ -2492,6 +2588,7 @@ const ProductionTimeline = React.memo(() => {
           minimumWidthForItemContentVisibility={50}
           buffer={1}
           traditionalZoom={true}
+          itemTouchSendsClick={false}
         >
           <TimelineHeaders className="sticky">
             <SidebarHeader>

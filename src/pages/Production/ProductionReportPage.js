@@ -128,17 +128,38 @@ const ProductionReportPage = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      console.log('[RAPORT PRODUKCJI] Rozpoczynam pobieranie danych...');
+      
       const [fetchedTasks, fetchedOrders, fetchedCustomers] = await Promise.all([
         getAllTasks(),
         getAllOrders(),
         getAllCustomers()
       ]);
       
+      console.log(`[RAPORT PRODUKCJI] Pobrano ${fetchedTasks.length} zadań produkcyjnych`);
+      
+      // Sprawdź ile zadań ma dane konsumpcji
+      const tasksWithConsumption = fetchedTasks.filter(task => 
+        task.consumedMaterials && task.consumedMaterials.length > 0
+      );
+      
+      console.log(`[RAPORT PRODUKCJI] Zadania z konsumpcją: ${tasksWithConsumption.length}/${fetchedTasks.length}`);
+      
+      if (tasksWithConsumption.length > 0) {
+        console.log('[RAPORT PRODUKCJI] Przykładowe zadania z konsumpcją:');
+        tasksWithConsumption.slice(0, 3).forEach((task, index) => {
+          console.log(`  ${index + 1}. ${task.moNumber || task.name} - ${task.consumedMaterials.length} pozycji konsumpcji`);
+        });
+      } else {
+        console.warn('[RAPORT PRODUKCJI] UWAGA: Żadne zadanie nie ma danych konsumpcji!');
+      }
+      
       setTasks(fetchedTasks);
       setOrders(fetchedOrders);
       setCustomers(fetchedCustomers);
     } catch (error) {
       console.error('Błąd podczas pobierania danych:', error);
+      showError('Nie udało się pobrać danych raportów: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -769,12 +790,28 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
 
   // Funkcja do agregacji danych konsumpcji z zadań produkcyjnych
   const aggregateConsumptionData = (tasks) => {
+    console.log(`[RAPORT KONSUMPCJI] Rozpoczynam agregację dla ${tasks.length} zadań`);
+    console.log(`[RAPORT KONSUMPCJI] Zakres dat: ${format(consumptionStartDate, 'dd.MM.yyyy')} - ${format(consumptionEndDate, 'dd.MM.yyyy')}`);
+    
     const aggregatedData = [];
     const materialSummary = {};
+    let tasksWithConsumption = 0;
+    let totalConsumptionItems = 0;
+    let consumptionItemsInDateRange = 0;
 
-    tasks.forEach(task => {
+    tasks.forEach((task, taskIndex) => {
+      console.log(`[RAPORT KONSUMPCJI] Zadanie ${taskIndex + 1}/${tasks.length}: ${task.moNumber || task.name}`);
+      console.log(`[RAPORT KONSUMPCJI] - ID: ${task.id}`);
+      console.log(`[RAPORT KONSUMPCJI] - Konsumpcja: ${task.consumedMaterials ? task.consumedMaterials.length : 0} pozycji`);
+      
       if (task.consumedMaterials && task.consumedMaterials.length > 0) {
-        task.consumedMaterials.forEach(consumed => {
+        tasksWithConsumption++;
+        console.log(`[RAPORT KONSUMPCJI] - Zadanie ma ${task.consumedMaterials.length} pozycji konsumpcji`);
+        
+        task.consumedMaterials.forEach((consumed, consumedIndex) => {
+          totalConsumptionItems++;
+          console.log(`[RAPORT KONSUMPCJI] -- Konsumpcja ${consumedIndex + 1}: materialId=${consumed.materialId}, quantity=${consumed.quantity}`);
+          
           const materialId = consumed.materialId;
           
           // Znajdź materiał w liście materiałów zadania aby pobrać prawidłową nazwę
@@ -788,12 +825,67 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
           const quantity = Number(consumed.quantity) || 0;
           const unitPrice = Number(consumed.unitPrice) || 0;
           const totalCost = quantity * unitPrice;
-          const consumptionDate = consumed.timestamp ? new Date(consumed.timestamp) : null;
+          
+          // Ulepszone pobieranie daty konsumpcji z wieloma fallbackami
+          let consumptionDate = null;
+          if (consumed.timestamp) {
+            if (consumed.timestamp.toDate) {
+              // Firestore Timestamp
+              consumptionDate = consumed.timestamp.toDate();
+            } else if (consumed.timestamp instanceof Date) {
+              consumptionDate = consumed.timestamp;
+            } else if (typeof consumed.timestamp === 'string') {
+              consumptionDate = new Date(consumed.timestamp);
+            } else if (typeof consumed.timestamp === 'number') {
+              consumptionDate = new Date(consumed.timestamp);
+            }
+          } else if (consumed.date) {
+            // Fallback na pole date
+            if (consumed.date.toDate) {
+              consumptionDate = consumed.date.toDate();
+            } else {
+              consumptionDate = new Date(consumed.date);
+            }
+          } else if (task.updatedAt) {
+            // Fallback na datę aktualizacji zadania
+            if (task.updatedAt.toDate) {
+              consumptionDate = task.updatedAt.toDate();
+            } else {
+              consumptionDate = new Date(task.updatedAt);
+            }
+          } else if (task.createdAt) {
+            // Fallback na datę utworzenia zadania
+            if (task.createdAt.toDate) {
+              consumptionDate = task.createdAt.toDate();
+            } else {
+              consumptionDate = new Date(task.createdAt);
+            }
+          }
+          
+          console.log(`[RAPORT KONSUMPCJI] -- Data konsumpcji: ${consumptionDate ? format(consumptionDate, 'dd.MM.yyyy HH:mm') : 'BRAK'}`);
           
           // Sprawdź czy konsumpcja jest w wybranym zakresie dat
-          if (consumptionDate && 
-              consumptionDate >= consumptionStartDate && 
-              consumptionDate <= consumptionEndDate) {
+          let isInDateRange = false;
+          let dateReason = '';
+          
+          if (consumptionDate) {
+            isInDateRange = consumptionDate >= consumptionStartDate && 
+                           consumptionDate <= consumptionEndDate;
+            dateReason = isInDateRange ? 'w zakresie dat' : 'poza zakresem dat';
+          } else {
+            // Jeśli nie ma daty konsumpcji, użyj daty zadania lub załóż że jest aktualna
+            isInDateRange = true; // Domyślnie uwzględnij jeśli nie ma daty
+            dateReason = 'brak daty konsumpcji - uwzględniam';
+          }
+              
+          console.log(`[RAPORT KONSUMPCJI] -- Status: ${dateReason} (${isInDateRange ? 'UWZGLĘDNIAM' : 'POMIJAM'})`);
+          
+          if (isInDateRange) {
+            if (!consumptionDate) {
+              console.log(`[RAPORT KONSUMPCJI] -- UWAGA: Brak daty konsumpcji, używam fallback`);
+            }
+            
+            consumptionItemsInDateRange++;
             
             // Dodaj do szczegółowych danych
             aggregatedData.push({
@@ -808,7 +900,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
               unit: materialUnit,
               unitPrice,
               totalCost,
-              consumptionDate,
+              consumptionDate: consumptionDate || new Date(), // Użyj bieżącej daty jako fallback
               userName: consumed.userName || 'Nieznany użytkownik',
               includeInCosts: consumed.includeInCosts !== false
             });
@@ -832,8 +924,17 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
             materialSummary[materialId].taskCount.add(task.id);
           }
         });
+      } else {
+        console.log(`[RAPORT KONSUMPCJI] - Zadanie nie ma danych konsumpcji`);
       }
     });
+
+    console.log(`[RAPORT KONSUMPCJI] PODSUMOWANIE:`);
+    console.log(`[RAPORT KONSUMPCJI] - Zadania z konsumpcją: ${tasksWithConsumption}/${tasks.length}`);
+    console.log(`[RAPORT KONSUMPCJI] - Całkowita konsumpcja: ${totalConsumptionItems} pozycji`);
+    console.log(`[RAPORT KONSUMPCJI] - Konsumpcja w zakresie dat: ${consumptionItemsInDateRange} pozycji`);
+    console.log(`[RAPORT KONSUMPCJI] - Materiały w podsumowaniu: ${Object.keys(materialSummary).length}`);
+    console.log(`[RAPORT KONSUMPCJI] - Szczegółowe dane: ${aggregatedData.length} pozycji`);
 
     // Oblicz średnie ceny jednostkowe
     Object.values(materialSummary).forEach(material => {
@@ -906,9 +1007,56 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
     setOrdersList(orders.sort((a, b) => a.number.localeCompare(b.number)));
   }, [tasks]);
 
+  // Funkcja do debugowania struktury zadań
+  const debugTasksStructure = (tasks) => {
+    console.log('[DEBUG STRUKTURA] Analizuję strukturę zadań...');
+    
+    if (tasks.length === 0) {
+      console.log('[DEBUG STRUKTURA] Brak zadań do analizy');
+      return;
+    }
+    
+    // Sprawdź pierwsze zadanie
+    const firstTask = tasks[0];
+    console.log('[DEBUG STRUKTURA] Przykładowa struktura zadania:');
+    console.log('[DEBUG STRUKTURA] - Pola zadania:', Object.keys(firstTask));
+    console.log('[DEBUG STRUKTURA] - Ma consumedMaterials:', !!firstTask.consumedMaterials);
+    console.log('[DEBUG STRUKTURA] - Typ consumedMaterials:', typeof firstTask.consumedMaterials);
+    console.log('[DEBUG STRUKTURA] - Długość consumedMaterials:', firstTask.consumedMaterials?.length || 0);
+    
+    if (firstTask.consumedMaterials && firstTask.consumedMaterials.length > 0) {
+      const firstConsumption = firstTask.consumedMaterials[0];
+      console.log('[DEBUG STRUKTURA] - Przykładowa konsumpcja:', firstConsumption);
+      console.log('[DEBUG STRUKTURA] - Pola konsumpcji:', Object.keys(firstConsumption));
+    }
+    
+    // Sprawdź ile zadań ma różne pola
+    const stats = tasks.reduce((acc, task) => {
+      acc.total++;
+      if (task.consumedMaterials) acc.hasConsumedMaterials++;
+      if (task.consumedMaterials?.length > 0) acc.hasNonEmptyConsumption++;
+      if (task.materials) acc.hasMaterials++;
+      if (task.moNumber) acc.hasMoNumber++;
+      if (task.status) acc.hasStatus++;
+      return acc;
+    }, {
+      total: 0,
+      hasConsumedMaterials: 0,
+      hasNonEmptyConsumption: 0,
+      hasMaterials: 0,
+      hasMoNumber: 0,
+      hasStatus: 0
+    });
+    
+    console.log('[DEBUG STRUKTURA] Statystyki zadań:', stats);
+  };
+
   // Agreguj dane konsumpcji po zmianie filtrów
   useEffect(() => {
     setLoading(true);
+    
+    // DEBUG: Analizuj strukturę zadań
+    debugTasksStructure(tasks);
     
     // Filtruj zadania po wybranym zamówieniu przed agregacją
     let filteredTasks = tasks;
@@ -916,12 +1064,16 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
       filteredTasks = tasks.filter(task => task.orderId === selectedOrder);
     }
     
+    console.log(`[RAPORT KONSUMPCJI] Przetwarzam ${filteredTasks.length} zadań po filtrach`);
+    
     const { detailedData, materialSummary } = aggregateConsumptionData(filteredTasks);
     
     // Filtruj po wybranym materiale
     const filtered = selectedMaterial === 'all' 
       ? detailedData 
       : detailedData.filter(item => item.materialId === selectedMaterial);
+    
+    console.log(`[RAPORT KONSUMPCJI] Wyniki: ${materialSummary.length} materiałów, ${filtered.length} szczegółowych pozycji`);
     
     setConsumptionData(materialSummary);
     setFilteredConsumption(filtered);
@@ -1034,9 +1186,14 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
         </Typography>
         
         {consumptionData.length === 0 ? (
-          <Typography align="center" sx={{ py: 3 }}>
-            Brak danych konsumpcji w wybranym okresie.
-          </Typography>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Brak podsumowania konsumpcji
+            </Typography>
+            <Typography color="text.secondary">
+              Nie znaleziono żadnej konsumpcji materiałów w wybranym okresie i filtrach.
+            </Typography>
+          </Box>
         ) : (
           <TableContainer sx={{ overflowX: 'auto' }}>
             <Table size="small">
@@ -1113,9 +1270,28 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
         </Typography>
         
         {filteredConsumption.length === 0 ? (
-          <Typography align="center" sx={{ py: 3 }}>
-            Brak szczegółowych danych konsumpcji w wybranym okresie i filtrach.
-          </Typography>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Brak danych konsumpcji materiałów
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              W wybranym okresie ({format(consumptionStartDate, 'dd.MM.yyyy')} - {format(consumptionEndDate, 'dd.MM.yyyy')}) nie znaleziono żadnych danych konsumpcji materiałów.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Możliwe przyczyny:
+            </Typography>
+            <Box component="ul" sx={{ textAlign: 'left', display: 'inline-block', mt: 1 }}>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Brak zadań produkcyjnych z zapisaną konsumpcją w tym okresie
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Konsumpcja materiałów nie została jeszcze zarejestrowana
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Sprawdź zakres dat lub filtry materiałów/zamówień
+              </Typography>
+            </Box>
+          </Box>
         ) : (
           <TableContainer sx={{ overflowX: 'auto' }}>
             <Table size="small">
