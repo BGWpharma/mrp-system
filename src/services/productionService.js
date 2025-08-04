@@ -613,12 +613,7 @@ import {
         taskWithMeta.lotNumber = `SN${moNumericPart}`;
       }
       
-      // Jeśli nie określono daty ważności, ustaw domyślnie na rok od teraz
-      if (!taskWithMeta.expiryDate) {
-        const defaultExpiryDate = new Date();
-        defaultExpiryDate.setFullYear(defaultExpiryDate.getFullYear() + 1);
-        taskWithMeta.expiryDate = defaultExpiryDate;
-      }
+      // Data ważności nie jest już automatycznie ustawiana - będzie wymagana przy starcie produkcji
       
       // Zapisz zadanie w bazie danych
       console.log(`[DEBUG-MO] Tworzenie zadania z numerem MO: ${moNumber}`, 
@@ -3015,13 +3010,20 @@ import {
       const existingSessions = task.productionSessions || [];
       
       // Zaktualizuj status zadania na "W trakcie"
-      await updateDoc(taskRef, {
+      const updateData = {
         status: 'W trakcie',
         startDate: serverTimestamp(),
         productionSessions: existingSessions, // Zachowaj istniejące sesje
         updatedAt: serverTimestamp(),
         updatedBy: userId
-      });
+      };
+
+      // Jeśli podano datę ważności, zapisz ją do zadania
+      if (expiryDate) {
+        updateData.expiryDate = Timestamp.fromDate(expiryDate);
+      }
+
+      await updateDoc(taskRef, updateData);
       
       // Automatycznie utwórz pustą partię gotowego produktu
       let batchResult = null;
@@ -4269,19 +4271,21 @@ import {
       const lotNumber = taskData.lotNumber || 
                         (taskData.moNumber ? `SN${taskData.moNumber.replace('MO', '')}` : `LOT-PROD-${taskId.substring(0, 6)}`);
       
-      // Przygotuj datę ważności z zadania produkcyjnego
-      let expiryDate = null;
-      if (taskData.expiryDate) {
+      // Przygotuj datę ważności - używaj parametru przekazanego do funkcji, a jeśli go nie ma, sprawdź zadanie
+      let finalExpiryDate = expiryDate; // Parametr przekazany do funkcji
+      
+      // Jeśli nie przekazano daty przez parametr, sprawdź czy zadanie ma ustawioną datę ważności
+      if (!finalExpiryDate && taskData.expiryDate) {
         try {
           if (taskData.expiryDate instanceof Date) {
-            expiryDate = taskData.expiryDate;
+            finalExpiryDate = taskData.expiryDate;
           } else if (taskData.expiryDate.toDate) {
-            expiryDate = taskData.expiryDate.toDate();
+            finalExpiryDate = taskData.expiryDate.toDate();
           } else {
-            expiryDate = new Date(taskData.expiryDate);
+            finalExpiryDate = new Date(taskData.expiryDate);
           }
         } catch (error) {
-          console.error('Błąd podczas konwersji daty ważności:', error);
+          console.error('Błąd podczas konwersji daty ważności z zadania:', error);
         }
       }
       
@@ -4349,7 +4353,7 @@ import {
         initialQuantity: 0,
         batchNumber: lotNumber,
         receivedDate: serverTimestamp(),
-        expiryDate: expiryDate ? Timestamp.fromDate(expiryDate) : null,
+        expiryDate: finalExpiryDate ? Timestamp.fromDate(finalExpiryDate) : null,
         lotNumber: lotNumber,
         source: 'Produkcja (pusta partia)',
         sourceId: taskId,

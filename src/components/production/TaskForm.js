@@ -1579,20 +1579,31 @@ const TaskForm = ({ taskId }) => {
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                    <DateTimePicker
-                      label="Data ważności"
-                      value={taskData.expiryDate}
-                      onChange={(date) => setTaskData({...taskData, expiryDate: date})}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          variant: "outlined",
-                          helperText: "Określ datę ważności produktu końcowego"
-                        }
-                      }}
-                    />
-                  </LocalizationProvider>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                      <DateTimePicker
+                        label="Data ważności"
+                        value={taskData.expiryDate}
+                        onChange={(date) => setTaskData({...taskData, expiryDate: date})}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            variant: "outlined",
+                            helperText: "Określ datę ważności produktu końcowego"
+                          }
+                        }}
+                      />
+                    </LocalizationProvider>
+                    <Button 
+                      variant="outlined" 
+                      color="secondary"
+                      onClick={() => setTaskData({...taskData, expiryDate: null})}
+                      sx={{ mt: 2, ml: 1, height: 56 }}
+                      title="Wyczyść datę ważności"
+                    >
+                      <DeleteIcon />
+                    </Button>
+                  </Box>
                 </Grid>
               </Grid>
             </Paper>
