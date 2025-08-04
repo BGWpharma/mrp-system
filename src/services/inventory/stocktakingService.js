@@ -388,6 +388,8 @@ export const getStocktakingItems = async (stocktakingId, options = {}) => {
       };
     });
 
+
+
     if (includeStats) {
       const stats = calculateStocktakingStats(items);
       return { items, stats };
@@ -525,6 +527,7 @@ export const updateStocktakingItem = async (itemId, itemData, userId) => {
       updatedData.discrepancy = formatQuantityPrecision(
         itemData.countedQuantity - (currentData.systemQuantity || 0)
       );
+
     }
 
     updatedData.updatedAt = serverTimestamp();
@@ -1039,6 +1042,321 @@ const createInventoryAdjustmentTransaction = async (params) => {
 };
 
 /**
+ * Sprawdza wpływ korekt inwentaryzacji na rezerwacje partii
+ * @param {Array} items - Elementy inwentaryzacji
+ * @returns {Promise<Array>} - Lista ostrzeżeń o rezerwacjach
+ */
+export const checkStocktakingReservationImpact = async (items) => {
+  try {
+    const warnings = [];
+    const { getBatchReservations } = await import('./batchService');
+    
+    // Filtruj tylko elementy z partiami, które mają rozbieżności
+    const batchItemsWithDiscrepancies = items.filter(item => 
+      item.batchId && Math.abs(item.discrepancy || 0) > 0.001
+    );
+    
+    if (batchItemsWithDiscrepancies.length === 0) {
+      return warnings;
+    }
+    
+    console.log(`🔍 Sprawdzanie wpływu korekt na rezerwacje dla ${batchItemsWithDiscrepancies.length} partii...`);
+    
+    for (const item of batchItemsWithDiscrepancies) {
+      try {
+        // Pobierz rezerwacje dla partii
+        const reservations = await getBatchReservations(item.batchId);
+        
+        if (reservations.length === 0) continue;
+        
+        // Oblicz nową ilość po korekcie
+        const newQuantity = (item.systemQuantity || 0) + (item.discrepancy || 0);
+        
+        // Oblicz łączną ilość zarezerwowaną
+        const totalReserved = reservations.reduce((sum, res) => sum + (res.quantity || 0), 0);
+        
+        // Sprawdź czy nowa ilość będzie mniejsza niż zarezerwowana
+        if (newQuantity < totalReserved) {
+          const shortage = totalReserved - newQuantity;
+          
+          warnings.push({
+            batchId: item.batchId, // Dodane batchId
+            itemName: item.name,
+            batchNumber: item.batchNumber || item.lotNumber || 'Bez numeru',
+            currentQuantity: item.systemQuantity || 0,
+            newQuantity: formatQuantityPrecision(newQuantity),
+            totalReserved: formatQuantityPrecision(totalReserved),
+            shortage: formatQuantityPrecision(shortage),
+            unit: item.unit || 'szt.',
+            reservations: reservations.map(res => ({
+              taskNumber: res.taskNumber,
+              moNumber: res.moNumber,
+              displayName: res.taskNumber || res.moNumber || 'Zadanie nieznane',
+              quantity: res.quantity || 0,
+              clientName: res.clientName || 'N/A'
+            }))
+          });
+        }
+      } catch (error) {
+        console.error(`Błąd podczas sprawdzania rezerwacji dla partii ${item.batchId}:`, error);
+      }
+    }
+    
+    console.log(`⚠️ Znaleziono ${warnings.length} ostrzeżeń dotyczących rezerwacji`);
+    return warnings;
+    
+  } catch (error) {
+    console.error('Błąd podczas sprawdzania wpływu korekt na rezerwacje:', error);
+    return []; // Zwróć pustą tablicę w przypadku błędu
+  }
+};
+
+/**
+ * Anuluje rezerwacje zagrożone przez korekty inwentaryzacji
+ * @param {Array} reservationWarnings - Lista ostrzeżeń o rezerwacjach
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik operacji
+ */
+/**
+ * Aktualizuje materialBatches w zadaniach produkcyjnych po anulowaniu rezerwacji
+ * @param {Array} results - Lista anulowanych rezerwacji
+ * @param {string} batchId - ID partii
+ * @private
+ */
+const updateMaterialBatchesAfterCancellation = async (results, batchId) => {
+  try {
+    const { getDocs, collection, updateDoc, getDoc, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('../firebase/config');
+    
+    // Grupuj rezerwacje według taskId
+    const taskIds = [...new Set(results.map(r => r.taskId).filter(Boolean))];
+    
+    if (taskIds.length === 0) {
+      console.log('📭 Brak zadań do aktualizacji materialBatches');
+      return;
+    }
+    
+    console.log(`🔄 Aktualizuję materialBatches w ${taskIds.length} zadaniach produkcyjnych po anulowaniu rezerwacji partii ${batchId}`);
+    
+    for (const taskId of taskIds) {
+      try {
+        const taskRef = FirebaseQueryBuilder.getDocRef('productionTasks', taskId);
+        const taskDoc = await getDoc(taskRef);
+        
+        if (!taskDoc.exists()) {
+          console.log(`⚠️ Zadanie ${taskId} nie istnieje`);
+          continue;
+        }
+        
+        const taskData = taskDoc.data();
+        const materialBatches = { ...taskData.materialBatches } || {};
+        let hasChanges = false;
+        
+        // Sprawdź wszystkie materiały w zadaniu
+        for (const [itemId, batches] of Object.entries(materialBatches)) {
+          if (Array.isArray(batches)) {
+            // Usuń partie o danym batchId
+            const filteredBatches = batches.filter(batch => batch.batchId !== batchId);
+            
+            if (filteredBatches.length !== batches.length) {
+              hasChanges = true;
+              
+              if (filteredBatches.length === 0) {
+                // Usuń całkowicie materiał jeśli nie ma żadnych partii
+                delete materialBatches[itemId];
+                console.log(`🗑️ Usunięto materiał ${itemId} z zadania ${taskId} (brak partii)`);
+              } else {
+                // Zaktualizuj partie
+                materialBatches[itemId] = filteredBatches;
+                console.log(`📝 Zaktualizowano partie dla materiału ${itemId} w zadaniu ${taskId}`);
+              }
+            }
+          }
+        }
+        
+        // Zapisz zmiany jeśli są jakieś
+        if (hasChanges) {
+          const hasAnyReservations = Object.keys(materialBatches).length > 0;
+          
+          await updateDoc(taskRef, {
+            materialBatches,
+            materialsReserved: hasAnyReservations,
+            updatedAt: serverTimestamp(),
+            updatedBy: 'system-stocktaking-cancellation'
+          });
+          
+          console.log(`✅ Zaktualizowano materialBatches w zadaniu ${taskId}`);
+        } else {
+          console.log(`ℹ️ Brak zmian w materialBatches dla zadania ${taskId}`);
+        }
+        
+      } catch (error) {
+        console.error(`❌ Błąd podczas aktualizacji zadania ${taskId}:`, error);
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Błąd podczas aktualizacji materialBatches po anulowaniu rezerwacji:', error);
+  }
+};
+
+/**
+ * Anuluje rezerwacje na konkretnej partii
+ * @param {string} batchId - ID partii
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik operacji
+ * @private
+ */
+const cancelBatchReservations = async (batchId, userId) => {
+  try {
+    const { writeBatch, getDocs, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('../firebase/config');
+    
+    // Pobierz wszystkie aktywne rezerwacje dla partii
+    const reservationQuery = FirebaseQueryBuilder.buildBatchReservationsQuery(batchId, TRANSACTION_TYPES.BOOKING);
+    const querySnapshot = await getDocs(reservationQuery);
+    
+    if (querySnapshot.empty) {
+      console.log(`📭 Brak rezerwacji do anulowania dla partii ${batchId}`);
+      return { cancelledCount: 0, results: [] };
+    }
+    
+    const batch = writeBatch(db);
+    let cancelledCount = 0;
+    const results = [];
+    
+    querySnapshot.docs.forEach(doc => {
+      const reservation = doc.data();
+      
+      // Usuń rezerwację całkowicie (tak jak przy transferze partii)
+      const reservationRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, doc.id);
+      batch.delete(reservationRef);
+      
+      cancelledCount++;
+      results.push({
+        reservationId: doc.id,
+        taskId: reservation.taskId,
+        quantity: reservation.quantity,
+        itemId: reservation.itemId
+      });
+      
+      console.log(`🗑️ Usuwam rezerwację ${doc.id} (zadanie: ${reservation.taskId}, ilość: ${reservation.quantity})`);
+    });
+    
+    // Aktualizuj bookedQuantity w pozycjach magazynowych
+    const itemUpdates = {};
+    results.forEach(result => {
+      if (!itemUpdates[result.itemId]) {
+        itemUpdates[result.itemId] = 0;
+      }
+      itemUpdates[result.itemId] += result.quantity || 0;
+    });
+    
+    // Pobierz aktualne stany pozycji i zaktualizuj bookedQuantity
+    for (const [itemId, totalToReduce] of Object.entries(itemUpdates)) {
+      try {
+        const { getInventoryItemById } = await import('./inventoryItemsService');
+        const item = await getInventoryItemById(itemId);
+        
+        const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY, itemId);
+        const currentBookedQuantity = item.bookedQuantity || 0;
+        const newBookedQuantity = formatQuantityPrecision(
+          Math.max(0, currentBookedQuantity - totalToReduce), 
+          3
+        );
+        
+        batch.update(itemRef, {
+          bookedQuantity: newBookedQuantity,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+        
+        console.log(`📉 Redukcja bookedQuantity dla ${item.name}: ${currentBookedQuantity} → ${newBookedQuantity} (-${totalToReduce})`);
+        
+      } catch (error) {
+        console.error(`❌ Błąd podczas aktualizacji bookedQuantity dla pozycji ${itemId}:`, error);
+      }
+    }
+    
+    // Zatwierdź wszystkie zmiany w Firebase
+    await batch.commit();
+    
+    // Aktualizuj materialBatches w zadaniach produkcyjnych
+    await updateMaterialBatchesAfterCancellation(results, batchId);
+    
+    return { cancelledCount, results };
+    
+  } catch (error) {
+    console.error(`❌ Błąd podczas anulowania rezerwacji partii ${batchId}:`, error);
+    throw error;
+  }
+};
+
+export const cancelThreatenedReservations = async (reservationWarnings, userId) => {
+  try {
+    let cancelledCount = 0;
+    let failedCount = 0;
+    const results = [];
+    
+    console.log(`🚨 Anulowanie zagrożonych rezerwacji w ${reservationWarnings.length} partiach...`);
+    
+    for (const warning of reservationWarnings) {
+      try {
+        // Sprawdź czy warning ma rezerwacje
+        if (!warning.reservations || warning.reservations.length === 0) {
+          console.log(`⏭️ Pomijam partię ${warning.batchNumber} - brak rezerwacji do anulowania`);
+          continue;
+        }
+        
+        console.log(`🔄 Anulowanie rezerwacji dla partii ${warning.batchNumber} (${warning.batchId})`);
+        
+        // Anuluj wszystkie rezerwacje na tej partii
+        const batchResult = await cancelBatchReservations(warning.batchId, userId);
+        
+        cancelledCount += batchResult.cancelledCount;
+        
+        results.push({
+          success: true,
+          batchId: warning.batchId,
+          batchName: warning.batchNumber,
+          reservationCount: batchResult.cancelledCount,
+          reservations: batchResult.results
+        });
+        
+        console.log(`✅ Usunięto ${batchResult.cancelledCount} rezerwacji na partii ${warning.batchNumber}`);
+        
+      } catch (error) {
+        console.error(`❌ Błąd podczas anulowania rezerwacji dla partii ${warning.batchNumber}:`, error);
+        failedCount++;
+        
+        results.push({
+          success: false,
+          batchId: warning.batchId,
+          batchName: warning.batchNumber,
+          error: error.message
+        });
+      }
+    }
+    
+    const message = cancelledCount > 0 
+      ? `Anulowano ${cancelledCount} rezerwacji. ${failedCount > 0 ? `Nie udało się anulować ${failedCount} rezerwacji.` : ''}`
+      : `Nie udało się anulować żadnych rezerwacji.`;
+    
+    return {
+      success: cancelledCount > 0,
+      cancelledCount,
+      failedCount,
+      message,
+      results
+    };
+    
+  } catch (error) {
+    console.error('Błąd podczas anulowania zagrożonych rezerwacji:', error);
+    throw new Error(`Nie udało się anulować rezerwacji: ${error.message}`);
+  }
+};
+
+/**
  * Generuje raport CSV z inwentaryzacji
  * @private
  */
@@ -1205,7 +1523,7 @@ const generateStocktakingPDFReport = async (stocktaking, items) => {
  */
 const getTransactionReason = (type) => {
   const reasons = {
-    'stocktaking-reopen': 'Ponowne otwarcie inwentaryzacji',
+    [TRANSACTION_TYPES.STOCKTAKING_REOPEN]: 'Ponowne otwarcie inwentaryzacji',
     [TRANSACTION_TYPES.STOCKTAKING_CORRECTION_COMPLETED]: 'Zakończenie korekty inwentaryzacji',
     [TRANSACTION_TYPES.STOCKTAKING_DELETION]: 'Usunięcie inwentaryzacji',
     [TRANSACTION_TYPES.STOCKTAKING_COMPLETED]: 'Zakończenie inwentaryzacji'

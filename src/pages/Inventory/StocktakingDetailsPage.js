@@ -55,7 +55,9 @@ import {
   completeStocktaking,
   completeCorrectedStocktaking,
   getAllInventoryItems,
-  getItemBatches
+  getItemBatches,
+  checkStocktakingReservationImpact,
+  cancelThreatenedReservations
 } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -93,6 +95,10 @@ const StocktakingDetailsPage = () => {
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmAdjustInventory, setConfirmAdjustInventory] = useState(true);
+  const [reservationWarnings, setReservationWarnings] = useState([]);
+  const [checkingReservations, setCheckingReservations] = useState(false);
+  const [cancelReservations, setCancelReservations] = useState(true);
+  const [cancellingReservations, setCancellingReservations] = useState(false);
   const [editItemId, setEditItemId] = useState(null);
   const [deleteItemId, setDeleteItemId] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -137,9 +143,9 @@ const StocktakingDetailsPage = () => {
       const stocktakingData = await getStocktakingById(id);
       setStocktaking(stocktakingData);
       
-      const stocktakingItems = await getStocktakingItems(id);
-      setItems(stocktakingItems);
-      setFilteredItems(stocktakingItems);
+      const items = await getStocktakingItems(id);
+      setItems(items);
+      setFilteredItems(items);
       
       // Pobierz nazwę użytkownika, który utworzył inwentaryzację
       if (stocktakingData && stocktakingData.createdBy) {
@@ -347,12 +353,65 @@ const StocktakingDetailsPage = () => {
     }
   };
   
-  const handleCompleteStocktaking = () => {
+  const handleCompleteStocktaking = async () => {
+    // Sprawdź wpływ korekt na rezerwacje przed otwarciem dialogu
+    if (confirmAdjustInventory) {
+      setCheckingReservations(true);
+      try {
+        const warnings = await checkStocktakingReservationImpact(items);
+        setReservationWarnings(warnings);
+      } catch (error) {
+        console.error('Błąd podczas sprawdzania rezerwacji:', error);
+        setReservationWarnings([]);
+      } finally {
+        setCheckingReservations(false);
+      }
+    }
+    
     setConfirmDialogOpen(true);
   };
   
+  // Funkcja do sprawdzania rezerwacji przy zmianie opcji dostosowywania stanów
+  const handleAdjustInventoryChange = async (checked) => {
+    setConfirmAdjustInventory(checked);
+    
+    // Sprawdź rezerwacje tylko jeśli włączono dostosowywanie stanów
+    if (checked) {
+      setCheckingReservations(true);
+      try {
+        const warnings = await checkStocktakingReservationImpact(items);
+        setReservationWarnings(warnings);
+      } catch (error) {
+        console.error('Błąd podczas sprawdzania rezerwacji:', error);
+        setReservationWarnings([]);
+      } finally {
+        setCheckingReservations(false);
+      }
+    } else {
+      setReservationWarnings([]);
+    }
+  };
+
   const confirmComplete = async () => {
     try {
+      // Anuluj rezerwacje jeśli zostało to wybrane
+      if (cancelReservations && reservationWarnings.length > 0) {
+        setCancellingReservations(true);
+        try {
+          const result = await cancelThreatenedReservations(reservationWarnings, currentUser.uid);
+          if (result.success) {
+            showSuccess(result.message);
+          } else {
+            showError(result.message);
+          }
+        } catch (error) {
+          console.error('Błąd podczas anulowania rezerwacji:', error);
+          showError(`Błąd podczas anulowania rezerwacji: ${error.message}`);
+        } finally {
+          setCancellingReservations(false);
+        }
+      }
+      
       // Sprawdź czy to korekta czy normalne zakończenie
       if (stocktaking.status === 'W korekcie') {
         await completeCorrectedStocktaking(id, confirmAdjustInventory, currentUser.uid);
@@ -370,6 +429,8 @@ const StocktakingDetailsPage = () => {
       
       showSuccess(message);
       setConfirmDialogOpen(false);
+      setReservationWarnings([]);
+      setCancelReservations(true);
       
       // Refresh data
       fetchStocktakingData();
@@ -879,12 +940,18 @@ const StocktakingDetailsPage = () => {
       </Dialog>
       
       {/* Dialog zakończenia inwentaryzacji */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+      <Dialog 
+        open={confirmDialogOpen} 
+        onClose={() => setConfirmDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>Zakończ inwentaryzację</DialogTitle>
         <DialogContent>
           <DialogContentText>
             Czy na pewno chcesz zakończyć tę inwentaryzację? Po zakończeniu, nie będzie można dodawać ani edytować produktów.
           </DialogContentText>
+          
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
               Dostosuj stany magazynowe?
@@ -893,19 +960,193 @@ const StocktakingDetailsPage = () => {
               control={
                 <Switch
                   checked={confirmAdjustInventory}
-                  onChange={(e) => setConfirmAdjustInventory(e.target.checked)}
+                  onChange={(e) => handleAdjustInventoryChange(e.target.checked)}
                   color="primary"
                 />
               }
               label={confirmAdjustInventory ? "Tak, dostosuj stany magazynowe" : "Nie, tylko zakończ inwentaryzację"}
             />
           </Box>
+
+          {/* Sprawdzanie rezerwacji - loading */}
+          {checkingReservations && (
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2">
+                Sprawdzanie wpływu korekt na rezerwacje...
+              </Typography>
+            </Box>
+          )}
+
+          {/* Ostrzeżenia o rezerwacjach */}
+          {confirmAdjustInventory && reservationWarnings.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                  ⚠️ Korekty wpłyną na rezerwacje
+                </Typography>
+                <Typography variant="body2">
+                  {reservationWarnings.length} partii z niedoborami po korekcie:
+                </Typography>
+              </Alert>
+
+              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                {reservationWarnings.map((warning, index) => (
+                  <Paper 
+                    key={index} 
+                    elevation={2}
+                    sx={{ 
+                      p: 2.5, 
+                      mb: 1.5, 
+                      bgcolor: (theme) => theme.palette.mode === 'dark' 
+                        ? 'rgba(255, 193, 7, 0.08)' 
+                        : 'rgba(255, 193, 7, 0.12)',
+                      border: 1,
+                      borderColor: 'warning.main',
+                      borderRadius: 2
+                    }}>
+                    <Typography variant="subtitle2" sx={{ 
+                      fontWeight: 'bold', 
+                      color: (theme) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
+                      mb: 1
+                    }}>
+                      {warning.itemName} - Partia: {warning.batchNumber}
+                    </Typography>
+                    <Typography variant="body2" sx={{ 
+                      color: (theme) => theme.palette.mode === 'dark' ? 'text.secondary' : 'warning.dark',
+                      mb: 1
+                    }}>
+                      {warning.currentQuantity} → {warning.newQuantity} {warning.unit} 
+                      (zarezerwowano: {warning.totalReserved}, niedobór: {warning.shortage})
+                    </Typography>
+                    
+                    {warning.reservations.length > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" sx={{ 
+                          fontWeight: 'bold', 
+                          color: (theme) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
+                          display: 'block',
+                          mb: 0.5
+                        }}>
+                          Rezerwacje:
+                        </Typography>
+                        <Box sx={{ ml: 1, mt: 0.5 }}>
+                          {warning.reservations.map((res, resIndex) => (
+                            <Box key={resIndex} sx={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              py: 0.5,
+                              borderBottom: resIndex < warning.reservations.length - 1 ? 1 : 0,
+                              borderColor: 'divider'
+                            }}>
+                              <Typography variant="body2" sx={{ 
+                                fontWeight: 'medium',
+                                color: (theme) => theme.palette.mode === 'dark' ? 'text.primary' : 'text.primary'
+                              }}>
+                                {res.displayName}
+                              </Typography>
+                              <Typography variant="body2" sx={{ 
+                                fontWeight: 'bold', 
+                                color: (theme) => theme.palette.mode === 'dark' ? 'error.light' : 'error.main'
+                              }}>
+                                Ilość: {res.quantity} {warning.unit}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                  </Paper>
+                ))}
+              </Box>
+
+              <Alert severity="info" sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  Możesz zakończyć inwentaryzację. Rozważ kontakt z zespołem produkcji.
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+
+          {/* Informacja o braku ostrzeżeń */}
+          {confirmAdjustInventory && !checkingReservations && reservationWarnings.length === 0 && (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                ✅ Brak konfliktów z rezerwacjami.
+              </Typography>
+            </Alert>
+          )}
+
+          {/* Opcje anulowania rezerwacji */}
+          {confirmAdjustInventory && reservationWarnings.length > 0 && (
+            <Box sx={{ 
+              mt: 2, 
+              p: 2.5, 
+              bgcolor: (theme) => theme.palette.mode === 'dark' 
+                ? 'rgba(66, 165, 245, 0.08)' 
+                : 'rgba(25, 118, 210, 0.04)', 
+              borderRadius: 2,
+              border: 1,
+              borderColor: (theme) => theme.palette.mode === 'dark' 
+                ? 'primary.dark' 
+                : 'primary.light'
+            }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                🔧 Opcje rozwiązania:
+              </Typography>
+              
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={cancelReservations}
+                    onChange={(e) => setCancelReservations(e.target.checked)}
+                    color="warning"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                      Anuluj zagrożone rezerwacje
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Usuwa rezerwacje z niedoborami.
+                    </Typography>
+                  </Box>
+                }
+                sx={{ alignItems: 'flex-start', mb: 1 }}
+              />
+
+              {cancelReservations && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  <Typography variant="body2">
+                    ℹ️ Anulowanie {reservationWarnings.length} partii.
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={confirmComplete} color="primary">
-            Zakończ inwentaryzację
-          </Button>
+          
+          {cancellingReservations ? (
+            <Button disabled>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              Anulowanie rezerwacji...
+            </Button>
+          ) : (
+            <Button 
+              onClick={confirmComplete} 
+              color={reservationWarnings.length > 0 ? "warning" : "primary"}
+              variant={reservationWarnings.length > 0 ? "outlined" : "contained"}
+            >
+              {reservationWarnings.length > 0 
+                ? (cancelReservations ? 'Anuluj rezerwacje i zakończ' : 'Zakończ mimo ostrzeżeń')
+                : 'Zakończ inwentaryzację'
+              }
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Container>

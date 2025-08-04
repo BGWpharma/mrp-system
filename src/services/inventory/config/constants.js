@@ -29,7 +29,8 @@ export const TRANSACTION_TYPES = {
   STOCKTAKING: 'stocktaking',
   STOCKTAKING_DELETION: 'stocktaking-deletion',
   STOCKTAKING_COMPLETED: 'stocktaking-completed',
-  STOCKTAKING_CORRECTION_COMPLETED: 'stocktaking-correction-completed'
+  STOCKTAKING_CORRECTION_COMPLETED: 'stocktaking-correction-completed',
+  STOCKTAKING_REOPEN: 'stocktaking-reopen'
 };
 
 /**
