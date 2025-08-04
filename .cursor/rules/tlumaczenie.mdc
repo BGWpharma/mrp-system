@@ -1,0 +1,5 @@
+---
+description: Podczas tłumaczenia przeanaluzj dokładnie kod, bierz pod uwagę dialogi oraz powiązane komponenty, nie zapomnij o dodaniu kluczy tłumaczenia, nie inicjalizuj niepotrzebnie i18n jeżeli nie istnieje potrzeba
+globs:
+alwaysApply: false
+---

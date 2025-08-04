@@ -71,6 +71,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
 import { getInvoicesByOrderId } from '../../services/invoiceService';
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
+import { useTranslation } from 'react-i18next';
 
 // Funkcja obliczająca sumę wartości pozycji z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
 const calculateItemTotalValue = (item) => {
@@ -163,6 +164,7 @@ const verifyProductionTasks = async (orderToVerify) => {
 };
 
 const OrderDetails = () => {
+  const { t } = useTranslation();
   const { orderId } = useParams();
   const location = useLocation();
   const [order, setOrder] = useState(null);
@@ -204,7 +206,7 @@ const OrderDetails = () => {
         const { order: verifiedOrder, removedCount } = await verifyProductionTasks(orderData);
         
         if (removedCount > 0) {
-          showInfo(`Usunięto ${removedCount} nieistniejących zadań produkcyjnych z zamówienia.`);
+          showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
         }
         
         // Sprawdź, czy wartość zamówienia jest ujemna - jeśli tak, odśwież dane
@@ -262,7 +264,7 @@ const OrderDetails = () => {
               fetchOrderDetails(retries - 1, delay * 1.5);
             }, delay);
           } else {
-            showError('Błąd podczas pobierania szczegółów zamówienia: ' + error.message);
+            showError(t('orderDetails.notifications.loadError') + ': ' + error.message);
           }
         }
       } finally {
@@ -293,11 +295,11 @@ const OrderDetails = () => {
       const { order: verifiedOrder, removedCount } = await verifyProductionTasks(freshOrder);
       
       if (removedCount > 0) {
-        showInfo(`Usunięto ${removedCount} nieistniejących zadań produkcyjnych z zamówienia.`);
-      }
-      
-      setOrder(verifiedOrder);
-      showSuccess('Dane zamówienia zostały odświeżone');
+              showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
+    }
+    
+    setOrder(verifiedOrder);
+    showSuccess(t('orderDetails.notifications.refreshSuccess'));
     } catch (error) {
       if (!location.pathname.includes('/purchase-orders/')) {
         console.error('Error refreshing order data:', error);
@@ -309,7 +311,7 @@ const OrderDetails = () => {
             refreshOrderData(retries - 1, delay * 1.5);
           }, delay);
         } else {
-          showError('Błąd podczas odświeżania danych zamówienia: ' + error.message);
+          showError(t('orderDetails.notifications.refreshError') + ': ' + error.message);
         }
       }
     } finally {
@@ -401,9 +403,9 @@ const OrderDetails = () => {
         
         // Zaktualizuj dane zamówienia
         setOrder(updatedOrderData);
-        showSuccess('Dane kosztów produkcji zostały odświeżone');
-      } else {
-        showInfo('Brak zadań produkcyjnych do odświeżenia');
+            showSuccess(t('orderDetails.notifications.productionCostsRefreshed'));
+  } else {
+    showInfo(t('orderDetails.notifications.noProductionTasks'));
       }
     } catch (error) {
       if (!location.pathname.includes('/purchase-orders/')) {
@@ -416,7 +418,7 @@ const OrderDetails = () => {
             refreshProductionCosts(retries - 1, delay * 1.5);
           }, delay);
         } else {
-          showError('Błąd podczas odświeżania danych kosztów produkcji: ' + error.message);
+          showError(t('orderDetails.notifications.productionCostsRefreshError') + ': ' + error.message);
         }
       }
     } finally {
@@ -428,18 +430,18 @@ const OrderDetails = () => {
   const handleMigrateCmrData = async () => {
     try {
       setLoading(true);
-      showInfo('Rozpoczęcie migracji danych CMR...');
+      showInfo(t('orderDetails.notifications.migrationStarted'));
       
       const result = await migrateCmrHistoryData();
       
       if (result.success) {
-        showSuccess(`Migracja zakończona pomyślnie. Zmigrowano ${result.migratedCount} zamówień.`);
+        showSuccess(t('orderDetails.notifications.migrationSuccess', { count: result.migratedCount }));
         // Odśwież dane zamówienia
         await refreshOrderData();
       }
     } catch (error) {
       console.error('Błąd podczas migracji:', error);
-      showError('Wystąpił błąd podczas migracji danych CMR: ' + error.message);
+      showError(t('orderDetails.notifications.migrationError') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -488,10 +490,10 @@ const OrderDetails = () => {
       // Aktualizujemy stan lokalny
       setOrder({ ...order, deliveryProof: downloadURL });
       
-      showSuccess('Dowód dostawy został pomyślnie przesłany');
+      showSuccess(t('orderDetails.notifications.documentUploadSuccess'));
     } catch (error) {
       console.error('Błąd podczas przesyłania pliku:', error);
-      showError('Wystąpił błąd podczas przesyłania pliku');
+      showError(t('orderDetails.notifications.documentUploadGenericError'));
     } finally {
       setUploading(false);
     }
@@ -516,10 +518,10 @@ const OrderDetails = () => {
       // Aktualizujemy stan lokalny
       setOrder({ ...order, deliveryProof: null });
       
-      showSuccess('Dowód dostawy został usunięty');
+      showSuccess(t('orderDetails.notifications.documentDeleteSuccess'));
     } catch (error) {
       console.error('Błąd podczas usuwania pliku:', error);
-      showError('Wystąpił błąd podczas usuwania pliku');
+      showError(t('orderDetails.notifications.documentDeleteGenericError'));
     } finally {
       setUploading(false);
     }
@@ -631,23 +633,23 @@ const OrderDetails = () => {
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Historia zmian statusu
+          {t('orderDetails.sections.statusHistory')}
         </Typography>
         
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Data i godzina</TableCell>
-              <TableCell>Poprzedni status</TableCell>
-              <TableCell>Nowy status</TableCell>
-              <TableCell>Kto zmienił</TableCell>
+              <TableCell>{t('orderDetails.statusHistory.dateTime')}</TableCell>
+              <TableCell>{t('orderDetails.statusHistory.previousStatus')}</TableCell>
+              <TableCell>{t('orderDetails.statusHistory.newStatus')}</TableCell>
+              <TableCell>{t('orderDetails.statusHistory.whoChanged')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {[...order.statusHistory].reverse().map((change, index) => (
               <TableRow key={index}>
                 <TableCell>
-                  {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : 'Brak daty'}
+                  {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : t('orderDetails.statusHistory.noDate')}
                 </TableCell>
                 <TableCell>{change.oldStatus}</TableCell>
                 <TableCell>{change.newStatus}</TableCell>
@@ -675,13 +677,13 @@ const OrderDetails = () => {
 
   const handleDriveLinkSubmit = async () => {
     if (!driveLink) {
-      showError('Wprowadź prawidłowy link do Google Drive');
+      showError(t('orderDetails.notifications.invalidDriveLink'));
       return;
     }
 
     // Sprawdzamy czy link jest do Google Drive
     if (!driveLink.includes('drive.google.com')) {
-      showError('Link musi być z Google Drive');
+      showError(t('orderDetails.notifications.linkMustBeGoogleDrive'));
       return;
     }
 
@@ -702,11 +704,11 @@ const OrderDetails = () => {
         deliveryProofType: 'link'
       });
       
-      showSuccess('Link do Google Drive dodany jako dowód dostawy');
+      showSuccess(t('orderDetails.notifications.driveLinkAdded'));
       handleDriveLinkDialogClose();
     } catch (error) {
       console.error('Błąd podczas dodawania linku do Google Drive:', error);
-      showError('Wystąpił błąd podczas dodawania linku');
+      showError(t('orderDetails.notifications.driveLinkAddError'));
     } finally {
       setUploading(false);
     }
@@ -759,7 +761,7 @@ const OrderDetails = () => {
       setInvoices(orderInvoices);
     } catch (error) {
       console.error('Błąd podczas pobierania faktur:', error);
-      showError('Nie udało się pobrać faktur powiązanych z zamówieniem');
+      showError(t('orderDetails.notifications.invoicesLoadError'));
     } finally {
       setLoadingInvoices(false);
     }
@@ -768,9 +770,9 @@ const OrderDetails = () => {
   // Funkcja renderująca status płatności faktury
   const renderPaymentStatus = (paymentStatus) => {
     const statusConfig = {
-      'unpaid': { color: 'warning', label: 'Nieopłacona' },
-      'partially_paid': { color: 'primary', label: 'Częściowo opłacona' },
-      'paid': { color: 'success', label: 'Opłacona' }
+      'unpaid': { color: 'warning', label: t('orderDetails.paymentStatusLabels.unpaid') },
+      'partially_paid': { color: 'primary', label: t('orderDetails.paymentStatusLabels.partiallyPaid') },
+      'paid': { color: 'success', label: t('orderDetails.paymentStatusLabels.paid') }
     };
     
     const status = paymentStatus || 'unpaid';
@@ -793,7 +795,7 @@ const OrderDetails = () => {
       setCmrDocuments(orderCmrDocuments);
     } catch (error) {
       console.error('Błąd podczas pobierania dokumentów CMR:', error);
-      showError('Nie udało się pobrać dokumentów CMR powiązanych z zamówieniem');
+      showError(t('orderDetails.notifications.cmrDocumentsLoadError'));
     } finally {
       setLoadingCmrDocuments(false);
     }
@@ -802,15 +804,15 @@ const OrderDetails = () => {
   // Funkcja renderująca status dokumentu CMR
   const renderCmrStatus = (status) => {
     const statusConfig = {
-      [CMR_STATUSES.DRAFT]: { color: '#757575', label: 'Szkic' }, // szary
-      [CMR_STATUSES.ISSUED]: { color: '#2196f3', label: 'Wystawiony' }, // niebieski
-      [CMR_STATUSES.IN_TRANSIT]: { color: '#ff9800', label: 'W transporcie' }, // pomarańczowy
-      [CMR_STATUSES.DELIVERED]: { color: '#4caf50', label: 'Dostarczone' }, // zielony
-      [CMR_STATUSES.COMPLETED]: { color: '#9c27b0', label: 'Zakończony' }, // fioletowy
-      [CMR_STATUSES.CANCELED]: { color: '#f44336', label: 'Anulowany' } // czerwony
+      [CMR_STATUSES.DRAFT]: { color: '#757575', label: t('orderDetails.cmrStatuses.draft') }, // szary
+      [CMR_STATUSES.ISSUED]: { color: '#2196f3', label: t('orderDetails.cmrStatuses.issued') }, // niebieski
+      [CMR_STATUSES.IN_TRANSIT]: { color: '#ff9800', label: t('orderDetails.cmrStatuses.inTransit') }, // pomarańczowy
+      [CMR_STATUSES.DELIVERED]: { color: '#4caf50', label: t('orderDetails.cmrStatuses.delivered') }, // zielony
+      [CMR_STATUSES.COMPLETED]: { color: '#9c27b0', label: t('orderDetails.cmrStatuses.completed') }, // fioletowy
+      [CMR_STATUSES.CANCELED]: { color: '#f44336', label: t('orderDetails.cmrStatuses.canceled') } // czerwony
     };
     
-    const config = statusConfig[status] || { color: '#757575', label: status || 'Nieznany' };
+    const config = statusConfig[status] || { color: '#757575', label: status || t('orderDetails.cmrStatuses.unknown') };
     
     return (
       <Chip 
@@ -848,7 +850,7 @@ const OrderDetails = () => {
     
     // Tradycyjne sprawdzenie, jeśli nie ma bezpośredniego przypisania
     if (!productionTasks || !Array.isArray(productionTasks) || productionTasks.length === 0) {
-      return <Chip label="Brak zadań" size="small" color="default" />;
+      return <Chip label={t('orderDetails.productionStatus.noTasks')} size="small" color="default" />;
     }
 
     // Znajdź zadania produkcyjne dla tego elementu
@@ -858,7 +860,7 @@ const OrderDetails = () => {
     );
 
     if (tasksForItem.length === 0) {
-      return <Chip label="Brak zadań" size="small" color="default" />;
+      return <Chip label={t('orderDetails.productionStatus.noTasks')} size="small" color="default" />;
     }
 
     // Określ ogólny status na podstawie wszystkich zadań
@@ -893,15 +895,15 @@ const OrderDetails = () => {
 
     // W przypadku wielu zadań, pokaż ogólny status
     if (allCompleted) {
-      return <Chip label={`Zakończone (${tasksForItem.length})`} size="small" color="success" />;
+      return <Chip label={t('orderDetails.productionStatus.completed', { count: tasksForItem.length })} size="small" color="success" />;
     } else if (allCancelled) {
-      return <Chip label={`Anulowane (${tasksForItem.length})`} size="small" color="error" />;
+      return <Chip label={t('orderDetails.productionStatus.cancelled', { count: tasksForItem.length })} size="small" color="error" />;
     } else if (anyInProgress) {
-      return <Chip label={`W trakcie (${tasksForItem.length})`} size="small" color="warning" />;
+      return <Chip label={t('orderDetails.productionStatus.inProgress', { count: tasksForItem.length })} size="small" color="warning" />;
     } else if (anyPlanned) {
-      return <Chip label={`Zaplanowane (${tasksForItem.length})`} size="small" color="primary" />;
+      return <Chip label={t('orderDetails.productionStatus.planned', { count: tasksForItem.length })} size="small" color="primary" />;
     } else {
-      return <Chip label={`Mieszany (${tasksForItem.length})`} size="small" color="default" />;
+      return <Chip label={t('orderDetails.productionStatus.mixed', { count: tasksForItem.length })} size="small" color="default" />;
     }
   };
 
@@ -922,14 +924,14 @@ const OrderDetails = () => {
     return (
       <Box sx={{ textAlign: 'center', mt: 4 }}>
         <Typography variant="h6" color="error">
-          Nie znaleziono zamówienia
+          {t('orderDetails.notifications.orderNotFound')}
         </Typography>
         <Button 
           startIcon={<ArrowBackIcon />} 
           onClick={handleBackClick}
           sx={{ mt: 2 }}
         >
-          Powrót do listy zamówień
+          {t('orderDetails.actions.back')}
         </Button>
       </Box>
     );
@@ -943,10 +945,10 @@ const OrderDetails = () => {
             startIcon={<ArrowBackIcon />} 
             onClick={handleBackClick}
           >
-            Powrót
+            {t('orderDetails.actions.back')}
           </Button>
           <Typography variant="h5">
-            Zamówienie {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+            {t('orderDetails.orderNumber')} {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
           </Typography>
           <Box>
             <Button 
@@ -955,7 +957,7 @@ const OrderDetails = () => {
               onClick={handleEditClick}
               sx={{ mr: 1 }}
             >
-              Edytuj
+              {t('orderDetails.actions.edit')}
             </Button>
             <Button 
               startIcon={<PrintIcon />} 
@@ -963,7 +965,7 @@ const OrderDetails = () => {
               onClick={handlePrintInvoice}
               sx={{ mr: 1 }}
             >
-              Drukuj
+              {t('orderDetails.actions.print')}
             </Button>
             <Button 
               startIcon={<LabelIcon />} 
@@ -971,7 +973,7 @@ const OrderDetails = () => {
               onClick={() => setLabelDialogOpen(true)}
               sx={{ mr: 1 }}
             >
-              Drukuj etykietę
+              {t('orderDetails.actions.generateLabel')}
             </Button>
             {/* Przycisk migracji - tylko do testowania */}
             <Button 
@@ -991,7 +993,7 @@ const OrderDetails = () => {
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ mr: 2 }}>Status:</Typography>
+                <Typography variant="h6" sx={{ mr: 2 }}>{t('orderDetails.sections.status')}:</Typography>
                 <Chip 
                   label={order.status} 
                   color={getStatusChipColor(order.status)}
@@ -1000,25 +1002,25 @@ const OrderDetails = () => {
               </Box>
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <EventNoteIcon sx={{ mr: 1 }} fontSize="small" />
-                Data zamówienia: {formatTimestamp(order.orderDate, true)}
+                {t('orderDetails.orderDate')}: {formatTimestamp(order.orderDate, true)}
               </Typography>
               {order.expectedDeliveryDate && (
                 <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                   <ScheduleIcon sx={{ mr: 1 }} fontSize="small" />
-                  Oczekiwana dostawa: {formatTimestamp(order.expectedDeliveryDate, true)}
+                  {t('orderDetails.expectedDelivery')}: {formatTimestamp(order.expectedDeliveryDate, true)}
                 </Typography>
               )}
               {order.deliveryDate && (
                 <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
                   <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
-                  Zakończone: {formatTimestamp(order.deliveryDate, true)}
+                  {t('orderDetails.completed')}: {formatTimestamp(order.deliveryDate, true)}
                 </Typography>
               )}
             </Grid>
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', height: '100%' }}>
                 <Typography variant="h6" align="right">
-                  Łączna wartość:
+                  {t('orderDetails.totalValue')}:
                 </Typography>
                 <Typography variant="h4" align="right" color="primary.main" sx={{ fontWeight: 'bold' }}>
                   {(() => {
@@ -1047,7 +1049,7 @@ const OrderDetails = () => {
                   })()}
                 </Typography>
                 <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Tooltip title="Odśwież dane zamówienia">
+                  <Tooltip title={t('orderDetails.refreshOrder')}>
                     <IconButton
                       size="small"
                       color="primary"
@@ -1067,7 +1069,7 @@ const OrderDetails = () => {
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: '100%' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">Dane klienta</Typography>
+                <Typography variant="h6">{t('orderDetails.sections.customerData')}</Typography>
                 <IconButton 
                   size="small" 
                   color="primary"
@@ -1078,43 +1080,54 @@ const OrderDetails = () => {
                 </IconButton>
               </Box>
               <Divider sx={{ mb: 2 }} />
-              <Typography variant="h6" sx={{ mb: 1 }}>{order.customer?.name || 'Brak nazwy klienta'}</Typography>
+              <Typography variant="h6" sx={{ mb: 1 }}>{order.customer?.name || t('orderDetails.customerInfo.noCustomerName')}</Typography>
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <PersonIcon sx={{ mr: 1 }} fontSize="small" />
-                Email: {order.customer?.email || '-'}
+                {t('orderDetails.customerInfo.email')}: {order.customer?.email || '-'}
               </Typography>
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <PhoneIcon sx={{ mr: 1 }} fontSize="small" />
-                Telefon: {order.customer?.phone || '-'}
+                {t('orderDetails.customerInfo.phone')}: {order.customer?.phone || '-'}
               </Typography>
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
                 <LocationOnIcon sx={{ mr: 1 }} fontSize="small" />
-                Adres dostawy: {order.customer?.shippingAddress || '-'}
+                {t('orderDetails.customerInfo.shippingAddress')}: {order.customer?.shippingAddress || '-'}
               </Typography>
             </Paper>
           </Grid>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>Płatność i dostawa</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.paymentAndDelivery')}</Typography>
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <Typography variant="subtitle2">Metoda płatności:</Typography>
+                  <Typography variant="subtitle2">{t('orderDetails.payment.paymentMethod')}:</Typography>
                   <Typography variant="body1" sx={{ mb: 1 }}>{order.paymentMethod || '-'}</Typography>
                   
-                  <Typography variant="subtitle2">Status płatności:</Typography>
+                  <Typography variant="subtitle2">{t('orderDetails.payment.paymentStatus')}:</Typography>
                   <Chip 
-                    label={order.paymentStatus || 'Nieopłacone'} 
-                    color={order.paymentStatus === 'Opłacone' ? 'success' : order.paymentStatus === 'Opłacone częściowo' ? 'warning' : 'error'}
+                    label={(() => {
+                      const statusConfig = {
+                        'Opłacone': t('orderDetails.paymentStatusLabels.paid'),
+                        'paid': t('orderDetails.paymentStatusLabels.paid'),
+                        'Opłacone częściowo': t('orderDetails.paymentStatusLabels.partiallyPaid'),
+                        'partially_paid': t('orderDetails.paymentStatusLabels.partiallyPaid'),
+                        'Nieopłacone': t('orderDetails.paymentStatusLabels.unpaid'),
+                        'unpaid': t('orderDetails.paymentStatusLabels.unpaid')
+                      };
+                      return statusConfig[order.paymentStatus] || t('orderDetails.payment.unpaid');
+                    })()} 
+                    color={order.paymentStatus === 'Opłacone' || order.paymentStatus === 'paid' ? 'success' : 
+                           order.paymentStatus === 'Opłacone częściowo' || order.paymentStatus === 'partially_paid' ? 'warning' : 'error'}
                     size="small"
                     sx={{ mt: 0.5 }}
                   />
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="subtitle2">Metoda dostawy:</Typography>
+                  <Typography variant="subtitle2">{t('orderDetails.payment.deliveryMethod')}:</Typography>
                   <Typography variant="body1" sx={{ mb: 1 }}>{order.shippingMethod || '-'}</Typography>
                   
-                  <Typography variant="subtitle2">Koszt dostawy:</Typography>
+                  <Typography variant="subtitle2">{t('orderDetails.payment.deliveryCost')}:</Typography>
                   <Typography variant="body1">{formatCurrency(order.shippingCost || 0)}</Typography>
                 </Grid>
               </Grid>
@@ -1127,21 +1140,21 @@ const OrderDetails = () => {
 
         {/* Lista produktów */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Produkty</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.products')}</Typography>
           <Divider sx={{ mb: 2 }} />
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
-                <TableCell sx={{ color: 'inherit' }}>Produkt</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Ilość</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Wysłano</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Cena</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Wartość</TableCell>
-                <TableCell sx={{ color: 'inherit' }}>Lista cenowa</TableCell>
-                <TableCell sx={{ color: 'inherit' }}>Status produkcji</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.product')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.quantity')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.shipped')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.price')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.value')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.priceList')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.productionStatus')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">
-                  Koszt produkcji
-                  <Tooltip title="Odśwież dane zadań produkcyjnych">
+                  {t('orderDetails.table.productionCost')}
+                  <Tooltip title={t('orderDetails.actions.refreshProductionCosts')}>
                     <IconButton 
                       size="small" 
                       color="primary"
@@ -1152,11 +1165,11 @@ const OrderDetails = () => {
                     </IconButton>
                   </Tooltip>
                 </TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Profit</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Suma wartości pozycji</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Koszt całk./szt.</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Pełny koszt prod./szt.</TableCell>
-                <TableCell sx={{ color: 'inherit' }}>Akcje</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.profit')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.totalItemValue')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.totalCostPerUnit')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.fullProductionCostPerUnit')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1199,19 +1212,19 @@ const OrderDetails = () => {
                   <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
                   <TableCell>
                     {item.fromPriceList ? (
-                      <Chip 
-                        label="Tak" 
-                        size="small" 
-                        color="success" 
-                        variant="outlined" 
-                      />
-                    ) : (
-                      <Chip 
-                        label="Nie" 
-                        size="small" 
-                        color="default" 
-                        variant="outlined" 
-                      />
+                                    <Chip 
+                label={t('orderDetails.priceListLabels.yes')}
+                size="small"
+                color="success"
+                variant="outlined"
+              />
+            ) : (
+              <Chip 
+                label={t('orderDetails.priceListLabels.no')}
+                size="small"
+                color="default"
+                variant="outlined"
+              />
                     )}
                   </TableCell>
                   <TableCell>
@@ -1219,7 +1232,7 @@ const OrderDetails = () => {
                   </TableCell>
                   <TableCell align="right">
                     {item.productionTaskId && item.productionCost !== undefined ? (
-                      <Tooltip title="Koszt produkcji zadania">
+                      <Tooltip title={t('orderDetails.tooltips.productionTaskCost')}>
                         <Typography>
                           {formatCurrency(item.productionCost)}
                         </Typography>
@@ -1286,8 +1299,8 @@ const OrderDetails = () => {
                         if (item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null) {
                           return (
                             <Tooltip title={item.fromPriceList 
-                              ? "Pełny koszt produkcji na jednostkę (wszystkie materiały - pozycja z listy cenowej)"
-                              : "Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)"}>
+                                              ? t('orderDetails.tooltips.fullProductionCostPriceList')
+                : t('orderDetails.tooltips.fullProductionCostRegular')}>
                               <Typography sx={{ fontWeight: 'medium', color: 'primary.main' }}>
                                 {formatCurrency(item.fullProductionUnitCost)}
                               </Typography>
@@ -1306,8 +1319,8 @@ const OrderDetails = () => {
                         
                         return (
                           <Tooltip title={`${item.fromPriceList 
-                            ? "Pełny koszt produkcji na jednostkę (wszystkie materiały - pozycja z listy cenowej)"
-                            : "Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)"} - obliczane na bieżąco`}>
+                                            ? t('orderDetails.tooltips.fullProductionCostPriceList')
+                : t('orderDetails.tooltips.fullProductionCostRegular')} - ${t('orderDetails.tooltips.calculatedRealTime')}`}>
                             <Typography sx={{ fontWeight: 'medium', color: 'warning.main' }}>
                               {formatCurrency(unitFullProductionCost)}
                             </Typography>
@@ -1319,7 +1332,7 @@ const OrderDetails = () => {
                     })()}
                   </TableCell>
                   <TableCell>
-                    <Tooltip title="Drukuj etykietę">
+                    <Tooltip title={t('orderDetails.tooltips.printLabel')}>
                       <IconButton 
                         size="small" 
                         color="primary"
@@ -1466,7 +1479,7 @@ const OrderDetails = () => {
 
         {/* Sekcja dowodu dostawy */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Dowód dostawy</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.deliveryProof')}</Typography>
           <Divider sx={{ mb: 2 }} />
           
           {order.deliveryProof ? (
@@ -1475,7 +1488,7 @@ const OrderDetails = () => {
                 <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
                   <img 
                     src={order.deliveryProof} 
-                    alt="Dowód dostawy" 
+                    alt={t('orderDetails.deliveryProof.altText')} 
                     style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
                   />
                 </Box>
@@ -1492,8 +1505,8 @@ const OrderDetails = () => {
               ) : (
                 <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
                   <Alert severity="info">
-                    Dokument w formacie, który nie może być wyświetlony w przeglądarce. 
-                    Kliknij przycisk "Otwórz", aby wyświetlić dokument.
+                    {t('orderDetails.deliveryProof.cannotDisplayInBrowser')} 
+                    {t('orderDetails.deliveryProof.clickToOpen')}
                   </Alert>
                 </Box>
               )}
@@ -1539,7 +1552,7 @@ const OrderDetails = () => {
                     startIcon={<UploadIcon />}
                     disabled={uploading}
                   >
-                    {uploading ? 'Przesyłanie...' : 'Dodaj plik'}
+                    {uploading ? t('orderDetails.deliveryProof.uploading') : t('orderDetails.deliveryProof.addFile')}
                   </Button>
                 </label>
                 <Button
@@ -1557,7 +1570,7 @@ const OrderDetails = () => {
         {/* Uwagi */}
         {order.notes && (
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Uwagi</Typography>
+            <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.comments')}</Typography>
             <Divider sx={{ mb: 2 }} />
             <Typography variant="body1">
               {order.notes}
@@ -1569,7 +1582,7 @@ const OrderDetails = () => {
         {order && (
           <Paper sx={{ p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">Powiązane zamówienia zakupu</Typography>
+              <Typography variant="h6">{t('orderDetails.sections.relatedPurchaseOrders')}</Typography>
               <Button 
                 variant="outlined" 
                 startIcon={<PlaylistAddIcon />} 
@@ -1673,11 +1686,11 @@ const OrderDetails = () => {
 
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Zadania produkcyjne</Typography>
+            <Typography variant="h6">{t('orderDetails.sections.productionTasks')}</Typography>
             <IconButton 
               color="primary" 
               onClick={refreshProductionCosts} 
-              title="Odśwież dane zadań produkcyjnych"
+              title={t('orderDetails.tooltips.refreshProductionTasks')}
             >
               <RefreshIcon />
             </IconButton>
@@ -1686,19 +1699,19 @@ const OrderDetails = () => {
           
           {!order.productionTasks || order.productionTasks.length === 0 ? (
             <Typography variant="body1" color="text.secondary">
-              Brak powiązanych zadań produkcyjnych
+              {t('orderDetails.productionTasksTable.noTasks')}
             </Typography>
           ) : (
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Nr MO</TableCell>
-                  <TableCell>Nazwa zadania</TableCell>
-                  <TableCell>Produkt</TableCell>
-                  <TableCell>Ilość</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Numer partii</TableCell>
-                  <TableCell align="right">Akcje</TableCell>
+                  <TableCell>{t('orderDetails.productionTasksTable.moNumber')}</TableCell>
+                  <TableCell>{t('orderDetails.productionTasksTable.taskName')}</TableCell>
+                  <TableCell>{t('orderDetails.productionTasksTable.product')}</TableCell>
+                  <TableCell>{t('orderDetails.productionTasksTable.quantity')}</TableCell>
+                  <TableCell>{t('orderDetails.productionTasksTable.status')}</TableCell>
+                  <TableCell>{t('orderDetails.productionTasksTable.batchNumber')}</TableCell>
+                  <TableCell align="right">{t('orderDetails.productionTasksTable.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1731,7 +1744,7 @@ const OrderDetails = () => {
                     </TableCell>
                     <TableCell>
                       {task.lotNumber ? (
-                        <Tooltip title="Numer partii produkcyjnej">
+                        <Tooltip title={t('orderDetails.productionTasksTable.batchNumberTooltip')}>
                           <Chip
                             label={task.lotNumber}
                             color="success"
@@ -1741,7 +1754,7 @@ const OrderDetails = () => {
                         </Tooltip>
                       ) : task.status === 'Zakończone' ? (
                         <Chip
-                          label="Brak numeru LOT"
+                          label={t('orderDetails.productionTasksTable.noLotNumber')}
                           color="warning"
                           size="small"
                           variant="outlined"
@@ -1755,7 +1768,7 @@ const OrderDetails = () => {
                         to={`/production/tasks/${task.id}`}
                         variant="outlined"
                       >
-                        Szczegóły
+                        {t('orderDetails.productionTasksTable.details')}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -1768,12 +1781,12 @@ const OrderDetails = () => {
         {/* Sekcja faktur powiązanych z zamówieniem */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Faktury powiązane z zamówieniem</Typography>
+            <Typography variant="h6">{t('orderDetails.sections.relatedInvoices')}</Typography>
             <Box>
               <IconButton 
                 color="primary" 
                 onClick={fetchInvoices}
-                title="Odśwież listę faktur"
+                title={t('orderDetails.tooltips.refreshInvoicesList')}
               >
                 <RefreshIcon />
               </IconButton>
@@ -1784,7 +1797,7 @@ const OrderDetails = () => {
                 onClick={() => navigate(`/invoices/new?customerId=${order.customer?.id || ''}&orderId=${orderId}`)}
                 sx={{ ml: 1 }}
               >
-                Utwórz fakturę
+                {t('orderDetails.invoicesTable.createInvoice')}
               </Button>
             </Box>
           </Box>
@@ -1795,18 +1808,18 @@ const OrderDetails = () => {
             </Box>
           ) : invoices.length === 0 ? (
             <Typography variant="body1" color="text.secondary">
-              Brak faktur powiązanych z tym zamówieniem
+              {t('orderDetails.invoicesTable.noInvoices')}
             </Typography>
           ) : (
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Numer faktury</TableCell>
-                  <TableCell>Data wystawienia</TableCell>
-                  <TableCell>Termin płatności</TableCell>
-                  <TableCell>Status płatności</TableCell>
-                  <TableCell align="right">Wartość</TableCell>
-                  <TableCell align="right">Akcje</TableCell>
+                  <TableCell>{t('orderDetails.invoicesTable.invoiceNumber')}</TableCell>
+                  <TableCell>{t('orderDetails.invoicesTable.issueDate')}</TableCell>
+                  <TableCell>{t('orderDetails.invoicesTable.dueDate')}</TableCell>
+                  <TableCell>{t('orderDetails.invoicesTable.paymentStatus')}</TableCell>
+                  <TableCell align="right">{t('orderDetails.invoicesTable.value')}</TableCell>
+                  <TableCell align="right">{t('orderDetails.invoicesTable.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1846,7 +1859,7 @@ const OrderDetails = () => {
                         to={`/invoices/${invoice.id}`}
                         variant="outlined"
                       >
-                        Szczegóły
+                        {t('orderDetails.invoicesTable.details')}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -1859,12 +1872,12 @@ const OrderDetails = () => {
         {/* Sekcja dokumentów CMR powiązanych z zamówieniem */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Dokumenty CMR powiązane z zamówieniem</Typography>
+            <Typography variant="h6">{t('orderDetails.sections.relatedCmrDocuments')}</Typography>
             <Box>
               <IconButton 
                 color="primary" 
                 onClick={fetchCmrDocuments}
-                title="Odśwież listę dokumentów CMR"
+                title={t('orderDetails.tooltips.refreshCmrDocuments')}
               >
                 <RefreshIcon />
               </IconButton>
@@ -1875,7 +1888,7 @@ const OrderDetails = () => {
                 onClick={() => navigate(`/inventory/cmr/new`)}
                 sx={{ ml: 1 }}
               >
-                Utwórz CMR
+                {t('orderDetails.cmrTable.createCmr')}
               </Button>
             </Box>
           </Box>
@@ -1886,18 +1899,18 @@ const OrderDetails = () => {
             </Box>
           ) : cmrDocuments.length === 0 ? (
             <Typography variant="body1" color="text.secondary">
-              Brak dokumentów CMR powiązanych z tym zamówieniem
+              {t('orderDetails.cmrTable.noCmrDocuments')}
             </Typography>
           ) : (
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Numer CMR</TableCell>
-                  <TableCell>Data wystawienia</TableCell>
-                  <TableCell>Data dostawy</TableCell>
-                  <TableCell>Odbiorca</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Akcje</TableCell>
+                  <TableCell>{t('orderDetails.cmrTable.cmrNumber')}</TableCell>
+                  <TableCell>{t('orderDetails.cmrTable.issueDate')}</TableCell>
+                  <TableCell>{t('orderDetails.cmrTable.deliveryDate')}</TableCell>
+                  <TableCell>{t('orderDetails.cmrTable.recipient')}</TableCell>
+                  <TableCell>{t('orderDetails.cmrTable.status')}</TableCell>
+                  <TableCell align="right">{t('orderDetails.cmrTable.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1919,10 +1932,10 @@ const OrderDetails = () => {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      {cmr.issueDate ? formatDate(cmr.issueDate, false) : (cmr.status === 'Szkic' ? 'Nie ustawiono' : '-')}
+                      {cmr.issueDate ? formatDate(cmr.issueDate, false) : (cmr.status === 'Szkic' ? t('orderDetails.cmrTable.notSet') : '-')}
                     </TableCell>
                     <TableCell>
-                      {cmr.deliveryDate ? formatDate(cmr.deliveryDate, false) : (cmr.status === 'Szkic' ? 'Nie ustawiono' : '-')}
+                      {cmr.deliveryDate ? formatDate(cmr.deliveryDate, false) : (cmr.status === 'Szkic' ? t('orderDetails.cmrTable.notSet') : '-')}
                     </TableCell>
                     <TableCell>
                       {cmr.recipient || '-'}
@@ -1937,7 +1950,7 @@ const OrderDetails = () => {
                         to={`/inventory/cmr/${cmr.id}`}
                         variant="outlined"
                       >
-                        Szczegóły
+                        {t('orderDetails.cmrTable.details')}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -1949,7 +1962,7 @@ const OrderDetails = () => {
 
         {/* Dialog wyboru zamówienia zakupowego */}
         <Dialog open={openPurchaseOrderDialog} onClose={handleClosePurchaseOrderDialog} maxWidth="md" fullWidth>
-          <DialogTitle>Przypisz zamówienie zakupowe</DialogTitle>
+          <DialogTitle>{t('orderDetails.dialogs.purchaseOrder.title')}</DialogTitle>
           <DialogContent>
             {loadingPurchaseOrders ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -1958,15 +1971,15 @@ const OrderDetails = () => {
             ) : availablePurchaseOrders.length > 0 ? (
               <Box sx={{ mt: 2 }}>
                 <FormControl fullWidth>
-                  <InputLabel>Wybierz zamówienie zakupowe</InputLabel>
+                  <InputLabel>{t('orderDetails.dialogs.purchaseOrder.selectLabel')}</InputLabel>
                   <Select
                     value={selectedPurchaseOrderId}
                     onChange={handlePurchaseOrderSelection}
-                    label="Wybierz zamówienie zakupowe"
+                    label={t('orderDetails.dialogs.purchaseOrder.selectLabel')}
                   >
                     {availablePurchaseOrders.map(po => (
                       <MenuItem key={po.id} value={po.id}>
-                        {po.number} - {po.supplier?.name || 'Nieznany dostawca'} - Wartość: {po.totalGross} {po.currency || 'EUR'}
+                        {po.number} - {po.supplier?.name || t('orderDetails.dialogs.purchaseOrder.unknownSupplier')} - Wartość: {po.totalGross} {po.currency || 'EUR'}
                       </MenuItem>
                     ))}
                   </Select>
@@ -1974,73 +1987,73 @@ const OrderDetails = () => {
               </Box>
             ) : (
               <Typography variant="body1" sx={{ mt: 2 }}>
-                Brak dostępnych zamówień zakupowych, które można przypisać.
+                {t('orderDetails.dialogs.purchaseOrder.noAvailableOrders')}
               </Typography>
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleClosePurchaseOrderDialog}>Anuluj</Button>
+            <Button onClick={handleClosePurchaseOrderDialog}>{t('orderDetails.dialogs.purchaseOrder.cancel')}</Button>
             <Button 
               onClick={handleAssignSelected} 
               variant="contained" 
               disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
             >
-              Przypisz
+              {t('orderDetails.dialogs.purchaseOrder.assign')}
             </Button>
           </DialogActions>
         </Dialog>
 
         {/* Dialog do wprowadzania linku Google Drive */}
         <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
-          <DialogTitle>Dodaj link do Google Drive</DialogTitle>
+          <DialogTitle>{t('orderDetails.dialogs.driveLink.title')}</DialogTitle>
           <DialogContent>
             <DialogContentText sx={{ mb: 2 }}>
-              Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.
+              {t('orderDetails.dialogs.driveLink.description')}
             </DialogContentText>
             <TextField
               autoFocus
               margin="dense"
               id="drive-link"
-              label="Link do Google Drive"
+              label={t('orderDetails.dialogs.driveLink.linkLabel')}
               type="url"
               fullWidth
               variant="outlined"
               value={driveLink}
               onChange={handleDriveLinkChange}
-              placeholder="https://drive.google.com/file/d/..."
-              helperText="Link musi pochodzić z Google Drive i być publicznie dostępny"
+              placeholder={t('orderDetails.dialogs.driveLink.placeholder')}
+              helperText={t('orderDetails.dialogs.driveLink.helperText')}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleDriveLinkDialogClose}>Anuluj</Button>
-            <Button onClick={handleDriveLinkSubmit} variant="contained">Dodaj</Button>
+            <Button onClick={handleDriveLinkDialogClose}>{t('orderDetails.dialogs.driveLink.cancel')}</Button>
+            <Button onClick={handleDriveLinkSubmit} variant="contained">{t('orderDetails.dialogs.driveLink.add')}</Button>
           </DialogActions>
         </Dialog>
 
         {/* Dialog wyboru etykiety produktu */}
         <Dialog open={labelDialogOpen} onClose={handleLabelDialogClose}>
-          <DialogTitle>Wybierz produkt do etykiety</DialogTitle>
+          <DialogTitle>{t('orderDetails.dialogs.productLabel.title')}</DialogTitle>
           <DialogContent>
             {selectedItemForLabel ? (
               <DialogContentText>
-                Wybrano produkt: {selectedItemForLabel.name}
+                {t('orderDetails.dialogs.productLabel.selectedProduct', { name: selectedItemForLabel.name })}
               </DialogContentText>
             ) : (
               <DialogContentText>
-                Wybierz produkt z listy dla którego chcesz wydrukować etykietę:
+                {t('orderDetails.dialogs.productLabel.selectProduct')}
               </DialogContentText>
             )}
             
             {!selectedItemForLabel && (
               <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel>Produkt</InputLabel>
+                <InputLabel>{t('orderDetails.dialogs.productLabel.productLabel')}</InputLabel>
                 <Select
                   value={selectedItemForLabel?.id || ''}
                   onChange={(e) => {
                     const selected = order.items.find(item => item.id === e.target.value);
                     setSelectedItemForLabel(selected);
                   }}
-                  label="Produkt"
+                  label={t('orderDetails.dialogs.productLabel.productLabel')}
                 >
                   {order.items && order.items.map((item, index) => (
                     <MenuItem key={index} value={item.id || index}>
@@ -2052,7 +2065,7 @@ const OrderDetails = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleLabelDialogClose}>Anuluj</Button>
+            <Button onClick={handleLabelDialogClose}>{t('orderDetails.dialogs.productLabel.cancel')}</Button>
             <Button 
               onClick={handlePrintLabel} 
               variant="contained" 
@@ -2060,7 +2073,7 @@ const OrderDetails = () => {
               disabled={!selectedItemForLabel}
               startIcon={<LabelIcon />}
             >
-              Drukuj etykietę
+              {t('orderDetails.dialogs.productLabel.printLabel')}
             </Button>
           </DialogActions>
         </Dialog>

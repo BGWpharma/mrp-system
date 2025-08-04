@@ -70,8 +70,10 @@ import { formatCurrency } from '../../utils/formatUtils';
 import { getRecipeById } from '../../services/recipeService';
 import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
+import { useTranslation } from 'react-i18next';
 
 const OrdersList = () => {
+  const { t } = useTranslation();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -177,7 +179,7 @@ const OrdersList = () => {
       // console.log("Pobrano zamówienia z paginacją:", result);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień:', error);
-      showError('Nie udało się pobrać listy zamówień');
+      showError(t('orders.notifications.fetchError'));
     } finally {
       setLoading(false);
     }
@@ -190,7 +192,7 @@ const OrdersList = () => {
       const data = await getAllCustomers();
       setCustomers(data);
     } catch (error) {
-      console.error('Błąd podczas pobierania klientów:', error);
+      console.error(t('orders.notifications.customersError'), error);
     } finally {
       setCustomersLoading(false);
     }
@@ -209,7 +211,7 @@ const OrdersList = () => {
       }));
       
       if (location.state?.customerName) {
-        showSuccess(`Wyświetlam zamówienia klienta: ${location.state.customerName}`);
+        showSuccess(t('orders.notifications.customerOrdersFilter', { customerName: location.state.customerName }));
       }
       
       // Zastosuj filtry przy pierwszym załadowaniu
@@ -285,9 +287,9 @@ const OrdersList = () => {
     try {
       await deleteOrder(orderToDelete.id);
       setOrders(prev => prev.filter(order => order.id !== orderToDelete.id));
-      showSuccess('Zamówienie zostało usunięte');
+      showSuccess(t('orders.notifications.orderDeleted'));
     } catch (error) {
-      showError('Błąd podczas usuwania zamówienia: ' + error.message);
+      showError(t('orders.notifications.deleteError', { error: error.message }));
       console.error('Error deleting order:', error);
     } finally {
       setOrderToDelete(null);
@@ -302,7 +304,7 @@ const OrdersList = () => {
     try {
       if (!order || !order.id || typeof order.id !== 'string') {
         console.error('Nieprawidłowy identyfikator zamówienia:', order);
-        showError('Nie można zmienić statusu - nieprawidłowy identyfikator zamówienia');
+        showError(t('orders.notifications.statusUpdateError'));
         return;
       }
 
@@ -324,7 +326,7 @@ const OrdersList = () => {
       });
     } catch (error) {
       console.error('Błąd podczas przygotowania zmiany statusu:', error);
-      showError('Wystąpił błąd podczas przygotowania zmiany statusu');
+      showError(t('orders.notifications.statusUpdateError'));
     }
   };
 
@@ -342,9 +344,9 @@ const OrdersList = () => {
         return order;
       }));
       
-      showSuccess(`Status zamówienia zmieniony na "${statusChangeInfo.newStatus}"`);
+      showSuccess(t('orders.notifications.statusUpdated'));
     } catch (error) {
-      showError('Błąd podczas zmiany statusu: ' + error.message);
+      showError(t('orders.notifications.statusUpdateError'));
       console.error('Error updating order status:', error);
     } finally {
       setStatusChangeInfo(null);
@@ -369,12 +371,12 @@ const OrdersList = () => {
       // Po aktualizacji odświeżamy listę
       fetchOrders();
       
-      showSuccess('Status zamówienia został zaktualizowany');
+      showSuccess(t('orders.notifications.statusUpdated'));
       setStatusDialogOpen(false);
       setOrderToUpdateStatus(null);
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu zamówienia:', error);
-      showError('Nie udało się zaktualizować statusu zamówienia');
+      showError(t('orders.notifications.statusUpdateError'));
     }
   };
 
@@ -402,7 +404,7 @@ const OrdersList = () => {
       ...prev,
       customerId: customerId
     }));
-    showSuccess(`Wyświetlam zamówienia klienta: ${customerName}`);
+            showSuccess(t('orders.notifications.customerOrdersFilter', { customerName }));
     applyFilters();
   };
 
@@ -560,14 +562,14 @@ const OrdersList = () => {
           
           if (Math.abs(verificationValue - recalculatedTotalValue) > 0.01) {
             console.error(`❌ BŁĄD SYNCHRONIZACJI: Oczekiwana wartość ${recalculatedTotalValue}, a w bazie ${verificationValue}`);
-            showError(`Błąd synchronizacji danych. Spróbuj ponownie.`);
+            showError(t('orders.notifications.valuesRefreshError'));
           } else {
             console.log(`✅ Weryfikacja potwierdza prawidłowy zapis do bazy danych`);
           }
           
         } catch (error) {
           console.error(`❌ Błąd podczas aktualizacji wartości zamówienia ${order.id} w bazie danych:`, error);
-          showError(`Nie udało się zapisać zmian do bazy danych: ${error.message}`);
+          showError(t('orders.notifications.moSaveError'));
         }
       } else {
         console.log(`Wartość zamówienia ${order.id} nie zmieniła się (${recalculatedTotalValue}), pomijam zapis do bazy`);
@@ -587,17 +589,17 @@ const OrdersList = () => {
         return o;
       }));
       
-      showSuccess('Dane zamówienia zostały zaktualizowane' + (valueChanged ? ' i zapisane do bazy danych' : ''));
+      showSuccess(t('orders.notifications.valuesRefreshed', { count: 1 }));
     } catch (error) {
       console.error('Błąd podczas odświeżania danych zamówienia:', error);
-      showError('Nie udało się odświeżyć danych zamówienia');
+      showError(t('orders.notifications.valuesRefreshError'));
     }
   };
 
   const handleRefreshAll = async () => {
     try {
       setLoading(true);
-      showInfo('Trwa odświeżanie wszystkich danych...');
+      showInfo(t('orders.notifications.refreshingValues'));
       
       // Import potrzebnych funkcji
       const { getOrderById } = await import('../../services/orderService');
@@ -833,10 +835,10 @@ const OrdersList = () => {
       }));
       
       setOrders(updatedOrders);
-      showSuccess('Wszystkie dane zostały zaktualizowane');
+      showSuccess(t('orders.notifications.valuesRefreshed', { count: orders.length }));
     } catch (error) {
       console.error('Błąd podczas odświeżania danych zamówień:', error);
-      showError('Wystąpił błąd podczas odświeżania danych');
+      showError(t('orders.notifications.valuesRefreshError'));
     } finally {
       setLoading(false);
     }
@@ -1018,7 +1020,7 @@ const OrdersList = () => {
       
     } catch (error) {
       console.error('Błąd podczas odświeżania wartości przed eksportem:', error);
-      showError('Wystąpił błąd podczas odświeżania wartości');
+      showError(t('orders.notifications.valuesRefreshError'));
       throw error; // Przerwij eksport w przypadku błędu
     }
   };
@@ -1026,7 +1028,7 @@ const OrdersList = () => {
   const handleRefreshMO = async (order) => {
     try {
       setLoading(true);
-      showInfo('Odświeżanie danych MO...');
+      showInfo(t('orders.notifications.refreshingMO'));
       
       // Import potrzebnych funkcji
       const { getOrderById } = await import('../../services/orderService');
@@ -1124,17 +1126,17 @@ const OrdersList = () => {
             return o;
           }));
           
-          showSuccess('Dane MO zostały odświeżone');
+          showSuccess(t('orders.notifications.moRefreshed'));
         } catch (updateError) {
           console.error('Błąd podczas zapisywania zaktualizowanych danych MO:', updateError);
-          showError('Nie udało się zapisać zaktualizowanych danych MO');
+          showError(t('orders.notifications.moSaveError'));
         }
       } else {
-        showInfo('Brak danych MO do odświeżenia');
+        showInfo(t('orders.notifications.noMOData'));
       }
     } catch (error) {
       console.error('Błąd podczas odświeżania danych MO:', error);
-      showError('Nie udało się odświeżyć danych MO');
+      showError(t('orders.notifications.moRefreshError'));
     } finally {
       setLoading(false);
     }
@@ -1143,7 +1145,7 @@ const OrdersList = () => {
   const handleRefreshCMRData = async (order) => {
     try {
       setLoading(true);
-      showInfo('Odświeżanie danych CMR...');
+      showInfo(t('orders.notifications.refreshingCMR'));
       
       // Import funkcji do debugowania i odświeżania danych CMR
       const { debugOrderCMRConnections, refreshShippedQuantitiesFromCMR } = await import('../../services/orderService');
@@ -1169,14 +1171,14 @@ const OrdersList = () => {
       
       // Pokaż statystyki odświeżania
       const { stats } = result;
-      showSuccess(
-        `Dane CMR zostały odświeżone. ` +
-        `Przetworzono ${stats.processedCMRs} CMR, ` +
-        `zaktualizowano ${stats.shippedItems} pozycji z ${stats.cmrReferences} odniesieniami do CMR.`
-      );
+      showSuccess(t('orders.notifications.cmrRefreshed', {
+        cmrs: stats.processedCMRs,
+        items: stats.shippedItems,
+        references: stats.cmrReferences
+      }));
     } catch (error) {
       console.error('Błąd podczas odświeżania danych CMR:', error);
-      showError('Nie udało się odświeżyć danych CMR: ' + error.message);
+      showError(t('orders.notifications.cmrRefreshError', { error: error.message }));
     } finally {
       setLoading(false);
     }
@@ -1186,7 +1188,7 @@ const OrdersList = () => {
   const handleExportOrdersToCSV = async () => {
     try {
       setLoading(true);
-      showInfo('Odświeżanie wartości przed eksportem...');
+      showInfo(t('orders.notifications.refreshingValues'));
       
       // Najpierw odśwież wszystkie wartości zamówień
       await refreshOrdersForExport();
@@ -1378,13 +1380,16 @@ const OrdersList = () => {
       const success = exportToCSV(exportData, headers, filename);
 
       if (success) {
-        showSuccess(`Odświeżono wartości i wyeksportowano ${exportData.length} pozycji z ${exportOrders.length} zamówień do pliku CSV`);
+        showSuccess(t('orders.notifications.exportSuccess', { 
+          items: exportData.length, 
+          orders: exportOrders.length 
+        }));
       } else {
-        showError('Nie udało się wyeksportować zamówień do CSV');
+        showError(t('orders.notifications.exportError'));
       }
     } catch (error) {
       console.error('Błąd podczas eksportu CSV:', error);
-      showError('Wystąpił błąd podczas eksportu: ' + error.message);
+      showError(t('orders.notifications.exportErrorGeneral', { error: error.message }));
     } finally {
       setLoading(false);
     }
@@ -1394,7 +1399,7 @@ const OrdersList = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
         <Typography variant="h4" component="h1">
-          Zamówienia klientów
+          {t('orders.title')}
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
           <Button
@@ -1404,7 +1409,7 @@ const OrdersList = () => {
             onClick={() => navigate('/customers')}
             sx={{ width: '100%' }}
           >
-            Zarządzaj klientami
+            {t('orders.manageCustomers')}
           </Button>
           <Button
             variant="contained"
@@ -1413,7 +1418,7 @@ const OrdersList = () => {
             onClick={handleAddOrder}
             sx={{ width: '100%' }}
           >
-            Nowe zamówienie
+            {t('orders.newOrder')}
           </Button>
         </Box>
       </Box>
@@ -1421,7 +1426,7 @@ const OrdersList = () => {
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <TextField
-            placeholder="Szukaj zamówień..."
+            placeholder={t('orders.searchOrders')}
             variant="outlined"
             size="small"
             value={searchTerm}
@@ -1451,7 +1456,7 @@ const OrdersList = () => {
               onClick={handleExportOrdersToCSV}
               disabled={loading}
             >
-              {loading ? 'Eksportowanie...' : 'Eksportuj CSV'}
+              {loading ? t('orders.exporting') : t('orders.exportCsv')}
             </Button>
             <Button 
               variant={showFilters ? "contained" : "outlined"} 
@@ -1459,7 +1464,7 @@ const OrdersList = () => {
               onClick={() => setShowFilters(!showFilters)}
               color={showFilters ? "primary" : "inherit"}
             >
-              Filtry
+              {t('orders.filtersToggle')}
             </Button>
             <Button 
               variant="outlined" 
@@ -1468,7 +1473,7 @@ const OrdersList = () => {
               disabled={loading}
               sx={{ minWidth: 150 }}
             >
-              {loading ? 'Odświeżanie...' : 'Odśwież wartości'}
+              {loading ? t('orders.refreshing') : t('orders.refreshValues')}
             </Button>
           </Box>
         </Box>
@@ -1479,14 +1484,14 @@ const OrdersList = () => {
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={6} md={3}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Status</InputLabel>
+                    <InputLabel>{t('orders.filters.status')}</InputLabel>
                     <Select
                       name="status"
                       value={filters.status}
                       onChange={handleFilterChange}
-                      label="Status"
+                      label={t('orders.filters.status')}
                     >
-                      <MenuItem value="all">Wszystkie</MenuItem>
+                      <MenuItem value="all">{t('orders.filters.all')}</MenuItem>
                       {ORDER_STATUSES.map(status => (
                         <MenuItem key={status.value} value={status.value}>
                           {status.label}
@@ -1497,7 +1502,7 @@ const OrdersList = () => {
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <TextField
-                    label="Od daty"
+                    label={t('orders.filters.fromDate')}
                     type="date"
                     name="fromDate"
                     value={filters.fromDate}
@@ -1510,7 +1515,7 @@ const OrdersList = () => {
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <TextField
-                    label="Do daty"
+                    label={t('orders.filters.toDate')}
                     type="date"
                     name="toDate"
                     value={filters.toDate}
@@ -1523,15 +1528,15 @@ const OrdersList = () => {
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Klient</InputLabel>
+                    <InputLabel>{t('orders.filters.customer')}</InputLabel>
                     <Select
                       name="customerId"
                       value={filters.customerId}
                       onChange={handleFilterChange}
-                      label="Klient"
+                      label={t('orders.filters.customer')}
                       disabled={customersLoading}
                     >
-                      <MenuItem value="">Wszyscy klienci</MenuItem>
+                      <MenuItem value="">{t('orders.filters.allCustomers')}</MenuItem>
                       {customers.map(customer => (
                         <MenuItem key={customer.id} value={customer.id}>
                           {customer.name}
@@ -1547,14 +1552,14 @@ const OrdersList = () => {
                       onClick={applyFilters}
                       fullWidth
                     >
-                      Zastosuj filtry
+                      {t('orders.applyFilters')}
                     </Button>
                     <Button 
                       variant="outlined" 
                       onClick={resetFilters}
                       color="inherit"
                     >
-                      Resetuj
+                      {t('orders.reset')}
                     </Button>
                   </Box>
                 </Grid>
@@ -1573,13 +1578,13 @@ const OrdersList = () => {
               <Table sx={{ minWidth: 800 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Szczegóły</TableCell>
+                    <TableCell>{t('orders.table.details')}</TableCell>
                     <TableCell 
                       onClick={() => handleSort('orderNumber')}
                       style={{ cursor: 'pointer' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Numer 
+                        {t('orders.table.number')} 
                         {orderBy === 'orderNumber' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1595,7 +1600,7 @@ const OrdersList = () => {
                       style={{ cursor: 'pointer' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Klient
+                        {t('orders.table.customer')}
                         {orderBy === 'customer.name' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1606,13 +1611,13 @@ const OrdersList = () => {
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>{t('orders.table.status')}</TableCell>
                     <TableCell 
                       onClick={() => handleSort('orderDate')}
                       style={{ cursor: 'pointer' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Data
+                        {t('orders.table.date')}
                         {orderBy === 'orderDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1628,7 +1633,7 @@ const OrdersList = () => {
                       style={{ cursor: 'pointer' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        Termin dostawy
+                        {t('orders.table.deliveryDeadline')}
                         {orderBy === 'expectedDeliveryDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1645,7 +1650,7 @@ const OrdersList = () => {
                       align="right"
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        Wartość
+                        {t('orders.table.value')}
                         {orderBy === 'totalValue' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1656,14 +1661,14 @@ const OrdersList = () => {
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell align="right">Akcje</TableCell>
+                    <TableCell align="right">{t('orders.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {displayedOrders.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} align="center">
-                        Brak zamówień
+                        {t('orders.noOrders')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -1690,8 +1695,8 @@ const OrdersList = () => {
                           <TableCell>
                             <Typography variant="body2" fontWeight="medium">
                               {typeof order.customer === 'object' && order.customer !== null 
-                                ? (order.customer?.name || 'Brak danych klienta') 
-                                : String(order.customer) || 'Brak danych klienta'}
+                                ? (order.customer?.name || t('orders.constants.noCustomerData')) 
+                                : String(order.customer) || t('orders.constants.noCustomerData')}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -1741,7 +1746,7 @@ const OrdersList = () => {
                             </Box>
                           </TableCell>
                           <TableCell align="right">
-                            <Tooltip title="Edytuj">
+                            <Tooltip title={t('orders.actions.edit')}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleEditOrder(order.id)}
@@ -1749,7 +1754,7 @@ const OrdersList = () => {
                                 <EditIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Szczegóły">
+                            <Tooltip title={t('orders.actions.details')}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleViewOrderDetails(order.id)}
@@ -1758,7 +1763,7 @@ const OrdersList = () => {
                                 <EventNoteIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Usuń">
+                            <Tooltip title={t('orders.actions.delete')}>
                               <IconButton
                                 size="small"
                                 onClick={() => handleDeleteOrderClick(order)}
@@ -1776,43 +1781,43 @@ const OrdersList = () => {
                             <Collapse in={expandedOrderId === order.id} timeout="auto" unmountOnExit>
                               <Box sx={{ py: 2, px: 2 }}>
                                 <Typography variant="h6" gutterBottom component="div">
-                                  Szczegóły zamówienia
+                                  {t('orders.expandedDetails.orderDetails')}
                                 </Typography>
 
                                 <Grid container spacing={2}>
                                   <Grid item xs={12} md={6}>
-                                    <Typography variant="subtitle2">Kontakt:</Typography>
+                                    <Typography variant="subtitle2">{t('orders.expandedDetails.contact')}</Typography>
                                     <Typography variant="body2">
-                                      Email: {typeof order.customer?.email === 'object' 
+                                      {t('orders.expandedDetails.email')} {typeof order.customer?.email === 'object' 
                                         ? JSON.stringify(order.customer.email) 
                                         : (order.customer?.email || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Telefon: {typeof order.customer?.phone === 'object' 
+                                      {t('orders.expandedDetails.phone')} {typeof order.customer?.phone === 'object' 
                                         ? JSON.stringify(order.customer.phone) 
                                         : (order.customer?.phone || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Adres: {typeof order.customer?.address === 'object' 
+                                      {t('orders.expandedDetails.address')} {typeof order.customer?.address === 'object' 
                                         ? JSON.stringify(order.customer.address) 
                                         : (order.customer?.address || '-')}
                                     </Typography>
                                   </Grid>
 
                                   <Grid item xs={12} md={6}>
-                                    <Typography variant="subtitle2">Informacje o płatności:</Typography>
+                                    <Typography variant="subtitle2">{t('orders.expandedDetails.paymentInfo')}</Typography>
                                     <Typography variant="body2">
-                                      Metoda: {typeof order.paymentMethod === 'object'
+                                      {t('orders.expandedDetails.paymentMethod')} {typeof order.paymentMethod === 'object'
                                         ? JSON.stringify(order.paymentMethod)
                                         : (order.paymentMethod || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Status: {typeof order.paymentStatus === 'object'
+                                      {t('orders.expandedDetails.paymentStatus')} {typeof order.paymentStatus === 'object'
                                         ? JSON.stringify(order.paymentStatus)
                                         : (order.paymentStatus || '-')}
                                     </Typography>
                                     <Typography variant="body2">
-                                      Dostawa: {typeof order.shippingMethod === 'object'
+                                      {t('orders.expandedDetails.delivery')} {typeof order.shippingMethod === 'object'
                                         ? JSON.stringify(order.shippingMethod)
                                         : (order.shippingMethod || '-')} 
                                       ({formatCurrency(order.shippingCost || 0)})
@@ -1822,7 +1827,7 @@ const OrdersList = () => {
                                   <Grid item xs={12}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                       <Typography variant="subtitle2">
-                                        Produkty:
+                                        {t('orders.expandedDetails.products')}
                                       </Typography>
                                       <Box sx={{ display: 'flex', gap: 1 }}>
                                         <Button
@@ -1831,7 +1836,7 @@ const OrdersList = () => {
                                           onClick={() => handleRefreshMO(order)}
                                           title="Odśwież dane MO"
                                         >
-                                          Odśwież MO
+                                          {t('orders.expandedDetails.refreshMO')}
                                         </Button>
                                         <Button
                                           size="small"
@@ -1841,7 +1846,7 @@ const OrdersList = () => {
                                           variant="outlined"
                                           color="secondary"
                                         >
-                                          Odśwież CMR
+                                          {t('orders.expandedDetails.refreshCMR')}
                                         </Button>
                                       </Box>
                                     </Box>
@@ -1849,12 +1854,12 @@ const OrdersList = () => {
                                       <Table size="small">
                                         <TableHead>
                                           <TableRow>
-                                            <TableCell>Produkt</TableCell>
-                                            <TableCell align="right">Ilość</TableCell>
-                                            <TableCell align="right">Zarezerwowane</TableCell>
-                                            <TableCell align="right">Cena</TableCell>
-                                            <TableCell align="right">Wartość</TableCell>
-                                            <TableCell>MO</TableCell>
+                                            <TableCell>{t('orders.expandedDetails.product')}</TableCell>
+                                            <TableCell align="right">{t('orders.expandedDetails.quantity')}</TableCell>
+                                            <TableCell align="right">{t('orders.expandedDetails.reserved')}</TableCell>
+                                            <TableCell align="right">{t('orders.expandedDetails.price')}</TableCell>
+                                            <TableCell align="right">{t('orders.expandedDetails.value')}</TableCell>
+                                            <TableCell>{t('orders.expandedDetails.mo')}</TableCell>
                                           </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -2015,14 +2020,14 @@ const OrdersList = () => {
                                   <Grid item xs={12}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                       <Typography variant="subtitle2" gutterBottom>
-                                        Powiązane zamówienia zakupu:
+                                        {t('orders.expandedDetails.linkedPurchaseOrders')}
                                       </Typography>
                                       <Button
                                         size="small"
                                         startIcon={<RefreshIcon />}
                                         onClick={() => handleRefreshOrder(order)}
                                       >
-                                        Odśwież dane PO
+                                        {t('orders.expandedDetails.refreshPOData')}
                                       </Button>
                                     </Box>
                                     {order.linkedPurchaseOrders && Array.isArray(order.linkedPurchaseOrders) && order.linkedPurchaseOrders.length > 0 ? (
@@ -2030,10 +2035,10 @@ const OrdersList = () => {
                                         <Table size="small">
                                           <TableHead>
                                             <TableRow sx={{ bgcolor: 'primary.light' }}>
-                                              <TableCell>Numer PO</TableCell>
-                                              <TableCell>Dostawca</TableCell>
-                                              <TableCell align="right">Wartość</TableCell>
-                                              <TableCell>Status</TableCell>
+                                              <TableCell>{t('orders.expandedDetails.poNumber')}</TableCell>
+                                              <TableCell>{t('orders.expandedDetails.supplier')}</TableCell>
+                                              <TableCell align="right">{t('orders.expandedDetails.poValue')}</TableCell>
+                                              <TableCell>{t('orders.expandedDetails.poStatus')}</TableCell>
                                               <TableCell></TableCell>
                                             </TableRow>
                                           </TableHead>
@@ -2102,7 +2107,7 @@ const OrdersList = () => {
                                                     onClick={() => typeof po.id === 'string' ? navigate(`/purchase-orders/${po.id}`) : null}
                                                     disabled={typeof po.id !== 'string'}
                                                   >
-                                                    Szczegóły
+                                                    {t('orders.actions.details')}
                                                   </Button>
                                                 </TableCell>
                                               </TableRow>
@@ -2112,34 +2117,34 @@ const OrdersList = () => {
                                       </TableContainer>
                                     ) : (
                                       <Typography variant="body2" color="text.secondary">
-                                        Brak powiązanych zamówień zakupu.
+                                        {t('orders.expandedDetails.noPurchaseOrders')}
                                       </Typography>
                                     )}
                                   </Grid>
 
                                   <Grid item xs={12}>
                                     <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1, border: '1px solid #eee', p: 2, borderRadius: 1 }}>
-                                      <Typography variant="subtitle1" fontWeight="bold">Podsumowanie wartości:</Typography>
+                                      <Typography variant="subtitle1" fontWeight="bold">{t('orders.expandedDetails.valueSummary')}</Typography>
                                       <Grid container spacing={2}>
                                         <Grid item xs={4}>
-                                          <Typography variant="body2">Wartość produktów:</Typography>
+                                          <Typography variant="body2">{t('orders.expandedDetails.productsValue')}</Typography>
                                           <Typography variant="h6">{formatCurrency(order.productsValue || 0)}</Typography>
                                         </Grid>
                                         <Grid item xs={4}>
-                                          <Typography variant="body2">Koszt dostawy:</Typography>
+                                          <Typography variant="body2">{t('orders.expandedDetails.deliveryCost')}</Typography>
                                           <Typography variant="h6">{formatCurrency(order.shippingCost || 0)}</Typography>
                                         </Grid>
                                         <Grid item xs={4}>
-                                          <Typography variant="body2">Wartość PO:</Typography>
+                                          <Typography variant="body2">{t('orders.expandedDetails.poValue')}</Typography>
                                           <Typography variant="h6" color="warning.main">{formatCurrency(order.purchaseOrdersValue || 0)}</Typography>
                                         </Grid>
                                         <Grid item xs={12}>
                                           <Divider sx={{ my: 1 }} />
                                           <Typography variant="subtitle1" fontWeight="bold">
-                                            Łączna wartość: {formatCurrency((order.productsValue || 0) + (order.shippingCost || 0))}
+                                            {t('orders.expandedDetails.totalValue')} {formatCurrency((order.productsValue || 0) + (order.shippingCost || 0))}
                                           </Typography>
                                           <Typography variant="body2" color="text.secondary">
-                                            (bez wartości PO)
+                                            {t('orders.expandedDetails.withoutPO')}
                                           </Typography>
                                         </Grid>
                                       </Grid>
@@ -2148,7 +2153,7 @@ const OrdersList = () => {
 
                                   <Grid item xs={12}>
                                     <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                                      <Typography variant="subtitle2">Zmień status:</Typography>
+                                      <Typography variant="subtitle2">{t('orders.expandedDetails.changeStatus')}</Typography>
                                       {ORDER_STATUSES.map(status => {
                                         // Sprawdź czy order.status jest prymitywem, jeśli nie - konwertuj do stringa
                                         const orderStatus = typeof order.status === 'object' ? JSON.stringify(order.status) : String(order.status || '');
@@ -2196,8 +2201,8 @@ const OrdersList = () => {
               page={page - 1} // Odejmujemy 1, bo MUI TablePagination używa indeksowania od 0
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Wierszy na stronie:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+              labelRowsPerPage={t('orders.pagination.rowsPerPage')}
+              labelDisplayedRows={({ from, to, count }) => t('orders.pagination.displayedRows', { from, to, count })}
             />
           </>
         )}
@@ -2208,25 +2213,22 @@ const OrdersList = () => {
         open={!!orderToDelete}
         onClose={handleCancelDelete}
       >
-        <DialogTitle>Czy na pewno chcesz usunąć to zamówienie?</DialogTitle>
+        <DialogTitle>{t('orders.dialogs.deleteConfirmation.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {orderToDelete && (
-              <>
-                Zamówienie #{orderToDelete.id && orderToDelete.id.substring(0, 8).toUpperCase()} 
-                złożone przez {typeof orderToDelete.customer === 'object' && orderToDelete.customer !== null 
-                  ? (orderToDelete.customer.name || '(brak danych)') 
-                  : String(orderToDelete.customer) || '(brak danych)'}
-                {' '}o wartości {formatCurrency(orderToDelete.totalValue || 0)} 
-                zostanie trwale usunięte.
-              </>
-            )}
+            {orderToDelete && t('orders.dialogs.deleteConfirmation.description', {
+              number: orderToDelete.id && orderToDelete.id.substring(0, 8).toUpperCase(),
+              customer: typeof orderToDelete.customer === 'object' && orderToDelete.customer !== null 
+                ? (orderToDelete.customer.name || '(brak danych)') 
+                : String(orderToDelete.customer) || '(brak danych)',
+              value: formatCurrency(orderToDelete.totalValue || 0)
+            })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelDelete}>Anuluj</Button>
+          <Button onClick={handleCancelDelete}>{t('orders.dialogs.deleteConfirmation.cancel')}</Button>
           <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            Usuń
+            {t('orders.dialogs.deleteConfirmation.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2236,21 +2238,20 @@ const OrdersList = () => {
         open={!!statusChangeInfo}
         onClose={handleCancelStatusChange}
       >
-        <DialogTitle>Zmiana statusu zamówienia</DialogTitle>
+        <DialogTitle>{t('orders.dialogs.statusChange.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {statusChangeInfo && (
-              <>
-                Zmienić status zamówienia #{statusChangeInfo.orderNumber}
-                z "{statusChangeInfo.currentStatus}" na "{statusChangeInfo.newStatus}"?
-              </>
-            )}
+            {statusChangeInfo && t('orders.dialogs.statusChange.description', {
+              number: statusChangeInfo.orderNumber,
+              currentStatus: statusChangeInfo.currentStatus,
+              newStatus: statusChangeInfo.newStatus
+            })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelStatusChange}>Anuluj</Button>
+          <Button onClick={handleCancelStatusChange}>{t('orders.dialogs.statusChange.cancel')}</Button>
           <Button onClick={handleConfirmStatusChange} color="primary" variant="contained">
-            Zmień status
+            {t('orders.dialogs.statusChange.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2260,24 +2261,24 @@ const OrdersList = () => {
         open={statusDialogOpen}
         onClose={() => setStatusDialogOpen(false)}
       >
-        <DialogTitle>Zmiana statusu zamówienia</DialogTitle>
+        <DialogTitle>{t('orders.dialogs.statusChange.newTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Wybierz nowy status dla zamówienia:
+            {t('orders.dialogs.statusChange.selectStatus')}
             {orderToUpdateStatus && (
               <>
                 <br />
-                Numer: {orderToUpdateStatus.orderNumber || `#${orderToUpdateStatus.id.substring(0, 8).toUpperCase()}`}
+                {t('orders.dialogs.statusChange.orderNumber')} {orderToUpdateStatus.orderNumber || `#${orderToUpdateStatus.id.substring(0, 8).toUpperCase()}`}
               </>
             )}
           </DialogContentText>
           <FormControl fullWidth>
-            <InputLabel id="new-status-label">Status</InputLabel>
+            <InputLabel id="new-status-label">{t('orders.dialogs.statusChange.status')}</InputLabel>
             <Select
               labelId="new-status-label"
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
-              label="Status"
+              label={t('orders.dialogs.statusChange.status')}
             >
               {ORDER_STATUSES.map((status) => (
                 <MenuItem key={status.value} value={status.value}>
@@ -2288,8 +2289,8 @@ const OrdersList = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>Anuluj</Button>
-          <Button color="primary" onClick={handleStatusUpdate}>Zaktualizuj</Button>
+          <Button onClick={() => setStatusDialogOpen(false)}>{t('orders.dialogs.statusChange.cancel')}</Button>
+          <Button color="primary" onClick={handleStatusUpdate}>{t('orders.dialogs.statusChange.update')}</Button>
         </DialogActions>
       </Dialog>
     </Box>

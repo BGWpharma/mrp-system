@@ -63,6 +63,9 @@ i18n
       escapeValue: false,
     },
     
+    // Nie włączamy returnObjects - używamy bezpośrednich kluczy
+    // returnObjects: true,
+    
     // Opcje debugowania (wyłącz w produkcji)
     debug: process.env.NODE_ENV === 'development',
     

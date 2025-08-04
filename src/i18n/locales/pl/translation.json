@@ -2125,5 +2125,358 @@
   "confirmDeleteTitle": "Potwierdź usunięcie",
   "confirmDeleteMessage": "Czy na pewno chcesz usunąć ten element?",
   "cancel": "Anuluj",
-  "delete": "Usuń"
+  "delete": "Usuń",
+  "orders": {
+    "title": "Zamówienia klientów",
+    "newOrder": "Nowe zamówienie",
+    "manageCustomers": "Zarządzaj klientami",
+    "searchOrders": "Szukaj zamówień...",
+    "exportCsv": "Eksportuj CSV",
+    "exporting": "Eksportowanie...",
+    "filters": "Filtry",
+    "filtersToggle": "Filtry",
+    "refreshValues": "Odśwież wartości",
+    "refreshing": "Odświeżanie...",
+    "applyFilters": "Zastosuj filtry",
+    "reset": "Resetuj",
+    "noOrders": "Brak zamówień",
+    "table": {
+      "details": "Szczegóły", 
+      "number": "Numer",
+      "customer": "Klient",
+      "status": "Status",
+      "date": "Data",
+      "deliveryDeadline": "Termin dostawy",
+      "value": "Wartość",
+      "actions": "Akcje"
+    },
+    "filters": {
+      "status": "Status",
+      "all": "Wszystkie",
+      "fromDate": "Od daty",
+      "toDate": "Do daty",
+      "customer": "Klient",
+      "allCustomers": "Wszyscy klienci"
+    },
+    "actions": {
+      "edit": "Edytuj",
+      "details": "Szczegóły",
+      "delete": "Usuń"
+    },
+    "expandedDetails": {
+      "orderDetails": "Szczegóły zamówienia",
+      "contact": "Kontakt:",
+      "email": "Email:",
+      "phone": "Telefon:",
+      "address": "Adres:",
+      "paymentInfo": "Informacje o płatności:",
+      "paymentMethod": "Metoda:",
+      "paymentStatus": "Status:",
+      "delivery": "Dostawa:",
+      "products": "Produkty:",
+      "refreshMO": "Odśwież MO",
+      "refreshCMR": "Odśwież CMR",
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "reserved": "Zarezerwowane",
+      "price": "Cena",
+      "value": "Wartość",
+      "mo": "MO",
+      "linkedPurchaseOrders": "Powiązane zamówienia zakupu:",
+      "refreshPOData": "Odśwież dane PO",
+      "poNumber": "Numer PO",
+      "supplier": "Dostawca",
+      "poValue": "Wartość",
+      "poStatus": "Status",
+      "noPurchaseOrders": "Brak powiązanych zamówień zakupu.",
+      "valueSummary": "Podsumowanie wartości:",
+      "productsValue": "Wartość produktów:",
+      "deliveryCost": "Koszt dostawy:",
+      "poValue": "Wartość PO:",
+      "totalValue": "Łączna wartość:",
+      "withoutPO": "(bez wartości PO)",
+      "changeStatus": "Zmień status:"
+    },
+    "dialogs": {
+      "deleteConfirmation": {
+        "title": "Czy na pewno chcesz usunąć to zamówienie?",
+        "description": "Zamówienie {{number}} złożone przez {{customer}} o wartości {{value}} zostanie trwale usunięte.",
+        "cancel": "Anuluj",
+        "confirm": "Usuń"
+      },
+      "statusChange": {
+        "title": "Zmiana statusu zamówienia",
+        "description": "Zmienić status zamówienia {{number}} z \"{{currentStatus}}\" na \"{{newStatus}}\"?",
+        "newTitle": "Zmiana statusu zamówienia",
+        "selectStatus": "Wybierz nowy status dla zamówienia:",
+        "orderNumber": "Numer:",
+        "status": "Status",
+        "cancel": "Anuluj",
+        "confirm": "Zmień status",
+        "update": "Zaktualizuj"
+      }
+    },
+    "pagination": {
+      "rowsPerPage": "Wierszy na stronie:",
+      "displayedRows": "{{from}}-{{to}} z {{count}}"
+    },
+    "notifications": {
+      "orderDeleted": "Zamówienie zostało usunięte",
+      "deleteError": "Błąd podczas usuwania zamówienia: {{error}}",
+      "fetchError": "Nie udało się pobrać listy zamówień",
+      "customersError": "Błąd podczas pobierania klientów:",
+      "customerOrdersFilter": "Wyświetlam zamówienia klienta: {{customerName}}",
+      "refreshingMO": "Odświeżanie danych MO...",
+      "moRefreshed": "Dane MO zostały odświeżone",
+      "moRefreshError": "Nie udało się odświeżyć danych MO",
+      "noMOData": "Brak danych MO do odświeżenia",
+      "moSaveError": "Nie udało się zapisać zaktualizowanych danych MO",
+      "refreshingCMR": "Odświeżanie danych CMR...",
+      "cmrRefreshed": "Dane CMR zostały odświeżone. Przetworzono {{cmrs}} CMR, zaktualizowano {{items}} pozycji z {{references}} odniesieniami do CMR.",
+      "cmrRefreshError": "Nie udało się odświeżyć danych CMR: {{error}}",
+      "refreshingValues": "Odświeżanie wartości przed eksportem...",
+      "valuesRefreshed": "Odświeżono wartości dla {{count}} zamówień",
+      "valuesRefreshError": "Wystąpił błąd podczas odświeżania wartości",
+      "exportSuccess": "Odświeżono wartości i wyeksportowano {{items}} pozycji z {{orders}} zamówień do pliku CSV",
+      "exportError": "Nie udało się wyeksportować zamówień do CSV",
+      "exportErrorGeneral": "Wystąpił błąd podczas eksportu: {{error}}",
+      "statusUpdated": "Status zamówienia został zaktualizowany",
+      "statusUpdateError": "Nie udało się zaktualizować statusu zamówienia"
+    },
+    "constants": {
+      "noCustomerData": "Brak danych klienta"
+    }
+  },
+  "orderDetails": {
+    "title": "Szczegóły zamówienia",
+    "orderNumber": "Numer zamówienia",
+    "orderDate": "Data zamówienia",
+    "expectedDelivery": "Oczekiwana dostawa",
+    "completed": "Zakończone",
+    "totalValue": "Łączna wartość",
+    "refreshOrder": "Odśwież dane zamówienia",
+    "sections": {
+      "customerData": "Dane klienta",
+      "paymentAndDelivery": "Płatność i dostawa",
+      "products": "Produkty",
+      "statusHistory": "Historia zmian statusu",
+      "additionalCosts": "Dodatkowe koszty",
+      "documents": "Dokumenty",
+      "productionTasks": "Zadania produkcyjne",
+      "purchaseOrders": "Powiązane zamówienia zakupu",
+      "invoices": "Faktury",
+      "cmrDocuments": "Dokumenty CMR",
+      "status": "Status",
+      "deliveryProof": "Dowód dostawy",
+      "comments": "Uwagi",
+      "relatedPurchaseOrders": "Powiązane zamówienia zakupu",
+      "productionTasks": "Zadania produkcyjne",
+      "relatedInvoices": "Faktury powiązane z zamówieniem",
+      "relatedCmrDocuments": "Dokumenty CMR powiązane z zamówieniem",
+      "statusHistory": "Historia zmian statusu"
+    },
+    "customerInfo": {
+      "noCustomerName": "Brak nazwy klienta",
+      "email": "Email",
+      "phone": "Telefon",
+      "shippingAddress": "Adres dostawy"
+    },
+    "payment": {
+      "paymentMethod": "Metoda płatności",
+      "paymentStatus": "Status płatności",
+      "deliveryMethod": "Metoda dostawy",
+      "deliveryCost": "Koszt dostawy",
+      "unpaid": "Nieopłacone"
+    },
+    "table": {
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "shipped": "Wysłano",
+      "price": "Cena",
+      "value": "Wartość",
+      "priceList": "Lista cenowa",
+      "productionStatus": "Status produkcji",
+      "productionCost": "Koszt produkcji",
+      "profit": "Zysk",
+      "totalItemValue": "Suma wartości pozycji",
+      "totalCostPerUnit": "Koszt całk./szt.",
+      "fullProductionCostPerUnit": "Pełny koszt prod./szt.",
+      "actions": "Akcje"
+    },
+    "productionStatus": {
+      "noTasks": "Brak zadań",
+      "completed": "Zakończone ({{count}})",
+      "cancelled": "Anulowane ({{count}})",
+      "inProgress": "W trakcie ({{count}})",
+      "planned": "Zaplanowane ({{count}})",
+      "mixed": "Mieszany ({{count}})"
+    },
+    "paymentStatusLabels": {
+      "unpaid": "Nieopłacona",
+      "partiallyPaid": "Częściowo opłacona",
+      "paid": "Opłacona"
+    },
+    "tooltips": {
+      "printLabel": "Drukuj etykietę",
+      "fullProductionCostPriceList": "Pełny koszt produkcji na jednostkę (wszystkie materiały - pozycja z listy cenowej)",
+      "fullProductionCostRegular": "Pełny koszt produkcji na jednostkę (wszystkie materiały + cena jednostkowa)",
+      "calculatedRealTime": "obliczane na bieżąco",
+      "productionTaskCost": "Koszt produkcji zadania",
+      "refreshProductionTasks": "Odśwież dane zadań produkcyjnych",
+      "refreshInvoicesList": "Odśwież listę faktur",
+      "refreshCmrDocuments": "Odśwież listę dokumentów CMR"
+    },
+    "deliveryProof": {
+      "altText": "Dowód dostawy",
+      "clickToOpen": "Kliknij przycisk \"Otwórz\", aby wyświetlić dokument.",
+      "cannotDisplayInBrowser": "Dokument w formacie, który nie może być wyświetlony w przeglądarce.",
+      "uploading": "Przesyłanie...",
+      "addFile": "Dodaj plik"
+    },
+    "priceListLabels": {
+      "yes": "Tak",
+      "no": "Nie"
+    },
+    "cmrStatuses": {
+      "draft": "Szkic",
+      "issued": "Wystawiony",
+      "inTransit": "W transporcie",
+      "delivered": "Dostarczone",
+      "completed": "Zakończony",
+      "canceled": "Anulowany",
+      "unknown": "Nieznany"
+    },
+    "productionTasksTable": {
+      "noTasks": "Brak powiązanych zadań produkcyjnych",
+      "moNumber": "Nr MO",
+      "taskName": "Nazwa zadania",
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "status": "Status",
+      "batchNumber": "Numer partii",
+      "actions": "Akcje",
+      "details": "Szczegóły",
+      "batchNumberTooltip": "Numer partii produkcyjnej",
+      "noLotNumber": "Brak numeru LOT"
+    },
+    "invoicesTable": {
+      "createInvoice": "Utwórz fakturę",
+      "noInvoices": "Brak faktur powiązanych z tym zamówieniem",
+      "invoiceNumber": "Numer faktury",
+      "issueDate": "Data wystawienia",
+      "dueDate": "Termin płatności",
+      "paymentStatus": "Status płatności",
+      "value": "Wartość",
+      "actions": "Akcje",
+      "details": "Szczegóły"
+    },
+    "cmrTable": {
+      "createCmr": "Utwórz CMR",
+      "noCmrDocuments": "Brak dokumentów CMR powiązanych z tym zamówieniem",
+      "cmrNumber": "Numer CMR",
+      "issueDate": "Data wystawienia",
+      "deliveryDate": "Data dostawy",
+      "recipient": "Odbiorca",
+      "status": "Status",
+      "actions": "Akcje",
+      "details": "Szczegóły",
+      "notSet": "Nie ustawiono"
+    },
+    "actions": {
+      "edit": "Edytuj",
+      "back": "Wróć",
+      "print": "Drukuj",
+      "sendEmail": "Wyślij email",
+      "addDocument": "Dodaj dokument",
+      "addPurchaseOrder": "Dodaj zamówienie zakupu",
+      "generateLabel": "Generuj etykietę",
+      "refreshProductionCosts": "Odśwież dane zadań produkcyjnych"
+    },
+    "statusHistory": {
+      "title": "Historia zmian statusu",
+      "noHistory": "Brak historii zmian statusu",
+      "changedBy": "Zmienione przez",
+      "date": "Data",
+      "from": "z",
+      "to": "na",
+      "dateTime": "Data i godzina",
+      "previousStatus": "Poprzedni status",
+      "newStatus": "Nowy status",
+      "whoChanged": "Kto zmienił",
+      "noDate": "Brak daty"
+    },
+    "additionalCosts": {
+      "title": "Dodatkowe koszty i rabaty",
+      "name": "Nazwa",
+      "value": "Wartość",
+      "noAdditionalCosts": "Brak dodatkowych kosztów",
+      "total": "Łącznie dodatkowe koszty",
+      "discounts": "Rabaty"
+    },
+    "documents": {
+      "title": "Dokumenty zamówienia",
+      "upload": "Prześlij plik",
+      "noDocuments": "Brak dokumentów",
+      "filename": "Nazwa pliku",
+      "uploadedBy": "Przesłane przez",
+      "uploadDate": "Data przesłania",
+      "size": "Rozmiar"
+    },
+    "notifications": {
+      "orderNotFound": "Zamówienie nie zostało znalezione",
+      "loadError": "Błąd podczas ładowania szczegółów zamówienia",
+      "documentUploaded": "Dokument został przesłany",
+      "documentUploadError": "Błąd podczas przesyłania dokumentu",
+      "documentDeleted": "Dokument został usunięty",
+      "documentDeleteError": "Błąd podczas usuwania dokumentu",
+      "productionTasksRemoved": "Usunięto {{count}} nieistniejących zadań produkcyjnych z zamówienia",
+      "refreshSuccess": "Dane zamówienia zostały odświeżone",
+      "refreshError": "Błąd podczas odświeżania danych",
+      "productionCostsRefreshed": "Dane kosztów produkcji zostały odświeżone",
+      "noProductionTasks": "Brak zadań produkcyjnych do odświeżenia",
+      "productionCostsRefreshError": "Błąd podczas odświeżania danych kosztów produkcji",
+      "migrationStarted": "Rozpoczęcie migracji danych CMR...",
+      "migrationSuccess": "Migracja zakończona pomyślnie. Zmigrowano {{count}} zamówień.",
+      "migrationError": "Wystąpił błąd podczas migracji danych CMR",
+      "documentUploadSuccess": "Dowód dostawy został pomyślnie przesłany",
+      "documentUploadGenericError": "Wystąpił błąd podczas przesyłania pliku",
+      "documentDeleteSuccess": "Dowód dostawy został usunięty",
+      "documentDeleteGenericError": "Wystąpił błąd podczas usuwania pliku",
+      "invalidDriveLink": "Wprowadź prawidłowy link do Google Drive",
+      "linkMustBeGoogleDrive": "Link musi być z Google Drive",
+      "driveLinkAdded": "Link do Google Drive dodany jako dowód dostawy",
+      "driveLinkAddError": "Wystąpił błąd podczas dodawania linku",
+      "invoicesLoadError": "Nie udało się pobrać faktur powiązanych z zamówieniem",
+      "cmrDocumentsLoadError": "Nie udało się pobrać dokumentów CMR powiązanych z zamówieniem",
+      "emailSent": "Email został wysłany",
+      "emailError": "Błąd podczas wysyłania emaila"
+    },
+    "dialogs": {
+      "purchaseOrder": {
+        "title": "Przypisz zamówienie zakupowe",
+        "selectLabel": "Wybierz zamówienie zakupowe",
+        "unknownSupplier": "Nieznany dostawca",
+        "noAvailableOrders": "Brak dostępnych zamówień zakupowych, które można przypisać.",
+        "assign": "Przypisz",
+        "cancel": "Anuluj"
+      },
+      "driveLink": {
+        "title": "Dodaj link do Google Drive",
+        "description": "Wprowadź link do dokumentu w Google Drive, który będzie służył jako dowód dostawy.",
+        "linkLabel": "Link do Google Drive",
+        "placeholder": "https://drive.google.com/file/d/...",
+        "helperText": "Link musi pochodzić z Google Drive i być publicznie dostępny",
+        "add": "Dodaj",
+        "cancel": "Anuluj"
+      },
+      "productLabel": {
+        "title": "Wybierz produkt do etykiety",
+        "selectedProduct": "Wybrano produkt: {{name}}",
+        "selectProduct": "Wybierz produkt z listy dla którego chcesz wydrukować etykietę:",
+        "productLabel": "Produkt",
+        "printLabel": "Drukuj etykietę",
+        "cancel": "Anuluj"
+      }
+    }
+  }
 }
