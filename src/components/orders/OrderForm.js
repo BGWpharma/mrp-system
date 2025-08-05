@@ -75,7 +75,7 @@ import {
   deleteDeliveryProof,
   calculateOrderTotal
 } from '../../services/orderService';
-import { getAllInventoryItems, getIngredientPrices } from '../../services/inventory';
+import { getAllInventoryItems, getIngredientPrices, getInventoryItemsByCategory } from '../../services/inventory';
 import { getAllCustomers, createCustomer } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -135,8 +135,9 @@ const OrderForm = ({ orderId }) => {
     return defaultOrder;
   });
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [services, setServices] = useState([]); // Dodajemy listę usług
+  // USUNIĘTO: const [products, setProducts] = useState([]); 
+  // Produkty magazynowe ładowane są na żądanie w generateMaterialsList()
+  const [services, setServices] = useState([]); // Lista usług z kategorii "Inne"
   const [recipes, setRecipes] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
@@ -391,12 +392,18 @@ const OrderForm = ({ orderId }) => {
         const fetchedCustomers = await getAllCustomers();
         setCustomers(fetchedCustomers);
           
-        // Pobierz wszystkie produkty i odfiltruj usługi (kategoria "Inne")
-        const productsData = await getAllInventoryItems();
-        const servicesData = productsData.filter(item => item.category === 'Inne');
-        const otherProductsData = productsData.filter(item => item.category !== 'Inne');
-        setProducts(otherProductsData);
+        // OPTYMALIZACJA: Pobierz tylko usługi z kategorii "Inne" zamiast wszystkich produktów
+        // PRZED: getAllInventoryItems() pobierało 1000+ produktów, używaliśmy tylko ~20 usług
+        // TERAZ: getInventoryItemsByCategory('Inne') pobiera tylko ~20 usług bezpośrednio z Firebase
+        console.log('🔍 OrderForm - pobieranie usług z kategorii "Inne"...');
+        const servicesResult = await getInventoryItemsByCategory('Inne');
+        const servicesData = servicesResult?.items || [];
         setServices(servicesData);
+        
+        console.log('🔍 OrderForm - pobrano', servicesData.length, 'usług (wcześniej pobierano wszystkie produkty)');
+        
+        // USUNIĘTO: setProducts() - produkty magazynowe nie są używane w interfejsie
+        // Tylko pole tekstowe bez AutoComplete, więc niepotrzebne pobieranie z Firebase
           
         // Pobierz wszystkie receptury
         const fetchedRecipes = await getAllRecipes();
@@ -1578,6 +1585,13 @@ const OrderForm = ({ orderId }) => {
   const generateMaterialsList = async (recipeItems) => {
     const allMaterials = [];
     
+    // OPTYMALIZACJA: Pobierz wszystkie produkty dopiero gdy są potrzebne (na żądanie)
+    // Zamiast ładować przy starcie formularza, ładujemy tylko gdy generujemy PO
+    console.log('🔍 OrderForm - pobieranie wszystkich produktów do generowania PO...');
+    const allProductsData = await getAllInventoryItems();
+    const allProducts = allProductsData?.items || allProductsData || [];
+    console.log('🔍 OrderForm - pobrano', allProducts.length, 'produktów do analizy składników');
+    
     for (const { orderItem, recipe } of recipeItems) {
       if (!recipe.ingredients || recipe.ingredients.length === 0) continue;
       
@@ -1600,8 +1614,8 @@ const OrderForm = ({ orderId }) => {
           // Dodaj zaokrągloną wartość
           allMaterials[existingIndex].quantity = parseFloat((allMaterials[existingIndex].quantity + requiredQuantity).toFixed(3));
         } else {
-          // Znajdź pełne dane składnika w magazynie
-          const inventoryItem = products.find(p => p.id === ingredient.id);
+          // Znajdź pełne dane składnika w magazynie (z pobranych na żądanie)
+          const inventoryItem = allProducts.find(p => p.id === ingredient.id);
           
           allMaterials.push({
             id: ingredient.id,

@@ -57,7 +57,9 @@ import {
   getAllInventoryItems,
   getItemBatches,
   checkStocktakingReservationImpact,
-  cancelThreatenedReservations
+  cancelThreatenedReservations,
+  getInventoryCategories,
+  getInventoryItemsByCategory
 } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -86,11 +88,19 @@ const StocktakingDetailsPage = () => {
   const [countedQuantity, setCountedQuantity] = useState('');
   const [notes, setNotes] = useState('');
   
-  // Dodane stany dla obsługi LOTów
-  const [isLotMode, setIsLotMode] = useState(true); // Domyślnie tryb LOT włączony
+  // Dodane stany dla obsługi LOTów (tryb LOT zawsze włączony)
+  const [isLotMode] = useState(true); // Tryb LOT zawsze włączony
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  
+  // Stany dla kategorii
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  
+  // Cache dla produktów według kategorii (optymalizacja)
+  const [categoryCache, setCategoryCache] = useState({});
   
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -108,7 +118,7 @@ const StocktakingDetailsPage = () => {
   
   useEffect(() => {
     fetchStocktakingData();
-    fetchInventoryItems();
+    fetchInventoryCategories();
   }, [id]);
   
   useEffect(() => {
@@ -159,12 +169,62 @@ const StocktakingDetailsPage = () => {
     }
   };
   
-  const fetchInventoryItems = async () => {
+  const fetchInventoryCategories = async () => {
     try {
-      const inventoryItemsData = await getAllInventoryItems();
-      setInventoryItems(inventoryItemsData);
+      setLoadingCategories(true);
+      const categoriesData = await getInventoryCategories();
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Błąd podczas pobierania kategorii:', error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+  
+  const fetchInventoryItems = async (categoryFilter = null) => {
+    try {
+      if (!categoryFilter) {
+        // Jeśli nie wybrano kategorii, wyczyść listę produktów
+        setInventoryItems([]);
+        return;
+      }
+
+      // OPTYMALIZACJA: Sprawdź cache przed wykonaniem zapytania
+      if (categoryCache[categoryFilter]) {
+        console.log('🔍 StocktakingDetailsPage - używam cache dla kategorii:', categoryFilter);
+        setInventoryItems(categoryCache[categoryFilter]);
+        return;
+      }
+
+      console.log('🔍 StocktakingDetailsPage - pobieranie produktów dla kategorii:', categoryFilter);
+      
+      // OPTYMALIZACJA: Używamy nowej funkcji getInventoryItemsByCategory
+      // która filtruje bezpośrednio w Firebase zamiast pobierać wszystkie produkty
+      const inventoryItemsData = await getInventoryItemsByCategory(
+        categoryFilter, // category - wymagane
+        null, // warehouseId
+        null, // page
+        null, // pageSize
+        null, // searchTerm
+        'name', // sortField - sortowanie według nazwy
+        'asc'  // sortOrder
+      );
+      
+      // Nowa funkcja zwraca obiekt z właściwością 'items'
+      const items = inventoryItemsData?.items || [];
+      setInventoryItems(items);
+      
+      // OPTYMALIZACJA: Zapisz w cache dla przyszłego użycia
+      setCategoryCache(prev => ({
+        ...prev,
+        [categoryFilter]: items
+      }));
+      
+      console.log('🔍 StocktakingDetailsPage - pobrano', items.length, 'produktów dla kategorii:', categoryFilter, '(zapisano w cache)');
+      
     } catch (error) {
       console.error('Błąd podczas pobierania produktów z magazynu:', error);
+      setInventoryItems([]);
     }
   };
   
@@ -187,6 +247,21 @@ const StocktakingDetailsPage = () => {
     }
   };
   
+  // Obsługa wyboru kategorii
+  const handleCategorySelect = (category) => {
+    setSelectedCategory(category);
+    setSelectedItem(null);
+    setSelectedBatch(null);
+    setBatches([]);
+    
+    // Pobierz produkty z wybranej kategorii
+    if (category) {
+      fetchInventoryItems(category);
+    } else {
+      setInventoryItems([]);
+    }
+  };
+
   // Obsługa wyboru produktu (teraz wyzwala pobieranie partii)
   const handleItemSelect = (item) => {
     setSelectedItem(item);
@@ -217,80 +292,55 @@ const StocktakingDetailsPage = () => {
   };
   
   const handleAddItem = async () => {
-    // Walidacja dla trybu LOT
-    if (isLotMode) {
-      if (!selectedItem) {
-        showError('Wybierz produkt z magazynu');
-        return;
-      }
+    // Walidacja (tryb LOT zawsze włączony)
+    if (!selectedCategory) {
+      showError('Wybierz kategorię produktu');
+      return;
+    }
+    
+    if (!selectedItem) {
+      showError('Wybierz produkt z magazynu');
+      return;
+    }
+    
+    if (!selectedBatch) {
+      showError('Wybierz partię (LOT) produktu');
+      return;
+    }
+    
+    if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
+      showError('Podaj prawidłową ilość policzoną');
+      return;
+    }
+    
+    try {
+      // Dodaj pozycję jako partię (LOT)
+      await addItemToStocktaking(id, {
+        batchId: selectedBatch.id,
+        countedQuantity: Number(countedQuantity),
+        notes
+      }, currentUser.uid);
       
-      if (!selectedBatch) {
-        showError('Wybierz partię (LOT) produktu');
-        return;
-      }
+      showSuccess('Partia została dodana do inwentaryzacji');
+      setAddItemDialogOpen(false);
       
-      if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
-        showError('Podaj prawidłową ilość policzoną');
-        return;
-      }
+      // Reset form
+      setSelectedCategory('');
+      setSelectedItem(null);
+      setSelectedBatch(null);
+      setBatches([]);
+      setInventoryItems([]);
+      setCountedQuantity('');
+      setNotes('');
       
-      try {
-        // Dodaj pozycję jako partię (LOT)
-        await addItemToStocktaking(id, {
-          batchId: selectedBatch.id,
-          countedQuantity: Number(countedQuantity),
-          notes
-        }, currentUser.uid);
-        
-        showSuccess('Partia została dodana do inwentaryzacji');
-        setAddItemDialogOpen(false);
-        
-        // Reset form
-        setSelectedItem(null);
-        setSelectedBatch(null);
-        setBatches([]);
-        setCountedQuantity('');
-        setNotes('');
-        
-        // Refresh data
-        fetchStocktakingData();
-      } catch (error) {
-        console.error('Błąd podczas dodawania partii:', error);
-        showError(`Błąd podczas dodawania: ${error.message}`);
-      }
-    } else {
-      // Oryginalna logika dla pozycji magazynowych
-      if (!selectedItem) {
-        showError('Wybierz produkt z magazynu');
-        return;
-      }
+      // OPTYMALIZACJA: Wyczyść cache po dodaniu produktu
+      setCategoryCache({});
       
-      if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
-        showError('Podaj prawidłową ilość policzoną');
-        return;
-      }
-      
-      try {
-        await addItemToStocktaking(id, {
-          inventoryItemId: selectedItem.id,
-          countedQuantity: Number(countedQuantity),
-          notes
-        }, currentUser.uid);
-        
-        showSuccess('Produkt został dodany do inwentaryzacji');
-        setAddItemDialogOpen(false);
-        
-        // Reset form
-        setSelectedItem(null);
-        setCountedQuantity('');
-        setNotes('');
-        
-        // Refresh data
-        fetchStocktakingData();
-      } catch (error) {
-        console.error('Błąd podczas dodawania przedmiotu:', error);
-        showError(`Błąd podczas dodawania: ${error.message}`);
-      }
+      // Refresh data
+      fetchStocktakingData();
+    } catch (error) {
+      console.error('Błąd podczas dodawania partii:', error);
+      showError(`Błąd podczas dodawania: ${error.message}`);
     }
   };
   
@@ -796,49 +846,64 @@ const StocktakingDetailsPage = () => {
         <DialogTitle>{t('stocktaking.addProductDialog.title')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            {/* Przełącznik trybu LOT/Pozycja magazynowa */}
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={isLotMode}
-                  onChange={(e) => {
-                    setIsLotMode(e.target.checked);
-                    // Reset stanu przy zmianie trybu
-                    setSelectedBatch(null);
-                    setBatches([]);
-                  }}
-                  color="primary"
-                />
-              }
-              label={isLotMode ? t('stocktaking.addProductDialog.lotMode') : t('stocktaking.addProductDialog.itemMode')}
-              sx={{ mb: 2 }}
-            />
+            
+            {/* Selektor kategorii */}
+            <FormControl fullWidth margin="normal">
+              <InputLabel id="category-select-label">Wybierz kategorię *</InputLabel>
+              <Select
+                labelId="category-select-label"
+                value={selectedCategory}
+                onChange={(e) => handleCategorySelect(e.target.value)}
+                required
+                label="Wybierz kategorię *"
+              >
+                <MenuItem value="">
+                  <em>Wybierz kategorię</em>
+                </MenuItem>
+                {loadingCategories ? (
+                  <MenuItem disabled>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 1 }}>
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      <Typography>Ładowanie kategorii...</Typography>
+                    </Box>
+                  </MenuItem>
+                ) : (
+                  categories.map((category) => (
+                    <MenuItem key={category} value={category}>
+                      {category}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </FormControl>
             
             <Autocomplete
               options={inventoryItems}
               getOptionLabel={(option) => `${option.name} (${option.quantity} ${option.unit})`}
               value={selectedItem}
               onChange={(event, newValue) => handleItemSelect(newValue)}
+              disabled={!selectedCategory}
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label={t('stocktaking.addProductDialog.selectProduct')}
+                  label={selectedCategory ? t('stocktaking.addProductDialog.selectProduct') : 'Najpierw wybierz kategorię'}
                   fullWidth
                   required
                   margin="normal"
+                  disabled={!selectedCategory}
                 />
               )}
             />
             
-            {/* Pole wyboru partii, widoczne tylko dla trybu LOT */}
-            {isLotMode && selectedItem && (
+            {/* Pole wyboru partii (tryb LOT zawsze włączony) */}
+            {selectedItem && (
               <FormControl fullWidth margin="normal">
                 <InputLabel id="batch-select-label">Wybierz partię (LOT)</InputLabel>
                 <Select
                   labelId="batch-select-label"
                   value={selectedBatch || ''}
                   onChange={(e) => setSelectedBatch(e.target.value)}
-                  displayEmpty
+
                   required
                   renderValue={(selected) => {
                     if (!selected) return <em>Wybierz partię</em>;
@@ -880,7 +945,7 @@ const StocktakingDetailsPage = () => {
             )}
             
             {/* Wyświetl informację o cenie jednostkowej dla wybranej partii */}
-            {isLotMode && selectedBatch && selectedBatch.unitPrice > 0 && (
+            {selectedBatch && selectedBatch.unitPrice > 0 && (
               <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
                 {t('stocktaking.addProductDialog.batchUnitPrice', { price: selectedBatch.unitPrice.toFixed(2) })}
               </Alert>
@@ -898,7 +963,7 @@ const StocktakingDetailsPage = () => {
             />
             
             {/* Wyświetl różnicę i jej wartość pieniężną, jeśli wybrano partię */}
-            {isLotMode && selectedBatch && countedQuantity !== '' && !isNaN(countedQuantity) && (
+            {selectedBatch && countedQuantity !== '' && !isNaN(countedQuantity) && (
               <Alert 
                 severity={Number(countedQuantity) === selectedBatch.quantity ? "success" : Number(countedQuantity) > selectedBatch.quantity ? "info" : "warning"}
                 sx={{ mt: 1, mb: 1 }}

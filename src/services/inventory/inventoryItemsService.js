@@ -814,3 +814,268 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
   }
 };
 
+/**
+ * Pobiera unikalne kategorie produktów z magazynu
+ * @param {string} warehouseId - ID magazynu (opcjonalne)
+ * @returns {Promise<Array<string>>} Lista unikalnych kategorii
+ */
+export const getInventoryCategories = async (warehouseId = null) => {
+  try {
+    console.log('🏷️ getInventoryCategories - rozpoczynam pobieranie kategorii');
+    
+    // Walidacja ID magazynu jeśli podano
+    if (warehouseId) {
+      validateId(warehouseId, 'warehouseId');
+    }
+
+    const itemsRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY);
+    const q = query(itemsRef);
+    
+    // Pobierz wszystkie dokumenty
+    const allItemsSnapshot = await getDocs(q);
+    const categories = new Set();
+    
+    allItemsSnapshot.docs.forEach(doc => {
+      const item = doc.data();
+      
+      // Filtruj po magazynie jeśli podano
+      if (warehouseId && item.warehouseId !== warehouseId) {
+        return;
+      }
+      
+      // Dodaj kategorię do zbioru (jeśli istnieje)
+      if (item.category && item.category.trim() !== '') {
+        categories.add(item.category.trim());
+      }
+    });
+    
+    // Konwertuj Set na Array i posortuj alfabetycznie
+    const categoriesArray = Array.from(categories).sort();
+    
+    console.log('🏷️ getInventoryCategories - znaleziono kategorie:', categoriesArray.length);
+    return categoriesArray;
+    
+  } catch (error) {
+    console.error('Błąd podczas pobierania kategorii produktów:', error);
+    // W przypadku błędu zwróć podstawowe kategorie z constants
+    return ['Surowce', 'Opakowania zbiorcze', 'Opakowania jednostkowe', 'Gotowe produkty', 'Inne'];
+  }
+};
+
+/**
+ * Pobiera produkty z magazynu filtrując bezpośrednio po kategorii w Firebase
+ * OPTYMALIZACJA: Zamiast pobierać wszystkie produkty i filtrować po stronie klienta,
+ * to zapytanie filtruje na poziomie bazy danych, co znacznie poprawia wydajność
+ * 
+ * @param {string} category - Kategoria produktów do pobrania
+ * @param {string} warehouseId - ID magazynu (opcjonalne)
+ * @param {number} page - Numer strony (opcjonalne)
+ * @param {number} pageSize - Rozmiar strony (opcjonalne)
+ * @param {string} searchTerm - Termin wyszukiwania (opcjonalne)
+ * @param {string} sortField - Pole sortowania (opcjonalne)
+ * @param {string} sortOrder - Kierunek sortowania (opcjonalne)
+ * @returns {Promise<Array|Object>} Lista produktów z wybranej kategorii
+ */
+export const getInventoryItemsByCategory = async (
+  category,
+  warehouseId = null,
+  page = null,
+  pageSize = null,
+  searchTerm = null,
+  sortField = null,
+  sortOrder = null
+) => {
+  try {
+    console.log('🔍 getInventoryItemsByCategory - rozpoczynam optymalne pobieranie dla kategorii:', category);
+    
+    // Walidacja kategorii
+    if (!category || category.trim() === '') {
+      throw new ValidationError('Kategoria jest wymagana');
+    }
+    
+    // Walidacja parametrów paginacji
+    if (page !== null || pageSize !== null) {
+      validatePaginationParams({ page, pageSize });
+    }
+
+    // Walidacja ID magazynu jeśli podano
+    if (warehouseId) {
+      validateId(warehouseId, 'warehouseId');
+    }
+
+    const itemsRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY);
+    
+    // OPTYMALIZACJA: Filtrowanie po kategorii bezpośrednio w Firebase
+    let q = query(
+      itemsRef,
+      where('category', '==', category.trim())
+    );
+    
+    // Dodaj filtr magazynu jeśli podano
+    if (warehouseId) {
+      q = query(q, where('warehouseId', '==', warehouseId));
+    }
+    
+    // Pobierz dokumenty z Firebase
+    const categoryItemsSnapshot = await getDocs(q);
+    let categoryItems = categoryItemsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log('🔍 getInventoryItemsByCategory - pobrano z Firebase dla kategorii', category + ':', categoryItems.length, 'pozycji');
+    
+    // Filtruj po terminie wyszukiwania (nazwa, opis, numer CAS) - już po zoptymalizowanym zbiorze
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchTermLower = searchTerm.toLowerCase().trim();
+      categoryItems = categoryItems.filter(item => 
+        (item.name && item.name.toLowerCase().includes(searchTermLower)) ||
+        (item.description && item.description.toLowerCase().includes(searchTermLower)) ||
+        (item.casNumber && item.casNumber.toLowerCase().includes(searchTermLower))
+      );
+      console.log('🔍 getInventoryItemsByCategory - po filtrowaniu wyszukiwania:', categoryItems.length, 'pozycji');
+    }
+    
+    // Pobierz partie z bazy danych do obliczenia rzeczywistych ilości
+    const batchesRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY_BATCHES);
+    const batchesCache = {};
+    
+    // Pobierz partie dla wszystkich produktów z kategorii (już zoptymalizowany zbiór)
+    const itemIds = categoryItems.map(item => item.id);
+    console.log('🔍 getInventoryItemsByCategory - pobieranie partii dla', itemIds.length, 'produktów');
+    
+    // Grupuj zapytania o partie w batche po 10 (limit Firebase 'in')
+    const batchSize = 10;
+    const itemIdBatches = [];
+    for (let i = 0; i < itemIds.length; i += batchSize) {
+      itemIdBatches.push(itemIds.slice(i, i + batchSize));
+    }
+    
+    // Pobierz wszystkie partie w równoległych zapytaniach
+    const batchPromises = itemIdBatches.map(async (idBatch) => {
+      if (idBatch.length === 0) return [];
+      
+      const batchQuery = query(
+        batchesRef, 
+        where('inventoryItemId', 'in', idBatch)
+      );
+      const batchSnapshot = await getDocs(batchQuery);
+      return batchSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    });
+    
+    const allBatches = (await Promise.all(batchPromises)).flat();
+    
+    // Organizuj partie w cache według inventoryItemId
+    allBatches.forEach(batch => {
+      if (!batchesCache[batch.inventoryItemId]) {
+        batchesCache[batch.inventoryItemId] = [];
+      }
+      batchesCache[batch.inventoryItemId].push(batch);
+    });
+    
+    console.log('🔍 getInventoryItemsByCategory - pobrano', allBatches.length, 'partii dla kategorii', category);
+    
+    // Przelicz rzeczywiste ilości dla każdego produktu z kategorii
+    const enrichedItems = categoryItems.map(item => {
+      const itemBatches = batchesCache[item.id] || [];
+      
+      // Oblicz rzeczywistą ilość z partii
+      const realQuantity = itemBatches.reduce((total, batch) => {
+        return total + (parseFloat(batch.quantity) || 0);
+      }, 0);
+      
+      // Pobierz najniższą cenę jednostkową z partii
+      const batchPrices = itemBatches
+        .map(batch => parseFloat(batch.unitPrice) || 0)
+        .filter(price => price > 0);
+      const lowestUnitPrice = batchPrices.length > 0 ? Math.min(...batchPrices) : (parseFloat(item.unitPrice) || 0);
+      
+      return {
+        ...item,
+        quantity: realQuantity,
+        unitPrice: lowestUnitPrice,
+        batchCount: itemBatches.length,
+        batches: itemBatches // Dodajemy partie dla ewentualnego użycia
+      };
+    });
+    
+    // Określ pole do sortowania
+    const fieldToSort = SORT_FIELD_MAPPING[sortField] || 'name';
+    const direction = sortOrder === 'desc' ? 'desc' : 'asc';
+    
+    // Sortowanie po stronie klienta (już na zoptymalizowanym zbiorze)
+    enrichedItems.sort((a, b) => {
+      let aVal = a[fieldToSort];
+      let bVal = b[fieldToSort];
+      
+      // Obsługa różnych typów danych
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (typeof aVal === 'undefined') aVal = '';
+      if (typeof bVal === 'undefined') bVal = '';
+      
+      if (direction === 'desc') {
+        return bVal > aVal ? 1 : bVal < aVal ? -1 : 0;
+      } else {
+        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+      }
+    });
+    
+    console.log('🔍 getInventoryItemsByCategory - posortowano według:', fieldToSort, direction);
+    
+    // Oblicz statystyki
+    const totalCount = enrichedItems.length;
+    const totalValue = enrichedItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    
+    // Paginacja (jeśli wymagana)
+    let paginatedItems = enrichedItems;
+    let totalPages = 1;
+    
+    if (page && pageSize) {
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      paginatedItems = enrichedItems.slice(startIndex, endIndex);
+      totalPages = Math.ceil(totalCount / pageSize);
+      
+      console.log('🔍 getInventoryItemsByCategory - paginacja:', {
+        page,
+        pageSize,
+        totalPages,
+        totalCount,
+        returnedCount: paginatedItems.length
+      });
+    }
+    
+    // Zwróć wynik w formacie zgodnym z getAllInventoryItems
+    const result = {
+      items: paginatedItems,
+      totalCount,
+      totalPages,
+      currentPage: page || 1,
+      totalValue,
+      category,
+      hasNextPage: page ? page < totalPages : false,
+      hasPrevPage: page ? page > 1 : false
+    };
+    
+    console.log('🔍 getInventoryItemsByCategory - wynik końcowy dla kategorii', category + ':', {
+      itemsCount: paginatedItems.length,
+      totalCount,
+      totalValue: totalValue.toFixed(2),
+      batchesLoaded: allBatches.length
+    });
+    
+    return result;
+    
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas pobierania produktów z kategorii:', error);
+    throw new Error(`Nie udało się pobrać produktów z kategorii ${category}: ${error.message}`);
+  }
+};
+

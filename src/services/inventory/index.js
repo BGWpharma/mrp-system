@@ -79,7 +79,7 @@ export {
 export * from './warehouseService.js';
 
 // 📋 ETAP 3: Zarządzanie pozycjami magazynowymi  
-// Funkcje: getAllInventoryItems, createInventoryItem, updateInventoryItem, getInventoryItemById, getIngredientPrices
+// Funkcje: getAllInventoryItems, createInventoryItem, updateInventoryItem, getInventoryItemById, getIngredientPrices, getInventoryCategories, getInventoryItemsByCategory
 export * from './inventoryItemsService.js';
 
 // 🏷️ ETAP 4: Zarządzanie partiami (LOT)
