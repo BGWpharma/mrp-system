@@ -298,8 +298,35 @@ export const cancelBooking = async (itemId, quantity, taskId, userId) => {
         userId: validatedUserId
       }),
       
-      // Zaktualizuj status wszystkich rezerwacji dla tego zadania
-      updateReservationStatus(originalBookingSnapshot)
+      // Sprawdź, czy zadanie zostało usunięte, jeśli tak - usuń rezerwacje fizycznie
+      (async () => {
+        try {
+          const taskRef = FirebaseQueryBuilder.getDocRef('productionTasks', validatedTaskId);
+          const taskDoc = await getDoc(taskRef);
+          
+          if (!taskDoc.exists()) {
+            // Zadanie zostało usunięte - usuń rezerwacje fizycznie
+            if (originalBookingSnapshot.docs.length > 0) {
+              const batch = writeBatch(db);
+              
+              originalBookingSnapshot.forEach((bookingDoc) => {
+                const reservationDocRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, bookingDoc.id);
+                batch.delete(reservationDocRef);
+              });
+              
+              await batch.commit();
+              console.log(`Fizycznie usunięto ${originalBookingSnapshot.docs.length} rezerwacji dla usuniętego zadania ${validatedTaskId}`);
+            }
+          } else {
+            // Zadanie istnieje - tylko zaktualizuj status
+            await updateReservationStatus(originalBookingSnapshot);
+          }
+        } catch (error) {
+          console.error(`Błąd podczas sprawdzania statusu zadania ${validatedTaskId}:`, error);
+          // W przypadku błędu, wykonaj standardowe oznaczenie jako completed
+          await updateReservationStatus(originalBookingSnapshot);
+        }
+      })()
     ]);
     
     // Emituj zdarzenie o zmianie stanu magazynu
@@ -576,15 +603,10 @@ export const cleanupTaskReservations = async (taskId, itemIds = null) => {
           });
         }
         
-        // Oznacz rezerwacje jako anulowane
+        // Usuń rezerwacje fizycznie (tak jak w starej implementacji)
         itemReservations.forEach(reservation => {
           const reservationRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_TRANSACTIONS, reservation.id);
-          batch.update(reservationRef, {
-            status: RESERVATION_STATUS.CANCELLED,
-            cancelledAt: serverTimestamp(),
-            cancelledBy: 'system-cleanup',
-            cancelReason: 'Zadanie zostało usunięte'
-          });
+          batch.delete(reservationRef);
           cleanedCount++;
         });
         
