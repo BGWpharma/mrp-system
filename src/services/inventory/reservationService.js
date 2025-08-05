@@ -106,6 +106,16 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
       }
       throw error;
     }
+
+    // 🔄 SYNCHRONIZACJA BOOKEDQUANTITY - zapewnienie spójności danych przed rezerwacją
+    console.log('🔄 [SYNC] Synchronizacja bookedQuantity przed procesem rezerwacji...');
+    try {
+      item = await synchronizeBookedQuantity(item, validatedUserId);
+      console.log('✅ [SYNC] Synchronizacja zakończona, bookedQuantity:', item.bookedQuantity);
+    } catch (error) {
+      console.warn('⚠️ [SYNC] Błąd synchronizacji - kontynuuję bez synchronizacji:', error.message);
+      // Nie przerywamy procesu rezerwacji jeśli synchronizacja się nie powiodła
+    }
     
     // Pobierz partie dla tego materiału i oblicz dostępną ilość
     console.log('🔍 [REFACTOR] Pobieranie partii...');
@@ -386,7 +396,16 @@ export const updateReservation = async (reservationId, itemId, newQuantity, newB
     
     // Pobierz aktualny stan produktu
     const { getInventoryItemById } = await import('./inventoryItemsService');
-    const item = await getInventoryItemById(validatedItemId);
+    let item = await getInventoryItemById(validatedItemId);
+    
+    // 🔄 SYNCHRONIZACJA BOOKEDQUANTITY przed aktualizacją rezerwacji
+    console.log('🔄 [SYNC] Synchronizacja bookedQuantity przed aktualizacją rezerwacji...');
+    try {
+      item = await synchronizeBookedQuantity(item, validatedUserId);
+      console.log('✅ [SYNC] Synchronizacja przed aktualizacją zakończona, bookedQuantity:', item.bookedQuantity);
+    } catch (error) {
+      console.warn('⚠️ [SYNC] Błąd synchronizacji przed aktualizacją - kontynuuję bez synchronizacji:', error.message);
+    }
     
     // Jeśli nowa ilość jest 0 lub ujemna, usuń rezerwację
     if (validatedQuantity <= 0) {
@@ -1758,5 +1777,387 @@ export const cleanupDeletedTaskReservations = async () => {
   } catch (error) {
     console.error('Błąd podczas czyszczenia rezerwacji:', error);
     throw new Error(`Błąd podczas czyszczenia rezerwacji: ${error.message}`);
+  }
+};
+
+/**
+ * Synchronizuje bookedQuantity z rzeczywistymi rezerwacjami z partii
+ * @param {Object} item - Pozycja magazynowa
+ * @param {string} userId - ID użytkownika dla logowania (opcjonalnie)
+ * @returns {Promise<Object>} - Pozycja z zaktualizowanym bookedQuantity
+ * @throws {Error} - W przypadku krytycznego błędu (nie blokuje procesu rezerwacji)
+ */
+export const synchronizeBookedQuantity = async (item, userId = 'system-sync') => {
+  try {
+    console.log(`🔄 [SYNC] Rozpoczynam synchronizację bookedQuantity dla ${item.name} (ID: ${item.id})...`);
+    
+    // 1. Pobierz wszystkie partie dla pozycji
+    const { getItemBatches } = await import('./batchService');
+    const allBatches = await getItemBatches(item.id);
+    
+    if (!allBatches || allBatches.length === 0) {
+      console.log(`ℹ️ [SYNC] Brak partii dla pozycji ${item.name} - bookedQuantity powinno być 0`);
+      
+      // Jeśli brak partii, a bookedQuantity > 0, to wyzeruj
+      if (item.bookedQuantity > 0) {
+        console.warn(`⚠️ [SYNC] Znaleziono bookedQuantity=${item.bookedQuantity} dla pozycji bez partii - zerowanie`);
+        
+        const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY, item.id);
+        await updateDoc(itemRef, {
+          bookedQuantity: 0,
+          lastSynchronized: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+        
+        item.bookedQuantity = 0;
+        console.log(`✅ [SYNC] Wyzerowano bookedQuantity dla pozycji bez partii`);
+      }
+      
+      return item;
+    }
+    
+    // 2. Pobierz wszystkie aktywne rezerwacje dla wszystkich partii
+    const { getReservationsForMultipleBatches } = await import('./batchService');
+    const batchIds = allBatches.map(batch => batch.id);
+    const batchReservationsMap = await getReservationsForMultipleBatches(batchIds);
+    
+    // 3. Oblicz rzeczywistą sumę rezerwacji
+    let actualBookedQuantity = 0;
+    let reservationCount = 0;
+    
+    Object.entries(batchReservationsMap).forEach(([batchId, reservations]) => {
+      if (reservations && reservations.length > 0) {
+        reservations.forEach(reservation => {
+          // Uwzględnij tylko aktywne rezerwacje (nie anulowane i nie completed)
+          if (!reservation.status || reservation.status === 'active' || reservation.status === 'pending') {
+            actualBookedQuantity += parseFloat(reservation.quantity || 0);
+            reservationCount++;
+          }
+        });
+      }
+    });
+    
+    // 4. Formatuj z precyzją
+    actualBookedQuantity = formatQuantityPrecision(actualBookedQuantity, 3);
+    const currentBookedQuantity = formatQuantityPrecision(item.bookedQuantity || 0, 3);
+    
+    // 5. Sprawdź czy są rozbieżności (z tolerancją na błędy zaokrąglenia)
+    const discrepancy = Math.abs(actualBookedQuantity - currentBookedQuantity);
+    const tolerance = 0.001; // 0.001 jednostki tolerancji
+    
+    if (discrepancy > tolerance) {
+      console.warn(`⚠️ [SYNC] ROZBIEŻNOŚĆ w bookedQuantity dla ${item.name}:
+        📊 Zapisane w pozycji: ${currentBookedQuantity} ${item.unit}
+        🔍 Rzeczywiste z rezerwacji: ${actualBookedQuantity} ${item.unit}
+        📈 Różnica: ${formatQuantityPrecision(discrepancy, 3)} ${item.unit}
+        📋 Liczba aktywnych rezerwacji: ${reservationCount}
+        🗂️ Partie z rezerwacjami: ${Object.keys(batchReservationsMap).length}`);
+      
+      // 6. Aktualizuj pozycję magazynową
+      const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY, item.id);
+      await updateDoc(itemRef, {
+        bookedQuantity: actualBookedQuantity,
+        lastSynchronized: serverTimestamp(),
+        synchronizationDiscrepancy: discrepancy,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        syncMetadata: {
+          oldValue: currentBookedQuantity,
+          newValue: actualBookedQuantity,
+          reservationCount,
+          batchCount: Object.keys(batchReservationsMap).length,
+          syncReason: 'automatic-synchronization'
+        }
+      });
+      
+      console.log(`✅ [SYNC] Zsynchronizowano bookedQuantity: ${currentBookedQuantity} → ${actualBookedQuantity} ${item.unit}`);
+      
+      // Zaktualizuj lokalny obiekt
+      item.bookedQuantity = actualBookedQuantity;
+      
+      // Dodatkowe logowanie dla większych rozbieżności
+      if (discrepancy > 1.0) {
+        console.error(`🚨 [SYNC] DUŻA ROZBIEŻNOŚĆ (${discrepancy} ${item.unit}) dla pozycji ${item.name}! Wymaga analizy.`);
+      }
+      
+    } else {
+      console.log(`✅ [SYNC] bookedQuantity jest zgodne (${currentBookedQuantity} ${item.unit}, ${reservationCount} rezerwacji)`);
+      
+      // Zaktualizuj timestamp ostatniej synchronizacji nawet jeśli nie było rozbieżności
+      const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY, item.id);
+      await updateDoc(itemRef, {
+        lastSynchronized: serverTimestamp(),
+        updatedBy: userId
+      });
+    }
+    
+    return item;
+    
+  } catch (error) {
+    console.error(`❌ [SYNC] Błąd podczas synchronizacji bookedQuantity dla ${item.name}:`, error);
+    
+    // W przypadku błędu nie blokuj procesu rezerwacji - zwróć oryginalną pozycję
+    // ale zaloguj problem do dalszej analizy
+    console.warn(`⚠️ [SYNC] Kontynuuję bez synchronizacji dla pozycji ${item.name} ze względu na błąd`);
+    
+    return item;
+  }
+};
+
+/**
+ * Synchronizuje bookedQuantity dla wszystkich pozycji magazynowych w systemie
+ * Funkcja użyteczna dla administratorów do naprawienia rozbieżności w całym systemie
+ * @param {string} userId - ID użytkownika wykonującego synchronizację
+ * @param {number} batchSize - Rozmiar batch'a do przetwarzania (domyślnie 50)
+ * @returns {Promise<Object>} - Statystyki synchronizacji
+ * @throws {Error} - W przypadku krytycznego błędu
+ */
+export const synchronizeAllBookedQuantities = async (userId = 'system-sync', batchSize = 50) => {
+  console.log('🚀 [SYNC-ALL] Rozpoczynam synchronizację bookedQuantity dla wszystkich pozycji...');
+  
+  const stats = {
+    totalItems: 0,
+    synchronized: 0,
+    discrepancies: 0,
+    errors: 0,
+    totalDiscrepancyValue: 0,
+    largestDiscrepancy: 0,
+    startTime: new Date(),
+    endTime: null,
+    processedBatches: 0,
+    errorDetails: []
+  };
+  
+  try {
+    // 1. Pobierz wszystkie pozycje magazynowe w batch'ach
+    const { getAllInventoryItems } = await import('./inventoryItemsService');
+    
+    let hasMore = true;
+    let page = 1;
+    
+    while (hasMore) {
+      console.log(`📦 [SYNC-ALL] Przetwarzanie batch'a ${page} (rozmiar: ${batchSize})...`);
+      
+      const itemsResponse = await getAllInventoryItems(
+        null, // warehouseId - wszystkie magazyny
+        page,
+        batchSize
+      );
+      
+      const items = itemsResponse.items || [];
+      stats.totalItems += items.length;
+      stats.processedBatches++;
+      
+      if (items.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      // 2. Synchronizuj każdą pozycję w tym batch'u
+      for (const item of items) {
+        try {
+          console.log(`🔄 [SYNC-ALL] Synchronizacja pozycji: ${item.name} (${stats.totalItems - items.length + items.indexOf(item) + 1}/${stats.totalItems})`);
+          
+          const originalBookedQuantity = item.bookedQuantity || 0;
+          const synchronizedItem = await synchronizeBookedQuantity(item, userId);
+          
+          stats.synchronized++;
+          
+          // Sprawdź czy była rozbieżność
+          const newBookedQuantity = synchronizedItem.bookedQuantity || 0;
+          const discrepancy = Math.abs(newBookedQuantity - originalBookedQuantity);
+          
+          if (discrepancy > 0.001) {
+            stats.discrepancies++;
+            stats.totalDiscrepancyValue += discrepancy;
+            
+            if (discrepancy > stats.largestDiscrepancy) {
+              stats.largestDiscrepancy = discrepancy;
+            }
+            
+            console.log(`📊 [SYNC-ALL] Rozbieżność w ${item.name}: ${originalBookedQuantity} → ${newBookedQuantity} (różnica: ${discrepancy})`);
+          }
+          
+        } catch (error) {
+          stats.errors++;
+          stats.errorDetails.push({
+            itemId: item.id,
+            itemName: item.name,
+            error: error.message
+          });
+          
+          console.error(`❌ [SYNC-ALL] Błąd synchronizacji pozycji ${item.name}:`, error);
+        }
+      }
+      
+      // 3. Sprawdź czy są kolejne strony
+      if (items.length < batchSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+      
+      // Krótka pauza między batch'ami żeby nie przeciążać systemu
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    stats.endTime = new Date();
+    const durationMs = stats.endTime - stats.startTime;
+    const durationMin = Math.round(durationMs / 60000 * 100) / 100;
+    
+    console.log(`✅ [SYNC-ALL] Synchronizacja zakończona!
+      📊 Statystyki:
+      - Łącznie pozycji: ${stats.totalItems}
+      - Zsynchronizowano: ${stats.synchronized}
+      - Znalezione rozbieżności: ${stats.discrepancies}
+      - Błędy: ${stats.errors}
+      - Łączna wartość rozbieżności: ${stats.totalDiscrepancyValue.toFixed(3)}
+      - Największa rozbieżność: ${stats.largestDiscrepancy.toFixed(3)}
+      - Czas wykonania: ${durationMin} min
+      - Przetworzone batch'e: ${stats.processedBatches}`);
+    
+    return {
+      success: true,
+      message: `Zsynchronizowano ${stats.synchronized} pozycji. Znaleziono ${stats.discrepancies} rozbieżności.`,
+      stats
+    };
+    
+  } catch (error) {
+    stats.endTime = new Date();
+    console.error('❌ [SYNC-ALL] Błąd podczas synchronizacji wszystkich pozycji:', error);
+    
+    return {
+      success: false,
+      message: `Błąd podczas synchronizacji: ${error.message}`,
+      stats
+    };
+  }
+};
+
+/**
+ * Sprawdza stan synchronizacji bookedQuantity dla pozycji magazynowej bez wprowadzania zmian
+ * @param {string} itemId - ID pozycji magazynowej
+ * @returns {Promise<Object>} - Raport stanu synchronizacji
+ * @throws {ValidationError} - Gdy ID jest nieprawidłowe
+ * @throws {Error} - W przypadku błędu podczas operacji
+ */
+export const checkBookedQuantitySync = async (itemId) => {
+  try {
+    // Walidacja ID
+    const validatedItemId = validateId(itemId, 'itemId');
+    
+    console.log(`🔍 [CHECK-SYNC] Sprawdzanie synchronizacji bookedQuantity dla pozycji ${validatedItemId}...`);
+    
+    // 1. Pobierz pozycję magazynową
+    const { getInventoryItemById } = await import('./inventoryItemsService');
+    const item = await getInventoryItemById(validatedItemId);
+    
+    // 2. Pobierz wszystkie partie dla pozycji
+    const { getItemBatches } = await import('./batchService');
+    const allBatches = await getItemBatches(validatedItemId);
+    
+    if (!allBatches || allBatches.length === 0) {
+      return {
+        itemId: validatedItemId,
+        itemName: item.name,
+        synchronized: item.bookedQuantity === 0,
+        storedBookedQuantity: item.bookedQuantity || 0,
+        actualBookedQuantity: 0,
+        discrepancy: Math.abs((item.bookedQuantity || 0) - 0),
+        reservationCount: 0,
+        batchCount: 0,
+        batches: [],
+        reservations: [],
+        lastSynchronized: item.lastSynchronized || null,
+        recommendation: item.bookedQuantity === 0 ? 'OK' : 'SYNC_NEEDED'
+      };
+    }
+    
+    // 3. Pobierz wszystkie aktywne rezerwacje dla wszystkich partii
+    const { getReservationsForMultipleBatches } = await import('./batchService');
+    const batchIds = allBatches.map(batch => batch.id);
+    const batchReservationsMap = await getReservationsForMultipleBatches(batchIds);
+    
+    // 4. Oblicz rzeczywistą sumę rezerwacji
+    let actualBookedQuantity = 0;
+    let reservationCount = 0;
+    const allReservations = [];
+    
+    Object.entries(batchReservationsMap).forEach(([batchId, reservations]) => {
+      if (reservations && reservations.length > 0) {
+        reservations.forEach(reservation => {
+          // Uwzględnij tylko aktywne rezerwacje
+          if (!reservation.status || reservation.status === 'active' || reservation.status === 'pending') {
+            actualBookedQuantity += parseFloat(reservation.quantity || 0);
+            reservationCount++;
+            allReservations.push({
+              ...reservation,
+              batchId
+            });
+          }
+        });
+      }
+    });
+    
+    // 5. Formatuj z precyzją
+    actualBookedQuantity = formatQuantityPrecision(actualBookedQuantity, 3);
+    const storedBookedQuantity = formatQuantityPrecision(item.bookedQuantity || 0, 3);
+    
+    // 6. Oblicz rozbieżność
+    const discrepancy = Math.abs(actualBookedQuantity - storedBookedQuantity);
+    const tolerance = 0.001;
+    const synchronized = discrepancy <= tolerance;
+    
+    let recommendation = 'OK';
+    if (!synchronized) {
+      if (discrepancy > 1.0) {
+        recommendation = 'URGENT_SYNC_NEEDED';
+      } else {
+        recommendation = 'SYNC_RECOMMENDED';
+      }
+    }
+    
+    const result = {
+      itemId: validatedItemId,
+      itemName: item.name,
+      unit: item.unit,
+      synchronized,
+      storedBookedQuantity,
+      actualBookedQuantity,
+      discrepancy: formatQuantityPrecision(discrepancy, 3),
+      reservationCount,
+      batchCount: allBatches.length,
+      batches: allBatches.map(batch => ({
+        id: batch.id,
+        batchNumber: batch.batchNumber || batch.lotNumber,
+        quantity: batch.quantity,
+        warehouseId: batch.warehouseId
+      })),
+      reservations: allReservations.map(res => ({
+        id: res.id,
+        taskId: res.referenceId || res.taskId,
+        batchId: res.batchId,
+        quantity: res.quantity,
+        status: res.status || 'active',
+        createdAt: res.createdAt
+      })),
+      lastSynchronized: item.lastSynchronized || null,
+      recommendation,
+      message: synchronized 
+        ? `Dane są zsynchronizowane (${storedBookedQuantity} ${item.unit})`
+        : `Rozbieżność: zapisane ${storedBookedQuantity} vs rzeczywiste ${actualBookedQuantity} ${item.unit}`
+    };
+    
+    console.log(`📊 [CHECK-SYNC] Wynik sprawdzenia dla ${item.name}: ${synchronized ? 'ZSYNCHRONIZOWANE' : 'ROZBIEŻNOŚĆ'} (${discrepancy} ${item.unit})`);
+    
+    return result;
+    
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error(`❌ [CHECK-SYNC] Błąd podczas sprawdzania synchronizacji dla pozycji ${itemId}:`, error);
+    throw new Error(`Nie udało się sprawdzić synchronizacji: ${error.message}`);
   }
 };

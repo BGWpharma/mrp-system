@@ -198,7 +198,24 @@ export * from './utils/debugHelpers.js';
  * const bestPrice = await getBestSupplierPriceForItem('item123', 50);
  * ```
  * 
- * 6. ANALITYKA I RAPORTY:
+ * 6. SYNCHRONIZACJA BOOKEDQUANTITY:
+ * ```javascript
+ * import { synchronizeBookedQuantity, checkBookedQuantitySync, synchronizeAllBookedQuantities } from '@/services/inventory';
+ * 
+ * // Sprawdź stan synchronizacji dla pozycji
+ * const syncStatus = await checkBookedQuantitySync('item123');
+ * console.log(syncStatus.synchronized ? 'OK' : 'Wymaga synchronizacji');
+ * 
+ * // Synchronizuj pojedynczą pozycję
+ * const item = await getInventoryItemById('item123');
+ * const syncedItem = await synchronizeBookedQuantity(item, userId);
+ * 
+ * // Synchronizuj wszystkie pozycje (dla administratorów)
+ * const syncResult = await synchronizeAllBookedQuantities(userId);
+ * console.log(`Zsynchronizowano ${syncResult.stats.synchronized} pozycji`);
+ * ```
+ * 
+ * 7. ANALITYKA I RAPORTY:
  * ```javascript
  * import { getTransactionStatistics, exportTransactionsToCSV } from '@/services/inventory';
  * 
