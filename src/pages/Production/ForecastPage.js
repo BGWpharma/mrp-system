@@ -70,6 +70,7 @@ import { formatDateTime } from '../../utils/formatters';
 import { getExchangeRate } from '../../services/exchangeRateService';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { toast } from 'react-hot-toast';
+import { preciseMultiply } from '../../utils/mathUtils';
 
 // CACHE dla stabilnych danych - dodane dla optymalizacji
 const dataCache = {
@@ -267,7 +268,7 @@ const ForecastPage = () => {
           const materialQuantityPerUnit = correctMaterialQuantity(material, taskQuantity);
           
           // Oblicz całkowitą potrzebną ilość
-          const requiredQuantity = materialQuantityPerUnit * taskQuantity;
+          const requiredQuantity = preciseMultiply(materialQuantityPerUnit, taskQuantity);
           
           // Dodaj lub zaktualizuj materiał w wymaganiach
           if (!materialRequirements[materialId]) {

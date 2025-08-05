@@ -152,6 +152,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial } from '../../utils/productionUtils';
+import { preciseMultiply } from '../../utils/mathUtils';
 
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
@@ -666,7 +667,7 @@ const TaskDetailsPage = () => {
           
           return {
             ...updatedMaterial,
-            plannedQuantity: (updatedMaterial.quantity || 0) * (fetchedTask.quantity || 1)
+            plannedQuantity: preciseMultiply(updatedMaterial.quantity || 0, fetchedTask.quantity || 1)
           };
         });
         
@@ -1181,7 +1182,7 @@ const TaskDetailsPage = () => {
       if (updatedTask?.materials?.length > 0) {
         const materialsList = updatedTask.materials.map(material => ({
           ...material,
-          plannedQuantity: (material.quantity || 0) * (updatedTask.quantity || 1)
+          plannedQuantity: preciseMultiply(material.quantity || 0, updatedTask.quantity || 1)
         }));
         
         setMaterials(materialsList);

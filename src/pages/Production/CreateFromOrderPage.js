@@ -49,6 +49,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { getAllWorkstations } from '../../services/workstationService';
+import { preciseMultiply } from '../../utils/mathUtils';
 
 const CreateFromOrderPage = () => {
   const navigate = useNavigate();
@@ -283,7 +284,7 @@ const CreateFromOrderPage = () => {
     const materials = recipe.ingredients.map(ingredient => ({
       id: ingredient.id || ingredient.inventoryItemId,
       name: ingredient.name,
-      quantity: parseFloat((ingredient.quantity * scaleFactor).toFixed(10)),
+      quantity: preciseMultiply(ingredient.quantity, scaleFactor),
       unit: ingredient.unit,
       inventoryItemId: ingredient.inventoryItemId || ingredient.id || null,
       notes: `Z receptury: ${recipe.name}`

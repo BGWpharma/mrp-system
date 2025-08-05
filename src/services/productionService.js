@@ -22,6 +22,7 @@ import {
   import { db } from './firebase/config';
   import { format } from 'date-fns';
   import { generateMONumber, generateLOTNumber } from '../utils/numberGenerators';
+  import { preciseMultiply } from '../utils/mathUtils';
   import { 
     getInventoryItemByName, 
     getInventoryItemById,
@@ -1814,7 +1815,7 @@ import {
             materialQuantity = materialQuantity / taskQuantity;
           }
           
-          const requiredQuantity = materialQuantity * taskQuantity;
+          const requiredQuantity = preciseMultiply(materialQuantity, taskQuantity);
           
           // Dodaj lub zaktualizuj materiał w wymaganiach
           if (!materialRequirements[materialId]) {

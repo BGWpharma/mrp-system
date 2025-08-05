@@ -61,6 +61,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
 import { generateLOTNumber } from '../../utils/numberGenerators';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends } from '../../utils/dateUtils';
+import { preciseMultiply } from '../../utils/mathUtils';
 
 const TaskForm = ({ taskId }) => {
   const [loading, setLoading] = useState(!!taskId);
@@ -622,7 +623,7 @@ const TaskForm = ({ taskId }) => {
           id: ingredient.inventoryItemId || ingredient.id,
           name: ingredient.name,
           category: ingredient.category || 'Surowce',
-          quantity: (ingredient.quantity || 0) * taskQuantity,
+          quantity: preciseMultiply(ingredient.quantity || 0, taskQuantity),
           unit: ingredient.unit || 'szt.',
           inventoryItemId: ingredient.inventoryItemId || ingredient.id
         }));
@@ -722,7 +723,7 @@ const TaskForm = ({ taskId }) => {
           id: ingredient.id,
           name: ingredient.name,
           category: ingredient.category || 'Surowce',
-          quantity: (ingredient.quantity || 0) * taskQuantity,
+          quantity: preciseMultiply(ingredient.quantity || 0, taskQuantity),
           unit: ingredient.unit || 'szt.'
         }));
         
@@ -959,7 +960,7 @@ const TaskForm = ({ taskId }) => {
           if (recipeIngredient) {
             return {
               ...material,
-              quantity: (recipeIngredient.quantity || 0) * newQuantity
+              quantity: preciseMultiply(recipeIngredient.quantity || 0, newQuantity)
             };
           }
           return material;
@@ -1051,7 +1052,7 @@ const TaskForm = ({ taskId }) => {
         id: ingredient.id,
         name: ingredient.name,
         category: ingredient.category || 'Surowce',
-        quantity: (ingredient.quantity || 0) * newQuantity,
+        quantity: preciseMultiply(ingredient.quantity || 0, newQuantity),
         unit: ingredient.unit || 'szt.',
         inventoryItemId: ingredient.inventoryItemId || ingredient.id
       }));
