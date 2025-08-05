@@ -3561,12 +3561,17 @@ import {
       const checklistItems = [];
       
       mixingPlan.forEach(mixing => {
+        // Oblicz sumę składników (tylko dla składników z jednostką 'kg')
+        const totalIngredientsWeight = mixing.ingredients
+          .filter(ingredient => ingredient.unit === 'kg' && ingredient.name && !ingredient.name.includes('PACK'))
+          .reduce((sum, ingredient) => sum + parseFloat(ingredient.quantity || 0), 0);
+        
         // Dodaj nagłówek mieszania
         const headerItem = {
           id: `mixing-${mixing.mixingNumber}`,
           type: 'header',
           text: `Mieszanie nr ${mixing.mixingNumber}`,
-          details: `Objętość: ${mixing.volumeToMix.toFixed(4)} kg${mixing.piecesCount ? `, Liczba sztuk: ${mixing.piecesCount}` : ''}`,
+          details: `Suma składników: ${totalIngredientsWeight.toFixed(4)} kg${mixing.piecesCount ? `, Liczba sztuk: ${mixing.piecesCount}` : ''}`,
           completed: false,
           createdAt: new Date().toISOString(),
           createdBy: userId
