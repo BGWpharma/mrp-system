@@ -879,7 +879,7 @@ const StocktakingDetailsPage = () => {
             
             <Autocomplete
               options={inventoryItems}
-              getOptionLabel={(option) => `${option.name} (${option.quantity} ${option.unit})`}
+              getOptionLabel={(option) => option.name}
               value={selectedItem}
               onChange={(event, newValue) => handleItemSelect(newValue)}
               disabled={!selectedCategory}

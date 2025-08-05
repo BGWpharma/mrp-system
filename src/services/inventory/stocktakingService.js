@@ -1440,36 +1440,111 @@ const generateStocktakingPDFReport = async (stocktaking, items) => {
       .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
   };
   
-  // Nagłówek
-  doc.setFontSize(18);
-  doc.text(fixPolishChars('Raport inwentaryzacji'), 14, 20);
+  // Kolorowy nagłówek z tłem
+  doc.setFillColor(41, 128, 185); // Niebieski
+  doc.rect(10, 10, 277, 25, 'F'); // Prostokąt z wypełnieniem
   
-  doc.setFontSize(12);
-  doc.text(fixPolishChars(`Nazwa: ${stocktaking.name}`), 14, 30);
-  doc.text(fixPolishChars(`Status: ${stocktaking.status}`), 14, 38);
-  doc.text(fixPolishChars(`Lokalizacja: ${stocktaking.location || 'Wszystkie lokalizacje'}`), 14, 46);
+  doc.setTextColor(255, 255, 255); // Biały tekst
+  doc.setFontSize(22);
+  doc.text(fixPolishChars('RAPORT INWENTARYZACJI'), 148.5, 25, { align: 'center' });
   
-  // Data wygenerowania
+  // Resetuj kolor tekstu
+  doc.setTextColor(0, 0, 0);
+  
+  // Sekcja informacji podstawowych z ramką
+  doc.setDrawColor(41, 128, 185);
+  doc.setLineWidth(0.5);
+  doc.rect(10, 40, 135, 35); // Lewa ramka
+  doc.rect(152, 40, 135, 35); // Prawa ramka
+  
+  // Lewa kolumna - informacje o inwentaryzacji
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text(fixPolishChars('Informacje o inwentaryzacji:'), 15, 50);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(10);
+  doc.text(fixPolishChars(`Nazwa: ${stocktaking.name}`), 15, 58);
+  doc.text(fixPolishChars(`Status: ${stocktaking.status}`), 15, 65);
+  doc.text(fixPolishChars(`Lokalizacja: ${stocktaking.location || 'Wszystkie lokalizacje'}`), 15, 72);
+  
+  // Prawa kolumna - data i czas
   const currentDate = new Date();
   const formattedDate = formatDateToLocal(currentDate);
-  doc.text(fixPolishChars(`Wygenerowano: ${formattedDate}`), 14, 54);
+  doc.setFont(undefined, 'bold');
+  doc.text(fixPolishChars('Data i czas:'), 157, 50);
+  doc.setFont(undefined, 'normal');
+  doc.text(fixPolishChars(`Wygenerowano: ${formattedDate}`), 157, 58);
+  doc.text(fixPolishChars(`Godzina: ${currentDate.toLocaleTimeString('pl-PL')}`), 157, 65);
   
-  // Statystyki
+  // Sekcja podsumowania z atrakcyjnym layoutem
+  doc.setFillColor(52, 152, 219); // Jasnoniebieski
+  doc.rect(10, 85, 277, 12, 'F');
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
-  doc.text(fixPolishChars('Podsumowanie'), 14, 68);
+  doc.setFont(undefined, 'bold');
+  doc.text(fixPolishChars('PODSUMOWANIE INWENTARYZACJI'), 148.5, 93, { align: 'center' });
   
+  // Resetuj kolory
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(undefined, 'normal');
+  
+  // Ramka dla statystyk
+  doc.setFillColor(247, 249, 252); // Bardzo jasny szary
+  doc.rect(10, 105, 277, 35, 'F');
+  doc.setDrawColor(52, 152, 219);
+  doc.rect(10, 105, 277, 35);
+  
+  // Statystyki w trzech kolumnach
   doc.setFontSize(10);
-  doc.text(fixPolishChars(`Liczba pozycji: ${stats.totalItems}`), 14, 78);
-  doc.text(fixPolishChars(`Pozycje zgodne: ${stats.itemsAccurate}`), 14, 85);
-  doc.text(fixPolishChars(`Pozycje z roznicami: ${stats.itemsWithDiscrepancy}`), 14, 92);
-  doc.text(fixPolishChars(`Nadwyzki: ${stats.positiveDiscrepanciesCount}`), 14, 99);
-  doc.text(fixPolishChars(`Braki: ${stats.negativeDiscrepanciesCount}`), 14, 106);
-  doc.text(fixPolishChars(`Wartosc roznic: ${stats.totalValue} PLN`), 14, 113);
+  
+  // Kolumna 1 - Ogólne
+  doc.setFont(undefined, 'bold');
+  doc.text(fixPolishChars('Ogolne:'), 20, 115);
+  doc.setFont(undefined, 'normal');
+  doc.text(fixPolishChars(`Liczba pozycji: ${stats.totalItems}`), 20, 122);
+  doc.text(fixPolishChars(`Pozycje zgodne: ${stats.itemsAccurate}`), 20, 129);
+  
+  // Kolumna 2 - Różnice
+  doc.setFont(undefined, 'bold');
+  doc.text(fixPolishChars('Roznice:'), 110, 115);
+  doc.setFont(undefined, 'normal');
+  doc.text(fixPolishChars(`Z roznicami: ${stats.itemsWithDiscrepancy}`), 110, 122);
+  doc.setTextColor(46, 125, 50); // Zielony dla nadwyżek
+  doc.text(fixPolishChars(`Nadwyzki: ${stats.positiveDiscrepanciesCount}`), 110, 129);
+  doc.setTextColor(211, 47, 47); // Czerwony dla braków
+  doc.text(fixPolishChars(`Braki: ${stats.negativeDiscrepanciesCount}`), 110, 136);
+  
+  // Kolumna 3 - Wartość
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(undefined, 'bold');
+  doc.text(fixPolishChars('Wartosc finansowa:'), 200, 115);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  const totalValueColor = stats.totalValue >= 0 ? [46, 125, 50] : [211, 47, 47];
+  doc.setTextColor(...totalValueColor);
+  doc.text(fixPolishChars(`${stats.totalValue >= 0 ? '+' : ''}${stats.totalValue.toFixed(2)} PLN`), 200, 125);
+  
+  // Resetuj kolory przed tabelą
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(undefined, 'normal');
   
   // Przygotuj dane tabeli - tylko pozycje z różnicami
   const discrepancyItems = items.filter(item => Math.abs(item.discrepancy || 0) > 0.001);
   
   if (discrepancyItems.length > 0) {
+    // Nagłówek tabeli
+    doc.setFillColor(41, 128, 185);
+    doc.rect(10, 150, 277, 10, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(fixPolishChars('SZCZEGOLY POZYCJI Z ROZNICAMI'), 148.5, 157, { align: 'center' });
+    
+    // Resetuj kolory
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    
     // Import dynamiczny jspdf-autotable
     const autoTable = (await import('jspdf-autotable')).default;
     
@@ -1485,29 +1560,84 @@ const generateStocktakingPDFReport = async (stocktaking, items) => {
     
     autoTable(doc, {
       head: [[
-        fixPolishChars('Nazwa'),
+        fixPolishChars('Nazwa produktu'),
         fixPolishChars('Kategoria'),
-        fixPolishChars('Jednostka'),
-        fixPolishChars('Stan systemowy'),
-        fixPolishChars('Stan liczony'),
+        fixPolishChars('Jedn.'),
+        fixPolishChars('Stan syst.'),
+        fixPolishChars('Stan licz.'),
         fixPolishChars('Roznica'),
-        fixPolishChars('Wartosc rozn.')
+        fixPolishChars('Wart. rozn.')
       ]],
       body: tableData,
-      startY: 125,
-      styles: { fontSize: 8 },
+      startY: 165,
+      theme: 'striped',
+      headStyles: { 
+        fillColor: [41, 128, 185],
+        textColor: [255, 255, 255],
+        fontSize: 9,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [33, 37, 41]
+      },
+      alternateRowStyles: { 
+        fillColor: [248, 249, 250] 
+      },
       columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 20 },
+        0: { cellWidth: 45, halign: 'left' },
+        1: { cellWidth: 30, halign: 'center' },
+        2: { cellWidth: 15, halign: 'center' },
         3: { cellWidth: 25, halign: 'right' },
         4: { cellWidth: 25, halign: 'right' },
-        5: { cellWidth: 25, halign: 'right' },
-        6: { cellWidth: 25, halign: 'right' }
-      }
+        5: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+        6: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+      },
+      didParseCell: function(data) {
+        // Kolorowanie komórek z różnicami
+        if (data.column.index === 5 || data.column.index === 6) { // Kolumny różnic i wartości
+          const cellValue = parseFloat(data.cell.text[0]);
+          if (cellValue > 0) {
+            data.cell.styles.textColor = [46, 125, 50]; // Zielony dla nadwyżek
+          } else if (cellValue < 0) {
+            data.cell.styles.textColor = [211, 47, 47]; // Czerwony dla braków
+          }
+        }
+      },
+      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      tableLineWidth: 0.1,
+      tableLineColor: [189, 195, 199]
     });
   } else {
-    doc.text(fixPolishChars('Brak pozycji z roznicami'), 14, 125);
+    // Komunikat o braku różnic
+    doc.setFillColor(229, 245, 224); // Jasny zielony
+    doc.rect(10, 150, 277, 20, 'F');
+    doc.setDrawColor(46, 125, 50);
+    doc.rect(10, 150, 277, 20);
+    doc.setTextColor(46, 125, 50);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(fixPolishChars('Gratulacje! Brak pozycji z roznicami'), 148.5, 162, { align: 'center' });
+  }
+  
+  // Dodaj stopkę na każdej stronie
+  const pageCount = doc.internal.getNumberOfPages();
+  for(let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    
+    // Linia separacyjna
+    doc.setDrawColor(189, 195, 199);
+    doc.setLineWidth(0.5);
+    doc.line(10, 200, 287, 200);
+    
+    // Stopka
+    doc.setFontSize(8);
+    doc.setTextColor(108, 117, 125);
+    doc.setFont(undefined, 'normal');
+    doc.text(fixPolishChars('System MRP - Raport Inwentaryzacji'), 15, 207);
+    doc.text(fixPolishChars(`Strona ${i} z ${pageCount}`), 260, 207);
+    doc.text(fixPolishChars(`Wygenerowano: ${new Date().toLocaleString('pl-PL')}`), 15, 212);
   }
   
   return {

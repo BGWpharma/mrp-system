@@ -202,11 +202,15 @@ const StocktakingReportPage = () => {
   
   const handleExportPDF = async () => {
     try {
-      const reportBlob = await generateStocktakingReport(id);
+      const reportData = await generateStocktakingReport(id);
+      // Nowa funkcja zwraca obiekt z właściwością content (blob)
+      const reportBlob = reportData.content;
+      const fileName = reportData.filename || `inwentaryzacja_${id}_raport.pdf`;
+      
       const url = URL.createObjectURL(reportBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `inwentaryzacja_${id}_raport.pdf`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
