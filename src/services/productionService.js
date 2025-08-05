@@ -3229,6 +3229,9 @@ import {
       const sessionData = sessionDoc.data();
       const taskId = sessionData.taskId;
       const sessionIndex = sessionData.sessionIndex;
+      const originalQuantity = sessionData.quantity || 0;
+      const newQuantity = updateData.quantity || 0;
+      const quantityDifference = newQuantity - originalQuantity;
       
       // Pobierz dane zadania
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -3244,6 +3247,73 @@ import {
       // Sprawdź czy sesja istnieje w tablicy sesji zadania
       if (!productionSessions[sessionIndex]) {
         throw new Error('Sesja produkcyjna nie została znaleziona w zadaniu');
+      }
+      
+      // Jeśli zadanie ma powiązaną partię, zaktualizuj jej ilość
+      if (task.inventoryBatchId && Math.abs(quantityDifference) > 0.001) {
+        try {
+          console.log(`Aktualizacja partii ${task.inventoryBatchId} o ${quantityDifference} z powodu korekty historii produkcji`);
+          
+          // Aktualizuj ilość w partii używając Firebase increment
+          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
+          await updateDoc(batchRef, {
+            quantity: increment(quantityDifference),
+            initialQuantity: increment(quantityDifference),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            // Dodaj informacje o korekcie z historii produkcji
+            lastHistoryCorrection: {
+              sessionId: sessionId,
+              originalQuantity: originalQuantity,
+              newQuantity: newQuantity,
+              quantityDifference: quantityDifference,
+              correctedAt: serverTimestamp(),
+              correctedBy: userId
+            }
+          });
+          
+          // Pobierz aktualne dane partii dla dodania transakcji
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            const batchData = batchDoc.data();
+            
+            // Dodaj transakcję magazynową dokumentującą korektę
+            const transactionRef = doc(collection(db, 'inventoryTransactions'));
+            const transactionType = quantityDifference > 0 ? 'production-correction-add' : 'production-correction-remove';
+            
+            await setDoc(transactionRef, {
+              itemId: batchData.itemId,
+              itemName: batchData.itemName,
+              type: transactionType,
+              quantity: Math.abs(quantityDifference),
+              date: serverTimestamp(),
+              reason: 'Korekta z historii produkcji',
+              reference: `Zadanie: ${task.name || taskId} - Sesja #${sessionIndex + 1}`,
+              notes: `Korekta ilości partii z powodu zmiany w historii produkcji z ${originalQuantity} na ${newQuantity}`,
+              batchId: task.inventoryBatchId,
+              batchNumber: batchData.batchNumber || batchData.lotNumber || 'Bez numeru',
+              sessionId: sessionId,
+              taskId: taskId,
+              createdBy: userId,
+              createdAt: serverTimestamp()
+            });
+            
+            // Przelicz całkowitą ilość pozycji magazynowej
+            try {
+              const { recalculateItemQuantity } = await import('./inventory');
+              await recalculateItemQuantity(batchData.itemId);
+            } catch (recalcError) {
+              console.error('Błąd podczas przeliczania ilości pozycji magazynowej:', recalcError);
+              // Nie przerywaj operacji - aktualizacja historii jest ważniejsza
+            }
+            
+            console.log(`Partia ${task.inventoryBatchId} została zaktualizowana o ${quantityDifference}`);
+          }
+        } catch (batchError) {
+          console.error('Błąd podczas aktualizacji partii z historii produkcji:', batchError);
+          // Nie przerywaj aktualizacji historii, ale zaloguj błąd
+          console.warn('Aktualizacja historii produkcji zostanie kontynuowana mimo błędu partii');
+        }
       }
       
       // Aktualizuj dane w dokumencie productionHistory
@@ -3278,7 +3348,9 @@ import {
       
       return {
         success: true,
-        message: 'Sesja produkcyjna została zaktualizowana'
+        message: 'Sesja produkcyjna została zaktualizowana' + 
+          (Math.abs(quantityDifference) > 0.001 && task.inventoryBatchId ? 
+            ` (partia zaktualizowana o ${quantityDifference > 0 ? '+' : ''}${quantityDifference})` : '')
       };
     } catch (error) {
       console.error('Błąd podczas aktualizacji sesji produkcyjnej:', error);
@@ -3287,7 +3359,7 @@ import {
   };
 
   // Funkcja do ręcznego dodawania sesji produkcyjnej
-  export const addProductionSession = async (taskId, sessionData) => {
+  export const addProductionSession = async (taskId, sessionData, skipBatchUpdate = false) => {
     try {
       // Pobierz dane zadania
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -3299,6 +3371,72 @@ import {
       
       const task = taskDoc.data();
       const productionSessions = [...(task.productionSessions || [])];
+      const addedQuantity = parseFloat(sessionData.quantity) || 0;
+      
+      // Jeśli zadanie ma powiązaną partię i nie pomijamy aktualizacji partii, zaktualizuj jej ilość
+      if (task.inventoryBatchId && addedQuantity > 0 && !skipBatchUpdate) {
+        try {
+          console.log(`Aktualizacja partii ${task.inventoryBatchId} o +${addedQuantity} z powodu dodania nowej sesji produkcyjnej`);
+          
+          // Aktualizuj ilość w partii używając Firebase increment
+          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
+          await updateDoc(batchRef, {
+            quantity: increment(addedQuantity),
+            initialQuantity: increment(addedQuantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: sessionData.userId,
+            // Dodaj informacje o dodaniu z nowej sesji produkcyjnej
+            lastSessionAddition: {
+              sessionIndex: productionSessions.length,
+              addedQuantity: addedQuantity,
+              addedAt: serverTimestamp(),
+              addedBy: sessionData.userId
+            }
+          });
+          
+          // Pobierz aktualne dane partii dla dodania transakcji
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            const batchData = batchDoc.data();
+            
+            // Dodaj transakcję magazynową dokumentującą dodanie z nowej sesji
+            const transactionRef = doc(collection(db, 'inventoryTransactions'));
+            
+            await setDoc(transactionRef, {
+              itemId: batchData.itemId,
+              itemName: batchData.itemName,
+              type: 'production-session-add',
+              quantity: addedQuantity,
+              date: serverTimestamp(),
+              reason: 'Dodanie nowej sesji produkcyjnej',
+              reference: `Zadanie: ${task.name || taskId} - Nowa sesja #${productionSessions.length + 1}`,
+              notes: `Dodanie ilości partii z powodu utworzenia nowej sesji produkcyjnej o ilości ${addedQuantity}`,
+              batchId: task.inventoryBatchId,
+              batchNumber: batchData.batchNumber || batchData.lotNumber || 'Bez numeru',
+              taskId: taskId,
+              createdBy: sessionData.userId,
+              createdAt: serverTimestamp()
+            });
+            
+            // Przelicz całkowitą ilość pozycji magazynowej
+            try {
+              const { recalculateItemQuantity } = await import('./inventory');
+              await recalculateItemQuantity(batchData.itemId);
+            } catch (recalcError) {
+              console.error('Błąd podczas przeliczania ilości pozycji magazynowej:', recalcError);
+              // Nie przerywaj operacji - dodanie sesji jest ważniejsze
+            }
+            
+            console.log(`Partia ${task.inventoryBatchId} została zaktualizowana o +${addedQuantity}`);
+          }
+        } catch (batchError) {
+          console.error('Błąd podczas aktualizacji partii przy dodawaniu sesji:', batchError);
+          // Nie przerywaj dodawania sesji, ale zaloguj błąd
+          console.warn('Dodanie sesji produkcyjnej zostanie kontynuowane mimo błędu partii');
+        }
+      } else if (skipBatchUpdate) {
+        console.log(`Pomijam aktualizację partii dla sesji - zostanie zaktualizowana przez addTaskProductToInventory`);
+      }
       
       // Dodaj nową sesję produkcyjną
       const newSession = {
@@ -3344,7 +3482,8 @@ import {
       // Zwróć dane
       return {
         success: true,
-        message: 'Sesja produkcyjna została dodana',
+        message: 'Sesja produkcyjna została dodana' + 
+          (addedQuantity > 0 && task.inventoryBatchId ? ` (partia zaktualizowana o +${addedQuantity})` : ''),
         sessionId
       };
     } catch (error) {
@@ -3791,6 +3930,7 @@ import {
       const sessionData = sessionDoc.data();
       const taskId = sessionData.taskId;
       const sessionIndex = sessionData.sessionIndex;
+      const deletedQuantity = sessionData.quantity || 0;
       
       // Pobierz dane zadania
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
@@ -3801,6 +3941,71 @@ import {
       }
       
       const task = taskDoc.data();
+      
+      // Jeśli zadanie ma powiązaną partię, zaktualizuj jej ilość przy usuwaniu sesji
+      if (task.inventoryBatchId && deletedQuantity > 0) {
+        try {
+          console.log(`Aktualizacja partii ${task.inventoryBatchId} o -${deletedQuantity} z powodu usunięcia sesji produkcyjnej`);
+          
+          // Aktualizuj ilość w partii używając Firebase increment (ujemna wartość)
+          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
+          await updateDoc(batchRef, {
+            quantity: increment(-deletedQuantity),
+            initialQuantity: increment(-deletedQuantity),
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+            // Dodaj informacje o usunięciu sesji produkcyjnej
+            lastSessionDeletion: {
+              sessionId: sessionId,
+              sessionIndex: sessionIndex,
+              deletedQuantity: deletedQuantity,
+              deletedAt: serverTimestamp(),
+              deletedBy: userId
+            }
+          });
+          
+          // Pobierz aktualne dane partii dla dodania transakcji
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            const batchData = batchDoc.data();
+            
+            // Dodaj transakcję magazynową dokumentującą usunięcie sesji
+            const transactionRef = doc(collection(db, 'inventoryTransactions'));
+            
+            await setDoc(transactionRef, {
+              itemId: batchData.itemId,
+              itemName: batchData.itemName,
+              type: 'production-session-remove',
+              quantity: deletedQuantity,
+              date: serverTimestamp(),
+              reason: 'Usunięcie sesji produkcyjnej',
+              reference: `Zadanie: ${task.name || taskId} - Usunięto sesję #${sessionIndex + 1}`,
+              notes: `Zmniejszenie ilości partii z powodu usunięcia sesji produkcyjnej o ilości ${deletedQuantity}`,
+              batchId: task.inventoryBatchId,
+              batchNumber: batchData.batchNumber || batchData.lotNumber || 'Bez numeru',
+              sessionId: sessionId,
+              taskId: taskId,
+              createdBy: userId,
+              createdAt: serverTimestamp()
+            });
+            
+            // Przelicz całkowitą ilość pozycji magazynowej
+            try {
+              const { recalculateItemQuantity } = await import('./inventory');
+              await recalculateItemQuantity(batchData.itemId);
+            } catch (recalcError) {
+              console.error('Błąd podczas przeliczania ilości pozycji magazynowej:', recalcError);
+              // Nie przerywaj operacji - usunięcie sesji jest ważniejsze
+            }
+            
+            console.log(`Partia ${task.inventoryBatchId} została zaktualizowana o -${deletedQuantity}`);
+          }
+        } catch (batchError) {
+          console.error('Błąd podczas aktualizacji partii przy usuwaniu sesji:', batchError);
+          // Nie przerywaj usuwania sesji, ale zaloguj błąd
+          console.warn('Usunięcie sesji produkcyjnej zostanie kontynuowane mimo błędu partii');
+        }
+      }
       
       // Upewnij się, że tablica sesji istnieje
       const productionSessions = [...(task.productionSessions || [])];
@@ -3854,7 +4059,8 @@ import {
       
       return {
         success: true,
-        message: 'Sesja produkcyjna została usunięta'
+        message: 'Sesja produkcyjna została usunięta' + 
+          (deletedQuantity > 0 && task.inventoryBatchId ? ` (partia zaktualizowana o -${deletedQuantity})` : '')
       };
     } catch (error) {
       console.error('Błąd podczas usuwania sesji produkcyjnej:', error);

@@ -3310,7 +3310,9 @@ const TaskDetailsPage = () => {
       };
       
       // Wywołaj funkcję dodającą nową sesję produkcyjną
-      await addProductionSession(task.id, sessionData);
+      // Jeśli użytkownik zaznaczył opcję dodania do magazynu, pomiń automatyczną aktualizację partii
+      // aby uniknąć podwójnego dodawania ilości
+      await addProductionSession(task.id, sessionData, addToInventoryOnHistory);
       
       // Jeśli użytkownik wybrał opcję dodania do magazynu, dodaj produkt do magazynu
       if (addToInventoryOnHistory) {
