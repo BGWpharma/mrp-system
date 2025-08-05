@@ -2179,8 +2179,8 @@ import {
           const existingBatchIndex = materialBatches[itemId].findIndex(b => b.batchId === batchId);
           
           if (existingBatchIndex >= 0) {
-            // Aktualizuj istniejącą partię, dodając nową ilość
-            materialBatches[itemId][existingBatchIndex].quantity += quantity;
+            // Aktualizuj istniejącą partię, zastępując ilość nową wartością
+            materialBatches[itemId][existingBatchIndex].quantity = quantity;
           } else {
             // Dodaj nową partię do listy
             materialBatches[itemId].push(...reservedBatches);

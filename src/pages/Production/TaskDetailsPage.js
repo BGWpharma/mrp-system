@@ -823,15 +823,21 @@ const TaskDetailsPage = () => {
 
   // Funkcja do obliczania czy materiał ma wystarczające pokrycie rezerwacji
   const calculateMaterialReservationCoverage = (material, materialId) => {
-    // 1. Wymagana ilość (bazowa ilość materiału)
-    const requiredQuantity = materialQuantities[material.id] || material.quantity || 0;
+    // 1. Wymagana ilość - użyj rzeczywistej ilości jeśli dostępna, w przeciwnym razie planowaną
+    const actualUsage = task.actualMaterialUsage || {};
+    const requiredQuantity = (actualUsage[materialId] !== undefined) 
+      ? parseFloat(actualUsage[materialId]) || 0
+      : (materialQuantities[material.id] || material.quantity || 0);
     
     // 2. Skonsumowana ilość
     const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
     
     // 3. Standardowe rezerwacje magazynowe
     const reservedBatches = task.materialBatches && task.materialBatches[materialId];
-    const standardReservationsTotal = reservedBatches ? reservedBatches.reduce((sum, batch) => sum + (batch.quantity || 0), 0) : 0;
+    const standardReservationsTotal = reservedBatches ? reservedBatches.reduce((sum, batch) => {
+      const batchQuantity = parseFloat(batch.quantity || 0);
+      return sum + batchQuantity;
+    }, 0) : 0;
     
     // 4. Rezerwacje z PO (tylko aktywne) - WYŁĄCZONE z wyliczeń kolorowania
     const allPOReservations = getPOReservationsForMaterial(materialId);
@@ -853,17 +859,42 @@ const TaskDetailsPage = () => {
       }, 0);
     
     // 5. Całkowite pokrycie = skonsumowana ilość + standardowe rezerwacje (BEZ rezerwacji PO)
-    const totalCoverage = consumedQuantity + standardReservationsTotal;
+    // Formatuj wszystkie wartości z precyzją 3 miejsc po przecinku
+    const formatPrecision = (value) => Math.round(value * 1000) / 1000;
+    
+    const formattedRequiredQuantity = formatPrecision(requiredQuantity);
+    const formattedConsumedQuantity = formatPrecision(consumedQuantity);
+    const formattedStandardReservationsTotal = formatPrecision(standardReservationsTotal);
+    const totalCoverage = formatPrecision(formattedConsumedQuantity + formattedStandardReservationsTotal);
     
     // 6. Sprawdź czy pokrycie jest wystarczające
+    // Używamy tolerancji dla porównania liczb zmiennoprzecinkowych (0.001 = 1g dla kg)
+    const tolerance = 0.001;
+    const hasFullCoverage = (totalCoverage + tolerance) >= formattedRequiredQuantity;
+    
+    // Debug logging dla problemów z pokryciem
+    if (Math.abs(totalCoverage - formattedRequiredQuantity) < 0.1 && !hasFullCoverage) {
+      console.log(`[DEBUG COVERAGE] Materiał ${materialId}:`, {
+        originalRequiredQuantity: requiredQuantity,
+        formattedRequiredQuantity,
+        originalTotalCoverage: formattedConsumedQuantity + formattedStandardReservationsTotal,
+        formattedTotalCoverage: totalCoverage,
+        consumedQuantity: formattedConsumedQuantity,
+        standardReservationsTotal: formattedStandardReservationsTotal,
+        difference: totalCoverage - formattedRequiredQuantity,
+        hasFullCoverage,
+        tolerance
+      });
+    }
+    
     return {
-      requiredQuantity,
-      consumedQuantity,
-      standardReservationsTotal,
+      requiredQuantity: formattedRequiredQuantity,
+      consumedQuantity: formattedConsumedQuantity,
+      standardReservationsTotal: formattedStandardReservationsTotal,
       activePOReservationsTotal,
       totalCoverage,
-      hasFullCoverage: totalCoverage >= requiredQuantity,
-      coveragePercentage: requiredQuantity > 0 ? (totalCoverage / requiredQuantity) * 100 : 100
+      hasFullCoverage,
+      coveragePercentage: formattedRequiredQuantity > 0 ? (totalCoverage / formattedRequiredQuantity) * 100 : 100
     };
   };
 

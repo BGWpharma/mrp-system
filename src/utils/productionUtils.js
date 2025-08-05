@@ -39,6 +39,8 @@ export const getReservedQuantityForMaterial = (materialBatches, materialId) => {
 
 /**
  * Oblicza status rezerwacji materiałów dla zadania produkcyjnego
+ * Uwzględnia rzeczywiste ilości materiałów (actualMaterialUsage) jeśli są dostępne,
+ * w przeciwnym razie używa planowanych ilości (material.quantity)
  * @param {Object} task - Obiekt zadania produkcyjnego
  * @returns {Object} Obiekt ze statusem i dodatkowymi informacjami
  */
@@ -70,7 +72,12 @@ export const calculateMaterialReservationStatus = (task) => {
     const materialId = material.inventoryItemId || material.id;
     if (!materialId) return;
 
-    const requiredQuantity = material.quantity || 0;
+    // Użyj rzeczywistej ilości jeśli jest dostępna, w przeciwnym razie planowaną
+    const actualUsage = task.actualMaterialUsage || {};
+    const requiredQuantity = (actualUsage[materialId] !== undefined) 
+      ? parseFloat(actualUsage[materialId]) || 0
+      : (material.quantity || 0);
+    
     const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
     const reservedQuantity = getReservedQuantityForMaterial(task.materialBatches, materialId);
     

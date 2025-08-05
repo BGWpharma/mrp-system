@@ -191,8 +191,8 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
         const existingBatchIndex = materialBatches[validatedItemId].findIndex(b => b.batchId === batchId);
         
         if (existingBatchIndex >= 0) {
-          // Aktualizuj istniejącą partię, dodając nową ilość
-          materialBatches[validatedItemId][existingBatchIndex].quantity += validatedQuantity;
+          // Aktualizuj istniejącą partię, zastępując ilość nową wartością
+          materialBatches[validatedItemId][existingBatchIndex].quantity = validatedQuantity;
         } else {
           // Dodaj nową partię do listy
           materialBatches[validatedItemId].push(...reservationResult.reservedBatches);
