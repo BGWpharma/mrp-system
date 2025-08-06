@@ -97,11 +97,12 @@ export const getItemBatches = async (itemId, warehouseId = null) => {
  * Optymalizowane grupowe pobieranie partii dla wielu pozycji magazynowych
  * @param {Array<string>} itemIds - Lista ID pozycji magazynowych
  * @param {string|null} warehouseId - ID magazynu (opcjonalnie)
+ * @param {boolean} excludeExhausted - Czy wykluczyć partie z ilością <= 0 (domyślnie false)
  * @returns {Promise<Object>} - Mapa partii (itemId -> lista partii)
  * @throws {ValidationError} - Gdy lista ID jest nieprawidłowa
  * @throws {Error} - Gdy wystąpi błąd podczas pobierania
  */
-export const getBatchesForMultipleItems = async (itemIds, warehouseId = null) => {
+export const getBatchesForMultipleItems = async (itemIds, warehouseId = null, excludeExhausted = false) => {
   try {
     if (!itemIds || itemIds.length === 0) {
       return {};
@@ -159,7 +160,21 @@ export const getBatchesForMultipleItems = async (itemIds, warehouseId = null) =>
     }
     
     const totalBatches = Object.values(resultMap).reduce((sum, batches) => sum + batches.length, 0);
-    console.log(`✅ Optymalizacja: Pobrano ${totalBatches} partii w ${Math.ceil(validatedIds.length / batchSize)} zapytaniach zamiast ${validatedIds.length} osobnych zapytań`);
+    
+    // Opcjonalne filtrowanie wyczerpanych partii
+    if (excludeExhausted) {
+      Object.keys(resultMap).forEach(itemId => {
+        resultMap[itemId] = resultMap[itemId].filter(batch => 
+          (batch.quantity || 0) > 0
+        );
+      });
+      
+      const filteredBatches = Object.values(resultMap).reduce((sum, batches) => sum + batches.length, 0);
+      console.log(`🔍 Filtrowanie: Wykluczono ${totalBatches - filteredBatches} wyczerpanych partii, pozostało ${filteredBatches} partii`);
+    }
+    
+    const finalBatches = Object.values(resultMap).reduce((sum, batches) => sum + batches.length, 0);
+    console.log(`✅ Optymalizacja: Pobrano ${finalBatches} partii w ${Math.ceil(validatedIds.length / batchSize)} zapytaniach zamiast ${validatedIds.length} osobnych zapytań`);
     
     return resultMap;
     

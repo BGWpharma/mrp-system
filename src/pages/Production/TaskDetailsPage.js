@@ -384,6 +384,9 @@ const TaskDetailsPage = () => {
   // Stan dla głównej zakładki
   const [mainTab, setMainTab] = useState(0);
   
+  // Stan kontrolujący wyświetlanie wyczerpanych partii w dialogu rezerwacji
+  const [showExhaustedBatches, setShowExhaustedBatches] = useState(false);
+
   // ✅ Selective Data Loading - tracking załadowanych danych dla każdej zakładki
   const [loadedTabs, setLoadedTabs] = useState({
     productionPlan: false,     // Historia produkcji, plan mieszań
@@ -2145,16 +2148,29 @@ const TaskDetailsPage = () => {
           <Typography variant="subtitle1">
             Wybierz partie dla każdego materiału:
           </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<RefreshIcon />}
-            onClick={fetchBatchesForMaterialsOptimized}
-            disabled={materialBatchesLoading}
-            sx={{ minWidth: 'auto' }}
-          >
-            Odśwież partie
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={showExhaustedBatches}
+                  onChange={(e) => setShowExhaustedBatches(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Pokaż wyczerpane partie"
+              sx={{ fontSize: '0.875rem' }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<RefreshIcon />}
+              onClick={fetchBatchesForMaterialsOptimized}
+              disabled={materialBatchesLoading}
+              sx={{ minWidth: 'auto' }}
+            >
+              Odśwież partie
+            </Button>
+          </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           💡 Możesz zarezerwować mniejszą ilość niż wymagana. Niezarezerwowane materiały można uzupełnić później.
@@ -2172,6 +2188,22 @@ const TaskDetailsPage = () => {
           const requiredQuantity = getRequiredQuantityForReservation(material, materialId);
           
           let materialBatches = batches[materialId] || [];
+          
+          // NOWE: Filtruj wyczerpane partie jeśli opcja jest wyłączona
+          if (!showExhaustedBatches) {
+            materialBatches = materialBatches.filter(batch => {
+              const effectiveQuantity = batch.effectiveQuantity || 0;
+              const isReservedForTask = task.materialBatches && 
+                                       task.materialBatches[materialId] && 
+                                       task.materialBatches[materialId].some(b => b.batchId === batch.id);
+              
+              // Pokaż partię jeśli:
+              // 1. Ma dostępną ilość (effectiveQuantity > 0), LUB
+              // 2. Jest już zarezerwowana dla tego zadania
+              return effectiveQuantity > 0 || isReservedForTask;
+            });
+          }
+          
           const selectedMaterialBatches = selectedBatches[materialId] || [];
           const totalSelectedQuantity = selectedMaterialBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
           // Umożliwi rezerwację częściową - przycisk będzie aktywny nawet gdy nie wszystko jest zarezerwowane
