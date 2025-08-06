@@ -11,6 +11,7 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../services/firebase/config';
 import { updateUserData } from '../services/userService';
+import LoadingScreen from '../components/common/LoadingScreen';
 
 export const AuthContext = createContext();
 
@@ -117,7 +118,14 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? (
+        <LoadingScreen 
+          message="Inicjalizacja aplikacji..." 
+          fullScreen={true}
+        />
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 };

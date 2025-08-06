@@ -14,13 +14,13 @@ const root = createRoot(document.getElementById('root'));
 
 root.render(
   <React.StrictMode>
-    <AuthProvider>
-      <ThemeProvider>
+    <ThemeProvider>
+      <AuthProvider>
         <CssBaseline />
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
           <App />
         </LocalizationProvider>
-      </ThemeProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );
