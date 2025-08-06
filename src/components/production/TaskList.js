@@ -1,5 +1,5 @@
 // src/components/production/TaskList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Table, 
@@ -40,7 +40,10 @@ import {
   CardActions,
   Pagination,
   FormControlLabel,
-  Switch
+  Switch,
+  Fade,
+  Grow,
+  Skeleton
 } from '@mui/material';
 import { 
   Add as AddIcon, 
@@ -59,9 +62,12 @@ import {
   BuildCircle as BuildCircleIcon,
   ArrowDropDown as ArrowDropDownIcon,
   Download as DownloadIcon,
-  Sort as SortIcon
+  Sort as SortIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, updateTaskInCache, addTaskToCache, removeTaskFromCache } from '../../services/productionService';
+import { db } from '../../services/firebase/config';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { getAllWarehouses } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -77,6 +83,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
+import { useTaskListState } from '../../contexts/TaskListStateContext';
 import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from 'react-i18next';
@@ -122,10 +129,18 @@ const TaskList = () => {
     }
   };
 
+  // Użyj kontekstu stanu listy zadań
+  const { state: listState, actions: listActions } = useTaskListState();
+  
+  // Zmienne stanu z kontekstu
+  const searchTerm = listState.searchTerm;
+  const statusFilter = listState.statusFilter;
+  const page = listState.page;
+  const pageSize = listState.pageSize;
+  const tableSort = listState.tableSort;
+
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
 
   const { currentUser } = useAuth();
@@ -163,17 +178,20 @@ const TaskList = () => {
   const theme = useMuiTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Stany do obsługi paginacji
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10); 
+  // Stany dla optymalizacji
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState(null);
-
-  // Stany do obsługi sortowania
-  const [sortField, setSortField] = useState('scheduledDate');
-  const [sortOrder, setSortOrder] = useState('asc');
+  
+  // Debouncing dla wyszukiwania
+  const searchTermTimerRef = useRef(null);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  
+  // Stany dla animacji ładowania
+  const [mainTableLoading, setMainTableLoading] = useState(false);
+  const [showContent, setShowContent] = useState(false);
+  const isFirstRender = useRef(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null);
 
   // Nowe stany dla opcji dodawania do magazynu w dialogu zatrzymania produkcji
@@ -204,42 +222,153 @@ const TaskList = () => {
     }
   }, [completedQuantity, addToInventoryOnStop]);
 
-  // Obsługa debounce dla wyszukiwania
+  // Debouncing dla wyszukiwania - nowa optymalizacja
   useEffect(() => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
+    if (searchTermTimerRef.current) {
+      clearTimeout(searchTermTimerRef.current);
     }
     
-    const timeoutId = setTimeout(() => {
+    searchTermTimerRef.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 1000); // 1000ms opóźnienia (1 sekunda)
-    
-    setSearchTimeout(timeoutId);
-    
+      if (searchTerm !== debouncedSearchTerm) {
+        listActions.setPage(1); // Reset paginacji przy wyszukiwaniu
+        fetchTasksOptimized();
+      }
+    }, 1000);
+
     return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
+      if (searchTermTimerRef.current) {
+        clearTimeout(searchTermTimerRef.current);
       }
     };
   }, [searchTerm]);
 
-  // Reset strony do pierwszej przy zmianie wyszukiwania
+  // Pobierz zadania przy inicjalizacji
   useEffect(() => {
-    if (debouncedSearchTerm !== searchTerm) {
-      setPage(1);
+    fetchTasksOptimized();
+    fetchWarehouses();
+    
+    // Nasłuchiwanie na zdarzenie aktualizacji zadań
+    const handleTasksUpdate = (event) => {
+      console.log('📨 Wykryto aktualizację zadań, odświeżam dane...');
+      fetchTasksOptimized();
+    };
+    
+    window.addEventListener('tasks-updated', handleTasksUpdate);
+    
+    return () => {
+      window.removeEventListener('tasks-updated', handleTasksUpdate);
+    };
+  }, []);
+
+  // Efekt reagujący na zmianę statusFilter - reset strony i odświeżenie danych
+  useEffect(() => {
+    if (statusFilter !== undefined) {
+      listActions.setPage(1);
+      fetchTasksOptimized();
+    }
+  }, [statusFilter]);
+
+  // Obsługa zmiany strony i rozmiaru strony z inicjalizacją
+  useEffect(() => {
+    if (!isInitialized) {
+      setIsInitialized(true);
+      return;
+    }
+    fetchTasksOptimized();
+  }, [page, pageSize, isInitialized]);
+
+  // Reset strony po zmianie wyszukiwania (debounced)
+  useEffect(() => {
+    if (page !== 1) {
+      listActions.setPage(1);
+    } else {
+      fetchTasksOptimized();
     }
   }, [debouncedSearchTerm]);
 
-  // Pobierz zadania przy montowaniu komponentu i zmianie paginacji
+  // Real-time updates listener - nasłuchuje zmian w zadaniach produkcyjnych
   useEffect(() => {
-    fetchTasks();
-    fetchWarehouses();
-  }, [page, limit, debouncedSearchTerm, statusFilter, sortField, sortOrder]);
+    console.log('🔄 Inicjalizacja real-time listener dla zadań produkcyjnych');
+    
+    const unsubscribe = onSnapshot(
+      collection(db, 'productionTasks'),
+      (snapshot) => {
+        console.log('📡 Otrzymano real-time aktualizację zadań:', snapshot.docChanges().length, 'zmian');
+        
+        snapshot.docChanges().forEach((change) => {
+          const task = { id: change.doc.id, ...change.doc.data() };
+          
+          if (change.type === 'added') {
+            console.log('➕ Real-time: Dodano nowe zadanie:', task.id);
+            // Dodaj zadanie do cache
+            const added = addTaskToCache(task);
+            if (added) {
+              // Jeśli cache jest aktualny, nie potrzebujemy odświeżać całej listy
+              // Odświeżenie nastąpi automatycznie przy następnym fetchTasksOptimized
+              console.log('✅ Zadanie dodane do cache, lista zostanie odświeżona automatycznie');
+            }
+          }
+          
+          if (change.type === 'modified') {
+            console.log('🔄 Real-time: Zmodyfikowano zadanie:', task.id);
+            // Zaktualizuj zadanie w cache
+            const updated = updateTaskInCache(task.id, task);
+            if (updated) {
+              // Aktualizuj lokalne state zadań, jeśli zadanie jest aktualnie wyświetlane
+              setTasks(prevTasks => {
+                const taskIndex = prevTasks.findIndex(t => t.id === task.id);
+                if (taskIndex !== -1) {
+                  const newTasks = [...prevTasks];
+                  newTasks[taskIndex] = task;
+                  console.log('✅ Zadanie zaktualizowane w lokalnym state');
+                  return newTasks;
+                }
+                return prevTasks;
+              });
+              
+              setFilteredTasks(prevTasks => {
+                const taskIndex = prevTasks.findIndex(t => t.id === task.id);
+                if (taskIndex !== -1) {
+                  const newTasks = [...prevTasks];
+                  newTasks[taskIndex] = task;
+                  return newTasks;
+                }
+                return prevTasks;
+              });
+            }
+          }
+          
+          if (change.type === 'removed') {
+            console.log('🗑️ Real-time: Usunięto zadanie:', task.id);
+            // Usuń zadanie z cache
+            const removed = removeTaskFromCache(task.id);
+            if (removed) {
+              // Usuń zadanie z lokalnego state
+              setTasks(prevTasks => {
+                const newTasks = prevTasks.filter(t => t.id !== task.id);
+                console.log('✅ Zadanie usunięte z lokalnego state');
+                return newTasks;
+              });
+              
+              setFilteredTasks(prevTasks => {
+                return prevTasks.filter(t => t.id !== task.id);
+              });
+            }
+          }
+        });
+      },
+      (error) => {
+        console.error('❌ Błąd real-time listener:', error);
+      }
+    );
 
-  // Filtruj zadania przy zmianie searchTerm, statusFilter lub tasks
-  useEffect(() => {
-    setFilteredTasks(tasks);
-  }, [tasks]);
+    // Cleanup function
+    return () => {
+      console.log('🔄 Zamykanie real-time listener dla zadań produkcyjnych');
+      unsubscribe();
+    };
+  }, []); // Pusty array dependency - listener działa przez cały cykl życia komponentu
 
 
 
@@ -264,62 +393,112 @@ const TaskList = () => {
     }
   };
 
-  // Obsługa zmiany filtra statusu
+  // Obsługa zmiany filtra statusu - używa kontekstu
   const handleStatusFilterChange = (event) => {
-    setStatusFilter(event.target.value);
-    setPage(1); // Reset do pierwszej strony po zmianie filtra
+    listActions.setStatusFilter(event.target.value);
   };
 
-  // Obsługa zmiany pola wyszukiwania
+  // Obsługa zmiany pola wyszukiwania - używa kontekstu
   const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-    // Reset strony zostanie obsłużony przez efekt debounce, który ustawi debouncedSearchTerm
+    listActions.setSearchTerm(event.target.value);
   };
 
-  const fetchTasks = async () => {
+  // Nowa zoptymalizowana funkcja pobierania zadań
+  const fetchTasksOptimized = async (newSortField = null, newSortOrder = null) => {
+    setMainTableLoading(true);
+    setShowContent(false);
+    
     try {
-      setLoading(true);
-      
-      // Przygotuj filtry dla zapytania
-      const filters = {};
-      if (statusFilter) {
-        filters.status = statusFilter;
-      }
-      if (debouncedSearchTerm) {
-        filters.searchTerm = debouncedSearchTerm;
+      // Wymuszenie odświeżenia cache tylko przy pierwszym renderze
+      if (isFirstRender.current) {
+        await clearProductionTasksCache();
+        isFirstRender.current = false;
       }
       
-      // Użyj nowej funkcji z paginacją
-      const result = await getTasksWithPagination(
-        page,
-        limit,
-        sortField,
-        sortOrder,
-        filters
-      );
+      // Użyj przekazanych parametrów sortowania lub tych z kontekstu
+      const sortFieldToUse = newSortField || tableSort.field;
+      const sortOrderToUse = newSortOrder || tableSort.order;
       
-      console.log("Pobrano", result.data.length, "zadań z paginacją");
-      setTasks(result.data);
-      setFilteredTasks(result.data);
-      setTotalItems(result.pagination.totalItems);
-      setTotalPages(result.pagination.totalPages);
+      // UŻYJ ZOPTYMALIZOWANEJ FUNKCJI dla lepszej wydajności
+      const result = await getProductionTasksOptimized({
+        page: page,
+        pageSize: pageSize,
+        searchTerm: debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        statusFilter: statusFilter || null,
+        sortField: sortFieldToUse,
+        sortOrder: sortOrderToUse,
+        forceRefresh: false
+      });
+      
+      // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
+      if (result && result.items) {
+        setTasks(result.items);
+        setFilteredTasks(result.items);
+        setTotalItems(result.totalCount);
+        setTotalPages(Math.ceil(result.totalCount / pageSize));
+      } else {
+        // Stara logika dla kompatybilności
+        setTasks(result);
+        setFilteredTasks(result);
+      }
+      
+      // PRZYŚPIESZONE ANIMACJE - zmniejszone opóźnienie dla lepszej responsywności
+      setTimeout(() => {
+        setShowContent(true);
+      }, 25); // Zmniejszone z 100ms do 25ms
+      
     } catch (error) {
-      showError('Błąd podczas pobierania zadań: ' + error.message);
       console.error('Error fetching tasks:', error);
+      showError('Błąd podczas pobierania zadań: ' + error.message);
     } finally {
-      setLoading(false);
+      setMainTableLoading(false);
+      setLoading(false); // Zachowaj kompatybilność ze starym loading
     }
   };
 
-  // Obsługa zmiany strony
+  // Obsługa zmiany strony - używa kontekstu
   const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+    listActions.setPage(newPage);
   };
 
-  // Obsługa zmiany liczby elementów na stronie
+  // Obsługa zmiany liczby elementów na stronie - używa kontekstu
   const handleChangeRowsPerPage = (event) => {
-    setLimit(parseInt(event.target.value, 10));
-    setPage(1); // Reset do pierwszej strony po zmianie limitu
+    listActions.setPageSize(parseInt(event.target.value, 10));
+  };
+
+  // Nowa funkcja do sortowania głównej tabeli
+  const handleTableSort = (field) => {
+    const newOrder = tableSort.field === field && tableSort.order === 'asc' ? 'desc' : 'asc';
+    const newSort = {
+      field,
+      order: newOrder
+    };
+    listActions.setTableSort(newSort);
+    
+    // Zamiast sortować lokalnie, wywołamy fetchTasksOptimized z nowymi parametrami sortowania
+    // Najpierw resetujemy paginację
+    listActions.setPage(1);
+    
+    // Następnie pobieramy dane z serwera z nowym sortowaniem
+    fetchTasksOptimized(field, newOrder);
+  };
+
+  // Funkcja do odświeżania cache i danych
+  const handleRefreshData = async () => {
+    try {
+      setMainTableLoading(true);
+      
+      // Wyczyść cache zadań produkcyjnych
+      clearProductionTasksCache();
+      
+      // Wymuszaj pobranie świeżych danych
+      await fetchTasksOptimized();
+      
+      showSuccess('Lista zadań została odświeżona');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych:', error);
+      showError('Błąd podczas odświeżania danych: ' + error.message);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -328,7 +507,7 @@ const TaskList = () => {
         await deleteTask(id);
         showSuccess('Zadanie zostało usunięte');
         // Odśwież listę zadań
-        fetchTasks();
+        fetchTasksOptimized();
       } catch (error) {
         showError('Błąd podczas usuwania zadania: ' + error.message);
         console.error('Error deleting task:', error);
@@ -376,7 +555,7 @@ const TaskList = () => {
       }
       
       // Odśwież listę zadań
-      fetchTasks();
+      fetchTasksOptimized();
     } catch (error) {
       showError('Błąd podczas zmiany statusu: ' + error.message);
       console.error('Error updating task status:', error);
@@ -417,7 +596,7 @@ const TaskList = () => {
       });
       
       // Odśwież listę zadań
-      fetchTasks();
+      fetchTasksOptimized();
     } catch (error) {
       setStartProductionError('Błąd podczas rozpoczynania produkcji: ' + error.message);
       console.error('Error starting production:', error);
@@ -476,7 +655,7 @@ const TaskList = () => {
       resetInventoryForm();
       
       // Odśwież listę zadań
-      fetchTasks();
+      fetchTasksOptimized();
     } catch (error) {
       setInventoryError('Błąd podczas dodawania produktu do magazynu: ' + error.message);
       console.error('Error adding product to inventory:', error);
@@ -653,7 +832,7 @@ const TaskList = () => {
       setStopProductionInventoryError(null);
       
       // Odśwież listę zadań
-      fetchTasks();
+      fetchTasksOptimized();
     } catch (error) {
       showError('Błąd podczas zatrzymywania produkcji: ' + error.message);
       console.error('Error stopping production:', error);
@@ -669,7 +848,7 @@ const TaskList = () => {
       showSuccess('Produkcja została wstrzymana. Możesz kontynuować później.');
       
       // Odśwież listę zadań
-      fetchTasks();
+      fetchTasksOptimized();
     } catch (error) {
       showError('Błąd podczas wstrzymywania produkcji: ' + error.message);
       console.error('Error pausing production:', error);
@@ -883,17 +1062,9 @@ const TaskList = () => {
     updateColumnPreferences('productionTasks', columnName, !visibleColumns[columnName]);
   };
 
-  // Funkcja obsługi sortowania
+  // Funkcja obsługi sortowania - używa kontekstu
   const handleSort = (field) => {
-    if (sortField === field) {
-      // Jeśli klikamy na tę samą kolumnę, zmień kierunek sortowania
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      // Jeśli klikamy na nową kolumnę, ustaw ją jako sortowaną z kierunkiem rosnącym
-      setSortField(field);
-      setSortOrder('asc');
-    }
-    setPage(1); // Reset do pierwszej strony przy zmianie sortowania
+    handleTableSort(field);
   };
 
   const handleSortMenuOpen = (event) => {
@@ -1305,6 +1476,52 @@ const TaskList = () => {
               {isMobile ? "Nowe" : "Nowe Zadanie"}
             </Button>
             
+            {/* Przycisk odświeżania - tylko na desktop jako IconButton */}
+            {!isMobile && (
+              <Tooltip title="Odśwież listę i wyczyść cache">
+                <IconButton 
+                  onClick={handleRefreshData}
+                  color="primary"
+                  size="medium"
+                  disabled={mainTableLoading}
+                  sx={{ 
+                    border: '1px solid',
+                    borderColor: 'primary.main',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                      color: 'primary.contrastText'
+                    },
+                    '&:disabled': {
+                      borderColor: 'action.disabled',
+                      color: 'action.disabled'
+                    }
+                  }}
+                >
+                  {mainTableLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
+            
+            {/* Przycisk odświeżania na mobile jako Button */}
+            {isMobile && (
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                startIcon={mainTableLoading ? <CircularProgress size={12} /> : <RefreshIcon sx={{ fontSize: '1rem' }} />}
+                onClick={handleRefreshData}
+                disabled={mainTableLoading}
+                size="small"
+                sx={{
+                  fontSize: '0.7rem',
+                  padding: '4px 8px',
+                  minHeight: '32px',
+                  flex: 1
+                }}
+              >
+                {mainTableLoading ? 'Odśw...' : 'Odśw'}
+              </Button>
+            )}
+            
             <Button 
               variant="outlined" 
               color="secondary" 
@@ -1354,22 +1571,31 @@ const TaskList = () => {
           </Box>
         </Box>
         
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress />
-          </Box>
-        ) : filteredTasks.length === 0 ? (
-          <Paper sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="body1">{t('production.taskListLabels.noTasksMessage')}</Typography>
+        {mainTableLoading ? (
+          <Paper sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Skeleton variant="rectangular" height={60} />
+              <Skeleton variant="rectangular" height={50} />
+              <Skeleton variant="rectangular" height={50} />
+              <Skeleton variant="rectangular" height={50} />
+              <Skeleton variant="rectangular" height={50} />
+            </Box>
           </Paper>
-        ) : isMobile ? (
-          // Widok mobilny - karty zamiast tabeli
-          <Box sx={{ mt: 1 }}>
-            {filteredTasks.map(renderTaskCard)}
-          </Box>
         ) : (
-          // Widok desktopowy - tabela
-          <TableContainer component={Paper}>
+          <Fade in={showContent && !mainTableLoading} timeout={300}>
+            <Box>
+              {filteredTasks.length === 0 ? (
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography variant="body1">{t('production.taskListLabels.noTasksMessage')}</Typography>
+                </Paper>
+              ) : isMobile ? (
+                // Widok mobilny - karty zamiast tabeli
+                <Box sx={{ mt: 1 }}>
+                  {filteredTasks.map(renderTaskCard)}
+                </Box>
+              ) : (
+                // Widok desktopowy - tabela
+                <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -1380,10 +1606,10 @@ const TaskList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('production.taskListColumns.taskName')}
-                        {sortField === 'moNumber' && (
+                        {tableSort.field === 'moNumber' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s',
                               ml: 0.5
                             }} 
@@ -1399,10 +1625,10 @@ const TaskList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('production.taskListColumns.product')}
-                        {sortField === 'productName' && (
+                        {tableSort.field === 'productName' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s',
                               ml: 0.5
                             }} 
@@ -1418,10 +1644,10 @@ const TaskList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('production.taskListColumns.quantityProgress')}
-                        {sortField === 'quantity' && (
+                        {tableSort.field === 'quantity' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s',
                               ml: 0.5
                             }} 
@@ -1438,10 +1664,10 @@ const TaskList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('production.taskListColumns.status')}
-                        {sortField === 'status' && (
+                        {tableSort.field === 'status' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s',
                               ml: 0.5
                             }} 
@@ -1458,10 +1684,10 @@ const TaskList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('production.taskListColumns.plannedStart')}
-                        {sortField === 'scheduledDate' && (
+                        {tableSort.field === 'scheduledDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s',
                               ml: 0.5
                             }} 
@@ -1477,10 +1703,10 @@ const TaskList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('production.taskListColumns.plannedEnd')}
-                        {sortField === 'endDate' && (
+                        {tableSort.field === 'endDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s',
                               ml: 0.5
                             }} 
@@ -1662,8 +1888,11 @@ const TaskList = () => {
                   );
                 })}
               </TableBody>
-            </Table>
-          </TableContainer>
+                </Table>
+                </TableContainer>
+              )}
+            </Box>
+          </Fade>
         )}
       </Box>
       
@@ -1676,37 +1905,37 @@ const TaskList = () => {
         <MenuItem onClick={() => handleSortChange('moNumber')}>
           <ListItemText 
             primary={t('production.taskListColumns.taskName')} 
-            secondary={sortField === 'moNumber' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
+            secondary={tableSort.field === 'moNumber' ? `(${tableSort.order === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('productName')}>
           <ListItemText 
             primary={t('production.taskListColumns.product')} 
-            secondary={sortField === 'productName' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
+            secondary={tableSort.field === 'productName' ? `(${tableSort.order === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('quantity')}>
           <ListItemText 
             primary={t('production.taskListColumns.quantityProgress')} 
-            secondary={sortField === 'quantity' ? `(${sortOrder === 'asc' ? 'rosnąco' : 'malejąco'})` : ''}
+            secondary={tableSort.field === 'quantity' ? `(${tableSort.order === 'asc' ? 'rosnąco' : 'malejąco'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('status')}>
           <ListItemText 
             primary={t('production.taskListColumns.status')} 
-            secondary={sortField === 'status' ? `(${sortOrder === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
+            secondary={tableSort.field === 'status' ? `(${tableSort.order === 'asc' ? 'A-Z' : 'Z-A'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('scheduledDate')}>
           <ListItemText 
             primary={t('production.taskListColumns.plannedStart')} 
-            secondary={sortField === 'scheduledDate' ? `(${sortOrder === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
+            secondary={tableSort.field === 'scheduledDate' ? `(${tableSort.order === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
           />
         </MenuItem>
         <MenuItem onClick={() => handleSortChange('endDate')}>
           <ListItemText 
             primary={t('production.taskListColumns.plannedEnd')} 
-            secondary={sortField === 'endDate' ? `(${sortOrder === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
+            secondary={tableSort.field === 'endDate' ? `(${tableSort.order === 'asc' ? 'najwcześniej' : 'najpóźniej'})` : ''}
           />
         </MenuItem>
       </Menu>
@@ -2119,33 +2348,36 @@ const TaskList = () => {
       </Dialog>
 
       {/* Komponent Pagination */}
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
-        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="body2" color="textSecondary">
-            Wyświetlanie {tasks.length > 0 ? (page - 1) * limit + 1 : 0} - {Math.min(page * limit, totalItems)} z {totalItems} zadań
-          </Typography>
+      {/* Komponent Pagination z nowymi optymalizacjami */}
+      <Fade in={showContent && !mainTableLoading} timeout={300}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
+          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="textSecondary">
+              Wyświetlanie {tasks.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, totalItems)} z {totalItems} zadań
+            </Typography>
+            
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>
+              <Select
+                value={pageSize}
+                onChange={handleChangeRowsPerPage}
+              >
+                <MenuItem value={5}>5</MenuItem>
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
           
-          <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>
-            <Select
-              value={limit}
-              onChange={handleChangeRowsPerPage}
-            >
-              <MenuItem value={5}>5</MenuItem>
-              <MenuItem value={10}>10</MenuItem>
-              <MenuItem value={25}>25</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-            </Select>
-          </FormControl>
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={handleChangePage}
+            shape="rounded"
+            color="primary"
+          />
         </Box>
-        
-        <Pagination
-          count={totalPages}
-          page={page}
-          onChange={handleChangePage}
-          shape="rounded"
-          color="primary"
-        />
-      </Box>
+      </Fade>
     </Container>
   );
 };

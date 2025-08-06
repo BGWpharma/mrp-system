@@ -6,6 +6,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
 import { InventoryListStateProvider } from './contexts/InventoryListStateContext';
+import { TaskListStateProvider } from './contexts/TaskListStateContext';
 import { RecipeListStateProvider } from './contexts/RecipeListStateContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
@@ -178,8 +179,9 @@ function App() {
         <NotificationProvider>
           <ColumnPreferencesProvider>
             <InventoryListStateProvider>
-              <RecipeListStateProvider>
-                <SidebarProvider>
+              <TaskListStateProvider>
+                <RecipeListStateProvider>
+                  <SidebarProvider>
                 <div className="app-container">
                   <Notifications />
                   <Routes>
@@ -345,8 +347,9 @@ function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </div>
-              </SidebarProvider>
+                              </SidebarProvider>
                 </RecipeListStateProvider>
+              </TaskListStateProvider>
             </InventoryListStateProvider>
           </ColumnPreferencesProvider>
         </NotificationProvider>

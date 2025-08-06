@@ -45,6 +45,11 @@ import {
     fetchInProgress: {}, // Flagi zapobiegające równoległym zapytaniom o te same dane
     ttl: 60000 // Czas życia cache w ms (60 sekund)
   };
+
+  // Cache dla zoptymalizowanej funkcji pobierania zadań
+  let productionTasksCache = null;
+  let productionTasksCacheTimestamp = null;
+  const TASKS_CACHE_EXPIRY_MS = 3 * 60 * 1000; // 3 minut
   
   // Pobieranie wszystkich zadań produkcyjnych
   export const getAllTasks = async () => {
@@ -286,6 +291,289 @@ import {
       console.error('Błąd podczas pobierania zadań produkcyjnych z paginacją:', error);
       throw error;
     }
+  };
+
+  /**
+   * ZOPTYMALIZOWANA FUNKCJA dla interfejsu listy zadań produkcyjnych
+   * 
+   * Ta funkcja została stworzona dla lepszej wydajności w interfejsie listy:
+   * - Cachuje wszystkie zadania po pierwszym pobraniu
+   * - Dynamicznie filtruje i sortuje dane w cache
+   * - Implementuje debouncing dla wyszukiwania
+   * 
+   * @param {Object} params - Parametry zapytania
+   * @param {number} params.page - Numer strony (wymagany)
+   * @param {number} params.pageSize - Rozmiar strony (wymagany)
+   * @param {string|null} params.searchTerm - Termin wyszukiwania (opcjonalne)
+   * @param {string|null} params.statusFilter - Filtr statusu (opcjonalne)
+   * @param {string|null} params.sortField - Pole do sortowania (opcjonalne)
+   * @param {string|null} params.sortOrder - Kierunek sortowania (opcjonalne)
+   * @param {boolean} params.forceRefresh - Wymuś odświeżenie cache (opcjonalne)
+   * @returns {Promise<Object>} - Obiekt z paginacją i danymi
+   */
+  export const getProductionTasksOptimized = async ({
+    page,
+    pageSize,
+    searchTerm = null,
+    statusFilter = null,
+    sortField = 'scheduledDate',
+    sortOrder = 'asc',
+    forceRefresh = false
+  }) => {
+    try {
+      console.log('🚀 getProductionTasksOptimized - rozpoczynam zoptymalizowane pobieranie');
+      console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, sortField, sortOrder, forceRefresh });
+
+      // Walidacja wymaganych parametrów
+      if (!page || !pageSize) {
+        throw new Error('Parametry page i pageSize są wymagane');
+      }
+
+      const pageNum = Math.max(1, parseInt(page));
+      const itemsPerPage = Math.max(1, parseInt(pageSize));
+
+      // KROK 1: Sprawdź cache zadań produkcyjnych
+      const now = Date.now();
+      const isCacheValid = productionTasksCache && 
+                          productionTasksCacheTimestamp && 
+                          (now - productionTasksCacheTimestamp) < TASKS_CACHE_EXPIRY_MS &&
+                          !forceRefresh;
+
+      let allTasks;
+
+      if (isCacheValid) {
+        console.log('💾 Używam cache zadań produkcyjnych');
+        allTasks = [...productionTasksCache];
+      } else {
+        console.log('🔄 Pobieram świeże dane zadań produkcyjnych');
+        
+        // Pobierz wszystkie zadania produkcyjne
+        const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+        const q = query(tasksRef);
+        const allTasksSnapshot = await getDocs(q);
+        
+        allTasks = allTasksSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Zaktualizuj cache
+        productionTasksCache = [...allTasks];
+        productionTasksCacheTimestamp = now;
+        
+        console.log('💾 Zapisano do cache:', allTasks.length, 'zadań');
+      }
+
+      // KROK 2: Filtrowanie po terminie wyszukiwania
+      if (searchTerm && searchTerm.trim() !== '') {
+        const searchTermLower = searchTerm.toLowerCase().trim();
+        
+        // Priorytetowe dopasowania - najpierw MO, potem inne pola
+        const moNumberMatches = [];
+        const otherMatches = [];
+        
+        allTasks.forEach(task => {
+          const moNumberMatch = task.moNumber && task.moNumber.toLowerCase().includes(searchTermLower);
+          const otherFieldsMatch = (
+            (task.name && task.name.toLowerCase().includes(searchTermLower)) ||
+            (task.description && task.description.toLowerCase().includes(searchTermLower)) ||
+            (task.productName && task.productName.toLowerCase().includes(searchTermLower)) ||
+            (task.clientName && task.clientName.toLowerCase().includes(searchTermLower))
+          );
+          
+          if (moNumberMatch) {
+            moNumberMatches.push(task);
+          } else if (otherFieldsMatch) {
+            otherMatches.push(task);
+          }
+        });
+        
+        allTasks = [...moNumberMatches, ...otherMatches];
+        console.log('🔍 Po wyszukiwaniu:', allTasks.length, 'zadań');
+      }
+
+      // KROK 3: Filtrowanie po statusie
+      if (statusFilter && statusFilter.trim() !== '') {
+        allTasks = allTasks.filter(task => task.status === statusFilter);
+        console.log('📊 Po filtrowaniu statusu:', allTasks.length, 'zadań');
+      }
+
+      // KROK 4: Sortowanie
+      const sortByField = (tasks, field, order) => {
+        return tasks.sort((a, b) => {
+          let aVal = a[field];
+          let bVal = b[field];
+          
+          // Specjalne obsłużenie dla dat
+          if (field === 'scheduledDate' || field === 'endDate' || field === 'createdAt') {
+            aVal = aVal ? (aVal.toDate ? aVal.toDate() : new Date(aVal)) : new Date(0);
+            bVal = bVal ? (bVal.toDate ? bVal.toDate() : new Date(bVal)) : new Date(0);
+          }
+          
+          // Specjalne obsłużenie dla numerów MO
+          if (field === 'moNumber') {
+            const getNumericPart = (moNumber) => {
+              if (!moNumber) return 0;
+              const match = moNumber.match(/MO(\d+)/);
+              return match ? parseInt(match[1], 10) : 0;
+            };
+            
+            aVal = getNumericPart(aVal);
+            bVal = getNumericPart(bVal);
+          }
+          
+          // Obsługa null/undefined
+          if (aVal == null && bVal == null) return 0;
+          if (aVal == null) return order === 'asc' ? 1 : -1;
+          if (bVal == null) return order === 'asc' ? -1 : 1;
+          
+          // Porównanie
+          if (aVal < bVal) return order === 'asc' ? -1 : 1;
+          if (aVal > bVal) return order === 'asc' ? 1 : -1;
+          return 0;
+        });
+      };
+
+      const sortedTasks = sortByField([...allTasks], sortField, sortOrder);
+      console.log('🔄 Posortowano według:', sortField, sortOrder);
+
+      // KROK 5: Paginacja
+      const totalItems = sortedTasks.length;
+      const totalPages = Math.ceil(totalItems / itemsPerPage);
+      const safePage = Math.min(pageNum, Math.max(1, totalPages));
+      
+      const startIndex = (safePage - 1) * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, sortedTasks.length);
+      const paginatedTasks = sortedTasks.slice(startIndex, endIndex);
+
+      console.log('📄 Paginacja:', `Strona ${safePage}/${totalPages}, elementy ${startIndex + 1}-${endIndex} z ${totalItems}`);
+
+      return {
+        items: paginatedTasks,
+        totalCount: totalItems,
+        page: safePage,
+        pageSize: itemsPerPage,
+        totalPages: totalPages
+      };
+      
+    } catch (error) {
+      console.error('❌ Błąd w getProductionTasksOptimized:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Czyści cache zadań produkcyjnych
+   */
+  export const clearProductionTasksCache = () => {
+    productionTasksCache = null;
+    productionTasksCacheTimestamp = null;
+    console.log('🗑️ Cache zadań produkcyjnych wyczyszczony');
+  };
+
+  /**
+   * Aktualizuje pojedyncze zadanie w cache (zamiast czyszczenia całego cache)
+   * @param {string} taskId - ID zadania do aktualizacji
+   * @param {Object} updatedTaskData - Nowe dane zadania
+   * @returns {boolean} - Czy aktualizacja się powiodła
+   */
+  export const updateTaskInCache = (taskId, updatedTaskData) => {
+    if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
+      console.log('🔄 Cache pusty, pomijam aktualizację pojedynczego zadania');
+      return false;
+    }
+
+    const taskIndex = productionTasksCache.findIndex(task => task.id === taskId);
+    if (taskIndex !== -1) {
+      productionTasksCache[taskIndex] = {
+        ...productionTasksCache[taskIndex],
+        ...updatedTaskData,
+        id: taskId // Zachowaj ID
+      };
+      console.log(`🔄 Zaktualizowano zadanie ${taskId} w cache`);
+      return true;
+    } else {
+      console.log(`⚠️ Zadanie ${taskId} nie znalezione w cache`);
+      return false;
+    }
+  };
+
+  /**
+   * Dodaje nowe zadanie do cache
+   * @param {Object} newTask - Nowe zadanie do dodania
+   * @returns {boolean} - Czy dodanie się powiodło
+   */
+  export const addTaskToCache = (newTask) => {
+    if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
+      console.log('🔄 Cache pusty, pomijam dodanie zadania do cache');
+      return false;
+    }
+
+    productionTasksCache.push(newTask);
+    console.log(`➕ Dodano nowe zadanie ${newTask.id} do cache`);
+    return true;
+  };
+
+  /**
+   * Usuwa zadanie z cache
+   * @param {string} taskId - ID zadania do usunięcia
+   * @returns {boolean} - Czy usunięcie się powiodło
+   */
+  export const removeTaskFromCache = (taskId) => {
+    if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
+      console.log('🔄 Cache pusty, pomijam usunięcie zadania z cache');
+      return false;
+    }
+
+    const initialLength = productionTasksCache.length;
+    productionTasksCache = productionTasksCache.filter(task => task.id !== taskId);
+    
+    if (productionTasksCache.length < initialLength) {
+      console.log(`🗑️ Usunięto zadanie ${taskId} z cache`);
+      return true;
+    } else {
+      console.log(`⚠️ Zadanie ${taskId} nie znalezione w cache do usunięcia`);
+      return false;
+    }
+  };
+
+  /**
+   * Sprawdza status cache zadań produkcyjnych
+   * @returns {Object} - Informacje o stanie cache
+   */
+  export const getProductionTasksCacheStatus = () => {
+    const now = Date.now();
+    return {
+      hasCache: !!productionTasksCache,
+      tasksCount: productionTasksCache?.length || 0,
+      cacheAge: productionTasksCacheTimestamp ? now - productionTasksCacheTimestamp : null,
+      isValid: productionTasksCache && 
+               productionTasksCacheTimestamp && 
+               (now - productionTasksCacheTimestamp) < TASKS_CACHE_EXPIRY_MS,
+      cacheSize: productionTasksCache ? JSON.stringify(productionTasksCache).length : 0
+    };
+  };
+
+  /**
+   * Sprawdza czy można zaktualizować cache zamiast go czyścić
+   * @param {string} operation - Typ operacji (create, update, delete)
+   * @returns {boolean} - Czy cache może być zaktualizowany
+   */
+  export const canUpdateCacheInsteadOfClear = (operation = 'update') => {
+    const status = getProductionTasksCacheStatus();
+    
+    if (!status.hasCache || !status.isValid) {
+      return false;
+    }
+
+    // Dla niektórych operacji lepiej wyczyścić cache (np. masowe operacje)
+    const safeCacheSize = 50000; // 50KB
+    if (status.cacheSize > safeCacheSize) {
+      console.log('🔄 Cache za duży, lepiej wyczyścić');
+      return false;
+    }
+
+    return true;
   };
   
   // Pobieranie zadań produkcyjnych na dany okres
@@ -551,8 +839,11 @@ import {
   };
   
   // Tworzenie nowego zadania produkcyjnego
-  export const createTask = async (taskData, userId, autoReserveMaterials = true) => {
-    try {
+export const createTask = async (taskData, userId, autoReserveMaterials = true) => {
+  let docRef = null;
+  let taskWithMeta = null;
+  
+  try {
       console.log(`[DEBUG-MO] Rozpoczęto tworzenie zadania produkcyjnego:`, JSON.stringify({
         productName: taskData.productName,
         orderItemId: taskData.orderItemId,
@@ -698,12 +989,30 @@ import {
     } catch (error) {
       console.error('Error creating task:', error);
       throw error;
+    } finally {
+      // Spróbuj dodać zadanie do cache zamiast czyścić
+      if (docRef && taskWithMeta) {
+        const newTaskForCache = {
+          id: docRef.id,
+          ...taskWithMeta
+        };
+        const added = addTaskToCache(newTaskForCache);
+        if (!added) {
+          // Fallback - wyczyść cache jeśli nie można dodać
+          clearProductionTasksCache();
+        }
+      } else {
+        // Jeśli nie mamy danych, wyczyść cache
+        clearProductionTasksCache();
+      }
     }
   };
   
   // Aktualizacja zadania produkcyjnego
-  export const updateTask = async (taskId, taskData, userId) => {
-    try {
+export const updateTask = async (taskId, taskData, userId) => {
+  let updatedTask = null;
+  
+  try {
       // Pobierz aktualne dane zadania, aby zachować pola kosztów jeśli nie są aktualizowane
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       const taskDoc = await getDoc(taskRef);
@@ -832,12 +1141,31 @@ import {
     } catch (error) {
       console.error('Błąd podczas aktualizacji zadania:', error);
       throw error;
+    } finally {
+      // Spróbuj zaktualizować zadanie w cache zamiast czyścić
+      if (updatedTask) {
+        const updatedTaskForCache = {
+          id: taskId,
+          ...updatedTask
+        };
+        const updated = updateTaskInCache(taskId, updatedTaskForCache);
+        if (!updated) {
+          // Fallback - wyczyść cache jeśli nie można zaktualizować
+          clearProductionTasksCache();
+        }
+      } else {
+        // Jeśli nie mamy danych, wyczyść cache
+        clearProductionTasksCache();
+      }
     }
   };
   
   // Aktualizacja statusu zadania
-  export const updateTaskStatus = async (taskId, newStatus, userId) => {
-    try {
+export const updateTaskStatus = async (taskId, newStatus, userId) => {
+  let task = null;
+  let oldStatus = null;
+  
+  try {
       // Sprawdź, czy zadanie istnieje
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       const taskDoc = await getDoc(taskRef);
@@ -1007,6 +1335,32 @@ import {
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu zadania:', error);
       throw error;
+    } finally {
+      // Spróbuj zaktualizować status zadania w cache zamiast czyścić
+      if (task && oldStatus !== undefined) {
+        const updatedTaskData = {
+          status: newStatus,
+          updatedAt: new Date().toISOString(),
+          updatedBy: userId,
+          statusHistory: [
+            ...(task.statusHistory || []),
+            {
+              oldStatus: oldStatus || 'Nowe',
+              newStatus: newStatus,
+              changedBy: userId,
+              changedAt: new Date().toISOString()
+            }
+          ]
+        };
+        const updated = updateTaskInCache(taskId, updatedTaskData);
+        if (!updated) {
+          // Fallback - wyczyść cache jeśli nie można zaktualizować
+          clearProductionTasksCache();
+        }
+      } else {
+        // Jeśli nie mamy danych, wyczyść cache
+        clearProductionTasksCache();
+      }
     }
   };
   
@@ -1145,6 +1499,13 @@ import {
     } catch (error) {
       console.error('Błąd podczas usuwania zadania produkcyjnego:', error);
       throw error;
+    } finally {
+      // Spróbuj usunąć zadanie z cache zamiast czyścić
+      const removed = removeTaskFromCache(taskId);
+      if (!removed) {
+        // Fallback - wyczyść cache jeśli nie można usunąć
+        clearProductionTasksCache();
+      }
     }
   };
   
