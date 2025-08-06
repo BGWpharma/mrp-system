@@ -3,6 +3,7 @@ import { Box, Container, Typography, Paper, Button, Snackbar, Alert, CircularPro
 import { useNavigate } from 'react-router-dom';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
 import CompanyInfoForm from '../../components/invoices/CompanyInfoForm';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const CompanySettingsPage = () => {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ const CompanySettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
+  const { t } = useTranslation();
 
   const handleBack = () => {
     navigate('/invoices');
@@ -29,7 +31,7 @@ const CompanySettingsPage = () => {
         setError(result.error);
       }
     } catch (err) {
-      setError('Wystąpił błąd podczas zapisywania danych.');
+      setError(t('invoices.company.messages.saveError'));
     } finally {
       setSaving(false);
     }
@@ -50,7 +52,7 @@ const CompanySettingsPage = () => {
             variant="outlined"
             color="primary"
           >
-            Powrót
+            {t('invoices.company.buttons.back')}
           </Button>
           
           <Button
@@ -60,17 +62,17 @@ const CompanySettingsPage = () => {
             color="primary"
             disabled={saving}
           >
-            {saving ? 'Zapisywanie...' : 'Zapisz dane firmy'}
+            {saving ? t('invoices.company.buttons.saving') : t('invoices.company.buttons.save')}
           </Button>
         </Box>
       </Paper>
       
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
-          Dane firmy
+          {t('invoices.company.title')}
         </Typography>
         <Typography variant="subtitle1" color="text.secondary">
-          Ustaw dane firmy, które będą widoczne na wystawianych fakturach
+          {t('invoices.company.subtitle')}
         </Typography>
       </Box>
       
@@ -78,7 +80,7 @@ const CompanySettingsPage = () => {
       
       <Snackbar open={success} autoHideDuration={6000} onClose={handleCloseAlert}>
         <Alert onClose={handleCloseAlert} severity="success" sx={{ width: '100%' }}>
-          Dane firmy zostały pomyślnie zapisane!
+          {t('invoices.company.messages.saved')}
         </Alert>
       </Snackbar>
       

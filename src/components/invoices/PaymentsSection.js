@@ -36,6 +36,7 @@ import {
 } from '../../services/invoiceService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatters';
 
 const PaymentsSection = ({ invoice, onPaymentChange }) => {
@@ -56,14 +57,15 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
 
   const paymentMethods = [
-    { value: 'przelew', label: 'Przelew' },
-    { value: 'gotowka', label: 'Gotówka' },
-    { value: 'karta', label: 'Karta' },
-    { value: 'blik', label: 'BLIK' },
-    { value: 'paypal', label: 'PayPal' },
-    { value: 'inne', label: 'Inne' }
+    { value: 'przelew', label: t('invoices.payments.methods.przelew') },
+    { value: 'gotowka', label: t('invoices.payments.methods.gotowka') },
+    { value: 'karta', label: t('invoices.payments.methods.karta') },
+    { value: 'blik', label: t('invoices.payments.methods.blik') },
+    { value: 'paypal', label: t('invoices.payments.methods.paypal') },
+    { value: 'inne', label: t('invoices.payments.methods.inne') }
   ];
 
   useEffect(() => {
@@ -77,7 +79,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
       const invoicePayments = await getInvoicePayments(invoice.id);
       setPayments(invoicePayments);
     } catch (error) {
-      console.error('Błąd podczas ładowania płatności:', error);
+      console.error(t('invoices.payments.notifications.errors.loadPayments') + ':', error);
     }
   };
 
@@ -126,7 +128,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
   const handleSavePayment = async () => {
     try {
       if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) {
-        showError('Kwota płatności musi być większa od zera');
+        showError(t('invoices.payments.notifications.errors.amountMustBePositive'));
         return;
       }
 
@@ -140,11 +142,11 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
           paymentForm, 
           currentUser.uid
         );
-        showSuccess('Płatność została zaktualizowana');
+        showSuccess(t('invoices.payments.notifications.paymentUpdated'));
       } else {
         // Dodanie nowej płatności
         await addPaymentToInvoice(invoice.id, paymentForm, currentUser.uid);
-        showSuccess('Płatność została dodana');
+        showSuccess(t('invoices.payments.notifications.paymentAdded'));
       }
 
       await loadPayments();
@@ -155,7 +157,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         onPaymentChange();
       }
     } catch (error) {
-      showError('Błąd podczas zapisywania płatności: ' + error.message);
+      showError(t('invoices.payments.notifications.errors.savePayment') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -171,14 +173,14 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
       setLoading(true);
       await removePaymentFromInvoice(invoice.id, paymentToDelete.id, currentUser.uid);
       await loadPayments();
-      showSuccess('Płatność została usunięta');
+      showSuccess(t('invoices.payments.notifications.paymentDeleted'));
       
       // Powiadom komponent nadrzędny o zmianie
       if (onPaymentChange) {
         onPaymentChange();
       }
     } catch (error) {
-      showError('Błąd podczas usuwania płatności: ' + error.message);
+      showError(t('invoices.payments.notifications.errors.deletePayment') + ': ' + error.message);
     } finally {
       setLoading(false);
       setDeleteConfirmOpen(false);
@@ -239,7 +241,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
           onClick={() => handleOpenDialog()}
           size="small"
         >
-          Dodaj płatność
+          {t('invoices.payments.addPayment')}
         </Button>
       </Box>
 
@@ -248,7 +250,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Wartość faktury
+              {t('invoices.payments.invoiceValue')}
             </Typography>
             <Typography variant="h6">
               {formatCurrency(invoice.total, invoice.currency)}
@@ -258,7 +260,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Zapłacono
+              {t('invoices.payments.paid')}
             </Typography>
             <Typography variant="h6" color="success.main">
               {formatCurrency(getTotalPaid(), invoice.currency)}
@@ -269,7 +271,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
           <Grid item xs={12} md={3}>
             <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Przedpłaty z proform
+                {t('invoices.payments.advancePayments')}
               </Typography>
               <Typography variant="h6" color="warning.main">
                 {formatCurrency(getTotalAdvancePayments(), invoice.currency)}
@@ -280,7 +282,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Do zapłaty
+              {t('invoices.payments.remaining')}
             </Typography>
             <Typography variant="h6" color="error.main">
               {formatCurrency(getRemainingAmount(), invoice.currency)}
@@ -290,7 +292,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              Status
+              {t('invoices.payments.status')}
             </Typography>
             <Box sx={{ mt: 1 }}>
               {getPaymentStatusChip()}
@@ -305,12 +307,12 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Data</TableCell>
-                <TableCell>Kwota</TableCell>
-                <TableCell>Metoda</TableCell>
-                <TableCell>Opis</TableCell>
-                <TableCell>Referenza</TableCell>
-                <TableCell align="right">Akcje</TableCell>
+                <TableCell>{t('invoices.payments.table.date')}</TableCell>
+                <TableCell>{t('invoices.payments.table.amount')}</TableCell>
+                <TableCell>{t('invoices.payments.table.method')}</TableCell>
+                <TableCell>{t('invoices.payments.table.description')}</TableCell>
+                <TableCell>{t('invoices.payments.table.reference')}</TableCell>
+                <TableCell align="right">{t('invoices.payments.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -333,14 +335,14 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
                     <IconButton
                       size="small"
                       onClick={() => handleOpenDialog(payment)}
-                      title="Edytuj płatność"
+                      title={t('invoices.payments.tooltips.editPayment')}
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
                     <IconButton
                       size="small"
                       onClick={() => handleDeletePayment(payment)}
-                      title="Usuń płatność"
+                      title={t('invoices.payments.tooltips.deletePayment')}
                       color="error"
                     >
                       <DeleteIcon fontSize="small" />
@@ -353,14 +355,14 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         </TableContainer>
       ) : (
         <Alert severity="info">
-          Brak płatności dla tej faktury. Kliknij "Dodaj płatność", aby dodać pierwszą płatność.
+          {t('invoices.payments.noPayments')}
         </Alert>
       )}
 
       {/* Dialog dodawania/edycji płatności */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          {editingPayment ? 'Edytuj płatność' : 'Dodaj płatność'}
+          {editingPayment ? t('invoices.payments.editPayment') : t('invoices.payments.addPayment')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
@@ -368,7 +370,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Kwota"
+                  label={t('invoices.payments.form.amount')}
                   type="number"
                   value={paymentForm.amount}
                   onChange={(e) => handleFormChange('amount', e.target.value)}
@@ -379,7 +381,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Data płatności"
+                  label={t('invoices.payments.form.date')}
                   type="date"
                   value={paymentForm.date}
                   onChange={(e) => handleFormChange('date', e.target.value)}
@@ -391,7 +393,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
                 <TextField
                   fullWidth
                   select
-                  label="Metoda płatności"
+                  label={t('invoices.payments.form.method')}
                   value={paymentForm.method}
                   onChange={(e) => handleFormChange('method', e.target.value)}
                 >
@@ -405,7 +407,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Opis"
+                  label={t('invoices.payments.form.description')}
                   value={paymentForm.description}
                   onChange={(e) => handleFormChange('description', e.target.value)}
                   multiline
@@ -415,45 +417,46 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Numer referencyjny"
+                  label={t('invoices.payments.form.reference')}
                   value={paymentForm.reference}
                   onChange={(e) => handleFormChange('reference', e.target.value)}
-                  placeholder="np. numer przelewu, numer transakcji"
+                  placeholder={t('invoices.payments.form.referencePlaceholder')}
                 />
               </Grid>
             </Grid>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Anuluj</Button>
+          <Button onClick={handleCloseDialog}>{t('invoices.payments.form.cancel')}</Button>
           <Button 
             onClick={handleSavePayment} 
             variant="contained"
             disabled={loading}
           >
-            {editingPayment ? 'Zapisz zmiany' : 'Dodaj płatność'}
+            {editingPayment ? t('invoices.payments.form.save') : t('invoices.payments.form.add')}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Dialog potwierdzenia usunięcia */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-        <DialogTitle>Potwierdzenie usunięcia</DialogTitle>
+        <DialogTitle>{t('invoices.payments.deleteConfirm.title')}</DialogTitle>
         <DialogContent>
           <Typography>
-            Czy na pewno chcesz usunąć płatność o kwocie{' '}
-            {paymentToDelete && formatCurrency(paymentToDelete.amount, invoice.currency)}?
+            {t('invoices.payments.deleteConfirm.message', { 
+              amount: paymentToDelete && formatCurrency(paymentToDelete.amount, invoice.currency) 
+            })}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>Anuluj</Button>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>{t('common.cancel')}</Button>
           <Button 
             onClick={handleConfirmDelete} 
             color="error" 
             variant="contained"
             disabled={loading}
           >
-            Usuń
+            {t('common.delete')}
           </Button>
         </DialogActions>
       </Dialog>

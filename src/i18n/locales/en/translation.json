@@ -2644,5 +2644,223 @@
       "date": "Date",
       "convertedFromOtherCurrencies": "converted from other currencies"
     }
+  },
+  "invoices": {
+    "title": "Invoices",
+    "newInvoice": "New Invoice",
+    "searchInvoices": "Search invoices...",
+    "noInvoicesFound": "No invoices to display",
+    "refresh": "Refresh",
+    "refreshProformaAmounts": "Refresh available proforma amounts",
+    "companyData": "Company Data",
+    "clients": "Clients",
+    "proforma": "Proforma",
+    "table": {
+      "invoiceNumber": "Invoice Number",
+      "client": "Client",
+      "issueDate": "Issue Date",
+      "dueDate": "Due Date",
+      "amount": "Amount",
+      "amountToPay": "To Pay/Available",
+      "invoiceStatus": "Invoice Status",
+      "paymentStatus": "Payment Status",
+      "actions": "Actions"
+    },
+    "filters": {
+      "status": "Status",
+      "allStatuses": "All Statuses",
+      "client": "Client",
+      "allClients": "All Clients",
+      "fromDate": "From Date",
+      "toDate": "To Date",
+      "applyFilters": "Apply Filters",
+      "resetFilters": "Reset"
+    },
+    "status": {
+      "draft": "Draft",
+      "issued": "Issued",
+      "sent": "Sent",
+      "paid": "Paid",
+      "partiallyPaid": "Partially Paid",
+      "overdue": "Overdue",
+      "cancelled": "Cancelled",
+      "unpaid": "Unpaid"
+    },
+    "form": {
+      "title": {
+        "new": "New Invoice",
+        "edit": "Edit Invoice"
+      }
+    },
+    "company": {
+      "title": "Company Data",
+      "subtitle": "Set company data that will be visible on issued invoices",
+      "buttons": {
+        "back": "Back",
+        "save": "Save Company Data",
+        "saving": "Saving..."
+      },
+      "messages": {
+        "saved": "Company data has been successfully saved!",
+        "saveError": "An error occurred while saving data."
+      }
+    },
+    "payments": {
+      "title": "Payments",
+      "addPayment": "Add Payment",
+      "editPayment": "Edit Payment",
+      "invoiceValue": "Invoice Value",
+      "paid": "Paid",
+      "advancePayments": "Advance Payments from Proformas",
+      "remaining": "To Pay",
+      "status": "Status",
+      "noPayments": "No payments for this invoice. Click \"Add Payment\" to add the first payment.",
+      "table": {
+        "date": "Date",
+        "amount": "Amount",
+        "method": "Method",
+        "description": "Description",
+        "reference": "Reference",
+        "actions": "Actions"
+      },
+      "form": {
+        "amount": "Amount",
+        "date": "Payment Date",
+        "method": "Payment Method",
+        "description": "Description",
+        "reference": "Reference Number",
+        "referencePlaceholder": "e.g. transfer number, transaction number",
+        "save": "Save Changes",
+        "add": "Add Payment",
+        "cancel": "Cancel"
+      },
+      "methods": {
+        "przelew": "Bank Transfer",
+        "gotowka": "Cash",
+        "karta": "Card",
+        "blik": "BLIK",
+        "paypal": "PayPal",
+        "inne": "Other"
+      },
+      "deleteConfirm": {
+        "title": "Confirm Deletion",
+        "message": "Are you sure you want to delete payment of {{amount}}?"
+      },
+      "tooltips": {
+        "editPayment": "Edit Payment",
+        "deletePayment": "Delete Payment"
+      },
+      "notifications": {
+        "paymentAdded": "Payment has been added",
+        "paymentUpdated": "Payment has been updated",
+        "paymentDeleted": "Payment has been deleted",
+        "errors": {
+          "loadPayments": "Error loading payments",
+          "savePayment": "Error saving payment",
+          "deletePayment": "Error deleting payment",
+          "amountMustBePositive": "Payment amount must be greater than zero"
+        }
+      }
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Delete Invoice?",
+        "message": "Are you sure you want to delete invoice {{number}}? This operation cannot be undone.",
+        "cancel": "Cancel",
+        "delete": "Delete"
+      }
+    },
+    "details": {
+      "title": "Invoice Details",
+      "basicInfo": "Basic Information",
+      "invoiceNumber": "Invoice Number",
+      "status": "Status",
+      "invoiceType": "Invoice Type",
+      "proformaInvoice": "Proforma Invoice",
+      "invoice": "Invoice",
+      "issueDate": "Issue Date",
+      "dueDate": "Due Date",
+      "paymentMethod": "Payment Method",
+      "paymentStatus": "Payment Status",
+      "invoiceItems": "Invoice Items",
+      "notes": "Notes",
+      "attachments": "Attachments",
+      "payments": "Payments",
+      "actions": "Actions",
+      "client": "Client",
+      "seller": "Seller",
+      "relatedOrder": "Related Order",
+      "otherInvoicesForOrder": "Other invoices for this order",
+      "amount": "Amount",
+      "date": "Date",
+      "proformaAmount": "Proforma Amount",
+      "totals": {
+        "netTotal": "Net Total:",
+        "vatTotal": "VAT Total:"
+      },
+      "clientInfo": {
+        "email": "Email",
+        "phone": "Phone",
+        "address": "Address",
+        "shippingAddress": "Shipping Address",
+        "billingAddress": "Billing Address",
+        "vatEu": "VAT-EU",
+        "addresses": "Addresses",
+        "noClientName": "No client name",
+        "noBillingAddress": "No billing address provided",
+        "noShippingAddress": "No shipping address provided",
+        "viewClientDetails": "View client details"
+      },
+      "sellerInfo": {
+        "nip": "Tax ID",
+        "regon": "REGON",
+        "email": "Email",
+        "phone": "Phone",
+        "bank": "Bank",
+        "accountNumber": "Account Number"
+      },
+      "buttons": {
+        "backToList": "Back to invoice list",
+        "backToListShort": "Back to list",
+        "edit": "Edit",
+        "delete": "Delete",
+        "downloadPdf": "Download PDF",
+        "generating": "Generating...",
+        "deleteInvoice": "Delete Invoice",
+        "markAsSent": "Mark as Sent"
+      },
+      "notifications": {
+        "invoiceDeleted": "Invoice has been deleted",
+        "invoiceIssued": "Invoice has been issued and PDF has been generated",
+        "statusUpdated": "Invoice status has been updated",
+        "errors": {
+          "fetchInvoice": "Error fetching invoice data",
+          "deleteInvoice": "Error deleting invoice",
+          "updateStatus": "Error updating invoice status",
+          "generatePdf": "Failed to generate PDF file"
+        }
+      }
+    },
+    "tooltips": {
+      "viewInvoice": "View Invoice",
+      "editInvoice": "Edit Invoice",
+      "deleteInvoice": "Delete Invoice"
+    },
+    "notifications": {
+      "invoiceDeleted": "Invoice has been deleted",
+      "invoiceStatusUpdated": "Invoice status has been updated",
+      "listRefreshed": "List has been refreshed",
+      "proformaAmountsRefreshed": "Proforma amounts have been refreshed",
+      "errors": {
+        "fetchInvoices": "Error fetching invoices list",
+        "deleteInvoice": "Error deleting invoice",
+        "updateStatus": "Error updating invoice status",
+        "filterInvoices": "Error filtering invoices",
+        "fetchInvoiceData": "Error fetching invoice data",
+        "fetchProformaInfo": "Error fetching proforma usage information",
+        "fetchRelatedInvoices": "Error fetching related invoices",
+        "fetchCompanyData": "Error fetching company data"
+      }
+    }
   }
 }

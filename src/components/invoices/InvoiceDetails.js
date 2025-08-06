@@ -48,6 +48,7 @@ import {
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
@@ -68,6 +69,7 @@ const InvoiceDetails = () => {
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -89,7 +91,7 @@ const InvoiceDetails = () => {
         await fetchRelatedInvoices(fetchedInvoice.orderId);
       }
     } catch (error) {
-      showError('Błąd podczas pobierania danych faktury: ' + error.message);
+      showError(t('invoices.details.notifications.errors.fetchInvoice') + ': ' + error.message);
       navigate('/invoices');
     } finally {
       setLoading(false);
@@ -116,14 +118,14 @@ const InvoiceDetails = () => {
           const usageInfo = await getAvailableProformaAmount(invoiceId);
           setProformaUsageInfo(usageInfo);
         } catch (error) {
-          console.error('Błąd podczas pobierania informacji o wykorzystaniu proformy:', error);
+          console.error(t('invoices.notifications.errors.fetchProformaInfo') + ':', error);
           setProformaUsageInfo(null);
         }
       } else {
         setProformaUsageInfo(null);
       }
     } catch (error) {
-      console.error('Błąd podczas pobierania powiązanych faktur:', error);
+      console.error(t('invoices.notifications.errors.fetchRelatedInvoices') + ':', error);
       setRelatedInvoices([]);
       setProformaUsageInfo(null);
     } finally {
@@ -136,7 +138,7 @@ const InvoiceDetails = () => {
       const data = await getCompanyInfo();
       setCompanyInfo(data);
     } catch (error) {
-      console.error('Błąd podczas pobierania danych firmy:', error);
+      console.error(t('invoices.notifications.errors.fetchCompanyData') + ':', error);
     }
   };
   
@@ -151,10 +153,10 @@ const InvoiceDetails = () => {
   const handleDeleteConfirm = async () => {
     try {
       await deleteInvoice(invoiceId);
-      showSuccess('Faktura została usunięta');
+      showSuccess(t('invoices.details.notifications.invoiceDeleted'));
       navigate('/invoices');
     } catch (error) {
-      showError('Błąd podczas usuwania faktury: ' + error.message);
+      showError(t('invoices.details.notifications.errors.deleteInvoice') + ': ' + error.message);
     } finally {
       setDeleteDialogOpen(false);
     }
@@ -172,12 +174,12 @@ const InvoiceDetails = () => {
       await fetchInvoice();
       
       if (newStatus === 'issued') {
-        showSuccess('Faktura została wystawiona i PDF został wygenerowany');
+        showSuccess(t('invoices.details.notifications.invoiceIssued'));
       } else {
-        showSuccess('Status faktury został zaktualizowany');
+        showSuccess(t('invoices.details.notifications.statusUpdated'));
       }
     } catch (error) {
-      showError('Błąd podczas aktualizacji statusu faktury: ' + error.message);
+      showError(t('invoices.details.notifications.errors.updateStatus') + ': ' + error.message);
     } finally {
       if (newStatus === 'issued') {
         setIssuingInvoice(false);
@@ -243,7 +245,7 @@ const InvoiceDetails = () => {
       
     } catch (error) {
       console.error('Błąd podczas generowania PDF:', error);
-      showError('Nie udało się wygenerować pliku PDF: ' + error.message);
+      showError(t('invoices.details.notifications.errors.generatePdf') + ': ' + error.message);
     } finally {
       setPdfGenerating(false);
     }
@@ -269,7 +271,7 @@ const InvoiceDetails = () => {
           onClick={() => navigate('/invoices')}
           sx={{ mt: 2 }}
         >
-          Powrót do listy faktur
+                          {t('invoices.details.buttons.backToList')}
         </Button>
       </Box>
     );
@@ -283,10 +285,10 @@ const InvoiceDetails = () => {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/invoices')}
         >
-          Powrót do listy
+                          {t('invoices.details.buttons.backToListShort')}
         </Button>
         <Typography variant="h4" component="h1">
-          {invoice.isProforma ? 'Faktura proforma' : 'Faktura'} {invoice.number}
+                          {invoice.isProforma ? t('invoices.details.proformaInvoice') : t('invoices.details.invoice')} {invoice.number}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
@@ -294,7 +296,7 @@ const InvoiceDetails = () => {
             startIcon={<EditIcon />}
             onClick={handleEditClick}
           >
-            Edytuj
+                            {t('invoices.details.buttons.edit')}
           </Button>
           <Button
             variant="outlined"
@@ -310,7 +312,7 @@ const InvoiceDetails = () => {
             disabled={invoice.status === 'draft' || pdfGenerating}
             onClick={() => handleDownloadPdf('en')}
           >
-            {pdfGenerating ? 'Generowanie...' : 'Pobierz PDF'}
+                            {pdfGenerating ? t('invoices.details.buttons.generating') : t('invoices.details.buttons.downloadPdf')}
           </Button>
           {invoice.status === 'draft' && (
             <Button
@@ -331,12 +333,12 @@ const InvoiceDetails = () => {
           <Grid item xs={12} md={8}>
             <Box sx={{ mb: 3 }}>
               <Typography variant="h6" gutterBottom>
-                Dane podstawowe
+                {t('invoices.details.basicInfo')}
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
-                    Numer faktury
+                    {t('invoices.details.invoiceNumber')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {invoice.number}
@@ -344,7 +346,7 @@ const InvoiceDetails = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
-                    Status
+                    {t('invoices.details.status')}
                   </Typography>
                   <Box>
                     {renderInvoiceStatus(invoice.status)}
@@ -353,16 +355,16 @@ const InvoiceDetails = () => {
                 {invoice.isProforma && (
                   <Grid item xs={12} sm={6}>
                     <Typography variant="body2" color="text.secondary">
-                      Typ faktury
+                      {t('invoices.details.invoiceType')}
                     </Typography>
                     <Typography variant="body1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      Faktura proforma
+                      {t('invoices.details.proformaInvoice')}
                     </Typography>
                   </Grid>
                 )}
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
-                    Data wystawienia
+                    {t('invoices.details.issueDate')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {formatDate(invoice.issueDate)}
@@ -370,7 +372,7 @@ const InvoiceDetails = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
-                    Termin płatności
+                    {t('invoices.details.dueDate')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {formatDate(invoice.dueDate)}
@@ -378,7 +380,7 @@ const InvoiceDetails = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
-                    Metoda płatności
+                    {t('invoices.details.paymentMethod')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {invoice.paymentMethod}
@@ -386,7 +388,7 @@ const InvoiceDetails = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">
-                    Status płatności
+                    {t('invoices.details.paymentStatus')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {(() => {
@@ -431,17 +433,17 @@ const InvoiceDetails = () => {
             
             <Box>
               <Typography variant="h6" gutterBottom>
-                Adresy
+                {t('invoices.details.clientInfo.addresses')}
               </Typography>
               <Grid container spacing={3}>
                 <Grid item xs={12} sm={6}>
                   <Card variant="outlined" sx={{ height: '100%' }}>
                     <CardContent sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
-                        Adres do faktury
+                        {t('invoices.details.clientInfo.billingAddress')}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                        {invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address || 'Nie podano adresu do faktury'}
+                        {invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address || t('invoices.details.clientInfo.noBillingAddress')}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -450,10 +452,10 @@ const InvoiceDetails = () => {
                   <Card variant="outlined" sx={{ height: '100%' }}>
                     <CardContent sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
-                        Adres dostawy
+                        {t('invoices.details.clientInfo.shippingAddress')}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                        {invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address || 'Nie podano adresu dostawy'}
+                        {invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address || t('invoices.details.clientInfo.noShippingAddress')}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -468,54 +470,54 @@ const InvoiceDetails = () => {
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">
-                    Klient
+                    {t('invoices.details.client')}
                   </Typography>
                   <IconButton 
                     size="small" 
                     onClick={handleViewCustomer}
-                    title="Zobacz szczegóły klienta"
+                    title={t('invoices.details.clientInfo.viewClientDetails')}
                   >
                     <PersonIcon />
                   </IconButton>
                 </Box>
                 
                 <Typography variant="body1" fontWeight="bold">
-                  {invoice.customer?.name || 'Brak nazwy klienta'}
+                  {invoice.customer?.name || t('invoices.details.clientInfo.noClientName')}
                 </Typography>
                 
                 {invoice.customer?.vatEu && (
                   <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    VAT-EU: {invoice.customer.vatEu}
+                    {t('invoices.details.clientInfo.vatEu')}: {invoice.customer.vatEu}
                   </Typography>
                 )}
                 
                 {invoice.customer?.email && (
                   <Typography variant="body2" gutterBottom>
-                    Email: {invoice.customer.email}
+                    {t('invoices.details.clientInfo.email')}: {invoice.customer.email}
                   </Typography>
                 )}
                 
                 {invoice.customer?.phone && (
                   <Typography variant="body2" gutterBottom>
-                    Telefon: {invoice.customer.phone}
+                    {t('invoices.details.clientInfo.phone')}: {invoice.customer.phone}
                   </Typography>
                 )}
                 
                 {invoice.customer?.address && (
                   <Typography variant="body2" gutterBottom>
-                    Adres: {invoice.customer.address}
+                    {t('invoices.details.clientInfo.address')}: {invoice.customer.address}
                   </Typography>
                 )}
                 
                 {invoice.customer?.shippingAddress && (
                   <Typography variant="body2" gutterBottom>
-                    Adres dostawy: {invoice.customer.shippingAddress}
+                    {t('invoices.details.clientInfo.shippingAddress')}: {invoice.customer.shippingAddress}
                   </Typography>
                 )}
                 
                 {invoice.customer?.billingAddress && (
                   <Typography variant="body2" gutterBottom>
-                    Adres do faktury: {invoice.customer.billingAddress}
+                    {t('invoices.details.clientInfo.billingAddress')}: {invoice.customer.billingAddress}
                   </Typography>
                 )}
                 
@@ -525,12 +527,12 @@ const InvoiceDetails = () => {
                     
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                       <Typography variant="subtitle2">
-                        Powiązane zamówienie
+                        {t('invoices.details.relatedOrder')}
                       </Typography>
                       <IconButton 
                         size="small" 
                         onClick={handleViewOrder}
-                        title="Zobacz szczegóły zamówienia"
+                        title={t('orders.viewOrderDetails')}
                       >
                         <AssignmentIcon />
                       </IconButton>
@@ -551,7 +553,7 @@ const InvoiceDetails = () => {
                     </Typography>
                     <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
                       <Typography variant="body2">
-                        <strong>Kwota proformy:</strong> {proformaUsageInfo.total.toFixed(2)} {invoice.currency || 'EUR'}
+                        <strong>{t('invoices.details.proformaAmount')}:</strong> {proformaUsageInfo.total.toFixed(2)} {invoice.currency || 'EUR'}
                       </Typography>
                       <Typography variant="body2" color="error.main">
                         <strong>Wykorzystane:</strong> {proformaUsageInfo.used.toFixed(2)} {invoice.currency || 'EUR'}
@@ -573,7 +575,7 @@ const InvoiceDetails = () => {
                   <>
                     <Divider sx={{ my: 2 }} />
                     <Typography variant="subtitle2" gutterBottom>
-                      Inne faktury dla tego zamówienia:
+                      {t('invoices.details.otherInvoicesForOrder')}:
                     </Typography>
                     {loadingRelatedInvoices ? (
                       <CircularProgress size={20} />
@@ -585,12 +587,12 @@ const InvoiceDetails = () => {
                           </Typography>
                           {relInvoice.isProforma && (
                             <Typography variant="body2" color="warning.dark" fontWeight="bold">
-                              Kwota: {parseFloat(relInvoice.total || 0).toFixed(2)} {relInvoice.currency || 'EUR'}
+                              {t('invoices.details.amount')}: {parseFloat(relInvoice.total || 0).toFixed(2)} {relInvoice.currency || 'EUR'}
                             </Typography>
                           )}
                           {relInvoice.issueDate && (
                             <Typography variant="caption" color="text.secondary">
-                              Data: {new Date(relInvoice.issueDate).toLocaleDateString()}
+                              {t('invoices.details.date')}: {new Date(relInvoice.issueDate).toLocaleDateString()}
                             </Typography>
                           )}
                         </Box>
@@ -605,7 +607,7 @@ const InvoiceDetails = () => {
             <Card variant="outlined" sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  Sprzedawca
+                  {t('invoices.details.seller')}
                 </Typography>
                 
                 <Typography variant="body1" fontWeight="bold" gutterBottom>
@@ -619,30 +621,30 @@ const InvoiceDetails = () => {
                 </Typography>
                 <Box sx={{ mt: 1 }}>
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    NIP: {companyInfo.nip}
+                    {t('invoices.details.sellerInfo.nip')}: {companyInfo.nip}
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    REGON: {companyInfo.regon}
+                    {t('invoices.details.sellerInfo.regon')}: {companyInfo.regon}
                   </Typography>
                 </Box>
                 <Box sx={{ mt: 1 }}>
                   {companyInfo.email && (
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      Email: {companyInfo.email}
+                      {t('invoices.details.sellerInfo.email')}: {companyInfo.email}
                     </Typography>
                   )}
                   {companyInfo.phone && (
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      Telefon: {companyInfo.phone}
+                      {t('invoices.details.sellerInfo.phone')}: {companyInfo.phone}
                     </Typography>
                   )}
                 </Box>
                 <Box sx={{ mt: 1 }}>
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    Bank: {companyInfo.bankName}
+                    {t('invoices.details.sellerInfo.bank')}: {companyInfo.bankName}
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    Numer konta: {companyInfo.bankAccount}
+                    {t('invoices.details.sellerInfo.accountNumber')}: {companyInfo.bankAccount}
                   </Typography>
                 </Box>
               </CardContent>
@@ -652,7 +654,7 @@ const InvoiceDetails = () => {
             <Card variant="outlined">
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  Akcje
+                  {t('invoices.details.actions')}
                 </Typography>
                 
                 {invoice.status === 'issued' && (
@@ -663,7 +665,7 @@ const InvoiceDetails = () => {
                     onClick={() => handleUpdateStatus('sent')}
                     sx={{ mb: 1 }}
                   >
-                    Oznacz jako wysłaną
+                    {t('invoices.details.buttons.markAsSent')}
                   </Button>
                 )}
                 
@@ -677,7 +679,7 @@ const InvoiceDetails = () => {
                   onClick={handleDeleteClick}
                   sx={{ mb: 1 }}
                 >
-                  Usuń fakturę
+                  {t('invoices.details.buttons.deleteInvoice')}
                 </Button>
               </CardContent>
             </Card>
@@ -688,7 +690,7 @@ const InvoiceDetails = () => {
       {/* Oddzielny Paper dla sekcji pozycji faktury */}
       <Paper sx={{ p: 3, mb: 3, mt: 4, clear: 'both' }}>
         <Typography variant="h6" gutterBottom>
-          Pozycje faktury
+          {t('invoices.details.invoiceItems')}
         </Typography>
         
         <TableContainer sx={{ overflowX: 'auto' }}>
@@ -747,7 +749,7 @@ const InvoiceDetails = () => {
           <Grid container spacing={1} justifyContent="flex-end" sx={{ maxWidth: 300 }}>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
-                Razem netto:
+                {t('invoices.details.totals.netTotal')}
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -761,7 +763,7 @@ const InvoiceDetails = () => {
             </Grid>
             <Grid item xs={6}>
               <Typography variant="body1" fontWeight="bold" align="right">
-                Razem VAT:
+                {t('invoices.details.totals.vatTotal')}
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -995,7 +997,7 @@ const InvoiceDetails = () => {
       {invoice.notes && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Uwagi
+            {t('invoices.details.notes')}
           </Typography>
           <Typography variant="body1">
             {invoice.notes}
@@ -1007,7 +1009,7 @@ const InvoiceDetails = () => {
       {invoice.pdfAttachment && (
         <Paper sx={{ p: 3, mt: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Załączniki
+            {t('invoices.details.attachments')}
           </Typography>
           <Card variant="outlined" sx={{ mb: 2 }}>
             <CardContent>

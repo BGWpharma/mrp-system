@@ -52,6 +52,7 @@ import {
 import { getAllCustomers } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatters';
 import DeleteConfirmationDialog from '../common/DeleteConfirmationDialog';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -83,6 +84,7 @@ const InvoicesList = () => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -127,7 +129,7 @@ const InvoicesList = () => {
       // Pobierz dostępne kwoty dla proform
       await fetchProformaAmounts(fetchedInvoices);
     } catch (error) {
-      showError('Błąd podczas pobierania listy faktur: ' + error.message);
+      showError(t('invoices.notifications.errors.fetchInvoices') + ': ' + error.message);
       console.error('Error fetching invoices:', error);
     } finally {
       setLoading(false);
@@ -222,9 +224,9 @@ const InvoicesList = () => {
       await deleteInvoice(invoiceToDelete.id);
       setInvoices(invoices.filter(i => i.id !== invoiceToDelete.id));
       setFilteredInvoices(filteredInvoices.filter(i => i.id !== invoiceToDelete.id));
-      showSuccess('Faktura została usunięta');
+      showSuccess(t('invoices.notifications.invoiceDeleted'));
     } catch (error) {
-      showError('Błąd podczas usuwania faktury: ' + error.message);
+      showError(t('invoices.notifications.errors.deleteInvoice') + ': ' + error.message);
     } finally {
       setDeleteDialogOpen(false);
       setInvoiceToDelete(null);
@@ -236,21 +238,21 @@ const InvoicesList = () => {
       await updateInvoiceStatus(invoiceId, newStatus, currentUser.uid);
       // Odśwież listę po aktualizacji
       fetchInvoices();
-      showSuccess('Status faktury został zaktualizowany');
+      showSuccess(t('invoices.notifications.invoiceStatusUpdated'));
     } catch (error) {
-      showError('Błąd podczas aktualizacji statusu faktury: ' + error.message);
+      showError(t('invoices.notifications.errors.updateStatus') + ': ' + error.message);
     }
   };
 
   const handleRefreshList = async () => {
     await fetchInvoices();
-    showSuccess('Lista została odświeżona');
+    showSuccess(t('invoices.notifications.listRefreshed'));
   };
 
   const handleRefreshProformaAmounts = async () => {
     if (invoices.length > 0) {
       await fetchProformaAmounts(invoices);
-      showSuccess('Kwoty proform zostały odświeżone');
+      showSuccess(t('invoices.notifications.proformaAmountsRefreshed'));
     }
   };
 
@@ -279,7 +281,7 @@ const InvoicesList = () => {
       const fetchedInvoices = await getAllInvoices(filters);
       setFilteredInvoices(fetchedInvoices);
     } catch (error) {
-      showError('Błąd podczas filtrowania faktur: ' + error.message);
+      showError(t('invoices.notifications.errors.filterInvoices') + ': ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -306,13 +308,13 @@ const InvoicesList = () => {
 
   const renderInvoiceStatus = (status) => {
     const statusConfig = {
-      'draft': { color: 'default', label: 'Szkic' },
-      'issued': { color: 'primary', label: 'Wystawiona' },
-      'sent': { color: 'info', label: 'Wysłana' },
-      'paid': { color: 'success', label: 'Opłacona' },
-      'partially_paid': { color: 'warning', label: 'Częściowo opłacona' },
-      'overdue': { color: 'error', label: 'Przeterminowana' },
-      'cancelled': { color: 'error', label: 'Anulowana' }
+      'draft': { color: 'default', label: t('invoices.status.draft') },
+      'issued': { color: 'primary', label: t('invoices.status.issued') },
+      'sent': { color: 'info', label: t('invoices.status.sent') },
+      'paid': { color: 'success', label: t('invoices.status.paid') },
+      'partially_paid': { color: 'warning', label: t('invoices.status.partiallyPaid') },
+      'overdue': { color: 'error', label: t('invoices.status.overdue') },
+      'cancelled': { color: 'error', label: t('invoices.status.cancelled') }
     };
 
     const config = statusConfig[status] || { color: 'default', label: status };
@@ -328,9 +330,9 @@ const InvoicesList = () => {
 
   const renderPaymentStatus = (paymentStatus) => {
     const statusConfig = {
-      'unpaid': { color: 'error', label: 'Nieopłacona' },
-      'partially_paid': { color: 'warning', label: 'Częściowo opłacona' },
-      'paid': { color: 'success', label: 'Opłacona' }
+      'unpaid': { color: 'error', label: t('invoices.status.unpaid') },
+      'partially_paid': { color: 'warning', label: t('invoices.status.partiallyPaid') },
+      'paid': { color: 'success', label: t('invoices.status.paid') }
     };
 
     const status = paymentStatus || 'unpaid';
@@ -357,7 +359,7 @@ const InvoicesList = () => {
                 <TextField
                   fullWidth
                   variant="outlined"
-                  placeholder="Szukaj faktur..."
+                  placeholder={t('invoices.searchInvoices')}
                   value={searchTerm}
                   onChange={handleSearchChange}
                   onKeyPress={handleSearchKeyPress}
@@ -380,14 +382,14 @@ const InvoicesList = () => {
               <Grid item xs={12} sm={4}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button variant="outlined" onClick={handleSearch}>
-                    Szukaj
+                    {t('common.search')}
                   </Button>
                   <Button
                     variant="outlined"
                     startIcon={<FilterListIcon />}
                     onClick={toggleFilters}
                   >
-                    Filtry
+                    {t('common.filter')}
                   </Button>
                 </Box>
               </Grid>
@@ -402,7 +404,7 @@ const InvoicesList = () => {
                   onClick={handleRefreshList}
                   disabled={loading}
                 >
-                  Odśwież
+                  {t('invoices.refresh')}
                 </Button>
               </Grid>
               <Grid item>
@@ -423,7 +425,7 @@ const InvoicesList = () => {
                   startIcon={<CustomersIcon />}
                   onClick={() => navigate('/customers')}
                 >
-                  Klienci
+                  {t('invoices.clients')}
                 </Button>
               </Grid>
               <Grid item>
@@ -433,7 +435,7 @@ const InvoicesList = () => {
                   startIcon={<SettingsIcon />}
                   onClick={() => navigate('/invoices/company-settings')}
                 >
-                  Dane firmy
+                  {t('invoices.companyData')}
                 </Button>
               </Grid>
               <Grid item>
@@ -443,7 +445,7 @@ const InvoicesList = () => {
                   startIcon={<AddIcon />}
                   onClick={handleAddInvoice}
                 >
-                  Nowa faktura
+                  {t('invoices.newInvoice')}
                 </Button>
               </Grid>
             </Grid>
@@ -560,22 +562,22 @@ const InvoicesList = () => {
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 120, width: '14%' }}>Numer faktury</TableCell>
-                    <TableCell sx={{ minWidth: 150, width: '18%' }}>Klient</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '12%' }}>Data wystawienia</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '12%' }}>Termin płatności</TableCell>
-                    <TableCell sx={{ minWidth: 90, width: '10%' }}>Kwota</TableCell>
-                    <TableCell sx={{ minWidth: 90, width: '10%' }}>Do zapłaty/Dostępne</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '10%' }}>Status faktury</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '10%' }}>Status płatności</TableCell>
-                    <TableCell align="right" sx={{ minWidth: 100, width: '14%' }}>Akcje</TableCell>
+                    <TableCell sx={{ minWidth: 120, width: '14%' }}>{t('invoices.table.invoiceNumber')}</TableCell>
+                    <TableCell sx={{ minWidth: 150, width: '18%' }}>{t('invoices.table.client')}</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.issueDate')}</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.dueDate')}</TableCell>
+                    <TableCell sx={{ minWidth: 90, width: '10%' }}>{t('invoices.table.amount')}</TableCell>
+                    <TableCell sx={{ minWidth: 90, width: '10%' }}>{t('invoices.table.amountToPay')}</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '10%' }}>{t('invoices.table.invoiceStatus')}</TableCell>
+                    <TableCell sx={{ minWidth: 100, width: '10%' }}>{t('invoices.table.paymentStatus')}</TableCell>
+                    <TableCell align="right" sx={{ minWidth: 100, width: '14%' }}>{t('invoices.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} align="center">
-                        Brak faktur do wyświetlenia
+                        {t('invoices.noInvoicesFound')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -590,7 +592,7 @@ const InvoicesList = () => {
                               </Typography>
                               {invoice.isProforma && (
                                 <Chip 
-                                  label="Proforma" 
+                                  label={t('invoices.proforma')} 
                                   size="small" 
                                   color="primary" 
                                   variant="outlined"
@@ -685,21 +687,21 @@ const InvoicesList = () => {
                               <IconButton 
                                 size="small" 
                                 onClick={() => handleViewInvoice(invoice.id)}
-                                title="Podgląd faktury"
+                                title={t('invoices.tooltips.viewInvoice')}
                               >
                                 <ViewIcon fontSize="small" />
                               </IconButton>
                               <IconButton 
                                 size="small" 
                                 onClick={() => handleEditInvoice(invoice.id)}
-                                title="Edytuj fakturę"
+                                title={t('invoices.tooltips.editInvoice')}
                               >
                                 <EditIcon fontSize="small" />
                               </IconButton>
                               <IconButton 
                                 size="small" 
                                 onClick={() => handleDeleteClick(invoice)}
-                                title="Usuń fakturę"
+                                title={t('invoices.tooltips.deleteInvoice')}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
@@ -755,8 +757,8 @@ const InvoicesList = () => {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Usunąć fakturę?"
-        content={`Czy na pewno chcesz usunąć fakturę ${invoiceToDelete?.number}? Tej operacji nie można cofnąć.`}
+        title={t('invoices.dialogs.deleteConfirm.title')}
+        content={t('invoices.dialogs.deleteConfirm.message', { number: invoiceToDelete?.number })}
       />
     </Box>
   );
