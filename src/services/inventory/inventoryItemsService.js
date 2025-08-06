@@ -397,6 +397,9 @@ export const createInventoryItem = async (itemData, userId) => {
       // Nie przerywaj operacji jeśli nie udało się wyczyścić cache
     }
     
+    // Wyczyść cache zoptymalizowanej funkcji
+    clearInventoryItemsCache();
+    
     return {
       id: docRef.id,
       ...itemWithMeta
@@ -476,6 +479,9 @@ export const updateInventoryItem = async (itemId, itemData, userId) => {
       // Nie przerywaj operacji jeśli nie udało się wyczyścić cache
     }
     
+    // Wyczyść cache zoptymalizowanej funkcji
+    clearInventoryItemsCache();
+    
     return {
       id: validatedId,
       ...currentItem,
@@ -549,6 +555,9 @@ export const deleteInventoryItem = async (itemId) => {
     } catch (error) {
       console.error('Błąd podczas czyszczenia cache inventory:', error);
     }
+    
+    // Wyczyść cache zoptymalizowanej funkcji
+    clearInventoryItemsCache();
     
     return { 
       success: true,
@@ -1077,5 +1086,284 @@ export const getInventoryItemsByCategory = async (
     console.error('Błąd podczas pobierania produktów z kategorii:', error);
     throw new Error(`Nie udało się pobrać produktów z kategorii ${category}: ${error.message}`);
   }
+};
+
+// Cache dla pozycji magazynowych - optymalizacja dla interfejsu listy
+let inventoryItemsCache = null;
+let inventoryItemsCacheTimestamp = null;
+const CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minut
+
+/**
+ * NOWA ZOPTYMALIZOWANA FUNKCJA dla interfejsu listy pozycji magazynowych
+ * 
+ * Ta funkcja została stworzona aby rozwiązać problem wydajności w interfejsie listy:
+ * - Cachuje wszystkie pozycje magazynowe po pierwszym pobraniu
+ * - Dynamicznie pobiera partie tylko dla aktualnie wyświetlanych pozycji
+ * - Nie modyfikuje istniejącej funkcji getAllInventoryItems
+ * 
+ * @param {Object} params - Parametry zapytania
+ * @param {string|null} params.warehouseId - ID magazynu (opcjonalne)
+ * @param {number} params.page - Numer strony (wymagany)
+ * @param {number} params.pageSize - Rozmiar strony (wymagany)
+ * @param {string|null} params.searchTerm - Termin wyszukiwania (opcjonalne)
+ * @param {string|null} params.searchCategory - Kategoria do filtrowania (opcjonalne)
+ * @param {string|null} params.sortField - Pole do sortowania (opcjonalne)
+ * @param {string|null} params.sortOrder - Kierunek sortowania (opcjonalne)
+ * @param {boolean} params.forceRefresh - Wymuś odświeżenie cache (opcjonalne)
+ * @returns {Promise<Object>} - Obiekt z paginacją i danymi
+ */
+export const getInventoryItemsOptimized = async ({
+  warehouseId = null,
+  page,
+  pageSize,
+  searchTerm = null,
+  searchCategory = null,
+  sortField = null,
+  sortOrder = null,
+  forceRefresh = false
+}) => {
+  try {
+    console.log('🚀 getInventoryItemsOptimized - rozpoczynam zoptymalizowane pobieranie');
+    console.log('📄 Parametry:', { warehouseId, page, pageSize, searchTerm, searchCategory, sortField, sortOrder, forceRefresh });
+
+    // Walidacja wymaganych parametrów
+    validatePaginationParams({ page, pageSize });
+
+    // Walidacja ID magazynu jeśli podano
+    if (warehouseId) {
+      validateId(warehouseId, 'warehouseId');
+    }
+
+    // KROK 1: Sprawdź cache pozycji magazynowych
+    const now = Date.now();
+    const isCacheValid = inventoryItemsCache && 
+                        inventoryItemsCacheTimestamp && 
+                        (now - inventoryItemsCacheTimestamp) < CACHE_EXPIRY_MS &&
+                        !forceRefresh;
+
+    let allItems;
+
+    if (isCacheValid) {
+      console.log('💾 Używam cache pozycji magazynowych');
+      allItems = [...inventoryItemsCache];
+    } else {
+      console.log('🔄 Pobieram świeże dane pozycji magazynowych');
+      
+      // Pobierz wszystkie pozycje magazynowe (bez partii!)
+      const itemsRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY);
+      const q = query(itemsRef);
+      const allItemsSnapshot = await getDocs(q);
+      
+      allItems = allItemsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Zaktualizuj cache
+      inventoryItemsCache = [...allItems];
+      inventoryItemsCacheTimestamp = now;
+      
+      console.log('💾 Zapisano do cache:', allItems.length, 'pozycji');
+    }
+
+    // KROK 2: Filtrowanie po terminie wyszukiwania
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchTermLower = searchTerm.toLowerCase().trim();
+      allItems = allItems.filter(item => 
+        (item.name && item.name.toLowerCase().includes(searchTermLower)) ||
+        (item.description && item.description.toLowerCase().includes(searchTermLower)) ||
+        (item.casNumber && item.casNumber.toLowerCase().includes(searchTermLower))
+      );
+      console.log('🔍 Po filtrowaniu wyszukiwania:', allItems.length, 'pozycji');
+    }
+
+    // KROK 3: Filtrowanie po kategorii
+    if (searchCategory && searchCategory.trim() !== '') {
+      const searchCategoryLower = searchCategory.toLowerCase().trim();
+      allItems = allItems.filter(item => 
+        (item.category && item.category.toLowerCase().includes(searchCategoryLower))
+      );
+      console.log('🏷️ Po filtrowaniu kategorii:', allItems.length, 'pozycji');
+    }
+
+    // KROK 4: Sortowanie
+    const fieldToSort = SORT_FIELD_MAPPING[sortField] || 'name';
+    const direction = sortOrder === 'desc' ? 'desc' : 'asc';
+
+    allItems.sort((a, b) => {
+      let valueA, valueB;
+      
+      // Dla sortowania po ilościach używamy domyślnych wartości (będą przeliczone z partii)
+      if (sortField === 'availableQuantity' || sortField === 'totalQuantity' || sortField === 'reservedQuantity') {
+        valueA = Number(a[fieldToSort] || 0);
+        valueB = Number(b[fieldToSort] || 0);
+      } else {
+        // Dla stringów i innych pól
+        valueA = (a[fieldToSort] || '').toString().toLowerCase();
+        valueB = (b[fieldToSort] || '').toString().toLowerCase();
+      }
+      
+      if (typeof valueA === 'number' && typeof valueB === 'number') {
+        return direction === 'desc' ? valueB - valueA : valueA - valueB;
+      } else {
+        if (valueA < valueB) return direction === 'desc' ? 1 : -1;
+        if (valueA > valueB) return direction === 'desc' ? -1 : 1;
+        return 0;
+      }
+    });
+
+    // KROK 5: Paginacja - wytnij tylko aktualną stronę
+    const totalCount = allItems.length;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageItems = allItems.slice(startIndex, endIndex);
+
+    console.log('📄 Paginacja - strona:', page, 'rozmiar:', pageSize, 'pozycji na stronie:', pageItems.length);
+
+    // KROK 6: Pobierz partie TYLKO dla pozycji na aktualnej stronie
+    const pageItemIds = pageItems.map(item => item.id);
+    const batchesRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY_BATCHES);
+    
+    console.log('🎯 Pobieram partie tylko dla', pageItemIds.length, 'pozycji na aktualnej stronie');
+
+    // Grupuj zapytania o partie w batche po 10 (limit Firebase 'in')
+    const batchSize = 10;
+    const itemIdBatches = [];
+    for (let i = 0; i < pageItemIds.length; i += batchSize) {
+      itemIdBatches.push(pageItemIds.slice(i, i + batchSize));
+    }
+
+    // Pobierz partie dla pozycji na aktualnej stronie
+    const batchPromises = itemIdBatches.map(async (idBatch) => {
+      if (idBatch.length === 0) return [];
+      
+      let batchQuery;
+      if (warehouseId) {
+        // Filtruj po magazynie I po pozycjach
+        batchQuery = query(
+          batchesRef,
+          where('itemId', 'in', idBatch),
+          where('warehouseId', '==', warehouseId)
+        );
+      } else {
+        // Tylko po pozycjach
+        batchQuery = query(
+          batchesRef,
+          where('itemId', 'in', idBatch)
+        );
+      }
+      
+      const batchSnapshot = await getDocs(batchQuery);
+      return batchSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    });
+
+    const pageBatches = (await Promise.all(batchPromises)).flat();
+    
+    console.log('📦 Pobrano', pageBatches.length, 'partii dla aktualnej strony');
+
+    // KROK 7: Organizuj partie w cache według itemId
+    const batchesCache = {};
+    pageBatches.forEach(batch => {
+      const itemId = batch.itemId;
+      if (!batchesCache[itemId]) {
+        batchesCache[itemId] = [];
+      }
+      batchesCache[itemId].push(batch);
+    });
+
+    // KROK 8: Przelicz rzeczywiste ilości dla pozycji na stronie
+    const enrichedPageItems = pageItems.map(item => {
+      const itemBatches = batchesCache[item.id] || [];
+      let totalQuantity = 0;
+
+      itemBatches.forEach(batch => {
+        totalQuantity += parseFloat(batch.quantity || 0);
+      });
+
+      // Przypisz obliczone wartości
+      const enrichedItem = {
+        ...item,
+        quantity: formatQuantityPrecision(totalQuantity),
+        bookedQuantity: formatQuantityPrecision(item.bookedQuantity || 0),
+        availableQuantity: formatQuantityPrecision(totalQuantity - (item.bookedQuantity || 0)),
+        batches: itemBatches,
+        batchCount: itemBatches.length
+      };
+
+      // Dodaj informację o magazynie, jeśli filtrujemy po konkretnym magazynie
+      if (warehouseId && itemBatches.length > 0) {
+        enrichedItem.warehouseId = warehouseId;
+      }
+
+      return enrichedItem;
+    });
+
+    // KROK 9: Zwróć wynik
+    const result = {
+      items: enrichedPageItems,
+      totalCount: totalCount,
+      page: page,
+      pageSize: pageSize,
+      totalPages: totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+      // Dodatkowe informacje
+      cacheUsed: isCacheValid,
+      batchesLoaded: pageBatches.length,
+      optimization: {
+        totalItemsInCache: inventoryItemsCache?.length || 0,
+        itemsOnPage: enrichedPageItems.length,
+        batchQueriesExecuted: itemIdBatches.length
+      }
+    };
+
+    console.log('✅ getInventoryItemsOptimized - zakończono:', {
+      totalCount,
+      currentPage: page,
+      totalPages,
+      itemsOnPage: enrichedPageItems.length,
+      batchesLoaded: pageBatches.length,
+      cacheUsed: isCacheValid
+    });
+
+    return result;
+
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('❌ Błąd w getInventoryItemsOptimized:', error);
+    throw new Error(`Nie udało się pobrać pozycji magazynowych (zoptymalizowane): ${error.message}`);
+  }
+};
+
+/**
+ * Wyczyść cache pozycji magazynowych
+ * Użyj tej funkcji gdy wiesz, że dane mogły się zmienić (np. po dodaniu/edycji/usunięciu pozycji)
+ */
+export const clearInventoryItemsCache = () => {
+  inventoryItemsCache = null;
+  inventoryItemsCacheTimestamp = null;
+  console.log('🗑️ Cache pozycji magazynowych został wyczyszczony');
+};
+
+/**
+ * Sprawdź status cache pozycji magazynowych
+ */
+export const getInventoryItemsCacheStatus = () => {
+  const now = Date.now();
+  return {
+    hasCache: !!inventoryItemsCache,
+    itemsCount: inventoryItemsCache?.length || 0,
+    cacheAge: inventoryItemsCacheTimestamp ? now - inventoryItemsCacheTimestamp : null,
+    isValid: inventoryItemsCache && 
+             inventoryItemsCacheTimestamp && 
+             (now - inventoryItemsCacheTimestamp) < CACHE_EXPIRY_MS,
+    expiryTime: inventoryItemsCacheTimestamp ? inventoryItemsCacheTimestamp + CACHE_EXPIRY_MS : null
+  };
 };
 

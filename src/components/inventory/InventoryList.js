@@ -67,7 +67,7 @@ import {
   Assignment as CoAIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getAllInventoryItems, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
+import { getAllInventoryItems, getInventoryItemsOptimized, clearInventoryItemsCache, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatQuantity } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
@@ -399,18 +399,19 @@ const InventoryList = () => {
       const sortFieldToUse = newSortField || tableSort.field;
       const sortOrderToUse = newSortOrder || tableSort.order;
       
-      // Wywołaj getAllInventoryItems z parametrami paginacji, wyszukiwania i sortowania
+      // UŻYJ ZOPTYMALIZOWANEJ FUNKCJI dla lepszej wydajności
       // W głównej zakładce "Stany" nie filtrujemy po magazynie - pokazujemy wszystkie pozycje
       const warehouseFilter = currentTab === 0 ? null : (selectedWarehouse || null);
-      const result = await getAllInventoryItems(
-        warehouseFilter, 
-        page, 
-        pageSize, 
-        debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
-        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
-        sortFieldToUse,
-        sortOrderToUse
-      );
+      const result = await getInventoryItemsOptimized({
+        warehouseId: warehouseFilter,
+        page: page,
+        pageSize: pageSize,
+        searchTerm: debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        searchCategory: debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
+        sortField: sortFieldToUse,
+        sortOrder: sortOrderToUse,
+        forceRefresh: false
+      });
       
       // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
       if (result && result.items) {
@@ -424,11 +425,11 @@ const InventoryList = () => {
         setFilteredItems(result);
       }
       
-      // Dodaj małe opóźnienie dla smooth transition w głównej tabeli
+      // PRZYŚPIESZONE ANIMACJE - zmniejszone opóźnienie dla lepszej responsywności
       if (currentTab === 0) {
         setTimeout(() => {
           setShowContent(true);
-        }, 100);
+        }, 25); // Zmniejszone z 100ms do 25ms
       }
       
     } catch (error) {
@@ -1439,6 +1440,10 @@ const InventoryList = () => {
 
   const handleRefreshList = () => {
     console.log('🔄 Ręczne odświeżanie listy pozycji magazynowych...');
+    
+    // Wyczyść cache przed odświeżeniem
+    clearInventoryItemsCache();
+    
     // Odśwież dane w zależności od aktywnej zakładki
     if (currentTab === 0) {
       // Zakładka "Stany"
@@ -1646,6 +1651,24 @@ const InventoryList = () => {
               >
                 {t('inventory.states.searchNow')}
               </Button>
+              <Tooltip title="Odśwież listę i wyczyść cache">
+                <IconButton 
+                  onClick={handleRefreshList}
+                  color="primary"
+                  size="medium"
+                  sx={{ 
+                    ml: 1,
+                    border: '1px solid',
+                    borderColor: 'primary.main',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                      color: 'primary.contrastText'
+                    }
+                  }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
               <Tooltip title={t('inventory.states.configureColumns')}>
                 <IconButton onClick={handleColumnMenuOpen}>
                   <ViewColumnIcon />
@@ -1866,15 +1889,15 @@ const InventoryList = () => {
                           <Grow
                             key={item.id}
                             in={showContent}
-                            timeout={200 + (index * 50)}
+                            timeout={100 + (index * 15)}
                             style={{ transformOrigin: '0 0 0' }}
                           >
                             <TableRow 
                               sx={{ 
-                                transition: 'all 0.15s ease-in-out',
+                                transition: 'all 0.08s ease-in-out',
                                 '&:hover': {
                                   backgroundColor: 'action.hover',
-                                  transform: 'translateX(2px)'
+                                  transform: 'translateX(1px)'
                                 }
                               }}
                             >
