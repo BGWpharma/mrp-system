@@ -37,7 +37,6 @@ const defaultColumnPreferences = {
     name: true,
     productName: true,
     quantityProgress: true,
-    workstation: true,
     status: true,
     plannedStart: true,
     plannedEnd: true,

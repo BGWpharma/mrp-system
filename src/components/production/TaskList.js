@@ -75,7 +75,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
-import { getWorkstationById } from '../../services/workstationService';
+
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
@@ -127,7 +127,7 @@ const TaskList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [workstationNames, setWorkstationNames] = useState({});
+
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const muiTheme = useMuiTheme();
@@ -241,30 +241,7 @@ const TaskList = () => {
     setFilteredTasks(tasks);
   }, [tasks]);
 
-  // Pobierz nazwy stanowisk dla zadań
-  useEffect(() => {
-    const fetchWorkstationNames = async () => {
-      const workstationData = {};
-      
-      for (const task of tasks) {
-        if (task.workstationId && !workstationData[task.workstationId]) {
-          try {
-            const workstation = await getWorkstationById(task.workstationId);
-            workstationData[task.workstationId] = workstation.name;
-          } catch (error) {
-            console.error(`Błąd podczas pobierania stanowiska dla ID ${task.workstationId}:`, error);
-            workstationData[task.workstationId] = "Nieznane stanowisko";
-          }
-        }
-      }
-      
-      setWorkstationNames(workstationData);
-    };
-    
-    if (tasks.length > 0) {
-      fetchWorkstationNames();
-    }
-  }, [tasks]);
+
 
   // Funkcja do pobierania magazynów
   const fetchWarehouses = async () => {
@@ -945,19 +922,7 @@ const TaskList = () => {
         return;
       }
 
-      // Pobierz nazwy stanowisk dla zadań, które je mają
-      const workstationDataMap = { ...workstationNames };
-      for (const task of allTasks) {
-        if (task.workstationId && !workstationDataMap[task.workstationId]) {
-          try {
-            const workstation = await getWorkstationById(task.workstationId);
-            workstationDataMap[task.workstationId] = workstation.name;
-          } catch (error) {
-            console.error(`Błąd podczas pobierania stanowiska ${task.workstationId}:`, error);
-            workstationDataMap[task.workstationId] = 'Nieznane stanowisko';
-          }
-        }
-      }
+
 
       // Pobierz nazwy użytkowników dla pól createdBy i updatedBy
       const allUserIds = [
@@ -1021,7 +986,7 @@ const TaskList = () => {
         { label: t('production.csvHeaders.unit'), key: 'unit' },
         { label: t('production.csvHeaders.remainingQuantity'), key: 'remainingQuantity' },
         { label: t('production.csvHeaders.status'), key: 'status' },
-        { label: t('production.csvHeaders.workstationName'), key: 'workstationName' },
+  
         { label: t('production.csvHeaders.plannedStart'), key: 'scheduledDate' },
         { label: t('production.csvHeaders.plannedEnd'), key: 'endDate' },
         { label: t('production.csvHeaders.estimatedDurationHours'), key: 'estimatedDurationHours' },
@@ -1047,7 +1012,7 @@ const TaskList = () => {
           unit: task.unit || 'szt.',
           remainingQuantity: remainingQuantity,
           status: task.status || '',
-          workstationName: workstationDataMap[task.workstationId] || '',
+  
           scheduledDate: formatDateForCSV(task.scheduledDate),
           endDate: formatDateForCSV(task.endDate),
           estimatedDurationHours: task.estimatedDuration ? (task.estimatedDuration / 60).toFixed(2) : '',
@@ -1152,17 +1117,7 @@ const TaskList = () => {
                 </Box>
               </Box>
             </Box>
-            
-            {workstationNames[task.workstationId] && (
-              <Box sx={{ mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {t('production.taskListLabels.workstation')}
-                </Typography>
-                <Typography variant="body2">
-                  {workstationNames[task.workstationId] || task.workstationName || '-'}
-                </Typography>
-              </Box>
-            )}
+
             
             {task.materials && task.materials.length > 0 && (
               <Box sx={{ mt: 0.5 }}>
@@ -1475,7 +1430,7 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.workstation && <TableCell>{t('production.taskListColumns.workstation')}</TableCell>}
+
                   {visibleColumns.status && (
                     <TableCell
                       onClick={() => handleSort('status')}
@@ -1602,11 +1557,7 @@ const TaskList = () => {
                           </Box>
                         </TableCell>
                       )}
-                      {visibleColumns.workstation && (
-                        <TableCell>
-                          {workstationNames[task.workstationId] || task.workstationName || '-'}
-                        </TableCell>
-                      )}
+
                       {visibleColumns.status && (
                         <TableCell>
                           <Chip 
@@ -1778,10 +1729,7 @@ const TaskList = () => {
           <Checkbox checked={visibleColumns.quantityProgress} />
           <ListItemText primary={t('production.taskListColumns.quantityProgress')} />
         </MenuItem>
-        <MenuItem onClick={() => toggleColumnVisibility('workstation')}>
-          <Checkbox checked={visibleColumns.workstation} />
-          <ListItemText primary={t('production.taskListColumns.workstation')} />
-        </MenuItem>
+        
         <MenuItem onClick={() => toggleColumnVisibility('status')}>
           <Checkbox checked={visibleColumns.status} />
           <ListItemText primary={t('production.taskListColumns.status')} />

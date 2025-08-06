@@ -1712,7 +1712,6 @@
       "taskName": "Task Name",
       "product": "Product",
       "quantityProgress": "Quantity / Remaining",
-      "workstation": "Workstation",
       "status": "Status",
       "materialsReserved": "Materials Reserved",
       "plannedStart": "Planned Start",
@@ -1726,7 +1725,6 @@
       "product": "Product:",
       "quantityRemaining": "Quantity / Remaining:",
       "remaining": "remaining:",
-      "workstation": "Workstation:",
       "stopProduction": "Stop Production"
     },
     "tooltips": {
@@ -1742,7 +1740,6 @@
       "unit": "Unit",
       "remainingQuantity": "Remaining to Produce",
       "status": "Status",
-      "workstationName": "Production Workstation",
       "plannedStart": "Planned Start",
       "plannedEnd": "Planned End",
       "estimatedDurationHours": "Estimated Production Time (hours)",
@@ -1806,7 +1803,6 @@
         "product": "Product",
         "moNumber": "MO Number",
         "quantity": "Quantity",
-        "workstation": "Workstation",
         "status": "Status",
         "customer": "Customer",
         "orderNumber": "Order Number",
