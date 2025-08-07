@@ -516,7 +516,8 @@ const CmrListPage = () => {
     try {
       await updateCmrPaymentStatus(cmrToUpdatePaymentStatus.id, newPaymentStatus, currentUser.uid);
       
-      // Po aktualizacji odświeżamy listę
+      // Cache jest automatycznie aktualizowany w updateCmrPaymentStatus, 
+      // ale odświeżamy UI aby pobrać zaktualizowane dane z cache
       fetchCmrDocumentsOptimized();
       
       showSuccess('Status płatności został zaktualizowany');

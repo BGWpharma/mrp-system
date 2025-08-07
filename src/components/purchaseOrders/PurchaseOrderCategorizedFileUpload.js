@@ -15,7 +15,8 @@ import {
   Tooltip,
   Tabs,
   Tab,
-  Badge
+  Badge,
+  CircularProgress
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -27,11 +28,13 @@ import {
   PictureAsPdf as PdfIcon,
   Assignment as AssignmentIcon,
   Receipt as ReceiptIcon,
-  FolderOpen as FolderOpenIcon
+  FolderOpen as FolderOpenIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { useAuth } from '../../hooks/useAuth';
+import { updatePurchaseOrderAttachments, validateAndCleanupAttachments } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from 'react-i18next';
 
@@ -48,6 +51,7 @@ const PurchaseOrderCategorizedFileUpload = ({
   const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
 
   // Dozwolone typy plików
@@ -144,6 +148,18 @@ const PurchaseOrderCategorizedFileUpload = ({
       }
 
       onAttachmentsChange(newAttachments);
+
+      // NOWE: Natychmiast zapisz zmiany do bazy danych jeśli mamy prawdziwy orderId
+      if (orderId && orderId !== 'temp') {
+        try {
+          await updatePurchaseOrderAttachments(orderId, newAttachments, currentUser.uid);
+          console.log('✅ Załączniki zaktualizowane w bazie danych po upload');
+        } catch (dbError) {
+          console.error('❌ Błąd podczas aktualizacji załączników w bazie danych:', dbError);
+          // Nie blokuj operacji - użytkownik zobaczy efekt lokalnie
+          showError(`Pliki zostały przesłane, ale wystąpił błąd podczas aktualizacji bazy danych. Zapisz formularz aby zachować zmiany.`);
+        }
+      }
     } finally {
       setUploading(false);
     }
@@ -174,11 +190,54 @@ const PurchaseOrderCategorizedFileUpload = ({
           break;
       }
 
+      // Aktualizuj stan lokalny
       onAttachmentsChange(newAttachments);
+
+      // NOWE: Natychmiast zapisz zmiany do bazy danych jeśli mamy prawdziwy orderId
+      if (orderId && orderId !== 'temp') {
+        try {
+          await updatePurchaseOrderAttachments(orderId, newAttachments, currentUser.uid);
+          console.log('✅ Załączniki zaktualizowane w bazie danych');
+        } catch (dbError) {
+          console.error('❌ Błąd podczas aktualizacji załączników w bazie danych:', dbError);
+          // Nie blokuj operacji - użytkownik zobaczy efekt lokalnie, ale może być konieczny reload
+          showError(`Plik został usunięty, ale wystąpił błąd podczas aktualizacji bazy danych. Odśwież stronę aby zobaczyć aktualne dane.`);
+          return;
+        }
+      }
+
       showSuccess(`Plik "${attachment.fileName}" został usunięty`);
     } catch (error) {
-      console.error('Błąd podczas usywania pliku:', error);
+      console.error('Błąd podczas usuwania pliku:', error);
       showError(`Błąd podczas usuwania pliku: ${error.message}`);
+    }
+  };
+
+  // Funkcja odświeżania załączników z weryfikacją istnienia w Storage
+  const handleRefreshAttachments = async () => {
+    if (refreshing || !orderId || orderId === 'temp') {
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      const result = await validateAndCleanupAttachments(orderId, currentUser.uid);
+      
+      if (result.success) {
+        // Aktualizuj lokalne dane z oczyszczonymi załącznikami
+        onAttachmentsChange(result.updatedAttachments);
+        
+        if (result.totalRemoved > 0) {
+          showSuccess(result.message);
+        } else {
+          showSuccess('Wszystkie załączniki są aktualne');
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania załączników:', error);
+      showError(`Błąd podczas odświeżania załączników: ${error.message}`);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -434,6 +493,26 @@ const PurchaseOrderCategorizedFileUpload = ({
           />
         </Tabs>
       </Box>
+
+      {/* Przycisk odświeżania załączników */}
+      {orderId && orderId !== 'temp' && (
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Tooltip title="Sprawdź istnienie plików w Firebase Storage i usuń nieistniejące załączniki">
+            <IconButton
+              onClick={handleRefreshAttachments}
+              disabled={disabled || refreshing || uploading}
+              color="primary"
+              size="small"
+            >
+              {refreshing ? (
+                <CircularProgress size={20} />
+              ) : (
+                <RefreshIcon />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
 
       {activeTab === 0 && renderAttachmentSection(coaAttachments, 'coa', 'coaAttachments')}
       {activeTab === 1 && renderAttachmentSection(invoiceAttachments, 'invoice', 'invoiceAttachments')}

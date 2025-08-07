@@ -772,6 +772,15 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
       // Nie przerywamy procesu zmiany statusu - tylko logujemy błąd
     }
     
+    // Aktualizuj cache CMR z nowymi danymi
+    const updatedCacheData = {
+      status: newStatus,
+      updatedAt: new Date(), // Użyj lokalnej daty dla cache
+      updatedBy: userId
+    };
+    
+    updateCmrDocumentInCache(cmrId, updatedCacheData);
+    
     const result = { 
       success: true, 
       status: newStatus 
@@ -1445,6 +1454,16 @@ export const updateCmrPaymentStatus = async (cmrId, newPaymentStatus, userId) =>
     // Aktualizuj dokument
     await updateDoc(cmrRef, updateFields);
 
+    // Aktualizuj cache CMR z nowymi danymi
+    const updatedCacheData = {
+      paymentStatus: newPaymentStatus,
+      paymentStatusHistory,
+      updatedAt: new Date(), // Użyj lokalnej daty dla cache
+      updatedBy: userId
+    };
+    
+    updateCmrDocumentInCache(cmrId, updatedCacheData);
+
     console.log(`Zaktualizowano status płatności dokumentu CMR ${cmrId} z "${oldPaymentStatus}" na "${newPaymentStatus}"`);
 
     return { 
@@ -1873,7 +1892,7 @@ export const deleteCmrAttachment = async (attachmentId, userId) => {
 // Cache dla zoptymalizowanej funkcji pobierania dokumentów CMR
 let cmrDocumentsCache = null;
 let cmrDocumentsCacheTimestamp = null;
-const CMR_CACHE_EXPIRY_MS = 3 * 60 * 1000; // 3 minuty
+const CMR_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minuty
 
 /**
  * ZOPTYMALIZOWANA FUNKCJA dla interfejsu listy dokumentów CMR

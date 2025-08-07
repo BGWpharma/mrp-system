@@ -12,7 +12,8 @@ import {
   LinearProgress,
   Chip,
   Alert,
-  Tooltip
+  Tooltip,
+  CircularProgress
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -21,11 +22,13 @@ import {
   AttachFile as AttachFileIcon,
   Description as DescriptionIcon,
   Image as ImageIcon,
-  PictureAsPdf as PdfIcon
+  PictureAsPdf as PdfIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { useAuth } from '../../hooks/useAuth';
+import { updatePurchaseOrderAttachments, validateAndCleanupAttachments } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
 
 const PurchaseOrderFileUpload = ({ orderId, attachments = [], onAttachmentsChange, disabled = false }) => {
@@ -33,6 +36,7 @@ const PurchaseOrderFileUpload = ({ orderId, attachments = [], onAttachmentsChang
   const { showSuccess, showError } = useNotification();
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Dozwolone typy plików
   const allowedTypes = [
@@ -124,10 +128,57 @@ const PurchaseOrderFileUpload = ({ orderId, attachments = [], onAttachmentsChang
 
       const updatedAttachments = attachments.filter(a => a.id !== attachment.id);
       onAttachmentsChange(updatedAttachments);
+
+      // NOWE: Natychmiast zapisz zmiany do bazy danych jeśli mamy prawdziwy orderId
+      if (orderId && orderId !== 'temp') {
+        try {
+          // Konwertuj stare załączniki na nowy format kategoryzowany
+          const attachmentsUpdate = {
+            coaAttachments: [],
+            invoiceAttachments: [],
+            generalAttachments: updatedAttachments // Stare załączniki trafiają do "general"
+          };
+          await updatePurchaseOrderAttachments(orderId, attachmentsUpdate, currentUser.uid);
+          console.log('✅ Załączniki zaktualizowane w bazie danych');
+        } catch (dbError) {
+          console.error('❌ Błąd podczas aktualizacji załączników w bazie danych:', dbError);
+          showError(`Plik został usunięty, ale wystąpił błąd podczas aktualizacji bazy danych. Odśwież stronę aby zobaczyć aktualne dane.`);
+          return;
+        }
+      }
+
       showSuccess(`Plik "${attachment.fileName}" został usunięty`);
     } catch (error) {
-      console.error('Błąd podczas usuwania pliku:', error);
+      console.error('Błąd podczas usywania pliku:', error);
       showError(`Błąd podczas usuwania pliku: ${error.message}`);
+    }
+  };
+
+  // Funkcja odświeżania załączników z weryfikacją istnienia w Storage (dla starszego komponentu)
+  const handleRefreshAttachments = async () => {
+    if (refreshing || !orderId || orderId === 'temp') {
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      const result = await validateAndCleanupAttachments(orderId, currentUser.uid);
+      
+      if (result.success) {
+        // Dla starszego komponentu przekazujemy tylko generalAttachments jako główne attachments
+        onAttachmentsChange(result.updatedAttachments.attachments || []);
+        
+        if (result.totalRemoved > 0) {
+          showSuccess(result.message);
+        } else {
+          showSuccess('Wszystkie załączniki są aktualne');
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania załączników:', error);
+      showError(`Błąd podczas odświeżania załączników: ${error.message}`);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -224,6 +275,26 @@ const PurchaseOrderFileUpload = ({ orderId, attachments = [], onAttachmentsChang
         onChange={(e) => handleFileSelect(Array.from(e.target.files))}
         disabled={disabled || uploading}
       />
+
+      {/* Przycisk odświeżania załączników */}
+      {orderId && orderId !== 'temp' && attachments.length > 0 && (
+        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'flex-end' }}>
+          <Tooltip title="Sprawdź istnienie plików w Firebase Storage i usuń nieistniejące załączniki">
+            <IconButton
+              onClick={handleRefreshAttachments}
+              disabled={disabled || refreshing || uploading}
+              color="primary"
+              size="small"
+            >
+              {refreshing ? (
+                <CircularProgress size={16} />
+              ) : (
+                <RefreshIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
 
       {/* Lista załączonych plików */}
       {attachments.length > 0 && (

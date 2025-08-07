@@ -13,7 +13,8 @@ import {
   limit as firebaseLimit,
   limit
 } from 'firebase/firestore';
-import { db } from './firebase/config';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { db, storage } from './firebase/config';
 import { createNotification } from './notificationService';
 
 // Stałe dla kolekcji w Firebase
@@ -2463,6 +2464,190 @@ export const updatePurchaseOrderPaymentStatus = async (purchaseOrderId, newPayme
     };
   } catch (error) {
     console.error('Błąd podczas aktualizacji statusu płatności zamówienia zakupowego:', error);
+    throw error;
+  }
+};
+
+/**
+ * Aktualizuje załączniki zamówienia zakupowego w bazie danych
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {Object} attachments - Obiekt z załącznikami {coaAttachments, invoiceAttachments, generalAttachments}
+ * @param {string} userId - ID użytkownika wykonującego aktualizację
+ * @returns {Promise<void>}
+ */
+export const updatePurchaseOrderAttachments = async (purchaseOrderId, attachments, userId) => {
+  try {
+    if (!purchaseOrderId) {
+      throw new Error('ID zamówienia zakupowego jest wymagane');
+    }
+
+    const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    
+    // Sprawdź czy zamówienie istnieje
+    const poDoc = await getDoc(poRef);
+    if (!poDoc.exists()) {
+      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${purchaseOrderId}`);
+    }
+
+    const updateFields = {
+      coaAttachments: attachments.coaAttachments || [],
+      invoiceAttachments: attachments.invoiceAttachments || [],
+      generalAttachments: attachments.generalAttachments || [],
+      // Aktualizuj także stare pole dla kompatybilności
+      attachments: [
+        ...(attachments.coaAttachments || []),
+        ...(attachments.invoiceAttachments || []),
+        ...(attachments.generalAttachments || [])
+      ],
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    };
+
+    // Aktualizuj dokument
+    await updateDoc(poRef, updateFields);
+
+    console.log(`Zaktualizowano załączniki zamówienia ${purchaseOrderId}`);
+
+    // Wyczyść cache dotyczące tego zamówienia
+    if (searchCache.invalidateForOrder) {
+      searchCache.invalidateForOrder(purchaseOrderId);
+    }
+
+    return { 
+      success: true, 
+      message: 'Załączniki zostały zaktualizowane'
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji załączników zamówienia zakupowego:', error);
+    throw error;
+  }
+};
+
+/**
+ * Sprawdza istnienie załączników w Firebase Storage i usuwa nieistniejące z bazy danych
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {string} userId - ID użytkownika wykonującego operację
+ * @returns {Promise<Object>} - Wynik operacji z informacjami o usuniętych załącznikach
+ */
+export const validateAndCleanupAttachments = async (purchaseOrderId, userId) => {
+  try {
+    if (!purchaseOrderId) {
+      throw new Error('ID zamówienia zakupowego jest wymagane');
+    }
+
+    // Pobierz aktualne dane zamówienia
+    const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
+    const poDoc = await getDoc(poRef);
+    
+    if (!poDoc.exists()) {
+      throw new Error(`Nie znaleziono zamówienia zakupowego o ID ${purchaseOrderId}`);
+    }
+
+    const poData = poDoc.data();
+    
+    // Pobierz wszystkie kategorie załączników
+    const coaAttachments = poData.coaAttachments || [];
+    const invoiceAttachments = poData.invoiceAttachments || [];
+    const generalAttachments = poData.generalAttachments || [];
+    const oldAttachments = poData.attachments || [];
+
+    // Funkcja sprawdzania istnienia pliku w Storage
+    const checkFileExists = async (attachment) => {
+      try {
+        if (!attachment.storagePath) {
+          console.warn(`Załącznik ${attachment.fileName} nie ma ścieżki storage`);
+          return false;
+        }
+        
+        const fileRef = ref(storage, attachment.storagePath);
+        await getDownloadURL(fileRef); // Jeśli plik istnieje, to się powiedzie
+        return true;
+      } catch (error) {
+        if (error.code === 'storage/object-not-found') {
+          console.warn(`Plik nie istnieje w Storage: ${attachment.storagePath}`);
+          return false;
+        }
+        // Inne błędy mogą oznaczać problemy z siecią, więc zachowujemy załącznik
+        console.error(`Błąd podczas sprawdzania pliku ${attachment.storagePath}:`, error);
+        return true; // Zachowaj załącznik w przypadku błędu sieci
+      }
+    };
+
+    // Sprawdź każdą kategorię załączników
+    const [validCoaAttachments, validInvoiceAttachments, validGeneralAttachments, validOldAttachments] = 
+      await Promise.all([
+        Promise.all(coaAttachments.map(async (attachment) => {
+          const exists = await checkFileExists(attachment);
+          return exists ? attachment : null;
+        })),
+        Promise.all(invoiceAttachments.map(async (attachment) => {
+          const exists = await checkFileExists(attachment);
+          return exists ? attachment : null;
+        })),
+        Promise.all(generalAttachments.map(async (attachment) => {
+          const exists = await checkFileExists(attachment);
+          return exists ? attachment : null;
+        })),
+        Promise.all(oldAttachments.map(async (attachment) => {
+          const exists = await checkFileExists(attachment);
+          return exists ? attachment : null;
+        }))
+      ]);
+
+    // Filtruj null wartości (nieistniejące pliki)
+    const cleanedCoaAttachments = validCoaAttachments.filter(attachment => attachment !== null);
+    const cleanedInvoiceAttachments = validInvoiceAttachments.filter(attachment => attachment !== null);
+    const cleanedGeneralAttachments = validGeneralAttachments.filter(attachment => attachment !== null);
+    const cleanedOldAttachments = validOldAttachments.filter(attachment => attachment !== null);
+
+    // Policz usunięte załączniki
+    const removedCount = {
+      coa: coaAttachments.length - cleanedCoaAttachments.length,
+      invoice: invoiceAttachments.length - cleanedInvoiceAttachments.length,
+      general: generalAttachments.length - cleanedGeneralAttachments.length,
+      old: oldAttachments.length - cleanedOldAttachments.length
+    };
+
+    const totalRemoved = removedCount.coa + removedCount.invoice + removedCount.general + removedCount.old;
+
+    // Aktualizuj bazę danych tylko jeśli coś zostało usunięte
+    if (totalRemoved > 0) {
+      const updateFields = {
+        coaAttachments: cleanedCoaAttachments,
+        invoiceAttachments: cleanedInvoiceAttachments,
+        generalAttachments: cleanedGeneralAttachments,
+        attachments: cleanedOldAttachments,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+
+      await updateDoc(poRef, updateFields);
+
+      console.log(`Usunięto ${totalRemoved} nieistniejących załączników z zamówienia ${purchaseOrderId}`);
+
+      // Wyczyść cache dotyczące tego zamówienia
+      if (searchCache.invalidateForOrder) {
+        searchCache.invalidateForOrder(purchaseOrderId);
+      }
+    }
+
+    return {
+      success: true,
+      removedCount,
+      totalRemoved,
+      updatedAttachments: {
+        coaAttachments: cleanedCoaAttachments,
+        invoiceAttachments: cleanedInvoiceAttachments,
+        generalAttachments: cleanedGeneralAttachments,
+        attachments: cleanedOldAttachments
+      },
+      message: totalRemoved > 0 
+        ? `Usunięto ${totalRemoved} nieistniejących załączników`
+        : 'Wszystkie załączniki są aktualne'
+    };
+
+  } catch (error) {
+    console.error('Błąd podczas sprawdzania załączników:', error);
     throw error;
   }
 };

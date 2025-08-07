@@ -681,6 +681,7 @@
         "defaultSupplierPrice": "Domyślna cena dostawcy"
       },
       "summary": {
+        "title": "Podsumowanie kosztów",
         "itemsValue": "Wartość pozycji",
         "additionalCostsNet": "Dodatkowe koszty netto",
         "additionalCostsVat": "VAT od dodatkowych kosztów",

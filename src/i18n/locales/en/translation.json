@@ -672,6 +672,7 @@
         "defaultSupplierPrice": "Default supplier price"
       },
       "summary": {
+        "title": "Cost Summary", 
         "itemsValue": "Items value",
         "additionalCostsNet": "Additional costs net",
         "additionalCostsVat": "VAT from additional costs",
