@@ -828,7 +828,22 @@
       "employeeEmail": "Employee email",
       "employee": "Employee",
       "position": "Position",
-      "notProvided": "Not provided"
+      "notProvided": "Not provided",
+      "coaMigration": {
+        "title": "CoA Attachments Migration",
+        "description": "Move CoA attachments as batch certificates",
+        "selectAttachments": "Select CoA attachments",
+        "selectBatch": "Select target batch",
+        "migrateToBatch": "Migrate to batch",
+        "migrating": "Migrating...",
+        "downloadingFiles": "Downloading files...",
+        "success": "Successfully migrated {{count}} CoA attachments",
+        "noAttachments": "No CoA attachments to migrate",
+        "noBatches": "No related batches found",
+        "summary": "Migration summary",
+        "attachmentsToMigrate": "Attachments to migrate: {{count}}",
+        "targetBatch": "Target batch: {{batch}}"
+      }
     }
   },
   "cmr": {

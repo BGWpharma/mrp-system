@@ -837,7 +837,22 @@
       "employeeEmail": "Email pracownika",
       "employee": "Pracownik",
       "position": "Stanowisko",
-      "notProvided": "Nie podano"
+      "notProvided": "Nie podano",
+      "coaMigration": {
+        "title": "Migracja załączników CoA",
+        "description": "Przenieś załączniki CoA jako certyfikaty partii",
+        "selectAttachments": "Wybierz załączniki CoA",
+        "selectBatch": "Wybierz partię docelową",
+        "migrateToBatch": "Migruj do partii",
+        "migrating": "Migracja...",
+        "downloadingFiles": "Pobieranie plików...",
+        "success": "Pomyślnie zmigrowano {{count}} załączników CoA",
+        "noAttachments": "Brak załączników CoA do migracji",
+        "noBatches": "Brak powiązanych partii",
+        "summary": "Podsumowanie migracji",
+        "attachmentsToMigrate": "Załączników do przeniesienia: {{count}}",
+        "targetBatch": "Partia docelowa: {{batch}}"
+      }
     }
   },
   "cmr": {

@@ -57,6 +57,7 @@ import { updateDoc, doc, getDoc, collection, query, where, getDocs } from 'fireb
 import { formatCurrency } from '../../utils/formatUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { createPurchaseOrderPdfGenerator } from './PurchaseOrderPdfGenerator';
+import CoAMigrationDialog from './CoAMigrationDialog';
 
 const PurchaseOrderDetails = ({ orderId }) => {
   const { t } = useTranslation();
@@ -92,6 +93,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
   // Stany dla odpowiedzi formularzy rozładunku
   const [unloadingFormResponses, setUnloadingFormResponses] = useState([]);
   const [unloadingFormResponsesLoading, setUnloadingFormResponsesLoading] = useState(false);
+  
+  // Stan dla dialogu migracji CoA
+  const [coaMigrationDialogOpen, setCoaMigrationDialogOpen] = useState(false);
   
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
@@ -962,6 +966,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
 
+  // Funkcje obsługi dialogu migracji CoA
+  const handleCoAMigration = () => {
+    setCoaMigrationDialogOpen(true);
+  };
+
+  const handleCoAMigrationClose = () => {
+    setCoaMigrationDialogOpen(false);
+  };
+
+  const handleCoAMigrationComplete = () => {
+    // Odśwież dane partii po migracji
+    fetchRelatedBatches(orderId);
+    showSuccess('Migracja załączników CoA została zakończona');
+  };
+
   // Funkcje pomocnicze dla interfejsu użytkownika
   const formatAddress = (address) => {
     if (!address) return 'Brak adresu';
@@ -1794,13 +1813,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   <Box>
                     {/* Certyfikaty analizy (CoA) */}
                     <Box sx={{ mb: 3 }}>
-                      <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                        <AssignmentIcon sx={{ mr: 1, color: 'success.main' }} />
-                        {t('purchaseOrders.details.coaAttachments.title')}
-                        {hasCoA && (
-                          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                            ({purchaseOrder.coaAttachments.length})
-                          </Typography>
+                      <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <AssignmentIcon sx={{ mr: 1, color: 'success.main' }} />
+                          {t('purchaseOrders.details.coaAttachments.title')}
+                          {hasCoA && (
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                              ({purchaseOrder.coaAttachments.length})
+                            </Typography>
+                          )}
+                        </Box>
+                        {hasCoA && relatedBatches.length > 0 && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<LabelIcon />}
+                            onClick={handleCoAMigration}
+                            sx={{ ml: 'auto' }}
+                          >
+                            {t('purchaseOrders.details.coaMigration.migrateToBatch')}
+                          </Button>
                         )}
                       </Typography>
                       {renderAttachmentsList(purchaseOrder.coaAttachments, t('purchaseOrders.details.coaAttachments.noAttachments'))}
@@ -2470,6 +2502,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog migracji CoA */}
+      <CoAMigrationDialog
+        open={coaMigrationDialogOpen}
+        onClose={handleCoAMigrationClose}
+        purchaseOrder={purchaseOrder}
+        relatedBatches={relatedBatches}
+        onMigrationComplete={handleCoAMigrationComplete}
+      />
     </Container>
   );
 };
