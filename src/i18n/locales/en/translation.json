@@ -216,15 +216,11 @@
       }
     },
     "delete": {
-      "confirmTitle": "Confirm Deletion", 
-      "confirmMessage": "Are you sure you want to delete customer \"{{name}}\"? This operation cannot be undone."
+      "title": "Confirm Deletion",
+      "message": "Are you sure you want to delete customer \"{{name}}\"? This operation cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
     },
-    "confirmDelete": {
-        "title": "Confirm Deletion",
-        "message": "Are you sure you want to delete customer \"{{name}}\"? This operation cannot be undone.",
-        "confirm": "Delete",
-        "cancel": "Cancel"
-      },
     "notifications": {
       "customerAdded": "Customer has been added",
       "customerUpdated": "Customer has been updated",

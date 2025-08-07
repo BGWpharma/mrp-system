@@ -219,14 +219,10 @@
       }
     },
     "delete": {
-      "confirmTitle": "Potwierdź usunięcie",
-      "confirmMessage": "Czy na pewno chcesz usunąć klienta \"{{name}}\"? Tej operacji nie można cofnąć.",
-      "confirmDelete": {
-        "title": "Potwierdź usunięcie",
-        "message": "Czy na pewno chcesz usunąć klienta \"{{name}}\"? Tej operacji nie można cofnąć.",
-        "confirm": "Usuń",
-        "cancel": "Anuluj"
-      }
+      "title": "Potwierdź usunięcie",
+      "message": "Czy na pewno chcesz usunąć klienta \"{{name}}\"? Tej operacji nie można cofnąć.",
+      "confirm": "Usuń",
+      "cancel": "Anuluj"
     },
     "notifications": {
       "customerAdded": "Klient został dodany",
@@ -244,7 +240,7 @@
       "nipVerifyNetworkError": "Wystąpił błąd podczas weryfikacji NIP: {{message}}",
       "nipVerifySuccess": "Pomyślnie zweryfikowano NIP i zaktualizowano dane"
     },
-    "status": {
+    "customerFlags": {
       "standard": "Standardowy",
       "euVat": "VAT-EU",
       "yes": "Tak",
@@ -263,11 +259,6 @@
       "details": "Szczegóły",
       "orders": "Zamówienia",
       "invoices": "Faktury"
-    },
-    "paymentStatus": {
-      "unpaid": "Nieopłacona",
-      "partiallyPaid": "Częściowo opłacona",
-      "paid": "Opłacona"
     },
     "orderStatus": {
       "draft": "Szkic",
