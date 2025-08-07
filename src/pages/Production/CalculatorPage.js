@@ -45,10 +45,12 @@ import {
 import { useNotification } from '../../hooks/useNotification';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const CalculatorPage = () => {
   const { showSuccess, showError, showInfo } = useNotification();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   
   // Główne stany kalkulatora
   const [mixerVolume, setMixerVolume] = useState(100);
@@ -77,7 +79,7 @@ const CalculatorPage = () => {
       setRecipes(recipesData);
     } catch (error) {
       console.error('Błąd podczas pobierania receptur:', error);
-      showError('Nie udało się pobrać receptur');
+      showError(t('calculator.errors.fetchRecipesFailed'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +109,7 @@ const CalculatorPage = () => {
       setProductionTasks(tasks);
     } catch (error) {
       console.error('Błąd podczas pobierania zadań produkcyjnych:', error);
-      showError('Nie udało się pobrać zadań produkcyjnych');
+      showError(t('calculator.errors.fetchTasksFailed'));
     } finally {
       setLoading(false);
     }
@@ -172,13 +174,13 @@ const CalculatorPage = () => {
             setSelectedRecipe(recipeData);
           } else {
             setSelectedRecipe(null);
-            showError('Wybrana receptura nie zawiera składników');
+            showError(t('calculator.errors.selectedRecipeNoIngredients'));
           }
           setLoading(false);
         })
         .catch(error => {
           console.error('Błąd podczas pobierania receptury:', error);
-          showError('Nie udało się pobrać szczegółów receptury');
+          showError(t('calculator.errors.fetchRecipeDetailsFailed'));
           setLoading(false);
         });
     } else {
@@ -189,17 +191,17 @@ const CalculatorPage = () => {
   // Funkcja do obliczania planu mieszań
   const calculateMixings = () => {
     if (!selectedRecipe) {
-      showError('Wybierz recepturę przed obliczeniem');
+      showError(t('calculator.errors.selectRecipe'));
       return;
     }
     
     if (mixerVolume <= 0) {
-      showError('Objętość mieszalnika musi być większa od zera');
+      showError(t('calculator.errors.mixerVolumePositive'));
       return;
     }
     
     if (targetAmount <= 0) {
-      showError('Docelowa ilość musi być większa od zera');
+      showError(t('calculator.errors.targetAmountPositive'));
       return;
     }
     
@@ -365,10 +367,10 @@ const CalculatorPage = () => {
       
       console.log(`Całkowita suma wag wszystkich mieszań: ${totalCalculatedWeight.toFixed(2)} kg`);
       
-      showSuccess('Plan mieszań obliczony pomyślnie');
+      showSuccess(t('calculator.success.planCalculated'));
     } catch (error) {
       console.error('Błąd podczas obliczania planu mieszań:', error);
-      showError('Nie udało się obliczyć planu mieszań');
+      showError(t('calculator.errors.calculateFailed'));
     }
   };
   
@@ -504,15 +506,15 @@ const CalculatorPage = () => {
   // Generowanie pliku CSV z planem mieszań
   const generateCSV = () => {
     if (!mixings || mixings.length === 0) {
-      showError('Brak planu mieszań do wyeksportowania');
+      showError(t('calculator.errors.noMixingPlanToExport'));
       return;
     }
     
     try {
       // Przygotowanie nagłówków CSV
       let csvContent = usePieces ? 
-        'Objętość;Liczba sztuk;Nazwa produktu;Składnik;Ilość;Jednostka;Sprawdzone;Wstawione w mieszalnik;Zrobione\n' : 
-        'Objętość;Nazwa produktu;Składnik;Ilość;Jednostka;Sprawdzone;Wstawione w mieszalnik;Zrobione\n';
+        `${t('calculator.csv.volume')};${t('calculator.csv.piecesCount')};${t('calculator.csv.productName')};${t('calculator.csv.ingredient')};${t('calculator.csv.quantity')};${t('calculator.csv.unit')};${t('calculator.csv.checked')};${t('calculator.csv.addedToMixer')};${t('calculator.csv.completed')}\n` : 
+        `${t('calculator.csv.volume')};${t('calculator.csv.productName')};${t('calculator.csv.ingredient')};${t('calculator.csv.quantity')};${t('calculator.csv.unit')};${t('calculator.csv.checked')};${t('calculator.csv.addedToMixer')};${t('calculator.csv.completed')}\n`;
       
       // Przygotowanie sumy dla każdego surowca
       let ingredientTotals = {};
@@ -521,7 +523,7 @@ const CalculatorPage = () => {
       mixings.forEach(mixing => {
         // Dodaj wyróżniony nagłówek dla każdego mieszania
         const headerColumns = usePieces ? 9 : 8; // Zwiększono liczbę kolumn
-        csvContent += `"Mieszanie nr. ${mixing.mixingNumber}"${';'.repeat(headerColumns - 1)}\n`;
+        csvContent += `"${t('calculator.csv.mixing', { number: mixing.mixingNumber })}"${';'.repeat(headerColumns - 1)}\n`;
         
         // Dodaj wiersz z informacją o objętości mieszania i liczbie sztuk (jeśli w trybie sztuk)
         const formattedVolumeToMix = `="${Number(mixing.volumeToMix).toFixed(4)}"`;
@@ -574,10 +576,10 @@ const CalculatorPage = () => {
         csvContent += `${';'.repeat(usePieces ? 5 : 4)}\n`;
         
         // Dodaj podsumowanie dla każdego surowca
-        csvContent += `"Podsumowanie:"${';'.repeat(usePieces ? 8 : 7)}\n`;
+        csvContent += `"${t('calculator.csv.summary')}"${';'.repeat(usePieces ? 8 : 7)}\n`;
         
         // Dodaj sumy dla każdego surowca
-        csvContent += `"Sumy według surowców:"${';'.repeat(usePieces ? 8 : 7)}\n`;
+        csvContent += `"${t('calculator.csv.totalsPerIngredient')}"${';'.repeat(usePieces ? 8 : 7)}\n`;
         Object.keys(ingredientTotals).forEach(ingredientName => {
           const ingredientData = ingredientTotals[ingredientName];
           const formattedQuantity = `="${ingredientData.quantity.toFixed(4)}"`;
@@ -593,14 +595,14 @@ const CalculatorPage = () => {
         
         if (usePieces) {
           // Podsumowanie dla trybu sztuk
-          csvContent += `"Całkowita liczba sztuk:";="${calculationResult.targetAmount}";;;;;\n`;
-          csvContent += `"Waga jednej sztuki:";="${calculationResult.singlePieceWeight?.toFixed(4)}";kg;;;\n`;
-          csvContent += `"Całkowita waga:";="${calculationResult.totalWeight?.toFixed(4)}";kg;;;\n`;
-          csvContent += `"Liczba mieszań:";="${calculationResult.totalMixings}";;;;;\n`;
+          csvContent += `"${t('calculator.csv.totalPieces')}";="${calculationResult.targetAmount}";;;;;\n`;
+          csvContent += `"${t('calculator.csv.pieceWeight')}";="${calculationResult.singlePieceWeight?.toFixed(4)}";${t('calculator.kg')};;;;;\n`;
+          csvContent += `"${t('calculator.csv.totalWeight')}";="${calculationResult.totalWeight?.toFixed(4)}";${t('calculator.kg')};;;;;\n`;
+          csvContent += `"${t('calculator.csv.numberOfMixings')}";="${calculationResult.totalMixings}";;;;;\n`;
         } else {
           // Podsumowanie dla trybu kilogramów
-          csvContent += `"Docelowa ilość:";="${calculationResult.targetAmount}";kg;;;\n`;
-          csvContent += `"Liczba mieszań:";="${calculationResult.totalMixings}";;;\n`;
+          csvContent += `"${t('calculator.csv.targetQuantity')}";="${calculationResult.targetAmount}";${t('calculator.kg')};;;;;\n`;
+          csvContent += `"${t('calculator.csv.numberOfMixings')}";="${calculationResult.totalMixings}";;;;;\n`;
         }
       }
       
@@ -618,10 +620,10 @@ const CalculatorPage = () => {
       link.click();
       document.body.removeChild(link);
       
-      showSuccess('Plan mieszań wyeksportowany do pliku CSV');
+      showSuccess(t('calculator.success.csvExported'));
     } catch (error) {
       console.error('Błąd podczas generowania pliku CSV:', error);
-      showError('Nie udało się wygenerować pliku CSV');
+      showError(t('calculator.errors.csvGenerationFailed'));
     }
   };
   
@@ -635,13 +637,13 @@ const CalculatorPage = () => {
     setCalculationResult(null);
     setMixings([]);
     setUsePieces(false);
-    showInfo('Kalkulator został zresetowany');
+    showInfo(t('calculator.success.calculatorReset'));
   };
 
   // Funkcja do generowania planu mieszań na podstawie MO
   const generatePlanFromMO = async () => {
     if (!selectedTaskId) {
-      showError('Wybierz zadanie produkcyjne (MO) przed wygenerowaniem planu');
+      showError(t('calculator.errors.selectTaskBeforeGenerate'));
       return;
     }
     
@@ -654,13 +656,13 @@ const CalculatorPage = () => {
       const task = await getTaskById(selectedTaskId);
       
       if (!task) {
-        showError('Nie udało się pobrać szczegółów zadania produkcyjnego');
+        showError(t('calculator.errors.fetchTaskDetailsFailed'));
         return;
       }
       
       // Sprawdzamy czy zadanie ma przypisaną recepturę
       if (!task.recipeId) {
-        showError('Wybrane zadanie produkcyjne nie ma przypisanej receptury');
+        showError(t('calculator.errors.taskNoRecipe'));
         return;
       }
       
@@ -668,7 +670,7 @@ const CalculatorPage = () => {
       const recipeDoc = await getRecipeById(task.recipeId);
       
       if (!recipeDoc) {
-        showError('Nie udało się pobrać receptury dla zadania produkcyjnego');
+        showError(t('calculator.errors.fetchTaskRecipeFailed'));
         return;
       }
       
@@ -686,10 +688,10 @@ const CalculatorPage = () => {
       // Wywołujemy funkcję do obliczenia planu mieszań
       calculateMixings();
       
-      showSuccess(`Plan mieszań wygenerowany na podstawie zadania produkcyjnego ${task.moNumber}`);
+      showSuccess(t('calculator.success.planGeneratedFromMo', { moNumber: task.moNumber }));
     } catch (error) {
       console.error('Błąd podczas generowania planu mieszań z MO:', error);
-      showError('Wystąpił błąd podczas generowania planu mieszań z MO');
+      showError(t('calculator.errors.generateFromMoFailed'));
     } finally {
       setLoading(false);
     }
@@ -698,12 +700,12 @@ const CalculatorPage = () => {
   // Funkcja do zapisywania planu mieszań jako checklisty w zadaniu produkcyjnym (MO)
   const saveMixingPlanToTask = async () => {
     if (!selectedTaskId) {
-      showError('Wybierz zadanie produkcyjne (MO) przed zapisaniem planu mieszań');
+      showError(t('calculator.errors.selectTaskBeforeSave'));
       return;
     }
     
     if (!mixings || mixings.length === 0) {
-      showError('Brak planu mieszań do zapisania');
+      showError(t('calculator.errors.noMixingPlanToSave'));
       return;
     }
     
@@ -720,13 +722,13 @@ const CalculatorPage = () => {
       );
       
       if (result.success) {
-        showSuccess('Plan mieszań został zapisany jako checklista w zadaniu produkcyjnym');
+        showSuccess(t('calculator.success.planSavedToTask'));
       } else {
-        showError('Nie udało się zapisać planu mieszań w zadaniu produkcyjnym');
+        showError(t('calculator.errors.saveMixingPlanFailed'));
       }
     } catch (error) {
       console.error('Błąd podczas zapisywania planu mieszań w zadaniu:', error);
-      showError('Wystąpił błąd podczas zapisywania planu mieszań: ' + error.message);
+      showError(t('calculator.errors.saveMixingPlanError') + ' ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -736,14 +738,14 @@ const CalculatorPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Paper sx={{ p: 3, mb: 4, borderRadius: 2 }}>
         <Typography variant="h5" gutterBottom>
-          Kalkulator mieszań produkcyjnych
+          {t('calculator.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Narzędzie pomaga w planowaniu mieszań produkcyjnych, obliczając optymalną liczbę mieszań oraz ilości składników dla każdego mieszania.
+          {t('calculator.description')}
         </Typography>
         
         <Alert severity="info" sx={{ mb: 3 }}>
-          Uwaga: Kalkulator automatycznie pomija składniki z kategorii "Opakowania" oraz te, których nazwa zawiera "PACK" podczas obliczeń.
+          {t('calculator.warning')}
         </Alert>
         
         <Divider sx={{ my: 3 }} />
@@ -754,7 +756,7 @@ const CalculatorPage = () => {
             <TextField
               fullWidth
               type="number"
-              label="Objętość mieszalnika (max weight per mixing)"
+              label={t('calculator.mixerVolume')}
               value={mixerVolume}
               onChange={(e) => setMixerVolume(Number(e.target.value))}
               InputProps={{
@@ -773,13 +775,13 @@ const CalculatorPage = () => {
             <TextField
               fullWidth
               type="number"
-              label="Docelowa ilość produktu"
+              label={t('calculator.targetQuantity')}
               value={targetAmount}
               onChange={(e) => setTargetAmount(Number(e.target.value))}
               InputProps={{
                 endAdornment: (
                   <Typography variant="caption" color="text.secondary">
-                    {usePieces ? 'szt.' : 'kg'}
+                    {usePieces ? t('calculator.pieces') : t('calculator.kg')}
                   </Typography>
                 )
               }}
@@ -790,7 +792,7 @@ const CalculatorPage = () => {
           {/* Wybór trybu kalkulacji */}
           <Grid item xs={12} md={4}>
             <FormControl fullWidth component="fieldset">
-              <FormLabel component="legend">Tryb kalkulacji</FormLabel>
+              <FormLabel component="legend">{t('calculator.calculationMode')}</FormLabel>
               <RadioGroup
                 row
                 value={usePieces ? 'pieces' : 'weight'}
@@ -799,12 +801,12 @@ const CalculatorPage = () => {
                 <FormControlLabel
                   value="weight"
                   control={<Radio />}
-                  label="Waga (kg)"
+                  label={t('calculator.weightMode')}
                 />
                 <FormControlLabel
                   value="pieces"
                   control={<Radio />}
-                  label="Sztuki"
+                  label={t('calculator.piecesMode')}
                 />
               </RadioGroup>
             </FormControl>
@@ -813,16 +815,16 @@ const CalculatorPage = () => {
           {/* Wybór receptury */}
           <Grid item xs={12} md={6}>
             <FormControl fullWidth>
-              <InputLabel id="recipe-select-label">Wybierz recepturę</InputLabel>
+              <InputLabel id="recipe-select-label">{t('calculator.selectRecipe')}</InputLabel>
               <Select
                 labelId="recipe-select-label"
                 value={selectedRecipeId}
                 onChange={(e) => setSelectedRecipeId(e.target.value)}
-                label="Wybierz recepturę"
+                label={t('calculator.selectRecipe')}
                 disabled={loading}
               >
                 <MenuItem value="">
-                  <em>-- Wybierz recepturę --</em>
+                  <em>{t('calculator.selectRecipePlaceholder')}</em>
                 </MenuItem>
                 {recipes.map((recipe) => (
                   <MenuItem key={recipe.id} value={recipe.id}>
@@ -863,9 +865,9 @@ const CalculatorPage = () => {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Wyszukaj zadanie produkcyjne (MO)"
+                  label={t('calculator.searchTask')}
                   variant="outlined"
-                  placeholder="Wpisz numer MO, nazwę produktu..."
+                  placeholder={t('calculator.searchTaskPlaceholder')}
                   disabled={loading}
                   InputProps={{
                     ...params.InputProps,
@@ -881,7 +883,7 @@ const CalculatorPage = () => {
                       </>
                     ),
                   }}
-                  helperText="Wpisz numer MO, nazwę produktu lub ID zadania, aby wyszukać zadanie produkcyjne"
+                  helperText={t('calculator.searchTaskHelper')}
                 />
               )}
               renderOption={(props, option) => (
@@ -900,8 +902,8 @@ const CalculatorPage = () => {
               clearOnBlur={false}
               selectOnFocus={true}
               handleHomeEndKeys={true}
-              noOptionsText="Brak zadań produkcyjnych spełniających kryteria wyszukiwania"
-              loadingText="Ładowanie zadań produkcyjnych..."
+              noOptionsText={t('calculator.noTasksFound')}
+              loadingText={t('calculator.loadingTasks')}
               loading={loading}
             />
           </Grid>
@@ -916,7 +918,7 @@ const CalculatorPage = () => {
                 disabled={loading || !selectedRecipeId || mixerVolume <= 0 || targetAmount <= 0}
                 startIcon={<CalculateIcon />}
               >
-                Oblicz plan mieszań
+                {t('calculator.calculate')}
               </Button>
               
               {mixings.length > 0 && (
@@ -926,7 +928,7 @@ const CalculatorPage = () => {
                   onClick={generateCSV}
                   startIcon={<FileDownloadIcon />}
                 >
-                  Eksportuj CSV
+                  {t('calculator.exportCsv')}
                 </Button>
               )}
               
@@ -938,7 +940,7 @@ const CalculatorPage = () => {
                   startIcon={<SaveAltIcon />}
                   disabled={loading}
                 >
-                  Zapisz plan w MO
+                  {t('calculator.saveToPlan')}
                 </Button>
               )}
               
@@ -948,7 +950,7 @@ const CalculatorPage = () => {
                 onClick={resetCalculator}
                 startIcon={<ResetIcon />}
               >
-                Resetuj
+                {t('calculator.reset')}
               </Button>
             </Box>
           </Grid>
@@ -960,7 +962,7 @@ const CalculatorPage = () => {
         <Paper sx={{ p: 3, mb: 4, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              Wynik obliczenia planu mieszań
+              {t('calculator.result')}
             </Typography>
             <Button
               variant="contained"
@@ -968,7 +970,7 @@ const CalculatorPage = () => {
               startIcon={<DownloadIcon />}
               onClick={generateCSV}
             >
-              Eksportuj do CSV
+              {t('calculator.exportToCsv')}
             </Button>
           </Box>
           
@@ -981,7 +983,7 @@ const CalculatorPage = () => {
                 color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
               }}>
                 <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
-                  Produkt
+                  {t('calculator.product')}
                 </Typography>
                 <Typography variant="h6">
                   {calculationResult.recipeName}
@@ -996,10 +998,10 @@ const CalculatorPage = () => {
                 color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
               }}>
                 <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
-                  Docelowa ilość
+                  {t('calculator.targetAmount')}
                 </Typography>
                 <Typography variant="h6">
-                  {calculationResult.targetAmount} {usePieces ? "szt." : "kg"}
+                  {calculationResult.targetAmount} {usePieces ? t('calculator.pieces') : t('calculator.kg')}
                 </Typography>
               </Paper>
             </Grid>
@@ -1011,10 +1013,10 @@ const CalculatorPage = () => {
                 color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
               }}>
                 <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
-                  Objętość mieszalnika
+                  {t('calculator.mixerVolumeLabel')}
                 </Typography>
                 <Typography variant="h6">
-                  {calculationResult.mixerVolume} kg
+                  {calculationResult.mixerVolume} {t('calculator.kg')}
                 </Typography>
               </Paper>
             </Grid>
@@ -1026,7 +1028,7 @@ const CalculatorPage = () => {
                 color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
               }}>
                 <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
-                  Liczba mieszań
+                  {t('calculator.numberOfMixings')}
                 </Typography>
                 <Typography variant="h6">
                   {calculationResult.totalMixings}
@@ -1036,7 +1038,7 @@ const CalculatorPage = () => {
           </Grid>
           
           <Typography variant="subtitle1" gutterBottom>
-            Szczegółowy plan mieszań:
+            {t('calculator.detailedPlan')}
           </Typography>
           
           <TableContainer component={Paper} sx={{ 
@@ -1053,12 +1055,12 @@ const CalculatorPage = () => {
                     color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
                   }
                 }}>
-                  <TableCell>Nr mieszania</TableCell>
-                  <TableCell>Objętość</TableCell>
-                  {usePieces && <TableCell>Liczba sztuk</TableCell>}
-                  <TableCell>Składnik</TableCell>
-                  <TableCell align="right">Ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
+                  <TableCell>{t('calculator.mixingNumber')}</TableCell>
+                  <TableCell>{t('calculator.volume')}</TableCell>
+                  {usePieces && <TableCell>{t('calculator.piecesCount')}</TableCell>}
+                  <TableCell>{t('calculator.ingredient')}</TableCell>
+                  <TableCell align="right">{t('calculator.quantity')}</TableCell>
+                  <TableCell>{t('calculator.unit')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody sx={{
@@ -1076,12 +1078,12 @@ const CalculatorPage = () => {
                             {mixing.mixingNumber}
                           </TableCell>
                           <TableCell rowSpan={mixing.ingredients.length}>
-                            {mixing.volumeToMix.toFixed(4)} kg
+                            {mixing.volumeToMix.toFixed(4)} {t('calculator.kg')}
                             {/* Dodajemy informację o rzeczywistej wadze składników */}
                             <Typography variant="caption" display="block" color={theme => 
                               theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'
                             }>
-                              (suma składników: {mixing.totalIngredientsWeight.toFixed(4)} kg)
+                              ({t('calculator.ingredientsSum')}: {mixing.totalIngredientsWeight.toFixed(4)} {t('calculator.kg')})
                             </Typography>
                           </TableCell>
                           {usePieces && (
@@ -1103,17 +1105,31 @@ const CalculatorPage = () => {
            
           <Alert severity="info" sx={{ mt: 2 }}>
             {calculationResult.isProductPieces ? (
-              <>
-                Wygenerowano plan {calculationResult.totalMixings} mieszań dla {calculationResult.targetAmount} sztuk produktu 
-                (waga 1 szt. ≈ {calculationResult.singlePieceWeight?.toFixed(4)} kg, łączna waga {calculationResult.totalWeight?.toFixed(4)} kg).
-                {calculationResult.fullMixingsCount > 0 && ` ${calculationResult.fullMixingsCount} pełnych mieszań po ${calculationResult.piecesPerFullMixing} szt.`}
-                {calculationResult.piecesInLastMixing > 0 && ` oraz 1 mieszanie zawierające ${calculationResult.piecesInLastMixing} szt.`}
-              </>
+              t('calculator.alerts.piecesGenerated', {
+                totalMixings: calculationResult.totalMixings,
+                targetAmount: calculationResult.targetAmount,
+                singlePieceWeight: calculationResult.singlePieceWeight?.toFixed(4),
+                totalWeight: calculationResult.totalWeight?.toFixed(4),
+                fullMixingsText: calculationResult.fullMixingsCount > 0 ? 
+                  t('calculator.alerts.fullMixingsText', { 
+                    count: calculationResult.fullMixingsCount, 
+                    pieces: calculationResult.piecesPerFullMixing 
+                  }) : '',
+                lastMixingText: calculationResult.piecesInLastMixing > 0 ? 
+                  t('calculator.alerts.lastMixingText', { 
+                    pieces: calculationResult.piecesInLastMixing 
+                  }) : ''
+              })
             ) : (
-              <>
-                Wygenerowano plan {calculationResult.totalMixings} mieszań: {calculationResult.fullMixingsCount} pełnych mieszań po {calculationResult.mixerVolume} kg
-                {calculationResult.remainingAmount > 0 ? ` oraz 1 mieszanie o objętości ${calculationResult.remainingAmount.toFixed(4)} kg` : ''}.
-              </>
+              t('calculator.alerts.weightGenerated', {
+                totalMixings: calculationResult.totalMixings,
+                fullMixingsCount: calculationResult.fullMixingsCount,
+                mixerVolume: calculationResult.mixerVolume,
+                remainingText: calculationResult.remainingAmount > 0 ? 
+                  t('calculator.alerts.remainingText', { 
+                    amount: calculationResult.remainingAmount.toFixed(4) 
+                  }) : ''
+              })
             )}
           </Alert>
         </Paper>
