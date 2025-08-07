@@ -41,9 +41,11 @@ import {
 } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import CustomerForm from './CustomerForm';
 
 const CustomersList = () => {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -169,7 +171,7 @@ const CustomersList = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
-          Klienci
+          {t('customers.title')}
         </Typography>
         <Button
           variant="contained"
@@ -177,7 +179,7 @@ const CustomersList = () => {
           startIcon={<AddIcon />}
           onClick={handleAddCustomer}
         >
-          Dodaj klienta
+          {t('customers.addCustomer')}
         </Button>
       </Box>
 
@@ -187,7 +189,7 @@ const CustomersList = () => {
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Szukaj klientów..."
+              placeholder={t('customers.searchPlaceholder')}
               value={searchTerm}
               onChange={handleSearchChange}
               onKeyPress={handleSearchKeyPress}
@@ -209,7 +211,7 @@ const CustomersList = () => {
           </Grid>
           <Grid item>
             <Button variant="outlined" onClick={handleSearch}>
-              Szukaj
+              {t('customers.search')}
             </Button>
           </Grid>
         </Grid>
@@ -226,18 +228,18 @@ const CustomersList = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Nazwa</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Telefon</TableCell>
-                    <TableCell>Adres do faktury</TableCell>
-                    <TableCell align="right">Akcje</TableCell>
+                    <TableCell>{t('customers.table.name')}</TableCell>
+                    <TableCell>{t('customers.table.email')}</TableCell>
+                    <TableCell>{t('customers.table.phone')}</TableCell>
+                    <TableCell>{t('customers.table.billingAddress')}</TableCell>
+                    <TableCell align="right">{t('customers.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredCustomers.length === 0 ? (
                     <TableRow key="no-customers">
                       <TableCell colSpan={5} align="center">
-                        Brak klientów do wyświetlenia
+                        {t('customers.empty.noCustomers')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -276,7 +278,7 @@ const CustomersList = () => {
                             )}
                           </TableCell>
                           <TableCell align="right">
-                            <Tooltip title="Szczegóły">
+                            <Tooltip title={t('customers.actions.details')}>
                               <IconButton 
                                 color="primary"
                                 onClick={() => navigate(`/customers/${customer.id}`)}
@@ -284,7 +286,7 @@ const CustomersList = () => {
                                 <InfoIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Edytuj">
+                            <Tooltip title={t('customers.actions.edit')}>
                               <IconButton
                                 color="primary"
                                 onClick={() => handleEditCustomer(customer)}
@@ -292,7 +294,7 @@ const CustomersList = () => {
                                 <EditIcon />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Usuń">
+                            <Tooltip title={t('customers.actions.delete')}>
                               <IconButton
                                 color="error"
                                 onClick={() => handleDeleteClick(customer)}
@@ -315,8 +317,8 @@ const CustomersList = () => {
               page={page}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Wierszy na stronę:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+              labelRowsPerPage={t('customers.pagination.rowsPerPage')}
+              labelDisplayedRows={({ from, to, count }) => t('customers.pagination.displayedRows', { from, to, count })}
             />
           </>
         )}
@@ -324,16 +326,16 @@ const CustomersList = () => {
 
       {/* Dialog potwierdzenia usunięcia */}
       <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
-        <DialogTitle>Potwierdź usunięcie</DialogTitle>
+        <DialogTitle>{t('customers.delete.confirmTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć klienta "{customerToDelete?.name}"? Tej operacji nie można cofnąć.
+            {t('customers.delete.confirmMessage', { name: customerToDelete?.name })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelDelete}>Anuluj</Button>
+          <Button onClick={handleCancelDelete}>{t('customers.form.cancel')}</Button>
           <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            Usuń
+            {t('customers.actions.delete')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -346,7 +348,7 @@ const CustomersList = () => {
         maxWidth="md"
       >
         <DialogTitle>
-          {editingCustomer ? 'Edytuj klienta' : 'Dodaj nowego klienta'}
+          {editingCustomer ? t('customers.editCustomer') : t('customers.addNewCustomer')}
         </DialogTitle>
         <DialogContent>
           <CustomerForm 

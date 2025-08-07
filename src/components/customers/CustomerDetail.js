@@ -41,6 +41,7 @@ import CustomerForm from './CustomerForm';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { getInvoicesByCustomerId } from '../../services/invoiceService';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Funkcja formatująca datę
 const formatDate = (dateValue) => {
@@ -82,6 +83,7 @@ const formatCurrency = (amount, currency = 'EUR') => {
 
 // Komponent CustomerDetail
 const CustomerDetail = () => {
+  const { t } = useTranslation();
   const { customerId } = useParams();
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -105,7 +107,7 @@ const CustomerDetail = () => {
         setCustomer(customerData);
       } catch (error) {
         console.error('Błąd podczas pobierania danych klienta:', error);
-        showError('Nie udało się pobrać danych klienta');
+        showError(t('customers.notifications.loadDetailError'));
         navigate('/customers');
       } finally {
         setLoading(false);
@@ -191,11 +193,11 @@ const CustomerDetail = () => {
   // Renderowanie statusu zamówienia
   const renderOrderStatus = (status) => {
     const statusConfig = {
-      'draft': { color: '#757575', label: 'Szkic' },
-      'pending': { color: '#ff9800', label: 'Oczekujące' },
-      'in_progress': { color: '#2196f3', label: 'W realizacji' },
-      'completed': { color: '#4caf50', label: 'Zrealizowane' },
-      'cancelled': { color: '#f44336', label: 'Anulowane' }
+      'draft': { color: '#757575', label: t('customers.status.draft') },
+      'pending': { color: '#ff9800', label: t('customers.status.pending') },
+      'in_progress': { color: '#2196f3', label: t('customers.status.inProgress') },
+      'completed': { color: '#4caf50', label: t('customers.status.completed') },
+      'cancelled': { color: '#f44336', label: t('customers.status.cancelled') }
     };
     
     const config = statusConfig[status] || { color: '#757575', label: status };
@@ -215,9 +217,9 @@ const CustomerDetail = () => {
   // Renderowanie statusu faktury
   const renderPaymentStatus = (paymentStatus) => {
     const statusConfig = {
-      'unpaid': { color: '#ff9800', label: 'Nieopłacona' },
-      'partially_paid': { color: '#ff5722', label: 'Częściowo opłacona' },
-      'paid': { color: '#4caf50', label: 'Opłacona' }
+      'unpaid': { color: '#ff9800', label: t('customers.paymentStatus.unpaid') },
+      'partially_paid': { color: '#ff5722', label: t('customers.paymentStatus.partiallyPaid') },
+      'paid': { color: '#4caf50', label: t('customers.paymentStatus.paid') }
     };
     
     const status = paymentStatus || 'unpaid';
@@ -249,14 +251,14 @@ const CustomerDetail = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h5">Nie znaleziono klienta</Typography>
+          <Typography variant="h5">{t('customers.details.notFound')}</Typography>
           <Button 
             variant="contained" 
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate('/customers')}
             sx={{ mt: 2 }}
           >
-            Powrót do listy klientów
+            {t('customers.details.backToList')}
           </Button>
         </Paper>
       </Container>
@@ -274,7 +276,7 @@ const CustomerDetail = () => {
             onClick={() => navigate('/customers')}
             sx={{ mr: 2 }}
           >
-            Powrót
+            {t('customers.details.back')}
           </Button>
           <Typography variant="h4" component="h1">
             {customer.name}
@@ -286,7 +288,7 @@ const CustomerDetail = () => {
           startIcon={<EditIcon />}
           onClick={handleEditClick}
         >
-          Edytuj
+          {t('customers.details.edit')}
         </Button>
       </Box>
       
@@ -294,7 +296,7 @@ const CustomerDetail = () => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" gutterBottom>Informacje kontaktowe</Typography>
+            <Typography variant="subtitle1" gutterBottom>{t('customers.details.contactInformation')}</Typography>
             <Box sx={{ ml: 2 }}>
               {customer.email && (
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -325,12 +327,12 @@ const CustomerDetail = () => {
             </Box>
           </Grid>
           <Grid item xs={12} md={6}>
-            <Typography variant="subtitle1" gutterBottom>Adresy</Typography>
+            <Typography variant="subtitle1" gutterBottom>{t('customers.details.addresses')}</Typography>
             <Box sx={{ ml: 2 }}>
               {customer.billingAddress && (
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    Adres do faktury:
+                    {t('customers.details.billingAddress')}:
                   </Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
                     {customer.billingAddress}
@@ -340,7 +342,7 @@ const CustomerDetail = () => {
               {customer.shippingAddress && (
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Adres do wysyłki:
+                    {t('customers.details.shippingAddress')}:
                   </Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
                     {customer.shippingAddress}
@@ -350,7 +352,7 @@ const CustomerDetail = () => {
               {!customer.billingAddress && !customer.shippingAddress && customer.address && (
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Adres:
+                    {t('customers.details.billingAddress')}:
                   </Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
                     {customer.address}
@@ -362,7 +364,7 @@ const CustomerDetail = () => {
           {customer.notes && (
             <Grid item xs={12}>
               <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle1" gutterBottom>Notatki</Typography>
+              <Typography variant="subtitle1" gutterBottom>{t('customers.details.notes')}</Typography>
               <Typography variant="body1" sx={{ whiteSpace: 'pre-line', ml: 2 }}>
                 {customer.notes}
               </Typography>
@@ -379,9 +381,9 @@ const CustomerDetail = () => {
             onChange={handleTabChange} 
             aria-label="customer tabs"
           >
-            <Tab label="Szczegóły" />
-            <Tab label="Zamówienia" />
-            <Tab label="Faktury" />
+            <Tab label={t('customers.tabs.details')} />
+            <Tab label={t('customers.tabs.orders')} />
+            <Tab label={t('customers.tabs.invoices')} />
           </Tabs>
         </Box>
         
@@ -389,12 +391,12 @@ const CustomerDetail = () => {
         <Box role="tabpanel" hidden={tabValue !== 0} sx={{ p: 3 }}>
           {tabValue === 0 && (
             <Box>
-              <Typography variant="subtitle1" gutterBottom>Dane klienta</Typography>
+              <Typography variant="subtitle1" gutterBottom>{t('customers.details.basicInformation')}</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={4}>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Data utworzenia:
+                      {t('customers.details.createdAt')}:
                     </Typography>
                     <Typography variant="body1">
                       {customer.createdAt ? formatDate(customer.createdAt) : '-'}
@@ -404,7 +406,7 @@ const CustomerDetail = () => {
                 <Grid item xs={12} sm={6} md={4}>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Ostatnia aktualizacja:
+                      {t('customers.details.updatedAt')}:
                     </Typography>
                     <Typography variant="body1">
                       {customer.updatedAt ? formatDate(customer.updatedAt) : '-'}
@@ -421,7 +423,7 @@ const CustomerDetail = () => {
           {tabValue === 1 && (
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="subtitle1">Zamówienia klienta</Typography>
+                <Typography variant="subtitle1">{t('customers.details.orders')}</Typography>
                 <Box>
                   <Button 
                     variant="outlined"
@@ -430,7 +432,7 @@ const CustomerDetail = () => {
                     onClick={() => navigate('/orders', { state: { customerId: customer.id, customerName: customer.name } })}
                     sx={{ mr: 1 }}
                   >
-                    Wszystkie zamówienia
+                    {t('customers.details.allOrders')}
                   </Button>
                   <Button 
                     variant="contained" 
@@ -438,7 +440,7 @@ const CustomerDetail = () => {
                     startIcon={<AddIcon />}
                     onClick={handleCreateOrder}
                   >
-                    Nowe zamówienie
+                    {t('customers.details.newOrder')}
                   </Button>
                 </Box>
               </Box>
@@ -449,18 +451,18 @@ const CustomerDetail = () => {
                 </Box>
               ) : orders.length === 0 ? (
                 <Typography variant="body1" sx={{ textAlign: 'center', py: 3 }}>
-                  Brak zamówień dla tego klienta
+                  {t('customers.details.noOrders')}
                 </Typography>
               ) : (
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Nr zamówienia</TableCell>
-                        <TableCell>Data</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell align="right">Wartość</TableCell>
-                        <TableCell align="right">Akcje</TableCell>
+                                              <TableCell>{t('customers.details.orderNumber')}</TableCell>
+                      <TableCell>{t('customers.details.date')}</TableCell>
+                      <TableCell>{t('customers.details.status')}</TableCell>
+                      <TableCell align="right">{t('customers.details.value')}</TableCell>
+                      <TableCell align="right">{t('customers.details.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -469,14 +471,14 @@ const CustomerDetail = () => {
                           <TableCell>{order.orderNumber || `#${order.id.substring(0, 8).toUpperCase()}`}</TableCell>
                           <TableCell>{order.orderDate ? formatDate(order.orderDate) : '-'}</TableCell>
                           <TableCell>{renderOrderStatus(order.status)}</TableCell>
-                          <TableCell align="right">{formatCurrency(order.totalValue || order.total, 'PLN')}</TableCell>
+                          <TableCell align="right">{formatCurrency(order.totalValue || order.total, 'EUR')}</TableCell>
                           <TableCell align="right">
                             <Button
                               size="small"
                               variant="outlined"
                               onClick={() => navigate(`/orders/${order.id}`)}
                             >
-                              Szczegóły
+                              {t('customers.details.details')}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -494,14 +496,14 @@ const CustomerDetail = () => {
           {tabValue === 2 && (
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="subtitle1">Faktury klienta</Typography>
+                <Typography variant="subtitle1">{t('customers.details.invoices')}</Typography>
                 <Button 
                   variant="contained" 
                   color="primary" 
                   startIcon={<AddIcon />}
                   onClick={handleCreateInvoice}
                 >
-                  Nowa faktura
+                  {t('customers.details.newInvoice')}
                 </Button>
               </Box>
               
@@ -511,19 +513,19 @@ const CustomerDetail = () => {
                 </Box>
               ) : invoices.length === 0 ? (
                 <Typography variant="body1" sx={{ textAlign: 'center', py: 3 }}>
-                  Brak faktur dla tego klienta
+                  {t('customers.details.noInvoices')}
                 </Typography>
               ) : (
                 <TableContainer>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Nr faktury</TableCell>
-                        <TableCell>Data wystawienia</TableCell>
-                        <TableCell>Termin płatności</TableCell>
-                        <TableCell>Status płatności</TableCell>
-                        <TableCell align="right">Kwota</TableCell>
-                        <TableCell align="right">Akcje</TableCell>
+                                              <TableCell>{t('customers.details.invoiceNumber')}</TableCell>
+                      <TableCell>{t('customers.details.issueDate')}</TableCell>
+                      <TableCell>{t('customers.details.dueDate')}</TableCell>
+                      <TableCell>{t('customers.details.paymentStatus')}</TableCell>
+                      <TableCell align="right">{t('customers.details.amount')}</TableCell>
+                      <TableCell align="right">{t('customers.details.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -540,7 +542,7 @@ const CustomerDetail = () => {
                               variant="outlined"
                               onClick={() => navigate(`/invoices/${invoice.id}`)}
                             >
-                              Szczegóły
+                              {t('customers.details.details')}
                             </Button>
                           </TableCell>
                         </TableRow>

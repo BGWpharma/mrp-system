@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Eye, X, User } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 
 const Customers = () => {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,7 +32,7 @@ const Customers = () => {
         setError(null);
       } catch (error) {
         console.error('Error fetching customers:', error);
-        setError('Failed to load customers');
+        setError(t('customers.notifications.loadError'));
       } finally {
         setLoading(false);
       }
@@ -50,7 +52,7 @@ const Customers = () => {
   };
 
   const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
+    if (!timestamp) return t('common.noDate');
     try {
       // Handle Firestore timestamp
       if (timestamp.toDate) {
@@ -59,7 +61,7 @@ const Customers = () => {
       // Handle regular date string
       return new Date(timestamp).toLocaleDateString();
     } catch (error) {
-      return 'Invalid date';
+      return t('customers.empty.invalidDate');
     }
   };
 
@@ -68,7 +70,7 @@ const Customers = () => {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-400">Loading customers...</p>
+          <p className="mt-4 text-gray-400">{t('customers.loading')}</p>
         </div>
       </div>
     );
@@ -82,7 +84,7 @@ const Customers = () => {
           onClick={() => window.location.reload()}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
         >
-          Retry
+          {t('customers.actions.retry')}
         </button>
       </div>
     );
@@ -93,9 +95,9 @@ const Customers = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-white">Customers</h2>
+          <h2 className="text-2xl font-bold text-white">{t('customers.title')}</h2>
           <p className="text-gray-400 mt-1">
-            {customers.length} customer{customers.length !== 1 ? 's' : ''} found
+            {t('customers.count', { count: customers.length })}
           </p>
         </div>
       </div>
@@ -107,9 +109,9 @@ const Customers = () => {
             <div className="mx-auto h-24 w-24 text-gray-400 mb-4 flex items-center justify-center">
               <User className="w-full h-full" />
             </div>
-            <h3 className="text-lg font-medium text-gray-300 mb-2">No customers found</h3>
+            <h3 className="text-lg font-medium text-gray-300 mb-2">{t('customers.empty.title')}</h3>
             <p className="text-gray-400 max-w-sm mx-auto">
-              No customers are currently in the system. Customers will appear here once they are added.
+              {t('customers.empty.description')}
             </p>
           </div>
         </div>
@@ -131,7 +133,7 @@ const Customers = () => {
                       </div>
                       <div className="ml-3">
                         <div className="text-sm font-medium text-white">
-                          {customer.name || 'Unnamed Customer'}
+                          {customer.name || t('customers.empty.namedCustomer')}
                         </div>
                         <div className="text-xs text-gray-400">
                           ID: {customer.id}
@@ -141,7 +143,7 @@ const Customers = () => {
                     <button 
                       onClick={() => handleViewCustomer(customer)}
                       className="text-blue-400 hover:text-blue-300 p-2 rounded-lg hover:bg-gray-600 transition-colors"
-                      title="View Customer Details"
+                      title={t('customers.actions.details')}
                     >
                       <Eye className="w-4 h-4" />
                     </button>
@@ -149,15 +151,15 @@ const Customers = () => {
                   
                   <div className="space-y-2 text-sm">
                     <div>
-                      <span className="text-gray-400">Contact:</span>
-                      <div className="text-gray-300">{customer.email || 'No email'}</div>
-                      <div className="text-gray-400">{customer.phone || 'No phone'}</div>
+                      <span className="text-gray-400">{t('customers.table.contact')}:</span>
+                      <div className="text-gray-300">{customer.email || t('customers.empty.noEmail')}</div>
+                      <div className="text-gray-400">{customer.phone || t('customers.empty.noPhone')}</div>
                     </div>
                     
                     <div>
-                      <span className="text-gray-400">Address:</span>
+                      <span className="text-gray-400">{t('customers.table.address')}:</span>
                       <div className="text-gray-300 break-words">
-                        {customer.address || customer.billingAddress || 'No address'}
+                        {customer.address || customer.billingAddress || t('customers.empty.noAddress')}
                       </div>
                     </div>
                     
@@ -167,7 +169,7 @@ const Customers = () => {
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {customer.supplierVatEu ? 'EU VAT' : 'Standard'}
+                        {customer.supplierVatEu ? t('customers.status.euVat') : t('customers.status.standard')}
                       </span>
                       <span className="text-xs text-gray-400">
                         {formatDate(customer.createdAt)}
@@ -185,22 +187,22 @@ const Customers = () => {
               <thead className="bg-gray-900">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Customer
+                    {t('customers.table.customer')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Contact
+                    {t('customers.table.contact')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Address
+                    {t('customers.table.address')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Status
+                    {t('customers.table.status')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Created
+                    {t('customers.table.created')}
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Actions
+                    {t('customers.table.actions')}
                   </th>
                 </tr>
               </thead>
@@ -218,7 +220,7 @@ const Customers = () => {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-white">
-                            {customer.name || 'Unnamed Customer'}
+                            {customer.name || t('customers.empty.namedCustomer')}
                           </div>
                           <div className="text-sm text-gray-400">
                             ID: {customer.id}
@@ -228,19 +230,19 @@ const Customers = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-300">
-                        {customer.email || 'No email'}
+                        {customer.email || t('customers.empty.noEmail')}
                       </div>
                       <div className="text-sm text-gray-400">
-                        {customer.phone || 'No phone'}
+                        {customer.phone || t('customers.empty.noPhone')}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-300 max-w-xs truncate">
-                        {customer.address || customer.billingAddress || 'No address'}
+                        {customer.address || customer.billingAddress || t('customers.empty.noAddress')}
                       </div>
                       {customer.shippingAddress && customer.shippingAddress !== customer.address && (
                         <div className="text-sm text-gray-400 max-w-xs truncate">
-                          Ship: {customer.shippingAddress}
+                          {t('customers.table.shippingAddress')}: {customer.shippingAddress}
                         </div>
                       )}
                     </td>
@@ -250,7 +252,7 @@ const Customers = () => {
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {customer.supplierVatEu ? 'EU VAT' : 'Standard'}
+                        {customer.supplierVatEu ? t('customers.status.euVat') : t('customers.status.standard')}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
@@ -261,7 +263,7 @@ const Customers = () => {
                         <button 
                           onClick={() => handleViewCustomer(customer)}
                           className="text-blue-400 hover:text-blue-300 p-2 rounded-lg hover:bg-gray-700 transition-colors"
-                          title="View Customer Details"
+                          title={t('customers.actions.details')}
                         >
                           <Eye className="w-5 h-5" />
                         </button>
@@ -282,9 +284,9 @@ const Customers = () => {
             {/* Dialog Header */}
             <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-semibold text-white">Customer Details</h3>
+                <h3 className="text-xl font-semibold text-white">{t('customers.details.title')}</h3>
                 <p className="text-gray-400 mt-1">
-                  {selectedCustomer.name || 'Unknown Customer'}
+                  {selectedCustomer.name || t('customers.empty.namedCustomer')}
                 </p>
               </div>
               <button
@@ -301,28 +303,28 @@ const Customers = () => {
                 
                 {/* Basic Information */}
                 <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Basic Information</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.basicInformation')}</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-gray-400">Customer ID</label>
+                      <label className="text-sm text-gray-400">{t('customers.details.customerId')}</label>
                       <p className="text-white font-mono text-sm">{selectedCustomer.id}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Name</label>
-                      <p className="text-white">{selectedCustomer.name || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.customerName')}</label>
+                      <p className="text-white">{selectedCustomer.name || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Type</label>
-                      <p className="text-white">{selectedCustomer.type || 'Individual'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.type')}</label>
+                      <p className="text-white">{selectedCustomer.type || t('customers.details.individual')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Status</label>
+                      <label className="text-sm text-gray-400">{t('customers.details.status')}</label>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         selectedCustomer.supplierVatEu 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {selectedCustomer.supplierVatEu ? 'EU VAT Supplier' : 'Standard Customer'}
+                        {selectedCustomer.supplierVatEu ? t('customers.details.euVatSupplier') : t('customers.details.standardCustomer')}
                       </span>
                     </div>
                   </div>
@@ -330,98 +332,98 @@ const Customers = () => {
 
                 {/* Contact Information */}
                 <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Contact Information</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.contactInformation')}</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-gray-400">Email</label>
-                      <p className="text-white break-all">{selectedCustomer.email || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.email')}</label>
+                      <p className="text-white break-all">{selectedCustomer.email || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Phone</label>
-                      <p className="text-white">{selectedCustomer.phone || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.phone')}</label>
+                      <p className="text-white">{selectedCustomer.phone || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Website</label>
-                      <p className="text-white break-all">{selectedCustomer.website || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.website')}</label>
+                      <p className="text-white break-all">{selectedCustomer.website || t('common.noDate')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Billing Address */}
                 <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Billing Address</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.billingAddress')}</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-gray-400">Address</label>
-                      <p className="text-white">{selectedCustomer.address || selectedCustomer.billingAddress || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.table.address')}</label>
+                      <p className="text-white">{selectedCustomer.address || selectedCustomer.billingAddress || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">City</label>
-                      <p className="text-white">{selectedCustomer.city || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.city')}</label>
+                      <p className="text-white">{selectedCustomer.city || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Postal Code</label>
-                      <p className="text-white">{selectedCustomer.postalCode || selectedCustomer.zipCode || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.postalCode')}</label>
+                      <p className="text-white">{selectedCustomer.postalCode || selectedCustomer.zipCode || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Country</label>
-                      <p className="text-white">{selectedCustomer.country || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.country')}</label>
+                      <p className="text-white">{selectedCustomer.country || t('common.noDate')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Shipping Address */}
                 <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Shipping Address</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.shippingAddress')}</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-gray-400">Address</label>
-                      <p className="text-white">{selectedCustomer.shippingAddress || 'Same as billing'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.table.address')}</label>
+                      <p className="text-white">{selectedCustomer.shippingAddress || t('customers.details.sameAsBilling')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Shipping City</label>
-                      <p className="text-white">{selectedCustomer.shippingCity || selectedCustomer.city || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.shippingCity')}</label>
+                      <p className="text-white">{selectedCustomer.shippingCity || selectedCustomer.city || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Shipping Postal Code</label>
-                      <p className="text-white">{selectedCustomer.shippingPostalCode || selectedCustomer.postalCode || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.shippingPostalCode')}</label>
+                      <p className="text-white">{selectedCustomer.shippingPostalCode || selectedCustomer.postalCode || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Shipping Country</label>
-                      <p className="text-white">{selectedCustomer.shippingCountry || selectedCustomer.country || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.shippingCountry')}</label>
+                      <p className="text-white">{selectedCustomer.shippingCountry || selectedCustomer.country || t('common.noDate')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Tax Information */}
                 <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Tax Information</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.taxInformation')}</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-gray-400">VAT Number</label>
-                      <p className="text-white font-mono">{selectedCustomer.vatNumber || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.vatNumber')}</label>
+                      <p className="text-white font-mono">{selectedCustomer.vatNumber || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Tax ID</label>
-                      <p className="text-white font-mono">{selectedCustomer.taxId || 'N/A'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.taxId')}</label>
+                      <p className="text-white font-mono">{selectedCustomer.taxId || t('common.noDate')}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">EU VAT Supplier</label>
-                      <p className="text-white">{selectedCustomer.supplierVatEu ? 'Yes' : 'No'}</p>
+                      <label className="text-sm text-gray-400">{t('customers.details.euVatSupplierFlag')}</label>
+                      <p className="text-white">{selectedCustomer.supplierVatEu ? t('customers.status.yes') : t('customers.status.no')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Timestamps */}
                 <div className="bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Timestamps</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.timestamps')}</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-gray-400">Created At</label>
+                      <label className="text-sm text-gray-400">{t('customers.details.createdAt')}</label>
                       <p className="text-white">{formatDate(selectedCustomer.createdAt)}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-400">Updated At</label>
+                      <label className="text-sm text-gray-400">{t('customers.details.updatedAt')}</label>
                       <p className="text-white">{formatDate(selectedCustomer.updatedAt)}</p>
                     </div>
                   </div>
@@ -432,7 +434,7 @@ const Customers = () => {
               {/* Additional Information */}
               {selectedCustomer.notes && (
                 <div className="mt-6 bg-slate-700 rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-white mb-4">Notes</h4>
+                  <h4 className="text-lg font-medium text-white mb-4">{t('customers.details.notes')}</h4>
                   <p className="text-gray-300 whitespace-pre-wrap">{selectedCustomer.notes}</p>
                 </div>
               )}

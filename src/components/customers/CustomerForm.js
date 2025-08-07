@@ -19,8 +19,10 @@ import {
 import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({ ...DEFAULT_CUSTOMER });
   const [loading, setLoading] = useState(false);
   const [verifyingNip, setVerifyingNip] = useState(false);
@@ -39,11 +41,11 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
     const newErrors = {};
     
     if (!formData.name || formData.name.trim() === '') {
-      newErrors.name = 'Nazwa klienta jest wymagana';
+      newErrors.name = t('customers.form.nameRequired');
     }
     
     if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Niepoprawny format adresu email';
+      newErrors.email = t('customers.form.emailInvalid');
     }
     
     setErrors(newErrors);
@@ -68,7 +70,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
   const verifyNip = async () => {
     try {
       if (!formData.vatEu) {
-        showError('Wprowadź numer NIP do weryfikacji');
+        showError(t('customers.notifications.nipVerifyError'));
         return;
       }
       
@@ -76,7 +78,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
       const nip = formData.vatEu.replace(/^PL/i, '');
       
       if (!validateNipFormat(nip)) {
-        showError('Niepoprawny format numeru NIP');
+        showError(t('customers.notifications.nipFormatError'));
         return;
       }
       
@@ -85,7 +87,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
       const companyData = await getBasicCompanyDataByNip(nip);
       
       if (!companyData) {
-        showError('Nie znaleziono firmy o podanym numerze NIP');
+        showError(t('customers.notifications.nipNotFound'));
         setVerifyingNip(false);
         return;
       }
@@ -104,11 +106,11 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
       }
       
       setFormData(updatedData);
-      showSuccess('Pomyślnie zweryfikowano NIP i zaktualizowano dane');
+      showSuccess(t('customers.notifications.nipVerifySuccess'));
       
     } catch (error) {
       console.error('Błąd podczas weryfikacji NIP:', error);
-      showError('Wystąpił błąd podczas weryfikacji NIP: ' + error.message);
+      showError(t('customers.notifications.nipVerifyNetworkError', { message: error.message }));
     } finally {
       setVerifyingNip(false);
     }
@@ -127,18 +129,18 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
       if (customer) {
         // Aktualizacja istniejącego klienta
         await updateCustomer(customer.id, formData, currentUser.uid);
-        showSuccess('Klient został zaktualizowany');
+        showSuccess(t('customers.notifications.customerUpdated'));
       } else {
         // Dodawanie nowego klienta
         await createCustomer(formData, currentUser.uid);
-        showSuccess('Klient został dodany');
+        showSuccess(t('customers.notifications.customerAdded'));
       }
       
       if (onSubmitSuccess) {
         onSubmitSuccess();
       }
     } catch (error) {
-      showError('Błąd podczas zapisywania klienta: ' + error.message);
+      showError(t('customers.notifications.saveError', { message: error.message }));
       console.error('Error saving customer:', error);
     } finally {
       setLoading(false);
@@ -151,7 +153,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12}>
           <TextField
             name="name"
-            label="Nazwa klienta"
+            label={t('customers.form.customerName')}
             value={formData.name || ''}
             onChange={handleChange}
             fullWidth
@@ -164,7 +166,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12} md={6}>
           <TextField
             name="email"
-            label="Email"
+            label={t('customers.form.email')}
             type="email"
             value={formData.email || ''}
             onChange={handleChange}
@@ -177,7 +179,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12} md={6}>
           <TextField
             name="phone"
-            label="Telefon"
+            label={t('customers.form.phone')}
             value={formData.phone || ''}
             onChange={handleChange}
             fullWidth
@@ -187,7 +189,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12} md={6}>
           <TextField
             name="vatEu"
-            label="VAT-EU / NIP"
+            label={t('customers.form.vatEu')}
             value={formData.vatEu || ''}
             onChange={handleChange}
             fullWidth
@@ -199,32 +201,32 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
                     edge="end"
                     onClick={verifyNip}
                     disabled={verifyingNip || !formData.vatEu}
-                    title="Zweryfikuj NIP"
+                    title={t('customers.form.verifyNip')}
                   >
                     {verifyingNip ? <CircularProgress size={24} /> : <SearchIcon />}
                   </IconButton>
                 </InputAdornment>
               )
             }}
-            helperText="Format: PL0000000000 lub 0000000000"
+            helperText={t('customers.form.vatEuHelp')}
           />
         </Grid>
         
         <Grid item xs={12} md={6}>
           <TextField
             name="orderAffix"
-            label="Afiks zamówień klienta"
+            label={t('customers.form.orderAffix')}
             value={formData.orderAffix || ''}
             onChange={handleChange}
             fullWidth
-            helperText="Dodatkowy identyfikator do numerów zamówień, np. GW, BW"
+            helperText={t('customers.form.orderAffixHelp')}
           />
         </Grid>
         
         <Grid item xs={12} md={6}>
           <TextField
             name="supplierVatEu"
-            label="VAT-EU dostawcy"
+            label={t('customers.form.supplierVatEu')}
             value={formData.supplierVatEu || ''}
             onChange={handleChange}
             fullWidth
@@ -234,7 +236,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12} md={6}>
           <TextField
             name="billingAddress"
-            label="Adres do faktury"
+            label={t('customers.form.billingAddress')}
             value={formData.billingAddress || ''}
             onChange={handleChange}
             fullWidth
@@ -246,7 +248,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12} md={6}>
           <TextField
             name="shippingAddress"
-            label="Adres do wysyłki"
+            label={t('customers.form.shippingAddress')}
             value={formData.shippingAddress || ''}
             onChange={handleChange}
             fullWidth
@@ -258,7 +260,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
         <Grid item xs={12}>
           <TextField
             name="notes"
-            label="Notatki"
+            label={t('customers.form.notes')}
             value={formData.notes || ''}
             onChange={handleChange}
             fullWidth
@@ -273,7 +275,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             onClick={onCancel}
             disabled={loading}
           >
-            Anuluj
+            {t('customers.form.cancel')}
           </Button>
           <Button 
             type="submit" 
@@ -282,7 +284,7 @@ const CustomerForm = ({ customer, onSubmitSuccess, onCancel }) => {
             disabled={loading}
             startIcon={loading ? <CircularProgress size={20} /> : null}
           >
-            {loading ? 'Zapisywanie...' : customer ? 'Aktualizuj' : 'Dodaj'}
+            {loading ? t('customers.form.saving') : customer ? t('customers.form.update') : t('customers.form.add')}
           </Button>
         </Grid>
       </Grid>

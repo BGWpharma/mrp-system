@@ -59,6 +59,224 @@
     "settings": "Ustawienia",
     "logout": "Wyloguj"
   },
+  "customers": {
+    "title": "Klienci",
+    "newCustomer": "Nowy klient",
+    "editCustomer": "Edytuj klienta",
+    "addNewCustomer": "Dodaj nowego klienta",
+    "customerDetails": "Szczegóły klienta",
+    "searchCustomers": "Szukaj klientów...",
+    "noCustomersFound": "Nie znaleziono klientów",
+    "loading": "Ładowanie klientów...",
+    "loadingCustomers": "Ładowanie klientów...",
+    "count": "{{count}} klient{{count, plural, one {} few {ów} many {ów} other {ów}}} znaleziono",
+    "table": {
+      "name": "Nazwa",
+      "customer": "Klient",
+      "contact": "Kontakt",
+      "email": "Email",
+      "phone": "Telefon",
+      "address": "Adres",
+      "billingAddress": "Adres do faktury",
+      "shippingAddress": "Adres do wysyłki",
+      "status": "Status",
+      "created": "Utworzono",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "view": "Podgląd",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "details": "Szczegóły",
+      "back": "Wróć",
+      "backToList": "Powrót do listy klientów",
+      "search": "Szukaj",
+      "clear": "Wyczyść",
+      "retry": "Ponów"
+    },
+    "form": {
+      "customerName": "Nazwa klienta",
+      "nameRequired": "Nazwa klienta jest wymagana",
+      "email": "Email",
+      "emailInvalid": "Niepoprawny format adresu email",
+      "phone": "Telefon",
+      "vatEu": "VAT-EU / NIP",
+      "vatEuHelp": "Format: PL0000000000 lub 0000000000",
+      "verifyNip": "Zweryfikuj NIP",
+      "vatEuVerifying": "Weryfikowanie...",
+      "vatEuVerifyTitle": "Zweryfikuj NIP",
+      "orderAffix": "Afiks zamówień klienta",
+      "orderAffixHelp": "Dodatkowy identyfikator do numerów zamówień, np. GW, BW",
+      "supplierVatEu": "VAT-EU dostawcy",
+      "billingAddress": "Adres do faktury",
+      "shippingAddress": "Adres do wysyłki",
+      "notes": "Notatki",
+      "save": "Zapisz",
+      "saving": "Zapisywanie...",
+      "cancel": "Anuluj",
+      "update": "Aktualizuj",
+      "add": "Dodaj"
+    },
+    "addCustomer": "Dodaj klienta",
+    "addNewCustomer": "Dodaj nowego klienta", 
+    "editCustomer": "Edytuj klienta",
+    "searchPlaceholder": "Szukaj klientów...",
+    "search": "Szukaj",
+    "status": {
+      "draft": "Szkic",
+      "pending": "Oczekujące",
+      "inProgress": "W realizacji",
+      "completed": "Zrealizowane",
+      "cancelled": "Anulowane",
+      "euVat": "VAT-EU",
+      "standard": "Standard"
+    },
+    "paymentStatus": {
+      "unpaid": "Nieopłacona",
+      "partiallyPaid": "Częściowo opłacona",
+      "paid": "Opłacona"
+    },
+    "pagination": {
+      "rowsPerPage": "Wierszy na stronę:",
+      "displayedRows": "{{from}}-{{to}} z {{count}}"
+    },
+    "details": {
+      "title": "Szczegóły klienta",
+      "basicInformation": "Informacje podstawowe",
+      "contactInformation": "Informacje kontaktowe",
+      "addresses": "Adresy",
+      "taxInformation": "Informacje podatkowe",
+      "timestamps": "Znaczniki czasu",
+      "additionalInformation": "Informacje dodatkowe",
+      "customerId": "ID klienta",
+      "customerName": "Nazwa klienta",
+      "type": "Typ",
+      "individual": "Osoba fizyczna",
+      "status": "Status",
+      "euVatSupplier": "Dostawca VAT-EU",
+      "standardCustomer": "Standardowy klient",
+      "email": "Email",
+      "phone": "Telefon",
+      "website": "Strona internetowa",
+      "billingAddress": "Adres do faktury",
+      "shippingAddress": "Adres do wysyłki",
+      "sameAsBilling": "Taki sam jak adres do faktury",
+      "city": "Miasto",
+      "postalCode": "Kod pocztowy",
+      "country": "Kraj",
+      "shippingCity": "Miasto (wysyłka)",
+      "shippingPostalCode": "Kod pocztowy (wysyłka)",
+      "shippingCountry": "Kraj (wysyłka)",
+      "vatNumber": "Numer VAT",
+      "taxId": "NIP",
+      "euVatSupplierFlag": "Dostawca VAT-EU",
+      "createdAt": "Data utworzenia",
+      "updatedAt": "Data aktualizacji",
+      "notes": "Notatki",
+      "orders": "Zamówienia", 
+      "invoices": "Faktury",
+      "details": "Szczegóły",
+      "notFound": "Nie znaleziono klienta",
+      "backToList": "Powrót do listy klientów",
+      "back": "Powrót",
+      "edit": "Edytuj",
+      "allOrders": "Wszystkie zamówienia",
+      "newOrder": "Nowe zamówienie",
+      "newInvoice": "Nowa faktura",
+      "noOrders": "Brak zamówień dla tego klienta",
+      "noInvoices": "Brak faktur dla tego klienta",
+      "orderNumber": "Nr zamówienia",
+      "date": "Data",
+      "status": "Status",
+      "value": "Wartość",
+      "actions": "Akcje",
+      "invoiceNumber": "Nr faktury",
+      "issueDate": "Data wystawienia",
+      "dueDate": "Termin płatności",
+      "paymentStatus": "Status płatności",
+      "amount": "Kwota"
+    },
+    "list": {
+      "title": "Klienci",
+      "addCustomer": "Dodaj klienta",
+      "searchPlaceholder": "Szukaj klientów...",
+      "noCustomers": "Brak klientów do wyświetlenia",
+      "table": {
+        "name": "Nazwa",
+        "email": "Email",
+        "phone": "Telefon",
+        "billingAddress": "Adres do faktury",
+        "actions": "Akcje"
+      },
+      "actions": {
+        "details": "Szczegóły",
+        "edit": "Edytuj",
+        "delete": "Usuń"
+      },
+      "pagination": {
+        "rowsPerPage": "Wierszy na stronę:",
+        "displayedRows": "{{from}}-{{to}} z {{count}}"
+      }
+    },
+    "delete": {
+      "confirmTitle": "Potwierdź usunięcie",
+      "confirmMessage": "Czy na pewno chcesz usunąć klienta \"{{name}}\"? Tej operacji nie można cofnąć.",
+      "confirmDelete": {
+        "title": "Potwierdź usunięcie",
+        "message": "Czy na pewno chcesz usunąć klienta \"{{name}}\"? Tej operacji nie można cofnąć.",
+        "confirm": "Usuń",
+        "cancel": "Anuluj"
+      }
+    },
+    "notifications": {
+      "customerAdded": "Klient został dodany",
+      "customerUpdated": "Klient został zaktualizowany",
+      "customerDeleted": "Klient został usunięty",
+      "saveError": "Błąd podczas zapisywania klienta: {{message}}",
+      "deleteError": "Błąd podczas usuwania klienta: {{message}}",
+      "loadError": "Nie udało się pobrać listy klientów",
+      "loadDetailError": "Nie udało się pobrać danych klienta",
+      "dataLoadError": "Nie udało się pobrać danych klienta",
+      "searchError": "Błąd podczas wyszukiwania: {{message}}",
+      "nipVerifyError": "Wprowadź numer NIP do weryfikacji",
+      "nipFormatError": "Niepoprawny format numeru NIP",
+      "nipNotFound": "Nie znaleziono firmy o podanym numerze NIP",
+      "nipVerifyNetworkError": "Wystąpił błąd podczas weryfikacji NIP: {{message}}",
+      "nipVerifySuccess": "Pomyślnie zweryfikowano NIP i zaktualizowano dane"
+    },
+    "status": {
+      "standard": "Standardowy",
+      "euVat": "VAT-EU",
+      "yes": "Tak",
+      "no": "Nie"
+    },
+    "empty": {
+      "title": "Nie znaleziono klientów",
+      "description": "Brak klientów w systemie. Klienci pojawią się tutaj po dodaniu.",
+      "noEmail": "Brak emaila",
+      "noPhone": "Brak telefonu",
+      "noAddress": "Brak adresu",
+      "namedCustomer": "Klient bez nazwy",
+      "invalidDate": "Nieprawidłowa data"
+    },
+    "tabs": {
+      "details": "Szczegóły",
+      "orders": "Zamówienia",
+      "invoices": "Faktury"
+    },
+    "paymentStatus": {
+      "unpaid": "Nieopłacona",
+      "partiallyPaid": "Częściowo opłacona",
+      "paid": "Opłacona"
+    },
+    "orderStatus": {
+      "draft": "Szkic",
+      "pending": "Oczekujące",
+      "inProgress": "W realizacji",
+      "completed": "Zrealizowane",
+      "cancelled": "Anulowane"
+    }
+  },
   "sidebar": {
     "aiAssistant": "Asystent AI",
     "dashboard": "Dashboard",
@@ -2319,7 +2537,8 @@
       "deliveryProof": "Dowód dostawy",
       "comments": "Uwagi",
       "relatedInvoices": "Faktury powiązane z zamówieniem",
-      "relatedCmrDocuments": "Dokumenty CMR powiązane z zamówieniem"
+      "relatedCmrDocuments": "Dokumenty CMR powiązane z zamówieniem",
+      "relatedPurchaseOrders": "Zamówienia zakupu powiązane"
     },
     "customerInfo": {
       "noCustomerName": "Brak nazwy klienta",
