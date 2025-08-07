@@ -29,6 +29,7 @@ import { getAllCustomers } from '../../../services/customerService';
 import { CURRENCY_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 import Loader from '../../../components/common/Loader';
 import GoBackButton from '../../../components/common/GoBackButton';
 import PriceListItemsTable from '../../../components/sales/priceLists/PriceListItemsTable';
@@ -46,6 +47,7 @@ const PriceListFormPage = () => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
+  const { t } = useTranslation();
   
   useEffect(() => {
     async function loadData() {
@@ -76,7 +78,7 @@ const PriceListFormPage = () => {
         }
       } catch (error) {
         console.error('Błąd podczas ładowania danych:', error);
-        showNotification('Wystąpił błąd podczas ładowania danych', 'error');
+        showNotification(t('priceLists.messages.errors.loadDataFailed'), 'error');
         if (isEditMode) {
           navigate('/sales/price-lists');
         }
@@ -116,7 +118,7 @@ const PriceListFormPage = () => {
     e.preventDefault();
     
     if (!formData.customerId) {
-      showNotification('Wybierz klienta', 'error');
+      showNotification(t('priceLists.form.selectCustomer'), 'error');
       return;
     }
     
@@ -125,10 +127,10 @@ const PriceListFormPage = () => {
       
       if (isEditMode) {
         await updatePriceList(id, formData, currentUser.uid);
-        showNotification('Lista cenowa została zaktualizowana', 'success');
+        showNotification(t('priceLists.messages.success.updated'), 'success');
       } else {
         const newId = await createPriceList(formData, currentUser.uid);
-        showNotification('Lista cenowa została utworzona', 'success');
+        showNotification(t('priceLists.messages.success.created'), 'success');
         navigate(`/sales/price-lists/${newId}`);
         return; // Zapobiegamy przejściu do strony listy cenowych
       }
@@ -136,7 +138,7 @@ const PriceListFormPage = () => {
       navigate('/sales/price-lists');
     } catch (error) {
       console.error('Błąd podczas zapisywania listy cenowej:', error);
-      showNotification(error.message || 'Błąd podczas zapisywania listy cenowej', 'error');
+      showNotification(error.message || t('priceLists.messages.errors.saveFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -152,7 +154,7 @@ const PriceListFormPage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <GoBackButton />
           <Typography variant="h4" component="h1">
-            {isEditMode ? 'Edytuj listę cenową' : 'Nowa lista cenowa'}
+            {isEditMode ? t('priceLists.form.editTitle') : t('priceLists.form.newTitle')}
           </Typography>
         </Box>
         
@@ -162,7 +164,7 @@ const PriceListFormPage = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Nazwa listy cenowej"
+                  label={t('priceLists.form.name')}
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
@@ -179,7 +181,7 @@ const PriceListFormPage = () => {
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="Klient"
+                      label={t('priceLists.form.customer')}
                       required
                     />
                   )}
@@ -189,7 +191,7 @@ const PriceListFormPage = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Waluta"
+                  label={t('priceLists.form.currency')}
                   name="currency"
                   select
                   value={formData.currency}
@@ -213,14 +215,14 @@ const PriceListFormPage = () => {
                       color="primary"
                     />
                   }
-                  label="Aktywna"
+                  label={t('priceLists.form.active')}
                 />
               </Grid>
               
               <Grid item xs={12} md={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DatePicker
-                    label="Data ważności od"
+                    label={t('priceLists.form.validFrom')}
                     value={formData.validFrom}
                     onChange={(date) => handleDateChange('validFrom', date)}
                     renderInput={(params) => <TextField {...params} fullWidth />}
@@ -237,7 +239,7 @@ const PriceListFormPage = () => {
               <Grid item xs={12} md={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DatePicker
-                    label="Data ważności do"
+                    label={t('priceLists.form.validTo')}
                     value={formData.validTo}
                     onChange={(date) => handleDateChange('validTo', date)}
                     renderInput={(params) => <TextField {...params} fullWidth />}
@@ -254,7 +256,7 @@ const PriceListFormPage = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Opis"
+                  label={t('priceLists.form.description')}
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
@@ -271,7 +273,7 @@ const PriceListFormPage = () => {
                     onClick={() => navigate('/sales/price-lists')}
                     sx={{ mr: 2 }}
                   >
-                    Anuluj
+                    {t('priceLists.form.cancel')}
                   </Button>
                   <Button
                     type="submit"
@@ -279,7 +281,7 @@ const PriceListFormPage = () => {
                     color="primary"
                     disabled={loading}
                   >
-                    {isEditMode ? 'Zapisz zmiany' : 'Utwórz listę cenową'}
+                    {isEditMode ? t('priceLists.form.saveChanges') : t('priceLists.form.create')}
                   </Button>
                 </Box>
               </Grid>
@@ -290,7 +292,7 @@ const PriceListFormPage = () => {
         {isEditMode && (
           <Box sx={{ mt: 4 }}>
             <Typography variant="h5" gutterBottom>
-              Elementy listy cenowej
+              {t('priceLists.details.items')}
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <PriceListItemsTable priceListId={id} />

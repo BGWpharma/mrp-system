@@ -15,6 +15,7 @@ import { updatePriceListItem } from '../../../services/priceListService';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
   const [formData, setFormData] = useState({
@@ -29,6 +30,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
+  const { t } = useTranslation();
   
   useEffect(() => {
     if (item && open) {
@@ -65,23 +67,23 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
     e.preventDefault();
     
     if (typeof formData.price !== 'number' || formData.price < 0) {
-      showNotification('Cena musi być liczbą nieujemną', 'error');
+      showNotification(t('priceLists.dialogs.edit.priceValidation'), 'error');
       return;
     }
     
     if (typeof formData.minQuantity !== 'number' || formData.minQuantity <= 0) {
-      showNotification('Minimalna ilość musi być liczbą dodatnią', 'error');
+      showNotification(t('priceLists.dialogs.edit.minQuantityValidation'), 'error');
       return;
     }
     
     try {
       setLoading(true);
       await updatePriceListItem(item.id, formData, currentUser.uid);
-      showNotification('Element listy cenowej został zaktualizowany', 'success');
+      showNotification(t('priceLists.dialogs.edit.itemUpdated'), 'success');
       onItemUpdated({ id: item.id, ...formData });
     } catch (error) {
       console.error('Błąd podczas aktualizacji elementu listy cenowej:', error);
-      showNotification(error.message || 'Błąd podczas aktualizacji elementu listy cenowej', 'error');
+      showNotification(error.message || t('priceLists.dialogs.edit.updateError'), 'error');
     } finally {
       setLoading(false);
     }
@@ -89,14 +91,14 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
   
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Edytuj element listy cenowej</DialogTitle>
+      <DialogTitle>{t('priceLists.dialogs.edit.title')}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Produkt"
+                label={t('priceLists.dialogs.edit.product')}
                 value={formData.productName}
                 disabled
               />
@@ -105,7 +107,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label="Cena"
+                label={t('priceLists.dialogs.edit.price')}
                 name="price"
                 type="number"
                 value={formData.price}
@@ -121,7 +123,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label="Minimalna ilość"
+                label={t('priceLists.dialogs.edit.minQuantity')}
                 name="minQuantity"
                 type="number"
                 value={formData.minQuantity}
@@ -137,7 +139,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label="Jednostka"
+                label={t('priceLists.dialogs.edit.unit')}
                 name="unit"
                 select
                 value={formData.unit}
@@ -154,7 +156,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Uwagi"
+                label={t('priceLists.dialogs.edit.notes')}
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
@@ -166,7 +168,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} color="secondary">
-            Anuluj
+            {t('priceLists.dialogs.edit.cancel')}
           </Button>
           <Button 
             type="submit" 
@@ -174,7 +176,7 @@ const EditPriceListItemDialog = ({ open, onClose, item, onItemUpdated }) => {
             variant="contained"
             disabled={loading}
           >
-            Zapisz zmiany
+            {t('priceLists.dialogs.edit.save')}
           </Button>
         </DialogActions>
       </form>

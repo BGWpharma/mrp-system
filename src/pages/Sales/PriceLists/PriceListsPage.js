@@ -28,6 +28,7 @@ import { format } from 'date-fns';
 import { getAllPriceLists, deletePriceList } from '../../../services/priceListService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Loader from '../../../components/common/Loader';
 
@@ -41,6 +42,7 @@ const PriceListsPage = () => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
+  const { t } = useTranslation();
   
   useEffect(() => {
     fetchPriceLists();
@@ -58,7 +60,7 @@ const PriceListsPage = () => {
       setFilteredPriceLists(data);
     } catch (error) {
       console.error('Błąd podczas pobierania list cenowych:', error);
-      showNotification('Błąd podczas pobierania list cenowych', 'error');
+      showNotification(t('priceLists.messages.errors.fetchFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -89,11 +91,11 @@ const PriceListsPage = () => {
     
     try {
       await deletePriceList(priceListToDelete.id);
-      showNotification('Lista cenowa została usunięta', 'success');
+      showNotification(t('priceLists.messages.success.deleted'), 'success');
       setPriceLists(prev => prev.filter(item => item.id !== priceListToDelete.id));
     } catch (error) {
       console.error('Błąd podczas usuwania listy cenowej:', error);
-      showNotification('Błąd podczas usuwania listy cenowej', 'error');
+      showNotification(t('priceLists.messages.errors.deleteFailed'), 'error');
     } finally {
       setConfirmDialogOpen(false);
       setPriceListToDelete(null);
@@ -104,12 +106,12 @@ const PriceListsPage = () => {
     <Container maxWidth="lg">
       <Box sx={{ mt: 3, mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Listy cenowe klientów
+          {t('priceLists.title')}
         </Typography>
         
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
           <TextField
-            placeholder="Szukaj listy cenowej..."
+            placeholder={t('priceLists.searchPlaceholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             sx={{ width: '100%', maxWidth: 500 }}
@@ -131,7 +133,7 @@ const PriceListsPage = () => {
             color="primary"
             startIcon={<AddIcon />}
           >
-            Nowa lista cenowa
+            {t('priceLists.newPriceList')}
           </Button>
         </Box>
         
@@ -143,13 +145,13 @@ const PriceListsPage = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Nazwa</TableCell>
-                    <TableCell>Klient</TableCell>
-                    <TableCell>Waluta</TableCell>
-                    <TableCell>Ważna od</TableCell>
-                    <TableCell>Ważna do</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Akcje</TableCell>
+                    <TableCell>{t('priceLists.table.name')}</TableCell>
+                    <TableCell>{t('priceLists.table.customer')}</TableCell>
+                    <TableCell>{t('priceLists.table.currency')}</TableCell>
+                    <TableCell>{t('priceLists.table.validFrom')}</TableCell>
+                    <TableCell>{t('priceLists.table.validTo')}</TableCell>
+                    <TableCell>{t('priceLists.table.status')}</TableCell>
+                    <TableCell align="right">{t('priceLists.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -167,13 +169,13 @@ const PriceListsPage = () => {
                         </TableCell>
                         <TableCell>
                           <Chip 
-                            label={priceList.isActive ? "Aktywna" : "Nieaktywna"} 
+                            label={priceList.isActive ? t('priceLists.status.active') : t('priceLists.status.inactive')} 
                             color={priceList.isActive ? "success" : "default"}
                             size="small"
                           />
                         </TableCell>
                         <TableCell align="right">
-                          <Tooltip title="Szczegóły">
+                          <Tooltip title={t('priceLists.table.details')}>
                             <IconButton 
                               component={Link} 
                               to={`/sales/price-lists/${priceList.id}`}
@@ -182,7 +184,7 @@ const PriceListsPage = () => {
                               <VisibilityIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Edytuj">
+                          <Tooltip title={t('priceLists.table.edit')}>
                             <IconButton 
                               component={Link} 
                               to={`/sales/price-lists/${priceList.id}/edit`}
@@ -191,7 +193,7 @@ const PriceListsPage = () => {
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="Usuń">
+                          <Tooltip title={t('priceLists.table.delete')}>
                             <IconButton 
                               color="error" 
                               size="small"
@@ -206,7 +208,7 @@ const PriceListsPage = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={7} align="center">
-                        Brak list cenowych. Kliknij "Nowa lista cenowa", aby utworzyć pierwszą.
+                        {t('priceLists.noPriceLists')}
                       </TableCell>
                     </TableRow>
                   )}
@@ -219,8 +221,8 @@ const PriceListsPage = () => {
       
       <ConfirmDialog
         open={confirmDialogOpen}
-        title="Potwierdzenie usunięcia"
-        message={`Czy na pewno chcesz usunąć listę cenową "${priceListToDelete?.name}"?`}
+        title={t('priceLists.confirmations.deleteTitle')}
+        message={t('priceLists.confirmations.deleteMessage', { name: priceListToDelete?.name })}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDialogOpen(false)}
       />

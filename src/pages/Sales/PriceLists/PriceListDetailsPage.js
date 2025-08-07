@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 
 import { getPriceListById, deletePriceList } from '../../../services/priceListService';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Loader from '../../../components/common/Loader';
 import GoBackButton from '../../../components/common/GoBackButton';
@@ -30,6 +31,7 @@ const PriceListDetailsPage = () => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   
   const { showNotification } = useNotification();
+  const { t } = useTranslation();
   
   useEffect(() => {
     fetchPriceList();
@@ -42,7 +44,7 @@ const PriceListDetailsPage = () => {
       setPriceList(data);
     } catch (error) {
       console.error('Błąd podczas pobierania listy cenowej:', error);
-      showNotification('Błąd podczas pobierania listy cenowej', 'error');
+      showNotification(t('priceLists.messages.errors.fetchDetailsFailed'), 'error');
       navigate('/sales/price-lists');
     } finally {
       setLoading(false);
@@ -56,11 +58,11 @@ const PriceListDetailsPage = () => {
   const handleConfirmDelete = async () => {
     try {
       await deletePriceList(id);
-      showNotification('Lista cenowa została usunięta', 'success');
+      showNotification(t('priceLists.messages.success.deleted'), 'success');
       navigate('/sales/price-lists');
     } catch (error) {
       console.error('Błąd podczas usuwania listy cenowej:', error);
-      showNotification('Błąd podczas usuwania listy cenowej', 'error');
+      showNotification(t('priceLists.messages.errors.deleteFailed'), 'error');
     } finally {
       setConfirmDialogOpen(false);
     }
@@ -74,10 +76,10 @@ const PriceListDetailsPage = () => {
     return (
       <Container>
         <Typography variant="h5">
-          Nie znaleziono listy cenowej
+          {t('priceLists.details.notFound')}
         </Typography>
         <Button component={Link} to="/sales/price-lists">
-          Powrót do list cenowych
+          {t('priceLists.details.backToLists')}
         </Button>
       </Container>
     );
@@ -102,7 +104,7 @@ const PriceListDetailsPage = () => {
             startIcon={<EditIcon />}
             sx={{ mr: 2 }}
           >
-            Edytuj
+            {t('priceLists.details.edit')}
           </Button>
           <Button
             variant="outlined"
@@ -110,7 +112,7 @@ const PriceListDetailsPage = () => {
             startIcon={<DeleteIcon />}
             onClick={handleDeleteClick}
           >
-            Usuń
+            {t('priceLists.details.delete')}
           </Button>
         </Box>
         
@@ -118,7 +120,7 @@ const PriceListDetailsPage = () => {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" color="textSecondary">
-                Klient
+                {t('priceLists.details.customer')}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 {priceList.customerName}
@@ -127,10 +129,10 @@ const PriceListDetailsPage = () => {
             
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" color="textSecondary">
-                Status
+                {t('priceLists.details.status')}
               </Typography>
               <Chip 
-                label={priceList.isActive ? "Aktywna" : "Nieaktywna"} 
+                label={priceList.isActive ? t('priceLists.status.active') : t('priceLists.status.inactive')} 
                 color={priceList.isActive ? "success" : "default"}
                 size="small"
               />
@@ -138,7 +140,7 @@ const PriceListDetailsPage = () => {
             
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" color="textSecondary">
-                Waluta
+                {t('priceLists.details.currency')}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 {priceList.currency}
@@ -147,7 +149,7 @@ const PriceListDetailsPage = () => {
             
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" color="textSecondary">
-                Data utworzenia
+                {t('priceLists.details.createdAt')}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 {priceList.createdAt ? format(priceList.createdAt.toDate(), 'dd.MM.yyyy HH:mm') : '-'}
@@ -156,7 +158,7 @@ const PriceListDetailsPage = () => {
             
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" color="textSecondary">
-                Ważna od
+                {t('priceLists.details.validFrom')}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 {priceList.validFrom ? format(priceList.validFrom.toDate(), 'dd.MM.yyyy') : '-'}
@@ -165,7 +167,7 @@ const PriceListDetailsPage = () => {
             
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" color="textSecondary">
-                Ważna do
+                {t('priceLists.details.validTo')}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 {priceList.validTo ? format(priceList.validTo.toDate(), 'dd.MM.yyyy') : '-'}
@@ -175,7 +177,7 @@ const PriceListDetailsPage = () => {
             {priceList.description && (
               <Grid item xs={12}>
                 <Typography variant="subtitle1" color="textSecondary">
-                  Opis
+                  {t('priceLists.details.description')}
                 </Typography>
                 <Typography variant="body1" gutterBottom>
                   {priceList.description}
@@ -187,7 +189,7 @@ const PriceListDetailsPage = () => {
         
         <Box sx={{ mt: 4 }}>
           <Typography variant="h5" gutterBottom>
-            Elementy listy cenowej
+            {t('priceLists.details.items')}
           </Typography>
           <Divider sx={{ mb: 2 }} />
           <PriceListItemsTable priceListId={id} readOnly={true} />
@@ -196,8 +198,8 @@ const PriceListDetailsPage = () => {
       
       <ConfirmDialog
         open={confirmDialogOpen}
-        title="Potwierdzenie usunięcia"
-        message={`Czy na pewno chcesz usunąć listę cenową "${priceList.name}"?`}
+        title={t('priceLists.confirmations.deleteTitle')}
+        message={t('priceLists.confirmations.deleteMessage', { name: priceList.name })}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDialogOpen(false)}
       />

@@ -23,6 +23,7 @@ import {
   deletePriceListItem 
 } from '../../../services/priceListService';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../common/ConfirmDialog';
 import Loader from '../../common/Loader';
 import AddPriceListItemDialog from './AddPriceListItemDialog';
@@ -38,6 +39,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
   const [itemToDelete, setItemToDelete] = useState(null);
   
   const { showNotification } = useNotification();
+  const { t } = useTranslation();
   
   useEffect(() => {
     fetchItems();
@@ -50,7 +52,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
       setItems(data);
     } catch (error) {
       console.error('Błąd podczas pobierania elementów listy cenowej:', error);
-      showNotification('Błąd podczas pobierania elementów listy cenowej', 'error');
+      showNotification(t('priceLists.messages.errors.fetchItemsFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -76,10 +78,10 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
     try {
       await deletePriceListItem(itemToDelete.id);
       setItems(items.filter(item => item.id !== itemToDelete.id));
-      showNotification('Element został usunięty z listy cenowej', 'success');
+      showNotification(t('priceLists.messages.success.itemDeleted'), 'success');
     } catch (error) {
       console.error('Błąd podczas usuwania elementu listy cenowej:', error);
-      showNotification('Błąd podczas usuwania elementu listy cenowej', 'error');
+      showNotification(t('priceLists.messages.errors.deleteItemFailed'), 'error');
     } finally {
       setConfirmDeleteOpen(false);
       setItemToDelete(null);
@@ -107,7 +109,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
     <>
       <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="subtitle1">
-          Łączna ilość pozycji: {items.length}
+          {t('priceLists.items.totalCount', { count: items.length })}
         </Typography>
         
         {!readOnly && (
@@ -117,7 +119,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
             startIcon={<AddIcon />}
             onClick={handleAddClick}
           >
-            Dodaj produkt
+            {t('priceLists.items.addProduct')}
           </Button>
         )}
       </Box>
@@ -127,12 +129,12 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Nazwa produktu</TableCell>
-                <TableCell>Cena</TableCell>
-                <TableCell>Jednostka</TableCell>
-                <TableCell>Minimalna ilość</TableCell>
-                <TableCell>Uwagi</TableCell>
-                {!readOnly && <TableCell align="right">Akcje</TableCell>}
+                <TableCell>{t('priceLists.items.table.productName')}</TableCell>
+                <TableCell>{t('priceLists.items.table.price')}</TableCell>
+                <TableCell>{t('priceLists.items.table.unit')}</TableCell>
+                <TableCell>{t('priceLists.items.table.minQuantity')}</TableCell>
+                <TableCell>{t('priceLists.items.table.notes')}</TableCell>
+                {!readOnly && <TableCell align="right">{t('priceLists.items.table.actions')}</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -146,7 +148,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
                     <TableCell>{item.notes || '-'}</TableCell>
                     {!readOnly && (
                       <TableCell align="right">
-                        <Tooltip title="Edytuj">
+                        <Tooltip title={t('priceLists.items.table.edit')}>
                           <IconButton 
                             size="small"
                             onClick={() => handleEditClick(item)}
@@ -154,7 +156,7 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
                             <EditIcon />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Usuń">
+                        <Tooltip title={t('priceLists.items.table.delete')}>
                           <IconButton 
                             color="error" 
                             size="small"
@@ -170,8 +172,8 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
               ) : (
                 <TableRow>
                   <TableCell colSpan={readOnly ? 5 : 6} align="center">
-                    Brak produktów w tej liście cenowej.
-                    {!readOnly && ' Kliknij "Dodaj produkt", aby dodać pierwszy element.'}
+                    {t('priceLists.items.noItems')}
+                    {!readOnly && t('priceLists.items.noItemsAction')}
                   </TableCell>
                 </TableRow>
               )}
@@ -202,8 +204,8 @@ const PriceListItemsTable = ({ priceListId, readOnly = false }) => {
           
           <ConfirmDialog
             open={confirmDeleteOpen}
-            title="Potwierdzenie usunięcia"
-            message={`Czy na pewno chcesz usunąć produkt "${itemToDelete?.productName}" z listy cenowej?`}
+            title={t('priceLists.confirmations.deleteTitle')}
+            message={t('priceLists.confirmations.deleteItemMessage', { productName: itemToDelete?.productName })}
             onConfirm={handleConfirmDelete}
             onCancel={() => setConfirmDeleteOpen(false)}
           />
