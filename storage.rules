@@ -75,6 +75,12 @@ service firebase.storage {
       allow write: if request.auth != null;
     }
     
+    // Reguła dla PDF faktur - pozwala na pobieranie plików przez portale klientów (tylko odczyt)
+    match /invoices/{invoiceId}/{fileName} {
+      allow read: if true; // Publiczny dostęp do odczytu PDF faktur dla portali klientów
+      allow write: if request.auth != null; // Tylko uwierzytelnieni użytkownicy mogą przesyłać
+    }
+    
     // Domyślna reguła - blokuje dostęp bez szczegółowych uprawnień
     match /{allPaths=**} {
       allow read, write: if false;

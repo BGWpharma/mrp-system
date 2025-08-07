@@ -7,6 +7,7 @@ import { useTheme } from './contexts/ThemeContext';
 import { ColumnPreferencesProvider } from './contexts/ColumnPreferencesContext';
 import { InventoryListStateProvider } from './contexts/InventoryListStateContext';
 import { TaskListStateProvider } from './contexts/TaskListStateContext';
+import { CmrListStateProvider } from './contexts/CmrListStateContext';
 import { RecipeListStateProvider } from './contexts/RecipeListStateContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
@@ -180,8 +181,9 @@ function App() {
           <ColumnPreferencesProvider>
             <InventoryListStateProvider>
               <TaskListStateProvider>
-                <RecipeListStateProvider>
-                  <SidebarProvider>
+                <CmrListStateProvider>
+                  <RecipeListStateProvider>
+                    <SidebarProvider>
                 <div className="app-container">
                   <Notifications />
                   <Routes>
@@ -348,8 +350,9 @@ function App() {
                   </Routes>
                 </div>
                               </SidebarProvider>
-                </RecipeListStateProvider>
-              </TaskListStateProvider>
+                    </RecipeListStateProvider>
+                  </CmrListStateProvider>
+                </TaskListStateProvider>
             </InventoryListStateProvider>
           </ColumnPreferencesProvider>
         </NotificationProvider>

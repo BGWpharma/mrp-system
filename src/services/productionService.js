@@ -49,7 +49,7 @@ import {
   // Cache dla zoptymalizowanej funkcji pobierania zadań
   let productionTasksCache = null;
   let productionTasksCacheTimestamp = null;
-  const TASKS_CACHE_EXPIRY_MS = 3 * 60 * 1000; // 3 minut
+  const TASKS_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minut
   
   // Pobieranie wszystkich zadań produkcyjnych
   export const getAllTasks = async () => {

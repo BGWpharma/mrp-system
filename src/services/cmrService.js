@@ -1869,3 +1869,248 @@ export const deleteCmrAttachment = async (attachmentId, userId) => {
     throw error;
   }
 };
+
+// Cache dla zoptymalizowanej funkcji pobierania dokumentów CMR
+let cmrDocumentsCache = null;
+let cmrDocumentsCacheTimestamp = null;
+const CMR_CACHE_EXPIRY_MS = 3 * 60 * 1000; // 3 minuty
+
+/**
+ * ZOPTYMALIZOWANA FUNKCJA dla interfejsu listy dokumentów CMR
+ * 
+ * Ta funkcja została stworzona dla lepszej wydajności w interfejsie listy:
+ * - Cachuje wszystkie dokumenty CMR po pierwszym pobraniu
+ * - Dynamicznie filtruje i sortuje dane w cache
+ * - Implementuje debouncing dla wyszukiwania
+ * 
+ * @param {Object} params - Parametry zapytania
+ * @param {number} params.page - Numer strony (wymagany)
+ * @param {number} params.pageSize - Rozmiar strony (wymagany)
+ * @param {string|null} params.searchTerm - Termin wyszukiwania (opcjonalne)
+ * @param {string|null} params.statusFilter - Filtr statusu (opcjonalne)
+ * @param {string|null} params.sortField - Pole do sortowania (opcjonalne)
+ * @param {string|null} params.sortOrder - Kierunek sortowania (opcjonalne)
+ * @param {boolean} params.forceRefresh - Wymuś odświeżenie cache (opcjonalne)
+ * @returns {Promise<Object>} - Obiekt z paginacją i danymi
+ */
+export const getCmrDocumentsOptimized = async ({
+  page,
+  pageSize,
+  searchTerm = null,
+  statusFilter = null,
+  sortField = 'issueDate',
+  sortOrder = 'desc',
+  forceRefresh = false
+}) => {
+  try {
+    console.log('🚀 getCmrDocumentsOptimized - rozpoczynam zoptymalizowane pobieranie');
+    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, sortField, sortOrder, forceRefresh });
+
+    // Walidacja wymaganych parametrów
+    if (!page || !pageSize) {
+      throw new Error('Parametry page i pageSize są wymagane');
+    }
+
+    const pageNum = Math.max(1, parseInt(page));
+    const itemsPerPage = Math.max(1, parseInt(pageSize));
+
+    // KROK 1: Sprawdź cache dokumentów CMR
+    const now = Date.now();
+    const isCacheValid = cmrDocumentsCache && 
+                        cmrDocumentsCacheTimestamp && 
+                        (now - cmrDocumentsCacheTimestamp) < CMR_CACHE_EXPIRY_MS &&
+                        !forceRefresh;
+
+    let allDocuments;
+
+    if (isCacheValid) {
+      console.log('💾 Używam cache dokumentów CMR');
+      allDocuments = [...cmrDocumentsCache];
+    } else {
+      console.log('🔄 Pobieram świeże dane dokumentów CMR');
+      
+      // Pobierz wszystkie dokumenty CMR
+      allDocuments = await getAllCmrDocuments();
+
+      // Zaktualizuj cache
+      cmrDocumentsCache = [...allDocuments];
+      cmrDocumentsCacheTimestamp = now;
+      
+      console.log('💾 Zapisano do cache:', allDocuments.length, 'dokumentów CMR');
+    }
+
+    // KROK 2: Filtrowanie po terminie wyszukiwania
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchTermLower = searchTerm.toLowerCase().trim();
+      
+      // Priorytetowe dopasowania - najpierw numer CMR, potem inne pola
+      const cmrNumberMatches = [];
+      const otherMatches = [];
+      
+      allDocuments.forEach(doc => {
+        const cmrNumberMatch = doc.cmrNumber && doc.cmrNumber.toLowerCase().includes(searchTermLower);
+        const otherFieldsMatch = (
+          (doc.recipient && doc.recipient.toLowerCase().includes(searchTermLower)) ||
+          (doc.sender && doc.sender.toLowerCase().includes(searchTermLower)) ||
+          (doc.loadingPlace && doc.loadingPlace.toLowerCase().includes(searchTermLower)) ||
+          (doc.deliveryPlace && doc.deliveryPlace.toLowerCase().includes(searchTermLower)) ||
+          (doc.carrierName && doc.carrierName.toLowerCase().includes(searchTermLower)) ||
+          (doc.vehicleRegistration && doc.vehicleRegistration.toLowerCase().includes(searchTermLower))
+        );
+        
+        if (cmrNumberMatch) {
+          cmrNumberMatches.push(doc);
+        } else if (otherFieldsMatch) {
+          otherMatches.push(doc);
+        }
+      });
+      
+      allDocuments = [...cmrNumberMatches, ...otherMatches];
+      console.log('🔍 Po wyszukiwaniu:', allDocuments.length, 'dokumentów');
+    }
+
+    // KROK 3: Filtrowanie po statusie
+    if (statusFilter && statusFilter.trim() !== '') {
+      allDocuments = allDocuments.filter(doc => doc.status === statusFilter);
+      console.log('📊 Po filtrowaniu statusu:', allDocuments.length, 'dokumentów');
+    }
+
+    // KROK 4: Sortowanie
+    const sortByField = (documents, field, order) => {
+      return documents.sort((a, b) => {
+        let aVal = a[field];
+        let bVal = b[field];
+        
+        // Specjalne obsłużenie dla dat
+        if (field === 'issueDate' || field === 'deliveryDate' || field === 'loadingDate' || field === 'createdAt') {
+          aVal = aVal ? (aVal.toDate ? aVal.toDate() : new Date(aVal)) : new Date(0);
+          bVal = bVal ? (bVal.toDate ? bVal.toDate() : new Date(bVal)) : new Date(0);
+        }
+        
+        // Specjalne obsłużenie dla numerów CMR
+        if (field === 'cmrNumber') {
+          const getNumericPart = (cmrNumber) => {
+            if (!cmrNumber) return 0;
+            const match = cmrNumber.match(/CMR(\d+)/);
+            return match ? parseInt(match[1], 10) : 0;
+          };
+          
+          aVal = getNumericPart(aVal);
+          bVal = getNumericPart(bVal);
+        }
+        
+        // Obsługa null/undefined
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return order === 'asc' ? 1 : -1;
+        if (bVal == null) return order === 'asc' ? -1 : 1;
+        
+        // Porównanie
+        if (aVal < bVal) return order === 'asc' ? -1 : 1;
+        if (aVal > bVal) return order === 'asc' ? 1 : -1;
+        return 0;
+      });
+    };
+
+    const sortedDocuments = sortByField([...allDocuments], sortField, sortOrder);
+    console.log('🔄 Posortowano według:', sortField, sortOrder);
+
+    // KROK 5: Paginacja
+    const totalItems = sortedDocuments.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const safePage = Math.min(pageNum, Math.max(1, totalPages));
+    
+    const startIndex = (safePage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, sortedDocuments.length);
+    const paginatedDocuments = sortedDocuments.slice(startIndex, endIndex);
+
+    console.log('📄 Paginacja:', `Strona ${safePage}/${totalPages}, elementy ${startIndex + 1}-${endIndex} z ${totalItems}`);
+
+    return {
+      items: paginatedDocuments,
+      totalCount: totalItems,
+      page: safePage,
+      pageSize: itemsPerPage,
+      totalPages: totalPages
+    };
+    
+  } catch (error) {
+    console.error('❌ Błąd w getCmrDocumentsOptimized:', error);
+    throw error;
+  }
+};
+
+/**
+ * Czyści cache dokumentów CMR
+ */
+export const clearCmrDocumentsCache = () => {
+  cmrDocumentsCache = null;
+  cmrDocumentsCacheTimestamp = null;
+  console.log('🗑️ Cache dokumentów CMR wyczyszczony');
+};
+
+/**
+ * Aktualizuje pojedynczy dokument CMR w cache (zamiast czyszczenia całego cache)
+ * @param {string} documentId - ID dokumentu do aktualizacji
+ * @param {Object} updatedDocumentData - Nowe dane dokumentu
+ * @returns {boolean} - Czy aktualizacja się powiodła
+ */
+export const updateCmrDocumentInCache = (documentId, updatedDocumentData) => {
+  if (!cmrDocumentsCache || !Array.isArray(cmrDocumentsCache)) {
+    console.log('🚫 Cache dokumentów CMR jest pusty, pomijam aktualizację');
+    return false;
+  }
+
+  const documentIndex = cmrDocumentsCache.findIndex(doc => doc.id === documentId);
+  
+  if (documentIndex !== -1) {
+    cmrDocumentsCache[documentIndex] = {
+      ...cmrDocumentsCache[documentIndex],
+      ...updatedDocumentData,
+      id: documentId // Upewnij się, że ID się nie zmieni
+    };
+    console.log('✅ Zaktualizowano dokument CMR w cache:', documentId);
+    return true;
+  } else {
+    console.log('❌ Nie znaleziono dokumentu CMR w cache:', documentId);
+    return false;
+  }
+};
+
+/**
+ * Dodaje nowy dokument CMR do cache
+ * @param {Object} newDocumentData - Dane nowego dokumentu
+ * @returns {boolean} - Czy dodanie się powiodło
+ */
+export const addCmrDocumentToCache = (newDocumentData) => {
+  if (!cmrDocumentsCache || !Array.isArray(cmrDocumentsCache)) {
+    console.log('🚫 Cache dokumentów CMR jest pusty, pomijam dodanie');
+    return false;
+  }
+
+  cmrDocumentsCache.unshift(newDocumentData); // Dodaj na początek (najnowszy)
+  console.log('✅ Dodano nowy dokument CMR do cache:', newDocumentData.id);
+  return true;
+};
+
+/**
+ * Usuwa dokument CMR z cache
+ * @param {string} documentId - ID dokumentu do usunięcia
+ * @returns {boolean} - Czy usunięcie się powiodło
+ */
+export const removeCmrDocumentFromCache = (documentId) => {
+  if (!cmrDocumentsCache || !Array.isArray(cmrDocumentsCache)) {
+    console.log('🚫 Cache dokumentów CMR jest pusty, pomijam usunięcie');
+    return false;
+  }
+
+  const documentIndex = cmrDocumentsCache.findIndex(doc => doc.id === documentId);
+  
+  if (documentIndex !== -1) {
+    cmrDocumentsCache.splice(documentIndex, 1);
+    console.log('✅ Usunięto dokument CMR z cache:', documentId);
+    return true;
+  } else {
+    console.log('❌ Nie znaleziono dokumentu CMR w cache:', documentId);
+    return false;
+  }
+};

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   Paper, 
@@ -31,7 +31,9 @@ import {
   Switch,
   Pagination,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Fade,
+  Tooltip
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -39,6 +41,8 @@ import pl from 'date-fns/locale/pl';
 import enUS from 'date-fns/locale/en-US';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
+import { useCmrListState } from '../../../contexts/CmrListStateContext';
+import { useDebounce } from '../../../hooks/useDebounce';
 import { 
   getAllCmrDocuments, 
   CMR_STATUSES,
@@ -46,7 +50,11 @@ import {
   deleteCmrDocument,
   generateCmrReport,
   translatePaymentStatus,
-  updateCmrPaymentStatus
+  updateCmrPaymentStatus,
+  getCmrDocumentsOptimized,
+  clearCmrDocumentsCache,
+  updateCmrDocumentInCache,
+  removeCmrDocumentFromCache
 } from '../../../services/cmrService';
 import { getAllCustomers } from '../../../services/customerService';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +70,7 @@ import GetAppIcon from '@mui/icons-material/GetApp';
 import TranslateIcon from '@mui/icons-material/Translate';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Słownik tłumaczeń dla raportów
 const translations = {
@@ -142,27 +151,34 @@ const CmrListPage = () => {
   const { mode } = useThemeContext();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
+  // Użyj kontekstu stanu listy CMR
+  const { state: listState, actions: listActions } = useCmrListState();
+  
+  // Zmienne stanu z kontekstu
+  const searchTerm = listState.searchTerm;
+  const statusFilter = listState.statusFilter;
+  const page = listState.page;
+  const pageSize = listState.pageSize;
+  const tableSort = listState.tableSort;
+  
+  // Debounced search term
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  
+  // Ref do śledzenia pierwszego renderowania
+  const isFirstRender = useRef(true);
+  
   const [loading, setLoading] = useState(true);
+  const [mainTableLoading, setMainTableLoading] = useState(false);
+  const [showContent, setShowContent] = useState(false);
   const [cmrDocuments, setCmrDocuments] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState(null);
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [cmrToUpdatePaymentStatus, setCmrToUpdatePaymentStatus] = useState(null);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
-  
-  // Stany dla paginacji - rzeczywista paginacja
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [totalItems, setTotalItems] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  
-  // Stany dla sortowania
-  const [sortField, setSortField] = useState('issueDate');
-  const [sortOrder, setSortOrder] = useState('desc'); // domyślnie od najnowszych
-  
-  // Stany dla wyszukiwania i filtrowania
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   
   // Nowe stany dla generowania raportów
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
@@ -183,109 +199,107 @@ const CmrListPage = () => {
   // Bieżący słownik tłumaczeń na podstawie wybranego języka
   const t = translations[reportFilters.language] || translations.pl;
   
-  useEffect(() => {
-    fetchCmrDocuments();
-    fetchCustomers();
-  }, [page, limit, sortField, sortOrder, searchTerm, statusFilter]);
-  
-  const fetchCmrDocuments = async () => {
+  // Obsługa zmiany wyszukiwania - używa kontekstu
+  const handleSearchChange = (event) => {
+    listActions.setSearchTerm(event.target.value);
+  };
+
+  // Nowa zoptymalizowana funkcja pobierania dokumentów CMR
+  const fetchCmrDocumentsOptimized = async (newSortField = null, newSortOrder = null) => {
+    setMainTableLoading(true);
+    setShowContent(false);
+    
     try {
-      setLoading(true);
+      // Wymuszenie odświeżenia cache tylko przy pierwszym renderze
+      if (isFirstRender.current) {
+        await clearCmrDocumentsCache();
+        isFirstRender.current = false;
+      }
       
-      // Pobierz wszystkie dokumenty CMR
-      let allData = await getAllCmrDocuments();
+      // Użyj przekazanych parametrów sortowania lub tych z kontekstu
+      const sortFieldToUse = newSortField || tableSort.field;
+      const sortOrderToUse = newSortOrder || tableSort.order;
       
-      // Sortowanie po stronie klienta
-      allData = allData.sort((a, b) => {
-        let aValue, bValue;
-        
-        switch (sortField) {
-          case 'issueDate':
-            aValue = a.issueDate ? (a.issueDate.toDate ? a.issueDate.toDate() : new Date(a.issueDate)) : new Date(0);
-            bValue = b.issueDate ? (b.issueDate.toDate ? b.issueDate.toDate() : new Date(b.issueDate)) : new Date(0);
-            break;
-          case 'cmrNumber':
-            aValue = a.cmrNumber || '';
-            bValue = b.cmrNumber || '';
-            break;
-          case 'recipient':
-            aValue = a.recipient || '';
-            bValue = b.recipient || '';
-            break;
-          case 'status':
-            aValue = a.status || '';
-            bValue = b.status || '';
-            break;
-          default:
-            aValue = a.issueDate ? (a.issueDate.toDate ? a.issueDate.toDate() : new Date(a.issueDate)) : new Date(0);
-            bValue = b.issueDate ? (b.issueDate.toDate ? b.issueDate.toDate() : new Date(b.issueDate)) : new Date(0);
-        }
-        
-        if (sortOrder === 'asc') {
-          return aValue > bValue ? 1 : -1;
-        } else {
-          return aValue < bValue ? 1 : -1;
-        }
+      // UŻYJ ZOPTYMALIZOWANEJ FUNKCJI dla lepszej wydajności
+      const result = await getCmrDocumentsOptimized({
+        page: page,
+        pageSize: pageSize,
+        searchTerm: debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        statusFilter: statusFilter || null,
+        sortField: sortFieldToUse,
+        sortOrder: sortOrderToUse,
+        forceRefresh: false
       });
       
-      // Filtrowanie po stronie klienta
-      let filteredData = allData;
-      
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        filteredData = filteredData.filter(doc => 
-          doc.cmrNumber?.toLowerCase().includes(searchLower) ||
-          doc.recipient?.toLowerCase().includes(searchLower) ||
-          doc.sender?.toLowerCase().includes(searchLower) ||
-          doc.loadingPlace?.toLowerCase().includes(searchLower) ||
-          doc.deliveryPlace?.toLowerCase().includes(searchLower)
-        );
+      // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
+      if (result && result.items) {
+        setCmrDocuments(result.items);
+        setTotalItems(result.totalCount);
+        setTotalPages(Math.ceil(result.totalCount / pageSize));
+      } else {
+        // Stara logika dla kompatybilności
+        setCmrDocuments(result);
       }
       
-      if (statusFilter) {
-        filteredData = filteredData.filter(doc => doc.status === statusFilter);
-      }
+      // PRZYŚPIESZONE ANIMACJE - zmniejszone opóźnienie dla lepszej responsywności
+      setTimeout(() => {
+        setShowContent(true);
+      }, 25); // Zmniejszone z 100ms do 25ms
       
-      // Oblicz paginację
-      const totalCount = filteredData.length;
-      setTotalItems(totalCount);
-      setTotalPages(Math.ceil(totalCount / limit));
-      
-      // Pobierz dokumenty dla aktualnej strony
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
-      const pageData = filteredData.slice(startIndex, endIndex);
-      
-      setCmrDocuments(pageData);
     } catch (error) {
-      console.error('Błąd podczas pobierania dokumentów CMR:', error);
-      showError('Nie udało się pobrać listy dokumentów CMR');
+      console.error('Error fetching CMR documents:', error);
+      showError('Błąd podczas pobierania dokumentów CMR: ' + error.message);
     } finally {
-      setLoading(false);
+      setMainTableLoading(false);
+      setLoading(false); // Zachowaj kompatybilność ze starym loading
     }
   };
 
-  // Funkcja do sortowania
+  // Obsługa sortowania - używa kontekstu
   const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
-    setPage(1);
+    const isAsc = tableSort.field === field && tableSort.order === 'asc';
+    const newOrder = isAsc ? 'desc' : 'asc';
+    
+    listActions.setTableSort({
+      field: field,
+      order: newOrder
+    });
+    
+    // Wywołaj funkcję pobierania z nowymi parametrami sortowania
+    fetchCmrDocumentsOptimized(field, newOrder);
   };
 
-  // Obsługa zmiany filtra statusu
+  // Obsługa zmiany strony - używa kontekstu
+  const handleChangePage = (event, newPage) => {
+    listActions.setPage(newPage);
+  };
+
+  // Obsługa zmiany liczby wierszy na stronę - używa kontekstu
+  const handleChangeRowsPerPage = (event) => {
+    listActions.setPageSize(parseInt(event.target.value, 10));
+  };
+
+  // Obsługa zmiany filtra statusu - używa kontekstu
   const handleStatusFilterChange = (event) => {
-    setStatusFilter(event.target.value);
-    setPage(1);
+    listActions.setStatusFilter(event.target.value);
   };
 
-  // Obsługa zmiany pola wyszukiwania
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-    setPage(1);
+  // Funkcja do odświeżania cache i danych
+  const handleRefreshData = async () => {
+    try {
+      setMainTableLoading(true);
+      
+      // Wyczyść cache dokumentów CMR
+      clearCmrDocumentsCache();
+      
+      // Wymuszaj pobranie świeżych danych
+      await fetchCmrDocumentsOptimized();
+      
+      showSuccess('Lista dokumentów CMR została odświeżona');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania danych:', error);
+      showError('Błąd podczas odświeżania danych: ' + error.message);
+    }
   };
   
   const fetchCustomers = async () => {
@@ -301,15 +315,7 @@ const CmrListPage = () => {
     }
   };
 
-  // Funkcje obsługi paginacji
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
 
-  const handleChangeRowsPerPage = (event) => {
-    setLimit(parseInt(event.target.value, 10));
-    setPage(1);
-  };
   
   const handleCreateCmr = () => {
     navigate('/inventory/cmr/new');
@@ -339,9 +345,15 @@ const CmrListPage = () => {
     try {
       await deleteCmrDocument(documentToDelete.id);
       showSuccess(`Dokument CMR ${documentToDelete.cmrNumber} został usunięty`);
+      
+      // Usuń z cache zamiast ponownego pobierania
+      removeCmrDocumentFromCache(documentToDelete.id);
+      
       setDeleteDialogOpen(false);
       setDocumentToDelete(null);
-      fetchCmrDocuments(); // Odśwież listę
+      
+      // Odśwież listę z cache
+      fetchCmrDocumentsOptimized();
     } catch (error) {
       console.error('Błąd podczas usuwania dokumentu CMR:', error);
       showError('Nie udało się usunąć dokumentu CMR');
@@ -505,7 +517,7 @@ const CmrListPage = () => {
       await updateCmrPaymentStatus(cmrToUpdatePaymentStatus.id, newPaymentStatus, currentUser.uid);
       
       // Po aktualizacji odświeżamy listę
-      fetchCmrDocuments();
+      fetchCmrDocumentsOptimized();
       
       showSuccess('Status płatności został zaktualizowany');
       setPaymentStatusDialogOpen(false);
@@ -614,86 +626,72 @@ const CmrListPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+    };
+
+  // Efekt do pobierania danych - używa debouncedSearchTerm
+  useEffect(() => {
+    fetchCmrDocumentsOptimized();
+  }, [page, pageSize, debouncedSearchTerm, statusFilter]);
+
+  // Efekt do pobierania klientów przy pierwszym renderze
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  // Efekt do czyszczenia cache przy odmontowaniu komponentu
+  useEffect(() => {
+    return () => {
+      clearCmrDocumentsCache();
+    };
+  }, []);
   
-    return (
-    <Container maxWidth="xl" sx={{ 
-      px: isMobile ? 1 : 2,
-      bgcolor: isMobile ? (mode === 'dark' ? 'background.default' : 'transparent') : 'transparent'
-    }}>
-      <Box sx={{ mb: isMobile ? 1 : 4 }}>
-        <Typography variant="h5" gutterBottom align="center" sx={{ 
-          fontSize: isMobile ? '1.1rem' : '1.5rem',
-          mb: isMobile ? 0.5 : 1
-        }}>
-          {translate('cmr.title')}
-        </Typography>
-        
+  return (
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+      <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
         <Box sx={{ 
           display: 'flex', 
           flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between',
-          alignItems: isMobile ? 'stretch' : 'center', 
-          mb: isMobile ? 1 : 2,
-          gap: isMobile ? 0.5 : 2
+          justifyContent: 'space-between', 
+          alignItems: isMobile ? 'stretch' : 'center',
+          mb: 3,
+          gap: 2 
         }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ mb: isMobile ? 0 : 0 }}>
+            {translate('cmr.title')}
+          </Typography>
+          
           {/* Lewa strona - Wyszukiwanie i filtrowanie */}
           <Box sx={{ 
             display: 'flex', 
-            flexDirection: isMobile ? 'row' : 'row',
-            gap: isMobile ? 0.5 : 2,
-            order: isMobile ? 1 : 1
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: 2,
+            width: isMobile ? '100%' : 'auto',
+            order: isMobile ? 3 : 1
           }}>
-            {/* Wyszukiwanie - pierwsze od lewej */}
             <TextField
-              variant="outlined"
               size="small"
-              placeholder={isMobile ? "Szukaj CMR..." : "Szukaj dokumentów CMR..."}
+              placeholder="Szukaj po numerze CMR, nadawcy, odbiorcy..."
               value={searchTerm}
               onChange={handleSearchChange}
-              sx={{ 
-                width: isMobile ? '50%' : 250,
-                '& .MuiInputBase-root': {
-                  fontSize: isMobile ? '0.8rem' : '0.875rem'
-                }
-              }}
               InputProps={{
-                startAdornment: <SearchIcon color="action" sx={{ mr: isMobile ? 0.5 : 1, fontSize: isMobile ? '1.1rem' : '1.25rem' }} />,
-                sx: {
-                  borderRadius: '4px',
-                  bgcolor: mode === 'dark' ? 'background.paper' : 'white',
-                  height: isMobile ? '36px' : '40px'
-                }
+                startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1, my: 0.5 }} />
+              }}
+              sx={{ 
+                minWidth: isMobile ? '100%' : 300,
+                backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'
               }}
             />
             
-            {/* Filtrowanie - drugie od lewej */}
-            <FormControl 
-              variant="outlined" 
-              size="small" 
-              sx={{ 
-                minWidth: isMobile ? '50%' : 200,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '4px',
-                  bgcolor: mode === 'dark' ? 'background.paper' : 'white',
-                  height: isMobile ? '36px' : '40px',
-                  fontSize: isMobile ? '0.8rem' : '0.875rem'
-                },
-                '& .MuiInputLabel-root': {
-                  fontSize: isMobile ? '0.8rem' : '0.875rem'
-                }
-              }}
-            >
+            <FormControl size="small" sx={{ minWidth: isMobile ? '100%' : 150 }}>
               <InputLabel id="status-filter-label">Status</InputLabel>
               <Select
                 labelId="status-filter-label"
-                id="status-filter"
                 value={statusFilter}
                 onChange={handleStatusFilterChange}
                 label="Status"
               >
                 <MenuItem value="">Wszystkie</MenuItem>
-                {Object.entries(CMR_STATUSES).map(([key, status]) => (
+                {Object.values(CMR_STATUSES).map((status) => (
                   <MenuItem key={status} value={status}>
                     {status}
                   </MenuItem>
@@ -725,6 +723,53 @@ const CmrListPage = () => {
             >
               {isMobile ? "Raport" : "Generuj raport"}
             </Button>
+            
+            {/* Przycisk odświeżania - tylko na desktop jako IconButton */}
+            {!isMobile && (
+              <Tooltip title="Odśwież listę i wyczyść cache">
+                <IconButton 
+                  onClick={handleRefreshData}
+                  color="primary"
+                  size="medium"
+                  disabled={mainTableLoading}
+                  sx={{ 
+                    border: '1px solid',
+                    borderColor: 'primary.main',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                      color: 'primary.contrastText'
+                    },
+                    '&:disabled': {
+                      borderColor: 'action.disabled',
+                      color: 'action.disabled'
+                    }
+                  }}
+                >
+                  {mainTableLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
+            
+            {/* Przycisk odświeżania na mobile jako Button */}
+            {isMobile && (
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                startIcon={mainTableLoading ? <CircularProgress size={12} /> : <RefreshIcon sx={{ fontSize: '1rem' }} />}
+                onClick={handleRefreshData}
+                disabled={mainTableLoading}
+                size="small"
+                sx={{
+                  fontSize: '0.7rem',
+                  padding: '4px 8px',
+                  minHeight: '32px',
+                  flex: 1
+                }}
+              >
+                {mainTableLoading ? 'Odśw...' : 'Odśw'}
+              </Button>
+            )}
+            
             <Button
               variant="contained"
               color="primary"
@@ -743,7 +788,8 @@ const CmrListPage = () => {
           </Box>
         </Box>
         
-        {loading ? (
+        {/* Zaktualizowana tabela z loading stanami */}
+        {(loading || mainTableLoading) ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
             <CircularProgress />
           </Box>
@@ -757,138 +803,140 @@ const CmrListPage = () => {
             </Typography>
           </Paper>
         ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell
-                    onClick={() => handleSort('cmrNumber')}
-                    sx={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {translate('cmr.table.cmrNumber')}
-                      {sortField === 'cmrNumber' && (
-                        <ArrowDropDownIcon 
-                          sx={{ 
-                            transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
-                            transition: 'transform 0.2s',
-                            ml: 0.5
-                          }} 
-                        />
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell
-                    onClick={() => handleSort('issueDate')}
-                    sx={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {translate('cmr.table.issueDate')}
-                      {sortField === 'issueDate' && (
-                        <ArrowDropDownIcon 
-                          sx={{ 
-                            transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
-                            transition: 'transform 0.2s',
-                            ml: 0.5
-                          }} 
-                        />
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell>{translate('cmr.table.sender')}</TableCell>
-                  <TableCell
-                    onClick={() => handleSort('recipient')}
-                    sx={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {translate('cmr.table.recipient')}
-                      {sortField === 'recipient' && (
-                        <ArrowDropDownIcon 
-                          sx={{ 
-                            transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
-                            transition: 'transform 0.2s',
-                            ml: 0.5
-                          }} 
-                        />
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell
-                    onClick={() => handleSort('status')}
-                    sx={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {translate('cmr.table.status')}
-                      {sortField === 'status' && (
-                        <ArrowDropDownIcon 
-                          sx={{ 
-                            transform: sortOrder === 'asc' ? 'rotate(180deg)' : 'none',
-                            transition: 'transform 0.2s',
-                            ml: 0.5
-                          }} 
-                        />
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell>{translate('cmr.table.paymentStatus')}</TableCell>
-                  <TableCell>{translate('cmr.table.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {cmrDocuments.map((cmr) => (
-                  <TableRow key={cmr.id}>
-                    <TableCell>{cmr.cmrNumber}</TableCell>
-                    <TableCell>{formatDate(cmr.issueDate)}</TableCell>
-                    <TableCell>{cmr.sender}</TableCell>
-                    <TableCell>{cmr.recipient}</TableCell>
-                    <TableCell>{renderStatusChip(cmr.status)}</TableCell>
-                    <TableCell>{getPaymentStatusChip(cmr.paymentStatus, cmr)}</TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleViewCmr(cmr.id)}
-                        title={translate('cmr.actions.view')}
-                      >
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
-                      
-                      {cmr.status !== CMR_STATUSES.COMPLETED && cmr.status !== CMR_STATUSES.CANCELED && (
+          <Fade in={showContent && !mainTableLoading} timeout={300}>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell
+                      onClick={() => handleSort('cmrNumber')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {translate('cmr.table.cmrNumber')}
+                        {tableSort.field === 'cmrNumber' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell
+                      onClick={() => handleSort('issueDate')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {translate('cmr.table.issueDate')}
+                        {tableSort.field === 'issueDate' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>{translate('cmr.table.sender')}</TableCell>
+                    <TableCell
+                      onClick={() => handleSort('recipient')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {translate('cmr.table.recipient')}
+                        {tableSort.field === 'recipient' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell
+                      onClick={() => handleSort('status')}
+                      sx={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {translate('cmr.table.status')}
+                        {tableSort.field === 'status' && (
+                          <ArrowDropDownIcon 
+                            sx={{ 
+                              transform: tableSort.order === 'asc' ? 'rotate(180deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              ml: 0.5
+                            }} 
+                          />
+                        )}
+                      </Box>
+                    </TableCell>
+                    <TableCell>{translate('cmr.table.paymentStatus')}</TableCell>
+                    <TableCell>{translate('cmr.table.actions')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {cmrDocuments.map((cmr) => (
+                    <TableRow key={cmr.id}>
+                      <TableCell>{cmr.cmrNumber}</TableCell>
+                      <TableCell>{formatDate(cmr.issueDate)}</TableCell>
+                      <TableCell>{cmr.sender}</TableCell>
+                      <TableCell>{cmr.recipient}</TableCell>
+                      <TableCell>{renderStatusChip(cmr.status)}</TableCell>
+                      <TableCell>{getPaymentStatusChip(cmr.paymentStatus, cmr)}</TableCell>
+                      <TableCell>
                         <IconButton
                           size="small"
-                          onClick={() => handleEditCmr(cmr.id)}
-                          title={translate('cmr.actions.edit')}
+                          onClick={() => handleViewCmr(cmr.id)}
+                          title={translate('cmr.actions.view')}
                         >
-                          <EditIcon fontSize="small" />
+                          <VisibilityIcon fontSize="small" />
                         </IconButton>
-                      )}
-                      
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteClick(cmr)}
-                        title={translate('cmr.actions.delete')}
-                        color="error"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                        
+                        {cmr.status !== CMR_STATUSES.COMPLETED && cmr.status !== CMR_STATUSES.CANCELED && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditCmr(cmr.id)}
+                            title={translate('cmr.actions.edit')}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                        
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteClick(cmr)}
+                          title={translate('cmr.actions.delete')}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Fade>
         )}
         
-        {/* Paginacja - identyczna jak w TaskList */}
-        {cmrDocuments.length > 0 && (
+        {/* Zaktualizowana paginacja */}
+        <Fade in={showContent && !mainTableLoading} timeout={300}>
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
               <Typography variant="body2" color="textSecondary">
-                Wyświetlanie {cmrDocuments.length > 0 ? (page - 1) * limit + 1 : 0} - {Math.min(page * limit, totalItems)} z {totalItems} dokumentów CMR
+                Wyświetlanie {cmrDocuments.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, totalItems)} z {totalItems} dokumentów CMR
               </Typography>
               
               <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>
                 <Select
-                  value={limit}
+                  value={pageSize}
                   onChange={handleChangeRowsPerPage}
                 >
                   <MenuItem value={5}>5</MenuItem>
@@ -907,8 +955,8 @@ const CmrListPage = () => {
               color="primary"
             />
           </Box>
-        )}
-      </Box>
+        </Fade>
+      </Paper>
       
       {/* Dialog potwierdzenia usunięcia */}
       <Dialog
