@@ -1050,16 +1050,16 @@ const InvoiceDetails = () => {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
       >
-        <DialogTitle>Usunąć fakturę?</DialogTitle>
+        <DialogTitle>{t('invoices.dialogs.deleteConfirm.title')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Czy na pewno chcesz usunąć fakturę {invoice.number}? Tej operacji nie można cofnąć.
+            {t('invoices.dialogs.deleteConfirm.message', { number: invoice?.number })}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)}>{t('invoices.dialogs.deleteConfirm.cancel')}</Button>
           <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Usuń
+            {t('invoices.dialogs.deleteConfirm.delete')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -413,7 +413,7 @@ const InvoicesList = () => {
                   color="warning"
                   onClick={handleRefreshProformaAmounts}
                   disabled={loading}
-                  title="Odśwież dostępne kwoty proform"
+                  title={t('invoices.form.buttons.refreshProformaAmounts')}
                 >
                   📋
                 </Button>
@@ -467,28 +467,28 @@ const InvoicesList = () => {
                       onChange={handleFilterChange}
                       label="Status"
                     >
-                      <MenuItem value="">Wszystkie statusy</MenuItem>
-                      <MenuItem value="draft">Szkice</MenuItem>
-                      <MenuItem value="issued">Wystawione</MenuItem>
-                      <MenuItem value="sent">Wysłane</MenuItem>
-                      <MenuItem value="paid">Opłacone</MenuItem>
-                      <MenuItem value="partially_paid">Częściowo opłacone</MenuItem>
-                      <MenuItem value="overdue">Przeterminowane</MenuItem>
-                      <MenuItem value="cancelled">Anulowane</MenuItem>
+                      <MenuItem value="">{t('invoices.filters.allStatuses')}</MenuItem>
+                      <MenuItem value="draft">{t('invoices.status.draft')}</MenuItem>
+                      <MenuItem value="issued">{t('invoices.status.issued')}</MenuItem>
+                      <MenuItem value="sent">{t('invoices.status.sent')}</MenuItem>
+                      <MenuItem value="paid">{t('invoices.status.paid')}</MenuItem>
+                      <MenuItem value="partially_paid">{t('invoices.status.partiallyPaid')}</MenuItem>
+                      <MenuItem value="overdue">{t('invoices.status.overdue')}</MenuItem>
+                      <MenuItem value="cancelled">{t('invoices.status.cancelled')}</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Klient</InputLabel>
+                    <InputLabel>{t('invoices.form.filters.client')}</InputLabel>
                     <Select
                       name="customerId"
                       value={filters.customerId}
                       onChange={handleFilterChange}
-                      label="Klient"
+                      label={t('invoices.form.filters.client')}
                       disabled={customersLoading}
                     >
-                      <MenuItem value="">Wszyscy klienci</MenuItem>
+                      <MenuItem value="">{t('invoices.form.filters.allClients')}</MenuItem>
                       {customers.map(customer => (
                         <MenuItem key={customer.id} value={customer.id}>
                           {customer.name}
@@ -500,7 +500,7 @@ const InvoicesList = () => {
                 <Grid item xs={12} sm={6} md={3}>
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                     <DatePicker
-                      label="Od daty"
+                      label={t('invoices.form.filters.fromDate')}
                       value={filters.fromDate}
                       onChange={(date) => handleDateChange('fromDate', date)}
                       slotProps={{ 
@@ -515,7 +515,7 @@ const InvoicesList = () => {
                 <Grid item xs={12} sm={6} md={3}>
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                     <DatePicker
-                      label="Do daty"
+                      label={t('invoices.form.filters.toDate')}
                       value={filters.toDate}
                       onChange={(date) => handleDateChange('toDate', date)}
                       slotProps={{ 
@@ -534,14 +534,14 @@ const InvoicesList = () => {
                       onClick={applyFilters}
                       fullWidth
                     >
-                      Zastosuj filtry
+                      {t('invoices.form.filters.applyFilters')}
                     </Button>
                     <Button 
                       variant="outlined" 
                       onClick={resetFilters}
                       color="inherit"
                     >
-                      Resetuj
+                      {t('invoices.form.filters.resetFilters')}
                     </Button>
                   </Box>
                 </Grid>
@@ -624,7 +624,7 @@ const InvoicesList = () => {
                                   }
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                  dostępne z {formatCurrency(invoice.total, invoice.currency)}
+                                  {t('invoices.form.filters.availableFrom')} {formatCurrency(invoice.total, invoice.currency)}
                                 </Typography>
                               </Box>
                             ) : (
@@ -709,7 +709,7 @@ const InvoicesList = () => {
                                 <IconButton 
                                   size="small" 
                                   onClick={() => handleUpdateStatus(invoice.id, 'issued')}
-                                  title="Oznacz jako wystawioną"
+                                  title={t('invoices.form.buttons.markAsIssued')}
                                   color="primary"
                                 >
                                   <ReceiptIcon fontSize="small" />
@@ -719,7 +719,7 @@ const InvoicesList = () => {
                                 <IconButton 
                                   size="small" 
                                   onClick={() => handleUpdateStatus(invoice.id, 'sent')}
-                                  title="Oznacz jako wysłaną"
+                                  title={t('invoices.form.buttons.markAsSent')}
                                   color="info"
                                 >
                                   <SendIcon fontSize="small" />
@@ -744,9 +744,9 @@ const InvoicesList = () => {
                 setRowsPerPage(parseInt(event.target.value, 10));
                 setPage(0);
               }}
-              labelRowsPerPage="Wierszy na stronę:"
+              labelRowsPerPage={t('common.rowsPerPage') + ':'}
               labelDisplayedRows={({ from, to, count }) => 
-                `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+                t('common.displayedRows', { from, to, count: count !== -1 ? count : `więcej niż ${to}` })
               }
             />
           </Paper>

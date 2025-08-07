@@ -68,6 +68,7 @@ import plLocale from 'date-fns/locale/pl';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const InvoiceForm = ({ invoiceId }) => {
   const [searchParams] = useSearchParams();
@@ -107,6 +108,7 @@ const InvoiceForm = ({ invoiceId }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const init = async () => {
@@ -1091,11 +1093,11 @@ const InvoiceForm = ({ invoiceId }) => {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/invoices')}
         >
-          Powrót do listy faktur
+          {t('invoices.details.buttons.backToList')}
         </Button>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           <Typography variant="h4" component="h1">
-            {invoiceId ? 'Edycja faktury' : 'Nowa faktura'}
+            {invoiceId ? t('invoices.form.title.edit') : t('invoices.form.title.new')}
           </Typography>
           <ToggleButtonGroup
             value={invoice.isProforma ? 'proforma' : 'faktura'}
@@ -1131,10 +1133,10 @@ const InvoiceForm = ({ invoiceId }) => {
             }}
           >
             <ToggleButton value="faktura" aria-label="faktura">
-              📄 Faktura
+              📄 {t('invoices.form.toggleButtons.invoice')}
             </ToggleButton>
             <ToggleButton value="proforma" aria-label="proforma">
-              📋 Proforma
+              📋 {t('invoices.form.toggleButtons.proforma')}
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
@@ -1149,13 +1151,13 @@ const InvoiceForm = ({ invoiceId }) => {
             invoiceId && ['issued', 'sent', 'paid', 'partially_paid', 'overdue'].includes(invoice.status) 
               ? 'Zapisywanie i regenerowanie PDF...' 
               : 'Zapisywanie...'
-          ) : 'Zapisz fakturę'}
+          ) : t('invoices.form.buttons.save')}
         </Button>
       </Box>
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Dane podstawowe
+          {t('invoices.form.fields.basicData')}
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
@@ -1163,19 +1165,19 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Numer faktury"
+                  label={t('invoices.form.fields.invoiceNumber')}
                   name="number"
                   value={invoice.number}
                   onChange={handleChange}
                   disabled={invoiceId !== undefined}
-                  helperText={invoiceId ? 'Numer faktury nie może być zmieniony' : 'Zostanie wygenerowany automatycznie jeśli pozostawisz to pole puste'}
+                  helperText={invoiceId ? t('invoices.form.fields.invoiceNumberReadonly') : 'Zostanie wygenerowany automatycznie jeśli pozostawisz to pole puste'}
                 />
               </Grid>
 
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
-                    label="Data wystawienia"
+                    label={t('invoices.form.fields.issueDate')}
                     value={invoice.issueDate ? new Date(invoice.issueDate) : null}
                     onChange={(date) => handleDateChange('issueDate', date)}
                     slotProps={{ textField: { fullWidth: true } }}
@@ -1185,7 +1187,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
-                    label="Termin płatności"
+                    label={t('invoices.form.fields.dueDate')}
                     value={invoice.dueDate ? new Date(invoice.dueDate) : null}
                     onChange={(date) => handleDateChange('dueDate', date)}
                     slotProps={{ textField: { fullWidth: true } }}
@@ -1194,60 +1196,60 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Status faktury</InputLabel>
+                  <InputLabel>{t('invoices.form.fields.invoiceStatus')}</InputLabel>
                   <Select
                     name="status"
                     value={invoice.status}
                     onChange={handleChange}
-                    label="Status faktury"
+                    label={t('invoices.form.fields.invoiceStatus')}
                   >
-                    <MenuItem value="draft">Szkic</MenuItem>
-                    <MenuItem value="issued">Wystawiona</MenuItem>
-                    <MenuItem value="sent">Wysłana</MenuItem>
-                    <MenuItem value="paid">Opłacona</MenuItem>
-                    <MenuItem value="partially_paid">Częściowo opłacona</MenuItem>
-                    <MenuItem value="overdue">Przeterminowana</MenuItem>
-                    <MenuItem value="cancelled">Anulowana</MenuItem>
+                    <MenuItem value="draft">{t('invoices.status.draft')}</MenuItem>
+                    <MenuItem value="issued">{t('invoices.status.issued')}</MenuItem>
+                    <MenuItem value="sent">{t('invoices.status.sent')}</MenuItem>
+                    <MenuItem value="paid">{t('invoices.status.paid')}</MenuItem>
+                    <MenuItem value="partially_paid">{t('invoices.status.partiallyPaid')}</MenuItem>
+                    <MenuItem value="overdue">{t('invoices.status.overdue')}</MenuItem>
+                    <MenuItem value="cancelled">{t('invoices.status.cancelled')}</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Metoda płatności</InputLabel>
+                  <InputLabel>{t('invoices.form.fields.paymentMethod')}</InputLabel>
                   <Select
                     name="paymentMethod"
                     value={invoice.paymentMethod}
                     onChange={handleChange}
-                    label="Metoda płatności"
+                    label={t('invoices.form.fields.paymentMethod')}
                   >
-                    <MenuItem value="Przelew">Przelew</MenuItem>
-                    <MenuItem value="Gotówka">Gotówka</MenuItem>
-                    <MenuItem value="Karta">Karta płatnicza</MenuItem>
-                    <MenuItem value="BLIK">BLIK</MenuItem>
+                    <MenuItem value="Przelew">{t('invoices.form.paymentMethods.przelew')}</MenuItem>
+                    <MenuItem value="Gotówka">{t('invoices.form.paymentMethods.gotowka')}</MenuItem>
+                    <MenuItem value="Karta">{t('invoices.form.paymentMethods.karta')}</MenuItem>
+                    <MenuItem value="BLIK">{t('invoices.form.paymentMethods.blik')}</MenuItem>
                     <MenuItem value="Za pobraniem">Za pobraniem</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Waluta</InputLabel>
+                  <InputLabel>{t('invoices.form.fields.currency')}</InputLabel>
                   <Select
                     name="currency"
                     value={invoice.currency || 'EUR'}
                     onChange={handleChange}
-                    label="Waluta"
+                    label={t('invoices.form.fields.currency')}
                   >
-                    <MenuItem value="EUR">EUR - Euro</MenuItem>
-                    <MenuItem value="PLN">PLN - Polski złoty</MenuItem>
-                    <MenuItem value="USD">USD - Dolar amerykański</MenuItem>
-                    <MenuItem value="GBP">GBP - Funt brytyjski</MenuItem>
+                    <MenuItem value="EUR">{t('invoices.form.currencies.EUR')} - Euro</MenuItem>
+                    <MenuItem value="PLN">{t('invoices.form.currencies.PLN')} - Polski złoty</MenuItem>
+                    <MenuItem value="USD">{t('invoices.form.currencies.USD')} - Dolar amerykański</MenuItem>
+                    <MenuItem value="GBP">{t('invoices.form.currencies.GBP')} - Funt brytyjski</MenuItem>
                     <MenuItem value="CHF">CHF - Frank szwajcarski</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
-                  <InputLabel>Rachunek bankowy</InputLabel>
+                  <InputLabel>{t('invoices.form.fields.bankAccount')}</InputLabel>
                   <Select
                     name="selectedBankAccount"
                     value={
@@ -1257,7 +1259,7 @@ const InvoiceForm = ({ invoiceId }) => {
                         : ''
                     }
                     onChange={handleChange}
-                    label="Rachunek bankowy"
+                    label={t('invoices.form.fields.bankAccount')}
                   >
                     <MenuItem value="">Brak rachunku</MenuItem>
                     {companyInfo?.bankAccounts?.map(account => (
@@ -1277,7 +1279,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="subtitle1">
-                    Klient
+                    {t('invoices.form.fields.client')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
@@ -1286,7 +1288,7 @@ const InvoiceForm = ({ invoiceId }) => {
                       onClick={() => setCustomerDialogOpen(true)}
                       size="small"
                     >
-                      Wybierz klienta
+                      {t('invoices.form.buttons.selectClient')}
                     </Button>
                     {invoice.customer?.id && (
                       <Button
@@ -1298,7 +1300,7 @@ const InvoiceForm = ({ invoiceId }) => {
                         color="secondary"
                         title="Odśwież dane klienta"
                       >
-                        {refreshingCustomer ? 'Odświeżanie...' : 'Odśwież'}
+                        {refreshingCustomer ? 'Odświeżanie...' : t('invoices.form.buttons.refresh')}
                       </Button>
                     )}
                   </Box>
@@ -1365,7 +1367,7 @@ const InvoiceForm = ({ invoiceId }) => {
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label="Powiązane zamówienie"
+                          label={t('invoices.form.fields.relatedOrder')}
                           placeholder="Wyszukaj zamówienie..."
                           InputProps={{
                             ...params.InputProps,
@@ -1384,11 +1386,11 @@ const InvoiceForm = ({ invoiceId }) => {
                       openText="Otwórz"
                     />
                     
-                    {selectedOrderId && (
-                      <Typography variant="body2" color="primary">
-                        Faktura powiązana z zamówieniem {invoice.orderNumber || selectedOrderId}
-                      </Typography>
-                    )}
+                                          {selectedOrderId && (
+                        <Typography variant="body2" color="primary">
+                          {t('invoices.form.fields.relatedOrderInfo', { orderNumber: invoice.orderNumber || selectedOrderId })}
+                        </Typography>
+                      )}
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary">
@@ -1404,7 +1406,7 @@ const InvoiceForm = ({ invoiceId }) => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6">
-            Pozycje faktury
+            {t('invoices.form.fields.invoiceItems')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1 }}>
             {selectedOrder && selectedOrderType === 'customer' && selectedOrder.items && selectedOrder.items.length > 0 && (
@@ -1414,7 +1416,7 @@ const InvoiceForm = ({ invoiceId }) => {
                 startIcon={<AssignmentIcon />}
                 onClick={() => handleOpenOrderItemsDialog(selectedOrder.items)}
               >
-                Wybierz z zamówienia
+                {t('invoices.form.buttons.selectFromOrder')}
               </Button>
             )}
             <Button
@@ -1422,7 +1424,7 @@ const InvoiceForm = ({ invoiceId }) => {
               startIcon={<AddIcon />}
               onClick={handleAddItem}
             >
-              Dodaj pozycję
+              {t('invoices.form.buttons.addItem')}
             </Button>
           </Box>
         </Box>
@@ -1433,7 +1435,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  label="Nazwa towaru/usługi"
+                  label={t('invoices.form.fields.productName')}
                   value={item.name}
                   onChange={(e) => handleItemChange(index, 'name', e.target.value)}
                   required
@@ -1442,7 +1444,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={12} sm={4}>
                 <TextField
                   fullWidth
-                  label="Opis"
+                  label={t('invoices.form.fields.description')}
                   value={item.description || ''}
                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                 />
@@ -1450,17 +1452,17 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={12} sm={2}>
                 <TextField
                   fullWidth
-                  label="CN Code"
+                  label={t('invoices.form.fields.cnCode')}
                   value={item.cnCode || ''}
                   onChange={(e) => handleItemChange(index, 'cnCode', e.target.value)}
-                  placeholder="np. 1234.56.78.90"
-                  helperText="Kod klasyfikacji towarowej"
+                  placeholder={t('invoices.form.fields.cnCodePlaceholder')}
+                  helperText={t('invoices.form.fields.classificationCode')}
                 />
               </Grid>
               <Grid item xs={6} sm={2}>
                 <TextField
                   fullWidth
-                  label="Ilość"
+                  label={t('invoices.form.fields.quantity')}
                   type="number"
                   value={item.quantity}
                   onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value))}
@@ -1471,7 +1473,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={6} sm={2}>
                 <TextField
                   fullWidth
-                  label="Jednostka"
+                  label={t('invoices.form.fields.unit')}
                   value={item.unit}
                   onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
                   required
@@ -1480,7 +1482,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={6} sm={2}>
                 <TextField
                   fullWidth
-                  label="Cena netto"
+                  label={t('invoices.form.fields.netPrice')}
                   type="number"
                   value={item.price}
                   onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value))}
@@ -1490,11 +1492,11 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={6} sm={2}>
                 <FormControl fullWidth>
-                  <InputLabel>VAT %</InputLabel>
+                  <InputLabel>{t('invoices.form.fields.vatPercent')}</InputLabel>
                   <Select
                     value={item.vat || (item.vat === 0 ? 0 : 0)}
                     onChange={(e) => handleItemChange(index, 'vat', e.target.value)}
-                    label="VAT %"
+                    label={t('invoices.form.fields.vatPercent')}
                   >
                     <MenuItem value={0}>0%</MenuItem>
                     <MenuItem value={5}>5%</MenuItem>
@@ -1508,7 +1510,7 @@ const InvoiceForm = ({ invoiceId }) => {
               <Grid item xs={6} sm={3}>
                 <TextField
                   fullWidth
-                  label="Wartość netto"
+                  label={t('invoices.form.fields.netValue')}
                   type="number"
                   value={item.netValue || (item.quantity * item.price)}
                   onChange={(e) => handleItemChange(index, 'netValue', parseFloat(e.target.value))}
@@ -1520,7 +1522,7 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  Wartość brutto: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'EUR'}
+                  {t('invoices.form.fields.grossValue')}: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'EUR'}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1646,14 +1648,14 @@ const InvoiceForm = ({ invoiceId }) => {
         <Grid container spacing={2} justifyContent="flex-end">
           <Grid item xs={12} sm={8} md={6}>
             <Typography variant="body1" fontWeight="bold">
-              Razem netto: {invoice.items.reduce((sum, item) => {
+              {t('invoices.form.fields.totals.netTotal')} {invoice.items.reduce((sum, item) => {
                 const quantity = Number(item.quantity) || 0;
                 const price = Number(item.price) || 0;
                 return sum + (quantity * price);
               }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             <Typography variant="body1" fontWeight="bold">
-              Razem VAT: {invoice.items.reduce((sum, item) => {
+              {t('invoices.form.fields.totals.vatTotal')} {invoice.items.reduce((sum, item) => {
                 const quantity = Number(item.quantity) || 0;
                 const price = Number(item.price) || 0;
                 
@@ -1674,7 +1676,7 @@ const InvoiceForm = ({ invoiceId }) => {
             {!invoice.isProforma && availableProformas.length > 0 && (
               <Box sx={{ mt: 2, mb: 2 }}>
                 <Typography variant="subtitle1" gutterBottom>
-                  Rozliczenie z proform
+                  {t('invoices.form.fields.proformaSettlement')}
                 </Typography>
                 
                 {availableProformas.map((proforma) => {
@@ -1686,24 +1688,24 @@ const InvoiceForm = ({ invoiceId }) => {
                       <Grid container spacing={2} alignItems="center">
                         <Grid item xs={12} md={5}>
                           <Typography variant="body1" fontWeight="bold">
-                            📋 Proforma {proforma.number}
+                            📋 {t('invoices.form.toggleButtons.proforma')} {proforma.number}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            Data: {proforma.issueDate ? 
+                            {t('invoices.form.fields.issueDate')}: {proforma.issueDate ? 
                               (proforma.issueDate.seconds ? 
                                 new Date(proforma.issueDate.seconds * 1000).toLocaleDateString() 
                                 : new Date(proforma.issueDate).toLocaleDateString()
-                              ) : 'Brak daty'}
+                              ) : t('common.noDate')}
                           </Typography>
                         </Grid>
                         
                         <Grid item xs={12} md={3}>
                           <Typography variant="body2">
-                            <strong>Dostępne:</strong> {proforma.amountInfo.available.toFixed(2)} {proforma.currency || 'EUR'}
+                            <strong>{t('invoices.form.fields.available')}:</strong> {proforma.amountInfo.available.toFixed(2)} {proforma.currency || 'EUR'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            z {proforma.amountInfo.total.toFixed(2)} {proforma.currency || 'EUR'} 
-                            (wykorzystane: {proforma.amountInfo.used.toFixed(2)})
+                            {t('invoices.form.fields.from')} {proforma.amountInfo.total.toFixed(2)} {proforma.currency || 'EUR'} 
+                            ({t('invoices.form.fields.used')}: {proforma.amountInfo.used.toFixed(2)})
                           </Typography>
                         </Grid>
                         
@@ -1711,7 +1713,7 @@ const InvoiceForm = ({ invoiceId }) => {
                           <TextField
                             fullWidth
                             size="small"
-                            label="Kwota do rozliczenia"
+                            label={t('invoices.form.fields.amountToSettle')}
                             type="number"
                             value={allocatedAmount}
                             onChange={(e) => {
@@ -1729,7 +1731,7 @@ const InvoiceForm = ({ invoiceId }) => {
                             error={allocatedAmount > (proforma.amountInfo.available + 0.01)}
                             helperText={
                               allocatedAmount > (proforma.amountInfo.available + 0.01)
-                                ? `Przekracza dostępną kwotę (${proforma.amountInfo.available.toFixed(2)})`
+                                ? `${t('invoices.form.fields.exceedsAvailable')} (${proforma.amountInfo.available.toFixed(2)})`
                                 : null
                             }
                             disabled={proforma.amountInfo.available <= 0}
@@ -1739,7 +1741,7 @@ const InvoiceForm = ({ invoiceId }) => {
                       
                       {proforma.amountInfo.available <= 0 && (
                         <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
-                          ⚠️ Ta proforma została całkowicie wykorzystana
+                          ⚠️ {t('invoices.form.fields.proformaFullyUsed')}
                         </Typography>
                       )}
                     </Card>
@@ -1750,15 +1752,15 @@ const InvoiceForm = ({ invoiceId }) => {
                 {(invoice.proformAllocation || []).length > 0 && (
                   <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Podsumowanie rozliczenia:
+                      {t('invoices.form.fields.settlementSummary')}
                     </Typography>
                     {(invoice.proformAllocation || []).map((allocation) => (
                       <Typography key={allocation.proformaId} variant="body2">
-                        • Proforma {allocation.proformaNumber}: {allocation.amount.toFixed(2)} {invoice.currency || 'EUR'}
+                        • {t('invoices.form.toggleButtons.proforma')} {allocation.proformaNumber}: {allocation.amount.toFixed(2)} {invoice.currency || 'EUR'}
                       </Typography>
                     ))}
                     <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>
-                      Łączna kwota zaliczek: {getTotalAllocatedAmount().toFixed(2)} {invoice.currency || 'EUR'}
+                      {t('invoices.form.fields.totalAdvanceAmount')} {getTotalAllocatedAmount().toFixed(2)} {invoice.currency || 'EUR'}
                     </Typography>
                   </Box>
                 )}
@@ -1790,7 +1792,7 @@ const InvoiceForm = ({ invoiceId }) => {
             {relatedInvoices.length > 0 && (
               <Box sx={{ mt: 2, mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  Powiązane faktury z tym zamówieniem:
+                  {t('invoices.form.fields.relatedInvoices')}
                 </Typography>
                 {loadingRelatedInvoices ? (
                   <CircularProgress size={20} />
@@ -1812,7 +1814,7 @@ const InvoiceForm = ({ invoiceId }) => {
                       </Typography>
                       {relInvoice.issueDate && (
                         <Typography variant="caption" color="text.secondary">
-                          Data wystawienia: {new Date(relInvoice.issueDate).toLocaleDateString()}
+                          {t('invoices.form.fields.issueDate')}: {new Date(relInvoice.issueDate).toLocaleDateString()}
                         </Typography>
                       )}
                     </Box>
@@ -1848,28 +1850,28 @@ const InvoiceForm = ({ invoiceId }) => {
               const finalAmount = bruttoValue - totalAdvancePayments;
               
               return (
-                <>
-                  <Typography variant="h6" fontWeight="bold" color="primary">
-                    Razem brutto: {bruttoValue.toFixed(2)} {invoice.currency || 'EUR'}
-                  </Typography>
-                  
-                  {!invoice.isProforma && totalAdvancePayments > 0 && (
-                    <>
-                      <Typography variant="body1" color="warning.main" sx={{ mt: 1 }}>
-                        Przedpłaty z proform: -{totalAdvancePayments.toFixed(2)} {invoice.currency || 'EUR'}
-                      </Typography>
-                      <Typography variant="h5" fontWeight="bold" color="success.main" sx={{ mt: 1 }}>
-                        Do zapłaty: {finalAmount.toFixed(2)} {invoice.currency || 'EUR'}
-                      </Typography>
-                    </>
-                  )}
-                  
-                  {!invoice.isProforma && totalAdvancePayments === 0 && (
-                    <Typography variant="h6" fontWeight="bold" color="success.main" sx={{ mt: 1 }}>
-                      Do zapłaty: {bruttoValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                  <>
+                    <Typography variant="h6" fontWeight="bold" color="primary">
+                      {t('invoices.form.fields.totals.grossTotal')} {bruttoValue.toFixed(2)} {invoice.currency || 'EUR'}
                     </Typography>
-                  )}
-                </>
+                    
+                    {!invoice.isProforma && totalAdvancePayments > 0 && (
+                      <>
+                        <Typography variant="body1" color="warning.main" sx={{ mt: 1 }}>
+                          Przedpłaty z proform: -{totalAdvancePayments.toFixed(2)} {invoice.currency || 'EUR'}
+                        </Typography>
+                        <Typography variant="h5" fontWeight="bold" color="success.main" sx={{ mt: 1 }}>
+                          Do zapłaty: {finalAmount.toFixed(2)} {invoice.currency || 'EUR'}
+                        </Typography>
+                      </>
+                    )}
+                    
+                    {!invoice.isProforma && totalAdvancePayments === 0 && (
+                      <Typography variant="h6" fontWeight="bold" color="success.main" sx={{ mt: 1 }}>
+                        Do zapłaty: {bruttoValue.toFixed(2)} {invoice.currency || 'EUR'}
+                      </Typography>
+                    )}
+                  </>
               );
             })()}
           </Grid>
@@ -1878,7 +1880,7 @@ const InvoiceForm = ({ invoiceId }) => {
       
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Dodatkowe informacje
+          {t('invoices.form.fields.additionalInfo')}
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12}>
@@ -1886,7 +1888,7 @@ const InvoiceForm = ({ invoiceId }) => {
               fullWidth
               multiline
               rows={4}
-              label="Uwagi"
+              label={t('invoices.form.fields.notes')}
               name="notes"
               value={invoice.notes || ''}
               onChange={handleChange}
@@ -1897,19 +1899,19 @@ const InvoiceForm = ({ invoiceId }) => {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Wybierz źródło faktury
+          {t('invoices.form.fields.invoiceSource')}
         </Typography>
         
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
             <FormControl fullWidth>
-              <InputLabel>Typ zamówienia</InputLabel>
+              <InputLabel>{t('invoices.form.fields.orderType')}</InputLabel>
               <Select
                 value={selectedOrderType}
                 onChange={(e) => setSelectedOrderType(e.target.value)}
-                label="Typ zamówienia"
+                label={t('invoices.form.fields.orderType')}
               >
-                <MenuItem value="customer">Zamówienie klienta</MenuItem>
+                <MenuItem value="customer">{t('invoices.form.orderTypes.customer')}</MenuItem>
                 <MenuItem value="purchase">Zamówienie zakupowe (PO)</MenuItem>
               </Select>
             </FormControl>
@@ -1917,11 +1919,11 @@ const InvoiceForm = ({ invoiceId }) => {
           
           <Grid item xs={12} md={8}>
             <FormControl fullWidth>
-              <InputLabel>Wybierz zamówienie</InputLabel>
+              <InputLabel>{t('invoices.form.buttons.selectOrder')}</InputLabel>
               <Select
                 value={selectedOrderId || ''}
                 onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
-                label="Wybierz zamówienie"
+                label={t('invoices.form.buttons.selectOrder')}
                 disabled={!customers.length || (selectedOrderType === 'customer' ? ordersLoading : purchaseOrdersLoading)}
               >
                 <MenuItem value="">-- Brak --</MenuItem>
@@ -1947,7 +1949,7 @@ const InvoiceForm = ({ invoiceId }) => {
       </Paper>
 
       <Dialog open={customerDialogOpen} onClose={() => setCustomerDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Wybierz klienta</DialogTitle>
+        <DialogTitle>{t('invoices.form.buttons.selectClient')}</DialogTitle>
         <DialogContent>
           <Autocomplete
             options={customers}
@@ -1988,12 +1990,12 @@ const InvoiceForm = ({ invoiceId }) => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCustomerDialogOpen(false)}>Anuluj</Button>
+          <Button onClick={() => setCustomerDialogOpen(false)}>{t('invoices.form.buttons.cancel')}</Button>
           <Button 
             variant="contained"
             onClick={() => navigate('/customers')}
           >
-            Zarządzaj klientami
+            {t('invoices.form.buttons.manageClients')}
           </Button>
           <Button 
             variant="contained"
@@ -2001,7 +2003,7 @@ const InvoiceForm = ({ invoiceId }) => {
             onClick={() => handleCustomerSelect(selectedCustomerId)}
             disabled={!selectedCustomerId}
           >
-            Wybierz
+            {t('common.select')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2016,14 +2018,14 @@ const InvoiceForm = ({ invoiceId }) => {
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">
-              Wybierz pozycje z zamówienia {selectedOrder?.orderNumber}
+              {t('invoices.form.buttons.selectFromOrder')} {selectedOrder?.orderNumber}
             </Typography>
             <Button
               variant="outlined"
               size="small"
               onClick={handleSelectAllOrderItems}
             >
-              {availableOrderItems.every(item => item.selected) ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+              {availableOrderItems.every(item => item.selected) ? t('invoices.form.buttons.deselectAll') : t('invoices.form.buttons.selectAll')}
             </Button>
           </Box>
         </DialogTitle>
@@ -2032,14 +2034,14 @@ const InvoiceForm = ({ invoiceId }) => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell padding="checkbox">Wybierz</TableCell>
-                  <TableCell>Nazwa</TableCell>
-                  <TableCell>Opis</TableCell>
-                  <TableCell>CN Code</TableCell>
-                  <TableCell align="right">Ilość</TableCell>
-                  <TableCell>J.m.</TableCell>
-                  <TableCell align="right">Cena</TableCell>
-                  <TableCell align="right">Wartość netto</TableCell>
+                  <TableCell padding="checkbox">{t('common.select')}</TableCell>
+                  <TableCell>{t('common.name')}</TableCell>
+                  <TableCell>{t('invoices.form.fields.description')}</TableCell>
+                  <TableCell>{t('invoices.form.fields.cnCode')}</TableCell>
+                  <TableCell align="right">{t('invoices.form.fields.quantity')}</TableCell>
+                  <TableCell>{t('invoices.form.fields.unit')}</TableCell>
+                  <TableCell align="right">{t('common.price')}</TableCell>
+                  <TableCell align="right">{t('invoices.form.fields.netValue')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2128,7 +2130,7 @@ const InvoiceForm = ({ invoiceId }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOrderItemsDialogOpen(false)}>
-            Anuluj
+            {t('invoices.form.buttons.cancel')}
           </Button>
           <Button 
             onClick={handleConfirmOrderItemsSelection}

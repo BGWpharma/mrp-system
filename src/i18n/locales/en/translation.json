@@ -40,7 +40,9 @@
     "details": "Details",
     "rows": "Rows",
     "rowsPerPage": "Rows per page",
+    "select": "Select",
     "displayedRows": "{{from}}-{{to}} of {{count}}",
+    "noDate": "No date",
     "selectFile": "Select file",
     "takePhoto": "Take photo",
     "product": "Product"
@@ -2690,6 +2692,101 @@
       "title": {
         "new": "New Invoice",
         "edit": "Edit Invoice"
+      },
+      "fields": {
+        "basicData": "Basic Information",
+        "invoiceNumber": "Invoice Number",
+        "invoiceNumberReadonly": "Invoice number cannot be changed",
+        "issueDate": "Issue Date",
+        "dueDate": "Due Date",
+        "invoiceStatus": "Invoice Status",
+        "paymentMethod": "Payment Method",
+        "currency": "Currency",
+        "bankAccount": "Bank Account",
+        "client": "Client",
+        "relatedOrder": "Related Order",
+        "relatedOrderInfo": "Invoice related to order {{orderNumber}}",
+        "invoiceItems": "Invoice Items",
+        "productName": "Product/Service Name",
+        "description": "Description",
+        "cnCode": "CN Code",
+        "cnCodePlaceholder": "e.g. 1234.56.78.90",
+        "classificationCode": "Commodity Classification Code",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "netPrice": "Net Price",
+        "vatPercent": "VAT %",
+        "netValue": "Net Value",
+        "grossValue": "Gross Value",
+        "totals": {
+          "netTotal": "Net Total:",
+          "vatTotal": "VAT Total:",
+          "grossTotal": "Gross Total:"
+        },
+        "relatedInvoices": "Related invoices for this order:",
+        "additionalInfo": "Additional Information",
+        "notes": "Notes",
+        "invoiceSource": "Choose invoice source",
+        "orderType": "Order Type",
+        "proformaSettlement": "Proforma Settlement",
+        "available": "Available",
+        "from": "from",
+        "used": "used",
+        "amountToSettle": "Amount to Settle",
+        "exceedsAvailable": "Exceeds available amount",
+        "proformaFullyUsed": "This proforma has been fully utilized",
+        "settlementSummary": "Settlement Summary:",
+        "totalAdvanceAmount": "Total Advance Amount:"
+      },
+      "buttons": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "addItem": "Add Item",
+        "removeItem": "Remove Item",
+        "selectFromOrder": "Select from Order",
+        "selectClient": "Select Client",
+        "refresh": "Refresh",
+        "selectOrder": "Select Order",
+        "markAsIssued": "Mark as Issued",
+        "markAsSent": "Mark as Sent",
+        "refreshProformaAmounts": "Refresh Proforma Amounts",
+        "selectAll": "Select All",
+        "deselectAll": "Deselect All",
+        "manageClients": "Manage Clients"
+      },
+      "paymentMethods": {
+        "przelew": "Bank Transfer",
+        "gotowka": "Cash",
+        "karta": "Card",
+        "blik": "BLIK",
+        "paypal": "PayPal",
+        "inne": "Other"
+      },
+      "currencies": {
+        "PLN": "PLN",
+        "EUR": "EUR",
+        "USD": "USD",
+        "GBP": "GBP"
+      },
+      "orderTypes": {
+        "customer": "Customer",
+        "internal": "Internal",
+        "other": "Other"
+      },
+      "toggleButtons": {
+        "invoice": "Invoice",
+        "proforma": "Proforma"
+      },
+      "filters": {
+        "allStatuses": "All Statuses",
+        "allClients": "All Clients",
+        "fromDate": "From Date",
+        "toDate": "To Date",
+        "applyFilters": "Apply Filters",
+        "resetFilters": "Reset",
+        "client": "Client",
+        "availableFrom": "available from"
       }
     },
     "company": {
