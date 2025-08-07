@@ -2602,18 +2602,29 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     <Typography variant="caption" display="block" gutterBottom>
                                       Data faktury
                                     </Typography>
-                                    <TextField
-                                      type="date"
-                                      fullWidth
-                                      size="small"
-                                      value={cost.invoiceDate || ''}
-                                      onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceDate', e.target.value)}
-                                      InputLabelProps={{ shrink: true }}
-                                      placeholder="Wybierz datę"
-                                      inputProps={{ 
-                                        max: formatDateForInput(new Date()), // Maksymalna data to dzisiaj
-                                      }}
-                                    />
+                                    <LocalizationProvider dateAdapter={AdapterDateFns}>
+                                      <DatePicker
+                                        value={cost.invoiceDate ? new Date(cost.invoiceDate) : null}
+                                        onChange={(newValue) => {
+                                          try {
+                                            const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
+                                            handleAdditionalCostChange(cost.id, 'invoiceDate', dateString);
+                                          } catch (error) {
+                                            console.error('Błąd przy konwersji daty faktury (dodatkowy koszt):', error);
+                                            handleAdditionalCostChange(cost.id, 'invoiceDate', '');
+                                          }
+                                        }}
+                                        maxDate={new Date()} // Maksymalna data to dzisiaj
+                                        slotProps={{ 
+                                          textField: { 
+                                            fullWidth: true, 
+                                            size: 'small',
+                                            placeholder: 'dd.mm.yyyy'
+                                          } 
+                                        }}
+                                        format="dd.MM.yyyy"
+                                      />
+                                    </LocalizationProvider>
                                   </Grid>
                                   <Grid item xs={12} sm={4}>
                                     <Typography variant="caption" display="block" gutterBottom>
@@ -2983,6 +2994,18 @@ const PurchaseOrderForm = ({ orderId }) => {
                                   ? formatCurrency((item.originalUnitPrice || 0) * item.quantity, item.currency)
                                   : '-'}
                               </Typography>
+                              {item.vatRate > 0 && (
+                                <>
+                                  <Typography variant="caption" display="block" gutterBottom sx={{ mt: 1 }}>
+                                    Kwota z VAT ({item.vatRate}%)
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                                    {item.currency !== poData.currency 
+                                      ? formatCurrency((item.originalUnitPrice || 0) * item.quantity * (1 + (item.vatRate || 0) / 100), item.currency)
+                                      : formatCurrency((item.unitPrice || 0) * item.quantity * (1 + (item.vatRate || 0) / 100), poData.currency)}
+                                  </Typography>
+                                </>
+                              )}
                             </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
@@ -3000,42 +3023,82 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Data faktury
                               </Typography>
-                              <TextField
-                                type="date"
-                                fullWidth
-                                size="small"
-                                value={item.invoiceDate || ''}
-                                onChange={(e) => handleItemChange(index, 'invoiceDate', e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                              />
+                              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                                <DatePicker
+                                  value={item.invoiceDate ? new Date(item.invoiceDate) : null}
+                                  onChange={(newValue) => {
+                                    try {
+                                      const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
+                                      handleItemChange(index, 'invoiceDate', dateString);
+                                    } catch (error) {
+                                      console.error('Błąd przy konwersji daty faktury:', error);
+                                      handleItemChange(index, 'invoiceDate', '');
+                                    }
+                                  }}
+                                  slotProps={{ 
+                                    textField: { 
+                                      fullWidth: true, 
+                                      size: 'small',
+                                      placeholder: 'dd.mm.yyyy'
+                                    } 
+                                  }}
+                                  format="dd.MM.yyyy"
+                                />
+                              </LocalizationProvider>
                             </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
                                 Planowana data dostawy
                               </Typography>
-                              <TextField
-                                type="date"
-                                fullWidth
-                                size="small"
-                                value={item.plannedDeliveryDate || ''}
-                                onChange={(e) => handleItemChange(index, 'plannedDeliveryDate', e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                                placeholder="Planowana dostawa"
-                              />
+                              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                                <DatePicker
+                                  value={item.plannedDeliveryDate ? new Date(item.plannedDeliveryDate) : null}
+                                  onChange={(newValue) => {
+                                    try {
+                                      const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
+                                      handleItemChange(index, 'plannedDeliveryDate', dateString);
+                                    } catch (error) {
+                                      console.error('Błąd przy konwersji planowanej daty dostawy:', error);
+                                      handleItemChange(index, 'plannedDeliveryDate', '');
+                                    }
+                                  }}
+                                  slotProps={{ 
+                                    textField: { 
+                                      fullWidth: true, 
+                                      size: 'small',
+                                      placeholder: 'dd.mm.yyyy'
+                                    } 
+                                  }}
+                                  format="dd.MM.yyyy"
+                                />
+                              </LocalizationProvider>
                             </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
                                 Rzeczywista data dostawy
                               </Typography>
-                              <TextField
-                                type="date"
-                                fullWidth
-                                size="small"
-                                value={item.actualDeliveryDate || ''}
-                                onChange={(e) => handleItemChange(index, 'actualDeliveryDate', e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                                placeholder="Rzeczywista dostawa"
-                              />
+                              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                                <DatePicker
+                                  value={item.actualDeliveryDate ? new Date(item.actualDeliveryDate) : null}
+                                  onChange={(newValue) => {
+                                    try {
+                                      const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
+                                      handleItemChange(index, 'actualDeliveryDate', dateString);
+                                    } catch (error) {
+                                      console.error('Błąd przy konwersji rzeczywistej daty dostawy:', error);
+                                      handleItemChange(index, 'actualDeliveryDate', '');
+                                    }
+                                  }}
+                                  slotProps={{ 
+                                    textField: { 
+                                      fullWidth: true, 
+                                      size: 'small',
+                                      placeholder: 'dd.mm.yyyy'
+                                    } 
+                                  }}
+                                  format="dd.MM.yyyy"
+                                />
+                              </LocalizationProvider>
                             </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>

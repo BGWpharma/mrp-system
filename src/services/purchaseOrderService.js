@@ -1039,6 +1039,9 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
     searchCache.clear();
     clearLimitedPOCache();
     
+    // Dodaj nowe zamówienie do zoptymalizowanego cache
+    addPurchaseOrderToCache(result);
+    
     return result;
   } catch (error) {
     console.error('Błąd podczas tworzenia zamówienia zakupowego:', error);
@@ -1105,6 +1108,12 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     searchCache.invalidateForOrder(purchaseOrderId);
     clearLimitedPOCache();
     
+    // Aktualizuj zamówienie w zoptymalizowanym cache
+    updatePurchaseOrderInCache(purchaseOrderId, {
+      ...updatedData,
+      updatedAt: new Date()
+    });
+    
     // Pobierz zaktualizowane dane
     return await getPurchaseOrderById(purchaseOrderId);
   } catch (error) {
@@ -1129,6 +1138,9 @@ export const deletePurchaseOrder = async (id) => {
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(id);
     clearLimitedPOCache();
+    
+    // Usuń zamówienie z zoptymalizowanego cache
+    removePurchaseOrderFromCache(id);
     
     return { id };
   } catch (error) {
@@ -1267,6 +1279,12 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(purchaseOrderId);
+    
+    // Aktualizuj zamówienie w zoptymalizowanym cache
+    updatePurchaseOrderInCache(purchaseOrderId, {
+      status: newStatus,
+      updatedAt: new Date()
+    });
     
     return { success: true, status: newStatus };
   } catch (error) {
@@ -2304,6 +2322,11 @@ let limitedPOCache = null;
 let limitedPOCacheTimestamp = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minut
 
+// Cache dla zoptymalizowanej funkcji pobierania zamówień zakupu
+let purchaseOrdersCache = null;
+let purchaseOrdersCacheTimestamp = null;
+const PO_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minut
+
 /**
  * Pobiera ograniczoną listę zamówień zakupowych dla edycji partii
  * Optymalizowana wersja - pobiera tylko niezbędne pola i ogranicza liczbę dokumentów
@@ -2455,6 +2478,12 @@ export const updatePurchaseOrderPaymentStatus = async (purchaseOrderId, newPayme
 
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(purchaseOrderId);
+
+    // Aktualizuj zamówienie w zoptymalizowanym cache
+    updatePurchaseOrderInCache(purchaseOrderId, {
+      paymentStatus: newPaymentStatus,
+      updatedAt: new Date()
+    });
 
     return { 
       success: true, 
@@ -2650,4 +2679,295 @@ export const validateAndCleanupAttachments = async (purchaseOrderId, userId) => 
     console.error('Błąd podczas sprawdzania załączników:', error);
     throw error;
   }
+};
+
+/**
+ * ZOPTYMALIZOWANA FUNKCJA dla interfejsu listy zamówień zakupu
+ * 
+ * Ta funkcja została stworzona dla lepszej wydajności w interfejsie listy:
+ * - Cachuje wszystkie zamówienia po pierwszym pobraniu
+ * - Dynamicznie filtruje i sortuje dane w cache
+ * - Implementuje debouncing dla wyszukiwania
+ * 
+ * @param {Object} params - Parametry zapytania
+ * @param {number} params.page - Numer strony (wymagany)
+ * @param {number} params.pageSize - Rozmiar strony (wymagany)
+ * @param {string|null} params.searchTerm - Termin wyszukiwania (opcjonalne)
+ * @param {string|null} params.statusFilter - Filtr statusu (opcjonalne)
+ * @param {string|null} params.sortField - Pole do sortowania (opcjonalne)
+ * @param {string|null} params.sortOrder - Kierunek sortowania (opcjonalne)
+ * @param {boolean} params.forceRefresh - Wymuś odświeżenie cache (opcjonalne)
+ * @returns {Promise<Object>} - Obiekt z paginacją i danymi
+ */
+export const getPurchaseOrdersOptimized = async ({
+  page,
+  pageSize,
+  searchTerm = null,
+  statusFilter = null,
+  sortField = 'createdAt',
+  sortOrder = 'desc',
+  forceRefresh = false
+}) => {
+  try {
+    console.log('🚀 getPurchaseOrdersOptimized - rozpoczynam zoptymalizowane pobieranie');
+    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, sortField, sortOrder, forceRefresh });
+
+    // Walidacja wymaganych parametrów
+    if (!page || !pageSize) {
+      throw new Error('Parametry page i pageSize są wymagane');
+    }
+
+    const pageNum = Math.max(1, parseInt(page));
+    const itemsPerPage = Math.max(1, parseInt(pageSize));
+
+    // KROK 1: Sprawdź cache zamówień zakupu
+    const now = Date.now();
+    const isCacheValid = purchaseOrdersCache && 
+                        purchaseOrdersCacheTimestamp && 
+                        (now - purchaseOrdersCacheTimestamp) < PO_CACHE_EXPIRY_MS &&
+                        !forceRefresh;
+
+    let allOrders;
+
+    if (isCacheValid) {
+      console.log('💾 Używam cache zamówień zakupu');
+      allOrders = [...purchaseOrdersCache];
+    } else {
+      console.log('🔄 Pobieram świeże dane zamówień zakupu');
+      
+      // Pobierz wszystkie zamówienia zakupu
+      const ordersRef = collection(db, PURCHASE_ORDERS_COLLECTION);
+      const q = query(ordersRef);
+      const allOrdersSnapshot = await getDocs(q);
+      
+      // Zbierz wszystkie ID dostawców
+      const supplierIds = new Set();
+      const ordersData = allOrdersSnapshot.docs.map(doc => {
+        const orderData = doc.data();
+        if (orderData.supplierId) {
+          supplierIds.add(orderData.supplierId);
+        }
+        return {
+          id: doc.id,
+          ...orderData
+        };
+      });
+
+      // Pobierz dostawców jednym zapytaniem batch
+      const suppliersData = {};
+      if (supplierIds.size > 0) {
+        const supplierPromises = Array.from(supplierIds).map(async (supplierId) => {
+          try {
+            const supplierDoc = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
+            if (supplierDoc.exists()) {
+              return { id: supplierId, data: supplierDoc.data() };
+            }
+          } catch (error) {
+            console.warn(`Błąd podczas pobierania dostawcy ${supplierId}:`, error);
+          }
+          return null;
+        });
+
+        const suppliers = await Promise.all(supplierPromises);
+        suppliers.forEach(supplier => {
+          if (supplier) {
+            suppliersData[supplier.id] = supplier.data;
+          }
+        });
+      }
+
+      // Przypisz dane dostawców do zamówień
+      allOrders = ordersData.map(order => ({
+        ...order,
+        supplier: order.supplierId && suppliersData[order.supplierId] 
+          ? { id: order.supplierId, ...suppliersData[order.supplierId] }
+          : null,
+        // Konwersja dat Firestore na obiekty Date dla lepszego sortowania
+        createdAt: order.createdAt?.toDate ? order.createdAt.toDate() : order.createdAt,
+        updatedAt: order.updatedAt?.toDate ? order.updatedAt.toDate() : order.updatedAt,
+        dueDate: order.dueDate?.toDate ? order.dueDate.toDate() : order.dueDate,
+      }));
+
+      // Zaktualizuj cache
+      purchaseOrdersCache = [...allOrders];
+      purchaseOrdersCacheTimestamp = now;
+      
+      console.log('💾 Zapisano do cache:', allOrders.length, 'zamówień zakupu');
+    }
+
+    // KROK 2: Filtrowanie po terminie wyszukiwania
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchLower = searchTerm.toLowerCase().trim();
+      console.log('🔍 Filtrowanie po terminie wyszukiwania:', searchLower);
+      
+      allOrders = allOrders.filter(order => {
+        // Wyszukiwanie w numerze zamówienia
+        if (order.orderNumber && order.orderNumber.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        // Wyszukiwanie w nazwach dostawców
+        if (order.supplier?.name && order.supplier.name.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        // Wyszukiwanie w pozycjach zamówienia
+        if (order.items && order.items.some(item => 
+          (item.name && item.name.toLowerCase().includes(searchLower)) ||
+          (item.description && item.description.toLowerCase().includes(searchLower)) ||
+          (item.code && item.code.toLowerCase().includes(searchLower))
+        )) {
+          return true;
+        }
+        
+        // Wyszukiwanie w notatkach
+        if (order.notes && order.notes.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        return false;
+      });
+      
+      console.log('🔍 Po filtrowaniu wyszukiwania:', allOrders.length, 'zamówień');
+    }
+
+    // KROK 3: Filtrowanie po statusie
+    if (statusFilter && statusFilter !== 'all' && statusFilter.trim() !== '') {
+      console.log('📋 Filtrowanie po statusie:', statusFilter);
+      allOrders = allOrders.filter(order => order.status === statusFilter);
+      console.log('📋 Po filtrowaniu statusu:', allOrders.length, 'zamówień');
+    }
+
+    // KROK 4: Sortowanie
+    console.log('📊 Sortowanie po polu:', sortField, 'kierunek:', sortOrder);
+    allOrders.sort((a, b) => {
+      let valueA = a[sortField];
+      let valueB = b[sortField];
+
+      // Obsługa dat
+      if (valueA instanceof Date || valueB instanceof Date) {
+        valueA = valueA ? new Date(valueA).getTime() : 0;
+        valueB = valueB ? new Date(valueB).getTime() : 0;
+      }
+      
+      // Obsługa stringów
+      if (typeof valueA === 'string') valueA = valueA.toLowerCase();
+      if (typeof valueB === 'string') valueB = valueB.toLowerCase();
+      
+      // Obsługa wartości null/undefined
+      if (valueA == null && valueB == null) return 0;
+      if (valueA == null) return sortOrder === 'asc' ? -1 : 1;
+      if (valueB == null) return sortOrder === 'asc' ? 1 : -1;
+
+      let comparison = 0;
+      if (valueA < valueB) comparison = -1;
+      else if (valueA > valueB) comparison = 1;
+
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+
+    // KROK 5: Paginacja
+    const totalItems = allOrders.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const startIndex = (pageNum - 1) * itemsPerPage;
+    const paginatedData = allOrders.slice(startIndex, startIndex + itemsPerPage);
+
+    console.log('📊 Wyniki paginacji:', {
+      totalItems,
+      totalPages,
+      currentPage: pageNum,
+      itemsPerPage,
+      returnedItems: paginatedData.length
+    });
+
+    return {
+      items: paginatedData,
+      totalCount: totalItems,
+      totalPages,
+      currentPage: pageNum,
+      pageSize: itemsPerPage
+    };
+
+  } catch (error) {
+    console.error('❌ Błąd w getPurchaseOrdersOptimized:', error);
+    throw error;
+  }
+};
+
+/**
+ * Czyści cache zamówień zakupu
+ */
+export const clearPurchaseOrdersCache = () => {
+  purchaseOrdersCache = null;
+  purchaseOrdersCacheTimestamp = null;
+  console.log('🗑️ Cache zamówień zakupu wyczyszczony');
+};
+
+/**
+ * Aktualizuje pojedyncze zamówienie w cache (zamiast czyszczenia całego cache)
+ * @param {string} orderId - ID zamówienia do aktualizacji
+ * @param {Object} updatedOrderData - Nowe dane zamówienia
+ * @returns {boolean} - Czy aktualizacja się powiodła
+ */
+export const updatePurchaseOrderInCache = (orderId, updatedOrderData) => {
+  if (!purchaseOrdersCache || !Array.isArray(purchaseOrdersCache)) {
+    return false;
+  }
+
+  const orderIndex = purchaseOrdersCache.findIndex(order => order.id === orderId);
+  if (orderIndex === -1) {
+    return false;
+  }
+
+  // Aktualizuj zamówienie w cache
+  purchaseOrdersCache[orderIndex] = {
+    ...purchaseOrdersCache[orderIndex],
+    ...updatedOrderData,
+    updatedAt: new Date()
+  };
+
+  console.log('✏️ Zaktualizowano zamówienie w cache:', orderId);
+  return true;
+};
+
+/**
+ * Dodaje nowe zamówienie do cache
+ * @param {Object} newOrderData - Dane nowego zamówienia
+ * @returns {boolean} - Czy dodanie się powiodło
+ */
+export const addPurchaseOrderToCache = (newOrderData) => {
+  if (!purchaseOrdersCache || !Array.isArray(purchaseOrdersCache)) {
+    return false;
+  }
+
+  // Dodaj nowe zamówienie na początek listy (najnowsze pierwsze)
+  purchaseOrdersCache.unshift({
+    ...newOrderData,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+
+  console.log('➕ Dodano nowe zamówienie do cache:', newOrderData.id);
+  return true;
+};
+
+/**
+ * Usuwa zamówienie z cache
+ * @param {string} orderId - ID zamówienia do usunięcia
+ * @returns {boolean} - Czy usunięcie się powiodło
+ */
+export const removePurchaseOrderFromCache = (orderId) => {
+  if (!purchaseOrdersCache || !Array.isArray(purchaseOrdersCache)) {
+    return false;
+  }
+
+  const initialLength = purchaseOrdersCache.length;
+  purchaseOrdersCache = purchaseOrdersCache.filter(order => order.id !== orderId);
+
+  if (purchaseOrdersCache.length < initialLength) {
+    console.log('🗑️ Usunięto zamówienie z cache:', orderId);
+    return true;
+  }
+
+  return false;
 };

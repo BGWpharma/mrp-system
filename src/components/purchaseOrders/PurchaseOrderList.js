@@ -8,7 +8,23 @@ import {
   Fade, Skeleton
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon } from '@mui/icons-material';
-import { getAllPurchaseOrders, deletePurchaseOrder, updatePurchaseOrderStatus, updatePurchaseOrderPaymentStatus, getPurchaseOrdersWithPagination, clearSearchCache, PURCHASE_ORDER_STATUSES, PURCHASE_ORDER_PAYMENT_STATUSES, translateStatus, translatePaymentStatus } from '../../services/purchaseOrderService';
+import { 
+  getAllPurchaseOrders, 
+  deletePurchaseOrder, 
+  updatePurchaseOrderStatus, 
+  updatePurchaseOrderPaymentStatus, 
+  getPurchaseOrdersWithPagination, 
+  getPurchaseOrdersOptimized,
+  clearPurchaseOrdersCache,
+  updatePurchaseOrderInCache,
+  addPurchaseOrderToCache,
+  removePurchaseOrderFromCache,
+  clearSearchCache, 
+  PURCHASE_ORDER_STATUSES, 
+  PURCHASE_ORDER_PAYMENT_STATUSES, 
+  translateStatus, 
+  translatePaymentStatus 
+} from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
@@ -42,6 +58,11 @@ const PurchaseOrderList = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const searchTimeout = useRef(null);
   
+  // Stany dla animacji ładowania (podobnie jak w TaskList)
+  const [mainTableLoading, setMainTableLoading] = useState(false);
+  const [showContent, setShowContent] = useState(false);
+  const isFirstRender = useRef(true);
+  
   // Używamy kontekstu preferencji kolumn
   const { getColumnPreferencesForView, updateColumnPreferences } = useColumnPreferences();
   // Pobieramy preferencje dla widoku 'purchaseOrders'
@@ -57,56 +78,63 @@ const PurchaseOrderList = () => {
   const pageSize = listState.pageSize;
   const tableSort = listState.tableSort;
   
-  // Funkcja pobierająca dane z obsługą debounce dla wyszukiwania
-  const fetchPurchaseOrders = useCallback(async () => {
+  // Zoptymalizowana funkcja pobierania zamówień zakupu (podobnie jak w TaskList)
+  const fetchPurchaseOrdersOptimized = useCallback(async (newSortField = null, newSortOrder = null) => {
+    setMainTableLoading(true);
+    setShowContent(false);
+    
     try {
-      setLoading(true);
-      
-      // Przygotowujemy parametry filtrowania
-      const filters = {
-        status: statusFilter !== 'all' ? statusFilter : null,
-        searchTerm: debouncedSearchTerm || null
-      };
-      
-      // Jeśli jest wyszukiwanie, wyczyść cache aby pobrać świeże dane
-      if (debouncedSearchTerm && debouncedSearchTerm.trim() !== '') {
-        clearSearchCache();
-        console.log('Wyczyszczono cache wyszukiwania');
+      // Wymuszenie odświeżenia cache tylko przy pierwszym renderze
+      if (isFirstRender.current) {
+        await clearPurchaseOrdersCache();
+        isFirstRender.current = false;
       }
       
-      // Używamy funkcji z paginacją i filtrowaniem po stronie serwera
-      const response = await getPurchaseOrdersWithPagination(
-        page, 
-        pageSize, 
-        tableSort.field, 
-        tableSort.order,
-        filters // Przekazujemy filtry do funkcji
-      );
+      // Użyj przekazanych parametrów sortowania lub tych z kontekstu
+      const sortFieldToUse = newSortField || tableSort.field;
+      const sortOrderToUse = newSortOrder || tableSort.order;
       
-      console.log(`Pobieranie zamówień: strona ${page}, rozmiar ${pageSize}`);
+      // UŻYJ ZOPTYMALIZOWANEJ FUNKCJI dla lepszej wydajności
+      const result = await getPurchaseOrdersOptimized({
+        page: page,
+        pageSize: pageSize,
+        searchTerm: debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        statusFilter: statusFilter !== 'all' ? statusFilter : null,
+        sortField: sortFieldToUse,
+        sortOrder: sortOrderToUse,
+        forceRefresh: false
+      });
       
-      // Ustawiamy dane i informacje o paginacji
-      setPurchaseOrders(response.data);
-      setFilteredPOs(response.data); // Nie potrzebujemy już lokalnego filtrowania
+      // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
+      if (result && result.items) {
+        setPurchaseOrders(result.items);
+        setFilteredPOs(result.items);
+        setTotalItems(result.totalCount);
+        setTotalPages(Math.ceil(result.totalCount / pageSize));
+      } else {
+        // Stara logika dla kompatybilności
+        setPurchaseOrders(result);
+        setFilteredPOs(result);
+      }
       
-      setTotalItems(response.pagination.totalItems);
-      setTotalPages(response.pagination.totalPages);
-      
-      // Opóźnienie dla efektu wizualnego podobnie jak w liście stanów magazynowych
+      // PRZYŚPIESZONE ANIMACJE - zmniejszone opóźnienie dla lepszej responsywności
       setTimeout(() => {
-        setLoading(false);
-      }, 300);
+        setShowContent(true);
+      }, 25); // Zmniejszone z 300ms do 25ms
+      
     } catch (error) {
-      console.error('Błąd podczas pobierania zamówień zakupu:', error);
-      showError(t('purchaseOrders.errors.loadFailed'));
-      setLoading(false);
+      console.error('Error fetching purchase orders:', error);
+      showError('Błąd podczas pobierania zamówień zakupu: ' + error.message);
+    } finally {
+      setMainTableLoading(false);
+      setLoading(false); // Zachowaj kompatybilność ze starym loading
     }
   }, [page, pageSize, tableSort.field, tableSort.order, statusFilter, debouncedSearchTerm, showError]);
   
-  // Wywołujemy fetchPurchaseOrders przy zmianach parametrów
+  // Wywołujemy fetchPurchaseOrdersOptimized przy zmianach parametrów
   useEffect(() => {
-    fetchPurchaseOrders();
-  }, [fetchPurchaseOrders]);
+    fetchPurchaseOrdersOptimized();
+  }, [fetchPurchaseOrdersOptimized]);
   
   // Obsługa debounce dla wyszukiwania
   useEffect(() => {
@@ -116,7 +144,7 @@ const PurchaseOrderList = () => {
     
     searchTimeout.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 1000); // 1000ms opóźnienia (1 sekunda)
+    }, 300); // 300ms opóźnienia
     
     return () => {
       if (searchTimeout.current) {
@@ -143,10 +171,24 @@ const PurchaseOrderList = () => {
     listActions.setPageSize(parseInt(event.target.value, 10));
   };
   
-  const handleSearchChange = (e) => {
-    listActions.setSearchTerm(e.target.value);
-    // Nie resetujemy strony tutaj, to nastąpi przy zmianie debouncedSearchTerm
+  // Funkcja obsługi zmiany wyszukiwania
+  const handleSearchChange = (event) => {
+    listActions.setSearchTerm(event.target.value);
   };
+
+  // Funkcja obsługi sortowania tabeli
+  const handleTableSort = (field) => {
+    const isAsc = tableSort.field === field && tableSort.order === 'asc';
+    const newOrder = isAsc ? 'desc' : 'asc';
+    const newSort = { field, order: newOrder };
+    
+    listActions.setTableSort(newSort);
+    
+    // Wywołaj funkcję pobierania z nowymi parametrami sortowania
+    fetchPurchaseOrdersOptimized(field, newOrder);
+  };
+
+
   
   const handleStatusFilterChange = (e) => {
     listActions.setStatusFilter(e.target.value);
@@ -162,21 +204,23 @@ const PurchaseOrderList = () => {
     try {
       setLoading(true);
       
-      // Wywołaj API z pustymi filtrami
-      const response = await getPurchaseOrdersWithPagination(
-        1, // Reset do pierwszej strony
-        pageSize, 
-        tableSort.field, 
-        tableSort.order,
-        { status: null, searchTerm: null } // Puste filtry
-      );
-      
-      // Ustawiamy dane i informacje o paginacji
-      setPurchaseOrders(response.data);
-      setFilteredPOs(response.data);
-      
-      setTotalItems(response.pagination.totalItems);
-      setTotalPages(response.pagination.totalPages);
+              // Wywołaj zoptymalizowaną funkcję z pustymi filtrami
+        const response = await getPurchaseOrdersOptimized({
+          page: 1, // Reset do pierwszej strony
+          pageSize: pageSize,
+          searchTerm: null,
+          statusFilter: null,
+          sortField: tableSort.field,
+          sortOrder: tableSort.order,
+          forceRefresh: true
+        });
+        
+        // Ustawiamy dane i informacje o paginacji
+        setPurchaseOrders(response.items);
+        setFilteredPOs(response.items);
+        
+        setTotalItems(response.totalCount);
+        setTotalPages(Math.ceil(response.totalCount / pageSize));
       
       // Resetuj również stronę
       listActions.setPage(1);
@@ -197,16 +241,23 @@ const PurchaseOrderList = () => {
   };
   
   const handleDeleteConfirm = async () => {
-    try {
-      await deletePurchaseOrder(poToDelete.id);
-      // Po usunięciu odświeżamy listę
-      fetchPurchaseOrders();
-      showSuccess(t('purchaseOrders.orderDeleted'));
-      setDeleteDialogOpen(false);
-      setPoToDelete(null);
-    } catch (error) {
-      console.error('Błąd podczas usuwania zamówienia zakupu:', error);
-      showError(t('purchaseOrders.errors.deleteFailed'));
+    if (poToDelete) {
+      try {
+        await deletePurchaseOrder(poToDelete.id);
+        
+        // Usuń z cache zamiast odświeżania całej listy
+        removePurchaseOrderFromCache(poToDelete.id);
+        
+        // Odśwież listę
+        await fetchPurchaseOrdersOptimized();
+        
+        showSuccess(t('purchaseOrders.notifications.deleteSuccess'));
+        setDeleteDialogOpen(false);
+        setPoToDelete(null);
+      } catch (error) {
+        console.error('Błąd podczas usuwania zamówienia zakupu:', error);
+        showError(t('purchaseOrders.notifications.deleteError'));
+      }
     }
   };
   
@@ -217,36 +268,45 @@ const PurchaseOrderList = () => {
   };
   
   const handleStatusUpdate = async () => {
-    try {
-      // Sprawdź czy status zmienia się na "completed" i czy zamówienie ma pozycje i dostawcę
-      if (newStatus === 'completed' && 
-          poToUpdateStatus?.items?.length > 0 && 
-          poToUpdateStatus?.supplier?.id &&
-          poToUpdateStatus.status !== 'completed') {
+    if (poToUpdateStatus && newStatus) {
+      try {
+        // Sprawdź czy status zmienia się na "completed" i czy zamówienie ma pozycje i dostawcę
+        if (newStatus === 'completed' && 
+            poToUpdateStatus?.items?.length > 0 && 
+            poToUpdateStatus?.supplier?.id &&
+            poToUpdateStatus.status !== 'completed') {
+          
+          // Zapisz dane do oczekującej aktualizacji i pokaż dialog
+          setPendingStatusUpdate({
+            purchaseOrder: poToUpdateStatus,
+            newStatus: newStatus,
+            currentStatus: poToUpdateStatus.status
+          });
+          setSupplierPricesDialogOpen(true);
+          setStatusDialogOpen(false);
+          return;
+        }
         
-        // Zapisz dane do oczekującej aktualizacji i pokaż dialog
-        setPendingStatusUpdate({
-          purchaseOrder: poToUpdateStatus,
-          newStatus: newStatus,
-          currentStatus: poToUpdateStatus.status
+        // Standardowa aktualizacja statusu
+        await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus);
+        
+        // Zaktualizuj w cache zamiast odświeżania całej listy
+        updatePurchaseOrderInCache(poToUpdateStatus.id, { 
+          status: newStatus,
+          updatedAt: new Date()
         });
-        setSupplierPricesDialogOpen(true);
+        
+        // Odśwież listę
+        await fetchPurchaseOrdersOptimized();
+        
+        showSuccess(t('purchaseOrders.notifications.statusUpdateSuccess'));
         setStatusDialogOpen(false);
-        return;
+        setPoToUpdateStatus(null);
+        setNewStatus('');
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji statusu zamówienia zakupu:', error);
+        showError(t('purchaseOrders.notifications.statusUpdateError'));
       }
-      
-      // Standardowa aktualizacja statusu (bez pytania o ceny dostawców)
-      await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus, currentUser.uid);
-      
-      // Po aktualizacji odświeżamy listę
-      fetchPurchaseOrders();
-      
-      showSuccess(t('purchaseOrders.statusUpdated'));
-      setStatusDialogOpen(false);
-      setPoToUpdateStatus(null);
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji statusu zamówienia:', error);
-      showError(t('purchaseOrders.errors.statusUpdateFailed'));
     }
   };
 
@@ -257,18 +317,27 @@ const PurchaseOrderList = () => {
   };
 
   const handlePaymentStatusUpdate = async () => {
-    try {
-      await updatePurchaseOrderPaymentStatus(poToUpdatePaymentStatus.id, newPaymentStatus, currentUser.uid);
-      
-      // Po aktualizacji odświeżamy listę
-      fetchPurchaseOrders();
-      
-      showSuccess(t('purchaseOrders.paymentStatusUpdated'));
-      setPaymentStatusDialogOpen(false);
-      setPoToUpdatePaymentStatus(null);
-    } catch (error) {
-      console.error('Błąd podczas aktualizacji statusu płatności:', error);
-      showError(t('purchaseOrders.errors.statusUpdateFailed'));
+    if (poToUpdatePaymentStatus && newPaymentStatus) {
+      try {
+        await updatePurchaseOrderPaymentStatus(poToUpdatePaymentStatus.id, newPaymentStatus);
+        
+        // Zaktualizuj w cache zamiast odświeżania całej listy
+        updatePurchaseOrderInCache(poToUpdatePaymentStatus.id, { 
+          paymentStatus: newPaymentStatus,
+          updatedAt: new Date()
+        });
+        
+        // Odśwież listę
+        await fetchPurchaseOrdersOptimized();
+        
+        showSuccess(t('purchaseOrders.notifications.paymentStatusUpdateSuccess'));
+        setPaymentStatusDialogOpen(false);
+        setPoToUpdatePaymentStatus(null);
+        setNewPaymentStatus('');
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji statusu płatności zamówienia zakupu:', error);
+        showError(t('purchaseOrders.notifications.paymentStatusUpdateError'));
+      }
     }
   };
 
@@ -299,8 +368,8 @@ const PurchaseOrderList = () => {
         showSuccess('Status zamówienia został zaktualizowany bez aktualizacji cen dostawców.');
       }
       
-      // Po aktualizacji odświeżamy listę
-      fetchPurchaseOrders();
+              // Po aktualizacji odświeżamy listę
+        fetchPurchaseOrdersOptimized();
       
     } catch (error) {
       console.error('Błąd podczas aktualizacji statusu:', error);
@@ -475,7 +544,7 @@ const PurchaseOrderList = () => {
   };
   
   return (
-    <Container>
+    <Container maxWidth="xl">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="h5">{t('purchaseOrders.title')}</Typography>
         <Button
@@ -739,44 +808,41 @@ const PurchaseOrderList = () => {
                   ))
                 )}
               </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell colSpan={8}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="body2">
-                          Wierszy na stronę:
-                        </Typography>
-                        <Select
-                          value={pageSize}
-                          onChange={handleChangeRowsPerPage}
-                          size="small"
-                        >
-                          {[5, 10, 25, 50].map(size => (
-                            <MenuItem key={size} value={size}>
-                              {size}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </Box>
-                      <Pagination 
-                        count={totalPages}
-                        page={page}
-                        onChange={handleChangePage}
-                        color="primary"
-                        showFirstButton
-                        showLastButton
-                      />
-                      <Typography variant="body2">
-                        Wyświetlanie {filteredPOs.length > 0 ? (page - 1) * pageSize + 1 : 0}-{Math.min(page * pageSize, totalItems)} z {totalItems}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              </TableFooter>
+
             </Table>
           </TableContainer>
         </Paper>
+      </Fade>
+      
+      {/* Paginacja podobnie jak w TaskList */}
+      <Fade in={showContent && !mainTableLoading} timeout={300}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
+          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="textSecondary">
+              Wyświetlanie {purchaseOrders.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, totalItems)} z {totalItems} zamówień zakupu
+            </Typography>
+            
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>
+              <Select
+                value={pageSize}
+                onChange={handleChangeRowsPerPage}
+              >
+                <MenuItem value={5}>5</MenuItem>
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={handleChangePage}
+            shape="rounded"
+            color="primary"
+          />
+        </Box>
       </Fade>
 
       {/* Dialog potwierdzenia usunięcia */}
