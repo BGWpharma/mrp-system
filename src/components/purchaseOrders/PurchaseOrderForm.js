@@ -2697,7 +2697,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     <Typography variant="caption" display="block" gutterBottom>
                                       Data faktury
                                     </Typography>
-                                    <LocalizationProvider dateAdapter={AdapterDateFns}>
+                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                                       <DatePicker
                                         value={(() => {
                                           if (!cost.invoiceDate) return null;
@@ -2774,7 +2774,18 @@ const PurchaseOrderForm = ({ orderId }) => {
                                         }}
                                         format="dd.MM.yyyy"
                                         views={['year', 'month', 'day']}
-                                        dayOfWeekFormatter={(date) => format(date, 'EEE', { locale: pl })}
+                                        dayOfWeekFormatter={(date) => {
+                                    try {
+                                      if (!date || !isValid(date)) {
+                                        return '';
+                                      }
+                                      // Użyj krótszego formatu dla dni tygodnia
+                                      return format(date, 'EEE', { locale: pl }).slice(0, 2);
+                                    } catch (error) {
+                                      console.warn('dayOfWeekFormatter error:', error, date);
+                                      return '';
+                                    }
+                                  }}
                                       />
                                     </LocalizationProvider>
                                   </Grid>
@@ -3129,7 +3140,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 Kwota przed rabatem
                               </Typography>
                               <Typography variant="body2">
-                                {formatCurrency((item.unitPrice || 0) * item.quantity, item.currency || poData.currency)}
+                                {formatCurrency((item.unitPrice || 0) * item.quantity, poData.currency)}
                                 {item.discount > 0 && (
                                   <Typography variant="caption" component="span" sx={{ ml: 1, color: 'success.main' }}>
                                     (rabat {item.discount}%)
@@ -3175,7 +3186,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Data faktury
                               </Typography>
-                              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                                 <DatePicker
                                   value={(() => {
                                     if (!item.invoiceDate) return null;
@@ -3251,7 +3262,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                                   }}
                                   format="dd.MM.yyyy"
                                   views={['year', 'month', 'day']}
-                                  dayOfWeekFormatter={(date) => format(date, 'EEE', { locale: pl })}
                                 />
                               </LocalizationProvider>
                             </Grid>
@@ -3259,7 +3269,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Planowana data dostawy
                               </Typography>
-                              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                                 <DatePicker
                                   value={(() => {
                                     if (!item.plannedDeliveryDate) return null;
@@ -3313,7 +3323,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Rzeczywista data dostawy
                               </Typography>
-                              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                                 <DatePicker
                                   value={(() => {
                                     if (!item.actualDeliveryDate) return null;
