@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { parseISO, isValid } from 'date-fns';
+import { parseISO, isValid, format } from 'date-fns';
 import {
   Box,
   Button,
@@ -460,26 +460,32 @@ const PurchaseOrderForm = ({ orderId }) => {
     // Specjalna obsługa dla zmiany daty faktury
     if (field === 'invoiceDate' && value) {
       try {
-        // Pobierz datę poprzedniego dnia dla daty faktury
-        const invoiceDate = new Date(value);
-        const rateFetchDate = new Date(invoiceDate);
-        rateFetchDate.setDate(rateFetchDate.getDate() - 1);
-        
-        console.log(`Dla faktury z datą ${value} pobieram kurs z dnia ${rateFetchDate.toISOString().split('T')[0]}`);
-        
-        // Uaktualnij datę faktury niezależnie od waluty
+        // Uaktualnij datę faktury zawsze (niezależnie od waluty)
         let updatedItems = [...poData.items];
-        
-        // Uaktualnij datę faktury
         updatedItems[index] = {
           ...updatedItems[index],
           invoiceDate: value
         };
         
-        // Pobierz kurs tylko jeśli waluta pozycji jest inna niż waluta zamówienia i nie jest to EUR
-        if (currentItem.currency && 
+        // Sprawdź czy data jest kompletna i poprawna przed próbą pobrania kursu
+        const invoiceDate = new Date(value);
+        const isValidDate = !isNaN(invoiceDate.getTime()) && 
+                           invoiceDate.getFullYear() > 1900 && 
+                           invoiceDate.getFullYear() < 2100;
+        
+        // Pobierz kurs tylko jeśli:
+        // 1. Data jest kompletna i poprawna
+        // 2. Waluta pozycji jest inna niż waluta zamówienia i nie jest to EUR
+        if (isValidDate && 
+            currentItem.currency && 
             currentItem.currency !== poData.currency && 
             !(currentItem.currency === 'EUR' && poData.currency === 'EUR')) {
+          
+          const rateFetchDate = new Date(invoiceDate);
+          rateFetchDate.setDate(rateFetchDate.getDate() - 1);
+          
+          console.log(`Dla faktury z datą ${value} pobieram kurs z dnia ${rateFetchDate.toISOString().split('T')[0]}`);
+          
           let rate = 0;
           try {
             rate = await getExchangeRate(currentItem.currency, poData.currency, rateFetchDate);
@@ -504,13 +510,23 @@ const PurchaseOrderForm = ({ orderId }) => {
             console.error(`Błąd podczas pobierania kursu dla ${currentItem.currency}/${poData.currency} z dnia ${rateFetchDate.toISOString().split('T')[0]}:`, error);
             showError(`Nie udało się pobrać kursu dla ${currentItem.currency}/${poData.currency} z dnia ${rateFetchDate.toISOString().split('T')[0]}.`);
           }
+        } else if (!isValidDate && currentItem.currency && currentItem.currency !== poData.currency) {
+          // Jeśli data jest niepełna ale istnieje waluta inna niż domyślna, wyczyść kurs
+          console.log(`Data faktury ${value} jest niepełna - nie pobieram kursu`);
         }
         
         setPoData(prev => ({ ...prev, items: updatedItems }));
         return;
       } catch (error) {
         console.error('Błąd podczas przetwarzania daty faktury:', error);
-        showError('Nieprawidłowy format daty faktury');
+        // W przypadku błędu, i tak aktualizuj datę faktury
+        let updatedItems = [...poData.items];
+        updatedItems[index] = {
+          ...updatedItems[index],
+          invoiceDate: value
+        };
+        setPoData(prev => ({ ...prev, items: updatedItems }));
+        return;
       }
     }
     
@@ -1518,11 +1534,17 @@ const PurchaseOrderForm = ({ orderId }) => {
             invoiceDate: formattedDate
           };
           
-          // Pobierz kurs tylko jeśli waluta pozycji jest inna niż waluta zamówienia
-          if (currentCost.currency && currentCost.currency !== poData.currency) {
+          // Sprawdź czy data jest kompletna i poprawna przed próbą pobrania kursu
+          const invoiceDate = new Date(formattedDate);
+          const isValidDate = !isNaN(invoiceDate.getTime()) && 
+                             invoiceDate.getFullYear() > 1900 && 
+                             invoiceDate.getFullYear() < 2100;
+          
+          // Pobierz kurs tylko jeśli:
+          // 1. Data jest kompletna i poprawna
+          // 2. Waluta pozycji jest inna niż waluta zamówienia
+          if (isValidDate && currentCost.currency && currentCost.currency !== poData.currency) {
             try {
-              // Pobierz datę poprzedniego dnia dla daty faktury
-              const invoiceDate = new Date(formattedDate);
               const rateFetchDate = new Date(invoiceDate);
               rateFetchDate.setDate(rateFetchDate.getDate() - 1);
               
@@ -1547,6 +1569,8 @@ const PurchaseOrderForm = ({ orderId }) => {
               console.error(`Błąd podczas pobierania kursu:`, error);
               // W przypadku błędu nie zmieniamy kursu, tylko aktualizujemy datę
             }
+          } else if (!isValidDate && currentCost.currency && currentCost.currency !== poData.currency) {
+            console.log(`Data faktury ${formattedDate} jest niepełna - nie pobieram kursu dla dodatkowego kosztu`);
           }
           
           setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
@@ -1556,6 +1580,18 @@ const PurchaseOrderForm = ({ orderId }) => {
       } catch (error) {
         console.error('Błąd podczas przetwarzania daty faktury:', error);
         showError('Nieprawidłowy format daty faktury');
+        // W przypadku błędu, i tak aktualizuj datę faktury
+        let updatedCosts = [...poData.additionalCostsItems];
+        const costIndex = updatedCosts.findIndex(item => item.id === id);
+        if (costIndex !== -1) {
+          const formattedDate = formatDateForInput(value);
+          updatedCosts[costIndex] = {
+            ...updatedCosts[costIndex],
+            invoiceDate: formattedDate
+          };
+          setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
+        }
+        return;
       }
         }
         
@@ -2666,49 +2702,79 @@ const PurchaseOrderForm = ({ orderId }) => {
                                         value={(() => {
                                           if (!cost.invoiceDate) return null;
                                           try {
-                                            let date;
+                                            // Jeśli to już obiekt Date, użyj go bezpośrednio
+                                            if (cost.invoiceDate instanceof Date) {
+                                              return isValid(cost.invoiceDate) ? cost.invoiceDate : null;
+                                            }
+                                            
+                                            // Jeśli to Firestore Timestamp
+                                            if (cost.invoiceDate && typeof cost.invoiceDate.toDate === 'function') {
+                                              const date = cost.invoiceDate.toDate();
+                                              return isValid(date) ? date : null;
+                                            }
+                                            
+                                            // Jeśli to string
                                             if (typeof cost.invoiceDate === 'string') {
-                                              if (cost.invoiceDate.includes('Invalid') || cost.invoiceDate.trim() === '') {
+                                              const trimmed = cost.invoiceDate.trim();
+                                              if (trimmed === '' || trimmed.includes('Invalid')) {
                                                 return null;
                                               }
-                                              date = cost.invoiceDate.includes('T') || cost.invoiceDate.includes('Z') 
-                                                ? parseISO(cost.invoiceDate) 
-                                                : new Date(cost.invoiceDate + 'T00:00:00');
-                                            } else if (cost.invoiceDate instanceof Date) {
-                                              date = cost.invoiceDate;
-                                            } else if (cost.invoiceDate && typeof cost.invoiceDate.toDate === 'function') {
-                                              date = cost.invoiceDate.toDate();
-                                            } else {
-                                              return null;
+                                              
+                                              // Parsuj string do Date
+                                              let date;
+                                              if (trimmed.includes('T') || trimmed.includes('Z')) {
+                                                date = parseISO(trimmed);
+                                              } else {
+                                                // Format YYYY-MM-DD lub podobny
+                                                date = new Date(trimmed + 'T00:00:00');
+                                              }
+                                              
+                                              return isValid(date) ? date : null;
                                             }
-                                            return isValid(date) ? date : null;
+                                            
+                                            return null;
                                           } catch (error) {
                                             console.error('Błąd parsowania invoiceDate (dodatkowy koszt):', error, cost.invoiceDate);
                                             return null;
                                           }
                                         })()}
                                         onChange={(newValue) => {
-                                          try {
-                                            if (newValue && !isNaN(newValue.getTime())) {
-                                              const formattedDate = formatDateForInput(newValue);
-                                              handleAdditionalCostChange(cost.id, 'invoiceDate', formattedDate);
-                                            } else {
-                                              handleAdditionalCostChange(cost.id, 'invoiceDate', '');
-                                            }
-                                          } catch (error) {
-                                            console.error('Błąd przy konwersji daty faktury (dodatkowy koszt):', error);
+                                          // Zapisz datę w formacie ISO string tylko dla kompletnych i poprawnych dat
+                                          if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                            const formattedDate = formatDateForInput(newValue);
+                                            handleAdditionalCostChange(cost.id, 'invoiceDate', formattedDate);
+                                          } else if (newValue === null) {
+                                            // Tylko jeśli użytkownik jawnie wyczyścił pole (null)
                                             handleAdditionalCostChange(cost.id, 'invoiceDate', '');
                                           }
+                                          // W przypadku niepoprawnej daty (ale nie null) - nie robimy nic,
+                                          // zachowujemy obecną wartość w stanie
                                         }}
+                                        onError={(error) => {
+                                          // Obsługuj błędy parsowania bez resetowania wartości
+                                          console.log('DatePicker error:', error);
+                                        }}
+                                        disableHighlightToday={false}
+                                        reduceAnimations={true}
                                         maxDate={new Date()} // Maksymalna data to dzisiaj
                                         slotProps={{ 
                                           textField: { 
                                             fullWidth: true, 
                                             size: 'small',
-                                            placeholder: 'dd.mm.yyyy'
-                                          } 
+                                            placeholder: 'dd.mm.yyyy',
+                                            onBlur: (event) => {
+                                              // Dodatowa obsługa onBlur żeby zachować wartości podczas edycji
+                                              console.log('DatePicker blur:', event.target.value);
+                                            }
+                                          },
+                                          field: { 
+                                            clearable: true,
+                                            shouldRespectLeadingZeros: true
+                                          }
                                         }}
                                         format="dd.MM.yyyy"
+                                        views={['year', 'month', 'day']}
+                                        dayOfWeekFormatter={(date) => format(date, 'EEE', { locale: pl })}
                                       />
                                     </LocalizationProvider>
                                   </Grid>
@@ -3114,48 +3180,78 @@ const PurchaseOrderForm = ({ orderId }) => {
                                   value={(() => {
                                     if (!item.invoiceDate) return null;
                                     try {
-                                      let date;
+                                      // Jeśli to już obiekt Date, użyj go bezpośrednio
+                                      if (item.invoiceDate instanceof Date) {
+                                        return isValid(item.invoiceDate) ? item.invoiceDate : null;
+                                      }
+                                      
+                                      // Jeśli to Firestore Timestamp
+                                      if (item.invoiceDate && typeof item.invoiceDate.toDate === 'function') {
+                                        const date = item.invoiceDate.toDate();
+                                        return isValid(date) ? date : null;
+                                      }
+                                      
+                                      // Jeśli to string
                                       if (typeof item.invoiceDate === 'string') {
-                                        if (item.invoiceDate.includes('Invalid') || item.invoiceDate.trim() === '') {
+                                        const trimmed = item.invoiceDate.trim();
+                                        if (trimmed === '' || trimmed.includes('Invalid')) {
                                           return null;
                                         }
-                                        date = item.invoiceDate.includes('T') || item.invoiceDate.includes('Z') 
-                                          ? parseISO(item.invoiceDate) 
-                                          : new Date(item.invoiceDate + 'T00:00:00');
-                                      } else if (item.invoiceDate instanceof Date) {
-                                        date = item.invoiceDate;
-                                      } else if (item.invoiceDate && typeof item.invoiceDate.toDate === 'function') {
-                                        date = item.invoiceDate.toDate();
-                                      } else {
-                                        return null;
+                                        
+                                        // Parsuj string do Date
+                                        let date;
+                                        if (trimmed.includes('T') || trimmed.includes('Z')) {
+                                          date = parseISO(trimmed);
+                                        } else {
+                                          // Format YYYY-MM-DD lub podobny
+                                          date = new Date(trimmed + 'T00:00:00');
+                                        }
+                                        
+                                        return isValid(date) ? date : null;
                                       }
-                                      return isValid(date) ? date : null;
+                                      
+                                      return null;
                                     } catch (error) {
                                       console.error('Błąd parsowania invoiceDate (pozycja):', error, item.invoiceDate);
                                       return null;
                                     }
                                   })()}
                                   onChange={(newValue) => {
-                                    try {
-                                      if (newValue && !isNaN(newValue.getTime())) {
-                                        const formattedDate = formatDateForInput(newValue);
-                                        handleItemChange(index, 'invoiceDate', formattedDate);
-                                      } else {
-                                        handleItemChange(index, 'invoiceDate', '');
-                                      }
-                                    } catch (error) {
-                                      console.error('Błąd przy konwersji daty faktury:', error);
+                                    // Zapisz datę w formacie ISO string tylko dla kompletnych i poprawnych dat
+                                    if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                      const formattedDate = formatDateForInput(newValue);
+                                      handleItemChange(index, 'invoiceDate', formattedDate);
+                                    } else if (newValue === null) {
+                                      // Tylko jeśli użytkownik jawnie wyczyścił pole (null)
                                       handleItemChange(index, 'invoiceDate', '');
                                     }
+                                    // W przypadku niepoprawnej daty (ale nie null) - nie robimy nic,
+                                    // zachowujemy obecną wartość w stanie
                                   }}
+                                  onError={(error) => {
+                                    // Obsługuj błędy parsowania bez resetowania wartości
+                                    console.log('DatePicker error:', error);
+                                  }}
+                                  disableHighlightToday={false}
+                                  reduceAnimations={true}
                                   slotProps={{ 
                                     textField: { 
                                       fullWidth: true, 
                                       size: 'small',
-                                      placeholder: 'dd.mm.yyyy'
-                                    } 
+                                      placeholder: 'dd.mm.yyyy',
+                                      onBlur: (event) => {
+                                        // Dodatowa obsługa onBlur żeby zachować wartości podczas edycji
+                                        console.log('DatePicker blur:', event.target.value);
+                                      }
+                                    },
+                                    field: { 
+                                      clearable: true,
+                                      shouldRespectLeadingZeros: true
+                                    }
                                   }}
                                   format="dd.MM.yyyy"
+                                  views={['year', 'month', 'day']}
+                                  dayOfWeekFormatter={(date) => format(date, 'EEE', { locale: pl })}
                                 />
                               </LocalizationProvider>
                             </Grid>

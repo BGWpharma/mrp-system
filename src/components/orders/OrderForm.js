@@ -1168,11 +1168,15 @@ const OrderForm = ({ orderId }) => {
             const formattedDate = value;
             console.log(`Sformatowana data faktury: ${formattedDate}`);
             
-            // Jeśli waluta pozycji jest inna niż waluta zamówienia
-            if (item.currency && item.currency !== 'EUR') {
+            // Sprawdź czy data jest kompletna i poprawna przed próbą pobrania kursu
+            const invoiceDate = new Date(formattedDate);
+            const isValidDate = !isNaN(invoiceDate.getTime()) && 
+                               invoiceDate.getFullYear() > 1900 && 
+                               invoiceDate.getFullYear() < 2100;
+            
+            // Jeśli waluta pozycji jest inna niż waluta zamówienia i data jest poprawna
+            if (isValidDate && item.currency && item.currency !== 'EUR') {
               try {
-                // Pobierz datę poprzedniego dnia dla daty faktury
-                const invoiceDate = new Date(formattedDate);
                 const rateFetchDate = new Date(invoiceDate);
                 rateFetchDate.setDate(rateFetchDate.getDate() - 1);
                 
@@ -1231,7 +1235,10 @@ const OrderForm = ({ orderId }) => {
                 return { ...item, invoiceDate: formattedDate };
               }
             } else {
-              // Jeśli waluta jest taka sama, po prostu zaktualizuj datę
+              // Jeśli data jest niepełna lub waluta jest EUR, po prostu zaktualizuj datę
+              if (!isValidDate && item.currency && item.currency !== 'EUR') {
+                console.log(`Data faktury ${formattedDate} jest niepełna - nie pobieram kursu dla dodatkowego kosztu w OrderForm`);
+              }
               return { ...item, invoiceDate: formattedDate };
             }
           } catch (error) {
