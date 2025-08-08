@@ -45,7 +45,12 @@
     "noDate": "No date",
     "selectFile": "Select file",
     "takePhoto": "Take photo",
-    "product": "Product"
+    "product": "Product",
+    "pageSize": "Page size",
+    "showing": "Showing",
+    "results": "results",
+    "onPage": "on page",
+    "moreResultsAvailable": "More results available"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -172,7 +177,7 @@
       "updatedAt": "Updated At",
       "notes": "Notes",
       "orders": "Orders",
-      "invoices": "Invoices", 
+      "invoices": "Invoices",
       "details": "Details",
       "notFound": "Customer not found",
       "backToList": "Back to customer list",
@@ -672,7 +677,7 @@
         "defaultSupplierPrice": "Default supplier price"
       },
       "summary": {
-        "title": "Cost Summary", 
+        "title": "Cost Summary",
         "itemsValue": "Items value",
         "additionalCostsNet": "Additional costs net",
         "additionalCostsVat": "VAT from additional costs",
@@ -1626,7 +1631,7 @@
         "product": "Product",
         "price": "Price",
         "minQuantity": "Minimum quantity",
-        "unit": "Unit", 
+        "unit": "Unit",
         "notes": "Notes",
         "cancel": "Cancel",
         "save": "Save changes",
@@ -2395,7 +2400,7 @@
         "uploadError": "Error uploading file \"{{fileName}}\": {{error}}",
         "deleteSuccess": "Design \"{{fileName}}\" was deleted",
         "deleteError": "Error deleting file: {{error}}",
-          "descriptionUpdated": "Attachment description updated",
+        "descriptionUpdated": "Attachment description updated",
         "fileTooLarge": "File is too large ({{size}} MB). Maximum size is 20 MB.",
         "unsupportedFileType": "Unsupported file type: {{type}}. Allowed are images (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) and PDF documents."
       }
@@ -2519,11 +2524,11 @@
       "priceLists": "Price lists:",
       "noPriceLists": "Recipe is not added to any price list",
       "inactive": "(inactive)",
-              "additionalNotes": "Additional Notes",
-        "noAdditionalNotes": "No additional notes",
-        "latestDesign": "Latest Product Design",
-        "clickToOpenPdf": "Click to open in new tab",
-        "clickForFullPreview": "Click to see full preview",
+      "additionalNotes": "Additional Notes",
+      "noAdditionalNotes": "No additional notes",
+      "latestDesign": "Latest Product Design",
+      "clickToOpenPdf": "Click to open in new tab",
+      "clickForFullPreview": "Click to see full preview",
       "ingredients": {
         "title": "Ingredients",
         "ingredient": "Ingredient",
@@ -2596,7 +2601,7 @@
     "reset": "Reset",
     "noOrders": "No orders",
     "table": {
-      "details": "Details", 
+      "details": "Details",
       "number": "Number",
       "customer": "Customer",
       "status": "Status",

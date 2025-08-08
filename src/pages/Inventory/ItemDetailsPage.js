@@ -48,7 +48,7 @@ import {
   Cached as CachedIcon,
   AccessTime as ClockIcon
 } from '@mui/icons-material';
-import { getInventoryItemById, getItemTransactions, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity, getAwaitingOrdersForInventoryItem } from '../../services/inventory';
+import { getInventoryItemById, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity, getAwaitingOrdersForInventoryItem } from '../../services/inventory';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -56,7 +56,12 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatters';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
-import { getUsersDisplayNames } from '../../services/userService';
+
+// Lazy-loaded zakładki
+const BatchesTab = React.lazy(() => import('./ItemDetailsTabs/BatchesTab'));
+const TransactionsTab = React.lazy(() => import('./ItemDetailsTabs/TransactionsTab'));
+const ReservationsTab = React.lazy(() => import('./ItemDetailsTabs/ReservationsTab'));
+const AwaitingTab = React.lazy(() => import('./ItemDetailsTabs/AwaitingTab'));
 
 // TabPanel component
 function TabPanel(props) {
@@ -86,7 +91,7 @@ const ItemDetailsPage = () => {
   const { currentUser } = useAuth();
   const { t } = useTranslation();
   const [item, setItem] = useState(null);
-  const [transactions, setTransactions] = useState([]);
+
   const [batches, setBatches] = useState([]);
   const [supplierPrices, setSupplierPrices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,32 +107,13 @@ const ItemDetailsPage = () => {
   const [awaitingOrders, setAwaitingOrders] = useState({});
   const [awaitingOrdersLoading, setAwaitingOrdersLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [userNames, setUserNames] = useState({});
+
   
   // Dodajemy wykrywanie urządzeń mobilnych
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Funkcja pobierająca dane użytkowników
-  const fetchUserNames = async (transactions) => {
-    if (!transactions || transactions.length === 0) return;
-    
-    const userIds = transactions
-      .filter(transaction => transaction.createdBy)
-      .map(transaction => transaction.createdBy);
-    
-    // Usuń duplikaty
-    const uniqueUserIds = [...new Set(userIds)];
-    
-    if (uniqueUserIds.length === 0) return;
-    
-    try {
-      const names = await getUsersDisplayNames(uniqueUserIds);
-      setUserNames(names);
-    } catch (error) {
-      console.error(t('inventory.itemDetails.errorFetchingUserData'), error);
-    }
-  };
+
 
   useEffect(() => {
     const fetchItemData = async () => {
@@ -149,12 +135,7 @@ const ItemDetailsPage = () => {
         
         setItem(itemData);
         
-        // Pobierz historię transakcji
-        const transactionsData = await getItemTransactions(id);
-        setTransactions(transactionsData);
-        
-        // Pobierz nazwy użytkowników dla transakcji
-        fetchUserNames(transactionsData);
+        // Transakcje są teraz pobierane bezpośrednio w TransactionsTab z paginacją
         
         // Pobierz partie
         const batchesData = await getItemBatches(id);
@@ -909,492 +890,52 @@ const ItemDetailsPage = () => {
 
         {/* Zawartość zakładki Partie */}
         <TabPanel value={tabValue} index={1}>
-          <Box sx={{
-            p: 2,
-            mb: 2,
-            borderRadius: 2,
-            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white'
-          }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-              {t('inventory.itemDetails.tabs.batchesAndExpiry')}
-            </Typography>
-          </Box>
-          
-          {batches.length === 0 ? (
-            <Paper elevation={1} sx={{ p: 3, borderRadius: 2, textAlign: 'center', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : '#f8f9fa' }}>
-            <Typography variant="body1">{t('inventory.itemDetails.noBatches')}</Typography>
-            </Paper>
-          ) : (
-            <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
-              <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t('inventory.itemDetails.batchNumber')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.expiryDate')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.quantity')}</TableCell>
-                    <TableCell>{t('common.status')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.location')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.receivedDate')}</TableCell>
-                    <TableCell>{t('common.notes')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {batches
-                    .sort((a, b) => {
-                      const dateA = a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate);
-                      const dateB = b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate);
-                      return dateA - dateB;
-                    })
-                    .map(batch => {
-                      const expiryDate = batch.expiryDate instanceof Timestamp 
-                        ? batch.expiryDate.toDate() 
-                        : new Date(batch.expiryDate);
-                      
-                      const receivedDate = batch.receivedDate instanceof Timestamp 
-                        ? batch.receivedDate.toDate() 
-                        : new Date(batch.receivedDate);
-                      
-                      const today = new Date();
-                      const thirtyDaysFromNow = new Date();
-                      thirtyDaysFromNow.setDate(today.getDate() + 30);
-                      
-                      let status = 'valid';
-                      if (expiryDate < today) {
-                        status = 'expired';
-                      } else if (expiryDate <= thirtyDaysFromNow) {
-                        status = 'expiring';
-                      }
-                      
-                      return (
-                        <TableRow 
-                          key={batch.id} 
-                          hover
-                          sx={{
-                            bgcolor: theme => 
-                              status === 'expired' 
-                                ? theme.palette.mode === 'dark' 
-                                  ? 'rgba(255, 50, 50, 0.15)' 
-                                  : 'rgba(255, 0, 0, 0.05)'
-                                : status === 'expiring'
-                                  ? theme.palette.mode === 'dark'
-                                    ? 'rgba(255, 180, 50, 0.15)'
-                                    : 'rgba(255, 152, 0, 0.05)'
-                                  : 'inherit'
-                          }}
-                        >
-                          <TableCell sx={{ fontWeight: 'medium' }}>{batch.batchNumber || '-'}</TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Typography sx={{ fontWeight: 'medium' }}>
-                            {expiryDate.toLocaleDateString('pl-PL')}
-                              </Typography>
-                            {status === 'expired' && (
-                              <Chip 
-                                size="small" 
-                                label={t('inventory.itemDetails.expired')} 
-                                color="error" 
-                                sx={{ ml: 1 }} 
-                              />
-                            )}
-                            {status === 'expiring' && (
-                              <Chip 
-                                size="small" 
-                                label={t('inventory.itemDetails.expiringSoon')} 
-                                color="warning" 
-                                sx={{ ml: 1 }} 
-                              />
-                            )}
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Typography sx={{ fontWeight: 'medium' }}>
-                            {batch.quantity} {item.unit}
-                              </Typography>
-                            {batch.quantity === 0 && (
-                              <Chip 
-                                size="small" 
-                                label={t('inventory.itemDetails.issued')} 
-                                color="default" 
-                                sx={{ ml: 1 }} 
-                              />
-                            )}
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            {status === 'expired' && t('inventory.itemDetails.expired')}
-                            {status === 'expiring' && t('inventory.itemDetails.expiringStatus')}
-                            {status === 'valid' && batch.quantity > 0 && t('inventory.itemDetails.available')}
-                            {batch.quantity <= 0 && t('inventory.itemDetails.issued')}
-                          </TableCell>
-                          <TableCell>{batch.warehouseName || '-'}</TableCell>
-                          <TableCell>{receivedDate.toLocaleDateString('pl-PL')}</TableCell>
-                          <TableCell>{batch.notes || '-'}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <React.Suspense fallback={<Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>}>
+            <BatchesTab t={t} batches={batches} itemUnit={item.unit} />
+          </React.Suspense>
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <Box sx={{
-            p: 2,
-            mb: 2,
-            borderRadius: 2,
-            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white'
-          }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
-              {t('inventory.itemDetails.tabs.transactionHistory')}
-            </Typography>
-          </Box>
-          
-          {transactions.length === 0 ? (
-            <Typography variant="body1" align="center">
-              {t('inventory.itemDetails.noTransactionHistory')}
-            </Typography>
-          ) : (
-            <TableContainer>
-              <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t('common.date')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.quantity')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.reason')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.reference')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.warehouse')}</TableCell>
-                    <TableCell>{t('common.notes')}</TableCell>
-                    <TableCell>{t('common.user')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {transactions.map((transaction) => {
-                    // Pobierz datę transakcji - używamy transactionDate lub createdAt
-                    const transactionDate = transaction.transactionDate || transaction.createdAt || null;
-                    
-                    // Przygotuj nazwę magazynu - pobierz z bazy magazynów jeśli to możliwe
-                    const warehouseName = transaction.warehouseName || 
-                                          (transaction.warehouseId ? 
-                                            batches.find(b => b.warehouseId === transaction.warehouseId)?.warehouseName || 
-                                            transaction.warehouseId : '—');
-                    
-                    // Popraw format notatek, zastępując ID MO numerem MO
-                    let notesText = transaction.notes || '—';
-                    if (notesText.includes('MO:') && transaction.moNumber) {
-                      // Zastąp ID zadania numerem MO
-                      notesText = notesText.replace(/MO: ([a-zA-Z0-9]+)/, `MO: ${transaction.moNumber}`);
-                    }
-                    
-                    return (
-                      <TableRow key={transaction.id}>
-                        <TableCell>{transactionDate ? formatDateTime(transactionDate) : '—'}</TableCell>
-                        <TableCell>{transaction.quantity} {item.unit}</TableCell>
-                        <TableCell>{transaction.reason || '—'}</TableCell>
-                        <TableCell>{transaction.moNumber || transaction.reference || '—'}</TableCell>
-                        <TableCell>{warehouseName}</TableCell>
-                        <TableCell>{notesText}</TableCell>
-                        <TableCell>{userNames[transaction.createdBy] || transaction.createdBy || '—'}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <React.Suspense fallback={<Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>}>
+            <TransactionsTab 
+              t={t}
+              itemId={id}
+              itemUnit={item.unit}
+              batches={batches}
+              formatDateTime={formatDateTime}
+            />
+          </React.Suspense>
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderRadius: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('inventory.itemDetails.productReservations')}</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Button 
-                startIcon={updatingReservations ? <CircularProgress size={20} /> : <RefreshIcon />} 
-                onClick={() => fetchReservations(item)}
-                variant="outlined"
-                disabled={updatingReservations}
-                sx={{ mr: 2 }}
-              >
-                {t('common.refresh')}
-              </Button>
-              <Button 
-                startIcon={updatingReservations ? <CircularProgress size={20} /> : <DeleteIcon />} 
-                onClick={handleCleanupDeletedTaskReservations}
-                variant="outlined"
-                color="warning"
-                disabled={updatingReservations}
-                sx={{ mr: 2 }}
-              >
-                {updatingReservations ? t('inventory.itemDetails.cleaning') : t('inventory.itemDetails.removeDeletedReservations')}
-              </Button>
-                              <FormControl variant="outlined" size="small" sx={{ minWidth: 150, mr: 2 }}>
-                <InputLabel id="reservation-filter-label">{t('common.filter')}</InputLabel>
-                <Select
-                  labelId="reservation-filter-label"
-                  value={reservationFilter}
-                  onChange={handleFilterChange}
-                  label={t('common.filter')}
-                >
-                  <MenuItem value="all">{t('common.all')}</MenuItem>
-                  <MenuItem value="active">{t('inventory.itemDetails.activeOnly')}</MenuItem>
-                  <MenuItem value="fulfilled">{t('inventory.itemDetails.completedOnly')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-          </Box>
-          
-          {filteredReservations.length === 0 ? (
-            <Alert severity="info">{t('inventory.itemDetails.noReservations')}</Alert>
-          ) : (
-            <TableContainer component={Paper} elevation={0} variant="outlined">
-              <Table sx={{ '& thead th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {t('inventory.itemDetails.reservationDate')}
-                        <IconButton size="small" onClick={() => handleSort('createdAt')}>
-                          <SortIcon />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {t('inventory.itemDetails.quantity')}
-                        <IconButton size="small" onClick={() => handleSort('quantity')}>
-                          <SortIcon />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {t('inventory.itemDetails.productionTask')}
-                        <IconButton size="small" onClick={() => handleSort('taskNumber')}>
-                          <SortIcon />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {t('inventory.itemDetails.moNumber')}
-                        <IconButton size="small" onClick={() => handleSort('moNumber')}>
-                          <SortIcon />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                    <TableCell>{t('inventory.itemDetails.batch')}</TableCell>
-                    <TableCell>{t('common.status')}</TableCell>
-                    <TableCell align="right">{t('common.actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredReservations.map((reservation) => {
-                    const createdDate = reservation.createdAt?.seconds ? 
-                      reservation.createdAt.toDate() : 
-                      new Date(reservation.createdAt);
-                      
-                    return (
-                      <TableRow key={reservation.taskId} hover>
-                        <TableCell>
-                          {formatDate(createdDate)}
-                        </TableCell>
-                        <TableCell>
-                          <Typography fontWeight="bold">
-                            {reservation.totalQuantity} {item.unit}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {reservation.taskName || '—'}
-                        </TableCell>
-                        <TableCell>
-                          {reservation.moNumber || '—'}
-                        </TableCell>
-                        <TableCell>
-                          {reservation.batches?.map((batch, batchIndex) => (
-                            <Box key={batchIndex} sx={{ mb: 1 }}>
-                              {batch.batchNumber}
-                            </Box>
-                          )) || '—'}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={reservation.status === 'completed' ? t('inventory.itemDetails.completed') : t('inventory.itemDetails.active')} 
-                            color={reservation.status === 'completed' ? 'default' : 'secondary'} 
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box>
-                            <IconButton 
-                              size="small" 
-                              color="error" 
-                              onClick={() => handleDeleteReservation(reservation.taskId)}
-                              aria-label={t('inventory.itemDetails.deleteReservation')}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <React.Suspense fallback={<Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>}>
+            <ReservationsTab 
+              t={t}
+              updatingReservations={updatingReservations}
+              reservationFilter={reservationFilter}
+              handleFilterChange={handleFilterChange}
+              handleSort={handleSort}
+              filteredReservations={filteredReservations}
+              itemUnit={item.unit}
+              handleDeleteReservation={handleDeleteReservation}
+              fetchReservations={fetchReservations}
+              item={item}
+              handleCleanupDeletedTaskReservations={handleCleanupDeletedTaskReservations}
+            />
+          </React.Suspense>
         </TabPanel>
 
         {/* Zawartość zakładki Oczekiwane */}
         <TabPanel value={tabValue} index={4}>
-          <Box sx={{
-            p: 2,
-            mb: 2,
-            borderRadius: 2,
-            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'white',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>
-              {t('inventory.itemDetails.awaitingFromPurchaseOrders')}
-            </Typography>
-                          <Button 
-              variant="outlined" 
-              startIcon={awaitingOrdersLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
-              onClick={() => fetchAwaitingOrders(id)}
-              disabled={awaitingOrdersLoading}
-            >
-              {t('common.refresh')}
-            </Button>
-          </Box>
-          
-          {awaitingOrdersLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-              <CircularProgress />
-            </Box>
-          ) : awaitingOrders.length === 0 ? (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              {t('inventory.itemDetails.noAwaitingOrders')}
-            </Alert>
-          ) : (
-            <TableContainer component={Paper} sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', elevation: 1 }}>
-              <Table sx={{ '& th': { fontWeight: 'bold', bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : '#f8f9fa' } }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t('inventory.itemDetails.orderNumber')}</TableCell>
-                    <TableCell>{t('common.status')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.ordered')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.received')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.remaining')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.unitPrice')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.orderDate')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.expectedDelivery')}</TableCell>
-                    <TableCell>{t('inventory.itemDetails.tempId')}</TableCell>
-                    <TableCell>{t('common.actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {awaitingOrders.map(order => {
-                    const statusText = (() => {
-                      switch(order.status) {
-                        case 'pending': return t('inventory.itemDetails.orderStatus.pending');
-                        case 'approved': return t('inventory.itemDetails.orderStatus.approved');
-                        case 'ordered': return t('inventory.itemDetails.orderStatus.ordered');
-                        case 'confirmed': return t('inventory.itemDetails.orderStatus.confirmed');
-                        case 'partial': return t('inventory.itemDetails.orderStatus.partial');
-                        default: return order.status;
-                      }
-                    })();
-                    
-                    const statusColor = (() => {
-                      switch(order.status) {
-                        case 'pending': return '#757575'; // szary - oczekujące
-                        case 'approved': return '#ffeb3b'; // żółty - zatwierdzone
-                        case 'ordered': return '#1976d2'; // niebieski - zamówione
-                        case 'partial': return '#81c784'; // jasno zielony - częściowo dostarczone
-                        case 'confirmed': return '#4caf50'; // oryginalny zielony
-                        default: return '#757575'; // oryginalny szary
-                      }
-                    })();
-                    
-                    // Iteruj przez wszystkie pozycje w zamówieniu
-                    return order.items.map((orderItem, itemIndex) => {
-                      // Sprawdź, czy zamówienie jest opóźnione
-                      const isOverdue = orderItem.expectedDeliveryDate && new Date(orderItem.expectedDeliveryDate) < new Date();
-                      
-                      return (
-                        <TableRow key={`${order.id}-${itemIndex}`} hover>
-                          <TableCell>
-                            <Link to={`/purchase-orders/${order.id}`} style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}>
-                              {order.number || orderItem.poNumber}
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={statusText} 
-                              size="small"
-                              sx={{
-                                backgroundColor: statusColor,
-                                color: order.status === 'approved' ? 'black' : 'white'
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {orderItem.quantityOrdered} {orderItem.unit}
-                          </TableCell>
-                          <TableCell align="right">
-                            {orderItem.quantityReceived} {orderItem.unit}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography fontWeight="bold" color={orderItem.quantityRemaining > 0 ? 'primary' : 'success'}>
-                              {orderItem.quantityRemaining} {orderItem.unit}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            {orderItem.unitPrice ? `${Number(orderItem.unitPrice).toFixed(2)} ${orderItem.currency || 'EUR'}` : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              {orderItem.expectedDeliveryDate ? (
-                                <>
-                                  {new Date(orderItem.expectedDeliveryDate).toLocaleDateString('pl-PL')}
-                                  {isOverdue && (
-                                    <Chip 
-                                      size="small" 
-                                      label={t('inventory.itemDetails.overdue')} 
-                                      color="error" 
-                                      sx={{ ml: 1 }} 
-                                    />
-                                  )}
-                                </>
-                              ) : '-'}
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            {order.id ? `temp-${order.id.substring(0, 8)}` : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              component={Link}
-                              to={`/purchase-orders/${order.id}`}
-                            >
-                              {t('common.details')}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    });
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <React.Suspense fallback={<Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>}>
+            <AwaitingTab 
+              t={t}
+              awaitingOrders={awaitingOrders}
+              awaitingOrdersLoading={awaitingOrdersLoading}
+              fetchAwaitingOrders={fetchAwaitingOrders}
+              itemId={id}
+            />
+          </React.Suspense>
         </TabPanel>
       </Paper>
     </Container>

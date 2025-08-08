@@ -45,7 +45,12 @@
     "noDate": "Brak daty",
     "selectFile": "Wybierz plik",
     "takePhoto": "Zrób zdjęcie",
-    "product": "Produkt"
+    "product": "Produkt",
+    "pageSize": "Rozmiar strony",
+    "showing": "Wyświetlanie",
+    "results": "wyników",
+    "onPage": "na stronie",
+    "moreResultsAvailable": "Dostępne są kolejne wyniki"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -118,7 +123,7 @@
       "add": "Dodaj"
     },
     "addCustomer": "Dodaj klienta",
-    "addNewCustomer": "Dodaj nowego klienta", 
+    "addNewCustomer": "Dodaj nowego klienta",
     "editCustomer": "Edytuj klienta",
     "searchPlaceholder": "Szukaj klientów...",
     "search": "Szukaj",
@@ -173,7 +178,7 @@
       "createdAt": "Data utworzenia",
       "updatedAt": "Data aktualizacji",
       "notes": "Notatki",
-      "orders": "Zamówienia", 
+      "orders": "Zamówienia",
       "invoices": "Faktury",
       "details": "Szczegóły",
       "notFound": "Nie znaleziono klienta",
@@ -1292,7 +1297,7 @@
     "tableHeaders": {
       "productName": "Nazwa produktu",
       "lotBatch": "LOT/Partia",
-      "category": "Kategoria", 
+      "category": "Kategoria",
       "systemQuantity": "Stan systemowy",
       "countedQuantity": "Stan policzony",
       "difference": "Różnica",
@@ -1318,7 +1323,7 @@
       "stocktakingDates": "Daty inwentaryzacji",
       "allProducts": "Wszystkie produkty",
       "matching": "Zgodne",
-      "surplus": "Nadwyżki", 
+      "surplus": "Nadwyżki",
       "deficit": "Braki",
       "valueSummary": "Podsumowanie wartości",
       "systemValue": "Wartość systemowa",
@@ -1396,7 +1401,7 @@
       "description": "Formularz dokumentujący proces załadunku towaru. Zawiera identyfikację pracownika, informacje o przewoźniku oraz stan techniczny pojazdu."
     },
     "unloadingReport": {
-      "title": "Raport - Rozładunek towaru", 
+      "title": "Raport - Rozładunek towaru",
       "description": "Formularz dokumentujący proces rozładunku towaru. Zawiera identyfikację pracownika, informacje o dostawcy oraz wizualną ocenę towaru."
     }
   },
@@ -1658,7 +1663,7 @@
         "title": "Edytuj element listy cenowej",
         "product": "Produkt",
         "price": "Cena",
-        "minQuantity": "Minimalna ilość", 
+        "minQuantity": "Minimalna ilość",
         "unit": "Jednostka",
         "notes": "Uwagi",
         "cancel": "Anuluj",
@@ -2629,7 +2634,7 @@
     "reset": "Resetuj",
     "noOrders": "Brak zamówień",
     "table": {
-      "details": "Szczegóły", 
+      "details": "Szczegóły",
       "number": "Numer",
       "customer": "Klient",
       "status": "Status",
