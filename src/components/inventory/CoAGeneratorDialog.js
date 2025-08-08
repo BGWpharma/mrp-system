@@ -28,7 +28,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { getAllPurchaseOrders, updatePurchaseOrder } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders, updatePurchaseOrderAttachments } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -723,12 +723,12 @@ Produkt **ZGODNY** z wymaganiami specyfikacji.
           if (selectedPOData) {
             // Dodaj nowy załącznik do odpowiedniej kategorii
             const updatedCoAAttachments = [...(selectedPOData.coaAttachments || []), newAttachment];
-            const updatedGeneralAttachments = [...(selectedPOData.attachments || []), newAttachment]; // Dla kompatybilności wstecznej
             
-            // Aktualizuj PO z nowym załącznikiem CoA
-            await updatePurchaseOrder(selectedPO, { 
+            // Aktualizuj PO z nowym załącznikiem CoA używając dedykowanej funkcji
+            await updatePurchaseOrderAttachments(selectedPO, {
               coaAttachments: updatedCoAAttachments,
-              attachments: updatedGeneralAttachments // Zachowaj kompatybilność
+              invoiceAttachments: selectedPOData.invoiceAttachments || [],
+              generalAttachments: selectedPOData.generalAttachments || []
             }, currentUser?.uid);
             
             showSuccess(`CoA zostało dodane do certyfikatów analiz zamówienia ${selectedPOData.number}`);
