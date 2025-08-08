@@ -5022,6 +5022,9 @@ const TaskDetailsPage = () => {
       // Odśwież dane zadania
       fetchTask();
       
+      // Odśwież partie w dialogu ręcznej rezerwacji
+      await fetchBatchesForMaterialsOptimized();
+      
     } catch (error) {
       console.error('Błąd podczas konsumpcji materiałów:', error);
       showError('Nie udało się skonsumować materiałów: ' + error.message);
@@ -5209,6 +5212,9 @@ const TaskDetailsPage = () => {
 
       // Odśwież dane zadania
       await fetchTask();
+      
+      // Odśwież partie w dialogu ręcznej rezerwacji
+      await fetchBatchesForMaterialsOptimized();
 
       showSuccess('Konsumpcja materiału została zaktualizowana wraz z rezerwacjami');
       setEditConsumptionDialogOpen(false);
@@ -5393,6 +5399,9 @@ const TaskDetailsPage = () => {
 
       // Odśwież dane zadania
       await fetchTask();
+      
+      // Odśwież partie w dialogu ręcznej rezerwacji
+      await fetchBatchesForMaterialsOptimized();
 
       const successMessage = restoreReservation 
         ? 'Konsumpcja materiału została usunięta i rezerwacja przywrócona'

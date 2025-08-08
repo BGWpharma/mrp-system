@@ -2041,3 +2041,40 @@ export const debugOrderCMRConnections = async (orderId) => {
     console.error('❌ Błąd podczas debugowania:', error);
   }
 };
+
+/**
+ * Pobiera zamówienia powiązane z konkretnym zadaniem produkcyjnym
+ * @param {string} productionTaskId - ID zadania produkcyjnego
+ * @returns {Promise<Array>} - Lista zamówień zawierających to zadanie
+ */
+export const getOrdersByProductionTaskId = async (productionTaskId) => {
+  try {
+    const ordersRef = collection(db, ORDERS_COLLECTION);
+    
+    // Użyj array-contains-any do wyszukania zamówień z zadaniami produkcyjnymi
+    // Ponieważ produktionTasks może zawierać obiekty, musimy wyszukać inaczej
+    const q = query(ordersRef);
+    const querySnapshot = await getDocs(q);
+    
+    const relatedOrders = [];
+    
+    querySnapshot.forEach((doc) => {
+      const orderData = doc.data();
+      
+      // Sprawdź czy zamówienie ma pozycje powiązane z tym zadaniem
+      if (orderData.items && orderData.items.some(item => item.productionTaskId === productionTaskId)) {
+        relatedOrders.push({
+          id: doc.id,
+          ...orderData
+        });
+      }
+    });
+    
+    console.log(`🔍 Znaleziono ${relatedOrders.length} zamówień powiązanych z zadaniem ${productionTaskId}`);
+    return relatedOrders;
+    
+  } catch (error) {
+    console.error('Błąd podczas pobierania zamówień dla zadania produkcyjnego:', error);
+    return [];
+  }
+};

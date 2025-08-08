@@ -50,6 +50,9 @@ import {
   let productionTasksCache = null;
   let productionTasksCacheTimestamp = null;
   const TASKS_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minut
+
+  // Debounce dla aktualizacji kosztów
+  const costUpdateTimeouts = new Map();
   
   // Pobieranie wszystkich zadań produkcyjnych
   export const getAllTasks = async () => {
@@ -321,9 +324,6 @@ import {
     forceRefresh = false
   }) => {
     try {
-      console.log('🚀 getProductionTasksOptimized - rozpoczynam zoptymalizowane pobieranie');
-      console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, sortField, sortOrder, forceRefresh });
-
       // Walidacja wymaganych parametrów
       if (!page || !pageSize) {
         throw new Error('Parametry page i pageSize są wymagane');
@@ -342,11 +342,10 @@ import {
       let allTasks;
 
       if (isCacheValid) {
-        console.log('💾 Używam cache zadań produkcyjnych');
+        // Usuń ewentualne duplikaty z cache przed użyciem
+        removeDuplicatesFromCache();
         allTasks = [...productionTasksCache];
       } else {
-        console.log('🔄 Pobieram świeże dane zadań produkcyjnych');
-        
         // Pobierz wszystkie zadania produkcyjne
         const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
         const q = query(tasksRef);
@@ -360,8 +359,6 @@ import {
         // Zaktualizuj cache
         productionTasksCache = [...allTasks];
         productionTasksCacheTimestamp = now;
-        
-        console.log('💾 Zapisano do cache:', allTasks.length, 'zadań');
       }
 
       // KROK 2: Filtrowanie po terminie wyszukiwania
@@ -435,7 +432,7 @@ import {
       };
 
       const sortedTasks = sortByField([...allTasks], sortField, sortOrder);
-      console.log('🔄 Posortowano według:', sortField, sortOrder);
+
 
       // KROK 5: Paginacja
       const totalItems = sortedTasks.length;
@@ -446,7 +443,7 @@ import {
       const endIndex = Math.min(startIndex + itemsPerPage, sortedTasks.length);
       const paginatedTasks = sortedTasks.slice(startIndex, endIndex);
 
-      console.log('📄 Paginacja:', `Strona ${safePage}/${totalPages}, elementy ${startIndex + 1}-${endIndex} z ${totalItems}`);
+
 
       return {
         items: paginatedTasks,
@@ -468,7 +465,41 @@ import {
   export const clearProductionTasksCache = () => {
     productionTasksCache = null;
     productionTasksCacheTimestamp = null;
-    console.log('🗑️ Cache zadań produkcyjnych wyczyszczony');
+  };
+
+  /**
+   * Wymusza odświeżenie cache'a przy następnym wywołaniu
+   */
+  export const forceRefreshProductionTasksCache = () => {
+    if (productionTasksCache) {
+      // Ustaw timestamp na 0 aby wymusić odświeżenie
+      productionTasksCacheTimestamp = 0;
+    }
+  };
+
+  /**
+   * Usuwa duplikaty z cache zadań produkcyjnych
+   */
+  export const removeDuplicatesFromCache = () => {
+    if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
+      return;
+    }
+
+    const uniqueTasks = [];
+    const seenIds = new Set();
+
+    productionTasksCache.forEach(task => {
+      if (!seenIds.has(task.id)) {
+        seenIds.add(task.id);
+        uniqueTasks.push(task);
+      }
+    });
+
+    const duplicatesCount = productionTasksCache.length - uniqueTasks.length;
+    if (duplicatesCount > 0) {
+      console.log(`🧹 Usunięto ${duplicatesCount} duplikatów z cache zadań`);
+      productionTasksCache = uniqueTasks;
+    }
   };
 
   /**
@@ -479,7 +510,6 @@ import {
    */
   export const updateTaskInCache = (taskId, updatedTaskData) => {
     if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
-      console.log('🔄 Cache pusty, pomijam aktualizację pojedynczego zadania');
       return false;
     }
 
@@ -490,27 +520,38 @@ import {
         ...updatedTaskData,
         id: taskId // Zachowaj ID
       };
-      console.log(`🔄 Zaktualizowano zadanie ${taskId} w cache`);
       return true;
     } else {
-      console.log(`⚠️ Zadanie ${taskId} nie znalezione w cache`);
       return false;
     }
   };
 
   /**
-   * Dodaje nowe zadanie do cache
-   * @param {Object} newTask - Nowe zadanie do dodania
-   * @returns {boolean} - Czy dodanie się powiodło
+   * Dodaje nowe zadanie do cache lub aktualizuje istniejące
+   * @param {Object} newTask - Nowe zadanie do dodania/aktualizacji
+   * @returns {boolean} - Czy operacja się powiodła
    */
   export const addTaskToCache = (newTask) => {
     if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
-      console.log('🔄 Cache pusty, pomijam dodanie zadania do cache');
       return false;
     }
 
-    productionTasksCache.push(newTask);
-    console.log(`➕ Dodano nowe zadanie ${newTask.id} do cache`);
+    // Sprawdź czy zadanie już istnieje
+    const existingTaskIndex = productionTasksCache.findIndex(task => task.id === newTask.id);
+    
+    if (existingTaskIndex !== -1) {
+      // Zaktualizuj istniejące zadanie
+      productionTasksCache[existingTaskIndex] = {
+        ...productionTasksCache[existingTaskIndex],
+        ...newTask
+      };
+      console.log('🔄 Zaktualizowano istniejące zadanie w cache:', newTask.id);
+    } else {
+      // Dodaj nowe zadanie
+      productionTasksCache.push(newTask);
+      console.log('➕ Dodano nowe zadanie do cache:', newTask.id);
+    }
+    
     return true;
   };
 
@@ -521,7 +562,6 @@ import {
    */
   export const removeTaskFromCache = (taskId) => {
     if (!productionTasksCache || !Array.isArray(productionTasksCache)) {
-      console.log('🔄 Cache pusty, pomijam usunięcie zadania z cache');
       return false;
     }
 
@@ -529,10 +569,8 @@ import {
     productionTasksCache = productionTasksCache.filter(task => task.id !== taskId);
     
     if (productionTasksCache.length < initialLength) {
-      console.log(`🗑️ Usunięto zadanie ${taskId} z cache`);
       return true;
     } else {
-      console.log(`⚠️ Zadanie ${taskId} nie znalezione w cache do usunięcia`);
       return false;
     }
   };
@@ -1121,15 +1159,25 @@ export const updateTask = async (taskId, taskData, userId) => {
       );
         
       if (shouldUpdateCosts && !costsAlreadyUpdated) {
-        console.log('[AUTO-UPDATE] Wykryto zmiany w materiałach/kosztach, uruchamiam automatyczną aktualizację po 2 sekundach');
-        // Uruchom aktualizację kosztów w tle po krótkim opóźnieniu
-        setTimeout(async () => {
+        console.log('[AUTO-UPDATE] Wykryto zmiany w materiałach/kosztach, uruchamiam automatyczną aktualizację po 200ms');
+        
+        // Anuluj poprzedni timeout dla tego zadania (debounce)
+        if (costUpdateTimeouts.has(taskId)) {
+          clearTimeout(costUpdateTimeouts.get(taskId));
+        }
+        
+        // Uruchom aktualizację kosztów w tle po krótkim opóźnieniu z debounce
+        const timeoutId = setTimeout(async () => {
           try {
             await updateTaskCostsAutomatically(taskId, userId, 'Automatyczna aktualizacja po zmianie danych zadania');
+            costUpdateTimeouts.delete(taskId); // Wyczyść timeout po zakończeniu
           } catch (error) {
             console.error('Błąd podczas automatycznej aktualizacji kosztów:', error);
+            costUpdateTimeouts.delete(taskId); // Wyczyść timeout również przy błędzie
           }
-        }, 2000);
+        }, 200);
+        
+        costUpdateTimeouts.set(taskId, timeoutId);
       } else if (costsAlreadyUpdated) {
         console.log('[AUTO-UPDATE] Koszty już zaktualizowane w tej operacji, pomijam automatyczną aktualizację');
       }
@@ -1148,15 +1196,16 @@ export const updateTask = async (taskId, taskData, userId) => {
           id: taskId,
           ...updatedTask
         };
+        console.log('🔄 Próba aktualizacji cache po updateTask dla:', taskId);
         const updated = updateTaskInCache(taskId, updatedTaskForCache);
         if (!updated) {
-          // Fallback - wyczyść cache jeśli nie można zaktualizować
-          clearProductionTasksCache();
+          console.log('⚠️ Aktualizacja cache nie powiodła się - cache może być pusty');
+          // Nie dodawaj zadania do pustego cache - zostanie odświeżone przez real-time listener
+        } else {
+          console.log('✅ Cache zaktualizowany pomyślnie');
         }
-      } else {
-        // Jeśli nie mamy danych, wyczyść cache
-        clearProductionTasksCache();
       }
+      // Nie czyść cache'a - pozwól real-time listenerowi obsłużyć zmiany
     }
   };
   
@@ -1339,6 +1388,8 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Spróbuj zaktualizować status zadania w cache zamiast czyścić
       if (task && oldStatus !== undefined) {
         const updatedTaskData = {
+          ...task,
+          id: taskId,
           status: newStatus,
           updatedAt: new Date().toISOString(),
           updatedBy: userId,
@@ -1354,13 +1405,11 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         };
         const updated = updateTaskInCache(taskId, updatedTaskData);
         if (!updated) {
-          // Fallback - wyczyść cache jeśli nie można zaktualizować
-          clearProductionTasksCache();
+          // Nie dodawaj zadania do pustego cache - zostanie odświeżone przez real-time listener
+          console.log('⚠️ Aktualizacja cache status nie powiodła się - cache może być pusty');
         }
-      } else {
-        // Jeśli nie mamy danych, wyczyść cache
-        clearProductionTasksCache();
       }
+      // Nie czyść cache'a - pozwól real-time listenerowi obsłużyć zmiany
     }
   };
   
@@ -4596,21 +4645,17 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Automatycznie aktualizuj związane zamówienia klientów
       let relatedOrders = [];
       try {
-        const { getAllOrders, updateOrder } = await import('./orderService');
+        const { getOrdersByProductionTaskId, updateOrder } = await import('./orderService');
         const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../utils/costCalculator');
         
-        // Pobierz wszystkie zamówienia
-        const allOrders = await getAllOrders();
-        
-        // Znajdź zamówienia, które mają pozycje powiązane z tym zadaniem produkcyjnym
-        relatedOrders = allOrders.filter(order => 
-          order.items && order.items.some(item => item.productionTaskId === taskId)
-        );
+        // Pobierz tylko zamówienia powiązane z tym zadaniem (optymalizacja)
+        relatedOrders = await getOrdersByProductionTaskId(taskId);
 
         if (relatedOrders.length > 0) {
           console.log(`[AUTO] Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
           
-          for (const order of relatedOrders) {
+          // Przygotuj wszystkie aktualizacje równolegle
+          const updatePromises = relatedOrders.map(async (order) => {
             let orderUpdated = false;
             const updatedItems = [...order.items];
             
@@ -4684,7 +4729,10 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               await updateOrder(order.id, updateData, userId);
               console.log(`[AUTO] Zaktualizowano zamówienie ${order.orderNumber} - wartość zmieniona z ${order.totalValue}€ na ${newTotalValue}€`);
             }
-          }
+          });
+
+          // Wykonaj wszystkie aktualizacje równolegle
+          await Promise.all(updatePromises);
         }
       } catch (error) {
         console.error('[AUTO] Błąd podczas aktualizacji powiązanych zamówień:', error);

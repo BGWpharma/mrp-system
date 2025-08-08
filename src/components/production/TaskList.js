@@ -65,7 +65,7 @@ import {
   Sort as SortIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, updateTaskInCache, addTaskToCache, removeTaskFromCache } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache } from '../../services/productionService';
 import { db } from '../../services/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getAllWarehouses } from '../../services/inventory';
@@ -189,7 +189,7 @@ const TaskList = () => {
   // Stany dla animacji ładowania
   const [mainTableLoading, setMainTableLoading] = useState(false);
   const [showContent, setShowContent] = useState(false);
-  const isFirstRender = useRef(true);
+
   const [isInitialized, setIsInitialized] = useState(false);
   
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null);
@@ -289,53 +289,30 @@ const TaskList = () => {
 
   // Real-time updates listener - nasłuchuje zmian w zadaniach produkcyjnych
   useEffect(() => {
-    console.log('🔄 Inicjalizacja real-time listener dla zadań produkcyjnych');
+    let updateTimeout = null;
     
     const unsubscribe = onSnapshot(
       collection(db, 'productionTasks'),
       (snapshot) => {
-        console.log('📡 Otrzymano real-time aktualizację zadań:', snapshot.docChanges().length, 'zmian');
+        console.log('📡 Real-time aktualizacja zadań:', snapshot.docChanges().length, 'zmian');
+        let hasChanges = false;
         
         snapshot.docChanges().forEach((change) => {
           const task = { id: change.doc.id, ...change.doc.data() };
           
           if (change.type === 'added') {
-            console.log('➕ Real-time: Dodano nowe zadanie:', task.id);
+            console.log('➕ Real-time: Dodano zadanie:', task.id);
             // Dodaj zadanie do cache
-            const added = addTaskToCache(task);
-            if (added) {
-              // Jeśli cache jest aktualny, nie potrzebujemy odświeżać całej listy
-              // Odświeżenie nastąpi automatycznie przy następnym fetchTasksOptimized
-              console.log('✅ Zadanie dodane do cache, lista zostanie odświeżona automatycznie');
-            }
+            addTaskToCache(task);
+            hasChanges = true;
           }
           
           if (change.type === 'modified') {
             console.log('🔄 Real-time: Zmodyfikowano zadanie:', task.id);
-            // Zaktualizuj zadanie w cache
-            const updated = updateTaskInCache(task.id, task);
+            // Użyj addTaskToCache które obsługuje zarówno dodanie jak i aktualizację
+            const updated = addTaskToCache(task);
             if (updated) {
-              // Aktualizuj lokalne state zadań, jeśli zadanie jest aktualnie wyświetlane
-              setTasks(prevTasks => {
-                const taskIndex = prevTasks.findIndex(t => t.id === task.id);
-                if (taskIndex !== -1) {
-                  const newTasks = [...prevTasks];
-                  newTasks[taskIndex] = task;
-                  console.log('✅ Zadanie zaktualizowane w lokalnym state');
-                  return newTasks;
-                }
-                return prevTasks;
-              });
-              
-              setFilteredTasks(prevTasks => {
-                const taskIndex = prevTasks.findIndex(t => t.id === task.id);
-                if (taskIndex !== -1) {
-                  const newTasks = [...prevTasks];
-                  newTasks[taskIndex] = task;
-                  return newTasks;
-                }
-                return prevTasks;
-              });
+              hasChanges = true;
             }
           }
           
@@ -344,28 +321,36 @@ const TaskList = () => {
             // Usuń zadanie z cache
             const removed = removeTaskFromCache(task.id);
             if (removed) {
-              // Usuń zadanie z lokalnego state
-              setTasks(prevTasks => {
-                const newTasks = prevTasks.filter(t => t.id !== task.id);
-                console.log('✅ Zadanie usunięte z lokalnego state');
-                return newTasks;
-              });
-              
-              setFilteredTasks(prevTasks => {
-                return prevTasks.filter(t => t.id !== task.id);
-              });
+              hasChanges = true;
             }
           }
         });
+        
+        // Jeśli były zmiany, odśwież listę z uwzględnieniem filtrów i sortowania
+        if (hasChanges) {
+          console.log('🔄 Planowanie odświeżenia listy zadań...');
+          // Użyj debounce aby uniknąć zbyt częstych aktualizacji
+          if (updateTimeout) {
+            clearTimeout(updateTimeout);
+          }
+          
+          updateTimeout = setTimeout(() => {
+            console.log('📋 Odświeżanie listy zadań z filtrami i sortowaniem');
+            // Odśwież listę z aktualnymi filtrami, sortowaniem i paginacją
+            fetchTasksOptimized();
+          }, 500); // 500ms debounce
+        }
       },
       (error) => {
         console.error('❌ Błąd real-time listener:', error);
       }
     );
-
-    // Cleanup function
+    
+    // Cleanup
     return () => {
-      console.log('🔄 Zamykanie real-time listener dla zadań produkcyjnych');
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+      }
       unsubscribe();
     };
   }, []); // Pusty array dependency - listener działa przez cały cykl życia komponentu
@@ -404,17 +389,11 @@ const TaskList = () => {
   };
 
   // Nowa zoptymalizowana funkcja pobierania zadań
-  const fetchTasksOptimized = async (newSortField = null, newSortOrder = null) => {
+  const fetchTasksOptimized = async (newSortField = null, newSortOrder = null, forceRefresh = false) => {
     setMainTableLoading(true);
     setShowContent(false);
     
     try {
-      // Wymuszenie odświeżenia cache tylko przy pierwszym renderze
-      if (isFirstRender.current) {
-        await clearProductionTasksCache();
-        isFirstRender.current = false;
-      }
-      
       // Użyj przekazanych parametrów sortowania lub tych z kontekstu
       const sortFieldToUse = newSortField || tableSort.field;
       const sortOrderToUse = newSortOrder || tableSort.order;
@@ -427,7 +406,7 @@ const TaskList = () => {
         statusFilter: statusFilter || null,
         sortField: sortFieldToUse,
         sortOrder: sortOrderToUse,
-        forceRefresh: false
+        forceRefresh: forceRefresh
       });
       
       // Jeśli wynik to obiekt z właściwościami items i totalCount, to używamy paginacji
@@ -481,6 +460,26 @@ const TaskList = () => {
     
     // Następnie pobieramy dane z serwera z nowym sortowaniem
     fetchTasksOptimized(field, newOrder);
+  };
+
+  // Funkcja do manualnego odświeżania cache i danych
+  const handleManualRefresh = async () => {
+    try {
+      setMainTableLoading(true);
+      
+      // Usuń duplikaty i wymuś odświeżenie cache
+      removeDuplicatesFromCache();
+      forceRefreshProductionTasksCache();
+      
+      // Pobierz świeże dane
+      await fetchTasksOptimized(null, null, true);
+      
+      showSuccess('Lista zadań została odświeżona');
+    } catch (error) {
+      showError('Błąd podczas odświeżania: ' + error.message);
+    } finally {
+      setMainTableLoading(false);
+    }
   };
 
   // Funkcja do odświeżania cache i danych
@@ -1478,12 +1477,12 @@ const TaskList = () => {
             
             {/* Przycisk odświeżania - tylko na desktop jako IconButton */}
             {!isMobile && (
-              <Tooltip title="Odśwież listę i wyczyść cache">
+              <Tooltip title="Odśwież listę zadań">
                 <IconButton 
-                  onClick={handleRefreshData}
+                  onClick={handleManualRefresh}
+                  disabled={mainTableLoading}
                   color="primary"
                   size="medium"
-                  disabled={mainTableLoading}
                   sx={{ 
                     border: '1px solid',
                     borderColor: 'primary.main',

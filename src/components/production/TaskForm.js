@@ -48,7 +48,8 @@ import {
 import {
   createTask,
   updateTask,
-  getTaskById
+  getTaskById,
+  clearProductionTasksCache
 } from '../../services/productionService';
 import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion } from '../../services/recipeService';
 import {
@@ -489,6 +490,9 @@ const TaskForm = ({ taskId }) => {
         const newTask = await createTask(formattedData, currentUser.uid);
         savedTaskId = newTask.id;
         showSuccess('Zadanie zostało utworzone');
+        
+        // Wyczyść cache aby nowe zadanie było widoczne na liście
+        clearProductionTasksCache();
       }
       
       // Sprawdź czy jest parametr returnTo w URL
