@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { parseISO, isValid } from 'date-fns';
 import {
   Box,
   Button,
@@ -381,13 +382,23 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     if (date) {
       try {
-        // Upewnij się, że data jest poprawnym obiektem Date
-        const validDate = date instanceof Date && !isNaN(date) ? date : new Date(date);
-        console.log(`Poprawna data ${name}:`, validDate);
+        // Sprawdź czy data jest prawidłowa
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+          console.warn(`Nieprawidłowa data dla ${name}:`, date);
+          setPoData(prev => ({ ...prev, [name]: '' }));
+          return;
+        }
         
         // Użyj funkcji formatDateForInput aby poprawnie sformatować datę
-        const formattedDate = formatDateForInput(validDate);
+        const formattedDate = formatDateForInput(date);
         console.log(`Sformatowana data ${name}:`, formattedDate);
+        
+        // Sprawdź czy formatowanie się powiodło
+        if (!formattedDate) {
+          console.warn(`Formatowanie daty ${name} nie powiodło się`);
+          setPoData(prev => ({ ...prev, [name]: '' }));
+          return;
+        }
         
         setPoData(prev => ({ ...prev, [name]: formattedDate }));
       } catch (error) {
@@ -2346,7 +2357,31 @@ const PurchaseOrderForm = ({ orderId }) => {
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
                   label={t('purchaseOrders.form.orderDate')}
-                  value={poData.orderDate ? new Date(poData.orderDate) : null}
+                  value={(() => {
+                    if (!poData.orderDate) return null;
+                    try {
+                      let date;
+                      if (typeof poData.orderDate === 'string') {
+                        if (poData.orderDate.includes('Invalid') || poData.orderDate.trim() === '') {
+                          return null;
+                        }
+                        // Użyj parseISO dla ISO stringów lub new Date dla YYYY-MM-DD
+                        date = poData.orderDate.includes('T') || poData.orderDate.includes('Z') 
+                          ? parseISO(poData.orderDate) 
+                          : new Date(poData.orderDate + 'T00:00:00');
+                      } else if (poData.orderDate instanceof Date) {
+                        date = poData.orderDate;
+                      } else if (poData.orderDate && typeof poData.orderDate.toDate === 'function') {
+                        date = poData.orderDate.toDate();
+                      } else {
+                        return null;
+                      }
+                      return isValid(date) ? date : null;
+                    } catch (error) {
+                      console.error('Błąd parsowania orderDate:', error, poData.orderDate);
+                      return null;
+                    }
+                  })()}
                   onChange={(date) => handleDateChange('orderDate', date)}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
@@ -2358,7 +2393,31 @@ const PurchaseOrderForm = ({ orderId }) => {
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
                   label={t('purchaseOrders.form.expectedDeliveryDate')}
-                  value={poData.expectedDeliveryDate ? new Date(poData.expectedDeliveryDate) : null}
+                  value={(() => {
+                    if (!poData.expectedDeliveryDate) return null;
+                    try {
+                      let date;
+                      if (typeof poData.expectedDeliveryDate === 'string') {
+                        if (poData.expectedDeliveryDate.includes('Invalid') || poData.expectedDeliveryDate.trim() === '') {
+                          return null;
+                        }
+                        // Użyj parseISO dla ISO stringów lub new Date dla YYYY-MM-DD
+                        date = poData.expectedDeliveryDate.includes('T') || poData.expectedDeliveryDate.includes('Z') 
+                          ? parseISO(poData.expectedDeliveryDate) 
+                          : new Date(poData.expectedDeliveryDate + 'T00:00:00');
+                      } else if (poData.expectedDeliveryDate instanceof Date) {
+                        date = poData.expectedDeliveryDate;
+                      } else if (poData.expectedDeliveryDate && typeof poData.expectedDeliveryDate.toDate === 'function') {
+                        date = poData.expectedDeliveryDate.toDate();
+                      } else {
+                        return null;
+                      }
+                      return isValid(date) ? date : null;
+                    } catch (error) {
+                      console.error('Błąd parsowania expectedDeliveryDate:', error, poData.expectedDeliveryDate);
+                      return null;
+                    }
+                  })()}
                   onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
                   slotProps={{ textField: { fullWidth: true, required: true } }}
                 />
@@ -2604,11 +2663,38 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     </Typography>
                                     <LocalizationProvider dateAdapter={AdapterDateFns}>
                                       <DatePicker
-                                        value={cost.invoiceDate ? new Date(cost.invoiceDate) : null}
+                                        value={(() => {
+                                          if (!cost.invoiceDate) return null;
+                                          try {
+                                            let date;
+                                            if (typeof cost.invoiceDate === 'string') {
+                                              if (cost.invoiceDate.includes('Invalid') || cost.invoiceDate.trim() === '') {
+                                                return null;
+                                              }
+                                              date = cost.invoiceDate.includes('T') || cost.invoiceDate.includes('Z') 
+                                                ? parseISO(cost.invoiceDate) 
+                                                : new Date(cost.invoiceDate + 'T00:00:00');
+                                            } else if (cost.invoiceDate instanceof Date) {
+                                              date = cost.invoiceDate;
+                                            } else if (cost.invoiceDate && typeof cost.invoiceDate.toDate === 'function') {
+                                              date = cost.invoiceDate.toDate();
+                                            } else {
+                                              return null;
+                                            }
+                                            return isValid(date) ? date : null;
+                                          } catch (error) {
+                                            console.error('Błąd parsowania invoiceDate (dodatkowy koszt):', error, cost.invoiceDate);
+                                            return null;
+                                          }
+                                        })()}
                                         onChange={(newValue) => {
                                           try {
-                                            const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
-                                            handleAdditionalCostChange(cost.id, 'invoiceDate', dateString);
+                                            if (newValue && !isNaN(newValue.getTime())) {
+                                              const formattedDate = formatDateForInput(newValue);
+                                              handleAdditionalCostChange(cost.id, 'invoiceDate', formattedDate);
+                                            } else {
+                                              handleAdditionalCostChange(cost.id, 'invoiceDate', '');
+                                            }
                                           } catch (error) {
                                             console.error('Błąd przy konwersji daty faktury (dodatkowy koszt):', error);
                                             handleAdditionalCostChange(cost.id, 'invoiceDate', '');
@@ -3025,11 +3111,38 @@ const PurchaseOrderForm = ({ orderId }) => {
                               </Typography>
                               <LocalizationProvider dateAdapter={AdapterDateFns}>
                                 <DatePicker
-                                  value={item.invoiceDate ? new Date(item.invoiceDate) : null}
+                                  value={(() => {
+                                    if (!item.invoiceDate) return null;
+                                    try {
+                                      let date;
+                                      if (typeof item.invoiceDate === 'string') {
+                                        if (item.invoiceDate.includes('Invalid') || item.invoiceDate.trim() === '') {
+                                          return null;
+                                        }
+                                        date = item.invoiceDate.includes('T') || item.invoiceDate.includes('Z') 
+                                          ? parseISO(item.invoiceDate) 
+                                          : new Date(item.invoiceDate + 'T00:00:00');
+                                      } else if (item.invoiceDate instanceof Date) {
+                                        date = item.invoiceDate;
+                                      } else if (item.invoiceDate && typeof item.invoiceDate.toDate === 'function') {
+                                        date = item.invoiceDate.toDate();
+                                      } else {
+                                        return null;
+                                      }
+                                      return isValid(date) ? date : null;
+                                    } catch (error) {
+                                      console.error('Błąd parsowania invoiceDate (pozycja):', error, item.invoiceDate);
+                                      return null;
+                                    }
+                                  })()}
                                   onChange={(newValue) => {
                                     try {
-                                      const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
-                                      handleItemChange(index, 'invoiceDate', dateString);
+                                      if (newValue && !isNaN(newValue.getTime())) {
+                                        const formattedDate = formatDateForInput(newValue);
+                                        handleItemChange(index, 'invoiceDate', formattedDate);
+                                      } else {
+                                        handleItemChange(index, 'invoiceDate', '');
+                                      }
                                     } catch (error) {
                                       console.error('Błąd przy konwersji daty faktury:', error);
                                       handleItemChange(index, 'invoiceDate', '');
@@ -3052,11 +3165,38 @@ const PurchaseOrderForm = ({ orderId }) => {
                               </Typography>
                               <LocalizationProvider dateAdapter={AdapterDateFns}>
                                 <DatePicker
-                                  value={item.plannedDeliveryDate ? new Date(item.plannedDeliveryDate) : null}
+                                  value={(() => {
+                                    if (!item.plannedDeliveryDate) return null;
+                                    try {
+                                      let date;
+                                      if (typeof item.plannedDeliveryDate === 'string') {
+                                        if (item.plannedDeliveryDate.includes('Invalid') || item.plannedDeliveryDate.trim() === '') {
+                                          return null;
+                                        }
+                                        date = item.plannedDeliveryDate.includes('T') || item.plannedDeliveryDate.includes('Z') 
+                                          ? parseISO(item.plannedDeliveryDate) 
+                                          : new Date(item.plannedDeliveryDate + 'T00:00:00');
+                                      } else if (item.plannedDeliveryDate instanceof Date) {
+                                        date = item.plannedDeliveryDate;
+                                      } else if (item.plannedDeliveryDate && typeof item.plannedDeliveryDate.toDate === 'function') {
+                                        date = item.plannedDeliveryDate.toDate();
+                                      } else {
+                                        return null;
+                                      }
+                                      return isValid(date) ? date : null;
+                                    } catch (error) {
+                                      console.error('Błąd parsowania plannedDeliveryDate:', error, item.plannedDeliveryDate);
+                                      return null;
+                                    }
+                                  })()}
                                   onChange={(newValue) => {
                                     try {
-                                      const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
-                                      handleItemChange(index, 'plannedDeliveryDate', dateString);
+                                      if (newValue && !isNaN(newValue.getTime())) {
+                                        const formattedDate = formatDateForInput(newValue);
+                                        handleItemChange(index, 'plannedDeliveryDate', formattedDate);
+                                      } else {
+                                        handleItemChange(index, 'plannedDeliveryDate', '');
+                                      }
                                     } catch (error) {
                                       console.error('Błąd przy konwersji planowanej daty dostawy:', error);
                                       handleItemChange(index, 'plannedDeliveryDate', '');
@@ -3079,11 +3219,38 @@ const PurchaseOrderForm = ({ orderId }) => {
                               </Typography>
                               <LocalizationProvider dateAdapter={AdapterDateFns}>
                                 <DatePicker
-                                  value={item.actualDeliveryDate ? new Date(item.actualDeliveryDate) : null}
+                                  value={(() => {
+                                    if (!item.actualDeliveryDate) return null;
+                                    try {
+                                      let date;
+                                      if (typeof item.actualDeliveryDate === 'string') {
+                                        if (item.actualDeliveryDate.includes('Invalid') || item.actualDeliveryDate.trim() === '') {
+                                          return null;
+                                        }
+                                        date = item.actualDeliveryDate.includes('T') || item.actualDeliveryDate.includes('Z') 
+                                          ? parseISO(item.actualDeliveryDate) 
+                                          : new Date(item.actualDeliveryDate + 'T00:00:00');
+                                      } else if (item.actualDeliveryDate instanceof Date) {
+                                        date = item.actualDeliveryDate;
+                                      } else if (item.actualDeliveryDate && typeof item.actualDeliveryDate.toDate === 'function') {
+                                        date = item.actualDeliveryDate.toDate();
+                                      } else {
+                                        return null;
+                                      }
+                                      return isValid(date) ? date : null;
+                                    } catch (error) {
+                                      console.error('Błąd parsowania actualDeliveryDate:', error, item.actualDeliveryDate);
+                                      return null;
+                                    }
+                                  })()}
                                   onChange={(newValue) => {
                                     try {
-                                      const dateString = newValue && !isNaN(newValue.getTime()) ? newValue.toISOString().split('T')[0] : '';
-                                      handleItemChange(index, 'actualDeliveryDate', dateString);
+                                      if (newValue && !isNaN(newValue.getTime())) {
+                                        const formattedDate = formatDateForInput(newValue);
+                                        handleItemChange(index, 'actualDeliveryDate', formattedDate);
+                                      } else {
+                                        handleItemChange(index, 'actualDeliveryDate', '');
+                                      }
                                     } catch (error) {
                                       console.error('Błąd przy konwersji rzeczywistej daty dostawy:', error);
                                       handleItemChange(index, 'actualDeliveryDate', '');

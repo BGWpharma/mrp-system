@@ -46,6 +46,48 @@ export const getAllSuppliers = async () => {
 };
 
 /**
+ * Pobiera tylko wybranych dostawców po ich ID
+ * @param {Array<string>} supplierIds - Lista ID dostawców
+ * @returns {Promise<Array>} - Lista dostawców o podanych ID
+ */
+export const getSuppliersByIds = async (supplierIds) => {
+  if (!supplierIds || supplierIds.length === 0) return [];
+  
+  try {
+    // Firestore ma limit 10 dla 'in' operator, więc dzielimy na partie
+    const batchSize = 10;
+    const batches = [];
+    
+    for (let i = 0; i < supplierIds.length; i += batchSize) {
+      const batch = supplierIds.slice(i, i + batchSize);
+      batches.push(batch);
+    }
+    
+    const allSuppliers = [];
+    
+    for (const batch of batches) {
+      const q = query(
+        collection(db, SUPPLIERS_COLLECTION),
+        where('__name__', 'in', batch)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach(doc => {
+        allSuppliers.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+    }
+    
+    return allSuppliers;
+  } catch (error) {
+    console.error('Błąd podczas pobierania wybranych dostawców:', error);
+    return [];
+  }
+};
+
+/**
  * Pobiera dostawcę po ID
  * @param {string} id - ID dostawcy
  * @returns {Promise<Object>} - Dane dostawcy

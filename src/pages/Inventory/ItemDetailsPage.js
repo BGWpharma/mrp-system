@@ -29,7 +29,8 @@ import {
   CircularProgress,
   Tooltip,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Skeleton
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -49,7 +50,7 @@ import {
   AccessTime as ClockIcon
 } from '@mui/icons-material';
 import { getInventoryItemById, getItemBatches, getSupplierPrices, deleteReservation, cleanupDeletedTaskReservations, getReservationsGroupedByTask, cleanupItemReservations, getAllWarehouses, recalculateItemQuantity, getAwaitingOrdersForInventoryItem } from '../../services/inventory';
-import { getAllSuppliers } from '../../services/supplierService';
+import { getAllSuppliers, getSuppliersByIds } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -95,6 +96,15 @@ const ItemDetailsPage = () => {
   const [batches, setBatches] = useState([]);
   const [supplierPrices, setSupplierPrices] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Progressive loading states
+  const [loadingStates, setLoadingStates] = useState({
+    item: true,
+    batches: true,
+    suppliers: true,
+    reservations: true,
+    awaiting: true
+  });
   const [tabValue, setTabValue] = useState(0);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [reservations, setReservations] = useState([]);
@@ -113,35 +123,55 @@ const ItemDetailsPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // Helper function do aktualizacji stanów ładowania
+  const updateLoadingState = (key, value) => {
+    setLoadingStates(prev => ({ ...prev, [key]: value }));
+  };
+
 
 
   useEffect(() => {
     const fetchItemData = async () => {
       try {
         setLoading(true);
-        const itemData = await getInventoryItemById(id);
+        
+        // 🚀 ROZWIĄZANIE 1: Równoległe wywołania podstawowych danych
+        const [
+          itemResult,
+          batchesResult,
+          warehousesResult
+        ] = await Promise.allSettled([
+          getInventoryItemById(id),
+          getItemBatches(id),
+          getAllWarehouses()
+        ]);
+
+        // Obsługa wyników z error handling
+        const itemData = itemResult.status === 'fulfilled' ? itemResult.value : null;
+        const batchesData = batchesResult.status === 'fulfilled' ? batchesResult.value : [];
+        const warehousesData = warehousesResult.status === 'fulfilled' ? warehousesResult.value : [];
+
+        if (!itemData) {
+          throw new Error('Nie udało się pobrać danych pozycji magazynowej');
+        }
+
+        // 🚀 ROZWIĄZANIE 5: Progressive Loading - pokazuj dane jak się ładują
+        setItem(itemData);
+        updateLoadingState('item', false);
         
         // Pobierz informacje o powiązanym kartonie jeśli istnieje
         if (itemData.parentPackageItemId) {
           try {
             const parentPackageItem = await getInventoryItemById(itemData.parentPackageItemId);
             itemData.parentPackageItem = parentPackageItem;
+            setItem({ ...itemData }); // Re-render z parent package
           } catch (error) {
             console.error(t('inventory.itemDetails.errorFetchingLinkedPackage'), error);
-            // Jeśli nie można pobrać kartonu, usuń powiązanie aby uniknąć błędów
             itemData.parentPackageItem = null;
           }
         }
         
-        setItem(itemData);
-        
-        // Transakcje są teraz pobierane bezpośrednio w TransactionsTab z paginacją
-        
-        // Pobierz partie
-        const batchesData = await getItemBatches(id);
-        
-        // Pobierz magazyny i dodaj nazwy magazynów do partii
-        const warehousesData = await getAllWarehouses();
+        // Przetwórz partie z nazwami magazynów
         const batchesWithWarehouseNames = batchesData.map(batch => {
           const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
           return {
@@ -149,15 +179,18 @@ const ItemDetailsPage = () => {
             warehouseName: warehouse?.name || 'Magazyn podstawowy'
           };
         });
-        
         setBatches(batchesWithWarehouseNames);
+        updateLoadingState('batches', false);
 
-        // Pobierz ceny dostawców
-        const supplierPricesData = await getSupplierPrices(id);
+        // 🚀 ROZWIĄZANIE 2: Optymalizacja pobierania dostawców - tylko potrzebni
+        const supplierPricesPromise = getSupplierPrices(id).then(async (supplierPricesData) => {
         if (supplierPricesData && supplierPricesData.length > 0) {
-          const suppliersList = await getAllSuppliers();
+            // Pobierz tylko potrzebnych dostawców (nie wszystkich)
+            const supplierIds = [...new Set(supplierPricesData.map(p => p.supplierId))];
+            const relevantSuppliers = await getSuppliersByIds(supplierIds);
+            
           const pricesWithDetails = supplierPricesData.map(price => {
-            const supplier = suppliersList.find(s => s.id === price.supplierId);
+              const supplier = relevantSuppliers.find(s => s.id === price.supplierId);
             return {
               ...price,
               supplierName: supplier ? supplier.name : 'Nieznany dostawca'
@@ -165,12 +198,34 @@ const ItemDetailsPage = () => {
           });
           setSupplierPrices(pricesWithDetails);
         }
-        
-        // Pobierz rezerwacje (transakcje typu 'booking')
-        await fetchReservations(itemData);
-        
-        // Pobierz oczekiwane zamówienia
-        fetchAwaitingOrders(id);
+          updateLoadingState('suppliers', false);
+        }).catch(error => {
+          console.warn('Nie udało się pobrać cen dostawców:', error);
+          updateLoadingState('suppliers', false);
+        });
+
+        // 🚀 ROZWIĄZANIE 3: Lazy loading dla zakładek - uruchom równolegle ale nie blokuj głównego UI
+        const reservationsPromise = fetchReservations(itemData).then(() => {
+          updateLoadingState('reservations', false);
+        }).catch(error => {
+          console.warn('Nie udało się pobrać rezerwacji:', error);
+          updateLoadingState('reservations', false);
+        });
+
+        const awaitingPromise = fetchAwaitingOrders(id).then(() => {
+          updateLoadingState('awaiting', false);
+        }).catch(error => {
+          console.warn('Nie udało się pobrać oczekujących zamówień:', error);
+          updateLoadingState('awaiting', false);
+        });
+
+        // Poczekaj na wszystkie sekundarne operacje
+        await Promise.allSettled([
+          supplierPricesPromise,
+          reservationsPromise,
+          awaitingPromise
+        ]);
+
       } catch (error) {
         showError(t('inventory.itemDetails.errorFetchingData') + ': ' + error.message);
         console.error('Error fetching item details:', error);
@@ -813,7 +868,15 @@ const ItemDetailsPage = () => {
                 </TableContainer>
               </Paper>
 
-              {supplierPrices.length > 0 && (
+              {/* 🚀 ROZWIĄZANIE 5: Progressive Loading UI dla dostawców */}
+              {loadingStates.suppliers ? (
+                <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
+                  <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
+                    {t('inventory.itemDetails.suppliersAndPrices')}
+                  </Typography>
+                  <Skeleton variant="rectangular" height={150} />
+                </Paper>
+              ) : supplierPrices.length > 0 ? (
                 <Paper elevation={1} sx={{ p: 2, borderRadius: 2 }}>
                   <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: theme => theme.palette.mode === 'dark' ? 'divider' : '#e0e0e0', pb: 1, fontWeight: 'bold' }}>
                     {t('inventory.itemDetails.suppliersAndPrices')}
@@ -846,7 +909,7 @@ const ItemDetailsPage = () => {
                     </Table>
                   </TableContainer>
                 </Paper>
-              )}
+              ) : null}
             </Grid>
             
             <Grid item xs={12} md={6}>
@@ -938,6 +1001,13 @@ const ItemDetailsPage = () => {
           </React.Suspense>
         </TabPanel>
       </Paper>
+
+      {/* Dialog do drukowania etykiet */}
+      <LabelDialog
+        open={labelDialogOpen}
+        onClose={handleCloseLabelDialog}
+        item={item}
+      />
     </Container>
   );
 };

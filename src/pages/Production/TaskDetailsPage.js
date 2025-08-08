@@ -135,7 +135,7 @@ import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants'
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { getUsersDisplayNames } from '../../services/userService';
@@ -546,19 +546,25 @@ const TaskDetailsPage = () => {
     if (!moNumber) return { completedMO: [], productionControl: [], productionShift: [] };
     
     try {
-      // Równoległe pobieranie wszystkich 3 typów formularzy
+      // ✅ OPTYMALIZACJA: Równoległe pobieranie z limitami i sortowaniem
       const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
         getDocs(query(
           collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
-          where('moNumber', '==', moNumber)
+          where('moNumber', '==', moNumber),
+          orderBy('date', 'desc'), // Sortowanie od najnowszych
+          limit(50) // Limit ostatnich 50 odpowiedzi
         )),
         getDocs(query(
           collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
-          where('manufacturingOrder', '==', moNumber)
+          where('manufacturingOrder', '==', moNumber),
+          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
+          limit(50) // Limit ostatnich 50 odpowiedzi
         )),
         getDocs(query(
           collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
-          where('moNumber', '==', moNumber)
+          where('moNumber', '==', moNumber),
+          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
+          limit(50) // Limit ostatnich 50 odpowiedzi
         ))
       ]);
 
@@ -588,17 +594,12 @@ const TaskDetailsPage = () => {
 
 
       
-      // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
-      const sortByFillDate = (a, b) => {
-        const dateA = a.fillDate || a.date || new Date(0);
-        const dateB = b.fillDate || b.date || new Date(0);
-        return new Date(dateB) - new Date(dateA); // Od najnowszych
-      };
-      
+      // ✅ OPTYMALIZACJA: Sortowanie już wykonane w zapytaniu Firebase
+      // Nie trzeba dodatkowo sortować po stronie klienta
       return {
-        completedMO: completedMOData.sort(sortByFillDate),
-        productionControl: controlData.sort(sortByFillDate),
-        productionShift: shiftData.sort(sortByFillDate)
+        completedMO: completedMOData,
+        productionControl: controlData,
+        productionShift: shiftData
       };
     } catch (error) {
       console.error('Błąd podczas pobierania odpowiedzi formularzy:', error);
@@ -1894,13 +1895,15 @@ const TaskDetailsPage = () => {
       // Szukaj rezerwacji bezpośrednio (podobnie jak w handleQuantityChange)
       const transactionsRef = collection(db, 'inventoryTransactions');
       
+      // ✅ OPTYMALIZACJA: Dodaj limit(1) - potrzebujemy tylko jednej rezerwacji
       // Pierwsza próba - po referenceId
       let reservationQuery = query(
         transactionsRef,
         where('type', '==', 'booking'),
         where('referenceId', '==', task.id),
         where('itemId', '==', materialId),
-        where('batchId', '==', batchId)
+        where('batchId', '==', batchId),
+        limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
       );
       
       let reservationSnapshot = await getDocs(reservationQuery);
@@ -1913,7 +1916,8 @@ const TaskDetailsPage = () => {
           where('type', '==', 'booking'),
           where('taskId', '==', task.id),
           where('itemId', '==', materialId),
-          where('batchId', '==', batchId)
+          where('batchId', '==', batchId),
+          limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
         );
         
         reservationSnapshot = await getDocs(reservationQuery);
@@ -4411,12 +4415,28 @@ const TaskDetailsPage = () => {
     
     setLoadingFormResponses(true);
     try {
-      // Pobieranie odpowiedzi dla formularza "Skończone MO"
-      const completedMOQuery = query(
-        collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
-        where('moNumber', '==', moNumber)
-      );
-      const completedMOSnapshot = await getDocs(completedMOQuery);
+      // ✅ OPTYMALIZACJA: Równoległe pobieranie z limitami i sortowaniem
+      const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
+        getDocs(query(
+          collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
+          where('moNumber', '==', moNumber),
+          orderBy('date', 'desc'), // Sortowanie od najnowszych
+          limit(50) // Limit ostatnich 50 odpowiedzi
+        )),
+        getDocs(query(
+          collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
+          where('manufacturingOrder', '==', moNumber),
+          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
+          limit(50) // Limit ostatnich 50 odpowiedzi
+        )),
+        getDocs(query(
+          collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
+          where('moNumber', '==', moNumber),
+          orderBy('fillDate', 'desc'), // Sortowanie od najnowszych
+          limit(50) // Limit ostatnich 50 odpowiedzi
+        ))
+      ]);
+
       const completedMOData = completedMOSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -4424,12 +4444,6 @@ const TaskDetailsPage = () => {
         formType: 'completedMO'
       }));
 
-      // Pobieranie odpowiedzi dla formularza "Kontrola Produkcji"
-      const controlQuery = query(
-        collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
-        where('manufacturingOrder', '==', moNumber)
-      );
-      const controlSnapshot = await getDocs(controlQuery);
       const controlData = controlSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -4440,12 +4454,6 @@ const TaskDetailsPage = () => {
         formType: 'productionControl'
       }));
 
-      // Pobieranie odpowiedzi dla formularza "Zmiana Produkcji"
-      const shiftQuery = query(
-        collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
-        where('moNumber', '==', moNumber)
-      );
-      const shiftSnapshot = await getDocs(shiftQuery);
       const shiftData = shiftSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -4453,17 +4461,12 @@ const TaskDetailsPage = () => {
         formType: 'productionShift'
       }));
 
-      // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
-      const sortByFillDate = (a, b) => {
-        const dateA = a.fillDate || a.date || new Date(0);
-        const dateB = b.fillDate || b.date || new Date(0);
-        return new Date(dateB) - new Date(dateA); // Od najnowszych
-      };
-
+      // ✅ OPTYMALIZACJA: Sortowanie już wykonane w zapytaniu Firebase
+      // Nie trzeba dodatkowo sortować po stronie klienta
       setFormResponses({
-        completedMO: completedMOData.sort(sortByFillDate),
-        productionControl: controlData.sort(sortByFillDate),
-        productionShift: shiftData.sort(sortByFillDate)
+        completedMO: completedMOData,
+        productionControl: controlData,
+        productionShift: shiftData
       });
     } catch (error) {
       console.error('Błąd podczas pobierania odpowiedzi formularzy:', error);
@@ -4805,7 +4808,7 @@ const TaskDetailsPage = () => {
         
         for (const [materialId, batches] of Object.entries(consumptionData)) {
           for (const batchData of batches) {
-            // Znajdź rezerwację dla tego materiału, partii i zadania
+            // ✅ OPTYMALIZACJA: Znajdź rezerwację z limitem
             // Najpierw spróbuj z active/pending statusem
             let reservationQuery = query(
               transactionsRef,
@@ -4813,7 +4816,8 @@ const TaskDetailsPage = () => {
               where('referenceId', '==', id),
               where('itemId', '==', materialId),
               where('batchId', '==', batchData.batchId),
-              where('status', 'in', ['active', 'pending'])
+              where('status', 'in', ['active', 'pending']),
+              limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
             );
             
             let reservationSnapshot = await getDocs(reservationQuery);
@@ -4825,7 +4829,8 @@ const TaskDetailsPage = () => {
                 where('type', '==', 'booking'),
                 where('referenceId', '==', id),
                 where('itemId', '==', materialId),
-                where('batchId', '==', batchData.batchId)
+                where('batchId', '==', batchData.batchId),
+                limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
               );
               
               reservationSnapshot = await getDocs(reservationQuery);
@@ -5084,14 +5089,15 @@ const TaskDetailsPage = () => {
         const { updateReservation } = await import('../../services/inventory');
         const transactionsRef = collection(db, 'inventoryTransactions');
         
-        // Znajdź rezerwację dla tego materiału, partii i zadania
+        // ✅ OPTYMALIZACJA: Znajdź rezerwację z limitem
         let reservationQuery = query(
           transactionsRef,
           where('type', '==', 'booking'),
           where('referenceId', '==', id),
           where('itemId', '==', selectedConsumption.materialId),
           where('batchId', '==', selectedConsumption.batchId),
-          where('status', 'in', ['active', 'pending'])
+          where('status', 'in', ['active', 'pending']),
+          limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
         );
         
         let reservationSnapshot = await getDocs(reservationQuery);
@@ -5103,7 +5109,8 @@ const TaskDetailsPage = () => {
             where('type', '==', 'booking'),
             where('referenceId', '==', id),
             where('itemId', '==', selectedConsumption.materialId),
-            where('batchId', '==', selectedConsumption.batchId)
+            where('batchId', '==', selectedConsumption.batchId),
+            limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
           );
           
           reservationSnapshot = await getDocs(reservationQuery);
@@ -5262,14 +5269,15 @@ const TaskDetailsPage = () => {
           const { updateReservation, bookInventoryForTask } = await import('../../services/inventory');
           const transactionsRef = collection(db, 'inventoryTransactions');
           
-          // Znajdź rezerwację dla tego materiału, partii i zadania
+          // ✅ OPTYMALIZACJA: Znajdź rezerwację z limitem
           let reservationQuery = query(
             transactionsRef,
             where('type', '==', 'booking'),
             where('referenceId', '==', id),
             where('itemId', '==', selectedConsumption.materialId),
             where('batchId', '==', selectedConsumption.batchId),
-            where('status', 'in', ['active', 'pending'])
+            where('status', 'in', ['active', 'pending']),
+            limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
           );
           
           let reservationSnapshot = await getDocs(reservationQuery);
@@ -5281,7 +5289,8 @@ const TaskDetailsPage = () => {
               where('type', '==', 'booking'),
               where('referenceId', '==', id),
               where('itemId', '==', selectedConsumption.materialId),
-              where('batchId', '==', selectedConsumption.batchId)
+              where('batchId', '==', selectedConsumption.batchId),
+              limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
             );
             
             reservationSnapshot = await getDocs(reservationQuery);

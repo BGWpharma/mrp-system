@@ -681,6 +681,10 @@ const ConsumptionPage = () => {
     try {
       setConfirmLoading(true);
       
+      console.log('=== DEBUG: Rozpoczynam usuwanie pozostałych rezerwacji ===');
+      console.log('Task ID:', taskId);
+      console.log('Task data:', task);
+      
       if (!task || !task.materials) {
         throw new Error('Brak danych o materiałach w zadaniu');
       }
@@ -688,35 +692,112 @@ const ConsumptionPage = () => {
       // Import funkcji do czyszczenia rezerwacji
       const { cleanupTaskReservations } = await import('../../services/inventory');
       
-      // Znajdź materiały z aktywnymi rezerwacjami
+      // Najpierw sprawdź rzeczywiste rezerwacje w bazie danych
+      // zamiast polegać tylko na task.materialBatches
+      console.log('=== DEBUG: Sprawdzam materiały z rezerwacjami ===');
+      
       const materialsWithReservations = [];
-      for (const material of task.materials) {
-        const materialId = material.inventoryItemId || material.id;
-        const hasActiveReservations = task.materialBatches && 
-                                     task.materialBatches[materialId] && 
-                                     task.materialBatches[materialId].length > 0;
+      
+      // Metoda 1: Sprawdź task.materialBatches (jeśli istnieje)
+      if (task.materialBatches) {
+        console.log('task.materialBatches:', task.materialBatches);
         
-        if (hasActiveReservations) {
-          const totalReservedQuantity = task.materialBatches[materialId]
-            .reduce((total, batch) => total + Number(batch.quantity || 0), 0);
+        for (const material of task.materials) {
+          const materialId = material.inventoryItemId || material.id;
           
-          if (totalReservedQuantity > 0) {
-            materialsWithReservations.push(materialId);
+          if (task.materialBatches[materialId] && task.materialBatches[materialId].length > 0) {
+            const totalReservedQuantity = task.materialBatches[materialId]
+              .reduce((total, batch) => total + Number(batch.quantity || 0), 0);
+            
+            console.log(`Materiał ${material.name} (${materialId}): ${totalReservedQuantity} zarezerwowane`);
+            
+            if (totalReservedQuantity > 0) {
+              materialsWithReservations.push(materialId);
+            }
           }
         }
       }
-
-      if (materialsWithReservations.length === 0) {
-        showSuccess('Brak rezerwacji do usunięcia.');
-        return;
-      }
-
-      // Usuń rezerwacje dla materiałów z pozostałymi rezerwacjami
-      await cleanupTaskReservations(taskId, materialsWithReservations);
       
-      showSuccess(`Usunięto pozostałe rezerwacje dla ${materialsWithReservations.length} materiałów.`);
+      // Metoda 2: Jeśli nie znaleziono materialBatches, spróbuj usunąć wszystkie rezerwacje dla zadania
+      if (materialsWithReservations.length === 0) {
+        console.log('=== DEBUG: Brak materialBatches, próbuję usunąć wszystkie rezerwacje zadania ===');
+        
+        // Wywołaj cleanupTaskReservations bez itemIds - usunie wszystkie rezerwacje zadania
+        const result = await cleanupTaskReservations(taskId);
+        console.log('Wynik czyszczenia:', result);
+        
+        if (result.cleanedReservations > 0) {
+          showSuccess(`Usunięto ${result.cleanedReservations} rezerwacji dla zadania.`);
+        } else {
+          showSuccess('Brak rezerwacji do usunięcia.');
+          
+          // Sprawdź czy może być problem z niezsynchronizowanymi danymi
+          if (task.materialBatches && Object.keys(task.materialBatches).length > 0) {
+            console.log('=== DEBUG: Wykryto niezsynchronizowane dane - czyszczę materialBatches w zadaniu ===');
+            
+            // Wyczyść materialBatches w dokumencie zadania
+            await updateDoc(doc(db, 'productionTasks', taskId), {
+              materialBatches: {},
+              materialsReserved: false,
+              updatedAt: serverTimestamp(),
+              updatedBy: currentUser.uid
+            });
+            
+            showSuccess('Wyczyszczono niezsynchronizowane dane rezerwacji w zadaniu.');
+            
+            // Odśwież dane zadania
+            await fetchTaskData();
+            
+            // Wykonaj walidację ponownie
+            const updatedTaskData = await getTaskById(taskId);
+            let updatedConsumptionData = [];
+            if (updatedTaskData?.consumedMaterials?.length > 0) {
+              updatedConsumptionData = updatedTaskData.consumedMaterials;
+            }
+            
+            const newValidation = validatePostProductionConsumption(updatedTaskData, updatedConsumptionData);
+            setValidationResults(newValidation);
+            
+            if (newValidation.isValid) {
+              showSuccess('Walidacja przeszła pomyślnie po wyczyszczeniu danych. Możesz teraz zatwierdzić zadanie.');
+            }
+          }
+          return;
+        }
+      } else {
+        console.log('=== DEBUG: Znaleziono materiały z rezerwacjami:', materialsWithReservations);
+        
+        // Usuń rezerwacje dla konkretnych materiałów
+        const result = await cleanupTaskReservations(taskId, materialsWithReservations);
+        console.log('Wynik czyszczenia dla materiałów:', result);
+        
+        if (result.cleanedReservations > 0) {
+          showSuccess(`Usunięto pozostałe rezerwacje dla ${materialsWithReservations.length} materiałów.`);
+        } else {
+          // Jeśli nie znaleziono rezerwacji w bazie, ale są w materialBatches
+          console.log('=== DEBUG: Brak rezerwacji w bazie, ale są w materialBatches - czyszczę strukturę zadania ===');
+          
+          // Wyczyść tylko te materiały z materialBatches
+          const updatedMaterialBatches = { ...task.materialBatches };
+          materialsWithReservations.forEach(materialId => {
+            delete updatedMaterialBatches[materialId];
+          });
+          
+          const hasAnyReservations = Object.keys(updatedMaterialBatches).length > 0;
+          
+          await updateDoc(doc(db, 'productionTasks', taskId), {
+            materialBatches: updatedMaterialBatches,
+            materialsReserved: hasAnyReservations,
+            updatedAt: serverTimestamp(),
+            updatedBy: currentUser.uid
+          });
+          
+          showSuccess(`Wyczyszczono niezsynchronizowane dane rezerwacji dla ${materialsWithReservations.length} materiałów.`);
+        }
+      }
       
       // Odśwież dane zadania i pobierz zaktualizowane dane
+      console.log('=== DEBUG: Odświeżam dane zadania ===');
       await fetchTaskData();
       
       // Pobierz najnowsze dane zadania i konsumpcji
@@ -729,6 +810,8 @@ const ConsumptionPage = () => {
       // Ponownie wykonaj walidację z przekazanymi aktualnymi danymi
       const newValidation = validatePostProductionConsumption(updatedTaskData, updatedConsumptionData);
       setValidationResults(newValidation);
+      
+      console.log('=== DEBUG: Nowe wyniki walidacji:', newValidation);
       
       // Jeśli walidacja przeszła pomyślnie, pokaż komunikat
       if (newValidation.isValid) {
