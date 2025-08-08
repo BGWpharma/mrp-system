@@ -29,27 +29,37 @@ import {
   InputLabel,
   InputAdornment,
   Grid,
-  Link
+  Link,
+  TablePagination
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { db, storage } from '../../services/firebase/config';
-import { collection, getDocs, query, doc, deleteDoc } from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from '../../hooks/useTranslation';
+import { 
+  getFormResponsesWithPagination, 
+  deleteFormResponse, 
+  FORM_TYPES 
+} from '../../services/productionFormsService';
 
 // Komponent strony odpowiedzi formularzy
 const FormsResponsesPage = () => {
   const theme = useTheme();
   const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   
+  // Stany dla paginacji
+  const [page, setPage] = useState(0); // MUI używa 0-based indexing
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  
+  // Stany dla danych
   const [completedMOResponses, setCompletedMOResponses] = useState([]);
   const [productionControlResponses, setProductionControlResponses] = useState([]);
   const [productionShiftResponses, setProductionShiftResponses] = useState([]);
@@ -70,118 +80,122 @@ const FormsResponsesPage = () => {
   // Stan dla panelu filtrów
   const [showFilters, setShowFilters] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
+  // Funkcja ładowania danych z paginacją
+  const loadFormResponses = async (formType, pageNum = 1, perPage = rowsPerPage, filters = {}) => {
     try {
-      // ✅ OPTYMALIZACJA: Równoległe pobieranie wszystkich formularzy
-      const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'Forms/SkonczoneMO/Odpowiedzi'))),
-        getDocs(query(collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'))),
-        getDocs(query(collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi')))
-      ]);
-
-      // Przetwarzanie odpowiedzi "Skończone MO"
-      const completedMOData = completedMOSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date?.toDate() // Konwersja Timestamp na Date
-      }))
-      // Sortowanie od najnowszych (domyślnie)
-      .sort((a, b) => {
-        const dateA = a.date || new Date(0);
-        const dateB = b.date || new Date(0);
-        return dateB - dateA; // Od najnowszych do najstarszych
-      });
-      setCompletedMOResponses(completedMOData);
-
-      // Przetwarzanie odpowiedzi "Kontrola Produkcji"
-      const controlData = controlSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        productionStartDate: doc.data().productionStartDate?.toDate(),
-        productionEndDate: doc.data().productionEndDate?.toDate(),
-        readingDate: doc.data().readingDate?.toDate()
-      }))
-      // Sortowanie od najnowszych (domyślnie)
-      .sort((a, b) => {
-        const dateA = a.fillDate || new Date(0);
-        const dateB = b.fillDate || new Date(0);
-        return dateB - dateA; // Od najnowszych do najstarszych
-      });
-      setProductionControlResponses(controlData);
-
-      // Przetwarzanie odpowiedzi "Zmiana Produkcji"
-      const shiftData = shiftSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate()
-      }))
-      // Sortowanie od najnowszych (domyślnie)
-      .sort((a, b) => {
-        const dateA = a.fillDate || new Date(0);
-        const dateB = b.fillDate || new Date(0);
-        return dateB - dateA; // Od najnowszych do najstarszych
-      });
-      setProductionShiftResponses(shiftData);
-      setFilteredShiftResponses(shiftData);
+      setLoading(true);
       
-      console.log('✅ Wszystkie formularze zostały załadowane równolegle');
-    } catch (err) {
-      console.error('Błąd podczas pobierania danych:', err);
-      setError(err.message);
+      const result = await getFormResponsesWithPagination(
+        formType,
+        pageNum,
+        perPage,
+        filters
+      );
+      
+      setTotalCount(result.totalCount);
+      setTotalPages(result.totalPages);
+      
+      return result.data;
+      
+    } catch (error) {
+      console.error('Błąd podczas ładowania odpowiedzi:', error);
+      setError(error.message);
+      return [];
     } finally {
       setLoading(false);
     }
   };
   
-  useEffect(() => {
-    fetchData();
-  }, []);
-  
-  useEffect(() => {
-    // Filtrowanie danych zmian produkcyjnych na podstawie filtrów
-    if (productionShiftResponses.length > 0) {
-      let filtered = [...productionShiftResponses];
-      
-      if (shiftFilters.responsiblePerson) {
-        filtered = filtered.filter(item => 
-          item.responsiblePerson && item.responsiblePerson.toLowerCase().includes(shiftFilters.responsiblePerson.toLowerCase())
-        );
+  // Funkcja ładowania aktualnie wybranej zakładki
+  const loadCurrentTabData = async () => {
+    const pageNum = page + 1; // Konwersja z 0-based na 1-based
+    
+    try {
+      switch (tabValue) {
+        case 0:
+          const completedData = await loadFormResponses(FORM_TYPES.COMPLETED_MO, pageNum);
+          setCompletedMOResponses(completedData);
+          break;
+        case 1:
+          const controlData = await loadFormResponses(FORM_TYPES.PRODUCTION_CONTROL, pageNum);
+          setProductionControlResponses(controlData);
+          break;
+        case 2:
+          const shiftData = await loadFormResponses(FORM_TYPES.PRODUCTION_SHIFT, pageNum);
+          setProductionShiftResponses(shiftData);
+          setFilteredShiftResponses(shiftData); // Inicjalizuj filtry
+          break;
       }
-      
-      if (shiftFilters.shiftType) {
-        filtered = filtered.filter(item => 
-          item.shiftType === shiftFilters.shiftType
-        );
-      }
-      
-      if (shiftFilters.product) {
-        filtered = filtered.filter(item => 
-          item.product && item.product.toLowerCase().includes(shiftFilters.product.toLowerCase())
-        );
-      }
-      
-      if (shiftFilters.moNumber) {
-        filtered = filtered.filter(item => 
-          item.moNumber && item.moNumber.toLowerCase().includes(shiftFilters.moNumber.toLowerCase())
-        );
-      }
-      
-      // Sortowanie przefiltrowanych danych od najnowszych
-      filtered.sort((a, b) => {
-        const dateA = a.fillDate || new Date(0);
-        const dateB = b.fillDate || new Date(0);
-        return dateB - dateA; // Od najnowszych do najstarszych
-      });
-      
-      setFilteredShiftResponses(filtered);
+    } catch (error) {
+      console.error('Błąd podczas ładowania danych:', error);
+      setError(error.message);
     }
-  }, [productionShiftResponses, shiftFilters]);
-  
+  };
+
+  // Obsługa zmiany strony
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  // Obsługa zmiany liczby wierszy na stronę
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // Reset do pierwszej strony
+  };
+
+  // Obsługa zmiany zakładki
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+    setPage(0); // Reset paginacji przy zmianie zakładki
   };
+
+  // useEffect do ładowania danych
+  useEffect(() => {
+    loadCurrentTabData();
+  }, [tabValue, page, rowsPerPage]);
+  
+  // Funkcja ładowania z filtrami dla Production Shift
+  const loadShiftDataWithFilters = async () => {
+    if (tabValue !== 2) return; // Filtry tylko dla zakładki Production Shift
+    
+    const pageNum = page + 1;
+    const filters = {};
+    
+    // Konwertuj filtry na format service
+    if (shiftFilters.responsiblePerson) {
+      filters.author = shiftFilters.responsiblePerson;
+    }
+    if (shiftFilters.moNumber) {
+      filters.taskNumber = shiftFilters.moNumber;
+    }
+    
+    const shiftData = await loadFormResponses(FORM_TYPES.PRODUCTION_SHIFT, pageNum, rowsPerPage, filters);
+    
+    // Filtrowanie lokalnie dla pól, które nie są obsługiwane przez service
+    let filtered = [...shiftData];
+    
+    if (shiftFilters.shiftType) {
+      filtered = filtered.filter(item => 
+        item.shiftType === shiftFilters.shiftType
+      );
+    }
+    
+    if (shiftFilters.product) {
+      filtered = filtered.filter(item => 
+        item.product && item.product.toLowerCase().includes(shiftFilters.product.toLowerCase())
+      );
+    }
+    
+    setProductionShiftResponses(shiftData);
+    setFilteredShiftResponses(filtered);
+  };
+
+  // useEffect do obsługi filtrów Production Shift
+  useEffect(() => {
+    if (tabValue === 2) {
+      loadShiftDataWithFilters();
+    }
+  }, [shiftFilters]);
 
   // Funkcja do wyodrębniania ścieżki pliku z URL Firebase Storage
   const extractStoragePathFromUrl = (url) => {
@@ -256,61 +270,40 @@ const FormsResponsesPage = () => {
     
     try {
       const { item, formType } = deleteItemData;
-      let collectionPath = '';
+      
+      // Przygotuj załączniki do usunięcia
+      const attachments = [];
       
       switch (formType) {
         case 'completedMO':
-          collectionPath = 'Forms/SkonczoneMO/Odpowiedzi';
+          if (item.mixingPlanReportUrl) {
+            attachments.push({ url: extractStoragePathFromUrl(item.mixingPlanReportUrl) });
+          }
           break;
         case 'productionControl':
-          collectionPath = 'Forms/KontrolaProdukcji/Odpowiedzi';
-          break;
-        case 'productionShift':
-          collectionPath = 'Forms/ZmianaProdukcji/Odpowiedzi';
-          break;
-        default:
-          throw new Error('Nieznany typ formularza');
-      }
-      
-      // Usuń załączniki z Firebase Storage jeśli istnieją
-      const attachmentFields = [];
-      
-      switch (formType) {
-        case 'completedMO':
-          if (item.mixingPlanReportUrl) attachmentFields.push(item.mixingPlanReportUrl);
-          break;
-        case 'productionControl':
-          if (item.documentScansUrl) attachmentFields.push(item.documentScansUrl);
-          if (item.productPhoto1Url) attachmentFields.push(item.productPhoto1Url);
-          if (item.productPhoto2Url) attachmentFields.push(item.productPhoto2Url);
-          if (item.productPhoto3Url) attachmentFields.push(item.productPhoto3Url);
+          if (item.documentScansUrl) {
+            attachments.push({ url: extractStoragePathFromUrl(item.documentScansUrl) });
+          }
+          if (item.productPhoto1Url) {
+            attachments.push({ url: extractStoragePathFromUrl(item.productPhoto1Url) });
+          }
+          if (item.productPhoto2Url) {
+            attachments.push({ url: extractStoragePathFromUrl(item.productPhoto2Url) });
+          }
+          if (item.productPhoto3Url) {
+            attachments.push({ url: extractStoragePathFromUrl(item.productPhoto3Url) });
+          }
           break;
         case 'productionShift':
           // Formularz zmian produkcji nie ma załączników
           break;
       }
       
-      // Usuń wszystkie znalezione załączniki
-      for (const attachmentUrl of attachmentFields) {
-        try {
-          const storagePath = extractStoragePathFromUrl(attachmentUrl);
-          if (storagePath) {
-            const fileRef = ref(storage, storagePath);
-            await deleteObject(fileRef);
-            console.log(`Usunięto załącznik z Storage: ${storagePath}`);
-          }
-        } catch (storageError) {
-          console.warn('Nie można usunąć załącznika z Storage:', storageError);
-          // Kontynuuj mimo błędu usuwania załącznika
-        }
-      }
-      
-      // Usuń dokument z Firestore
-      const docRef = doc(db, collectionPath, item.id);
-      await deleteDoc(docRef);
+      // Użyj nowego service do usunięcia
+      await deleteFormResponse(formType, item.id, attachments);
       
       // Odśwież dane po usunięciu
-      fetchData();
+      loadCurrentTabData();
       
       // Zamknij dialog
       setDeleteConfirmOpen(false);
@@ -368,6 +361,7 @@ const FormsResponsesPage = () => {
       product: '',
       moNumber: ''
     });
+    setPage(0); // Reset paginacji po wyczyszczeniu filtrów
   };
   
   const toggleFilters = () => {
@@ -400,76 +394,93 @@ const FormsResponsesPage = () => {
       {completedMOResponses.length === 0 ? (
         <Alert severity="info">{t('noCompletedMOResponses')}</Alert>
       ) : (
-        <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow sx={{ 
-                backgroundColor: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.05)' 
-                  : '#f5f5f5' 
-              }}>
-                <TableCell>{t('date')}</TableCell>
-                <TableCell>{t('time')}</TableCell>
-                <TableCell>{t('email')}</TableCell>
-                <TableCell>{t('moNumber')}</TableCell>
-                <TableCell align="right">{t('productQuantity')}</TableCell>
-                <TableCell align="right">{t('packagingLoss')}</TableCell>
-                <TableCell align="right">{t('bulkLoss')}</TableCell>
-                <TableCell align="right">{t('rawMaterialLoss')}</TableCell>
-                <TableCell align="right">Waga netto kapsułek</TableCell>
-                <TableCell>{t('mixingPlanReport')}</TableCell>
-                <TableCell align="center">{t('actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {completedMOResponses.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.date ? format(row.date, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
-                  <TableCell>{row.time || '-'}</TableCell>
-                  <TableCell>{row.email}</TableCell>
-                  <TableCell>{row.moNumber}</TableCell>
-                  <TableCell align="right">{row.productQuantity}</TableCell>
-                  <TableCell align="right">{row.packagingLoss || '-'}</TableCell>
-                  <TableCell align="right">{row.bulkLoss || '-'}</TableCell>
-                  <TableCell align="right">{row.rawMaterialLoss || '-'}</TableCell>
-                  <TableCell align="right">{row.netCapsuleWeight || '-'}</TableCell>
-                  <TableCell>
-                    {row.mixingPlanReportUrl ? (
-                      <Button 
-                        size="small" 
-                        href={row.mixingPlanReportUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                      >
-                        {row.mixingPlanReportName || t('download')}
-                      </Button>
-                    ) : '-'}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title={t('editResponse')}>
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleEditClick(row, 'completedMO')}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('deleteResponse')}>
-                      <IconButton 
-                        size="small" 
-                        color="error"
-                        onClick={() => handleDeleteClick(row, 'completedMO')}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+        <>
+          <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow sx={{ 
+                  backgroundColor: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.05)' 
+                    : '#f5f5f5' 
+                }}>
+                  <TableCell>{t('date')}</TableCell>
+                  <TableCell>{t('time')}</TableCell>
+                  <TableCell>{t('email')}</TableCell>
+                  <TableCell>{t('moNumber')}</TableCell>
+                  <TableCell align="right">{t('productQuantity')}</TableCell>
+                  <TableCell align="right">{t('packagingLoss')}</TableCell>
+                  <TableCell align="right">{t('bulkLoss')}</TableCell>
+                  <TableCell align="right">{t('rawMaterialLoss')}</TableCell>
+                  <TableCell align="right">Waga netto kapsułek</TableCell>
+                  <TableCell>{t('mixingPlanReport')}</TableCell>
+                  <TableCell align="center">{t('actions')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {completedMOResponses.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.date ? format(row.date, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
+                    <TableCell>{row.time || '-'}</TableCell>
+                    <TableCell>{row.email}</TableCell>
+                    <TableCell>{row.moNumber}</TableCell>
+                    <TableCell align="right">{row.productQuantity}</TableCell>
+                    <TableCell align="right">{row.packagingLoss || '-'}</TableCell>
+                    <TableCell align="right">{row.bulkLoss || '-'}</TableCell>
+                    <TableCell align="right">{row.rawMaterialLoss || '-'}</TableCell>
+                    <TableCell align="right">{row.netCapsuleWeight || '-'}</TableCell>
+                    <TableCell>
+                      {row.mixingPlanReportUrl ? (
+                        <Button 
+                          size="small" 
+                          href={row.mixingPlanReportUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                        >
+                          {row.mixingPlanReportName || t('download')}
+                        </Button>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title={t('editResponse')}>
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          onClick={() => handleEditClick(row, 'completedMO')}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('deleteResponse')}>
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteClick(row, 'completedMO')}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {/* Paginacja dla CompletedMO */}
+          <TablePagination
+            component="div"
+            count={totalCount}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            labelRowsPerPage="Wierszy na stronę:"
+            labelDisplayedRows={({ from, to, count }) => 
+              `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+            }
+          />
+        </>
       )}
     </>
   );
@@ -500,8 +511,9 @@ const FormsResponsesPage = () => {
       {productionControlResponses.length === 0 ? (
         <Alert severity="info">{t('noProductionControlResponses')}</Alert>
       ) : (
-        <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-          <Table size="small" stickyHeader>
+        <>
+          <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
+            <Table size="small" stickyHeader>
             <TableHead>
               <TableRow sx={{ 
                 backgroundColor: theme.palette.mode === 'dark' 
@@ -637,6 +649,22 @@ const FormsResponsesPage = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        
+        {/* Paginacja dla ProductionControl */}
+        <TablePagination
+          component="div"
+          count={totalCount}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[5, 10, 25, 50]}
+          labelRowsPerPage="Wierszy na stronę:"
+          labelDisplayedRows={({ from, to, count }) => 
+            `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+          }
+        />
+        </>
       )}
     </>
   );
@@ -786,8 +814,9 @@ const FormsResponsesPage = () => {
         {filteredShiftResponses.length === 0 ? (
           <Alert severity="info">{t('noProductionShiftResponses')}</Alert>
         ) : (
-          <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-            <Table size="small" stickyHeader>
+          <>
+            <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
+              <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow sx={{ 
                   backgroundColor: theme.palette.mode === 'dark' 
@@ -867,6 +896,22 @@ const FormsResponsesPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          
+          {/* Paginacja dla ProductionShift */}
+          <TablePagination
+            component="div"
+            count={totalCount}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            labelRowsPerPage="Wierszy na stronę:"
+            labelDisplayedRows={({ from, to, count }) => 
+              `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+            }
+          />
+          </>
         )}
       </>
     );
