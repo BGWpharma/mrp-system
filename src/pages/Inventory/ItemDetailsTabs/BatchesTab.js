@@ -3,6 +3,12 @@ import { Box, Typography, Paper, Table, TableContainer, TableHead, TableRow, Tab
 import { Timestamp } from 'firebase/firestore';
 
 const BatchesTab = ({ t, batches, itemUnit }) => {
+  const safeGetDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Timestamp) return value.toDate();
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
   return (
     <>
       <Box sx={{
@@ -37,28 +43,28 @@ const BatchesTab = ({ t, batches, itemUnit }) => {
             <TableBody>
               {batches
                 .sort((a, b) => {
-                  const dateA = a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate);
-                  const dateB = b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate);
+                  const dateA = safeGetDate(a.expiryDate);
+                  const dateB = safeGetDate(b.expiryDate);
+                  if (!dateA && !dateB) return 0;
+                  if (!dateA) return 1; // partie bez daty na końcu
+                  if (!dateB) return -1;
                   return dateA - dateB;
                 })
                 .map(batch => {
-                  const expiryDate = batch.expiryDate instanceof Timestamp 
-                    ? batch.expiryDate.toDate() 
-                    : new Date(batch.expiryDate);
-                  
-                  const receivedDate = batch.receivedDate instanceof Timestamp 
-                    ? batch.receivedDate.toDate() 
-                    : new Date(batch.receivedDate);
+                  const expiryDate = safeGetDate(batch.expiryDate);
+                  const receivedDate = safeGetDate(batch.receivedDate);
                   
                   const today = new Date();
                   const thirtyDaysFromNow = new Date();
                   thirtyDaysFromNow.setDate(today.getDate() + 30);
                   
                   let status = 'valid';
-                  if (expiryDate < today) {
-                    status = 'expired';
-                  } else if (expiryDate <= thirtyDaysFromNow) {
-                    status = 'expiring';
+                  if (expiryDate) {
+                    if (expiryDate < today) {
+                      status = 'expired';
+                    } else if (expiryDate <= thirtyDaysFromNow) {
+                      status = 'expiring';
+                    }
                   }
                   
                   return (
@@ -82,9 +88,9 @@ const BatchesTab = ({ t, batches, itemUnit }) => {
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           <Typography sx={{ fontWeight: 'medium' }}>
-                            {expiryDate.toLocaleDateString('pl-PL')}
+                            {expiryDate ? expiryDate.toLocaleDateString('pl-PL') : '-'}
                           </Typography>
-                          {status === 'expired' && (
+                          {expiryDate && status === 'expired' && (
                             <Chip 
                               size="small" 
                               label={t('inventory.itemDetails.expired')} 
@@ -92,7 +98,7 @@ const BatchesTab = ({ t, batches, itemUnit }) => {
                               sx={{ ml: 1 }} 
                             />
                           )}
-                          {status === 'expiring' && (
+                          {expiryDate && status === 'expiring' && (
                             <Chip 
                               size="small" 
                               label={t('inventory.itemDetails.expiringSoon')} 
@@ -124,7 +130,7 @@ const BatchesTab = ({ t, batches, itemUnit }) => {
                         {batch.quantity <= 0 && t('inventory.itemDetails.issued')}
                       </TableCell>
                       <TableCell>{batch.warehouseName || '-'}</TableCell>
-                      <TableCell>{receivedDate.toLocaleDateString('pl-PL')}</TableCell>
+                      <TableCell>{receivedDate ? receivedDate.toLocaleDateString('pl-PL') : '-'}</TableCell>
                       <TableCell>{batch.notes || '-'}</TableCell>
                     </TableRow>
                   );

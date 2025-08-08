@@ -20,6 +20,7 @@ import {
   MenuItem,
   Select,
   InputLabel,
+  InputAdornment,
   Checkbox,
   FormGroup,
   Switch
@@ -80,6 +81,13 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     batchId: '', // Dla wydania - ID wybranej partii
     noExpiryDate: false // Nowe pole do oznaczenia braku terminu ważności
   });
+
+  // Wymuś włączone informacje o partii dla przyjęcia (nie pozwalaj wyłączyć)
+  useEffect(() => {
+    if (isReceive) {
+      setBatchData(prev => ({ ...prev, useBatch: true }));
+    }
+  }, [isReceive]);
 
   // Dodanie stanu dla certyfikatu
   const [certificateFile, setCertificateFile] = useState(null);
@@ -364,6 +372,8 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
 
   const handleBatchChange = (e) => {
     const { name, value, checked, type } = e.target;
+    // Dla przyjęcia nie pozwalamy wyłączyć sekcji partii
+    if (isReceive && name === 'useBatch') return;
     setBatchData(prev => ({ 
       ...prev, 
       [name]: type === 'checkbox' ? checked : value 
@@ -571,7 +581,7 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         
         <Box sx={{ p: 3 }}>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={6} md={4}>
               <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
                 <InputLabel id="warehouse-label">Magazyn</InputLabel>
                 <Select
@@ -580,6 +590,7 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                   value={transactionData.warehouseId}
                   onChange={handleChange}
                   label="Magazyn"
+                  size="small"
                   error={!transactionData.warehouseId}
                 >
                   <MenuItem value="">
@@ -596,7 +607,7 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                 )}
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={6} md={4}>
               <TextField
                 required
                 label="Ilość"
@@ -605,20 +616,34 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                 value={transactionData.quantity}
                 onChange={handleChange}
                 fullWidth
+                size="small"
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 inputProps={{ 
                   min: 0.01, 
                   step: "0.01" 
                 }}
                 error={isReceive ? false : (parseFloat(transactionData.quantity || 0) > item.quantity)}
-                helperText={
-                  isReceive ? undefined : 
-                  (parseFloat(transactionData.quantity || 0) > item.quantity ? 
-                    'Ilość do wydania przekracza dostępny stan magazynowy' : undefined)
-                }
+                helperText={isReceive ? 'Wprowadź ilość do przyjęcia' : (parseFloat(transactionData.quantity || 0) > item.quantity ? 'Ilość do wydania przekracza dostępny stan magazynowy' : undefined)}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            {isReceive && (
+              <Grid item xs={12} sm={6} md={4}>
+                <TextField
+                  fullWidth
+                  label="Cena jednostkowa (EUR)"
+                  name="unitPrice"
+                  type="number"
+                  value={transactionData.unitPrice}
+                  onChange={handleChange}
+                  inputProps={{ min: 0, step: 0.01 }}
+                  helperText="Używana do kalkulacji kosztów (receptury/produkcja)"
+                  required
+                  size="small"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                />
+              </Grid>
+            )}
+            <Grid item xs={12}>
               <FormControl component="fieldset">
                 <Typography variant="subtitle2" gutterBottom>Powód</Typography>
                 <RadioGroup
@@ -645,13 +670,14 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                 </RadioGroup>
               </FormControl>
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} sm={6} md={6}>
               <TextField
                 label="Numer referencyjny"
                 name="reference"
                 value={transactionData.reference || ''}
                 onChange={handleChange}
                 fullWidth
+                size="small"
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 placeholder={isReceive ? "Nr faktury, zamówienia, itp." : "Nr zlecenia produkcyjnego, itp."}
               />
@@ -665,26 +691,11 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                 fullWidth
                 multiline
                 rows={3}
+                size="small"
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                placeholder="Dodatkowe informacje dotyczące transakcji..."
+                placeholder={isReceive ? 'Np. numer dostawy, dodatkowe instrukcje...' : 'Dodatkowe informacje dotyczące transakcji...'}
               />
             </Grid>
-            {isReceive && (
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Cena jednostkowa (EUR)"
-                  name="unitPrice"
-                  type="number"
-                  value={transactionData.unitPrice}
-                  onChange={handleChange}
-                  inputProps={{ min: 0, step: 0.01 }}
-                  helperText="Cena za jednostkę, używana w kalkulacji kosztów receptur i produkcji. Ważne dla dokładnych obliczeń!"
-                  required
-                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                />
-              </Grid>
-            )}
           </Grid>
         </Box>
       </Paper>
@@ -717,22 +728,28 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
               {isReceive ? 'Informacje o partii' : 'Wybór partii'}
             </Typography>
           </Box>
-          <FormControlLabel 
-            control={
-              <Switch 
-                checked={batchData.useBatch} 
-                onChange={handleBatchChange}
-                name="useBatch"
-                color="primary"
-                size="small"
-              />
-            } 
-            label={
-              <Typography variant="body2" color="text.secondary">
-                {isReceive ? "Dodaj informacje o partii" : "Wybierz konkretną partię"}
-              </Typography>
-            }
-          />
+          {isReceive ? (
+            <Typography variant="body2" color="text.secondary">
+              Informacje o partii (wymagane)
+            </Typography>
+          ) : (
+            <FormControlLabel 
+              control={
+                <Switch 
+                  checked={batchData.useBatch} 
+                  onChange={handleBatchChange}
+                  name="useBatch"
+                  color="primary"
+                  size="small"
+                />
+              } 
+              label={
+                <Typography variant="body2" color="text.secondary">
+                  {"Wybierz konkretną partię"}
+                </Typography>
+              }
+            />
+          )}
         </Box>
 
         <Box sx={{ p: 3 }}>
@@ -741,19 +758,20 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
               {isReceive ? (
                 // Formularz dla przyjęcia
                 <>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} sm={6} md={4}>
                     <TextField
                       label="Numer partii/LOT"
                       name="batchNumber"
                       value={batchData.batchNumber}
                       onChange={handleBatchChange}
                       fullWidth
+                      size="small"
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                      placeholder="Numer partii od dostawcy lub zostaw puste dla auto-generacji"
-                      helperText="Jeśli pole pozostanie puste, system automatycznie wygeneruje numer LOT"
+                      placeholder="Wprowadź numer partii dostawcy lub zostaw puste — wygenerujemy LOT"
+                      helperText="Jeśli puste — automatyczna generacja numeru LOT"
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} sm={6} md={4}>
                     <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
                       <InputLabel shrink id="expiry-date-label">Data ważności</InputLabel>
                       <Box sx={{ 
@@ -777,23 +795,9 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                               color="primary"
                             />
                           }
-                          label={
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                fontWeight: batchData.noExpiryDate ? 'bold' : 'normal',
-                                color: batchData.noExpiryDate ? 'text.primary' : 'text.secondary'  
-                              }}
-                            >
-                              Brak terminu ważności
-                            </Typography>
-                          }
+                          label={<Typography variant="body2">Brak terminu ważności</Typography>}
                           sx={{ 
-                            mb: 1, 
-                            p: 1, 
-                            border: batchData.noExpiryDate ? '1px solid rgba(0, 0, 0, 0.23)' : 'none',
-                            borderRadius: 1,
-                            bgcolor: batchData.noExpiryDate ? 'rgba(0, 0, 0, 0.04)' : 'transparent'
+                            mb: 1
                           }}
                         />
                         {!batchData.noExpiryDate && (
@@ -808,6 +812,7 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                                   fullWidth
                                   variant="outlined"
                                   required
+                                  size="small"
                                   sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                                   error={!batchData.expiryDate && !batchData.noExpiryDate}
                                   helperText={!batchData.expiryDate && !batchData.noExpiryDate ? "Data ważności jest wymagana" : ""}
@@ -826,86 +831,88 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                       )}
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={4}>
                     <TextField
-                      label="Dodatkowe informacje o partii"
+                      label="Uwagi do partii (opcjonalnie)"
                       name="batchNotes"
                       value={batchData.batchNotes}
                       onChange={handleBatchChange}
                       fullWidth
                       multiline
                       rows={2}
+                      size="small"
                       sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                      placeholder="Dodatkowe informacje o partii, certyfikaty, itp."
+                      placeholder="Np. numer CoA, dodatkowe uwagi"
                     />
                   </Grid>
                   
-                  {/* Dodanie sekcji z wyborem certyfikatu */}
+                  {/* Certyfikat produktu (opcjonalnie) w akordeonie dla mniejszego hałasu wizualnego */}
                   <Grid item xs={12}>
-                    <Box sx={{ mt: 2, mb: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Certyfikat produktu
-                      </Typography>
-                      <input
-                        accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        style={{ display: 'none' }}
-                        id="certificate-file-upload"
-                        type="file"
-                        onChange={handleCertificateFileChange}
-                        ref={fileInputRef}
-                      />
-                      <label htmlFor="certificate-file-upload">
-                        <Button
-                          variant="outlined"
-                          component="span"
-                          startIcon={<FileUploadIcon />}
-                          fullWidth
-                          sx={{ mb: 2 }}
-                        >
-                          Wybierz plik certyfikatu
-                        </Button>
-                      </label>
-                      
-                      {certificateFile && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="body2" gutterBottom>
-                            Wybrany plik: {certificateFile.name}
-                          </Typography>
-                          
-                          {certificatePreviewUrl && (
-                            <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
-                              <Typography variant="subtitle2" gutterBottom>
-                                Podgląd dokumentu:
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2">Certyfikat produktu (opcjonalnie)</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box>
+                          <input
+                            accept="application/pdf,image/*,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            style={{ display: 'none' }}
+                            id="certificate-file-upload"
+                            type="file"
+                            onChange={handleCertificateFileChange}
+                            ref={fileInputRef}
+                          />
+                          <label htmlFor="certificate-file-upload">
+                            <Button
+                              variant="outlined"
+                              component="span"
+                              startIcon={<FileUploadIcon />}
+                              fullWidth
+                              sx={{ mb: 2 }}
+                            >
+                              Wybierz plik certyfikatu
+                            </Button>
+                          </label>
+                          {certificateFile && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="body2" gutterBottom>
+                                Wybrany plik: {certificateFile.name}
                               </Typography>
-                              
-                              {certificateFile.type.startsWith('image/') ? (
-                                <Box sx={{ mt: 1, textAlign: 'center' }}>
-                                  <img 
-                                    src={certificatePreviewUrl} 
-                                    alt="Podgląd certyfikatu" 
-                                    style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
-                                  />
+                              {certificatePreviewUrl && (
+                                <Box sx={{ mt: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 2 }}>
+                                  <Typography variant="subtitle2" gutterBottom>
+                                    Podgląd dokumentu:
+                                  </Typography>
+                                  {certificateFile.type.startsWith('image/') ? (
+                                    <Box sx={{ mt: 1, textAlign: 'center' }}>
+                                      <img 
+                                        src={certificatePreviewUrl} 
+                                        alt="Podgląd certyfikatu" 
+                                        style={{ maxWidth: '100%', maxHeight: '300px', objectFit: 'contain' }} 
+                                      />
+                                    </Box>
+                                  ) : certificateFile.type === 'application/pdf' ? (
+                                    <Box sx={{ mt: 1, textAlign: 'center', height: '300px' }}>
+                                      <iframe 
+                                        src={certificatePreviewUrl} 
+                                        title="Podgląd PDF" 
+                                        width="100%" 
+                                        height="100%" 
+                                        style={{ border: 'none' }}
+                                      />
+                                    </Box>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                      Podgląd dla tego typu pliku nie jest dostępny. Dokument zostanie zapisany w systemie.
+                                    </Typography>
+                                  )}
                                 </Box>
-                              ) : certificateFile.type === 'application/pdf' ? (
-                                <Box sx={{ mt: 1, textAlign: 'center', height: '300px' }}>
-                                  <iframe 
-                                    src={certificatePreviewUrl} 
-                                    title="Podgląd PDF" 
-                                    width="100%" 
-                                    height="100%" 
-                                    style={{ border: 'none' }}
-                                  />
-                                </Box>
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  Podgląd dla tego typu pliku nie jest dostępny. Dokument zostanie zapisany w systemie.
-                                </Typography>
                               )}
                             </Box>
                           )}
                         </Box>
-                      )}
-                    </Box>
+                      </AccordionDetails>
+                    </Accordion>
                   </Grid>
                 </>
               ) : (

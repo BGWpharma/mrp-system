@@ -345,7 +345,7 @@ const Sidebar = ({ onToggle }) => {
         { text: t('sidebar.submenu.inventory.forms'), icon: <ListAltIcon />, path: '/inventory/forms' },
         { text: t('sidebar.submenu.inventory.stocktaking'), icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
         { text: t('sidebar.submenu.inventory.status'), icon: <WarehouseIcon />, path: '/inventory' },
-        { text: t('sidebar.submenu.inventory.expiryDates'), icon: <CalendarIcon />, path: '/inventory/expiry-dates' },
+        { text: t('sidebar.submenu.inventory.expiryDates'), icon: <CalendarIcon />, path: '/inventory/expiry-dates', badge: expiringItemsCount > 0 ? expiringItemsCount : null },
         { text: t('sidebar.submenu.inventory.componentOrders'), icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     }
@@ -524,7 +524,13 @@ const Sidebar = ({ onToggle }) => {
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
                         <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                          {subItem.icon}
+                          {subItem.badge ? (
+                            <StyledBadge badgeContent={subItem.badge} color="primary">
+                              {subItem.icon}
+                            </StyledBadge>
+                          ) : (
+                            subItem.icon
+                          )}
                         </ListItemIcon>
                       </Tooltip>
                       {isDrawerOpen && (

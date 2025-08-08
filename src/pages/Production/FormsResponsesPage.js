@@ -378,7 +378,7 @@ const FormsResponsesPage = () => {
   const CompletedMOTable = () => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">{t('completedMO.title')}</Typography>
+        <Typography variant="h6">{t('productionForms.completedMO.title')}</Typography>
         <Box>
           <Button 
             variant="outlined" 
@@ -478,7 +478,7 @@ const FormsResponsesPage = () => {
   const ProductionControlTable = () => (
     <>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6">{t('productionControl.title')}</Typography>
+        <Typography variant="h6">{t('productionForms.productionControl.title')}</Typography>
         <Box>
           <Button 
             variant="outlined" 
@@ -651,7 +651,7 @@ const FormsResponsesPage = () => {
     return (
       <>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6">{t('productionShift.title')}</Typography>
+          <Typography variant="h6">{t('productionForms.productionShift.title')}</Typography>
           <Box>
             <Button 
               variant="outlined" 
@@ -897,9 +897,9 @@ const FormsResponsesPage = () => {
           textColor="primary"
           variant="fullWidth"
         >
-          <Tab label={t('completedMO.tab')} />
-          <Tab label={t('productionControl.tab')} />
-          <Tab label={t('productionShift.tab')} />
+          <Tab label={t('productionForms.completedMO.tab')} />
+          <Tab label={t('productionForms.productionControl.tab')} />
+          <Tab label={t('productionForms.productionShift.tab')} />
         </Tabs>
       </Paper>
       
