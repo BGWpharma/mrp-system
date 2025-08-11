@@ -146,9 +146,9 @@ const PurchaseOrderForm = ({ orderId }) => {
           const poDetails = await getPurchaseOrderById(currentOrderId);
           console.log("Pobrane dane zamówienia:", poDetails);
           
-          // Użyj formatDateForInput do formatowania dat
-          const formattedOrderDate = poDetails.orderDate ? formatDateForInput(poDetails.orderDate) : formatDateForInput(new Date());
-          const formattedDeliveryDate = poDetails.expectedDeliveryDate ? formatDateForInput(poDetails.expectedDeliveryDate) : '';
+          // Zachowaj daty jako obiekty Date
+          const orderDate = poDetails.orderDate ? (poDetails.orderDate.toDate ? poDetails.orderDate.toDate() : new Date(poDetails.orderDate)) : new Date();
+          const deliveryDate = poDetails.expectedDeliveryDate ? (poDetails.expectedDeliveryDate.toDate ? poDetails.expectedDeliveryDate.toDate() : new Date(poDetails.expectedDeliveryDate)) : null;
           
           // Pobierz obiekty supplier z tablicy wszystkich dostawców
           let matchedSupplier = null;
@@ -182,8 +182,8 @@ const PurchaseOrderForm = ({ orderId }) => {
           setPoData({
             ...poData,
             ...poDetails,
-            orderDate: formattedOrderDate,
-            expectedDeliveryDate: formattedDeliveryDate,
+            orderDate: orderDate,
+            expectedDeliveryDate: deliveryDate,
             supplier: matchedSupplier,
             additionalCostsItems: additionalCostsItems,
             attachments: poDetails.attachments || [], // Stare pole dla kompatybilności
@@ -385,30 +385,21 @@ const PurchaseOrderForm = ({ orderId }) => {
         // Sprawdź czy data jest prawidłowa
         if (!(date instanceof Date) || isNaN(date.getTime())) {
           console.warn(`Nieprawidłowa data dla ${name}:`, date);
-          setPoData(prev => ({ ...prev, [name]: '' }));
+          setPoData(prev => ({ ...prev, [name]: null }));
           return;
         }
         
-        // Użyj funkcji formatDateForInput aby poprawnie sformatować datę
-        const formattedDate = formatDateForInput(date);
-        console.log(`Sformatowana data ${name}:`, formattedDate);
-        
-        // Sprawdź czy formatowanie się powiodło
-        if (!formattedDate) {
-          console.warn(`Formatowanie daty ${name} nie powiodło się`);
-          setPoData(prev => ({ ...prev, [name]: '' }));
-          return;
-        }
-        
-        setPoData(prev => ({ ...prev, [name]: formattedDate }));
+        // Zapisz obiekt Date bezpośrednio - nie konwertuj na string
+        console.log(`Ustawiam datę ${name}:`, date);
+        setPoData(prev => ({ ...prev, [name]: date }));
       } catch (error) {
-        console.error(`Błąd podczas formatowania daty ${name}:`, error);
-        // W przypadku błędu, ustaw pustą datę
-        setPoData(prev => ({ ...prev, [name]: '' }));
+        console.error(`Błąd podczas ustawienia daty ${name}:`, error);
+        // W przypadku błędu, ustaw null
+        setPoData(prev => ({ ...prev, [name]: null }));
       }
     } else {
       console.log(`Usunięcie daty ${name}`);
-      setPoData(prev => ({ ...prev, [name]: '' }));
+      setPoData(prev => ({ ...prev, [name]: null }));
     }
   };
   
@@ -1983,9 +1974,9 @@ const PurchaseOrderForm = ({ orderId }) => {
         const poDetails = await getPurchaseOrderById(currentOrderId);
         console.log("Pobrane dane zamówienia:", poDetails);
         
-        // Użyj formatDateForInput do formatowania dat
-        const formattedOrderDate = poDetails.orderDate ? formatDateForInput(poDetails.orderDate) : formatDateForInput(new Date());
-        const formattedDeliveryDate = poDetails.expectedDeliveryDate ? formatDateForInput(poDetails.expectedDeliveryDate) : '';
+        // Zachowaj daty jako obiekty Date
+        const orderDate = poDetails.orderDate ? (poDetails.orderDate.toDate ? poDetails.orderDate.toDate() : new Date(poDetails.orderDate)) : new Date();
+        const deliveryDate = poDetails.expectedDeliveryDate ? (poDetails.expectedDeliveryDate.toDate ? poDetails.expectedDeliveryDate.toDate() : new Date(poDetails.expectedDeliveryDate)) : null;
         
         // Pobierz obiekty supplier z tablicy wszystkich dostawców
         let matchedSupplier = null;
@@ -2040,8 +2031,8 @@ const PurchaseOrderForm = ({ orderId }) => {
         setPoData({
           ...poDetails,
           supplier: matchedSupplier,
-          orderDate: formattedOrderDate,
-          expectedDeliveryDate: formattedDeliveryDate,
+          orderDate: orderDate,
+          expectedDeliveryDate: deliveryDate,
           invoiceLink: poDetails.invoiceLink || '',
           items: itemsWithVatRate,
           additionalCostsItems: costsWithVatRate,
@@ -2396,30 +2387,34 @@ const PurchaseOrderForm = ({ orderId }) => {
                   value={(() => {
                     if (!poData.orderDate) return null;
                     try {
-                      let date;
+                      // Jeśli to już obiekt Date, użyj go bezpośrednio
+                      if (poData.orderDate instanceof Date) {
+                        return isValid(poData.orderDate) ? poData.orderDate : null;
+                      }
+                      // Jeśli to Firestore Timestamp
+                      if (poData.orderDate && typeof poData.orderDate.toDate === 'function') {
+                        return poData.orderDate.toDate();
+                      }
+                      // Jeśli to string, spróbuj sparsować
                       if (typeof poData.orderDate === 'string') {
                         if (poData.orderDate.includes('Invalid') || poData.orderDate.trim() === '') {
                           return null;
                         }
-                        // Użyj parseISO dla ISO stringów lub new Date dla YYYY-MM-DD
-                        date = poData.orderDate.includes('T') || poData.orderDate.includes('Z') 
+                        const date = poData.orderDate.includes('T') || poData.orderDate.includes('Z') 
                           ? parseISO(poData.orderDate) 
                           : new Date(poData.orderDate + 'T00:00:00');
-                      } else if (poData.orderDate instanceof Date) {
-                        date = poData.orderDate;
-                      } else if (poData.orderDate && typeof poData.orderDate.toDate === 'function') {
-                        date = poData.orderDate.toDate();
-                      } else {
-                        return null;
+                        return isValid(date) ? date : null;
                       }
-                      return isValid(date) ? date : null;
+                      return null;
                     } catch (error) {
                       console.error('Błąd parsowania orderDate:', error, poData.orderDate);
                       return null;
                     }
                   })()}
                   onChange={(date) => handleDateChange('orderDate', date)}
-                  slotProps={{ textField: { fullWidth: true } }}
+                  minDate={new Date('1900-01-01')}
+                  maxDate={new Date('2100-12-31')}
+                  slotProps={{ textField: { fullWidth: true, error: false } }}
                 />
               </LocalizationProvider>
             </Grid>
@@ -2432,30 +2427,34 @@ const PurchaseOrderForm = ({ orderId }) => {
                   value={(() => {
                     if (!poData.expectedDeliveryDate) return null;
                     try {
-                      let date;
+                      // Jeśli to już obiekt Date, użyj go bezpośrednio
+                      if (poData.expectedDeliveryDate instanceof Date) {
+                        return isValid(poData.expectedDeliveryDate) ? poData.expectedDeliveryDate : null;
+                      }
+                      // Jeśli to Firestore Timestamp
+                      if (poData.expectedDeliveryDate && typeof poData.expectedDeliveryDate.toDate === 'function') {
+                        return poData.expectedDeliveryDate.toDate();
+                      }
+                      // Jeśli to string, spróbuj sparsować
                       if (typeof poData.expectedDeliveryDate === 'string') {
                         if (poData.expectedDeliveryDate.includes('Invalid') || poData.expectedDeliveryDate.trim() === '') {
                           return null;
                         }
-                        // Użyj parseISO dla ISO stringów lub new Date dla YYYY-MM-DD
-                        date = poData.expectedDeliveryDate.includes('T') || poData.expectedDeliveryDate.includes('Z') 
+                        const date = poData.expectedDeliveryDate.includes('T') || poData.expectedDeliveryDate.includes('Z') 
                           ? parseISO(poData.expectedDeliveryDate) 
                           : new Date(poData.expectedDeliveryDate + 'T00:00:00');
-                      } else if (poData.expectedDeliveryDate instanceof Date) {
-                        date = poData.expectedDeliveryDate;
-                      } else if (poData.expectedDeliveryDate && typeof poData.expectedDeliveryDate.toDate === 'function') {
-                        date = poData.expectedDeliveryDate.toDate();
-                      } else {
-                        return null;
+                        return isValid(date) ? date : null;
                       }
-                      return isValid(date) ? date : null;
+                      return null;
                     } catch (error) {
                       console.error('Błąd parsowania expectedDeliveryDate:', error, poData.expectedDeliveryDate);
                       return null;
                     }
                   })()}
                   onChange={(date) => handleDateChange('expectedDeliveryDate', date)}
-                  slotProps={{ textField: { fullWidth: true, required: true } }}
+                  minDate={new Date('1900-01-01')}
+                  maxDate={new Date('2100-12-31')}
+                  slotProps={{ textField: { fullWidth: true, required: true, error: false } }}
                 />
               </LocalizationProvider>
             </Grid>
@@ -3228,16 +3227,13 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     }
                                   })()}
                                   onChange={(newValue) => {
-                                    // Zapisz datę w formacie ISO string tylko dla kompletnych i poprawnych dat
+                                    // Zapisz obiekt Date bezpośrednio
                                     if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
-                                      const formattedDate = formatDateForInput(newValue);
-                                      handleItemChange(index, 'invoiceDate', formattedDate);
-                                    } else if (newValue === null) {
-                                      // Tylko jeśli użytkownik jawnie wyczyścił pole (null)
-                                      handleItemChange(index, 'invoiceDate', '');
+                                      handleItemChange(index, 'invoiceDate', newValue);
+                                    } else {
+                                      // Usuń datę
+                                      handleItemChange(index, 'invoiceDate', null);
                                     }
-                                    // W przypadku niepoprawnej daty (ale nie null) - nie robimy nic,
-                                    // zachowujemy obecną wartość w stanie
                                   }}
                                   onError={(error) => {
                                     // Obsługuj błędy parsowania bez resetowania wartości
@@ -3245,6 +3241,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                                   }}
                                   disableHighlightToday={false}
                                   reduceAnimations={true}
+                                  minDate={new Date('1900-01-01')}
+                                  maxDate={new Date('2100-12-31')}
                                   slotProps={{ 
                                     textField: { 
                                       fullWidth: true, 
@@ -3253,7 +3251,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                                       onBlur: (event) => {
                                         // Dodatowa obsługa onBlur żeby zachować wartości podczas edycji
                                         console.log('DatePicker blur:', event.target.value);
-                                      }
+                                      },
+                                      error: false
                                     },
                                     field: { 
                                       clearable: true,
@@ -3296,23 +3295,22 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     }
                                   })()}
                                   onChange={(newValue) => {
-                                    try {
-                                      if (newValue && !isNaN(newValue.getTime())) {
-                                        const formattedDate = formatDateForInput(newValue);
-                                        handleItemChange(index, 'plannedDeliveryDate', formattedDate);
-                                      } else {
-                                        handleItemChange(index, 'plannedDeliveryDate', '');
-                                      }
-                                    } catch (error) {
-                                      console.error('Błąd przy konwersji planowanej daty dostawy:', error);
-                                      handleItemChange(index, 'plannedDeliveryDate', '');
+                                    // Zapisz obiekt Date bezpośrednio
+                                    if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                      handleItemChange(index, 'plannedDeliveryDate', newValue);
+                                    } else {
+                                      // Usuń datę
+                                      handleItemChange(index, 'plannedDeliveryDate', null);
                                     }
                                   }}
+                                  minDate={new Date('1900-01-01')}
+                                  maxDate={new Date('2100-12-31')}
                                   slotProps={{ 
                                     textField: { 
                                       fullWidth: true, 
                                       size: 'small',
-                                      placeholder: 'dd.mm.yyyy'
+                                      placeholder: 'dd.mm.yyyy',
+                                      error: false
                                     } 
                                   }}
                                   format="dd.MM.yyyy"
@@ -3350,23 +3348,22 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     }
                                   })()}
                                   onChange={(newValue) => {
-                                    try {
-                                      if (newValue && !isNaN(newValue.getTime())) {
-                                        const formattedDate = formatDateForInput(newValue);
-                                        handleItemChange(index, 'actualDeliveryDate', formattedDate);
-                                      } else {
-                                        handleItemChange(index, 'actualDeliveryDate', '');
-                                      }
-                                    } catch (error) {
-                                      console.error('Błąd przy konwersji rzeczywistej daty dostawy:', error);
-                                      handleItemChange(index, 'actualDeliveryDate', '');
+                                    // Zapisz obiekt Date bezpośrednio
+                                    if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                      handleItemChange(index, 'actualDeliveryDate', newValue);
+                                    } else {
+                                      // Usuń datę
+                                      handleItemChange(index, 'actualDeliveryDate', null);
                                     }
                                   }}
+                                  minDate={new Date('1900-01-01')}
+                                  maxDate={new Date('2100-12-31')}
                                   slotProps={{ 
                                     textField: { 
                                       fullWidth: true, 
                                       size: 'small',
-                                      placeholder: 'dd.mm.yyyy'
+                                      placeholder: 'dd.mm.yyyy',
+                                      error: false
                                     } 
                                   }}
                                   format="dd.MM.yyyy"

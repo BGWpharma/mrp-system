@@ -1074,12 +1074,44 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     // Zapisz stare dane przed aktualizacją
     const oldPoData = poDoc.data();
     
-    // Aktualizuj dokument
-    await updateDoc(purchaseOrderRef, {
+    // Bezpieczna konwersja dat do obiektów Date
+    const safeConvertToDate = (value) => {
+      if (!value) return null;
+      
+      try {
+        // Jeśli to już obiekt Date, zwróć go
+        if (value instanceof Date) return value;
+        
+        // Jeśli to string, konwertuj na Date
+        if (typeof value === 'string') return new Date(value);
+        
+        // Jeśli to Timestamp, użyj toDate()
+        if (value && value.toDate && typeof value.toDate === 'function') return value.toDate();
+        
+        return null;
+      } catch (error) {
+        console.error("Błąd konwersji daty:", error);
+        return null;
+      }
+    };
+    
+    // Przygotuj dane do aktualizacji z konwersją dat
+    const dataToUpdate = {
       ...updatedData,
       updatedAt: serverTimestamp(),
       updatedBy: userId || 'system'
-    });
+    };
+    
+    // Konwertuj daty jeśli istnieją w aktualizowanych danych
+    if (updatedData.orderDate !== undefined) {
+      dataToUpdate.orderDate = safeConvertToDate(updatedData.orderDate);
+    }
+    if (updatedData.expectedDeliveryDate !== undefined) {
+      dataToUpdate.expectedDeliveryDate = safeConvertToDate(updatedData.expectedDeliveryDate);
+    }
+    
+    // Aktualizuj dokument
+    await updateDoc(purchaseOrderRef, dataToUpdate);
     
     // Pobierz pełne dane po aktualizacji
     const updatedPoDoc = await getDoc(purchaseOrderRef);
