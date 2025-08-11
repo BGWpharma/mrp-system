@@ -288,7 +288,7 @@ const PurchaseOrderList = () => {
         }
         
         // Standardowa aktualizacja statusu
-        await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus);
+        await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus, currentUser.uid);
         
         // Zaktualizuj w cache zamiast odświeżania całej listy
         updatePurchaseOrderInCache(poToUpdateStatus.id, { 
@@ -319,7 +319,7 @@ const PurchaseOrderList = () => {
   const handlePaymentStatusUpdate = async () => {
     if (poToUpdatePaymentStatus && newPaymentStatus) {
       try {
-        await updatePurchaseOrderPaymentStatus(poToUpdatePaymentStatus.id, newPaymentStatus);
+        await updatePurchaseOrderPaymentStatus(poToUpdatePaymentStatus.id, newPaymentStatus, currentUser.uid);
         
         // Zaktualizuj w cache zamiast odświeżania całej listy
         updatePurchaseOrderInCache(poToUpdatePaymentStatus.id, { 

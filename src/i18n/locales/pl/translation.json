@@ -858,6 +858,14 @@
         "attachmentsToMigrate": "Załączników do przeniesienia: {{count}}",
         "targetBatch": "Partia docelowa: {{batch}}"
       }
+    },
+    "notifications": {
+      "statusUpdateSuccess": "Status zamówienia został zaktualizowany",
+      "statusUpdateError": "Błąd podczas aktualizacji statusu zamówienia",
+      "paymentStatusUpdateSuccess": "Status płatności został zaktualizowany",
+      "paymentStatusUpdateError": "Błąd podczas aktualizacji statusu płatności",
+      "deleteSuccess": "Zamówienie zostało usunięte",
+      "deleteError": "Błąd podczas usuwania zamówienia"
     }
   },
   "cmr": {
