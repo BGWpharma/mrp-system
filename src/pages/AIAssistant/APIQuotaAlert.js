@@ -19,12 +19,14 @@ import {
   Payments as PaymentsIcon,
   ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
+  import { useTranslation } from '../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający szczegółowe informacje o błędzie przekroczenia limitu API OpenAI
  * oraz porady jak rozwiązać ten problem
  */
-const APIQuotaAlert = () => {
+  const APIQuotaAlert = () => {
+    const { t } = useTranslation();
   const handleOpenBillingPage = () => {
     window.open('https://platform.openai.com/account/billing', '_blank');
   };
@@ -37,97 +39,96 @@ const APIQuotaAlert = () => {
     <Paper sx={{ p: 3, mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <ErrorIcon color="error" fontSize="large" />
-        <Typography variant="h5" color="error.main">
-          Przekroczono limit API OpenAI
-        </Typography>
+          <Typography variant="h5" color="error.main">
+            {t('aiAssistant.quota.title')}
+          </Typography>
       </Box>
       
-      <Alert severity="warning" sx={{ mb: 3 }}>
-        System wykrył błąd związany z limitem lub wyczerpaniem środków na koncie OpenAI. 
-        Aby kontynuować korzystanie z asystenta AI, konieczne jest uzupełnienie konta.
-      </Alert>
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('aiAssistant.quota.alert')}
+        </Alert>
       
-      <Typography variant="body1" paragraph>
-        Komunikat błędu <strong>"You exceeded your current quota"</strong> oznacza, że wystąpił jeden z poniższych problemów:
-      </Typography>
+        <Typography variant="body1" paragraph>
+          {t('aiAssistant.quota.explainerPrefix')} <strong>"You exceeded your current quota"</strong> {t('aiAssistant.quota.explainerSuffix')}
+        </Typography>
       
       <List>
         <ListItem>
           <ListItemIcon>
             <WarningIcon color="warning" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Wyczerpanie darmowego limitu" 
-            secondary="Jeśli korzystasz z darmowego kredytu startowego, możliwe że został on wyczerpany."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.causes.freeTier.title')} 
+              secondary={t('aiAssistant.quota.causes.freeTier.desc')}
+            />
         </ListItem>
         
         <ListItem>
           <ListItemIcon>
             <WarningIcon color="warning" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Przekroczenie miesięcznego limitu wydatków" 
-            secondary="Jeśli ustawiłeś limit wydatków na koncie OpenAI, możliwe że został on osiągnięty."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.causes.monthlyCap.title')} 
+              secondary={t('aiAssistant.quota.causes.monthlyCap.desc')}
+            />
         </ListItem>
         
         <ListItem>
           <ListItemIcon>
             <WarningIcon color="warning" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Problem z metodą płatności" 
-            secondary="Jeśli wystąpił problem z metodą płatności, OpenAI mogło zawiesić dostęp do API."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.causes.payment.title')} 
+              secondary={t('aiAssistant.quota.causes.payment.desc')}
+            />
         </ListItem>
         
         <ListItem>
           <ListItemIcon>
             <InfoIcon color="info" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Błąd 429 (Too Many Requests)" 
-            secondary="Zbyt wiele zapytań w krótkim czasie. W tym przypadku odczekaj kilka minut i spróbuj ponownie."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.causes.tooManyRequests.title')} 
+              secondary={t('aiAssistant.quota.causes.tooManyRequests.desc')}
+            />
         </ListItem>
       </List>
       
       <Divider sx={{ my: 2 }} />
       
-      <Typography variant="h6" gutterBottom>
-        Jak rozwiązać problem?
-      </Typography>
+        <Typography variant="h6" gutterBottom>
+          {t('aiAssistant.quota.howTo.title')}
+        </Typography>
       
       <List>
         <ListItem>
           <ListItemIcon>
             <CheckIcon color="success" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Sprawdź stan konta i metody płatności" 
-            secondary="Zaloguj się do panelu OpenAI i przejdź do sekcji rozliczeń, aby sprawdzić status swojego konta."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.howTo.step1.title')} 
+              secondary={t('aiAssistant.quota.howTo.step1.desc')}
+            />
         </ListItem>
         
         <ListItem>
           <ListItemIcon>
             <CheckIcon color="success" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Uzupełnij środki lub dodaj metodę płatności" 
-            secondary="Upewnij się, że metoda płatności jest poprawna i aktywna. W razie potrzeby dodaj nowe środki."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.howTo.step2.title')} 
+              secondary={t('aiAssistant.quota.howTo.step2.desc')}
+            />
         </ListItem>
         
         <ListItem>
           <ListItemIcon>
             <CheckIcon color="success" />
           </ListItemIcon>
-          <ListItemText 
-            primary="Zwiększ miesięczny limit (jeśli dotyczy)" 
-            secondary="Jeśli ustaliłeś miesięczny limit wydatków, rozważ jego zwiększenie w ustawieniach konta."
-          />
+            <ListItemText 
+              primary={t('aiAssistant.quota.howTo.step3.title')} 
+              secondary={t('aiAssistant.quota.howTo.step3.desc')}
+            />
         </ListItem>
       </List>
       
@@ -138,7 +139,7 @@ const APIQuotaAlert = () => {
           startIcon={<PaymentsIcon />}
           onClick={handleOpenBillingPage}
         >
-          Przejdź do rozliczeń OpenAI
+            {t('aiAssistant.quota.howTo.goToBilling')}
         </Button>
         
         <Button 
@@ -146,14 +147,13 @@ const APIQuotaAlert = () => {
           endIcon={<ArrowForwardIcon />}
           onClick={handleOpenAPIDocsPage}
         >
-          Dokumentacja błędów API
+            {t('aiAssistant.quota.howTo.apiErrorsDocs')}
         </Button>
       </Box>
       
-      <Typography variant="caption" sx={{ display: 'block', mt: 3, textAlign: 'center', color: 'text.secondary' }}>
-        Uwaga: Koszt korzystania z modelu GPT-4o jest wyższy niż w przypadku starszych modeli. 
-        Jeśli chcesz zmniejszyć koszty, rozważ zmianę modelu w konfiguracji.
-      </Typography>
+        <Typography variant="caption" sx={{ display: 'block', mt: 3, textAlign: 'center', color: 'text.secondary' }}>
+          {t('aiAssistant.quota.notice')}
+        </Typography>
     </Paper>
   );
 };

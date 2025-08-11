@@ -64,13 +64,15 @@ import { checkAndUpdateAIMessageQuota } from '../../services/userService';
 import { getSystemSettings } from '../../services/settingsService';
 import ApiKeyInstructions from './ApiKeyInstructions';
 import APIQuotaAlert from './APIQuotaAlert';
+  import { useTranslation } from '../../hooks/useTranslation';
 
 // Ten komponent będzie przyszłościowo używał API do komunikacji z modelem AI
 // Na razie implementujemy podstawowy interfejs i strukturę
-const AIAssistantPage = () => {
+  const AIAssistantPage = () => {
   const { mode } = useTheme();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+    const { t, formatDate: formatDateLocalized, currentLanguage } = useTranslation();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -570,13 +572,12 @@ const AIAssistantPage = () => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('pl-PL', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return formatDateLocalized(dateString, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -638,7 +639,7 @@ const AIAssistantPage = () => {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4">
-          Asystent AI
+          {t('aiAssistant.title')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           {!useGlobalApiKey && (
@@ -646,9 +647,9 @@ const AIAssistantPage = () => {
               variant="outlined" 
               startIcon={<SettingsIcon />}
               onClick={handleOpenSettings}
-              color={hasApiKey ? "primary" : "warning"}
+              color={hasApiKey ? 'primary' : 'warning'}
             >
-              {hasApiKey ? "Ustawienia API" : "Skonfiguruj API"}
+              {hasApiKey ? t('aiAssistant.buttons.apiSettings') : t('aiAssistant.buttons.configureApi')}
             </Button>
           )}
         </Box>
@@ -664,7 +665,7 @@ const AIAssistantPage = () => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <KeyIcon color="primary" />
-            <Typography variant="h6">Instrukcje uzyskania klucza API OpenAI</Typography>
+            <Typography variant="h6">{t('aiAssistant.instructionsDialog.title')}</Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -675,7 +676,7 @@ const AIAssistantPage = () => {
             onClick={handleCloseInstructions}
             variant="outlined"
           >
-            Zamknij
+            {t('common.close')}
           </Button>
           <Button 
             onClick={() => {
@@ -685,7 +686,7 @@ const AIAssistantPage = () => {
             variant="contained"
             startIcon={<KeyIcon />}
           >
-            Konfiguruj klucz API
+            {t('aiAssistant.instructionsDialog.configureApiKey')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -695,25 +696,24 @@ const AIAssistantPage = () => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <SettingsIcon color="primary" />
-            <Typography variant="h6">Konfiguracja API OpenAI</Typography>
+            <Typography variant="h6">{t('aiAssistant.settingsDialog.title')}</Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Aby korzystać z GPT-4o, potrzebujesz klucza API OpenAI. Klucz będzie przechowywany w bazie danych Firebase
-            i używany tylko do komunikacji z API OpenAI w kontekście tego asystenta.
+            {t('aiAssistant.settingsDialog.description')}
           </Typography>
           
           <TextField
             autoFocus
             margin="dense"
-            label="Klucz API OpenAI"
+            label={t('aiAssistant.settingsDialog.apiKeyLabel')}
             type="text"
             fullWidth
             variant="outlined"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-..."
+            placeholder={t('aiAssistant.settingsDialog.apiKeyPlaceholder')}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -729,7 +729,7 @@ const AIAssistantPage = () => {
               startIcon={showInstructions ? <ExpandLessIcon /> : <ExpandMoreIcon />}
               sx={{ textTransform: 'none' }}
             >
-              {showInstructions ? "Ukryj instrukcje" : "Pokaż instrukcje"}
+              {showInstructions ? t('aiAssistant.buttons.hideInstructions') : t('aiAssistant.buttons.showInstructions')}
             </Button>
             
             <Button
@@ -739,22 +739,22 @@ const AIAssistantPage = () => {
               onClick={() => window.open('https://platform.openai.com/account/billing', '_blank')}
               startIcon={<PaymentsIcon />}
             >
-              Zarządzaj kontem OpenAI
+              {t('aiAssistant.settingsDialog.manageOpenAIAccount')}
             </Button>
           </Box>
           
           <Collapse in={showInstructions}>
             <Box sx={{ mt: 1, mb: 1, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom>
-                Jak uzyskać klucz API:
+                {t('aiAssistant.settingsDialog.howToGetKey.title')}
               </Typography>
               <Typography variant="body2" component="div">
                 <ol>
-                  <li>Odwiedź stronę <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI API Keys</a></li>
-                  <li>Zaloguj się lub utwórz konto</li>
-                  <li>Kliknij "Create new secret key"</li>
-                  <li>Skopiuj wygenerowany klucz (zaczyna się od "sk-")</li>
-                  <li>Wklej klucz w pole powyżej</li>
+                  <li>{t('aiAssistant.settingsDialog.howToGetKey.step1')}</li>
+                  <li>{t('aiAssistant.settingsDialog.howToGetKey.step2')}</li>
+                  <li>{t('aiAssistant.settingsDialog.howToGetKey.step3')}</li>
+                  <li>{t('aiAssistant.settingsDialog.howToGetKey.step4')}</li>
+                  <li>{t('aiAssistant.settingsDialog.howToGetKey.step5')}</li>
                 </ol>
               </Typography>
               <Button 
@@ -762,27 +762,27 @@ const AIAssistantPage = () => {
                 onClick={handleOpenInstructions}
                 sx={{ mt: 1 }}
               >
-                Pełne instrukcje
+                {t('aiAssistant.settingsDialog.fullInstructions')}
               </Button>
             </Box>
           </Collapse>
           
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            Klucz API można uzyskać na stronie{' '}
+            {t('aiAssistant.settingsDialog.apiKeysLinkLabel')}{' '}
             <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
               https://platform.openai.com/api-keys
             </a>
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseSettings}>Anuluj</Button>
+          <Button onClick={handleCloseSettings}>{t('common.cancel')}</Button>
           <Button 
             onClick={handleSaveApiKey} 
             variant="contained" 
             disabled={saveApiKeyLoading}
             startIcon={saveApiKeyLoading ? <CircularProgress size={20} /> : null}
           >
-            Zapisz
+            {t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -797,7 +797,7 @@ const AIAssistantPage = () => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ErrorIcon color="error" />
-            <Typography variant="h6">Problem z limitem API OpenAI</Typography>
+            <Typography variant="h6">{t('aiAssistant.quotaDialog.title')}</Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -808,7 +808,7 @@ const AIAssistantPage = () => {
             onClick={handleCloseQuotaDialog}
             variant="outlined"
           >
-            Zamknij
+            {t('common.close')}
           </Button>
           <Button 
             onClick={() => {
@@ -819,7 +819,7 @@ const AIAssistantPage = () => {
             color="primary"
             startIcon={<PaymentsIcon />}
           >
-            Przejdź do rozliczeń OpenAI
+            {t('aiAssistant.quotaDialog.goToBilling')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -836,19 +836,19 @@ const AIAssistantPage = () => {
           severity="info" 
           variant="filled"
           action={
-            <Button 
-              color="inherit" 
-              size="small" 
-              onClick={() => {
-                setOpenAlert(false);
-                handleOpenSettings();
-              }}
-            >
-              Konfiguruj
-            </Button>
+              <Button 
+                color="inherit" 
+                size="small" 
+                onClick={() => {
+                  setOpenAlert(false);
+                  handleOpenSettings();
+                }}
+              >
+                {t('aiAssistant.buttons.configure')}
+              </Button>
           }
         >
-          Asystent działa w trybie demo - skonfiguruj klucz API OpenAI, aby używać GPT-4o
+            {t('aiAssistant.snackbar.demoMode')}
         </Alert>
       </Snackbar>
       
@@ -871,7 +871,7 @@ const AIAssistantPage = () => {
                 onClick={handleOpenQuotaDialog}
                 sx={{ mr: 1 }}
               >
-                Szczegóły
+                {t('aiAssistant.buttons.details')}
               </Button>
               <Button 
                 color="inherit" 
@@ -881,18 +881,18 @@ const AIAssistantPage = () => {
                   window.open('https://platform.openai.com/account/billing', '_blank');
                 }}
               >
-                Uzupełnij konto
+                {t('aiAssistant.buttons.topUpAccount')}
               </Button>
             </Box>
           }
         >
-          Przekroczono limit dostępnych środków. Uzupełnij konto OpenAI, aby kontynuować korzystanie z asystenta AI.
+          {t('aiAssistant.snackbar.quotaExceeded')}
         </Alert>
       </Snackbar>
       
       {/* Wyświetlanie informacji o limicie wiadomości - dodaj przed polem inputa */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, mt: 2 }}>
-        <Tooltip title={`Pozostało ${aiMessageQuota.remaining} z ${aiMessageQuota.limit} wiadomości w tym miesiącu`}>
+        <Tooltip title={t('aiAssistant.quota.tooltip', { remaining: aiMessageQuota.remaining, limit: aiMessageQuota.limit })}>
           <Box sx={{ width: '100%', mr: 1 }}>
             <LinearProgress 
               variant="determinate" 
@@ -921,14 +921,14 @@ const AIAssistantPage = () => {
             </Button>
           }
         >
-          Dla pełnej funkcjonalności asystenta AI, skonfiguruj klucz API OpenAI.
+          {t('aiAssistant.alert.configureApiNotice')}
           <Button
             color="inherit"
             size="small"
             onClick={handleOpenInstructions}
             sx={{ mt: 1, display: 'block' }}
           >
-            Pokaż instrukcje
+            {t('aiAssistant.buttons.showInstructions')}
           </Button>
         </Alert>
       )}
@@ -945,7 +945,7 @@ const AIAssistantPage = () => {
           }}
         >
           <Typography variant="h6" gutterBottom>
-            Historia konwersacji
+            {t('aiAssistant.history.title')}
           </Typography>
           <Divider sx={{ mb: 2 }} />
           
@@ -956,7 +956,7 @@ const AIAssistantPage = () => {
             sx={{ mb: 2 }}
             fullWidth
           >
-            Nowa konwersacja
+            {t('aiAssistant.history.newConversation')}
           </Button>
           
           {loadingConversations ? (
@@ -967,7 +967,7 @@ const AIAssistantPage = () => {
             <List sx={{ overflow: 'auto', maxHeight: '400px' }}>
               {conversationHistory.length === 0 ? (
                 <Typography variant="body2" sx={{ textAlign: 'center', py: 2, color: 'text.secondary' }}>
-                  Brak historii konwersacji
+                  {t('aiAssistant.history.empty')}
                 </Typography>
               ) : (
                 conversationHistory.map((conv) => (
@@ -992,9 +992,9 @@ const AIAssistantPage = () => {
                         <BotIcon />
                       </Avatar>
                     </ListItemAvatar>
-                    <ListItemText 
-                      primary={conv.title || 'Nowa konwersacja'}
-                      secondary={conv.updatedAt ? new Date(conv.updatedAt.toDate()).toLocaleDateString('pl-PL') : 'Dzisiaj'}
+                      <ListItemText 
+                        primary={conv.title || t('aiAssistant.history.newConversation')}
+                        secondary={conv.updatedAt ? new Date(conv.updatedAt.toDate()).toLocaleDateString(currentLanguage === 'pl' ? 'pl-PL' : 'en-US') : t('aiAssistant.history.today')}
                       primaryTypographyProps={{ 
                         variant: 'body2', 
                         fontWeight: 'medium',
@@ -1026,7 +1026,7 @@ const AIAssistantPage = () => {
               fullWidth
               disabled={messages.length === 0}
             >
-              Wyczyść konwersację
+              {t('aiAssistant.history.clearConversation')}
             </Button>
           </Box>
         </Paper>
@@ -1071,16 +1071,13 @@ const AIAssistantPage = () => {
               >
                 <BotIcon sx={{ fontSize: 60, mb: 2, color: 'primary.main' }} />
                 <Typography variant="h6">
-                  Witaj w Asystencie AI dla systemu MRP
+                  {t('aiAssistant.welcome.title')}
                 </Typography>
                 <Typography variant="body2" sx={{ maxWidth: '600px', mt: 1 }}>
-                  Zadaj pytanie dotyczące danych w systemie, zamówień, stanów magazynowych
-                  lub innych aspektów działania Twojej firmy. Asystent przeanalizuje dane
-                  i udzieli odpowiedzi na podstawie aktualnych informacji.
+                  {t('aiAssistant.welcome.description')}
                 </Typography>
                 <Typography variant="body2" sx={{ maxWidth: '600px', mt: 1, fontStyle: 'italic' }}>
-                  💡 Możesz również załączyć pliki (dokumenty, obrazy, pliki tekstowe) do swojego zapytania
-                  używając przycisku załącznika.
+                  {t('aiAssistant.welcome.hint')}
                 </Typography>
                 
                 <Alert 
@@ -1088,11 +1085,10 @@ const AIAssistantPage = () => {
                   sx={{ mt: 3, maxWidth: '600px', width: '100%' }}
                 >
                   <Typography variant="subtitle2">
-                    Asystent ma teraz bezpośredni dostęp do bazy danych!
+                    {t('aiAssistant.welcome.dbAccessTitle')}
                   </Typography>
                   <Typography variant="body2">
-                    Możesz pytać o dane z modułów: Magazyn, Zamówienia, Produkcja, Dostawcy i Receptury.
-                    Asystent analizuje dane w czasie rzeczywistym i dostarcza aktualne odpowiedzi.
+                    {t('aiAssistant.welcome.dbAccessDescription')}
                   </Typography>
                 </Alert>
                 
@@ -1106,18 +1102,18 @@ const AIAssistantPage = () => {
                         size="small" 
                         onClick={handleOpenSettings}
                       >
-                        Konfiguruj
+                        {t('aiAssistant.buttons.configure')}
                       </Button>
                     }
                   >
-                    Dla pełnej funkcjonalności asystenta AI, skonfiguruj klucz API OpenAI.
+                    {t('aiAssistant.alert.configureApiNotice')}
                     <Button
                       color="inherit"
                       size="small"
                       onClick={handleOpenInstructions}
                       sx={{ mt: 1, display: 'block' }}
                     >
-                      Pokaż instrukcje
+                      {t('aiAssistant.buttons.showInstructions')}
                     </Button>
                   </Alert>
                 )}
@@ -1169,7 +1165,7 @@ const AIAssistantPage = () => {
                           {message.role === 'user' ? <PersonIcon /> : <BotIcon />}
                         </Avatar>
                         <Typography variant="subtitle2">
-                          {message.role === 'user' ? 'Ty' : 'Asystent AI'}
+                          {message.role === 'user' ? t('aiAssistant.message.you') : t('aiAssistant.message.assistant')}
                         </Typography>
                       </Box>
                       
@@ -1181,7 +1177,7 @@ const AIAssistantPage = () => {
                       {message.attachments && message.attachments.length > 0 && (
                         <Box sx={{ ml: 4, mt: 1 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                            Załączniki:
+                            {t('aiAssistant.attachments.label')}
                           </Typography>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                             {message.attachments.map((attachment, attachIndex) => (
@@ -1234,7 +1230,7 @@ const AIAssistantPage = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 2, flex: '0 0 auto' }}>
                 <CircularProgress size={20} />
                 <Typography variant="body2" color="text.secondary">
-                  Asystent odpowiada...
+                  {t('aiAssistant.loading.replying')}
                 </Typography>
               </Box>
             )}
@@ -1246,7 +1242,7 @@ const AIAssistantPage = () => {
           {attachments.length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Załączniki ({attachments.length}):
+                {t('aiAssistant.attachments.title', { count: attachments.length })}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {attachments.map((attachment, index) => (
@@ -1291,7 +1287,7 @@ const AIAssistantPage = () => {
               <TextField
                 fullWidth
                 variant="outlined"
-                placeholder="Zadaj pytanie do asystenta AI..."
+                placeholder={t('aiAssistant.input.placeholder')}
                 value={input}
                 onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
