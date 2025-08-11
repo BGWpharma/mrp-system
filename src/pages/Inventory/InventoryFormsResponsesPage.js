@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Container, 
   Typography, 
@@ -21,119 +21,165 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Tooltip
+  Tooltip,
+  TablePagination,
+  Chip
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { db, storage } from '../../services/firebase/config';
-import { collection, getDocs, query, doc, deleteDoc } from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from '../../hooks/useTranslation';
+import { 
+  getInventoryFormResponsesWithPagination,
+  deleteInventoryFormResponse,
+  INVENTORY_FORM_TYPES
+} from '../../services/inventoryFormsService';
 
-// Komponent strony odpowiedzi formularzy magazynowych
+// Komponent strony odpowiedzi formularzy magazynowych z optymalizacjami
 const InventoryFormsResponsesPage = () => {
   const theme = useTheme();
   const { t } = useTranslation();
   const [tabValue, setTabValue] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   
+  // ✅ OPTYMALIZACJA: Separate state for each tab
   const [loadingReportResponses, setLoadingReportResponses] = useState([]);
   const [unloadingReportResponses, setUnloadingReportResponses] = useState([]);
+  
+  // ✅ OPTYMALIZACJA: Pagination state
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  
+  // ✅ OPTYMALIZACJA: Track loaded tabs to implement lazy loading
+  const [loadedTabs, setLoadedTabs] = useState({
+    loadingReport: false,
+    unloadingReport: false
+  });
   
   // Stan dla dialogu potwierdzenia usunięcia
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteItemData, setDeleteItemData] = useState(null);
 
-  const fetchData = async () => {
-    setLoading(true);
+  // ✅ OPTYMALIZACJA: Lazy loading functions for each tab
+  const loadLoadingReportData = useCallback(async () => {
+    if (loadedTabs.loadingReport) return;
+    
     try {
-      // ✅ OPTYMALIZACJA: Równoległe pobieranie wszystkich formularzy
-      const [loadingReportSnapshot, unloadingReportSnapshot] = await Promise.all([
-        getDocs(query(collection(db, 'Forms/ZaladunekTowaru/Odpowiedzi'))),
-        getDocs(query(collection(db, 'Forms/RozladunekTowaru/Odpowiedzi')))
-      ]);
-
-      // Przetwarzanie odpowiedzi "Załadunek Towaru"
-      const loadingReportData = loadingReportSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        fillDate: doc.data().fillDate?.toDate(),
-        loadingDate: doc.data().loadingDate?.toDate()
-      }))
-      // Sortowanie od najnowszych (domyślnie)
-      .sort((a, b) => {
-        const dateA = a.fillDate || new Date(0);
-        const dateB = b.fillDate || new Date(0);
-        return dateB - dateA; // Od najnowszych do najstarszych
-      });
-      setLoadingReportResponses(loadingReportData);
-
-      // Przetwarzanie odpowiedzi "Rozładunek Towaru"
-      const unloadingReportData = unloadingReportSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          fillDate: data.fillDate?.toDate(),
-          unloadingDate: data.unloadingDate?.toDate(),
-          // Obsługa selectedItems z konwersją dat ważności
-          selectedItems: data.selectedItems?.map(item => ({
-            ...item,
-            expiryDate: item.expiryDate?.toDate ? item.expiryDate.toDate() : item.expiryDate
-          })) || []
-        };
-      })
-      // Sortowanie od najnowszych (domyślnie)
-      .sort((a, b) => {
-        const dateA = a.fillDate || new Date(0);
-        const dateB = b.fillDate || new Date(0);
-        return dateB - dateA; // Od najnowszych do najstarszych
-      });
-      setUnloadingReportResponses(unloadingReportData);
+      console.log('🔄 Loading Loading Report data...');
+      const pageNum = page + 1; // Convert from 0-based to 1-based
+      const result = await getInventoryFormResponsesWithPagination(
+        INVENTORY_FORM_TYPES.LOADING_REPORT,
+        pageNum,
+        rowsPerPage
+      );
       
-      console.log('✅ Formularze magazynowe zostały załadowane równolegle');
-      console.log('📦 Raporty rozładunku towaru:', unloadingReportData);
-      console.log('🔍 Przykładowe selectedItems:', unloadingReportData[0]?.selectedItems);
-    } catch (err) {
-      console.error('Błąd podczas pobierania danych:', err);
-      setError(err.message);
+      setLoadingReportResponses(result.data);
+      setTotalCount(result.totalCount);
+      setTotalPages(result.totalPages);
+      setLoadedTabs(prev => ({ ...prev, loadingReport: true }));
+      
+      console.log('✅ Loading Report data loaded');
+    } catch (error) {
+      console.error('❌ Error loading Loading Report data:', error);
+      setError(error.message);
+    }
+  }, [loadedTabs.loadingReport, page, rowsPerPage]);
+
+  const loadUnloadingReportData = useCallback(async () => {
+    if (loadedTabs.unloadingReport) return;
+    
+    try {
+      console.log('🔄 Loading Unloading Report data...');
+      const pageNum = page + 1; // Convert from 0-based to 1-based
+      const result = await getInventoryFormResponsesWithPagination(
+        INVENTORY_FORM_TYPES.UNLOADING_REPORT,
+        pageNum,
+        rowsPerPage
+      );
+      
+      setUnloadingReportResponses(result.data);
+      setTotalCount(result.totalCount);
+      setTotalPages(result.totalPages);
+      setLoadedTabs(prev => ({ ...prev, unloadingReport: true }));
+      
+      console.log('✅ Unloading Report data loaded');
+    } catch (error) {
+      console.error('❌ Error loading Unloading Report data:', error);
+      setError(error.message);
+    }
+  }, [loadedTabs.unloadingReport, page, rowsPerPage]);
+
+  // ✅ OPTYMALIZACJA: Load data for current tab only
+  const loadCurrentTabData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const pageNum = page + 1;
+      
+      switch (tabValue) {
+        case 0: // Loading Reports
+          const loadingResult = await getInventoryFormResponsesWithPagination(
+            INVENTORY_FORM_TYPES.LOADING_REPORT,
+            pageNum,
+            rowsPerPage
+          );
+          setLoadingReportResponses(loadingResult.data);
+          setTotalCount(loadingResult.totalCount);
+          setTotalPages(loadingResult.totalPages);
+          break;
+          
+        case 1: // Unloading Reports
+          const unloadingResult = await getInventoryFormResponsesWithPagination(
+            INVENTORY_FORM_TYPES.UNLOADING_REPORT,
+            pageNum,
+            rowsPerPage
+          );
+          setUnloadingReportResponses(unloadingResult.data);
+          setTotalCount(unloadingResult.totalCount);
+          setTotalPages(unloadingResult.totalPages);
+          break;
+          
+        default:
+          break;
+      }
+    } catch (error) {
+      console.error('Błąd podczas ładowania danych zakładki:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [tabValue, page, rowsPerPage]);
   
+  // ✅ OPTYMALIZACJA: Load data when tab, page, or rowsPerPage changes
   useEffect(() => {
-    fetchData();
-  }, []);
+    loadCurrentTabData();
+  }, [loadCurrentTabData]);
   
+  // ✅ OPTYMALIZACJA: Reset pagination when changing tabs
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+    setPage(0); // Reset to first page when changing tabs
+    setError(null); // Clear any previous errors
   };
 
-  // Funkcja do wyodrębniania ścieżki pliku z URL Firebase Storage
-  const extractStoragePathFromUrl = (url) => {
-    if (!url || !url.includes('firebase')) return null;
-    
-    try {
-      // Format URL: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encodedPath}?alt=media
-      const pathStart = url.indexOf('/o/') + 3;
-      const pathEnd = url.indexOf('?');
-      
-      if (pathStart > 2 && pathEnd > pathStart) {
-        const encodedPath = url.substring(pathStart, pathEnd);
-        return decodeURIComponent(encodedPath);
-      }
-      return null;
-    } catch (error) {
-      console.error('Błąd podczas wyodrębniania ścieżki z URL:', error);
-      return null;
-    }
+  // ✅ OPTYMALIZACJA: Pagination handlers
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
   };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // Reset to first page when changing rows per page
+  };
+
+
   
   const formatDateTime = (date) => {
     if (!date) return '-';
@@ -194,51 +240,70 @@ const InventoryFormsResponsesPage = () => {
     return '-';
   };
   
-  const handleExportToCSV = (data, filename) => {
-    // Funkcja do eksportu danych do pliku CSV
-    let csvContent = "data:text/csv;charset=utf-8,";
-    
-    if (tabValue === 0) {
-      csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Numer CMR,Data załadunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Nazwa klienta,Numer zamówienia,Paleta/nazwa produktu,Ilość palet,Waga,Uwagi załadunku,Uwagi towaru\n";
-      data.forEach(row => {
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.cmrNumber || ''},${row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.clientName || ''},${row.orderNumber || ''},${row.palletProductName || ''},${row.palletQuantity || ''},${row.weight || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
-      });
-    } else if (tabValue === 1) {
-      csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Data rozładunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Higiena transportu,Dostawca,Numer PO,Pozycje dostarczone,Ilość palet,Ilość kartonów/tub,Waga,Ocena wizualna,Nr certyfikatu ekologicznego,Uwagi rozładunku,Uwagi towaru\n";
-      data.forEach(row => {
-        // Formatuj pozycje dostarczone dla CSV
-        let itemsText = '';
-        if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
-          itemsText = row.selectedItems.map(item => {
-            let itemText = item.productName || 'Brak nazwy';
-            if (item.quantity) itemText += ` (zamówiono: ${item.quantity} ${item.unit || 'szt.'})`;
-            if (item.unloadedQuantity) itemText += ` (rozładowano: ${item.unloadedQuantity})`;
-            if (item.expiryDate) {
-              try {
-                const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
-                itemText += ` (ważność: ${format(date, 'dd.MM.yyyy')})`;
-              } catch (error) {
-                itemText += ` (ważność: nieprawidłowa data)`;
+  // ✅ OPTYMALIZACJA: Export all data (not just current page)
+  const handleExportToCSV = async (filename) => {
+    try {
+      setLoading(true);
+      
+      // Pobierz wszystkie dane dla eksportu (bez paginacji)
+      const formType = tabValue === 0 ? INVENTORY_FORM_TYPES.LOADING_REPORT : INVENTORY_FORM_TYPES.UNLOADING_REPORT;
+      const result = await getInventoryFormResponsesWithPagination(
+        formType,
+        1, // First page
+        1000, // Large limit to get all data
+        {} // No filters
+      );
+      
+      let csvContent = "data:text/csv;charset=utf-8,";
+      
+      if (tabValue === 0) {
+        csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Numer CMR,Data załadunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Nazwa klienta,Numer zamówienia,Paleta/nazwa produktu,Ilość palet,Waga,Uwagi załadunku,Uwagi towaru\n";
+        result.data.forEach(row => {
+          csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.cmrNumber || ''},${row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.clientName || ''},${row.orderNumber || ''},${row.palletProductName || ''},${row.palletQuantity || ''},${row.weight || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
+        });
+      } else if (tabValue === 1) {
+        csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Data rozładunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Higiena transportu,Dostawca,Numer PO,Pozycje dostarczone,Ilość palet,Ilość kartonów/tub,Waga,Ocena wizualna,Nr certyfikatu ekologicznego,Uwagi rozładunku,Uwagi towaru\n";
+        result.data.forEach(row => {
+          // Formatuj pozycje dostarczone dla CSV
+          let itemsText = '';
+          if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
+            itemsText = row.selectedItems.map(item => {
+              let itemText = item.productName || 'Brak nazwy';
+              if (item.quantity) itemText += ` (zamówiono: ${item.quantity} ${item.unit || 'szt.'})`;
+              if (item.unloadedQuantity) itemText += ` (rozładowano: ${item.unloadedQuantity})`;
+              if (item.expiryDate) {
+                try {
+                  const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                  itemText += ` (ważność: ${format(date, 'dd.MM.yyyy')})`;
+                } catch (error) {
+                  itemText += ` (ważność: nieprawidłowa data)`;
+                }
               }
-            }
-            return itemText;
-          }).join('; ');
-        } else if (row.goodsDescription) {
-          // Kompatybilność wsteczna
-          itemsText = row.goodsDescription;
-        }
-        
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.transportHygiene || ''},${row.supplierName || ''},${row.poNumber || ''},${itemsText},${row.palletQuantity || ''},${row.cartonsTubsQuantity || ''},${row.weight || ''},${row.visualInspectionResult || ''},${row.ecoCertificateNumber || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
-      });
+              return itemText;
+            }).join('; ');
+          } else if (row.goodsDescription) {
+            // Kompatybilność wsteczna
+            itemsText = row.goodsDescription;
+          }
+          
+          csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.transportHygiene || ''},${row.supplierName || ''},${row.poNumber || ''},${itemsText},${row.palletQuantity || ''},${row.cartonsTubsQuantity || ''},${row.weight || ''},${row.visualInspectionResult || ''},${row.ecoCertificateNumber || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
+        });
+      }
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+    } catch (error) {
+      console.error('Błąd podczas eksportu do CSV:', error);
+      setError(`Błąd podczas eksportu: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // Funkcje do obsługi dialogu potwierdzenia usunięcia
@@ -252,40 +317,25 @@ const InventoryFormsResponsesPage = () => {
     
     try {
       const { item, formType } = deleteItemData;
-      let collectionPath = '';
       
+      // Mapuj formType na INVENTORY_FORM_TYPES
+      let serviceFormType;
       switch (formType) {
         case 'loadingReport':
-          collectionPath = 'Forms/ZaladunekTowaru/Odpowiedzi';
+          serviceFormType = INVENTORY_FORM_TYPES.LOADING_REPORT;
           break;
         case 'unloadingReport':
-          collectionPath = 'Forms/RozladunekTowaru/Odpowiedzi';
+          serviceFormType = INVENTORY_FORM_TYPES.UNLOADING_REPORT;
           break;
         default:
           throw new Error('Nieznany typ formularza');
       }
       
-      // Usuń załączniki z Firebase Storage jeśli istnieją (tylko dla raportów rozładunku)
-      if (item.documentsUrl && formType !== 'loadingReport') {
-        try {
-          const storagePath = extractStoragePathFromUrl(item.documentsUrl);
-          if (storagePath) {
-            const fileRef = ref(storage, storagePath);
-            await deleteObject(fileRef);
-            console.log(`Usunięto załącznik z Storage: ${storagePath}`);
-          }
-        } catch (storageError) {
-          console.warn('Nie można usunąć załącznika z Storage:', storageError);
-          // Kontynuuj mimo błędu usuwania załącznika
-        }
-      }
+      // ✅ OPTYMALIZACJA: Use service method for deletion
+      await deleteInventoryFormResponse(serviceFormType, item.id, item);
       
-      // Usuń dokument z Firestore
-      const docRef = doc(db, collectionPath, item.id);
-      await deleteDoc(docRef);
-      
-      // Odśwież dane po usunięciu
-      fetchData();
+      // ✅ OPTYMALIZACJA: Refresh only current tab data instead of all data
+      await loadCurrentTabData();
       
       // Zamknij dialog
       setDeleteConfirmOpen(false);
@@ -293,7 +343,7 @@ const InventoryFormsResponsesPage = () => {
       
     } catch (error) {
       console.error('Błąd podczas usuwania dokumentu:', error);
-      alert(`Wystąpił błąd podczas usuwania dokumentu: ${error.message}`);
+      setError(`Wystąpił błąd podczas usuwania dokumentu: ${error.message}`);
     }
   };
 
@@ -336,11 +386,11 @@ const InventoryFormsResponsesPage = () => {
         <Box>
           <Button 
             variant="outlined" 
-            onClick={() => handleExportToCSV(loadingReportResponses, 'raporty-zaladunku-towaru.csv')}
-            disabled={loadingReportResponses.length === 0}
+            onClick={() => handleExportToCSV('raporty-zaladunku-towaru.csv')}
+            disabled={loading || totalCount === 0}
             sx={{ mr: 1 }}
           >
-            {t('inventory.forms.exportToCSV')}
+            {loading ? 'Eksportowanie...' : t('inventory.forms.exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
@@ -351,82 +401,115 @@ const InventoryFormsResponsesPage = () => {
           </Button>
         </Box>
       </Box>
-      {loadingReportResponses.length === 0 ? (
+      {/* ✅ OPTYMALIZACJA: Show loading state and pagination info */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          {loading ? 'Ładowanie...' : `Wyników: ${totalCount}`}
+        </Typography>
+        {totalCount > 0 && (
+          <Chip 
+            size="small" 
+            label={`Strona ${page + 1} z ${totalPages}`} 
+            variant="outlined" 
+          />
+        )}
+      </Box>
+      
+      {tabValue === 0 && loadingReportResponses.length === 0 && !loading ? (
         <Alert severity="info">{t('inventory.forms.noResponses')}</Alert>
       ) : (
-        <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow sx={{ 
-                backgroundColor: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.05)' 
-                  : '#f5f5f5' 
-              }}>
-                <TableCell>{t('inventory.forms.fillDate')}</TableCell>
-                <TableCell>{t('inventory.forms.fillTime')}</TableCell>
-                <TableCell>{t('inventory.forms.email')}</TableCell>
-                <TableCell>{t('inventory.forms.employeeName')}</TableCell>
-                <TableCell>{t('inventory.forms.position')}</TableCell>
-                <TableCell>{t('inventory.forms.cmrNumber')}</TableCell>
-                <TableCell>{t('inventory.forms.loadingDate')}</TableCell>
-                <TableCell>{t('inventory.forms.carrierName')}</TableCell>
-                <TableCell>{t('inventory.forms.vehicleRegistration')}</TableCell>
-                <TableCell>{t('inventory.forms.vehicleTechnicalCondition')}</TableCell>
-                <TableCell>{t('inventory.forms.clientName')}</TableCell>
-                <TableCell>{t('inventory.forms.orderNumber')}</TableCell>
-                <TableCell>{t('inventory.forms.palletProductName')}</TableCell>
-                <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
-                <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
-                <TableCell>{t('inventory.forms.loadingNotes')}</TableCell>
-                <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
-                <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loadingReportResponses.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.fillDate ? format(row.fillDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
-                  <TableCell>{row.fillTime || '-'}</TableCell>
-                  <TableCell>{row.email}</TableCell>
-                  <TableCell>{row.employeeName}</TableCell>
-                  <TableCell>{row.position}</TableCell>
-                  <TableCell>{row.cmrNumber || '-'}</TableCell>
-                  <TableCell>{row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
-                  <TableCell>{row.carrierName}</TableCell>
-                  <TableCell>{row.vehicleRegistration}</TableCell>
-                  <TableCell>{row.vehicleTechnicalCondition}</TableCell>
-                  <TableCell>{row.clientName}</TableCell>
-                  <TableCell>{row.orderNumber}</TableCell>
-                  <TableCell>{row.palletProductName}</TableCell>
-                  <TableCell align="right">{row.palletQuantity}</TableCell>
-                  <TableCell align="right">{row.weight}</TableCell>
-                  <TableCell>{row.notes || '-'}</TableCell>
-                  <TableCell>{row.goodsNotes || '-'}</TableCell>
-                  <TableCell align="center">
-                    <Tooltip title={t('inventory.forms.editResponse')}>
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleEditClick(row, 'loadingReport')}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('inventory.forms.deleteResponse')}>
-                      <IconButton 
-                        size="small" 
-                        color="error"
-                        onClick={() => handleDeleteClick(row, 'loadingReport')}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+        <>
+                     <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+             <Table size="small">
+              <TableHead>
+                <TableRow sx={{ 
+                  backgroundColor: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.05)' 
+                    : '#f5f5f5' 
+                }}>
+                  <TableCell>{t('inventory.forms.fillDate')}</TableCell>
+                  <TableCell>{t('inventory.forms.fillTime')}</TableCell>
+                  <TableCell>{t('inventory.forms.email')}</TableCell>
+                  <TableCell>{t('inventory.forms.employeeName')}</TableCell>
+                  <TableCell>{t('inventory.forms.position')}</TableCell>
+                  <TableCell>{t('inventory.forms.cmrNumber')}</TableCell>
+                  <TableCell>{t('inventory.forms.loadingDate')}</TableCell>
+                  <TableCell>{t('inventory.forms.carrierName')}</TableCell>
+                  <TableCell>{t('inventory.forms.vehicleRegistration')}</TableCell>
+                  <TableCell>{t('inventory.forms.vehicleTechnicalCondition')}</TableCell>
+                  <TableCell>{t('inventory.forms.clientName')}</TableCell>
+                  <TableCell>{t('inventory.forms.orderNumber')}</TableCell>
+                  <TableCell>{t('inventory.forms.palletProductName')}</TableCell>
+                  <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
+                  <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
+                  <TableCell>{t('inventory.forms.loadingNotes')}</TableCell>
+                  <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
+                  <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {loadingReportResponses.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.fillDate ? format(row.fillDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
+                    <TableCell>{row.fillTime || '-'}</TableCell>
+                    <TableCell>{row.email}</TableCell>
+                    <TableCell>{row.employeeName}</TableCell>
+                    <TableCell>{row.position}</TableCell>
+                    <TableCell>{row.cmrNumber || '-'}</TableCell>
+                    <TableCell>{row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
+                    <TableCell>{row.carrierName}</TableCell>
+                    <TableCell>{row.vehicleRegistration}</TableCell>
+                    <TableCell>{row.vehicleTechnicalCondition}</TableCell>
+                    <TableCell>{row.clientName}</TableCell>
+                    <TableCell>{row.orderNumber}</TableCell>
+                    <TableCell>{row.palletProductName}</TableCell>
+                    <TableCell align="right">{row.palletQuantity}</TableCell>
+                    <TableCell align="right">{row.weight}</TableCell>
+                    <TableCell>{row.notes || '-'}</TableCell>
+                    <TableCell>{row.goodsNotes || '-'}</TableCell>
+                    <TableCell align="center">
+                      <Tooltip title={t('inventory.forms.editResponse')}>
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          onClick={() => handleEditClick(row, 'loadingReport')}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('inventory.forms.deleteResponse')}>
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteClick(row, 'loadingReport')}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {/* ✅ OPTYMALIZACJA: Pagination component for Loading Reports */}
+          {totalCount > 0 && (
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              component="div"
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              labelRowsPerPage="Wierszy na stronę:"
+              labelDisplayedRows={({ from, to, count }) => 
+                `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+              }
+            />
+          )}
+        </>
       )}
     </>
   );
@@ -439,11 +522,11 @@ const InventoryFormsResponsesPage = () => {
         <Box>
           <Button 
             variant="outlined" 
-            onClick={() => handleExportToCSV(unloadingReportResponses, 'raporty-rozladunku-towaru.csv')}
-            disabled={unloadingReportResponses.length === 0}
+            onClick={() => handleExportToCSV('raporty-rozladunku-towaru.csv')}
+            disabled={loading || totalCount === 0}
             sx={{ mr: 1 }}
           >
-            {t('inventory.forms.exportToCSV')}
+            {loading ? 'Eksportowanie...' : t('inventory.forms.exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
@@ -454,103 +537,136 @@ const InventoryFormsResponsesPage = () => {
           </Button>
         </Box>
       </Box>
-      {unloadingReportResponses.length === 0 ? (
+      {/* ✅ OPTYMALIZACJA: Show loading state and pagination info */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          {loading ? 'Ładowanie...' : `Wyników: ${totalCount}`}
+        </Typography>
+        {totalCount > 0 && (
+          <Chip 
+            size="small" 
+            label={`Strona ${page + 1} z ${totalPages}`} 
+            variant="outlined" 
+          />
+        )}
+      </Box>
+      
+      {tabValue === 1 && unloadingReportResponses.length === 0 && !loading ? (
         <Alert severity="info">{t('inventory.forms.noResponses')}</Alert>
       ) : (
-        <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-          <Table size="small" stickyHeader>
-            <TableHead>
-              <TableRow sx={{ 
-                backgroundColor: theme.palette.mode === 'dark' 
-                  ? 'rgba(255, 255, 255, 0.05)' 
-                  : '#f5f5f5' 
-              }}>
-                <TableCell>{t('inventory.forms.fillDate')}</TableCell>
-                <TableCell>{t('inventory.forms.fillTime')}</TableCell>
-                <TableCell>{t('inventory.forms.email')}</TableCell>
-                <TableCell>{t('inventory.forms.employeeName')}</TableCell>
-                <TableCell>{t('inventory.forms.position')}</TableCell>
-                <TableCell>{t('inventory.forms.unloadingDate')}</TableCell>
-                <TableCell>{t('inventory.forms.carrierName')}</TableCell>
-                <TableCell>{t('inventory.forms.vehicleRegistration')}</TableCell>
-                <TableCell>{t('inventory.forms.vehicleTechnicalCondition')}</TableCell>
-                <TableCell>{t('inventory.forms.transportHygiene')}</TableCell>
-                <TableCell>{t('inventory.forms.supplierName')}</TableCell>
-                <TableCell>{t('inventory.forms.poNumber')}</TableCell>
-                <TableCell>{t('inventory.forms.deliveredItems')}</TableCell>
-                <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
-                <TableCell align="right">{t('inventory.forms.cartonsTubsQuantity')}</TableCell>
-                <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
-                <TableCell>{t('inventory.forms.visualInspectionResult')}</TableCell>
-                <TableCell>{t('inventory.forms.ecoCertificateNumber')}</TableCell>
-                <TableCell>{t('inventory.forms.unloadingNotes')}</TableCell>
-                <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
-                <TableCell>{t('inventory.forms.documents')}</TableCell>
-                <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {unloadingReportResponses.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.fillDate ? format(row.fillDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
-                  <TableCell>{row.fillTime || '-'}</TableCell>
-                  <TableCell>{row.email}</TableCell>
-                  <TableCell>{row.employeeName}</TableCell>
-                  <TableCell>{row.position}</TableCell>
-                  <TableCell>{row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
-                  <TableCell>{row.carrierName}</TableCell>
-                  <TableCell>{row.vehicleRegistration}</TableCell>
-                  <TableCell>{row.vehicleTechnicalCondition}</TableCell>
-                  <TableCell>{row.transportHygiene}</TableCell>
-                  <TableCell>{row.supplierName}</TableCell>
-                  <TableCell>{row.poNumber}</TableCell>
-                  <TableCell sx={{ maxWidth: 300, minWidth: 200 }}>
-                    {formatDeliveredItems(row)}
-                  </TableCell>
-                  <TableCell align="right">{row.palletQuantity}</TableCell>
-                  <TableCell align="right">{row.cartonsTubsQuantity}</TableCell>
-                  <TableCell align="right">{row.weight}</TableCell>
-                  <TableCell>{row.visualInspectionResult}</TableCell>
-                  <TableCell>{row.ecoCertificateNumber || '-'}</TableCell>
-                  <TableCell>{row.notes || '-'}</TableCell>
-                  <TableCell>{row.goodsNotes || '-'}</TableCell>
-                  <TableCell>
-                    {row.documentsUrl ? (
-                      <Button 
-                        size="small" 
-                        href={row.documentsUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                      >
-                        {row.documentsName || t('inventory.forms.download')}
-                      </Button>
-                    ) : '-'}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title={t('inventory.forms.editResponse')}>
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleEditClick(row, 'unloadingReport')}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('inventory.forms.deleteResponse')}>
-                      <IconButton 
-                        size="small" 
-                        color="error"
-                        onClick={() => handleDeleteClick(row, 'unloadingReport')}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+        <>
+                     <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+             <Table size="small">
+              <TableHead>
+                <TableRow sx={{ 
+                  backgroundColor: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.05)' 
+                    : '#f5f5f5' 
+                }}>
+                  <TableCell>{t('inventory.forms.fillDate')}</TableCell>
+                  <TableCell>{t('inventory.forms.fillTime')}</TableCell>
+                  <TableCell>{t('inventory.forms.email')}</TableCell>
+                  <TableCell>{t('inventory.forms.employeeName')}</TableCell>
+                  <TableCell>{t('inventory.forms.position')}</TableCell>
+                  <TableCell>{t('inventory.forms.unloadingDate')}</TableCell>
+                  <TableCell>{t('inventory.forms.carrierName')}</TableCell>
+                  <TableCell>{t('inventory.forms.vehicleRegistration')}</TableCell>
+                  <TableCell>{t('inventory.forms.vehicleTechnicalCondition')}</TableCell>
+                  <TableCell>{t('inventory.forms.transportHygiene')}</TableCell>
+                  <TableCell>{t('inventory.forms.supplierName')}</TableCell>
+                  <TableCell>{t('inventory.forms.poNumber')}</TableCell>
+                  <TableCell>{t('inventory.forms.deliveredItems')}</TableCell>
+                  <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
+                  <TableCell align="right">{t('inventory.forms.cartonsTubsQuantity')}</TableCell>
+                  <TableCell align="right">{t('inventory.forms.weight')}</TableCell>
+                  <TableCell>{t('inventory.forms.visualInspectionResult')}</TableCell>
+                  <TableCell>{t('inventory.forms.ecoCertificateNumber')}</TableCell>
+                  <TableCell>{t('inventory.forms.unloadingNotes')}</TableCell>
+                  <TableCell>{t('inventory.forms.goodsNotes')}</TableCell>
+                  <TableCell>{t('inventory.forms.documents')}</TableCell>
+                  <TableCell align="center">{t('inventory.forms.actions')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {unloadingReportResponses.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.fillDate ? format(row.fillDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
+                    <TableCell>{row.fillTime || '-'}</TableCell>
+                    <TableCell>{row.email}</TableCell>
+                    <TableCell>{row.employeeName}</TableCell>
+                    <TableCell>{row.position}</TableCell>
+                    <TableCell>{row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy', { locale: pl }) : '-'}</TableCell>
+                    <TableCell>{row.carrierName}</TableCell>
+                    <TableCell>{row.vehicleRegistration}</TableCell>
+                    <TableCell>{row.vehicleTechnicalCondition}</TableCell>
+                    <TableCell>{row.transportHygiene}</TableCell>
+                    <TableCell>{row.supplierName}</TableCell>
+                    <TableCell>{row.poNumber}</TableCell>
+                    <TableCell sx={{ maxWidth: 300, minWidth: 200 }}>
+                      {formatDeliveredItems(row)}
+                    </TableCell>
+                    <TableCell align="right">{row.palletQuantity}</TableCell>
+                    <TableCell align="right">{row.cartonsTubsQuantity}</TableCell>
+                    <TableCell align="right">{row.weight}</TableCell>
+                    <TableCell>{row.visualInspectionResult}</TableCell>
+                    <TableCell>{row.ecoCertificateNumber || '-'}</TableCell>
+                    <TableCell>{row.notes || '-'}</TableCell>
+                    <TableCell>{row.goodsNotes || '-'}</TableCell>
+                    <TableCell>
+                      {row.documentsUrl ? (
+                        <Button 
+                          size="small" 
+                          href={row.documentsUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                        >
+                          {row.documentsName || t('inventory.forms.download')}
+                        </Button>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title={t('inventory.forms.editResponse')}>
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          onClick={() => handleEditClick(row, 'unloadingReport')}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('inventory.forms.deleteResponse')}>
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteClick(row, 'unloadingReport')}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          
+          {/* ✅ OPTYMALIZACJA: Pagination component for Unloading Reports */}
+          {totalCount > 0 && (
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50]}
+              component="div"
+              count={totalCount}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={handleChangePage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              labelRowsPerPage="Wierszy na stronę:"
+              labelDisplayedRows={({ from, to, count }) => 
+                `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+              }
+            />
+          )}
+        </>
       )}
     </>
   );

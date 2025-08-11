@@ -395,8 +395,8 @@ const FormsResponsesPage = () => {
         <Alert severity="info">{t('noCompletedMOResponses')}</Alert>
       ) : (
         <>
-          <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-            <Table size="small" stickyHeader>
+          <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table size="small">
               <TableHead>
                 <TableRow sx={{ 
                   backgroundColor: theme.palette.mode === 'dark' 
@@ -512,8 +512,8 @@ const FormsResponsesPage = () => {
         <Alert severity="info">{t('noProductionControlResponses')}</Alert>
       ) : (
         <>
-          <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-            <Table size="small" stickyHeader>
+          <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+            <Table size="small">
             <TableHead>
               <TableRow sx={{ 
                 backgroundColor: theme.palette.mode === 'dark' 
@@ -815,8 +815,8 @@ const FormsResponsesPage = () => {
           <Alert severity="info">{t('noProductionShiftResponses')}</Alert>
         ) : (
           <>
-            <TableContainer component={Paper} sx={{ maxHeight: 600, overflowX: 'auto' }}>
-              <Table size="small" stickyHeader>
+            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+              <Table size="small">
               <TableHead>
                 <TableRow sx={{ 
                   backgroundColor: theme.palette.mode === 'dark' 
