@@ -26,6 +26,10 @@ import {
   getPurchaseOrders
 } from './aiDataService';
 import { getSystemSettings, getGlobalOpenAIApiKey } from './settingsService';
+import { AIAssistantV2 } from './ai/AIAssistantV2.js';
+import { SmartModelSelector } from './ai/optimization/SmartModelSelector.js';
+import { ContextOptimizer } from './ai/optimization/ContextOptimizer.js';
+import { GPTResponseCache } from './ai/optimization/GPTResponseCache.js';
 
 // Deklaracja funkcji getMockResponse przed jej użyciem (hoisting)
 let getMockResponse;
@@ -86,43 +90,92 @@ export const saveOpenAIApiKey = async (userId, apiKey) => {
 };
 
 /**
- * Wysyła zapytanie do API OpenAI (GPT-4o)
+ * Wysyła zapytanie do API OpenAI z optymalizacjami
  * @param {string} apiKey - Klucz API OpenAI
  * @param {Array} messages - Wiadomości do wysłania do API
+ * @param {Object} options - Opcje optymalizacji
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
-export const callOpenAIAPI = async (apiKey, messages) => {
+export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+    // Wyciągnij zapytanie użytkownika dla optymalizacji
+    const userQuery = messages[messages.length - 1]?.content || '';
+    const contextSize = JSON.stringify(messages).length;
+    
+    // NOWA OPTYMALIZACJA: Inteligentny wybór modelu
+    const modelConfig = SmartModelSelector.selectOptimalModel(
+      userQuery, 
+      contextSize, 
+      options.complexity || 'medium',
+      options.optimizationOptions || {}
+    );
+
+    console.log(`[callOpenAIAPI] Użyję modelu ${modelConfig.model} (szacowany koszt: $${modelConfig.estimatedCost.toFixed(4)})`);
+
+    // NOWA OPTYMALIZACJA: Cache dla odpowiedzi
+    const contextHash = GPTResponseCache.generateContextHash(messages);
+    const cacheOptions = {
+      enableCache: true,
+      estimatedCost: modelConfig.estimatedCost,
+      cacheDuration: options.cacheDuration || GPTResponseCache.CACHE_DURATION
+    };
+
+    const apiStartTime = performance.now();
+    
+    const cachedResponse = await GPTResponseCache.getCachedOrFetch(
+      userQuery,
+      contextHash,
+      async () => {
+        // Wykonanie rzeczywistego zapytania API
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: modelConfig.model,
+            messages,
+            temperature: modelConfig.temperature,
+            max_tokens: modelConfig.maxTokens
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMessage = errorData.error?.message || 'Błąd podczas komunikacji z API OpenAI';
+          
+          // Sprawdzamy, czy error dotyczy limitu zapytań lub pobierania
+          if (response.status === 429) {
+            throw new Error(`Przekroczono limit zapytań do API OpenAI: ${errorMessage}`);
+          } else if (errorMessage.includes('quota')) {
+            throw new Error(`Przekroczono przydział API OpenAI: ${errorMessage}`);
+          } else {
+            throw new Error(errorMessage);
+          }
+        }
+        
+        const data = await response.json();
+        return data.choices[0].message.content;
       },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages,
-        temperature: 0.7,
-        max_tokens: 4000
-      })
-    });
+      cacheOptions
+    );
+
+    // Zapisz statystyki użycia modelu
+    const apiEndTime = performance.now();
+    const responseTime = apiEndTime - apiStartTime;
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      const errorMessage = errorData.error?.message || 'Błąd podczas komunikacji z API OpenAI';
-      
-      // Sprawdzamy, czy error dotyczy limitu zapytań lub pobierania
-      if (response.status === 429) {
-        throw new Error(`Przekroczono limit zapytań do API OpenAI: ${errorMessage}`);
-      } else if (errorMessage.includes('quota')) {
-        throw new Error(`Przekroczono przydział API OpenAI: ${errorMessage}`);
-      } else {
-        throw new Error(errorMessage);
-      }
+    try {
+      SmartModelSelector.recordUsage(
+        modelConfig.model,
+        modelConfig.estimatedCost,
+        responseTime
+      );
+    } catch (statsError) {
+      console.warn('[callOpenAIAPI] Błąd zapisywania statystyk:', statsError);
     }
-    
-    const data = await response.json();
-    return data.choices[0].message.content;
+
+    return cachedResponse;
   } catch (error) {
     console.error('Błąd podczas komunikacji z API OpenAI:', error);
     throw error;
@@ -133,17 +186,39 @@ export const callOpenAIAPI = async (apiKey, messages) => {
  * Formatuje wiadomości do wysłania do API OpenAI wraz z danymi kontekstowymi z bazy danych
  * @param {Array} messages - Lista wiadomości z konwersacji
  * @param {Object} businessData - Dane biznesowe z systemu MRP
+ * @param {Object} options - Opcje optymalizacji kontekstu
  * @returns {Array} - Sformatowane wiadomości dla API OpenAI
  */
-const formatMessagesForOpenAI = (messages, businessData = null) => {
+const formatMessagesForOpenAI = (messages, businessData = null, options = {}) => {
+  // NOWA OPTYMALIZACJA: Optymalizacja kontekstu na podstawie zapytania
+  let optimizedBusinessData = businessData;
+  
+  if (businessData && options.enableOptimization !== false) {
+    const userQuery = messages[messages.length - 1]?.content || '';
+    const modelType = options.modelType || 'medium';
+    
+    try {
+      optimizedBusinessData = ContextOptimizer.prepareOptimalContext(
+        userQuery, 
+        businessData, 
+        modelType
+      );
+      
+      console.log(`[formatMessagesForOpenAI] ${ContextOptimizer.generateOptimizationReport(optimizedBusinessData)}`);
+    } catch (error) {
+      console.error('[formatMessagesForOpenAI] Błąd optymalizacji kontekstu:', error);
+      optimizedBusinessData = businessData; // Fallback do oryginalnych danych
+    }
+  }
+
   // Przygotowanie danych biznesowych do prezentacji
   let businessDataContext = '';
   
-  if (businessData) {
+  if (optimizedBusinessData) {
     // Dodaj podstawowe podsumowanie systemu
-    if (businessData.summary) {
+    if (optimizedBusinessData.summary) {
       businessDataContext += `\n### Podsumowanie systemu MRP:\n`;
-      const summary = businessData.summary;
+      const summary = optimizedBusinessData.summary;
       businessDataContext += `- Łączna liczba produktów: ${summary.totalInventoryItems || 0}\n`;
       businessDataContext += `- Łączna liczba zamówień: ${summary.totalOrders || 0}\n`;
       businessDataContext += `- Łączna liczba zadań produkcyjnych: ${summary.totalProductionTasks || 0}\n`;
@@ -469,9 +544,19 @@ const formatMessagesForOpenAI = (messages, businessData = null) => {
           businessDataContext += `${index + 1}. ID: ${task.id}, Nazwa: ${task.name || task.productName || `Zadanie #${task.id}`} - `;
           businessDataContext += `status: ${task.status || 'nieznany'}`;
           
-          if (task.plannedStartDate) {
-            const startDate = new Date(task.plannedStartDate);
+          if (task.scheduledDate) {
+            const startDate = task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate);
             businessDataContext += `, planowane rozpoczęcie: ${startDate.toLocaleDateString('pl-PL')}`;
+          }
+          
+          if (task.endDate) {
+            const endDate = task.endDate.toDate ? task.endDate.toDate() : new Date(task.endDate);
+            businessDataContext += `, planowane zakończenie: ${endDate.toLocaleDateString('pl-PL')}`;
+          }
+          
+          if (task.startDate) {
+            const actualStartDate = task.startDate.toDate ? task.startDate.toDate() : new Date(task.startDate);
+            businessDataContext += `, rzeczywiste rozpoczęcie: ${actualStartDate.toLocaleDateString('pl-PL')}`;
           }
           
           if (task.quantity) {
@@ -1666,6 +1751,40 @@ export const addMessageToConversation = async (conversationId, role, content, at
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
 export const processAIQuery = async (query, context = [], userId, attachments = []) => {
+  console.log('[processAIQuery] Rozpoczynam przetwarzanie zapytania:', query);
+  
+  // NOWY SYSTEM V2: Sprawdź czy zapytanie może być obsłużone przez zoptymalizowany system
+  try {
+    if (AIAssistantV2.canHandleQuery(query)) {
+      console.log('[processAIQuery] Zapytanie może być obsłużone przez AIAssistantV2');
+      
+      const v2Result = await AIAssistantV2.processQuery(query, { userId, attachments });
+      
+      if (v2Result.success) {
+        console.log(`[processAIQuery] AIAssistantV2 zakończył w ${v2Result.processingTime.toFixed(2)}ms`);
+        
+        // Dodaj informację o metodzie przetwarzania dla użytkownika
+        let response = v2Result.response;
+        
+        // Jeśli to bardzo szybka odpowiedź (< 2s), dodaj info o optymalizacji
+        if (v2Result.processingTime < 2000) {
+          response += `\n\n_⚡ Odpowiedź wygenerowana w ${v2Result.processingTime.toFixed(0)}ms przez zoptymalizowany system AI v2.0_`;
+        }
+        
+        return response;
+      } else {
+        console.log('[processAIQuery] AIAssistantV2 nie zdołał przetworzyć zapytania, fallback do standardowego systemu');
+      }
+    } else {
+      console.log('[processAIQuery] Zapytanie przekraczające możliwości AIAssistantV2, używam standardowego systemu');
+    }
+  } catch (v2Error) {
+    console.error('[processAIQuery] Błąd w AIAssistantV2, fallback do standardowego systemu:', v2Error);
+  }
+  
+  // STANDARDOWY SYSTEM: Fallback dla zapytań, których nowy system nie obsługuje
+  console.log('[processAIQuery] Używam standardowego systemu z OpenAI API');
+  
   // Limit czasu na pobranie danych (w milisekundach) - zwiększony na 20 sekund
   const DATA_FETCH_TIMEOUT = 20000;
   
@@ -1759,15 +1878,34 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
       }
     }
     
-    // Przygotowanie wiadomości do wysłania
+    // Przygotowanie wiadomości do wysłania z optymalizacjami
     const allMessages = [...context, { role: 'user', content: queryWithAttachments }];
-    const formattedMessages = formatMessagesForOpenAI(allMessages, businessData);
+    
+    // Określ poziom złożoności zapytania dla optymalizacji
+    const complexity = queryWithAttachments.length > 100 ? 'complex' : 
+                      queryWithAttachments.length > 50 ? 'medium' : 'simple';
+    
+    const formattedMessages = formatMessagesForOpenAI(allMessages, businessData, {
+      enableOptimization: true,
+      modelType: complexity
+    });
     
     console.log('Wysyłam zapytanie do API OpenAI z pełnymi danymi z Firebase...');
     
-    // Wywołanie API OpenAI
+    // Wywołanie API OpenAI z optymalizacjami
     try {
-      const response = await callOpenAIAPI(apiKey, formattedMessages);
+      const apiCallStartTime = performance.now();
+      const response = await callOpenAIAPI(apiKey, formattedMessages, {
+        complexity,
+        optimizationOptions: {
+          prioritizeSpeed: complexity === 'simple',
+          prioritizeCost: true,
+          enableCache: true
+        }
+      });
+      const apiCallEndTime = performance.now();
+      const responseTime = apiCallEndTime - apiCallStartTime;
+      
       console.log('Otrzymano odpowiedź z API OpenAI');
       
       if (!response || response.trim() === '') {
