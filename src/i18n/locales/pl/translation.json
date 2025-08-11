@@ -389,6 +389,130 @@
       "cancelled": "Anulowane"
     }
   },
+  "coReports": {
+    "title": "Raporty zamówień klientów (CO)",
+    "aria": { "tabs": "raporty co" },
+    "tabs": {
+      "ordersReport": "Raport zamówień",
+      "productionCosts": "Koszty produkcji"
+    },
+    "common": {
+      "export": "Eksport",
+      "exportAsPdf": "Eksportuj jako PDF",
+      "exportAsCsv": "Eksportuj jako CSV",
+      "refreshData": "Odśwież dane",
+      "average": "Średnia",
+      "noNumber": "Brak numeru",
+      "noCustomerData": "Brak danych klienta"
+    },
+    "filters": {
+      "period": {
+        "label": "Okres raportu",
+        "last7days": "Ostatnie 7 dni",
+        "last30days": "Ostatnie 30 dni",
+        "lastMonth": "Poprzedni miesiąc",
+        "thisMonth": "Bieżący miesiąc",
+        "custom": "Niestandardowy"
+      },
+      "startDate": "Data początkowa",
+      "endDate": "Data końcowa",
+      "customer": {
+        "label": "Klient",
+        "all": "Wszyscy klienci"
+      }
+    },
+    "periodRange": "Dane za okres: {{start}} - {{end}}",
+    "cards": {
+      "totalOrders": "Liczba zamówień",
+      "totalValue": "Wartość zamówień",
+      "avgOrderValue": "Średnia wartość zamówienia"
+    },
+    "customerStats": { "title": "Statystyki według klientów" },
+    "statusStats": { "title": "Statystyki według statusu" },
+    "ordersList": {
+      "title": "Lista zamówień",
+      "empty": "Brak zamówień spełniających kryteria"
+    },
+    "productionCosts": {
+      "title": "Raport kosztów produkcji",
+      "selectProduct": "Wybierz produkt",
+      "allProducts": "Wszystkie produkty",
+      "noDataToExport": "Brak danych kosztów produkcji do eksportu",
+      "empty": {
+        "title": "Brak kosztów produkcji",
+        "description": "W wybranym okresie nie ma zamówień z kosztami produkcji.",
+        "hint": "Koszty produkcji są dostępne tylko dla pozycji zamówień powiązanych z zadaniami produkcyjnymi."
+      },
+      "periodRange": "Koszty produkcji za okres: {{start}} - {{end}}",
+      "productStats": {
+        "titleFor": "Statystyki kosztu produkcji dla: {{product}}",
+        "avgFullUnitCost": "Średni pełny koszt/szt.",
+        "minFullUnitCost": "Min. pełny koszt/szt.",
+        "maxFullUnitCost": "Max. pełny koszt/szt."
+      },
+      "chart": {
+        "title": "📈 Analiza kosztów produkcji w czasie",
+        "yAxisLabel": "Koszt na sztukę (€)",
+        "tooltipFullCostPerUnit": "Pełny koszt na sztukę",
+        "seriesFullCostPerUnit": "Pełny koszt na sztukę"
+      },
+      "detailsOverTime": "Szczegółowe dane kosztów w czasie",
+      "ordersContainingProduct": "Zamówienia klientów (CO) zawierające produkt",
+      "cards": {
+        "itemsWithCosts": "Pozycje z kosztami",
+        "totalProductionCost": "Łączny koszt produkcji",
+        "totalFullProductionCost": "Pełny koszt produkcji",
+        "shareInOrdersValue": "Udział w wartości zamówień"
+      },
+      "byProduct": { "title": "Koszty według produktów", "showProductDetails": "Pokaż szczegóły produktu" },
+      "byCustomer": { "title": "Koszty według klientów" }
+    },
+    "export": {
+      "orders": { "pdfTitle": "Raport zamówień klientów" },
+      "labels": {
+        "dateRange": "Zakres dat",
+        "customer": "Klient",
+        "generatedOn": "Wygenerowano"
+      }
+    },
+    "messages": {
+      "csvSuccess": "Wygenerowano raport CSV.",
+      "csvError": "Nie udało się wygenerować raportu CSV.",
+      "pdfSuccess": "Wygenerowano raport PDF.",
+      "pdfError": "Nie udało się wygenerować raportu PDF.",
+      "productionCsvSuccess": "Wygenerowano raport CSV kosztów produkcji.",
+      "productionCsvSuccessForProduct": "Wygenerowano raport CSV kosztów produkcji dla produktu {{product}}.",
+      "productionCsvError": "Nie udało się wygenerować raportu CSV kosztów produkcji.",
+      "productionPdfSuccess": "Wygenerowano raport PDF kosztów produkcji.",
+      "productionPdfSuccessForProduct": "Wygenerowano raport PDF kosztów produkcji dla produktu {{product}}.",
+      "productionPdfError": "Nie udało się wygenerować raportu PDF kosztów produkcji.",
+      "refreshing": "Odświeżanie danych...",
+      "refreshed": "Dane zostały odświeżone i zsynchronizowane",
+      "refreshError": "Nie udało się odświeżyć danych"
+    },
+    "table": {
+      "orderNumber": "Nr zamówienia",
+      "date": "Data",
+      "customer": "Klient",
+      "status": "Status",
+      "value": "Wartość",
+      "expectedDelivery": "Przewidywana dostawa",
+      "fullCostPerUnit": "Pełny koszt/szt.",
+      "totalFullCost": "Łączny pełny koszt",
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "totalQuantity": "Łączna ilość",
+      "productionCost": "Koszt produkcji",
+      "fullCost": "Pełny koszt",
+      "ordersCount": "Liczba zamówień",
+      "itemsCount": "Liczba pozycji",
+      "avgCostPerUnit": "Średni koszt/szt.",
+      "ordersValue": "Wartość zamówień",
+      "avgValue": "Średnia wartość",
+      "actions": "Akcje",
+      "percentOfTotal": "% całości"
+    }
+  },
   "sidebar": {
     "aiAssistant": "Asystent AI",
     "dashboard": "Dashboard",

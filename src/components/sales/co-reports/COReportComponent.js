@@ -14,14 +14,16 @@ import {
   Alert
 } from '@mui/material';
 import { formatCurrency } from '../../../utils/formatUtils';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający tabelę zamówień klientów na raporcie
  */
 const COReportComponent = ({ orders, loading, title }) => {
+  const { t, currentLanguage, formatDate: formatDateLocalized } = useTranslation();
   // Formatowanie wyświetlanych dat
   const formatDate = (dateObj) => {
-    if (!dateObj) return 'Brak daty';
+    if (!dateObj) return t('common.noDate');
     
     const date = dateObj instanceof Date 
       ? dateObj 
@@ -29,7 +31,7 @@ const COReportComponent = ({ orders, loading, title }) => {
         ? dateObj.toDate() 
         : new Date(dateObj);
         
-    return date.toLocaleDateString('pl-PL');
+    return date.toLocaleDateString(currentLanguage === 'pl' ? 'pl-PL' : 'en-US');
   };
   
   // Określa kolor chipa na podstawie statusu zamówienia
@@ -60,30 +62,30 @@ const COReportComponent = ({ orders, loading, title }) => {
         </Box>
       ) : orders.length === 0 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Brak zamówień spełniających kryteria
+          {t('coReports.ordersList.empty')}
         </Alert>
       ) : (
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Nr zamówienia</TableCell>
-                <TableCell>Data</TableCell>
-                <TableCell>Klient</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Wartość</TableCell>
-                <TableCell align="right">Przewidywana dostawa</TableCell>
+                <TableCell>{t('coReports.table.orderNumber')}</TableCell>
+                <TableCell>{t('coReports.table.date')}</TableCell>
+                <TableCell>{t('coReports.table.customer')}</TableCell>
+                <TableCell>{t('coReports.table.status')}</TableCell>
+                <TableCell align="right">{t('coReports.table.value')}</TableCell>
+                <TableCell align="right">{t('coReports.table.expectedDelivery')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {orders.map((order) => (
                 <TableRow key={order.id}>
-                  <TableCell>{order.orderNumber || 'Brak numeru'}</TableCell>
+                  <TableCell>{order.orderNumber || t('coReports.common.noNumber')}</TableCell>
                   <TableCell>{formatDate(order.orderDate)}</TableCell>
-                  <TableCell>{order.customer?.name || 'Brak danych klienta'}</TableCell>
+                  <TableCell>{order.customer?.name || t('coReports.common.noCustomerData')}</TableCell>
                   <TableCell>
                     <Chip 
-                      label={order.status || 'Nieznany'} 
+                      label={order.status || t('common.status')} 
                       size="small"
                       sx={{
                         backgroundColor: getStatusColor(order.status),

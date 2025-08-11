@@ -14,11 +14,13 @@ import {
   Divider
 } from '@mui/material';
 import { formatCurrency } from '../../../utils/formatUtils';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający statystyki zamówień według statusu
  */
 const StatusStatsComponent = ({ statusStats, totalValue, loading, title }) => {
+  const { t } = useTranslation();
   // Określa kolor chipa na podstawie statusu zamówienia
   const getStatusColor = (status) => {
     switch (status) {
@@ -38,7 +40,7 @@ const StatusStatsComponent = ({ statusStats, totalValue, loading, title }) => {
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h6" gutterBottom>
-        {title || 'Statystyki według statusu'}
+        {title || t('coReports.statusStats.title')}
       </Typography>
       <Divider sx={{ mb: 2 }} />
       
@@ -51,10 +53,10 @@ const StatusStatsComponent = ({ statusStats, totalValue, loading, title }) => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Liczba zamówień</TableCell>
-                <TableCell align="right">Wartość zamówień</TableCell>
-                <TableCell align="right">% całości</TableCell>
+                <TableCell>{t('coReports.table.status')}</TableCell>
+                <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
+                <TableCell align="right">{t('coReports.table.ordersValue')}</TableCell>
+                <TableCell align="right">{t('coReports.table.percentOfTotal')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

@@ -52,6 +52,7 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
+import { enUS } from 'date-fns/locale';
 import { 
   format, 
   subDays, 
@@ -86,6 +87,7 @@ import {
 import COReportComponent from '../../../components/sales/co-reports/COReportComponent';
 import CustomerStatsComponent from '../../../components/sales/co-reports/CustomerStatsComponent';
 import StatusStatsComponent from '../../../components/sales/co-reports/StatusStatsComponent';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 // Definicja okresów czasowych dla filtrowania
 const TIME_PERIODS = {
@@ -100,6 +102,7 @@ const COReportsPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
   const theme = useTheme();
+  const { t, currentLanguage } = useTranslation();
   
   // Stan komponentu
   const [loading, setLoading] = useState(true);
@@ -359,7 +362,7 @@ const COReportsPage = () => {
   const formatDateDisplay = (date) => {
     try {
       // Sprawdź czy data jest prawidłowa
-      if (!date) return 'Brak daty';
+      if (!date) return t('common.noDate');
       
       // Jeśli to timestamp z Firebase, konwertuj na Date
       let dateObj = date;
@@ -371,13 +374,13 @@ const COReportsPage = () => {
       
       // Sprawdź czy data jest prawidłowa
       if (isNaN(dateObj.getTime())) {
-        return 'Nieprawidłowa data';
+        return t('common.error');
       }
       
-      return format(dateObj, 'dd.MM.yyyy', { locale: pl });
+      return format(dateObj, 'dd.MM.yyyy', { locale: currentLanguage === 'pl' ? pl : enUS });
     } catch (error) {
       console.error('Błąd formatowania daty:', error, date);
-      return 'Błąd daty';
+      return t('common.error');
     }
   };
   
@@ -405,15 +408,12 @@ const COReportsPage = () => {
     
     // Definicja nagłówków dla CSV
     const headers = [
-      { label: 'Order ID', key: 'id' },
-      { label: 'Order Number', key: 'orderNumber' },
-      { label: 'Date', key: 'orderDate' },
-      { label: 'Customer Name', key: 'customer.name' },
-      { label: 'Customer Email', key: 'customer.email' },
-      { label: 'Status', key: 'status' },
-      { label: 'Total Value', key: 'totalValue' },
-      { label: 'Expected Delivery', key: 'expectedDeliveryDate' },
-      { label: 'Payment Status', key: 'paymentStatus' }
+      { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
+      { label: t('coReports.table.date'), key: 'orderDate' },
+      { label: t('coReports.table.customer'), key: 'customer.name' },
+      { label: t('coReports.table.status'), key: 'status' },
+      { label: t('coReports.table.value'), key: 'totalValue' },
+      { label: t('coReports.table.expectedDelivery'), key: 'expectedDeliveryDate' }
     ];
     
     // Przygotuj dane do eksportu
@@ -443,12 +443,12 @@ const COReportsPage = () => {
     
     // Definicja nagłówków dla PDF
     const headers = [
-      { label: 'Order Number', key: 'orderNumber' },
-      { label: 'Date', key: 'orderDate' },
-      { label: 'Customer', key: 'customer.name' },
-      { label: 'Status', key: 'status' },
-      { label: 'Total Value', key: 'totalValue' },
-      { label: 'Expected Delivery', key: 'expectedDeliveryDate' }
+      { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
+      { label: t('coReports.table.date'), key: 'orderDate' },
+      { label: t('coReports.table.customer'), key: 'customer.name' },
+      { label: t('coReports.table.status'), key: 'status' },
+      { label: t('coReports.table.value'), key: 'totalValue' },
+      { label: t('coReports.table.expectedDelivery'), key: 'expectedDeliveryDate' }
     ];
     
     // Przygotuj dane do eksportu
@@ -717,7 +717,7 @@ const COReportsPage = () => {
       {/* Nagłówek z przyciskami Export i Odśwież */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6" component="h2">
-          Raport zamówień
+          {t('coReports.tabs.ordersReport')}
         </Typography>
         
         <Box>
@@ -730,7 +730,7 @@ const COReportsPage = () => {
               endIcon={<ArrowDownIcon />}
               sx={{ mr: 1 }}
             >
-              Export
+              {t('coReports.common.export')}
             </Button>
             {isExportMenuOpen && (
               <ClickAwayListener onClickAway={handleExportMenuClose}>
@@ -750,13 +750,13 @@ const COReportsPage = () => {
                       <ListItemIcon>
                         <PdfIcon fontSize="small" />
                       </ListItemIcon>
-                      <ListItemText>Export as PDF</ListItemText>
+                      <ListItemText>{t('coReports.common.exportAsPdf')}</ListItemText>
                     </MenuItem>
                     <MenuItem onClick={handleExportCSV}>
                       <ListItemIcon>
                         <CsvIcon fontSize="small" />
                       </ListItemIcon>
-                      <ListItemText>Export as CSV</ListItemText>
+                      <ListItemText>{t('coReports.common.exportAsCsv')}</ListItemText>
                     </MenuItem>
                   </MenuList>
                 </Paper>
@@ -764,7 +764,7 @@ const COReportsPage = () => {
             )}
           </Box>
           
-          <Tooltip title="Odśwież dane">
+          <Tooltip title={t('coReports.common.refreshData')}>
             <IconButton onClick={handleRefreshData} color="primary">
               <RefreshIcon />
             </IconButton>
@@ -777,25 +777,25 @@ const COReportsPage = () => {
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
             <FormControl fullWidth>
-              <InputLabel>Okres raportu</InputLabel>
+              <InputLabel>{t('coReports.filters.period.label')}</InputLabel>
               <Select
                 value={reportPeriod}
                 onChange={handlePeriodChange}
-                label="Okres raportu"
+                label={t('coReports.filters.period.label')}
               >
-                <MenuItem value={TIME_PERIODS.LAST_7_DAYS}>Ostatnie 7 dni</MenuItem>
-                <MenuItem value={TIME_PERIODS.LAST_30_DAYS}>Ostatnie 30 dni</MenuItem>
-                <MenuItem value={TIME_PERIODS.LAST_MONTH}>Poprzedni miesiąc</MenuItem>
-                <MenuItem value={TIME_PERIODS.THIS_MONTH}>Bieżący miesiąc</MenuItem>
-                <MenuItem value={TIME_PERIODS.CUSTOM}>Niestandardowy</MenuItem>
+                <MenuItem value={TIME_PERIODS.LAST_7_DAYS}>{t('coReports.filters.period.last7days')}</MenuItem>
+                <MenuItem value={TIME_PERIODS.LAST_30_DAYS}>{t('coReports.filters.period.last30days')}</MenuItem>
+                <MenuItem value={TIME_PERIODS.LAST_MONTH}>{t('coReports.filters.period.lastMonth')}</MenuItem>
+                <MenuItem value={TIME_PERIODS.THIS_MONTH}>{t('coReports.filters.period.thisMonth')}</MenuItem>
+                <MenuItem value={TIME_PERIODS.CUSTOM}>{t('coReports.filters.period.custom')}</MenuItem>
               </Select>
             </FormControl>
           </Grid>
           
           <Grid item xs={12} md={3}>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
               <DatePicker
-                label="Data początkowa"
+                label={t('coReports.filters.startDate')}
                 value={startDate}
                 onChange={(newDate) => {
                   setStartDate(newDate);
@@ -807,9 +807,9 @@ const COReportsPage = () => {
           </Grid>
           
           <Grid item xs={12} md={3}>
-            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
               <DatePicker
-                label="Data końcowa"
+                label={t('coReports.filters.endDate')}
                 value={endDate}
                 onChange={(newDate) => {
                   setEndDate(newDate);
@@ -863,13 +863,13 @@ const COReportsPage = () => {
         <Grid container spacing={3} sx={{ mt: 1 }}>
           <Grid item xs={12} md={4}>
             <FormControl fullWidth>
-              <InputLabel>Klient</InputLabel>
+              <InputLabel>{t('coReports.filters.customer.label')}</InputLabel>
               <Select
                 value={selectedCustomer}
                 onChange={(e) => setSelectedCustomer(e.target.value)}
-                label="Klient"
+                label={t('coReports.filters.customer.label')}
               >
-                <MenuItem value="all">Wszyscy klienci</MenuItem>
+                <MenuItem value="all">{t('coReports.filters.customer.all')}</MenuItem>
                 {customers.map(customer => (
                   <MenuItem key={customer.id} value={customer.id}>
                     {customer.name}
@@ -882,7 +882,7 @@ const COReportsPage = () => {
       </Paper>
 
       <Typography variant="subtitle1" gutterBottom>
-        Dane za okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
+        {t('coReports.periodRange', { start: formatDateDisplay(startDate), end: formatDateDisplay(endDate) })}
       </Typography>
       
       {/* Karty ze statystykami */}
@@ -929,7 +929,7 @@ const COReportsPage = () => {
       <CustomerStatsComponent 
         customerStats={stats.customerStats} 
         loading={loading} 
-        title="Statystyki według klientów" 
+        title={t('coReports.customerStats.title')} 
       />
       
       {/* Statystyki według statusu */}
@@ -937,14 +937,14 @@ const COReportsPage = () => {
         statusStats={stats.statusStats} 
         totalValue={stats.totalValue}
         loading={loading} 
-        title="Statystyki według statusu" 
+        title={t('coReports.statusStats.title')} 
       />
       
       {/* Lista zamówień */}
       <COReportComponent 
         orders={filteredOrders} 
         loading={loading} 
-        title="Lista zamówień" 
+        title={t('coReports.ordersList.title')} 
       />
     </>
   );
@@ -1083,23 +1083,23 @@ const COReportsPage = () => {
       }
       
       if (dataToExport.length === 0) {
-        showError('Brak danych kosztów produkcji do eksportu');
+        showError(t('coReports.productionCosts.noDataToExport'));
         return;
       }
 
       // Definicja nagłówków dla CSV
       const headers = [
-        { label: 'CO Number', key: 'orderNumber' },
-        { label: 'Order Date', key: 'orderDate' },
-        { label: 'Customer Name', key: 'customerName' },
-        { label: 'Product Name', key: 'itemName' },
-        { label: 'Quantity', key: 'quantity' },
-        { label: 'Unit', key: 'unit' },
-        { label: 'Production Cost per Unit', key: 'unitProductionCost' },
-        { label: 'Full Production Cost per Unit', key: 'fullProductionUnitCost' },
-        { label: 'Total Production Cost', key: 'totalProductionCost' },
-        { label: 'Total Full Production Cost', key: 'totalFullProductionCost' },
-        { label: 'MO Number', key: 'productionTaskNumber' }
+        { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
+        { label: t('coReports.table.date'), key: 'orderDate' },
+        { label: t('coReports.table.customer'), key: 'customerName' },
+        { label: t('coReports.table.product'), key: 'itemName' },
+        { label: t('coReports.table.quantity'), key: 'quantity' },
+        { label: t('common.pieces'), key: 'unit' },
+        { label: t('coReports.table.avgCostPerUnit'), key: 'unitProductionCost' },
+        { label: t('coReports.table.fullCostPerUnit'), key: 'fullProductionUnitCost' },
+        { label: t('coReports.table.productionCost'), key: 'totalProductionCost' },
+        { label: t('coReports.table.totalFullCost'), key: 'totalFullProductionCost' },
+        { label: 'MO', key: 'productionTaskNumber' }
       ];
       
       // Przygotuj dane do eksportu
@@ -1120,11 +1120,11 @@ const COReportsPage = () => {
       
       if (success) {
         const message = selectedProduct 
-          ? `Production costs CSV report for ${selectedProduct} has been generated successfully.`
-          : 'Production costs CSV report has been generated successfully.';
+          ? t('coReports.messages.productionCsvSuccessForProduct', { product: selectedProduct })
+          : t('coReports.messages.productionCsvSuccess');
         showSuccess(message);
       } else {
-        showError('Failed to generate production costs CSV report.');
+        showError(t('coReports.messages.productionCsvError'));
       }
     };
 
@@ -1140,7 +1140,7 @@ const COReportsPage = () => {
       }
       
       if (dataToExport.length === 0) {
-        showError('Brak danych kosztów produkcji do eksportu');
+        showError(t('coReports.productionCosts.noDataToExport'));
         return;
       }
 
@@ -1148,15 +1148,15 @@ const COReportsPage = () => {
 
       // Definicja nagłówków dla PDF
       const headers = [
-        { label: 'Order Number', key: 'orderNumber' },
-        { label: 'Date', key: 'orderDate' },
-        { label: 'Customer', key: 'customerName' },
-        { label: 'Product', key: 'itemName' },
-        { label: 'Quantity', key: 'quantity' },
-        { label: 'Cost/Unit', key: 'unitProductionCost' },
-        { label: 'Full Cost/Unit', key: 'fullProductionUnitCost' },
-        { label: 'Total Cost', key: 'totalFullProductionCost' },
-        { label: 'MO Number', key: 'productionTaskNumber' }
+        { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
+        { label: t('coReports.table.date'), key: 'orderDate' },
+        { label: t('coReports.table.customer'), key: 'customerName' },
+        { label: t('coReports.table.product'), key: 'itemName' },
+        { label: t('coReports.table.quantity'), key: 'quantity' },
+        { label: t('coReports.table.avgCostPerUnit'), key: 'unitProductionCost' },
+        { label: t('coReports.table.fullCostPerUnit'), key: 'fullProductionUnitCost' },
+        { label: t('coReports.table.totalFullCost'), key: 'totalFullProductionCost' },
+        { label: 'MO', key: 'productionTaskNumber' }
       ];
       
       // Przygotuj dane do eksportu
@@ -1173,15 +1173,15 @@ const COReportsPage = () => {
       // Utwórz datę i zakres filtrowania jako podtytuł
       const dateRange = `${formatDateForExport(startDate)} - ${formatDateForExport(endDate)}`;
       const customerFilter = selectedCustomer !== 'all' 
-        ? `, Customer: ${getCustomerName(selectedCustomer)}` 
+        ? `, ${t('coReports.export.labels.customer')}: ${getCustomerName(selectedCustomer)}` 
         : '';
       const productFilter = selectedProduct ? `, Product: ${selectedProduct}` : '';
       
       // Opcje dla eksportu PDF
       const pdfOptions = {
-        title: 'Production Costs Report',
-        subtitle: `Period: ${dateRange}${customerFilter}${productFilter}`,
-        footerText: `Generated: ${new Date().toLocaleString()} | Items: ${filteredCostStats.totalItems} | Total Cost: ${formatCurrency(filteredCostStats.totalFullProductionCost)}`
+        title: t('coReports.productionCosts.title'),
+        subtitle: `${t('coReports.export.labels.dateRange')}: ${dateRange}${customerFilter}${productFilter}`,
+        footerText: `${t('coReports.export.labels.generatedOn')}: ${new Date().toLocaleString()} | ${t('coReports.table.itemsCount')}: ${filteredCostStats.totalItems} | ${t('coReports.table.totalFullCost')}: ${formatCurrency(filteredCostStats.totalFullProductionCost)}`
       };
       
       // Wygeneruj plik PDF z nazwą uwzględniającą filtr produktu
@@ -1191,11 +1191,11 @@ const COReportsPage = () => {
       
       if (success) {
         const message = selectedProduct 
-          ? `Production costs PDF report for ${selectedProduct} has been generated successfully.`
-          : 'Production costs PDF report has been generated successfully.';
+          ? t('coReports.messages.productionPdfSuccessForProduct', { product: selectedProduct })
+          : t('coReports.messages.productionPdfSuccess');
         showSuccess(message);
       } else {
-        showError('Failed to generate production costs PDF report.');
+        showError(t('coReports.messages.productionPdfError'));
       }
     };
 
@@ -1204,7 +1204,7 @@ const COReportsPage = () => {
         {/* Nagłówek z przyciskami Export i Odśwież */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h6" component="h2">
-            Raport kosztów produkcji
+            {t('coReports.productionCosts.title')}
           </Typography>
           
           <Box>
@@ -1251,7 +1251,7 @@ const COReportsPage = () => {
               )}
             </Box>
             
-            <Tooltip title="Odśwież dane">
+              <Tooltip title={t('coReports.common.refreshData')}>
               <IconButton onClick={handleRefreshData} color="primary">
                 <RefreshIcon />
               </IconButton>
@@ -1264,17 +1264,17 @@ const COReportsPage = () => {
           <Grid container spacing={3} alignItems="center">
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
-                <InputLabel>Okres raportu</InputLabel>
+                <InputLabel>{t('coReports.filters.period.label')}</InputLabel>
                 <Select
                   value={reportPeriod}
                   onChange={handlePeriodChange}
-                  label="Okres raportu"
+                  label={t('coReports.filters.period.label')}
                 >
-                  <MenuItem value={TIME_PERIODS.LAST_7_DAYS}>Ostatnie 7 dni</MenuItem>
-                  <MenuItem value={TIME_PERIODS.LAST_30_DAYS}>Ostatnie 30 dni</MenuItem>
-                  <MenuItem value={TIME_PERIODS.LAST_MONTH}>Poprzedni miesiąc</MenuItem>
-                  <MenuItem value={TIME_PERIODS.THIS_MONTH}>Bieżący miesiąc</MenuItem>
-                  <MenuItem value={TIME_PERIODS.CUSTOM}>Niestandardowy</MenuItem>
+                  <MenuItem value={TIME_PERIODS.LAST_7_DAYS}>{t('coReports.filters.period.last7days')}</MenuItem>
+                  <MenuItem value={TIME_PERIODS.LAST_30_DAYS}>{t('coReports.filters.period.last30days')}</MenuItem>
+                  <MenuItem value={TIME_PERIODS.LAST_MONTH}>{t('coReports.filters.period.lastMonth')}</MenuItem>
+                  <MenuItem value={TIME_PERIODS.THIS_MONTH}>{t('coReports.filters.period.thisMonth')}</MenuItem>
+                  <MenuItem value={TIME_PERIODS.CUSTOM}>{t('coReports.filters.period.custom')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -1282,7 +1282,7 @@ const COReportsPage = () => {
             <Grid item xs={12} md={3}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
-                  label="Data początkowa"
+                  label={t('coReports.filters.startDate')}
                   value={startDate}
                   onChange={(newDate) => {
                     setStartDate(newDate);
@@ -1296,7 +1296,7 @@ const COReportsPage = () => {
             <Grid item xs={12} md={3}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DatePicker
-                  label="Data końcowa"
+                  label={t('coReports.filters.endDate')}
                   value={endDate}
                   onChange={(newDate) => {
                     setEndDate(newDate);
@@ -1350,13 +1350,13 @@ const COReportsPage = () => {
           <Grid container spacing={3} sx={{ mt: 1 }}>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
-                <InputLabel>Klient</InputLabel>
+                <InputLabel>{t('coReports.filters.customer.label')}</InputLabel>
                 <Select
                   value={selectedCustomer}
                   onChange={(e) => setSelectedCustomer(e.target.value)}
-                  label="Klient"
+                  label={t('coReports.filters.customer.label')}
                 >
-                  <MenuItem value="all">Wszyscy klienci</MenuItem>
+                  <MenuItem value="all">{t('coReports.filters.customer.all')}</MenuItem>
                   {customers.map(customer => (
                     <MenuItem key={customer.id} value={customer.id}>
                       {customer.name}
@@ -1368,13 +1368,13 @@ const COReportsPage = () => {
             
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
-                <InputLabel>Wybierz produkt</InputLabel>
+                <InputLabel>{t('coReports.productionCosts.selectProduct')}</InputLabel>
                 <Select
                   value={selectedProduct}
                   onChange={(e) => setSelectedProduct(e.target.value)}
-                  label="Wybierz produkt"
+                  label={t('coReports.productionCosts.selectProduct')}
                 >
-                  <MenuItem value="">Wszystkie produkty</MenuItem>
+                  <MenuItem value="">{t('coReports.productionCosts.allProducts')}</MenuItem>
                   {costStats.costsByProduct.map((product, index) => (
                     <MenuItem key={index} value={product.name}>
                       {product.name}
@@ -1403,14 +1403,14 @@ const COReportsPage = () => {
           <>
             {/* Nagłówek z datami */}
             <Typography variant="subtitle1" gutterBottom>
-              Koszty produkcji za okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
+              {t('coReports.productionCosts.periodRange', { start: formatDateDisplay(startDate), end: formatDateDisplay(endDate) })}
             </Typography>
             
             {selectedProduct && (
               <>
                 {/* Karta ze statystykami dla wybranego produktu */}
                 <Typography variant="h6" component="h3" sx={{ mb: 2 }}>
-                  Statystyki kosztu produkcji dla: {selectedProduct}
+                  {t('coReports.productionCosts.productStats.titleFor', { product: selectedProduct })}
                 </Typography>
                 
                 {productStats && (
@@ -1419,7 +1419,7 @@ const COReportsPage = () => {
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
-                            Średni pełny koszt/szt.
+                            {t('coReports.productionCosts.productStats.avgFullUnitCost')}
                           </Typography>
                           <Typography variant="h5" component="div">
                             {formatCurrency(productStats.avgFullUnitCost)}
@@ -1431,7 +1431,7 @@ const COReportsPage = () => {
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
-                            Min. pełny koszt/szt.
+                            {t('coReports.productionCosts.productStats.minFullUnitCost')}
                           </Typography>
                           <Typography variant="h5" component="div">
                             {formatCurrency(productStats.minFullUnitCost)}
@@ -1443,7 +1443,7 @@ const COReportsPage = () => {
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
-                            Max. pełny koszt/szt.
+                            {t('coReports.productionCosts.productStats.maxFullUnitCost')}
                           </Typography>
                           <Typography variant="h5" component="div">
                             {formatCurrency(productStats.maxFullUnitCost)}
@@ -1455,7 +1455,7 @@ const COReportsPage = () => {
                       <Card>
                         <CardContent>
                           <Typography color="textSecondary" gutterBottom>
-                            Liczba zamówień
+                            {t('coReports.cards.totalOrders')}
                           </Typography>
                           <Typography variant="h5" component="div">
                             {productStats.orderCount}
@@ -1484,7 +1484,7 @@ const COReportsPage = () => {
                           fontWeight: 'bold',
                           textAlign: 'center'
                         }}>
-                          📈 Analiza kosztów produkcji w czasie
+                          {t('coReports.productionCosts.chart.title')}
                         </Typography>
                         <Box sx={{ 
                           height: 450, 
@@ -1538,7 +1538,7 @@ const COReportsPage = () => {
                                   stroke: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#ddd' 
                                 }}
                                 label={{ 
-                                  value: 'Koszt na sztukę (€)', 
+                                  value: t('coReports.productionCosts.chart.yAxisLabel'), 
                                   angle: -90, 
                                   position: 'insideLeft',
                                   style: { 
@@ -1548,7 +1548,7 @@ const COReportsPage = () => {
                                 }}
                               />
                               <RechartsTooltip
-                                formatter={(value) => [value.toFixed(2) + ' €', 'Pełny koszt na sztukę']}
+                                formatter={(value) => [value.toFixed(2) + ' €', t('coReports.productionCosts.chart.tooltipFullCostPerUnit')]}
                                 labelFormatter={(date) => formatDateDisplay(date)}
                                 contentStyle={{
                                   backgroundColor: theme.palette.mode === 'dark' 
@@ -1563,7 +1563,7 @@ const COReportsPage = () => {
                               <Line
                                 type="monotone"
                                 dataKey="fullUnitCost"
-                                name="Pełny koszt na sztukę"
+                                name={t('coReports.productionCosts.chart.seriesFullCostPerUnit')}
                                 stroke="#82ca9d"
                                 strokeWidth={3}
                                 dot={{ 
@@ -1584,7 +1584,7 @@ const COReportsPage = () => {
                                 <ReferenceLine
                                   y={productStats.avgFullUnitCost}
                                   label={{ 
-                                    value: "Średnia", 
+                                    value: t('coReports.common.average'), 
                                     position: "topRight",
                                     style: { 
                                       fill: theme.palette.text.secondary, 
@@ -1605,17 +1605,17 @@ const COReportsPage = () => {
                     <Grid item xs={12}>
                       <Paper sx={{ p: 2 }}>
                         <Typography variant="h6" component="h3">
-                          Szczegółowe dane kosztów w czasie
+                          {t('coReports.productionCosts.detailsOverTime')}
                         </Typography>
                         <Box sx={{ mt: 2, overflowX: 'auto' }}>
                           <TableContainer>
                             <Table size="small">
                               <TableHead>
                                 <TableRow>
-                                  <TableCell>Data</TableCell>
-                                  <TableCell align="right">Ilość</TableCell>
-                                  <TableCell align="right">Pełny koszt/szt.</TableCell>
-                                  <TableCell align="right">Łączny pełny koszt</TableCell>
+                                  <TableCell>{t('coReports.table.date')}</TableCell>
+                                  <TableCell align="right">{t('coReports.table.quantity')}</TableCell>
+                                  <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
+                                  <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -1640,19 +1640,19 @@ const COReportsPage = () => {
                 <Paper sx={{ mb: 3 }}>
                   <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
                     <Typography variant="h6" component="h3">
-                      Zamówienia klientów (CO) zawierające produkt
+                      {t('coReports.productionCosts.ordersContainingProduct')}
                     </Typography>
                   </Box>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Numer zamówienia</TableCell>
-                          <TableCell>Data</TableCell>
-                          <TableCell>Klient</TableCell>
-                          <TableCell align="right">Ilość</TableCell>
-                          <TableCell align="right">Pełny koszt/szt.</TableCell>
-                          <TableCell align="right">Łączny pełny koszt</TableCell>
+                          <TableCell>{t('coReports.table.orderNumber')}</TableCell>
+                          <TableCell>{t('coReports.table.date')}</TableCell>
+                          <TableCell>{t('coReports.table.customer')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.quantity')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1681,7 +1681,7 @@ const COReportsPage = () => {
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
-                          Pozycje z kosztami
+                          {t('coReports.productionCosts.cards.itemsWithCosts')}
                         </Typography>
                         <Typography variant="h4" component="div">
                           {costStats.totalItems}
@@ -1693,7 +1693,7 @@ const COReportsPage = () => {
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
-                          Łączny koszt produkcji
+                          {t('coReports.productionCosts.cards.totalProductionCost')}
                         </Typography>
                         <Typography variant="h4" component="div">
                           {formatCurrency(costStats.totalProductionCost)}
@@ -1705,7 +1705,7 @@ const COReportsPage = () => {
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
-                          Pełny koszt produkcji
+                          {t('coReports.productionCosts.cards.totalFullProductionCost')}
                         </Typography>
                         <Typography variant="h4" component="div">
                           {formatCurrency(costStats.totalFullProductionCost)}
@@ -1717,7 +1717,7 @@ const COReportsPage = () => {
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
-                          Udział w wartości zamówień
+                          {t('coReports.productionCosts.cards.shareInOrdersValue')}
                         </Typography>
                         <Typography variant="h4" component="div">
                           {costStats.productionCostRatio.toFixed(1)}%
@@ -1731,20 +1731,20 @@ const COReportsPage = () => {
                 <Paper sx={{ mb: 3 }}>
                   <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
                     <Typography variant="h6" component="h3">
-                      Koszty według produktów
+                      {t('coReports.productionCosts.byProduct.title')}
                     </Typography>
                   </Box>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Produkt</TableCell>
-                          <TableCell align="right">Łączna ilość</TableCell>
-                          <TableCell align="right">Koszt produkcji</TableCell>
-                          <TableCell align="right">Pełny koszt</TableCell>
-                          <TableCell align="right">Liczba zamówień</TableCell>
-                          <TableCell align="right">Średni koszt/szt.</TableCell>
-                          <TableCell align="center">Akcje</TableCell>
+                          <TableCell>{t('coReports.table.product')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.totalQuantity')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.productionCost')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.fullCost')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.avgCostPerUnit')}</TableCell>
+                          <TableCell align="center">{t('coReports.table.actions')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1759,7 +1759,7 @@ const COReportsPage = () => {
                               {formatCurrency(product.totalQuantity > 0 ? product.totalCost / product.totalQuantity : 0)}
                             </TableCell>
                             <TableCell align="center">
-                              <Tooltip title="Pokaż szczegóły produktu">
+                              <Tooltip title={t('coReports.productionCosts.byProduct.showProductDetails')}>
                                 <IconButton 
                                   size="small"
                                   onClick={() => {
@@ -1781,18 +1781,18 @@ const COReportsPage = () => {
                 <Paper sx={{ mb: 3 }}>
                   <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
                     <Typography variant="h6" component="h3">
-                      Koszty według klientów
+                      {t('coReports.productionCosts.byCustomer.title')}
                     </Typography>
                   </Box>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Klient</TableCell>
-                          <TableCell align="right">Koszt produkcji</TableCell>
-                          <TableCell align="right">Pełny koszt</TableCell>
-                          <TableCell align="right">Liczba zamówień</TableCell>
-                          <TableCell align="right">Liczba pozycji</TableCell>
+                          <TableCell>{t('coReports.table.customer')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.productionCost')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.fullCost')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.itemsCount')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1821,7 +1821,7 @@ const COReportsPage = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" component="h1">
-          Raporty zamówień klientów (CO)
+          {t('coReports.title')}
         </Typography>
       </Box>
       
@@ -1829,7 +1829,7 @@ const COReportsPage = () => {
         <Tabs 
           value={selectedTab} 
           onChange={handleTabChange} 
-          aria-label="raporty co"
+          aria-label={t('coReports.aria.tabs')}
           sx={{
             '& .MuiTab-root': {
               fontWeight: 'bold',
@@ -1847,13 +1847,13 @@ const COReportsPage = () => {
           }}
         >
           <Tab 
-            label="Raport zamówień" 
+            label={t('coReports.tabs.ordersReport')} 
             icon={<AssessmentIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />
           <Tab 
-            label="Koszty produkcji"
+            label={t('coReports.tabs.productionCosts')}
             icon={<MoneyIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}

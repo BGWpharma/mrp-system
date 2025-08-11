@@ -13,15 +13,17 @@ import {
   Divider
 } from '@mui/material';
 import { formatCurrency } from '../../../utils/formatUtils';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający statystyki zamówień według klientów
  */
 const CustomerStatsComponent = ({ customerStats, loading, title }) => {
+  const { t } = useTranslation();
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h6" gutterBottom>
-        {title || 'Statystyki według klientów'}
+        {title || t('coReports.customerStats.title')}
       </Typography>
       <Divider sx={{ mb: 2 }} />
       
@@ -34,10 +36,10 @@ const CustomerStatsComponent = ({ customerStats, loading, title }) => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Klient</TableCell>
-                <TableCell align="right">Liczba zamówień</TableCell>
-                <TableCell align="right">Wartość zamówień</TableCell>
-                <TableCell align="right">Średnia wartość</TableCell>
+                <TableCell>{t('coReports.table.customer')}</TableCell>
+                <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
+                <TableCell align="right">{t('coReports.table.ordersValue')}</TableCell>
+                <TableCell align="right">{t('coReports.table.avgValue')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
