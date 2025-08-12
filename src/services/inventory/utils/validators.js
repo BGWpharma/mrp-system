@@ -276,6 +276,9 @@ export const validateWarehouseData = (warehouseData) => {
   // Nazwa jest wymagana
   validated.name = validateRequiredString(warehouseData.name, 'name');
   
+  // Adres jest opcjonalny
+  validated.address = validateRequiredString(warehouseData.address || '', 'address', false);
+  
   // Opis jest opcjonalny
   validated.description = validateRequiredString(warehouseData.description || '', 'description', false);
   
