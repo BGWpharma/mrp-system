@@ -164,7 +164,7 @@ const verifyProductionTasks = async (orderToVerify) => {
 };
 
 const OrderDetails = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('orders');
   const { orderId } = useParams();
   const location = useLocation();
   const [order, setOrder] = useState(null);
