@@ -8,7 +8,8 @@ import {
   orderBy,
   limit,
   startAfter,
-  Timestamp
+  Timestamp,
+  getCountFromServer
 } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase/config';
@@ -28,18 +29,20 @@ export const FORM_TYPES = {
 };
 
 /**
- * Pobiera odpowiedzi formularzy produkcyjnych z paginacją
+ * ✅ ZOPTYMALIZOWANA: Pobiera odpowiedzi formularzy produkcyjnych z prawdziwą paginacją
  * @param {string} formType - Typ formularza (COMPLETED_MO, PRODUCTION_CONTROL, PRODUCTION_SHIFT)
  * @param {number} page - Numer strony (1-based)
  * @param {number} itemsPerPage - Liczba elementów na stronę
  * @param {Object} filters - Filtry (opcjonalne)
- * @returns {Object} - { data, totalCount, hasMore, totalPages }
+ * @param {Object} lastVisible - Kursor z poprzedniej strony
+ * @returns {Object} - { data, totalCount, hasMore, totalPages, lastVisible }
  */
 export const getFormResponsesWithPagination = async (
   formType, 
   page = 1, 
   itemsPerPage = 10, 
-  filters = {}
+  filters = {},
+  lastVisible = null
 ) => {
   try {
     const pageNum = Math.max(1, page);
@@ -92,72 +95,56 @@ export const getFormResponsesWithPagination = async (
       conditions.push(where('moNumber', '==', filters.taskNumber.trim()));
     }
 
-    // Utwórz zapytanie bazowe - sortuj od najnowszych (desc)
-    let baseQuery;
+    // ✅ OPTYMALIZACJA 1: Utwórz zapytanie bazowe do liczenia
+    let countQuery;
+    if (conditions.length > 0) {
+      countQuery = query(
+        collection(db, collectionPath),
+        ...conditions
+      );
+    } else {
+      countQuery = query(collection(db, collectionPath));
+    }
+
+    // ✅ OPTYMALIZACJA 2: Policz dokumenty BEZ pobierania danych
+    const countSnapshot = await getCountFromServer(countQuery);
+    const totalCount = countSnapshot.data().count;
+    const totalPages = Math.ceil(totalCount / limit_val);
+
+    // ✅ OPTYMALIZACJA 3: Utwórz zapytanie z sortowaniem i kursorem
+    let dataQuery;
     if (conditions.length > 0) {
       // Gdy filtrujemy po dacie, musimy sortować po tym samym polu
       if (conditions.some(cond => cond._field?.fieldPath === dateField)) {
-        baseQuery = query(
+        dataQuery = query(
           collection(db, collectionPath),
           ...conditions,
           orderBy(dateField, 'desc')
         );
       } else {
-        baseQuery = query(
+        dataQuery = query(
           collection(db, collectionPath),
           ...conditions,
           orderBy(dateField, 'desc')
         );
       }
     } else {
-      baseQuery = query(
+      dataQuery = query(
         collection(db, collectionPath),
         orderBy(dateField, 'desc')
       );
     }
 
-    // Pobierz wszystkie dokumenty dla policzenia totalCount
-    const totalSnapshot = await getDocs(baseQuery);
-    const totalCount = totalSnapshot.size;
-    
-    // Oblicz totalPages
-    const totalPages = Math.ceil(totalCount / limit_val);
-    
-    // Pobierz dokumenty dla aktualnej strony
-    let paginatedQuery;
-    const offset = (pageNum - 1) * limit_val;
-    
-    if (offset > 0) {
-      // Dla stron innych niż pierwsza, użyj startAfter
-      const allDocs = totalSnapshot.docs;
-      if (offset < allDocs.length) {
-        const lastVisibleDoc = allDocs[offset - 1];
-        
-        paginatedQuery = query(
-          baseQuery,
-          startAfter(lastVisibleDoc),
-          limit(limit_val)
-        );
-      } else {
-        // Offset większy niż liczba dokumentów - zwróć pustą tablicę
-        return {
-          data: [],
-          totalCount,
-          totalPages,
-          currentPage: pageNum,
-          itemsPerPage: limit_val,
-          hasMore: false
-        };
-      }
-    } else {
-      // Dla pierwszej strony
-      paginatedQuery = query(
-        baseQuery,
-        limit(limit_val)
-      );
+    // ✅ OPTYMALIZACJA 4: Zastosuj kursor dla paginacji
+    if (lastVisible) {
+      dataQuery = query(dataQuery, startAfter(lastVisible));
     }
     
-    const paginatedSnapshot = await getDocs(paginatedQuery);
+    // Dodaj limit
+    dataQuery = query(dataQuery, limit(limit_val));
+    
+    // ✅ OPTYMALIZACJA 5: Pobierz TYLKO potrzebne dokumenty
+    const paginatedSnapshot = await getDocs(dataQuery);
     
     const data = paginatedSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -172,7 +159,14 @@ export const getFormResponsesWithPagination = async (
       readingDate: doc.data().readingDate?.toDate?.() || null
     }));
 
-    const hasMore = page < totalPages;
+    // ✅ OPTYMALIZACJA 6: Przygotuj kursor do następnej strony
+    const newLastVisible = paginatedSnapshot.docs.length > 0 
+      ? paginatedSnapshot.docs[paginatedSnapshot.docs.length - 1] 
+      : null;
+
+    const hasMore = paginatedSnapshot.docs.length === limit_val && newLastVisible !== null;
+
+    console.log(`✅ ZOPTYMALIZOWANE: Pobrano ${data.length} z ${totalCount} rekordów (strona ${pageNum}/${totalPages})`);
 
     return {
       data,
@@ -180,7 +174,8 @@ export const getFormResponsesWithPagination = async (
       totalPages,
       currentPage: pageNum,
       itemsPerPage: limit_val,
-      hasMore
+      hasMore,
+      lastVisible: newLastVisible
     };
 
   } catch (error) {

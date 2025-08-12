@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   Typography, 
@@ -53,6 +53,13 @@ const FormsResponsesPage = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   
+  // ✅ FIX: Cache kursorów dla każdej strony - umożliwia cofanie się
+  const cursorsRef = useRef({
+    completedMO: new Map(), // Map<pageNumber, cursor>
+    productionControl: new Map(), // Map<pageNumber, cursor>
+    productionShift: new Map() // Map<pageNumber, cursor>
+  });
+
   // Stany dla paginacji
   const [page, setPage] = useState(0); // MUI używa 0-based indexing
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -80,17 +87,79 @@ const FormsResponsesPage = () => {
   // Stan dla panelu filtrów
   const [showFilters, setShowFilters] = useState(false);
 
-  // Funkcja ładowania danych z paginacją
+  // ✅ FALLBACK: Funkcja do sekwencyjnego ładowania stron gdy brakuje kursorów
+  const loadSequentiallyToPage = async (targetPage, formType) => {
+    try {
+      console.log(`🔄 Rozpoczynam sekwencyjne ładowanie ${formType} do strony ${targetPage}`);
+      
+      let cursor = null;
+      
+      // Ładuj strony sekwencyjnie od 1 do targetPage-1
+      for (let p = 1; p < targetPage; p++) {
+        // Sprawdź czy już mamy kursor dla tej strony
+        if (cursorsRef.current[formType].has(p)) {
+          cursor = cursorsRef.current[formType].get(p);
+          console.log(`📦 Użyto cached kursor dla strony ${p}`);
+          continue;
+        }
+        
+        console.log(`📄 Ładowanie strony ${p} z kursorem:`, cursor ? 'JEST' : 'BRAK');
+        
+        const result = await getFormResponsesWithPagination(
+          formType,
+          p,
+          rowsPerPage,
+          {},
+          cursor
+        );
+        
+        // Zapisz kursor tej strony
+        if (result.lastVisible) {
+          cursorsRef.current[formType].set(p, result.lastVisible);
+          cursor = result.lastVisible;
+          console.log(`💾 Zapisano kursor dla strony ${p}`);
+        }
+      }
+      
+      console.log(`✅ Zakończono sekwencyjne ładowanie do strony ${targetPage}`);
+    } catch (error) {
+      console.error('Błąd podczas sekwencyjnego ładowania:', error);
+    }
+  };
+
+  // ✅ ZOPTYMALIZOWANA funkcja ładowania danych z kursorami
   const loadFormResponses = async (formType, pageNum = 1, perPage = rowsPerPage, filters = {}) => {
     try {
       setLoading(true);
+      
+      // ✅ FIX: Pobierz kursor dla danej strony z cache lub użyj fallback
+      let currentCursor = null;
+      if (pageNum > 1) {
+        currentCursor = cursorsRef.current[formType].get(pageNum - 1);
+        
+        console.log(`📍 Pobieranie strony ${pageNum} formularza ${formType}, kursor z strony ${pageNum - 1}:`, currentCursor ? 'ZNALEZIONY' : 'BRAK');
+        
+        // ✅ FALLBACK: Jeśli nie ma kursora, załaduj sekwencyjnie od strony 1
+        if (!currentCursor && pageNum > 1) {
+          console.log(`🔄 FALLBACK: Ładowanie sekwencyjne do strony ${pageNum}`);
+          await loadSequentiallyToPage(pageNum, formType);
+          currentCursor = cursorsRef.current[formType].get(pageNum - 1);
+        }
+      }
       
       const result = await getFormResponsesWithPagination(
         formType,
         pageNum,
         perPage,
-        filters
+        filters,
+        currentCursor
       );
+      
+      // ✅ FIX: Zapisz kursor dla aktualnej strony w cache
+      if (result.lastVisible) {
+        cursorsRef.current[formType].set(pageNum, result.lastVisible);
+        console.log(`💾 Zapisano kursor dla ${formType} strony ${pageNum}`);
+      }
       
       setTotalCount(result.totalCount);
       setTotalPages(result.totalPages);
@@ -137,16 +206,30 @@ const FormsResponsesPage = () => {
     setPage(newPage);
   };
 
-  // Obsługa zmiany liczby wierszy na stronę
+  // ✅ OPTYMALIZACJA: Reset kursorów przy zmianie rozmiaru strony
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0); // Reset do pierwszej strony
+    
+    // ✅ FIX: Wyczyść cache kursorów przy zmianie rozmiaru strony
+    cursorsRef.current = {
+      completedMO: new Map(),
+      productionControl: new Map(),
+      productionShift: new Map()
+    };
   };
 
-  // Obsługa zmiany zakładki
+  // ✅ OPTYMALIZACJA: Reset kursorów przy zmianie zakładki
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
     setPage(0); // Reset paginacji przy zmianie zakładki
+    
+    // ✅ FIX: Wyczyść cache kursorów przy zmianie zakładki
+    cursorsRef.current = {
+      completedMO: new Map(),
+      productionControl: new Map(),
+      productionShift: new Map()
+    };
   };
 
   // useEffect do ładowania danych

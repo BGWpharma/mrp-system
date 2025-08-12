@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Container, 
   Typography, 
@@ -46,6 +46,12 @@ const InventoryFormsResponsesPage = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   
+  // ✅ FIX: Cache kursorów dla każdej strony - umożliwia cofanie się
+  const cursorsRef = useRef({
+    loadingReport: new Map(), // Map<pageNumber, cursor>
+    unloadingReport: new Map() // Map<pageNumber, cursor>
+  });
+
   // ✅ OPTYMALIZACJA: Separate state for each tab
   const [loadingReportResponses, setLoadingReportResponses] = useState([]);
   const [unloadingReportResponses, setUnloadingReportResponses] = useState([]);
@@ -65,6 +71,49 @@ const InventoryFormsResponsesPage = () => {
   // Stan dla dialogu potwierdzenia usunięcia
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteItemData, setDeleteItemData] = useState(null);
+
+  // ✅ FALLBACK: Funkcja do sekwencyjnego ładowania stron gdy brakuje kursorów
+  const loadSequentiallyToPage = async (targetPage, formType) => {
+    try {
+      console.log(`🔄 Rozpoczynam sekwencyjne ładowanie ${formType} do strony ${targetPage}`);
+      
+      let cursor = null;
+      const inventoryFormType = formType === 'loadingReport' 
+        ? INVENTORY_FORM_TYPES.LOADING_REPORT 
+        : INVENTORY_FORM_TYPES.UNLOADING_REPORT;
+      
+      // Ładuj strony sekwencyjnie od 1 do targetPage-1
+      for (let p = 1; p < targetPage; p++) {
+        // Sprawdź czy już mamy kursor dla tej strony
+        if (cursorsRef.current[formType].has(p)) {
+          cursor = cursorsRef.current[formType].get(p);
+          console.log(`📦 Użyto cached kursor dla strony ${p}`);
+          continue;
+        }
+        
+        console.log(`📄 Ładowanie strony ${p} z kursorem:`, cursor ? 'JEST' : 'BRAK');
+        
+        const result = await getInventoryFormResponsesWithPagination(
+          inventoryFormType,
+          p,
+          rowsPerPage,
+          {},
+          cursor
+        );
+        
+        // Zapisz kursor tej strony
+        if (result.lastVisible) {
+          cursorsRef.current[formType].set(p, result.lastVisible);
+          cursor = result.lastVisible;
+          console.log(`💾 Zapisano kursor dla strony ${p}`);
+        }
+      }
+      
+      console.log(`✅ Zakończono sekwencyjne ładowanie do strony ${targetPage}`);
+    } catch (error) {
+      console.error('Błąd podczas sekwencyjnego ładowania:', error);
+    }
+  };
 
   // ✅ OPTYMALIZACJA: Lazy loading functions for each tab
   const loadLoadingReportData = useCallback(async () => {
@@ -115,7 +164,7 @@ const InventoryFormsResponsesPage = () => {
     }
   }, [loadedTabs.unloadingReport, page, rowsPerPage]);
 
-  // ✅ OPTYMALIZACJA: Load data for current tab only
+  // ✅ ZOPTYMALIZOWANA: Load data for current tab with cursors
   const loadCurrentTabData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -123,27 +172,59 @@ const InventoryFormsResponsesPage = () => {
     try {
       const pageNum = page + 1;
       
+      // ✅ FIX: Pobierz kursor dla danej strony z cache lub użyj fallback
+      let currentCursor = null;
+      if (pageNum > 1) {
+        const currentFormType = tabValue === 0 ? 'loadingReport' : 'unloadingReport';
+        currentCursor = cursorsRef.current[currentFormType].get(pageNum - 1);
+        
+        console.log(`📍 Pobieranie strony ${pageNum}, kursor z strony ${pageNum - 1}:`, currentCursor ? 'ZNALEZIONY' : 'BRAK');
+        
+        // ✅ FALLBACK: Jeśli nie ma kursora, załaduj sekwencyjnie od strony 1
+        if (!currentCursor && pageNum > 1) {
+          console.log(`🔄 FALLBACK: Ładowanie sekwencyjne do strony ${pageNum}`);
+          await loadSequentiallyToPage(pageNum, currentFormType);
+          currentCursor = cursorsRef.current[currentFormType].get(pageNum - 1);
+        }
+      }
+      
       switch (tabValue) {
         case 0: // Loading Reports
           const loadingResult = await getInventoryFormResponsesWithPagination(
             INVENTORY_FORM_TYPES.LOADING_REPORT,
             pageNum,
-            rowsPerPage
+            rowsPerPage,
+            {},
+            currentCursor
           );
           setLoadingReportResponses(loadingResult.data);
           setTotalCount(loadingResult.totalCount);
           setTotalPages(loadingResult.totalPages);
+          
+          // ✅ FIX: Zapisz kursor dla aktualnej strony w cache
+          if (loadingResult.lastVisible) {
+            cursorsRef.current.loadingReport.set(pageNum, loadingResult.lastVisible);
+            console.log(`💾 Zapisano kursor dla loadingReport strony ${pageNum}`);
+          }
           break;
           
         case 1: // Unloading Reports
           const unloadingResult = await getInventoryFormResponsesWithPagination(
             INVENTORY_FORM_TYPES.UNLOADING_REPORT,
             pageNum,
-            rowsPerPage
+            rowsPerPage,
+            {},
+            currentCursor
           );
           setUnloadingReportResponses(unloadingResult.data);
           setTotalCount(unloadingResult.totalCount);
           setTotalPages(unloadingResult.totalPages);
+          
+          // ✅ FIX: Zapisz kursor dla aktualnej strony w cache
+          if (unloadingResult.lastVisible) {
+            cursorsRef.current.unloadingReport.set(pageNum, unloadingResult.lastVisible);
+            console.log(`💾 Zapisano kursor dla unloadingReport strony ${pageNum}`);
+          }
           break;
           
         default:
@@ -162,11 +243,17 @@ const InventoryFormsResponsesPage = () => {
     loadCurrentTabData();
   }, [loadCurrentTabData]);
   
-  // ✅ OPTYMALIZACJA: Reset pagination when changing tabs
+  // ✅ OPTYMALIZACJA: Reset pagination and cursors when changing tabs
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
     setPage(0); // Reset to first page when changing tabs
     setError(null); // Clear any previous errors
+    
+    // ✅ FIX: Wyczyść cache kursorów przy zmianie zakładki
+    cursorsRef.current = {
+      loadingReport: new Map(),
+      unloadingReport: new Map()
+    };
   };
 
   // ✅ OPTYMALIZACJA: Pagination handlers
@@ -174,9 +261,16 @@ const InventoryFormsResponsesPage = () => {
     setPage(newPage);
   };
 
+  // ✅ OPTYMALIZACJA: Reset kursorów przy zmianie rozmiaru strony
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0); // Reset to first page when changing rows per page
+    
+    // ✅ FIX: Wyczyść cache kursorów przy zmianie rozmiaru strony
+    cursorsRef.current = {
+      loadingReport: new Map(),
+      unloadingReport: new Map()
+    };
   };
 
 

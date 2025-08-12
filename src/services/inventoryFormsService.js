@@ -8,7 +8,8 @@ import {
   startAfter, 
   Timestamp,
   doc,
-  deleteDoc 
+  deleteDoc,
+  getCountFromServer
 } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase/config';
@@ -26,18 +27,20 @@ export const INVENTORY_FORM_TYPES = {
 };
 
 /**
- * Pobiera odpowiedzi formularzy magazynowych z paginacją
+ * ✅ ZOPTYMALIZOWANA: Pobiera odpowiedzi formularzy magazynowych z prawdziwą paginacją
  * @param {string} formType - Typ formularza (LOADING_REPORT, UNLOADING_REPORT)
  * @param {number} page - Numer strony (1-based)
  * @param {number} itemsPerPage - Liczba elementów na stronę
  * @param {Object} filters - Filtry (opcjonalne)
- * @returns {Object} - { data, totalCount, hasMore, totalPages }
+ * @param {Object} lastVisible - Kursor z poprzedniej strony
+ * @returns {Object} - { data, totalCount, hasMore, totalPages, lastVisible }
  */
 export const getInventoryFormResponsesWithPagination = async (
   formType, 
   page = 1, 
   itemsPerPage = 10, 
-  filters = {}
+  filters = {},
+  lastVisible = null
 ) => {
   try {
     const pageNum = Math.max(1, page);
@@ -92,65 +95,49 @@ export const getInventoryFormResponsesWithPagination = async (
       conditions.push(where('carrierName', '==', filters.carrierName.trim()));
     }
 
-    // Utwórz zapytanie bazowe - sortuj od najnowszych (desc)
-    let baseQuery;
+    console.log(`🔄 ZOPTYMALIZOWANE: Pobieranie formularzy magazynowych typu: ${formType}, strona: ${pageNum}, limit: ${limit_val}`);
+
+    // ✅ OPTYMALIZACJA 1: Utwórz zapytanie bazowe do liczenia
+    let countQuery;
     if (conditions.length > 0) {
-      baseQuery = query(
+      countQuery = query(
+        collection(db, collectionPath),
+        ...conditions
+      );
+    } else {
+      countQuery = query(collection(db, collectionPath));
+    }
+
+    // ✅ OPTYMALIZACJA 2: Policz dokumenty BEZ pobierania danych
+    const countSnapshot = await getCountFromServer(countQuery);
+    const totalCount = countSnapshot.data().count;
+    const totalPages = Math.ceil(totalCount / limit_val);
+
+    // ✅ OPTYMALIZACJA 3: Utwórz zapytanie z sortowaniem i kursorem
+    let dataQuery;
+    if (conditions.length > 0) {
+      dataQuery = query(
         collection(db, collectionPath),
         ...conditions,
         orderBy(dateField, 'desc')
       );
     } else {
-      baseQuery = query(
+      dataQuery = query(
         collection(db, collectionPath),
         orderBy(dateField, 'desc')
       );
     }
 
-    console.log(`🔄 Pobieranie formularzy magazynowych typu: ${formType}, strona: ${pageNum}, limit: ${limit_val}`);
-
-    // Pobierz wszystkie dokumenty dla policzenia totalCount
-    const totalSnapshot = await getDocs(baseQuery);
-    const totalCount = totalSnapshot.size;
-    
-    // Oblicz totalPages
-    const totalPages = Math.ceil(totalCount / limit_val);
-    
-    // Pobierz dokumenty dla aktualnej strony
-    let paginatedQuery;
-    const offset = (pageNum - 1) * limit_val;
-    
-    if (offset > 0) {
-      // Dla stron innych niż pierwsza, użyj startAfter
-      const allDocs = totalSnapshot.docs;
-      if (offset < allDocs.length) {
-        const lastVisibleDoc = allDocs[offset - 1];
-        
-        paginatedQuery = query(
-          baseQuery,
-          startAfter(lastVisibleDoc),
-          limit(limit_val)
-        );
-      } else {
-        // Offset większy niż liczba dokumentów - zwróć pustą tablicę
-        return {
-          data: [],
-          totalCount,
-          totalPages,
-          currentPage: pageNum,
-          itemsPerPage: limit_val,
-          hasMore: false
-        };
-      }
-    } else {
-      // Dla pierwszej strony
-      paginatedQuery = query(
-        baseQuery,
-        limit(limit_val)
-      );
+    // ✅ OPTYMALIZACJA 4: Zastosuj kursor dla paginacji
+    if (lastVisible) {
+      dataQuery = query(dataQuery, startAfter(lastVisible));
     }
     
-    const paginatedSnapshot = await getDocs(paginatedQuery);
+    // Dodaj limit
+    dataQuery = query(dataQuery, limit(limit_val));
+    
+    // ✅ OPTYMALIZACJA 5: Pobierz TYLKO potrzebne dokumenty
+    const paginatedSnapshot = await getDocs(dataQuery);
     
     const data = paginatedSnapshot.docs.map(doc => {
       const docData = doc.data();
@@ -171,9 +158,14 @@ export const getInventoryFormResponsesWithPagination = async (
       };
     });
 
-    const hasMore = page < totalPages;
+    // ✅ OPTYMALIZACJA 6: Przygotuj kursor do następnej strony
+    const newLastVisible = paginatedSnapshot.docs.length > 0 
+      ? paginatedSnapshot.docs[paginatedSnapshot.docs.length - 1] 
+      : null;
 
-    console.log(`✅ Pobrano ${data.length} formularzy z ${totalCount} ogółem (strona ${pageNum}/${totalPages})`);
+    const hasMore = paginatedSnapshot.docs.length === limit_val && newLastVisible !== null;
+
+    console.log(`✅ ZOPTYMALIZOWANE MAGAZYN: Pobrano ${data.length} z ${totalCount} ogółem (strona ${pageNum}/${totalPages})`);
 
     return {
       data,
@@ -181,7 +173,8 @@ export const getInventoryFormResponsesWithPagination = async (
       totalPages,
       currentPage: pageNum,
       itemsPerPage: limit_val,
-      hasMore
+      hasMore,
+      lastVisible: newLastVisible
     };
 
   } catch (error) {
