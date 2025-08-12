@@ -1,5 +1,41 @@
 ---
-description: Podczas tłumaczenia przeanaluzj dokładnie kod, bierz pod uwagę dialogi oraz powiązane komponenty, nie zapomnij o dodaniu kluczy tłumaczenia, nie inicjalizuj niepotrzebnie i18n jeżeli nie istnieje potrzeba
+description: tłumaczenia-namespace: 
+
+Po podzieleniu kluczy tłumaczeń na namespace'y zawsze sprawdź:
+
+1. NAMESPACE W HOOKS:
+- Każdy komponent MUSI używać useTranslation z odpowiednim namespace'em: useTranslation('orders'), useTranslation('customers'), etc.
+- NIE używaj domyślnego useTranslation() bez namespace'u w komponentach używających podzielonych tłumaczeń
+- Namespace odpowiada nazwie pliku JSON bez rozszerzenia (orders.json → 'orders')
+
+2. STRUKTURA KLUCZY:
+- Sprawdź czy wszystkie klucze t('klucz') istnieją w odpowiednim pliku namespace'u
+- Klucze w JSON powinny być zagnieżdżone logicznie: orderDetails.sections.status, orderDetails.table.product
+- Zachowaj hierarchię: główna sekcja → podsekcja → konkretny klucz
+
+3. MAPOWANIE NAMESPACE'ÓW:
+- src/hooks/useTranslation.js zawiera mapowanie starych kluczy do nowych namespace'ów
+- Przy dodawaniu nowego namespace'u, zaktualizuj mapowanie w namespaceMapping
+- Customowy hook automatycznie mapuje stare klucze: 'orders.something' → 'orders:something'
+
+4. WERYFIKACJA:
+- Po zmianie namespace'u w komponencie, sprawdź czy wszystkie wywołania t() działają
+- Uruchom aplikację i przetestuj interfejs w miejscach gdzie zmieniłeś namespace
+- Sprawdź konsolę przeglądarki pod kątem błędów missing translation keys
+
+5. KONSYSTENCJA:
+- Wszystkie komponenty w tym samym module powinny używać tego samego namespace'u
+- Komponenty orders/* używają 'orders', customers/* używają 'customers', etc.
+- Dialogi i modalne w komponencie dzielą namespace z komponentem nadrzędnym
+
+PRZYKŁAD NAPRAWY:
+Błędne: const { t } = useTranslation();
+Poprawne: const { t } = useTranslation('orders');
+
+PLIKI DO SPRAWDZENIA:
+- src/i18n/locales/pl/[namespace].json
+- src/i18n/locales/en/[namespace].json  
+- src/hooks/useTranslation.js (mapowanie)
 globs:
 alwaysApply: false
 ---
