@@ -45,7 +45,7 @@ import { Link } from 'react-router-dom';
 import { getAllInteractions, deleteInteraction, updateInteraction, getInteractionById } from '../../services/crmService';
 import { getAllSuppliers } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { INTERACTION_TYPES, INTERACTION_STATUSES } from '../../utils/constants';

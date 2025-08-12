@@ -1,0 +1,37 @@
+{
+  "productionForms": {
+    "title": "Formularze produkcyjne",
+    "description": "Formularze, dokumenty i narzędzia dostępne dla brygadzistów i operatorów produkcji",
+    "fillForm": "Wypełnij formularz",
+    "viewResponses": "Wyświetl odpowiedzi",
+    "completedMO": {
+      "title": "Raport - Skończone MO",
+      "description": "Formularz do raportowania zakończonych zadań produkcyjnych (MO). Wypełnij po zakończeniu zlecenia produkcyjnego.",
+      "tab": "Raporty zakończonych MO"
+    },
+    "productionControl": {
+      "title": "Raport - Kontrola Produkcji",
+      "description": "Formularz do raportowania kontroli jakości produkcji. Zawiera szczegółowe informacje o przebiegu procesu produkcyjnego i warunkach atmosferycznych.",
+      "tab": "Raporty kontroli produkcji"
+    },
+    "productionShift": {
+      "title": "Raport - Zmiana Produkcji",
+      "description": "Formularz do raportowania pracy na zmianie produkcyjnej. Zawiera informacje o pracownikach, wykonanych produktach i innych czynnościach.",
+      "tab": "Raporty zmian produkcyjnych"
+    }
+  },
+  "inventoryForms": {
+    "title": "Formularze magazynowe",
+    "description": "Formularze, dokumenty i narzędzia dostępne dla pracowników magazynu",
+    "fillForm": "Wypełnij formularz",
+    "viewResponses": "Wyświetl odpowiedzi",
+    "loadingReport": {
+      "title": "Raport - Załadunek towaru",
+      "description": "Formularz dokumentujący proces załadunku towaru. Zawiera identyfikację pracownika, informacje o przewoźniku oraz stan techniczny pojazdu."
+    },
+    "unloadingReport": {
+      "title": "Raport - Rozładunek towaru",
+      "description": "Formularz dokumentujący proces rozładunku towaru. Zawiera identyfikację pracownika, informacje o dostawcy oraz wizualną ocenę towaru."
+    }
+  }
+}

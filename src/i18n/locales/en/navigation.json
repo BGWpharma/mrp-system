@@ -1,0 +1,12 @@
+{
+  "dashboard": "Dashboard",
+  "inventory": "Inventory",
+  "production": "Production",
+  "orders": "Orders",
+  "customers": "Customers",
+  "recipes": "Recipes",
+  "quality": "Quality",
+  "reports": "Reports",
+  "settings": "Settings",
+  "logout": "Logout"
+}

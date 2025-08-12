@@ -1,0 +1,313 @@
+{
+  "title": "Faktury",
+  "newInvoice": "Nowa faktura",
+  "searchInvoices": "Szukaj faktur...",
+  "noInvoicesFound": "Brak faktur do wyświetlenia",
+  "refresh": "Odśwież",
+  "refreshProformaAmounts": "Odśwież dostępne kwoty proform",
+  "companyData": "Dane firmy",
+  "clients": "Klienci",
+  "proforma": "Proforma",
+  "table": {
+    "invoiceNumber": "Numer faktury",
+    "client": "Klient",
+    "issueDate": "Data wystawienia",
+    "dueDate": "Termin płatności",
+    "amount": "Kwota",
+    "amountToPay": "Do zapłaty/Dostępne",
+    "invoiceStatus": "Status faktury",
+    "paymentStatus": "Status płatności",
+    "actions": "Akcje"
+  },
+  "filters": {
+    "status": "Status",
+    "allStatuses": "Wszystkie statusy",
+    "client": "Klient",
+    "allClients": "Wszyscy klienci",
+    "fromDate": "Od daty",
+    "toDate": "Do daty",
+    "applyFilters": "Zastosuj filtry",
+    "resetFilters": "Resetuj"
+  },
+  "status": {
+    "draft": "Szkic",
+    "issued": "Wystawiona",
+    "sent": "Wysłana",
+    "paid": "Opłacona",
+    "partiallyPaid": "Częściowo opłacona",
+    "overdue": "Przeterminowana",
+    "cancelled": "Anulowana",
+    "unpaid": "Nieopłacona"
+  },
+  "form": {
+    "title": {
+      "new": "Nowa faktura",
+      "edit": "Edycja faktury"
+    },
+    "fields": {
+      "basicData": "Dane podstawowe",
+      "invoiceNumber": "Numer faktury",
+      "invoiceNumberReadonly": "Numer faktury nie może być zmieniony",
+      "issueDate": "Data wystawienia",
+      "dueDate": "Termin płatności",
+      "invoiceStatus": "Status faktury",
+      "paymentMethod": "Metoda płatności",
+      "currency": "Waluta",
+      "bankAccount": "Rachunek bankowy",
+      "client": "Klient",
+      "relatedOrder": "Powiązane zamówienie",
+      "relatedOrderInfo": "Faktura powiązana z zamówieniem {{orderNumber}}",
+      "invoiceItems": "Pozycje faktury",
+      "productName": "Nazwa towaru/usługi",
+      "description": "Opis",
+      "cnCode": "CN Code",
+      "cnCodePlaceholder": "np. 1234.56.78.90",
+      "classificationCode": "Kod klasyfikacji towarowej",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "netPrice": "Cena netto",
+      "vatPercent": "VAT %",
+      "netValue": "Wartość netto",
+      "grossValue": "Wartość brutto",
+      "totals": {
+        "netTotal": "Razem netto:",
+        "vatTotal": "Razem VAT:",
+        "grossTotal": "Razem brutto:"
+      },
+      "relatedInvoices": "Powiązane faktury z tym zamówieniem:",
+      "additionalInfo": "Dodatkowe informacje",
+      "notes": "Uwagi",
+      "invoiceSource": "Wybierz źródło faktury",
+      "orderType": "Typ zamówienia",
+      "proformaSettlement": "Rozliczenie z proform",
+      "available": "Dostępne",
+      "from": "z",
+      "used": "wykorzystane",
+      "amountToSettle": "Kwota do rozliczenia",
+      "exceedsAvailable": "Przekracza dostępną kwotę",
+      "proformaFullyUsed": "Ta proforma została całkowicie wykorzystana",
+      "settlementSummary": "Podsumowanie rozliczenia:",
+      "totalAdvanceAmount": "Łączna kwota zaliczek:"
+    },
+    "buttons": {
+      "save": "Zapisz",
+      "cancel": "Anuluj",
+      "delete": "Usuń",
+      "addItem": "Dodaj pozycję",
+      "removeItem": "Usuń pozycję",
+      "selectFromOrder": "Wybierz z zamówienia",
+      "selectClient": "Wybierz klienta",
+      "refresh": "Odśwież",
+      "selectOrder": "Wybierz zamówienie",
+      "markAsIssued": "Oznacz jako wystawioną",
+      "markAsSent": "Oznacz jako wysłaną",
+      "refreshProformaAmounts": "Odśwież dostępne kwoty proform",
+      "selectAll": "Zaznacz wszystkie",
+      "deselectAll": "Odznacz wszystkie",
+      "manageClients": "Zarządzaj klientami"
+    },
+    "paymentMethods": {
+      "przelew": "Przelew",
+      "gotowka": "Gotówka",
+      "karta": "Karta",
+      "blik": "BLIK",
+      "paypal": "PayPal",
+      "inne": "Inne"
+    },
+    "currencies": {
+      "PLN": "PLN",
+      "EUR": "EUR",
+      "USD": "USD",
+      "GBP": "GBP"
+    },
+    "orderTypes": {
+      "customer": "Klient",
+      "internal": "Wewnętrzne",
+      "other": "Inne"
+    },
+    "toggleButtons": {
+      "invoice": "Faktura",
+      "proforma": "Proforma"
+    },
+    "filters": {
+      "allStatuses": "Wszystkie statusy",
+      "allClients": "Wszyscy klienci",
+      "fromDate": "Od daty",
+      "toDate": "Do daty",
+      "applyFilters": "Zastosuj filtry",
+      "resetFilters": "Resetuj",
+      "client": "Klient",
+      "availableFrom": "dostępne z"
+    }
+  },
+  "company": {
+    "title": "Dane firmy",
+    "subtitle": "Ustaw dane firmy, które będą widoczne na wystawianych fakturach",
+    "buttons": {
+      "back": "Powrót",
+      "save": "Zapisz dane firmy",
+      "saving": "Zapisywanie..."
+    },
+    "messages": {
+      "saved": "Dane firmy zostały pomyślnie zapisane!",
+      "saveError": "Wystąpił błąd podczas zapisywania danych."
+    }
+  },
+  "payments": {
+    "title": "Płatności",
+    "addPayment": "Dodaj płatność",
+    "editPayment": "Edytuj płatność",
+    "invoiceValue": "Wartość faktury",
+    "paid": "Zapłacono",
+    "advancePayments": "Przedpłaty z proform",
+    "remaining": "Do zapłaty",
+    "status": "Status",
+    "noPayments": "Brak płatności dla tej faktury. Kliknij \"Dodaj płatność\", aby dodać pierwszą płatność.",
+    "table": {
+      "date": "Data",
+      "amount": "Kwota",
+      "method": "Metoda",
+      "description": "Opis",
+      "reference": "Referenza",
+      "actions": "Akcje"
+    },
+    "form": {
+      "amount": "Kwota",
+      "date": "Data płatności",
+      "method": "Metoda płatności",
+      "description": "Opis",
+      "reference": "Numer referencyjny",
+      "referencePlaceholder": "np. numer przelewu, numer transakcji",
+      "save": "Zapisz zmiany",
+      "add": "Dodaj płatność",
+      "cancel": "Anuluj"
+    },
+    "methods": {
+      "przelew": "Przelew",
+      "gotowka": "Gotówka",
+      "karta": "Karta",
+      "blik": "BLIK",
+      "paypal": "PayPal",
+      "inne": "Inne"
+    },
+    "deleteConfirm": {
+      "title": "Potwierdzenie usunięcia",
+      "message": "Czy na pewno chcesz usunąć płatność o kwocie {{amount}}?"
+    },
+    "tooltips": {
+      "editPayment": "Edytuj płatność",
+      "deletePayment": "Usuń płatność"
+    },
+    "notifications": {
+      "paymentAdded": "Płatność została dodana",
+      "paymentUpdated": "Płatność została zaktualizowana",
+      "paymentDeleted": "Płatność została usunięta",
+      "errors": {
+        "loadPayments": "Błąd podczas ładowania płatności",
+        "savePayment": "Błąd podczas zapisywania płatności",
+        "deletePayment": "Błąd podczas usuwania płatności",
+        "amountMustBePositive": "Kwota płatności musi być większa od zera"
+      }
+    }
+  },
+  "dialogs": {
+    "deleteConfirm": {
+      "title": "Usunąć fakturę?",
+      "message": "Czy na pewno chcesz usunąć fakturę {{number}}? Tej operacji nie można cofnąć.",
+      "cancel": "Anuluj",
+      "delete": "Usuń"
+    }
+  },
+  "details": {
+    "title": "Szczegóły faktury",
+    "basicInfo": "Dane podstawowe",
+    "invoiceNumber": "Numer faktury",
+    "status": "Status",
+    "invoiceType": "Typ faktury",
+    "proformaInvoice": "Faktura proforma",
+    "invoice": "Faktura",
+    "issueDate": "Data wystawienia",
+    "dueDate": "Termin płatności",
+    "paymentMethod": "Metoda płatności",
+    "paymentStatus": "Status płatności",
+    "invoiceItems": "Pozycje faktury",
+    "notes": "Uwagi",
+    "attachments": "Załączniki",
+    "payments": "Płatności",
+    "actions": "Akcje",
+    "client": "Klient",
+    "seller": "Sprzedawca",
+    "relatedOrder": "Powiązane zamówienie",
+    "otherInvoicesForOrder": "Inne faktury dla tego zamówienia",
+    "amount": "Kwota",
+    "date": "Data",
+    "proformaAmount": "Kwota proformy",
+    "totals": {
+      "netTotal": "Razem netto:",
+      "vatTotal": "Razem VAT:"
+    },
+    "clientInfo": {
+      "email": "Email",
+      "phone": "Telefon",
+      "address": "Adres",
+      "shippingAddress": "Adres dostawy",
+      "billingAddress": "Adres do faktury",
+      "vatEu": "VAT-EU",
+      "addresses": "Adresy",
+      "noClientName": "Brak nazwy klienta",
+      "noBillingAddress": "Nie podano adresu do faktury",
+      "noShippingAddress": "Nie podano adresu dostawy",
+      "viewClientDetails": "Zobacz szczegóły klienta"
+    },
+    "sellerInfo": {
+      "nip": "NIP",
+      "regon": "REGON",
+      "email": "Email",
+      "phone": "Telefon",
+      "bank": "Bank",
+      "accountNumber": "Numer konta"
+    },
+    "buttons": {
+      "backToList": "Powrót do listy faktur",
+      "backToListShort": "Powrót do listy",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "downloadPdf": "Pobierz PDF",
+      "generating": "Generowanie...",
+      "deleteInvoice": "Usuń fakturę",
+      "markAsSent": "Oznacz jako wysłaną"
+    },
+    "notifications": {
+      "invoiceDeleted": "Faktura została usunięta",
+      "invoiceIssued": "Faktura została wystawiona i PDF został wygenerowany",
+      "statusUpdated": "Status faktury został zaktualizowany",
+      "errors": {
+        "fetchInvoice": "Błąd podczas pobierania danych faktury",
+        "deleteInvoice": "Błąd podczas usuwania faktury",
+        "updateStatus": "Błąd podczas aktualizacji statusu faktury",
+        "generatePdf": "Nie udało się wygenerować pliku PDF"
+      }
+    }
+  },
+  "tooltips": {
+    "viewInvoice": "Podgląd faktury",
+    "editInvoice": "Edytuj fakturę",
+    "deleteInvoice": "Usuń fakturę"
+  },
+  "notifications": {
+    "invoiceDeleted": "Faktura została usunięta",
+    "invoiceStatusUpdated": "Status faktury został zaktualizowany",
+    "listRefreshed": "Lista została odświeżona",
+    "proformaAmountsRefreshed": "Kwoty proform zostały odświeżone",
+    "errors": {
+      "fetchInvoices": "Błąd podczas pobierania listy faktur",
+      "deleteInvoice": "Błąd podczas usuwania faktury",
+      "updateStatus": "Błąd podczas aktualizacji statusu faktury",
+      "filterInvoices": "Błąd podczas filtrowania faktur",
+      "fetchInvoiceData": "Błąd podczas pobierania danych faktury",
+      "fetchProformaInfo": "Błąd podczas pobierania informacji o wykorzystaniu proformy",
+      "fetchRelatedInvoices": "Błąd podczas pobierania powiązanych faktur",
+      "fetchCompanyData": "Błąd podczas pobierania danych firmy"
+    }
+  }
+}

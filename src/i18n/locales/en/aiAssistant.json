@@ -1,0 +1,158 @@
+{
+  "title": "AI Assistant",
+  "buttons": {
+    "apiSettings": "API Settings",
+    "configureApi": "Configure API",
+    "configure": "Configure",
+    "details": "Details",
+    "topUpAccount": "Top up account",
+    "showInstructions": "Show instructions",
+    "hideInstructions": "Hide instructions"
+  },
+  "instructionsDialog": {
+    "title": "How to obtain OpenAI API key",
+    "configureApiKey": "Configure API key"
+  },
+  "settingsDialog": {
+    "title": "OpenAI API Configuration",
+    "description": "To use GPT-4o, you need an OpenAI API key. The key will be stored in Firebase and used only to communicate with the OpenAI API for this assistant.",
+    "apiKeyLabel": "OpenAI API Key",
+    "apiKeyPlaceholder": "sk-...",
+    "manageOpenAIAccount": "Manage OpenAI account",
+    "howToGetKey": {
+      "title": "How to get an API key:",
+      "step1": "Visit the OpenAI API Keys page",
+      "step2": "Sign in or create an account",
+      "step3": "Click \"Create new secret key\"",
+      "step4": "Copy the generated key (starts with \"sk-\")",
+      "step5": "Paste the key into the field above"
+    },
+    "fullInstructions": "Full instructions",
+    "apiKeysLinkLabel": "You can obtain an API key at"
+  },
+  "quotaDialog": {
+    "title": "OpenAI API quota issue",
+    "goToBilling": "Go to OpenAI billing"
+  },
+  "snackbar": {
+    "demoMode": "Assistant is running in demo mode – configure your OpenAI API key to use GPT-4o",
+    "quotaExceeded": "Quota exceeded. Top up your OpenAI account to continue using the AI Assistant."
+  },
+  "quota": {
+    "tooltip": "Remaining {{remaining}} of {{limit}} messages this month",
+    "title": "OpenAI API quota exceeded",
+    "alert": "The system detected an issue related to quota or insufficient funds on the OpenAI account. To continue using the AI assistant, you need to top up your account.",
+    "explainerPrefix": "The error message",
+    "explainerSuffix": "means that one of the following issues occurred:",
+    "causes": {
+      "freeTier": {
+        "title": "Free tier exhausted",
+        "desc": "If you are using the free starting credit, it may have been used up."
+      },
+      "monthlyCap": {
+        "title": "Monthly spending limit reached",
+        "desc": "If you set a spending cap on your OpenAI account, it may have been reached."
+      },
+      "payment": {
+        "title": "Payment method issue",
+        "desc": "If there is a problem with your payment method, OpenAI may suspend API access."
+      },
+      "tooManyRequests": {
+        "title": "Error 429 (Too Many Requests)",
+        "desc": "Too many requests in a short time. In this case wait a few minutes and try again."
+      }
+    },
+    "howTo": {
+      "title": "How to resolve it?",
+      "step1": {
+        "title": "Check account status and payment methods",
+        "desc": "Log in to the OpenAI dashboard and go to the billing section to check your account status."
+      },
+      "step2": {
+        "title": "Top up funds or add a payment method",
+        "desc": "Make sure your payment method is correct and active. Add funds if needed."
+      },
+      "step3": {
+        "title": "Increase monthly limit (if applicable)",
+        "desc": "If you have set a monthly spending limit, consider increasing it in account settings."
+      },
+      "goToBilling": "Go to OpenAI billing",
+      "apiErrorsDocs": "API error codes docs"
+    },
+    "notice": "Note: The cost of using the GPT-4o model is higher than older models. To reduce costs, consider changing the model in configuration."
+  },
+  "alert": {
+    "configureApiNotice": "For full assistant functionality, configure your OpenAI API key."
+  },
+  "history": {
+    "title": "Conversation history",
+    "newConversation": "New conversation",
+    "empty": "No conversation history",
+    "today": "Today",
+    "clearConversation": "Clear conversation"
+  },
+  "welcome": {
+    "title": "Welcome to the AI Assistant for the MRP system",
+    "description": "Ask about system data, orders, inventory or other aspects of your operations. The assistant will analyze data and answer based on current information.",
+    "hint": "💡 You can also attach files (documents, images, text files) to your query using the attachment button.",
+    "dbAccessTitle": "The assistant now has direct access to the database!",
+    "dbAccessDescription": "You can ask about data from modules: Inventory, Orders, Production, Suppliers and Recipes. The assistant analyzes data in real time and provides up-to-date answers."
+  },
+  "loading": {
+    "replying": "Assistant is replying..."
+  },
+  "message": {
+    "you": "You",
+    "assistant": "AI Assistant"
+  },
+  "attachments": {
+    "label": "Attachments:",
+    "title": "Attachments ({{count}}):"
+  },
+  "input": {
+    "placeholder": "Ask the AI assistant a question..."
+  },
+  "instructions": {
+    "title": "How to get an OpenAI API key for GPT-4o",
+    "intro": "To use the advanced AI assistant features based on GPT-4o, you need an OpenAI API key. Below are instructions on how to get it:",
+    "steps": {
+      "step1": {
+        "title": "Step 1: Create an OpenAI account",
+        "desc": "Visit https://platform.openai.com/signup and create an account if you don't have one yet."
+      },
+      "step2": {
+        "title": "Step 2: Sign in to your account",
+        "desc": "Go to https://platform.openai.com/login and sign in to your OpenAI account."
+      },
+      "step3": {
+        "title": "Step 3: Go to the API panel",
+        "desc": "After signing in, go to the API section in the navigation panel."
+      },
+      "step4": {
+        "title": "Step 4: Add a payment method",
+        "desc": "To use the OpenAI API, you must add a payment method. OpenAI offers free credit for new users, but after it is used you will have to pay for API usage."
+      },
+      "step5": {
+        "title": "Step 5: Generate an API key",
+        "desc": "Go to the 'API keys' section and click 'Create new secret key'. Give the key a descriptive name, e.g. 'MRP System'."
+      },
+      "step6": {
+        "title": "Step 6: Copy and save the API key",
+        "desc": "Copy the generated API key (starts with 'sk-'). NOTE: This key will be shown only once, so make sure you save it!"
+      },
+      "step7": {
+        "title": "Step 7: Enter the key in the assistant settings",
+        "desc": "Paste the copied API key in the 'OpenAI API Key' field in the AI assistant settings."
+      }
+    },
+    "important": {
+      "title": "Important information:",
+      "confidential": "Your API key is confidential – do not share it with anyone.",
+      "billing": "OpenAI charges for API usage based on the number of tokens processed by the model.",
+      "gpt4oCost": "GPT-4o is OpenAI's most advanced model and may incur higher costs than others.",
+      "monitor": "You can monitor your usage and costs in the OpenAI dashboard under 'Usage'.",
+      "deactivate": "You can deactivate or delete your API key in the OpenAI dashboard at any time."
+    },
+    "docsLinkLabel": "For the latest information and API documentation visit:"
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "purchaseInteractions": {
+    "title": "Interakcje zakupowe",
+    "newInteraction": "Nowa interakcja",
+    "editInteraction": "Edytuj interakcję",
+    "interactionDetails": "Szczegóły interakcji",
+    "backToList": "Wróć do listy",
+    "loading": "Ładowanie...",
+    "search": {
+      "placeholder": "Szukaj interakcji...",
+      "clear": "Wyczyść wyszukiwanie"
+    },
+    "summary": {
+      "total": "Łącznie: {{count}} interakcji"
+    },
+    "table": {
+      "headers": {
+        "type": "Typ",
+        "subject": "Temat",
+        "date": "Data",
+        "supplier": "Dostawca",
+        "phone": "Telefon",
+        "email": "Email",
+        "address": "Adres",
+        "status": "Status",
+        "actions": "Akcje"
+      },
+      "noData": "Brak danych",
+      "clickForDetails": "Kliknij, aby zobaczyć szczegóły"
+    },
+    "actions": {
+      "view": "Podgląd",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "changeStatus": "Zmień status",
+      "cancel": "Anuluj",
+      "save": "Zapisz",
+      "update": "Aktualizuj"
+    },
+    "form": {
+      "selectSupplier": "Wybierz dostawcę",
+      "supplierRequired": "Dostawca jest wymagany",
+      "type": "Typ interakcji",
+      "typeRequired": "Typ interakcji jest wymagany",
+      "subject": "Temat",
+      "subjectRequired": "Temat jest wymagany",
+      "subjectPlaceholder": "Wprowadź temat interakcji",
+      "date": "Data i godzina",
+      "dateRequired": "Data jest wymagana",
+      "status": "Status",
+      "statusRequired": "Status jest wymagany",
+      "notes": "Notatki",
+      "notesPlaceholder": "Dodatkowe informacje dotyczące interakcji",
+      "validation": {
+        "supplierRequired": "Wybierz dostawcę",
+        "typeRequired": "Wybierz typ interakcji",
+        "subjectRequired": "Wprowadź temat interakcji",
+        "subjectMinLength": "Temat musi zawierać co najmniej 3 znaki",
+        "dateRequired": "Wybierz datę i godzinę",
+        "statusRequired": "Status jest wymagany"
+      }
+    },
+    "types": {
+      "call": "Rozmowa telefoniczna",
+      "email": "Email",
+      "meeting": "Spotkanie",
+      "note": "Notatka"
+    },
+    "statuses": {
+      "planned": "Zaplanowana",
+      "inProgress": "W trakcie",
+      "completed": "Zakończona",
+      "cancelled": "Anulowana"
+    },
+    "details": {
+      "basicInfo": "Informacje podstawowe",
+      "supplier": "Dostawca",
+      "contact": "Kontakt",
+      "unknownSupplier": "Nieznany dostawca",
+      "noName": "Brak nazwy",
+      "phone": "Telefon",
+      "email": "Email",
+      "address": "Adres",
+      "noAddress": "Brak adresu",
+      "interactionInfo": "Informacje o interakcji",
+      "type": "Typ",
+      "subject": "Temat",
+      "dateTime": "Data i godzina",
+      "status": "Status",
+      "notes": "Notatki",
+      "noNotes": "Brak notatek",
+      "metadata": "Metadane",
+      "createdBy": "Utworzono przez",
+      "createdAt": "Data utworzenia",
+      "updatedBy": "Zaktualizowano przez",
+      "updatedAt": "Data aktualizacji",
+      "history": "Historia",
+      "relatedInteractions": "Powiązane interakcje"
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Potwierdzenie usunięcia",
+        "message": "Czy na pewno chcesz usunąć tę interakcję? Ta operacja jest nieodwracalna.",
+        "confirm": "Usuń",
+        "cancel": "Anuluj"
+      },
+      "statusChange": {
+        "title": "Zmiana statusu interakcji",
+        "newStatus": "Nowy status",
+        "selectStatus": "Wybierz nowy status"
+      },
+      "details": {
+        "title": "Szczegóły interakcji",
+        "close": "Zamknij"
+      }
+    },
+    "notifications": {
+      "created": "Interakcja została utworzona",
+      "updated": "Interakcja została zaktualizowana",
+      "deleted": "Interakcja została usunięta",
+      "statusUpdated": "Status interakcji został zaktualizowany",
+      "createFailed": "Nie udało się utworzyć interakcji",
+      "updateFailed": "Nie udało się zaktualizować interakcji",
+      "deleteFailed": "Nie udało się usunąć interakcji",
+      "loadFailed": "Nie udało się załadować interakcji",
+      "loadSuppliersFailed": "Nie udało się pobrać listy dostawców",
+      "loadSupplierFailed": "Nie udało się pobrać danych dostawcy",
+      "statusUpdateFailed": "Nie udało się zaktualizować statusu"
+    },
+    "pagination": {
+      "rowsPerPage": "Wierszy na stronie:",
+      "of": "z"
+    },
+    "noResults": {
+      "title": "Brak interakcji",
+      "description": "Nie znaleziono żadnych interakcji spełniających kryteria.",
+      "createFirst": "Kliknij \"Nowa interakcja\", aby utworzyć pierwszą interakcję."
+    }
+  },
+  "interactionDetails": {
+    "dateTime": "Data i czas",
+    "status": "Status",
+    "supplier": "Dostawca",
+    "type": "Typ",
+    "notes": "Notatki",
+    "noNotes": "Brak notatek",
+    "newInteractionWithSupplier": "Nowa interakcja z tym dostawcą",
+    "createdAt": "Utworzono",
+    "lastModified": "Ostatnia modyfikacja",
+    "viewSupplierCard": "Przejdź do karty dostawcy",
+    "deleteDialogTitle": "Usuń interakcję",
+    "deleteDialogConfirmText": "Czy na pewno chcesz usunąć interakcję \"{{subject}}\"?",
+    "deleteDialogConfirmWarning": "Tej operacji nie można cofnąć.",
+    "deleteDialogCancel": "Anuluj",
+    "deleteDialogConfirm": "Usuń"
+  }
+}

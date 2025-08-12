@@ -1,0 +1,86 @@
+{
+  "title": "CMR Documents",
+  "newDocument": "New CMR document",
+  "generateReport": "Generate report",
+  "noDocuments": "No CMR documents in system. Click \"New CMR document\" to add the first one.",
+  "sorting": {
+    "oldestToNewest": "from oldest to newest",
+    "newestToOldest": "from newest to oldest",
+    "sortBy": "Sort",
+    "byIssueDate": "issue date"
+  },
+  "table": {
+    "cmrNumber": "CMR Number",
+    "issueDate": "Issue Date",
+    "sender": "Sender",
+    "recipient": "Recipient",
+    "status": "Status",
+    "paymentStatus": "Payment Status",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "View",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "dialogs": {
+    "deleteConfirmation": "Delete Confirmation",
+    "deleteMessage": "Are you sure you want to delete CMR document {{cmrNumber}}? This operation is irreversible.",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "changePaymentStatus": "Change Payment Status",
+    "selectNewPaymentStatus": "Select new payment status for CMR document:",
+    "update": "Update"
+  },
+  "report": {
+    "title": "CMR Report",
+    "generate": "Generate CMR Documents Report",
+    "results": "Report Results",
+    "generating": "Generate Report",
+    "exportToCsv": "Export to CSV",
+    "fields": {
+      "cmrNumber": "CMR Number",
+      "issueDate": "Issue Date",
+      "sender": "Sender",
+      "recipient": "Recipient",
+      "loadingPlace": "Loading Place",
+      "deliveryPlace": "Delivery Place",
+      "status": "Status"
+    },
+    "items": {
+      "id": "No.",
+      "description": "Item Description",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "weight": "Weight (kg)",
+      "volume": "Volume (m³)"
+    },
+    "summary": {
+      "title": "Summary",
+      "totalDocuments": "Total Documents",
+      "reportPeriod": "Report Period",
+      "includeItems": "Items Included",
+      "statusStatistics": "Status Statistics",
+      "documentCount": "Document Count",
+      "documentsInReport": "Documents in Report"
+    },
+    "common": {
+      "yes": "Yes",
+      "no": "No",
+      "by": "by"
+    }
+  },
+  "statuses": {
+    "draft": "Draft",
+    "issued": "Issued",
+    "inTransit": "In Transit",
+    "delivered": "Delivered",
+    "completed": "Completed",
+    "canceled": "Canceled"
+  },
+  "paymentStatuses": {
+    "unpaid": "Unpaid",
+    "paid": "Paid"
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "title": "Listy cenowe klientów",
+  "searchPlaceholder": "Szukaj listy cenowej...",
+  "newPriceList": "Nowa lista cenowa",
+  "noPriceLists": "Brak list cenowych. Kliknij \"Nowa lista cenowa\", aby utworzyć pierwszą.",
+  "form": {
+    "newTitle": "Nowa lista cenowa",
+    "editTitle": "Edytuj listę cenową",
+    "name": "Nazwa listy cenowej",
+    "customer": "Klient",
+    "currency": "Waluta",
+    "active": "Aktywna",
+    "validFrom": "Data ważności od",
+    "validTo": "Data ważności do",
+    "description": "Opis",
+    "cancel": "Anuluj",
+    "create": "Utwórz listę cenową",
+    "saveChanges": "Zapisz zmiany",
+    "selectCustomer": "Wybierz klienta"
+  },
+  "details": {
+    "notFound": "Nie znaleziono listy cenowej",
+    "backToLists": "Powrót do list cenowych",
+    "edit": "Edytuj",
+    "delete": "Usuń",
+    "customer": "Klient",
+    "status": "Status",
+    "currency": "Waluta",
+    "createdAt": "Data utworzenia",
+    "validFrom": "Ważna od",
+    "validTo": "Ważna do",
+    "description": "Opis",
+    "items": "Elementy listy cenowej"
+  },
+  "table": {
+    "name": "Nazwa",
+    "customer": "Klient",
+    "currency": "Waluta",
+    "validFrom": "Ważna od",
+    "validTo": "Ważna do",
+    "status": "Status",
+    "actions": "Akcje",
+    "details": "Szczegóły",
+    "edit": "Edytuj",
+    "delete": "Usuń"
+  },
+  "status": {
+    "active": "Aktywna",
+    "inactive": "Nieaktywna"
+  },
+  "items": {
+    "title": "Elementy listy cenowej",
+    "totalCount": "Łączna ilość pozycji: {{count}}",
+    "addProduct": "Dodaj produkt",
+    "noItems": "Brak produktów w tej liście cenowej.",
+    "noItemsAction": " Kliknij \"Dodaj produkt\", aby dodać pierwszy element.",
+    "table": {
+      "productName": "Nazwa produktu",
+      "price": "Cena",
+      "unit": "Jednostka",
+      "minQuantity": "Minimalna ilość",
+      "notes": "Uwagi",
+      "actions": "Akcje",
+      "edit": "Edytuj",
+      "delete": "Usuń"
+    }
+  },
+  "confirmations": {
+    "deleteTitle": "Potwierdzenie usunięcia",
+    "deleteMessage": "Czy na pewno chcesz usunąć listę cenową \"{{name}}\"?",
+    "deleteItemMessage": "Czy na pewno chcesz usunąć produkt \"{{productName}}\" z listy cenowej?"
+  },
+  "dialogs": {
+    "add": {
+      "title": "Dodaj do listy cenowej",
+      "recipe": "Receptura",
+      "price": "Cena",
+      "minQuantity": "Minimalna ilość",
+      "unit": "Jednostka",
+      "notes": "Uwagi",
+      "cancel": "Anuluj",
+      "add": "Dodaj",
+      "selectRecipe": "Wybierz recepturę",
+      "priceValidation": "Cena musi być liczbą nieujemną",
+      "minQuantityValidation": "Minimalna ilość musi być liczbą dodatnią",
+      "recipeAdded": "Receptura została dodana do listy cenowej",
+      "addError": "Błąd podczas dodawania elementu do listy cenowej",
+      "fetchRecipesError": "Błąd podczas pobierania receptur"
+    },
+    "edit": {
+      "title": "Edytuj element listy cenowej",
+      "product": "Produkt",
+      "price": "Cena",
+      "minQuantity": "Minimalna ilość",
+      "unit": "Jednostka",
+      "notes": "Uwagi",
+      "cancel": "Anuluj",
+      "save": "Zapisz zmiany",
+      "priceValidation": "Cena musi być liczbą nieujemną",
+      "minQuantityValidation": "Minimalna ilość musi być liczbą dodatnią",
+      "itemUpdated": "Element listy cenowej został zaktualizowany",
+      "updateError": "Błąd podczas aktualizacji elementu listy cenowej"
+    }
+  },
+  "messages": {
+    "errors": {
+      "fetchFailed": "Błąd podczas pobierania list cenowych",
+      "fetchDetailsFailed": "Błąd podczas pobierania listy cenowej",
+      "fetchItemsFailed": "Błąd podczas pobierania elementów listy cenowej",
+      "loadDataFailed": "Wystąpił błąd podczas ładowania danych",
+      "deleteFailed": "Błąd podczas usuwania listy cenowej",
+      "deleteItemFailed": "Błąd podczas usuwania elementu listy cenowej",
+      "saveFailed": "Błąd podczas zapisywania listy cenowej"
+    },
+    "success": {
+      "deleted": "Lista cenowa została usunięta",
+      "itemDeleted": "Element został usunięty z listy cenowej",
+      "created": "Lista cenowa została utworzona",
+      "updated": "Lista cenowa została zaktualizowana"
+    }
+  }
+}

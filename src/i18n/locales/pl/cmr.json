@@ -1,0 +1,86 @@
+{
+  "title": "Dokumenty CMR",
+  "newDocument": "Nowy dokument CMR",
+  "generateReport": "Generuj raport",
+  "noDocuments": "Brak dokumentów CMR w systemie. Kliknij \"Nowy dokument CMR\", aby dodać pierwszy.",
+  "sorting": {
+    "oldestToNewest": "od najstarszej do najnowszej",
+    "newestToOldest": "od najnowszej do najstarszej",
+    "sortBy": "Sortuj",
+    "byIssueDate": "daty wystawienia"
+  },
+  "table": {
+    "cmrNumber": "Numer CMR",
+    "issueDate": "Data wystawienia",
+    "sender": "Nadawca",
+    "recipient": "Odbiorca",
+    "status": "Status",
+    "paymentStatus": "Status płatności",
+    "actions": "Akcje"
+  },
+  "actions": {
+    "view": "Podgląd",
+    "edit": "Edytuj",
+    "delete": "Usuń"
+  },
+  "dialogs": {
+    "deleteConfirmation": "Potwierdzenie usunięcia",
+    "deleteMessage": "Czy na pewno chcesz usunąć dokument CMR {{cmrNumber}}? Ta operacja jest nieodwracalna.",
+    "cancel": "Anuluj",
+    "delete": "Usuń",
+    "close": "Zamknij",
+    "changePaymentStatus": "Zmiana statusu płatności",
+    "selectNewPaymentStatus": "Wybierz nowy status płatności dla dokumentu CMR:",
+    "update": "Zaktualizuj"
+  },
+  "report": {
+    "title": "Raport CMR",
+    "generate": "Generuj raport z dokumentów CMR",
+    "results": "Wyniki raportu",
+    "generating": "Generuj raport",
+    "exportToCsv": "Eksportuj do CSV",
+    "fields": {
+      "cmrNumber": "Numer CMR",
+      "issueDate": "Data wystawienia",
+      "sender": "Nadawca",
+      "recipient": "Odbiorca",
+      "loadingPlace": "Miejsce załadunku",
+      "deliveryPlace": "Miejsce dostawy",
+      "status": "Status"
+    },
+    "items": {
+      "id": "Lp.",
+      "description": "Opis towaru",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "weight": "Waga (kg)",
+      "volume": "Objętość (m³)"
+    },
+    "summary": {
+      "title": "Podsumowanie",
+      "totalDocuments": "Całkowita liczba dokumentów",
+      "reportPeriod": "Okres raportu",
+      "includeItems": "Uwzględniono pozycje",
+      "statusStatistics": "Statystyki według statusu",
+      "documentCount": "Liczba dokumentów",
+      "documentsInReport": "Dokumenty w raporcie"
+    },
+    "common": {
+      "yes": "Tak",
+      "no": "Nie",
+      "by": "według"
+    }
+  },
+  "statuses": {
+    "draft": "Szkic",
+    "issued": "Wystawiony",
+    "inTransit": "W transporcie",
+    "delivered": "Dostarczone",
+    "completed": "Zakończony",
+    "canceled": "Anulowany"
+  },
+  "paymentStatuses": {
+    "unpaid": "Nieopłacone",
+    "paid": "Opłacone"
+  }
+}

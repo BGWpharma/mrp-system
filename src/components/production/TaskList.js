@@ -86,7 +86,7 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useTaskListState } from '../../contexts/TaskListStateContext';
 import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 
 const TaskList = () => {

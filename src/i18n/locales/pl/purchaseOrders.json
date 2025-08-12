@@ -1,0 +1,297 @@
+{
+  "title": "Zamówienia Komponentów",
+  "detailsTitle": "Szczegóły Zamówienia Komponentów",
+  "newOrder": "Nowe zamówienie",
+  "editOrder": "Edytuj zamówienie",
+  "deleteOrder": "Usuń zamówienie",
+  "backToList": "Powrót do listy",
+  "downloadPdf": "Pobierz PDF",
+  "receiveGoods": "Przyjmij towary",
+  "orderData": "Dane zamówienia",
+  "additionalCosts": "Dodatkowe koszty",
+  "itemsInOrder": "Przedmioty w zamówieniu",
+  "noOrdersFound": "Nie znaleziono zamówień zakupu",
+  "loadingOrders": "Ładowanie zamówień...",
+  "orderSaved": "Zamówienie zakupu zostało zapisane!",
+  "orderDeleted": "Zamówienie zostało usunięte",
+  "statusUpdated": "Status zamówienia został zaktualizowany",
+  "paymentStatusUpdated": "Status płatności został zaktualizowany",
+  "selectSupplier": "Wybierz dostawcę",
+  "table": {
+    "number": "Numer",
+    "supplier": "Dostawca",
+    "status": "Status",
+    "paymentStatus": "Status płatności",
+    "orderDate": "Data zamówienia",
+    "totalValue": "Wartość całkowita",
+    "actions": "Akcje"
+  },
+  "filters": {
+    "search": "Szukaj zamówień...",
+    "status": "Status",
+    "all": "Wszystkie",
+    "clear": "Wyczyść",
+    "refresh": "Odśwież"
+  },
+  "actions": {
+    "view": "Podgląd",
+    "edit": "Edytuj",
+    "delete": "Usuń",
+    "updateStatus": "Zmień status",
+    "updatePaymentStatus": "Zmień status płatności"
+  },
+  "dialogs": {
+    "deleteConfirm": {
+      "title": "Potwierdzenie usunięcia",
+      "message": "Czy na pewno chcesz usunąć to zamówienie zakupu?",
+      "warning": "Ta operacja jest nieodwracalna."
+    },
+    "statusUpdate": {
+      "title": "Zmiana statusu zamówienia",
+      "newStatus": "Nowy status"
+    },
+    "paymentStatusUpdate": {
+      "title": "Zmiana statusu płatności",
+      "newPaymentStatus": "Nowy status płatności"
+    }
+  },
+  "statuses": {
+    "new": "Nowe",
+    "pending": "Oczekujące",
+    "confirmed": "Potwierdzone",
+    "shipped": "Wysłane",
+    "delivered": "Dostarczone",
+    "cancelled": "Anulowane"
+  },
+  "paymentStatuses": {
+    "unpaid": "Nieopłacone",
+    "partiallyPaid": "Częściowo opłacone",
+    "paid": "Opłacone",
+    "overdue": "Przeterminowane"
+  },
+  "form": {
+    "createTitle": "Utwórz Zamówienie Zakupu",
+    "editTitle": "Edycja Zamówienia Zakupu",
+    "loadingData": "Ładowanie danych zamówienia...",
+    "poNumber": "Numer PO: {{number}}",
+    "supplier": "Dostawca",
+    "targetWarehouse": "Magazyn docelowy",
+    "selectWarehouse": "Wybierz magazyn",
+    "currency": "Waluta",
+    "orderDate": "Data zamówienia",
+    "expectedDeliveryDate": "Planowana data dostawy",
+    "supplierAddress": "Adres dostawcy",
+    "selectSupplierAddress": "Wybierz adres dostawcy:",
+    "mainAddress": "(główny)",
+    "notes": "Uwagi",
+    "additionalCosts": {
+      "title": "Dodatkowe koszty",
+      "addCost": "Dodaj koszt",
+      "description": "Opis",
+      "amount": "Kwota",
+      "vatRate": "VAT",
+      "noCosts": "Brak dodatkowych kosztów. Kliknij \"Dodaj koszt\", aby dodać opłaty jak cła, transport, ubezpieczenie itp.",
+      "placeholder": "Np. cła, transport, ubezpieczenie",
+      "originalAmount": "Kwota oryginalna",
+      "exchangeRate": "Kurs wymiany",
+      "amountInOrderCurrency": "Kwota w walucie PO",
+      "expandFields": "Rozwiń dodatkowe pola"
+    },
+    "orderItems": {
+      "title": "Pozycje zamówienia",
+      "addItem": "Dodaj pozycję",
+      "fillMinimumQuantities": "Uzupełnij minimalne ilości",
+      "findBestPrices": "Znajdź najlepsze ceny",
+      "applyBestPrices": "Zastosuj najlepsze ceny",
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "unit": "Jedn.",
+      "unitPrice": "Cena jedn.",
+      "discount": "Rabat %",
+      "vatRate": "VAT",
+      "amountAfterConversion": "Kwota po przew.",
+      "defaultSupplierPrice": "Domyślna cena dostawcy"
+    },
+    "summary": {
+      "title": "Podsumowanie kosztów",
+      "itemsValue": "Wartość pozycji",
+      "additionalCostsNet": "Dodatkowe koszty netto",
+      "additionalCostsVat": "VAT od dodatkowych kosztów",
+      "vatRateBreakdown": "Stawka {{rate}}%",
+      "beforeDiscount": "Wartość przed rabatem",
+      "netValueTotal": "Wartość netto razem",
+      "vatTotal": "Suma podatku VAT",
+      "globalDiscount": "Rabat globalny",
+      "savings": "Oszczędność",
+      "grossValue": "Wartość brutto",
+      "exchangeRateInfo": "Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury lub z dnia utworzenia PO (jeśli brak daty faktury)."
+    },
+    "invoices": {
+      "title": "Faktury",
+      "addInvoice": "Dodaj fakturę",
+      "description": "Opis",
+      "link": "Link do faktury",
+      "noInvoices": "Brak faktur. Kliknij \"Dodaj fakturę\", aby dodać link do faktury.",
+      "descriptionPlaceholder": "Opis faktury, np. Faktura główna, Faktura transportowa itp.",
+      "linkPlaceholder": "https://drive.google.com/file/d/..."
+    },
+    "attachments": "Załączniki",
+    "coaAttachments": {
+      "title": "Certyfikaty analiz (CoA)",
+      "description": "Certyfikaty analizy od dostawcy",
+      "noAttachments": "Brak certyfikatów analizy"
+    },
+    "invoiceAttachments": {
+      "title": "Faktury (załączniki)",
+      "description": "Pliki faktur od dostawcy",
+      "noAttachments": "Brak załączników faktur"
+    },
+    "generalAttachments": {
+      "title": "Inne załączniki",
+      "description": "Inne dokumenty związane z zamówieniem",
+      "noAttachments": "Brak innych załączników"
+    },
+    "actions": {
+      "cancel": "Anuluj",
+      "save": "Zapisz",
+      "saving": "Zapisywanie..."
+    }
+  },
+  "editPage": {
+    "orderData": "Dane zamówienia",
+    "additionalCosts": "Dodatkowe koszty",
+    "orderItems": "Przedmioty w zamówieniu",
+    "receiveItems": "Przyjmij towary"
+  },
+  "errors": {
+    "loadFailed": "Nie udało się pobrać listy zamówień zakupu",
+    "saveFailed": "Nie udało się zapisać zamówienia",
+    "deleteFailed": "Nie udało się usunąć zamówienia",
+    "statusUpdateFailed": "Nie udało się zaktualizować statusu",
+    "productNotLinked": "Ten produkt nie jest powiązany z pozycją magazynową"
+  },
+  "details": {
+    "orderNumber": "Zamówienie {{number}}",
+    "orderTitle": "Zamówienie {{number}}",
+    "orderDate": "Data zamówienia",
+    "expectedDeliveryDate": "Oczekiwana data dostawy",
+    "deliveryDate": "Data dostawy",
+    "invoice": "Faktura",
+    "invoices": "Faktury",
+    "viewInvoice": "Zobacz fakturę",
+    "supplier": "Dostawca",
+    "noSupplierData": "Brak danych dostawcy",
+    "statusHistory": "Historia zmian statusu",
+    "orderElements": "Elementy zamówienia",
+    "additionalCostsDetails": "Dodatkowe koszty",
+    "relatedBatches": "Powiązane partie",
+    "deleteOrder": "Usuń zamówienie",
+    "receive": "Przyjmij",
+    "notInReport": "Brak w raporcie",
+    "itemReportedInUnloading": "Pozycja została zgłoszona w raporcie rozładunku - można przyjąć towar",
+    "itemNotReportedInUnloading": "Pozycja nie została zgłoszona w raporcie rozładunku - nie można przyjąć towaru",
+    "batchesAssignedToItem": "Partie (LOT) przypisane do tej pozycji",
+    "noData": "Nie określono",
+    "noAddress": "Brak adresu",
+    "dateReadError": "Błąd odczytu daty",
+    "invalidDate": "Nieprawidłowa wartość daty",
+    "noPdfData": "Brak danych zamówienia do wygenerowania PDF",
+    "table": {
+      "productName": "Nazwa produktu",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "unitPrice": "Cena jedn.",
+      "netValue": "Wartość netto",
+      "originalAmount": "Kwota oryg.",
+      "plannedDeliveryDate": "Plan. data dost.",
+      "actualDeliveryDate": "Rzecz. data dost.",
+      "received": "Odebrano",
+      "dateTime": "Data i godzina",
+      "previousStatus": "Poprzedni status",
+      "newStatus": "Nowy status",
+      "changedBy": "Kto zmienił",
+      "batchNumber": "Numer partii",
+      "expiryDate": "Data ważności",
+      "warehouse": "Magazyn",
+      "location": "Lokalizacja",
+      "details": "Szczegóły",
+      "actions": "Akcje",
+      "notes": "Uwagi"
+    },
+    "summary": {
+      "netValue": "Wartość netto razem",
+      "totalVAT": "Suma podatku VAT",
+      "grossValue": "Wartość brutto",
+      "productsNetValue": "Wartość produktów netto",
+      "vatFromProducts": "VAT od produktów",
+      "vatRate": "Stawka {{rate}}%",
+      "from": "od"
+    },
+    "batches": {
+      "allRelatedBatches": "Wszystkie partie (LOT) powiązane z zamówieniem",
+      "lotNumber": "Numer LOT",
+      "product": "Produkt",
+      "receivedDate": "Data przyjęcia",
+      "value": "Wartość",
+      "noLotNumber": "Brak numeru",
+      "unknownProduct": "Nieznany produkt",
+      "mainWarehouse": "Główny magazyn",
+      "unknownDate": "Nieznana data",
+      "noBatchesAssigned": "Brak przypisanych partii dla tej pozycji",
+      "received": "Przyjęto",
+      "warehouse": "Magazyn"
+    },
+    "attachments": "Załączniki",
+    "unloadingReports": "Raporty rozładunku towaru",
+    "foundUnloadingReports": "Znaleziono {{count}} raport(ów) rozładunku dla PO: {{number}}",
+    "searchingUnloadingReports": "Szukanie raportów rozładunku...",
+    "noUnloadingReports": "Brak raportów rozładunku dla PO: {{number}}",
+    "unknown": "Nieznany",
+    "clickToOpen": "Kliknij aby otworzyć",
+    "attachedFiles": "Załączonych plików: {{count}}",
+    "noAttachments": "Brak załączników",
+    "noAttachmentsForOrder": "Brak załączników do tego zamówienia",
+    "coaAttachments": {
+      "title": "Certyfikaty analiz (CoA)",
+      "noAttachments": "Brak certyfikatów analizy"
+    },
+    "invoiceAttachments": {
+      "title": "Faktury (załączniki)",
+      "noAttachments": "Brak załączników faktur"
+    },
+    "generalAttachments": {
+      "title": "Inne załączniki",
+      "noAttachments": "Brak innych załączników"
+    },
+    "unloadingReport": "Raport rozładunku #{{number}}",
+    "noDate": "Brak daty",
+    "editUnloadingReport": "Edytuj raport rozładunku",
+    "employeeEmail": "Email pracownika",
+    "employee": "Pracownik",
+    "position": "Stanowisko",
+    "notProvided": "Nie podano",
+    "coaMigration": {
+      "title": "Migracja załączników CoA",
+      "description": "Przenieś załączniki CoA jako certyfikaty partii",
+      "selectAttachments": "Wybierz załączniki CoA",
+      "selectBatch": "Wybierz partię docelową",
+      "migrateToBatch": "Migruj do partii",
+      "migrating": "Migracja...",
+      "downloadingFiles": "Pobieranie plików...",
+      "success": "Pomyślnie zmigrowano {{count}} załączników CoA",
+      "noAttachments": "Brak załączników CoA do migracji",
+      "noBatches": "Brak powiązanych partii",
+      "summary": "Podsumowanie migracji",
+      "attachmentsToMigrate": "Załączników do przeniesienia: {{count}}",
+      "targetBatch": "Partia docelowa: {{batch}}"
+    }
+  },
+  "notifications": {
+    "statusUpdateSuccess": "Status zamówienia został zaktualizowany",
+    "statusUpdateError": "Błąd podczas aktualizacji statusu zamówienia",
+    "paymentStatusUpdateSuccess": "Status płatności został zaktualizowany",
+    "paymentStatusUpdateError": "Błąd podczas aktualizacji statusu płatności",
+    "deleteSuccess": "Zamówienie zostało usunięte",
+    "deleteError": "Błąd podczas usuwania zamówienia"
+  }
+}

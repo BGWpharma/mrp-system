@@ -2,7 +2,8 @@
 
 ## Przegląd
 
-Ten projekt używa React i18next do obsługi tłumaczeń między językiem polskim (domyślny) a angielskim.
+Ten projekt używa React i18next do obsługi tłumaczeń między językiem polskim (domyślny) a angielskim. 
+Pliki tłumaczeń zostały podzielone na namespace'y dla lepszej organizacji i łatwiejszego zarządzania.
 
 ## Struktura plików
 
@@ -10,27 +11,93 @@ Ten projekt używa React i18next do obsługi tłumaczeń między językiem polsk
 src/i18n/
 ├── index.js                    # Główna konfiguracja i18next
 ├── locales/
-│   ├── pl/
-│   │   └── translation.json    # Polskie tłumaczenia
-│   └── en/
-│       └── translation.json    # Angielskie tłumaczenia
+│   ├── pl/                     # Polskie tłumaczenia (namespace'y)
+│   │   ├── common.json         # Wspólne elementy
+│   │   ├── navigation.json     # Nawigacja
+│   │   ├── auth.json           # Autoryzacja
+│   │   ├── dashboard.json      # Dashboard
+│   │   ├── inventory.json      # Magazyn
+│   │   ├── production.json     # Produkcja
+│   │   ├── orders.json         # Zamówienia
+│   │   ├── invoices.json       # Faktury
+│   │   ├── customers.json      # Klienci
+│   │   ├── suppliers.json      # Dostawcy
+│   │   ├── recipes.json        # Receptury
+│   │   ├── reports.json        # Raporty
+│   │   ├── machines.json       # Maszyny
+│   │   ├── purchaseOrders.json # Zamówienia zakupu
+│   │   ├── cmr.json            # CMR
+│   │   ├── forms.json          # Formularze
+│   │   ├── calculator.json     # Kalkulator
+│   │   ├── priceLists.json     # Cenniki
+│   │   ├── aiAssistant.json    # Asystent AI
+│   │   ├── environmentalConditions.json # Warunki środowiskowe
+│   │   ├── expiryDates.json    # Daty ważności
+│   │   ├── stocktaking.json    # Inwentaryzacja
+│   │   ├── interactions.json   # Interakcje
+│   │   ├── sidebar.json        # Pasek boczny
+│   │   ├── translation.json    # Oryginalny plik (zachowany)
+│   │   └── translation.backup.json # Kopia zapasowa
+│   └── en/                     # Angielskie tłumaczenia (te same namespace'y)
+│       └── ... (analogiczne pliki)
+├── scripts/
+│   └── split-translations.js   # Skrypt do podziału tłumaczeń
+├── i18next-scanner.config.js   # Konfiguracja skanera
 └── README.md                   # Ta dokumentacja
 ```
 
-## Jak używać tłumaczeń
+## Jak używać tłumaczeń z namespace'ami
 
-### 1. Podstawowe użycie w komponentach
+### 1. Podstawowe użycie - pojedynczy namespace
 
 ```jsx
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
+
+function InventoryComponent() {
+  // Użyj konkretnego namespace'u
+  const { t } = useTranslation('inventory');
+  
+  return (
+    <div>
+      <h1>{t('title')}</h1>  {/* Bezpośrednio z namespace'u inventory */}
+      <button>{t('newItem')}</button>
+    </div>
+  );
+}
+```
+
+### 2. Użycie wielu namespace'ów
+
+```jsx
+import { useTranslation } from '../../hooks/useTranslation';
+
+function OrderComponent() {
+  // Użyj wielu namespace'ów
+  const { t } = useTranslation(['orders', 'common']);
+  
+  return (
+    <div>
+      <h1>{t('orders:title')}</h1>        {/* Z namespace orders */}
+      <button>{t('common:save')}</button>  {/* Z namespace common */}
+      <span>{t('newOrder')}</span>        {/* Domyślnie z pierwszego namespace (orders) */}
+    </div>
+  );
+}
+```
+
+### 3. Domyślny namespace (common)
+
+```jsx
+import { useTranslation } from '../../hooks/useTranslation';
 
 function MyComponent() {
+  // Bez podania namespace'u używa domyślnego (common)
   const { t } = useTranslation();
   
   return (
     <div>
-      <h1>{t('common.save')}</h1>
-      <button>{t('auth.loginButton')}</button>
+      <button>{t('save')}</button>    {/* Z namespace common */}
+      <button>{t('cancel')}</button>  {/* Z namespace common */}
     </div>
   );
 }
@@ -97,7 +164,7 @@ function Header() {
 ### Programowo
 
 ```jsx
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 function MyComponent() {
   const { i18n } = useTranslation();
@@ -154,11 +221,77 @@ backend: {
 }
 ```
 
-## Dodawanie nowych tłumaczeń
+## ✅ MIGRACJA ZAKOŃCZONA - Kompatybilność wsteczna
 
-1. Dodaj klucz do `src/i18n/locales/pl/translation.json`
-2. Dodaj odpowiednie tłumaczenie do `src/i18n/locales/en/translation.json`
-3. Użyj klucza w komponencie: `t('your.new.key')`
+### 🎉 Wszystkie istniejące komponenty działają bez zmian!
+
+**Automatyczne mapowanie kluczy:**
+- `t('suppliers.title')` → automatycznie mapowane na `suppliers:title`
+- `t('inventory.newItem')` → automatycznie mapowane na `inventory:newItem`
+- `t('common.save')` → automatycznie mapowane na `common:save`
+
+### Zarządzanie namespace'ami i tłumaczeniami
+
+#### Dodawanie nowych tłumaczeń
+
+1. **Do istniejącego namespace'u:**
+   - Dodaj klucz do odpowiedniego pliku, np. `src/i18n/locales/pl/inventory.json`
+   - Dodaj tłumaczenie do `src/i18n/locales/en/inventory.json`
+   - Użyj w komponencie: `t('inventory.newKey')` (automatyczne mapowanie) lub `t('inventory:newKey')`
+
+2. **Nowy namespace:**
+   - Utwórz nowe pliki: `src/i18n/locales/pl/newNamespace.json` i `src/i18n/locales/en/newNamespace.json`
+   - Dodaj import w `src/i18n/index.js`
+   - Dodaj do listy `ns` w konfiguracji
+   - Dodaj do `resources` w obu językach
+   - Dodaj mapowanie w `src/hooks/useTranslation.js`
+
+### 📊 Korzyści z migracji
+
+✅ **Plik 3681 linii → 24 pliki (średnio 150 linii)**  
+✅ **Lepsza organizacja i łatwiejsze zarządzanie**  
+✅ **Zero breaking changes**  
+✅ **Możliwość lazy loading w przyszłości**  
+✅ **Prostsze dodawanie nowych tłumaczeń**  
+
+### Dostępne skrypty
+
+```bash
+# Automatyczny podział dużego pliku translation.json na namespace'y
+npm run i18n:split
+
+# Skanowanie kodu w poszukiwaniu kluczy tłumaczeń (i18next-scanner)
+npm run i18n:scan
+```
+
+### 🔄 Opcje migracji (stopniowo, bez pośpiechu)
+
+**Opcja 1: Nie zmieniaj nic (ZALECANA)**
+- Wszystkie istniejące klucze działają automatycznie
+- `t('suppliers.title')` działa tak samo jak wcześniej
+
+**Opcja 2: Migracja komponentów z wieloma tłumaczeniami z jednego modułu**
+```javascript
+// PRZED (nadal działa!):
+const { t } = useTranslation();
+t('suppliers.title');
+t('suppliers.newSupplier');
+t('suppliers.editSupplier');
+
+// PO (opcjonalnie, dla lepszej wydajności):
+const { t } = useTranslation('suppliers');
+t('title');
+t('newSupplier');
+t('editSupplier');
+```
+
+**Opcja 3: Użycie bezpośrednich namespace'ów**
+```javascript
+// Dla kluczy z różnych namespace'ów:
+const { t } = useTranslation();
+t('suppliers:title');
+t('common:save');
+```
 
 ## Formatowanie
 

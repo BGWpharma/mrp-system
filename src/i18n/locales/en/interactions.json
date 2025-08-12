@@ -1,0 +1,157 @@
+{
+  "purchaseInteractions": {
+    "title": "Purchase Interactions",
+    "newInteraction": "New Interaction",
+    "editInteraction": "Edit Interaction",
+    "interactionDetails": "Interaction Details",
+    "backToList": "Back to List",
+    "loading": "Loading...",
+    "search": {
+      "placeholder": "Search interactions...",
+      "clear": "Clear search"
+    },
+    "summary": {
+      "total": "Total: {{count}} interactions"
+    },
+    "table": {
+      "headers": {
+        "type": "Type",
+        "subject": "Subject",
+        "date": "Date",
+        "supplier": "Supplier",
+        "phone": "Phone",
+        "email": "Email",
+        "address": "Address",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "noData": "No data",
+      "clickForDetails": "Click to view details"
+    },
+    "actions": {
+      "view": "View",
+      "edit": "Edit",
+      "delete": "Delete",
+      "changeStatus": "Change Status",
+      "cancel": "Cancel",
+      "save": "Save",
+      "update": "Update"
+    },
+    "form": {
+      "selectSupplier": "Select supplier",
+      "supplierRequired": "Supplier is required",
+      "type": "Interaction type",
+      "typeRequired": "Interaction type is required",
+      "subject": "Subject",
+      "subjectRequired": "Subject is required",
+      "subjectPlaceholder": "Enter interaction subject",
+      "date": "Date and time",
+      "dateRequired": "Date is required",
+      "status": "Status",
+      "statusRequired": "Status is required",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional information about the interaction",
+      "validation": {
+        "supplierRequired": "Select a supplier",
+        "typeRequired": "Select interaction type",
+        "subjectRequired": "Enter interaction subject",
+        "subjectMinLength": "Subject must contain at least 3 characters",
+        "dateRequired": "Select date and time",
+        "statusRequired": "Status is required"
+      }
+    },
+    "types": {
+      "call": "Phone Call",
+      "email": "Email",
+      "meeting": "Meeting",
+      "note": "Note"
+    },
+    "statuses": {
+      "planned": "Planned",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "details": {
+      "basicInfo": "Basic Information",
+      "supplier": "Supplier",
+      "contact": "Contact",
+      "unknownSupplier": "Unknown supplier",
+      "noName": "No name",
+      "phone": "Phone",
+      "email": "Email",
+      "address": "Address",
+      "noAddress": "No address",
+      "interactionInfo": "Interaction Information",
+      "type": "Type",
+      "subject": "Subject",
+      "dateTime": "Date and time",
+      "status": "Status",
+      "notes": "Notes",
+      "noNotes": "No notes",
+      "metadata": "Metadata",
+      "createdBy": "Created by",
+      "createdAt": "Created at",
+      "updatedBy": "Updated by",
+      "updatedAt": "Updated at",
+      "history": "History",
+      "relatedInteractions": "Related interactions"
+    },
+    "dialogs": {
+      "deleteConfirm": {
+        "title": "Delete Confirmation",
+        "message": "Are you sure you want to delete this interaction? This operation is irreversible.",
+        "confirm": "Delete",
+        "cancel": "Cancel"
+      },
+      "statusChange": {
+        "title": "Change Interaction Status",
+        "newStatus": "New status",
+        "selectStatus": "Select new status"
+      },
+      "details": {
+        "title": "Interaction Details",
+        "close": "Close"
+      }
+    },
+    "notifications": {
+      "created": "Interaction has been created",
+      "updated": "Interaction has been updated",
+      "deleted": "Interaction has been deleted",
+      "statusUpdated": "Interaction status has been updated",
+      "createFailed": "Failed to create interaction",
+      "updateFailed": "Failed to update interaction",
+      "deleteFailed": "Failed to delete interaction",
+      "loadFailed": "Failed to load interactions",
+      "loadSuppliersFailed": "Failed to load suppliers list",
+      "loadSupplierFailed": "Failed to load supplier data",
+      "statusUpdateFailed": "Failed to update status"
+    },
+    "pagination": {
+      "rowsPerPage": "Rows per page:",
+      "of": "of"
+    },
+    "noResults": {
+      "title": "No interactions",
+      "description": "No interactions found matching the criteria.",
+      "createFirst": "Click \"New Interaction\" to create the first interaction."
+    }
+  },
+  "interactionDetails": {
+    "dateTime": "Date and time",
+    "status": "Status",
+    "supplier": "Supplier",
+    "type": "Type",
+    "notes": "Notes",
+    "noNotes": "No notes",
+    "newInteractionWithSupplier": "New interaction with this supplier",
+    "createdAt": "Created",
+    "lastModified": "Last modified",
+    "viewSupplierCard": "View supplier card",
+    "deleteDialogTitle": "Delete interaction",
+    "deleteDialogConfirmText": "Are you sure you want to delete interaction \"{{subject}}\"?",
+    "deleteDialogConfirmWarning": "This operation cannot be undone.",
+    "deleteDialogCancel": "Cancel",
+    "deleteDialogConfirm": "Delete"
+  }
+}

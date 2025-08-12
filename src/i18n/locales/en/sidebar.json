@@ -1,0 +1,45 @@
+{
+  "aiAssistant": "AI Assistant",
+  "dashboard": "Dashboard",
+  "hallData": "Hall Parameters",
+  "sales": "Sales",
+  "production": "Production",
+  "inventory": "Inventory",
+  "reportBug": "Report Bug",
+  "submenu": {
+    "dashboard": {
+      "main": "Main",
+      "analytics": "Analytics"
+    },
+    "hallData": {
+      "environmentalConditions": "Environmental Conditions",
+      "machines": "Machines"
+    },
+    "sales": {
+      "invoices": "Invoices",
+      "customers": "Customers",
+      "priceLists": "Price Lists",
+      "newProductionTask": "New Production Task",
+      "coReports": "CO Reports",
+      "customerOrders": "Customer Orders"
+    },
+    "production": {
+      "forms": "Forms",
+      "calculator": "Calculator",
+      "forecast": "Forecast",
+      "productionTasks": "Production Tasks",
+      "recipes": "Recipes",
+      "timeline": "Timeline"
+    },
+    "inventory": {
+      "cmr": "CMR",
+      "suppliers": "Suppliers",
+      "forms": "Forms",
+      "purchaseInteractions": "Purchase Interactions",
+      "stocktaking": "Stocktaking",
+      "status": "Stock",
+      "expiryDates": "Expiry Dates",
+      "componentOrders": "Component Orders"
+    }
+  }
+}

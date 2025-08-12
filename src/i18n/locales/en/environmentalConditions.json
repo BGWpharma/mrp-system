@@ -1,0 +1,45 @@
+{
+  "title": "Environmental Conditions",
+  "sensor": "Sensor",
+  "timeRange": "Time Range",
+  "view": "View",
+  "refreshData": "Refresh data",
+  "temperature": "Temperature",
+  "humidity": "Humidity",
+  "dataRange": "Data Range",
+  "chartHistory": "Reading History",
+  "lastReading": "Last reading",
+  "noHistoricalData": "No historical data",
+  "startDate": "Start date",
+  "endDate": "End date",
+  "timeRanges": {
+    "lastHour": "Last hour",
+    "last6Hours": "Last 6 hours",
+    "last12Hours": "Last 12 hours",
+    "today": "Today",
+    "lastDay": "Last day",
+    "lastWeek": "Last week",
+    "lastMonth": "Last month",
+    "custom": "Custom"
+  },
+  "chartTypes": {
+    "line": "Line",
+    "area": "Area"
+  },
+  "errors": {
+    "permissionDenied": "No Firebase database permissions",
+    "permissionDeniedDescription": "Detected \"permission_denied\" error when accessing Realtime Database data.",
+    "troubleshooting": "To solve this problem:",
+    "loginToConsole": "Log in to Firebase console:",
+    "selectProject": "Select project \"bgw-mrp-system\"",
+    "goToRealtimeDb": "Go to \"Realtime Database\" section",
+    "clickRulesTab": "Click \"Rules\" tab",
+    "changeRules": "Change rules to allow data reading (for testing you can set public access):",
+    "productionWarning": "In production environment, more strict security rules are recommended.",
+    "noSensorData": "No sensor data in Firebase database. Make sure that:",
+    "checkRealtimeDb": "You have configured Firebase Realtime Database",
+    "checkDataStructure": "Data is saved in sensors/{device_id} structure",
+    "checkHistoryStructure": "Historical data is saved in history/{device_id}",
+    "exampleDataStructure": "Example data structure:"
+  }
+}

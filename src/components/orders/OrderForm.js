@@ -79,7 +79,7 @@ import { getAllInventoryItems, getIngredientPrices, getInventoryItemsByCategory 
 import { getAllCustomers, createCustomer } from '../../services/customerService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateForInput, formatDate, safeParseDate, ensureDateInputFormat } from '../../utils/dateUtils';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';

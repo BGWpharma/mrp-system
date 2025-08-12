@@ -1,0 +1,289 @@
+{
+  "title": "Component Orders",
+  "detailsTitle": "Component Order Details",
+  "newOrder": "New order",
+  "editOrder": "Edit order",
+  "deleteOrder": "Delete order",
+  "backToList": "Back to list",
+  "downloadPdf": "Download PDF",
+  "receiveGoods": "Receive goods",
+  "orderData": "Order data",
+  "additionalCosts": "Additional costs",
+  "itemsInOrder": "Items in order",
+  "noOrdersFound": "No purchase orders found",
+  "loadingOrders": "Loading orders...",
+  "orderSaved": "Purchase order has been saved!",
+  "orderDeleted": "Order has been deleted",
+  "statusUpdated": "Order status has been updated",
+  "paymentStatusUpdated": "Payment status has been updated",
+  "selectSupplier": "Select supplier",
+  "table": {
+    "number": "Number",
+    "supplier": "Supplier",
+    "status": "Status",
+    "paymentStatus": "Payment Status",
+    "orderDate": "Order Date",
+    "totalValue": "Total Value",
+    "actions": "Actions"
+  },
+  "filters": {
+    "search": "Search orders...",
+    "status": "Status",
+    "all": "All",
+    "clear": "Clear",
+    "refresh": "Refresh"
+  },
+  "actions": {
+    "view": "View",
+    "edit": "Edit",
+    "delete": "Delete",
+    "updateStatus": "Update status",
+    "updatePaymentStatus": "Update payment status"
+  },
+  "dialogs": {
+    "deleteConfirm": {
+      "title": "Delete Confirmation",
+      "message": "Are you sure you want to delete this purchase order?",
+      "warning": "This operation is irreversible."
+    },
+    "statusUpdate": {
+      "title": "Update Order Status",
+      "newStatus": "New status"
+    },
+    "paymentStatusUpdate": {
+      "title": "Update Payment Status",
+      "newPaymentStatus": "New payment status"
+    }
+  },
+  "statuses": {
+    "new": "New",
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "shipped": "Shipped",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  },
+  "paymentStatuses": {
+    "unpaid": "Unpaid",
+    "partiallyPaid": "Partially Paid",
+    "paid": "Paid",
+    "overdue": "Overdue"
+  },
+  "form": {
+    "createTitle": "Create Purchase Order",
+    "editTitle": "Edit Purchase Order",
+    "loadingData": "Loading order data...",
+    "poNumber": "PO Number: {{number}}",
+    "supplier": "Supplier",
+    "targetWarehouse": "Target warehouse",
+    "selectWarehouse": "Select warehouse",
+    "currency": "Currency",
+    "orderDate": "Order date",
+    "expectedDeliveryDate": "Expected delivery date",
+    "supplierAddress": "Supplier address",
+    "selectSupplierAddress": "Select supplier address:",
+    "mainAddress": "(main)",
+    "notes": "Notes",
+    "additionalCosts": {
+      "title": "Additional costs",
+      "addCost": "Add cost",
+      "description": "Description",
+      "amount": "Amount",
+      "vatRate": "VAT",
+      "noCosts": "No additional costs. Click \"Add cost\" to add fees like customs, transport, insurance etc.",
+      "placeholder": "E.g. customs, transport, insurance",
+      "originalAmount": "Original amount",
+      "exchangeRate": "Exchange rate",
+      "amountInOrderCurrency": "Amount in PO currency",
+      "expandFields": "Expand additional fields"
+    },
+    "orderItems": {
+      "title": "Order items",
+      "addItem": "Add item",
+      "fillMinimumQuantities": "Fill minimum quantities",
+      "findBestPrices": "Find best prices",
+      "applyBestPrices": "Apply best prices",
+      "product": "Product",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "unitPrice": "Unit price",
+      "discount": "Discount %",
+      "vatRate": "VAT",
+      "amountAfterConversion": "Amount after conversion",
+      "defaultSupplierPrice": "Default supplier price"
+    },
+    "summary": {
+      "title": "Cost Summary",
+      "itemsValue": "Items value",
+      "additionalCostsNet": "Additional costs net",
+      "additionalCostsVat": "VAT from additional costs",
+      "vatRateBreakdown": "Rate {{rate}}%",
+      "beforeDiscount": "Value before discount",
+      "netValueTotal": "Net value total",
+      "vatTotal": "VAT total",
+      "globalDiscount": "Global discount",
+      "savings": "Savings",
+      "grossValue": "Gross value",
+      "exchangeRateInfo": "Values in foreign currencies were converted using exchange rates from the day preceding the invoice date or from the PO creation date (if no invoice date)."
+    },
+    "invoices": {
+      "title": "Invoices",
+      "addInvoice": "Add invoice",
+      "description": "Description",
+      "link": "Invoice link",
+      "noInvoices": "No invoices. Click \"Add invoice\" to add a link to an invoice.",
+      "descriptionPlaceholder": "Invoice description, e.g. Main invoice, Transport invoice etc.",
+      "linkPlaceholder": "https://drive.google.com/file/d/..."
+    },
+    "attachments": "Attachments",
+    "coaAttachments": {
+      "title": "Certificates of Analysis (CoA)",
+      "description": "Analysis certificates from supplier",
+      "noAttachments": "No analysis certificates"
+    },
+    "invoiceAttachments": {
+      "title": "Invoice attachments",
+      "description": "Invoice files from supplier",
+      "noAttachments": "No invoice attachments"
+    },
+    "generalAttachments": {
+      "title": "Other attachments",
+      "description": "Other documents related to the order",
+      "noAttachments": "No other attachments"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    }
+  },
+  "editPage": {
+    "orderData": "Order data",
+    "additionalCosts": "Additional costs",
+    "orderItems": "Order items",
+    "receiveItems": "Receive items"
+  },
+  "errors": {
+    "loadFailed": "Failed to load purchase orders list",
+    "saveFailed": "Failed to save order",
+    "deleteFailed": "Failed to delete order",
+    "statusUpdateFailed": "Failed to update status",
+    "productNotLinked": "This product is not linked to an inventory item"
+  },
+  "details": {
+    "orderNumber": "Order {{number}}",
+    "orderTitle": "Order {{number}}",
+    "orderDate": "Order date",
+    "expectedDeliveryDate": "Expected delivery date",
+    "deliveryDate": "Delivery date",
+    "invoice": "Invoice",
+    "invoices": "Invoices",
+    "viewInvoice": "View invoice",
+    "supplier": "Supplier",
+    "noSupplierData": "No supplier data",
+    "statusHistory": "Status change history",
+    "orderElements": "Order elements",
+    "additionalCostsDetails": "Additional costs",
+    "relatedBatches": "Related batches",
+    "deleteOrder": "Delete order",
+    "receive": "Receive",
+    "notInReport": "Not in report",
+    "itemReportedInUnloading": "Item has been reported in unloading report - can receive goods",
+    "itemNotReportedInUnloading": "Item has not been reported in unloading report - cannot receive goods",
+    "batchesAssignedToItem": "Batches (LOT) assigned to this item",
+    "noData": "Not specified",
+    "noAddress": "No address",
+    "dateReadError": "Date read error",
+    "invalidDate": "Invalid date value",
+    "noPdfData": "No order data available to generate PDF",
+    "table": {
+      "productName": "Product name",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "unitPrice": "Unit price",
+      "netValue": "Net value",
+      "originalAmount": "Original amount",
+      "plannedDeliveryDate": "Planned delivery date",
+      "actualDeliveryDate": "Actual delivery date",
+      "received": "Received",
+      "dateTime": "Date and time",
+      "previousStatus": "Previous status",
+      "newStatus": "New status",
+      "changedBy": "Changed by",
+      "batchNumber": "Batch number",
+      "expiryDate": "Expiry date",
+      "warehouse": "Warehouse",
+      "location": "Location",
+      "details": "Details",
+      "actions": "Actions",
+      "notes": "Notes"
+    },
+    "summary": {
+      "netValue": "Total net value",
+      "totalVAT": "Total VAT",
+      "grossValue": "Gross value",
+      "productsNetValue": "Products net value",
+      "vatFromProducts": "VAT from products",
+      "vatRate": "Rate {{rate}}%",
+      "from": "from"
+    },
+    "batches": {
+      "allRelatedBatches": "All batches (LOT) related to order",
+      "lotNumber": "LOT number",
+      "product": "Product",
+      "receivedDate": "Received date",
+      "value": "Value",
+      "noLotNumber": "No number",
+      "unknownProduct": "Unknown product",
+      "mainWarehouse": "Main warehouse",
+      "unknownDate": "Unknown date",
+      "noBatchesAssigned": "No batches assigned to this item",
+      "received": "Received",
+      "warehouse": "Warehouse"
+    },
+    "attachments": "Attachments",
+    "unloadingReports": "Unloading Reports",
+    "foundUnloadingReports": "Found {{count}} unloading report(s) for PO: {{number}}",
+    "searchingUnloadingReports": "Searching for unloading reports...",
+    "noUnloadingReports": "No unloading reports for PO: {{number}}",
+    "unknown": "Unknown",
+    "clickToOpen": "Click to open",
+    "attachedFiles": "Attached files: {{count}}",
+    "noAttachments": "No attachments",
+    "noAttachmentsForOrder": "No attachments for this order",
+    "coaAttachments": {
+      "title": "Certificates of Analysis (CoA)",
+      "noAttachments": "No analysis certificates"
+    },
+    "invoiceAttachments": {
+      "title": "Invoice attachments",
+      "noAttachments": "No invoice attachments"
+    },
+    "generalAttachments": {
+      "title": "Other attachments",
+      "noAttachments": "No other attachments"
+    },
+    "unloadingReport": "Unloading Report #{{number}}",
+    "noDate": "No date",
+    "editUnloadingReport": "Edit unloading report",
+    "employeeEmail": "Employee email",
+    "employee": "Employee",
+    "position": "Position",
+    "notProvided": "Not provided",
+    "coaMigration": {
+      "title": "CoA Attachments Migration",
+      "description": "Move CoA attachments as batch certificates",
+      "selectAttachments": "Select CoA attachments",
+      "selectBatch": "Select target batch",
+      "migrateToBatch": "Migrate to batch",
+      "migrating": "Migrating...",
+      "downloadingFiles": "Downloading files...",
+      "success": "Successfully migrated {{count}} CoA attachments",
+      "noAttachments": "No CoA attachments to migrate",
+      "noBatches": "No related batches found",
+      "summary": "Migration summary",
+      "attachmentsToMigrate": "Attachments to migrate: {{count}}",
+      "targetBatch": "Target batch: {{batch}}"
+    }
+  }
+}

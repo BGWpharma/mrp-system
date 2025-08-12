@@ -1,0 +1,79 @@
+{
+  "title": "Dashboard",
+  "welcome": "Welcome, {{name}}",
+  "overview": "Overview",
+  "recentActivity": "Recent Activity",
+  "quickActions": "Quick Actions",
+  "refreshAll": "Refresh All",
+  "refreshing": "Refreshing...",
+  "refresh": "Refresh",
+  "announcements": "Announcements",
+  "editAnnouncement": "Edit Announcement",
+  "loadingAnnouncements": "Loading announcements...",
+  "announcementPlaceholder": "Enter announcement content for all users...",
+  "announcementHelper": "Press Ctrl+Enter to confirm",
+  "save": "Save",
+  "cancel": "Cancel",
+  "noAnnouncements": "No announcements. Click the edit icon to add an announcement.",
+  "lastUpdate": "Last updated: {{date}}{{author}}",
+  "by": " by {{name}}",
+  "cards": {
+    "recipes": {
+      "title": "Recipes",
+      "description": "Manage recipes and ingredients",
+      "goTo": "Go"
+    },
+    "production": {
+      "title": "Production",
+      "description": "Plan and manage production",
+      "activeTasks": "{{count}} active tasks",
+      "goTo": "Go"
+    },
+    "inventory": {
+      "title": "Inventory",
+      "description": "Manage inventory levels",
+      "goTo": "Go"
+    },
+    "quality": {
+      "title": "Quality",
+      "description": "Product quality control",
+      "goTo": "Go"
+    },
+    "orders": {
+      "title": "Customer Orders",
+      "description": "Manage customer orders",
+      "ordersCount": "{{count}} orders ({{value}})",
+      "recentOrders": "Recent orders:"
+    },
+    "forms": {
+      "title": "Forms",
+      "subtitle": "Production forms",
+      "description": "Manage production forms",
+      "goTo": "Go"
+    }
+  },
+  "production": {
+    "tasksInProgress": "Production Tasks in Progress",
+    "seeAll": "See All",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "orders": "Orders"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "description": "Check detailed system analytics in a new, simplified view. Monitor key indicators for inventory, production, and orders.",
+    "availableStats": "Available statistics:",
+    "ordersAndSales": "Orders and sales",
+    "inventoryLevels": "Inventory levels",
+    "productionTasks": "Production tasks",
+    "goTo": "Go"
+  },
+  "statuses": {
+    "new": "New",
+    "inProgress": "In Progress",
+    "readyToShip": "Ready to Ship",
+    "shipped": "Shipped",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  }
+}

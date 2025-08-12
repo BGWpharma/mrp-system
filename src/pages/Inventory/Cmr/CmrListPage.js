@@ -57,7 +57,7 @@ import {
   removeCmrDocumentFromCache
 } from '../../../services/cmrService';
 import { getAllCustomers } from '../../../services/customerService';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { useTheme as useThemeContext } from '../../../contexts/ThemeContext';
 
 // Ikony

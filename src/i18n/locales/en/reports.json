@@ -1,0 +1,186 @@
+{
+  "coReports": {
+    "title": "Customer Orders Reports (CO)",
+    "aria": {
+      "tabs": "co reports"
+    },
+    "tabs": {
+      "ordersReport": "Orders report",
+      "productionCosts": "Production costs"
+    },
+    "common": {
+      "export": "Export",
+      "exportAsPdf": "Export as PDF",
+      "exportAsCsv": "Export as CSV",
+      "refreshData": "Refresh data",
+      "average": "Average",
+      "noNumber": "No number",
+      "noCustomerData": "No customer data"
+    },
+    "filters": {
+      "period": {
+        "label": "Report period",
+        "last7days": "Last 7 days",
+        "last30days": "Last 30 days",
+        "lastMonth": "Last month",
+        "thisMonth": "This month",
+        "custom": "Custom"
+      },
+      "startDate": "Start date",
+      "endDate": "End date",
+      "customer": {
+        "label": "Customer",
+        "all": "All customers"
+      }
+    },
+    "periodRange": "Period: {{start}} - {{end}}",
+    "cards": {
+      "totalOrders": "Total orders",
+      "totalValue": "Orders value",
+      "avgOrderValue": "Average order value"
+    },
+    "customerStats": {
+      "title": "Customer statistics"
+    },
+    "statusStats": {
+      "title": "Status statistics"
+    },
+    "ordersList": {
+      "title": "Orders list",
+      "empty": "No orders matching the criteria"
+    },
+    "productionCosts": {
+      "title": "Production costs report",
+      "selectProduct": "Select product",
+      "allProducts": "All products",
+      "noDataToExport": "No production cost data to export",
+      "empty": {
+        "title": "No production costs",
+        "description": "There are no orders with production costs in the selected period.",
+        "hint": "Production costs are available only for order items linked with production tasks."
+      },
+      "periodRange": "Production costs for the period: {{start}} - {{end}}",
+      "productStats": {
+        "titleFor": "Production cost stats for: {{product}}",
+        "avgFullUnitCost": "Avg full cost/unit",
+        "minFullUnitCost": "Min full cost/unit",
+        "maxFullUnitCost": "Max full cost/unit"
+      },
+      "chart": {
+        "title": "📈 Production costs over time",
+        "yAxisLabel": "Cost per unit (€)",
+        "tooltipFullCostPerUnit": "Full cost per unit",
+        "seriesFullCostPerUnit": "Full cost per unit"
+      },
+      "detailsOverTime": "Detailed costs over time",
+      "ordersContainingProduct": "Customer orders (CO) containing product",
+      "cards": {
+        "itemsWithCosts": "Items with costs",
+        "totalProductionCost": "Total production cost",
+        "totalFullProductionCost": "Total full production cost",
+        "shareInOrdersValue": "Share in orders value"
+      },
+      "byProduct": {
+        "title": "Costs by products",
+        "showProductDetails": "Show product details"
+      },
+      "byCustomer": {
+        "title": "Costs by customers"
+      }
+    },
+    "export": {
+      "orders": {
+        "pdfTitle": "Customer Orders Report"
+      },
+      "labels": {
+        "dateRange": "Date range",
+        "customer": "Customer",
+        "generatedOn": "Generated on"
+      }
+    },
+    "messages": {
+      "csvSuccess": "CSV report has been generated successfully.",
+      "csvError": "Failed to generate CSV report.",
+      "pdfSuccess": "PDF report has been generated successfully.",
+      "pdfError": "Failed to generate PDF report.",
+      "productionCsvSuccess": "Production costs CSV report has been generated successfully.",
+      "productionCsvSuccessForProduct": "Production costs CSV report for {{product}} has been generated successfully.",
+      "productionCsvError": "Failed to generate production costs CSV report.",
+      "productionPdfSuccess": "Production costs PDF report has been generated successfully.",
+      "productionPdfSuccessForProduct": "Production costs PDF report for {{product}} has been generated successfully.",
+      "productionPdfError": "Failed to generate production costs PDF report.",
+      "refreshing": "Refreshing data...",
+      "refreshed": "Data has been refreshed and synchronized",
+      "refreshError": "Failed to refresh data"
+    },
+    "table": {
+      "orderNumber": "Order no.",
+      "date": "Date",
+      "customer": "Customer",
+      "status": "Status",
+      "value": "Value",
+      "expectedDelivery": "Expected delivery",
+      "fullCostPerUnit": "Full cost/unit",
+      "totalFullCost": "Total full cost",
+      "product": "Product",
+      "quantity": "Quantity",
+      "totalQuantity": "Total quantity",
+      "productionCost": "Production cost",
+      "fullCost": "Full cost",
+      "ordersCount": "Orders count",
+      "itemsCount": "Items count",
+      "avgCostPerUnit": "Avg cost/unit",
+      "ordersValue": "Orders value",
+      "avgValue": "Average value",
+      "actions": "Actions",
+      "percentOfTotal": "% of total"
+    }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Overview of key system performance indicators",
+    "lastUpdate": "Last update",
+    "refreshData": "Refresh data",
+    "refreshing": "Refreshing...",
+    "refresh": "Refresh",
+    "cacheExpired": " (cache expired)",
+    "tabs": {
+      "statistics": "Statistics",
+      "charts": "Charts"
+    },
+    "cards": {
+      "sales": {
+        "title": "Sales",
+        "orders": "Orders",
+        "inProgress": "In Progress"
+      },
+      "inventory": {
+        "title": "Inventory",
+        "totalValue": "Total value"
+      },
+      "production": {
+        "title": "Production",
+        "completedTasks": "Completed tasks"
+      }
+    },
+    "sections": {
+      "recentOrders": {
+        "title": "Recent orders (CO)",
+        "noData": "No customer order data",
+        "orderPrefix": "Order"
+      },
+      "activeTasks": {
+        "title": "Active production tasks",
+        "noData": "No active production tasks",
+        "inProgress": "In progress"
+      },
+      "purchaseOrders": {
+        "title": "Purchase orders (PO)",
+        "noData": "No purchase order data"
+      }
+    },
+    "status": {
+      "noStatus": "No status"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "title": "Daty ważności produktów",
+  "backToInventory": "Powrót",
+  "loading": "Ładowanie...",
+  "expiredProducts": {
+    "title": "Przeterminowane produkty",
+    "alertMessage": "W magazynie znajduje się {{count}} {{count, plural, one {przeterminowana partia} few {przeterminowane partie} many {przeterminowanych partii} other {przeterminowanych partii}}} produktów."
+  },
+  "thresholdSettings": {
+    "label": "Próg dni do wygaśnięcia",
+    "description": "Pokazuje produkty wygasające w ciągu {{days}} dni"
+  },
+  "search": {
+    "label": "Szukaj",
+    "clear": "Wyczyść"
+  },
+  "tabs": {
+    "expiring": "Wkrótce wygasające ({{count}})",
+    "expired": "Przeterminowane ({{count}})"
+  },
+  "table": {
+    "headers": {
+      "product": "Produkt",
+      "batchNumber": "Numer partii",
+      "expiryDate": "Data ważności",
+      "status": "Status",
+      "quantity": "Ilość",
+      "actions": "Akcje"
+    },
+    "noData": "-",
+    "actions": {
+      "manageBatches": "Zarządzaj partiami",
+      "dispose": "Utylizuj"
+    }
+  },
+  "status": {
+    "noDate": "Brak daty",
+    "expired": "Przeterminowana",
+    "expiringSoon": "Wygasa wkrótce",
+    "current": "Aktualna"
+  },
+  "noResults": {
+    "expiring": {
+      "withSearch": "Brak wyników wyszukiwania dla produktów wkrótce wygasających.",
+      "withoutSearch": "Brak produktów wkrótce wygasających."
+    },
+    "expired": {
+      "withSearch": "Brak wyników wyszukiwania dla przeterminowanych produktów.",
+      "withoutSearch": "Brak przeterminowanych produktów."
+    }
+  },
+  "errors": {
+    "fetchData": "Błąd podczas pobierania danych: {{message}}"
+  }
+}

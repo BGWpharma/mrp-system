@@ -31,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useDebounce } from '../../hooks/useDebounce';
 import { Timestamp } from 'firebase/firestore';
 

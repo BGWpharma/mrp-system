@@ -1,0 +1,81 @@
+{
+  "title": "Dostawcy",
+  "newSupplier": "Nowy Dostawca",
+  "editSupplier": "Edytuj Dostawcę",
+  "supplierDetails": "Szczegóły Dostawcy",
+  "loading": "Ładowanie dostawców...",
+  "search": "Szukaj",
+  "noResultsFound": "Brak dostawców spełniających kryteria wyszukiwania",
+  "noAddress": "Brak adresu",
+  "table": {
+    "name": "Nazwa",
+    "contactPerson": "Osoba kontaktowa",
+    "email": "Email",
+    "phone": "Telefon",
+    "address": "Adres",
+    "actions": "Akcje"
+  },
+  "actions": {
+    "view": "Podgląd",
+    "edit": "Edytuj",
+    "delete": "Usuń",
+    "cancel": "Anuluj",
+    "save": "Zapisz",
+    "saving": "Zapisywanie...",
+    "add": "Dodaj",
+    "back": "Wróć do listy"
+  },
+  "confirmDelete": {
+    "title": "Potwierdź usunięcie",
+    "message": "Czy na pewno chcesz usunąć dostawcę {{name}}? Tej operacji nie można cofnąć.",
+    "confirm": "Usuń",
+    "cancel": "Anuluj"
+  },
+  "form": {
+    "basicInfo": "Podstawowe informacje",
+    "name": "Nazwa firmy",
+    "contactPerson": "Osoba kontaktowa",
+    "email": "Email",
+    "phone": "Telefon",
+    "taxId": "NIP",
+    "vatEu": "VAT EU",
+    "notes": "Notatki",
+    "verifyNip": "Zweryfikuj NIP",
+    "verifying": "Weryfikowanie...",
+    "nipFormat": "Format: 0000000000 (bez myślników)",
+    "loadingData": "Ładowanie danych dostawcy...",
+    "addresses": {
+      "title": "Adresy",
+      "addAddress": "Dodaj adres",
+      "editAddress": "Edytuj adres",
+      "addNewAddress": "Dodaj nowy adres",
+      "noAddresses": "Brak adresów",
+      "name": "Nazwa adresu",
+      "street": "Ulica i numer",
+      "city": "Miasto",
+      "postalCode": "Kod pocztowy",
+      "country": "Kraj",
+      "isMain": "Adres główny",
+      "mainAddress": "Główny",
+      "confirmDelete": "Czy na pewno chcesz usunąć ten adres?"
+    },
+    "validation": {
+      "nameRequired": "Nazwa dostawcy jest wymagana",
+      "fillAllAddressFields": "Wypełnij wszystkie wymagane pola adresu",
+      "enterNipToVerify": "Wprowadź numer NIP do weryfikacji",
+      "invalidNipFormat": "Niepoprawny format numeru NIP",
+      "nipNotFound": "Nie znaleziono firmy o podanym numerze NIP",
+      "nipVerificationError": "Wystąpił błąd podczas weryfikacji NIP"
+    }
+  },
+  "notifications": {
+    "deleted": "Dostawca został usunięty",
+    "deleteFailed": "Nie udało się usunąć dostawcy",
+    "updated": "Dostawca został zaktualizowany",
+    "created": "Dostawca został utworzony",
+    "saveFailed": "Nie udało się zapisać dostawcy",
+    "loadFailed": "Nie udało się załadować listy dostawców",
+    "dataLoadFailed": "Nie udało się pobrać danych dostawcy",
+    "nipVerified": "Pomyślnie zweryfikowano NIP i zaktualizowano dane"
+  }
+}

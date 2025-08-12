@@ -146,7 +146,7 @@ import ProductionControlFormDialog from '../../components/production/ProductionC
 import CompletedMOFormDialog from '../../components/production/CompletedMOFormDialog';
 import ProductionShiftFormDialog from '../../components/production/ProductionShiftFormDialog';
 import POReservationManager from '../../components/production/POReservationManager';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';

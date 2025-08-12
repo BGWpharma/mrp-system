@@ -63,7 +63,7 @@ import { getAllCustomers } from '../../services/customerService';
 import { getWorkstationById } from '../../services/workstationService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { PRODUCTION_TASK_STATUSES } from '../../utils/constants';
 
 const ProductionReportPage = () => {

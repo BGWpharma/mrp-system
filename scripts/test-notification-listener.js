@@ -6,7 +6,7 @@ const {
   createRealtimeNotification,
   markAllRealtimeNotificationsAsRead,
   markRealtimeNotificationAsRead
-} = require('./services/notificationService');
+} = require('../src/services/notificationService');
 
 async function testNotifications() {
   try {

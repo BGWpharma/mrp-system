@@ -1,0 +1,81 @@
+{
+  "title": "Suppliers",
+  "newSupplier": "New Supplier",
+  "editSupplier": "Edit Supplier",
+  "supplierDetails": "Supplier Details",
+  "loading": "Loading suppliers...",
+  "search": "Search",
+  "noResultsFound": "No suppliers match the search criteria",
+  "noAddress": "No address",
+  "table": {
+    "name": "Name",
+    "contactPerson": "Contact person",
+    "email": "Email",
+    "phone": "Phone",
+    "address": "Address",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "View",
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
+    "add": "Add",
+    "back": "Back to list"
+  },
+  "confirmDelete": {
+    "title": "Confirm deletion",
+    "message": "Are you sure you want to delete supplier {{name}}? This operation cannot be undone.",
+    "confirm": "Delete",
+    "cancel": "Cancel"
+  },
+  "form": {
+    "basicInfo": "Basic information",
+    "name": "Company name",
+    "contactPerson": "Contact person",
+    "email": "Email",
+    "phone": "Phone",
+    "taxId": "Tax ID",
+    "vatEu": "VAT EU",
+    "notes": "Notes",
+    "verifyNip": "Verify Tax ID",
+    "verifying": "Verifying...",
+    "nipFormat": "Format: 0000000000 (without dashes)",
+    "loadingData": "Loading supplier data...",
+    "addresses": {
+      "title": "Addresses",
+      "addAddress": "Add address",
+      "editAddress": "Edit address",
+      "addNewAddress": "Add new address",
+      "noAddresses": "No addresses",
+      "name": "Address name",
+      "street": "Street and number",
+      "city": "City",
+      "postalCode": "Postal code",
+      "country": "Country",
+      "isMain": "Main address",
+      "mainAddress": "Main",
+      "confirmDelete": "Are you sure you want to delete this address?"
+    },
+    "validation": {
+      "nameRequired": "Company name is required",
+      "fillAllAddressFields": "Fill in all required address fields",
+      "enterNipToVerify": "Enter Tax ID number to verify",
+      "invalidNipFormat": "Invalid Tax ID format",
+      "nipNotFound": "No company found with the given Tax ID",
+      "nipVerificationError": "An error occurred while verifying Tax ID"
+    }
+  },
+  "notifications": {
+    "deleted": "Supplier has been deleted",
+    "deleteFailed": "Failed to delete supplier",
+    "updated": "Supplier has been updated",
+    "created": "Supplier has been created",
+    "saveFailed": "Failed to save supplier",
+    "loadFailed": "Failed to load suppliers list",
+    "dataLoadFailed": "Failed to load supplier data",
+    "nipVerified": "Successfully verified Tax ID and updated data"
+  }
+}

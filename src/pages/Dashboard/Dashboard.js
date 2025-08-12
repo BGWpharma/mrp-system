@@ -63,7 +63,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp } from '../../utils/dateUtils';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { db } from '../../services/firebase/config';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { createRealtimeNotification } from '../../services/notificationService';

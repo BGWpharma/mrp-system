@@ -36,7 +36,7 @@ import { storage } from '../../services/firebase/config';
 import { useAuth } from '../../hooks/useAuth';
 import { updatePurchaseOrderAttachments, validateAndCleanupAttachments } from '../../services/purchaseOrderService';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const PurchaseOrderCategorizedFileUpload = ({ 
   orderId, 

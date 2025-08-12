@@ -469,7 +469,7 @@ const ProductionTimeline = React.memo(() => {
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
   const { mode: themeMode } = useTheme(); // Motyw aplikacji
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
 

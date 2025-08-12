@@ -3,17 +3,112 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import HttpApi from 'i18next-http-backend';
 
-// Importujemy pliki tłumaczeń
-import translationPL from './locales/pl/translation.json';
-import translationEN from './locales/en/translation.json';
+// Importujemy pliki tłumaczeń - namespace'y
+// Polskie tłumaczenia
+import commonPL from './locales/pl/common.json';
+import navigationPL from './locales/pl/navigation.json';
+import authPL from './locales/pl/auth.json';
+import dashboardPL from './locales/pl/dashboard.json';
+import inventoryPL from './locales/pl/inventory.json';
+import productionPL from './locales/pl/production.json';
+import ordersPL from './locales/pl/orders.json';
+import invoicesPL from './locales/pl/invoices.json';
+import customersPL from './locales/pl/customers.json';
+import suppliersPL from './locales/pl/suppliers.json';
+import recipesPL from './locales/pl/recipes.json';
+import reportsPL from './locales/pl/reports.json';
+import machinesPL from './locales/pl/machines.json';
+import purchaseOrdersPL from './locales/pl/purchaseOrders.json';
+import cmrPL from './locales/pl/cmr.json';
+import formsPL from './locales/pl/forms.json';
+import calculatorPL from './locales/pl/calculator.json';
+import priceListsPL from './locales/pl/priceLists.json';
+import aiAssistantPL from './locales/pl/aiAssistant.json';
+import environmentalConditionsPL from './locales/pl/environmentalConditions.json';
+import expiryDatesPL from './locales/pl/expiryDates.json';
+import stocktakingPL from './locales/pl/stocktaking.json';
+import interactionsPL from './locales/pl/interactions.json';
+import sidebarPL from './locales/pl/sidebar.json';
 
-// Konfiguracja zasobów tłumaczeń
+// Angielskie tłumaczenia
+import commonEN from './locales/en/common.json';
+import navigationEN from './locales/en/navigation.json';
+import authEN from './locales/en/auth.json';
+import dashboardEN from './locales/en/dashboard.json';
+import inventoryEN from './locales/en/inventory.json';
+import productionEN from './locales/en/production.json';
+import ordersEN from './locales/en/orders.json';
+import invoicesEN from './locales/en/invoices.json';
+import customersEN from './locales/en/customers.json';
+import suppliersEN from './locales/en/suppliers.json';
+import recipesEN from './locales/en/recipes.json';
+import reportsEN from './locales/en/reports.json';
+import machinesEN from './locales/en/machines.json';
+import purchaseOrdersEN from './locales/en/purchaseOrders.json';
+import cmrEN from './locales/en/cmr.json';
+import formsEN from './locales/en/forms.json';
+import calculatorEN from './locales/en/calculator.json';
+import priceListsEN from './locales/en/priceLists.json';
+import aiAssistantEN from './locales/en/aiAssistant.json';
+import environmentalConditionsEN from './locales/en/environmentalConditions.json';
+import expiryDatesEN from './locales/en/expiryDates.json';
+import stocktakingEN from './locales/en/stocktaking.json';
+import interactionsEN from './locales/en/interactions.json';
+import sidebarEN from './locales/en/sidebar.json';
+
+// Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
   pl: {
-    translation: translationPL
+    common: commonPL,
+    navigation: navigationPL,
+    auth: authPL,
+    dashboard: dashboardPL,
+    inventory: inventoryPL,
+    production: productionPL,
+    orders: ordersPL,
+    invoices: invoicesPL,
+    customers: customersPL,
+    suppliers: suppliersPL,
+    recipes: recipesPL,
+    reports: reportsPL,
+    machines: machinesPL,
+    purchaseOrders: purchaseOrdersPL,
+    cmr: cmrPL,
+    forms: formsPL,
+    calculator: calculatorPL,
+    priceLists: priceListsPL,
+    aiAssistant: aiAssistantPL,
+    environmentalConditions: environmentalConditionsPL,
+    expiryDates: expiryDatesPL,
+    stocktaking: stocktakingPL,
+    interactions: interactionsPL,
+    sidebar: sidebarPL
   },
   en: {
-    translation: translationEN
+    common: commonEN,
+    navigation: navigationEN,
+    auth: authEN,
+    dashboard: dashboardEN,
+    inventory: inventoryEN,
+    production: productionEN,
+    orders: ordersEN,
+    invoices: invoicesEN,
+    customers: customersEN,
+    suppliers: suppliersEN,
+    recipes: recipesEN,
+    reports: reportsEN,
+    machines: machinesEN,
+    purchaseOrders: purchaseOrdersEN,
+    cmr: cmrEN,
+    forms: formsEN,
+    calculator: calculatorEN,
+    priceLists: priceListsEN,
+    aiAssistant: aiAssistantEN,
+    environmentalConditions: environmentalConditionsEN,
+    expiryDates: expiryDatesEN,
+    stocktaking: stocktakingEN,
+    interactions: interactionsEN,
+    sidebar: sidebarEN
   }
 };
 
@@ -35,7 +130,18 @@ i18n
     lng: 'pl',
     
     // Namespace domyślny
-    defaultNS: 'translation',
+    defaultNS: 'common',
+    
+    // Lista wszystkich namespace'ów
+    ns: [
+      'common', 'navigation', 'auth', 'dashboard', 
+      'inventory', 'production', 'orders', 'invoices', 
+      'customers', 'suppliers', 'recipes', 'reports',
+      'machines', 'purchaseOrders', 'cmr', 'forms',
+      'calculator', 'priceLists', 'aiAssistant', 
+      'environmentalConditions', 'expiryDates', 'stocktaking',
+      'interactions', 'sidebar'
+    ],
     
     // Konfiguracja wykrywania języka
     detection: {

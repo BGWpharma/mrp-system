@@ -1,0 +1,270 @@
+{
+  "title": "Produkcja",
+  "taskList": {
+    "title": "Zadania Produkcyjne",
+    "tabs": {
+      "taskList": "Lista zadań",
+      "timeline": "Harmonogram",
+      "moReport": "Raport MO",
+      "forms": "Formularze",
+      "forecast": "Prognoza zapotrzebowania",
+      "calculator": "Kalkulator",
+      "workstations": "Stanowiska produkcyjne"
+    }
+  },
+  "forecast": {
+    "title": "Prognoza zapotrzebowania materiałów",
+    "refresh": "Odśwież",
+    "generateReport": "Generuj raport CSV",
+    "search": "Szukaj",
+    "timeRange": "Zakres czasowy",
+    "startDate": "Data początkowa",
+    "endDate": "Data końcowa",
+    "searchMaterial": "Szukaj materiału",
+    "filterByCategory": "Filtruj po kategorii",
+    "allCategories": "Wszystkie kategorie",
+    "selectDateRange": "Wybierz zakres dat i kliknij \"Szukaj\", aby wyświetlić prognozę zapotrzebowania materiałów.",
+    "forecastPeriod": "Prognoza na okres: {{startDate}} - {{endDate}}",
+    "totalMaterials": "Łączna liczba materiałów",
+    "materialsRequiringPurchase": "Materiały wymagające zakupu",
+    "materialsWithShortageAfterDeliveries": "Materiały z niedoborem po dostawach",
+    "estimatedTotalCost": "Szacowany koszt całkowity",
+    "shortageValue": "Wartość niedoborów",
+    "shortageValueAfterDeliveries": "Wartość niedoborów po dostawach",
+    "calculating": "Obliczanie prognozy zapotrzebowania...",
+    "calculatingSteps": {
+      "preparing": "Przygotowywanie danych...",
+      "processing": "Przetwarzanie zadań produkcyjnych...",
+      "fetchingPrices": "Pobieranie cen dostawców...",
+      "checkingOrders": "Sprawdzanie zamówień...",
+      "finalizing": "Finalizowanie wyników..."
+    },
+    "successMessage": "Prognoza została pomyślnie wygenerowana!",
+    "materialDetails": "Szczegóły materiału",
+    "close": "Zamknij",
+    "orderMaterial": "Zamów materiał",
+    "table": {
+      "material": "Materiał",
+      "availableQuantity": "Dostępna ilość",
+      "requiredQuantity": "Potrzebna ilość",
+      "balance": "Bilans",
+      "expectedDeliveries": "Oczekiwane dostawy",
+      "balanceAfterDeliveries": "Bilans z dostawami",
+      "estimatedCost": "Szacowany koszt",
+      "status": "Status",
+      "actions": "Akcje"
+    },
+    "thirtyDays": "30 dni",
+    "category": "Kategoria",
+    "noCategory": "Bez kategorii",
+    "expectedDeliveriesDetails": "Oczekiwane dostawy ({{total}} {{unit}})",
+    "tasksUsingMaterial": "Zadania używające tego materiału",
+    "poNumber": "Numer PO",
+    "deliveryDate": "Data dostawy",
+    "noDate": "Brak daty",
+    "taskName": "Zadanie",
+    "moNumber": "Numer MO",
+    "productQuantity": "Ilość produktu",
+    "materialPerUnit": "Materiału na jedn.",
+    "executionDate": "Data wykonania",
+    "statusLabels": {
+      "sufficient": "Wystarczająca ilość",
+      "almostSufficient": "Prawie wystarczająca",
+      "insufficient": "Niewystarczająca ilość"
+    },
+    "tooltips": {
+      "showDetails": "Pokaż szczegóły",
+      "orderMaterial": "Zamów materiał"
+    },
+    "productionTasksInPeriod": "Zadania produkcyjne w wybranym okresie",
+    "taskWithoutName": "Zadanie bez nazwy"
+  },
+  "taskDetails": {
+    "tabs": {
+      "basicData": "Dane podstawowe",
+      "materialsAndCosts": "Materiały i Koszty",
+      "productionAndPlan": "Produkcja i Plan",
+      "forms": "Formularze",
+      "changeHistory": "Historia zmian",
+      "finishedProductReport": "Raport gotowego produktu"
+    },
+    "formTabs": {
+      "completedMO": "Raporty zakończonych MO",
+      "productionControl": "Raporty kontroli produkcji",
+      "productionShift": "Raporty zmian produkcyjnych"
+    }
+  },
+  "productionReport": {
+    "tabs": {
+      "taskList": "Lista zadań",
+      "detailedTaskList": "Szczegółowa lista zadań"
+    },
+    "tableHeaders": {
+      "taskName": "Nazwa zadania",
+      "moNumber": "Nr MO",
+      "product": "Produkt",
+      "client": "Klient",
+      "date": "Data",
+      "status": "Status",
+      "workTime": "Czas pracy (min)"
+    },
+    "noTasksInPeriod": "Brak zadań produkcyjnych w wybranym okresie.",
+    "customerFilter": "Klient",
+    "allCustomers": "Wszyscy klienci"
+  },
+  "taskListColumns": {
+    "taskName": "Nazwa zadania",
+    "product": "Produkt",
+    "quantityProgress": "Ilość / Pozostało",
+    "status": "Status",
+    "materialsReserved": "Surowce zarezerwowane",
+    "plannedStart": "Planowany start",
+    "plannedEnd": "Planowane zakończenie",
+    "unitCost": "Koszt jednostkowy",
+    "totalCost": "Koszt całkowity",
+    "actions": "Akcje"
+  },
+  "taskListLabels": {
+    "noTasksMessage": "Brak zadań produkcyjnych spełniających kryteria.",
+    "product": "Produkt:",
+    "quantityRemaining": "Ilość / Pozostało:",
+    "remaining": "pozostało:",
+    "stopProduction": "Zatrzymaj produkcję"
+  },
+  "tooltips": {
+    "startProduction": "Rozpocznij produkcję",
+    "stopProduction": "Zatrzymaj produkcję",
+    "confirmConsumption": "Potwierdź zużycie materiałów"
+  },
+  "csvHeaders": {
+    "moNumber": "Numer MO",
+    "taskName": "Nazwa zadania",
+    "product": "Produkt",
+    "quantity": "Ilość",
+    "unit": "Jednostka",
+    "remainingQuantity": "Pozostało do produkcji",
+    "status": "Status",
+    "plannedStart": "Planowany start",
+    "plannedEnd": "Planowane zakończenie",
+    "estimatedDurationHours": "Szacowany czas produkcji (godz.)",
+    "productionTimePerUnit": "Czas na jednostkę (min.)",
+    "orderNumber": "Numer zamówienia klienta",
+    "client": "Klient",
+    "description": "Opis",
+    "lotNumber": "Numer partii (LOT)",
+    "createdAt": "Data utworzenia",
+    "createdBy": "Utworzony przez"
+  },
+  "timeline": {
+    "title": "Harmonogram produkcji",
+    "legend": "Legenda:",
+    "instructionsZoom": "Skróty: Ctrl+kółko myszy - zoom, Shift+kółko myszy - przewijanie poziome",
+    "editMode": "Tryb edycji",
+    "editModeTooltip": "Włącz aby móc przeciągać zadania w harmonogramie",
+    "snapToPrevious": "Inteligentne dociąganie",
+    "snapToPreviousTooltip": "Automatycznie dociąga przesuwane zadania do najbliższego kafelka - czy to do końca poprzedniego, czy do początku następnego zadania na tym samym stanowisku",
+    "workstationColors": "Kolory stanowisk",
+    "groupBy": "Grupuj według",
+    "groupByWorkstation": "Stanowisk",
+    "groupByOrder": "Zamówień",
+    "timeScale": "Skala czasu",
+    "hourly": "Godzinowa",
+    "daily": "Dzienna",
+    "weekly": "Tygodniowa",
+    "monthly": "Miesięczna",
+    "filters": "Filtry",
+    "settings": "Ustawienia",
+    "exportTimeline": "Eksportuj harmonogram",
+    "refresh": "Odśwież",
+    "zoom": {
+      "in": "Powiększ",
+      "out": "Pomniejsz",
+      "reset": "Resetuj zoom"
+    },
+    "slider": {
+      "timeRange": "Zakres czasu: {{start}} - {{end}}"
+    },
+    "advancedFilters": {
+      "title": "Zaawansowane filtry",
+      "productName": "Nazwa produktu",
+      "moNumber": "Numer MO",
+      "orderNumber": "Numer zamówienia",
+      "startDate": "Data rozpoczęcia od",
+      "endDate": "Data rozpoczęcia do",
+      "apply": "Zastosuj filtry",
+      "clear": "Wyczyść filtry"
+    },
+    "edit": {
+      "title": "Edytuj zadanie",
+      "scheduledDate": "Data rozpoczęcia",
+      "endDate": "Data zakończenia",
+      "save": "Zapisz zmiany",
+      "cancel": "Anuluj",
+      "saveSuccess": "Zadanie zostało zaktualizowane",
+      "saveError": "Błąd podczas zapisywania zadania"
+    },
+    "tooltip": {
+      "product": "Produkt",
+      "moNumber": "Numer MO",
+      "quantity": "Ilość",
+      "status": "Status",
+      "workstation": "Stanowisko",
+      "customer": "Klient",
+      "orderNumber": "Nr zamówienia",
+      "scheduledDate": "Planowany start",
+      "endDate": "Planowane zakończenie",
+      "actualStartDate": "Rzeczywisty start",
+      "actualEndDate": "Rzeczywiste zakończenie",
+      "duration": "Czas trwania",
+      "priority": "Priorytet",
+      "description": "Opis",
+      "cannotEdit": "Nie można edytować - zadanie zakończone"
+    },
+    "groups": {
+      "noWorkstation": "Bez stanowiska",
+      "noOrder": "Bez zamówienia"
+    },
+    "statuses": {
+      "scheduled": "Zaplanowane",
+      "inProgress": "W trakcie",
+      "completed": "Zakończone",
+      "cancelled": "Anulowane",
+      "onHold": "Wstrzymane"
+    },
+    "messages": {
+      "loadingError": "Błąd podczas ładowania danych harmonogramu",
+      "taskMoveError": "Błąd podczas przenoszenia zadania",
+      "noTasksFound": "Brak zadań do wyświetlenia",
+      "refreshSuccess": "Dane harmonogramu zostały odświeżone",
+      "undoSuccess": "Cofnięto ostatnią akcję",
+      "undoError": "Nie można cofnąć akcji",
+      "noActionsToUndo": "Brak akcji do cofnięcia"
+    },
+    "export": {
+      "title": "Eksportuj harmonogram do Excel",
+      "description": "Skonfiguruj parametry eksportu harmonogramu. Raport będzie zawierał szczegółowy harmonogram, wizualny timeline oraz podsumowanie statystyk.",
+      "dateRange": "Zakres dat",
+      "startDate": "Data początkowa",
+      "endDate": "Data końcowa",
+      "customerFilters": "Filtry klientów",
+      "selectAll": "Zaznacz wszystkich",
+      "deselectAll": "Odznacz wszystkich",
+      "noCustomer": "Bez przypisanego klienta",
+      "summary": "Podsumowanie eksportu",
+      "period": "Okres",
+      "tasksToExport": "Zadań do eksportu",
+      "grouping": "Grupowanie",
+      "groupingByWorkstation": "Według stanowisk",
+      "groupingByOrder": "Według zamówień",
+      "export": "Eksportuj do Excel",
+      "cancel": "Anuluj",
+      "generating": "Rozpoczynanie generowania raportu harmonogramu...",
+      "success": "Raport harmonogramu został pomyślnie wygenerowany i pobrany!",
+      "error": "Wystąpił błąd podczas generowania raportu",
+      "noTasks": "Brak zadań do eksportu. Załaduj dane harmonogramu.",
+      "noWorkstations": "Brak danych o stanowiskach. Odśwież stronę i spróbuj ponownie.",
+      "noTasksInDateRange": "Brak zadań w wybranym zakresie dat.",
+      "buttonText": "Eksportuj harmonogram"
+    }
+  }
+}

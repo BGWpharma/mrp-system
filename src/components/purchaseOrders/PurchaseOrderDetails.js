@@ -7,7 +7,7 @@ import {
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
   List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu, ButtonGroup
 } from '@mui/material';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon, 

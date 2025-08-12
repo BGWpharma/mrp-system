@@ -1,0 +1,270 @@
+{
+  "title": "Production",
+  "taskList": {
+    "title": "Production Tasks",
+    "tabs": {
+      "taskList": "Task List",
+      "timeline": "Timeline",
+      "moReport": "MO Report",
+      "forms": "Forms",
+      "forecast": "Demand Forecast",
+      "calculator": "Calculator",
+      "workstations": "Workstations"
+    }
+  },
+  "forecast": {
+    "title": "Materials Demand Forecast",
+    "refresh": "Refresh",
+    "generateReport": "Generate CSV Report",
+    "search": "Search",
+    "timeRange": "Time Range",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "searchMaterial": "Search Material",
+    "filterByCategory": "Filter by Category",
+    "allCategories": "All Categories",
+    "selectDateRange": "Select date range and click \"Search\" to display materials demand forecast.",
+    "forecastPeriod": "Forecast for period: {{startDate}} - {{endDate}}",
+    "totalMaterials": "Total Number of Materials",
+    "materialsRequiringPurchase": "Materials Requiring Purchase",
+    "materialsWithShortageAfterDeliveries": "Materials with Shortage After Deliveries",
+    "estimatedTotalCost": "Estimated Total Cost",
+    "shortageValue": "Shortage Value",
+    "shortageValueAfterDeliveries": "Shortage Value After Deliveries",
+    "calculating": "Calculating demand forecast...",
+    "calculatingSteps": {
+      "preparing": "Preparing data...",
+      "processing": "Processing production tasks...",
+      "fetchingPrices": "Fetching supplier prices...",
+      "checkingOrders": "Checking orders...",
+      "finalizing": "Finalizing results..."
+    },
+    "successMessage": "Forecast has been successfully generated!",
+    "materialDetails": "Material Details",
+    "close": "Close",
+    "orderMaterial": "Order Material",
+    "table": {
+      "material": "Material",
+      "availableQuantity": "Available Quantity",
+      "requiredQuantity": "Required Quantity",
+      "balance": "Balance",
+      "expectedDeliveries": "Expected Deliveries",
+      "balanceAfterDeliveries": "Balance with Deliveries",
+      "estimatedCost": "Estimated Cost",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "thirtyDays": "30 days",
+    "category": "Category",
+    "noCategory": "No category",
+    "expectedDeliveriesDetails": "Expected deliveries ({{total}} {{unit}})",
+    "tasksUsingMaterial": "Tasks using this material",
+    "poNumber": "PO Number",
+    "deliveryDate": "Delivery Date",
+    "noDate": "No date",
+    "taskName": "Task",
+    "moNumber": "MO Number",
+    "productQuantity": "Product Quantity",
+    "materialPerUnit": "Material per Unit",
+    "executionDate": "Execution Date",
+    "statusLabels": {
+      "sufficient": "Sufficient Quantity",
+      "almostSufficient": "Nearly Sufficient",
+      "insufficient": "Insufficient Quantity"
+    },
+    "tooltips": {
+      "showDetails": "Show Details",
+      "orderMaterial": "Order Material"
+    },
+    "productionTasksInPeriod": "Production Tasks in Selected Period",
+    "taskWithoutName": "Task without name"
+  },
+  "taskDetails": {
+    "tabs": {
+      "basicData": "Basic Data",
+      "materialsAndCosts": "Materials and Costs",
+      "productionAndPlan": "Production and Plan",
+      "forms": "Forms",
+      "changeHistory": "Change History",
+      "finishedProductReport": "Finished Product Report"
+    },
+    "formTabs": {
+      "completedMO": "Completed MO Reports",
+      "productionControl": "Production Control Reports",
+      "productionShift": "Production Shift Reports"
+    }
+  },
+  "productionReport": {
+    "tabs": {
+      "taskList": "Task List",
+      "detailedTaskList": "Detailed Task List"
+    },
+    "tableHeaders": {
+      "taskName": "Task Name",
+      "moNumber": "MO No.",
+      "product": "Product",
+      "client": "Client",
+      "date": "Date",
+      "status": "Status",
+      "workTime": "Work Time (min)"
+    },
+    "noTasksInPeriod": "No production tasks in the selected period.",
+    "customerFilter": "Client",
+    "allCustomers": "All clients"
+  },
+  "taskListColumns": {
+    "taskName": "Task Name",
+    "product": "Product",
+    "quantityProgress": "Quantity / Remaining",
+    "status": "Status",
+    "materialsReserved": "Materials Reserved",
+    "plannedStart": "Planned Start",
+    "plannedEnd": "Planned End",
+    "unitCost": "Unit Cost",
+    "totalCost": "Total Cost",
+    "actions": "Actions"
+  },
+  "taskListLabels": {
+    "noTasksMessage": "No production tasks matching the criteria.",
+    "product": "Product:",
+    "quantityRemaining": "Quantity / Remaining:",
+    "remaining": "remaining:",
+    "stopProduction": "Stop Production"
+  },
+  "tooltips": {
+    "startProduction": "Start Production",
+    "stopProduction": "Stop Production",
+    "confirmConsumption": "Confirm Material Consumption"
+  },
+  "csvHeaders": {
+    "moNumber": "MO Number",
+    "taskName": "Task Name",
+    "product": "Product",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "remainingQuantity": "Remaining to Produce",
+    "status": "Status",
+    "plannedStart": "Planned Start",
+    "plannedEnd": "Planned End",
+    "estimatedDurationHours": "Estimated Production Time (hours)",
+    "productionTimePerUnit": "Time per Unit (min.)",
+    "orderNumber": "Customer Order Number",
+    "client": "Client",
+    "description": "Description",
+    "lotNumber": "Batch Number (LOT)",
+    "createdAt": "Created Date",
+    "createdBy": "Created By"
+  },
+  "timeline": {
+    "title": "Production Timeline",
+    "legend": "Legend:",
+    "instructionsZoom": "Shortcuts: Ctrl+mouse wheel - zoom, Shift+mouse wheel - horizontal scroll",
+    "editMode": "Edit Mode",
+    "editModeTooltip": "Enable to drag tasks in the timeline",
+    "snapToPrevious": "Smart Snapping",
+    "snapToPreviousTooltip": "Automatically snaps moved tasks to the closest tile - either to the end of the previous task or to the beginning of the next task on the same workstation",
+    "workstationColors": "Workstation Colors",
+    "groupBy": "Group by",
+    "groupByWorkstation": "Workstations",
+    "groupByOrder": "Orders",
+    "timeScale": "Time Scale",
+    "hourly": "Hourly",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "filters": "Filters",
+    "settings": "Settings",
+    "exportTimeline": "Export Timeline",
+    "refresh": "Refresh",
+    "zoom": {
+      "in": "Zoom In",
+      "out": "Zoom Out",
+      "reset": "Reset Zoom"
+    },
+    "slider": {
+      "timeRange": "Time Range: {{start}} - {{end}}"
+    },
+    "advancedFilters": {
+      "title": "Advanced Filters",
+      "productName": "Product Name",
+      "moNumber": "MO Number",
+      "orderNumber": "Order Number",
+      "startDate": "Start Date From",
+      "endDate": "Start Date To",
+      "apply": "Apply Filters",
+      "clear": "Clear Filters"
+    },
+    "edit": {
+      "title": "Edit Task",
+      "scheduledDate": "Start Date",
+      "endDate": "End Date",
+      "save": "Save Changes",
+      "cancel": "Cancel",
+      "saveSuccess": "Task has been updated",
+      "saveError": "Error saving task"
+    },
+    "tooltip": {
+      "product": "Product",
+      "moNumber": "MO Number",
+      "quantity": "Quantity",
+      "status": "Status",
+      "workstation": "Workstation",
+      "customer": "Customer",
+      "orderNumber": "Order Number",
+      "scheduledDate": "Planned Start",
+      "endDate": "Planned End",
+      "actualStartDate": "Actual Start",
+      "actualEndDate": "Actual End",
+      "duration": "Duration",
+      "priority": "Priority",
+      "description": "Description",
+      "cannotEdit": "Cannot edit - task completed"
+    },
+    "groups": {
+      "noWorkstation": "No Workstation",
+      "noOrder": "No Order"
+    },
+    "statuses": {
+      "scheduled": "Scheduled",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "onHold": "On Hold"
+    },
+    "messages": {
+      "loadingError": "Error loading timeline data",
+      "taskMoveError": "Error moving task",
+      "noTasksFound": "No tasks to display",
+      "refreshSuccess": "Timeline data has been refreshed",
+      "undoSuccess": "Last action undone",
+      "undoError": "Cannot undo action",
+      "noActionsToUndo": "No actions to undo"
+    },
+    "export": {
+      "title": "Export Timeline to Excel",
+      "description": "Configure timeline export parameters. The report will contain detailed schedule, visual timeline and statistics summary.",
+      "dateRange": "Date Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "customerFilters": "Customer Filters",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
+      "noCustomer": "No assigned customer",
+      "summary": "Export Summary",
+      "period": "Period",
+      "tasksToExport": "Tasks to Export",
+      "grouping": "Grouping",
+      "groupingByWorkstation": "By Workstations",
+      "groupingByOrder": "By Orders",
+      "export": "Export to Excel",
+      "cancel": "Cancel",
+      "generating": "Starting timeline report generation...",
+      "success": "Timeline report has been successfully generated and downloaded!",
+      "error": "An error occurred while generating the report",
+      "noTasks": "No tasks to export. Load timeline data.",
+      "noWorkstations": "No workstation data. Refresh the page and try again.",
+      "noTasksInDateRange": "No tasks in the selected date range.",
+      "buttonText": "Export Timeline"
+    }
+  }
+}

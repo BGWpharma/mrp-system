@@ -68,7 +68,7 @@ import {
 } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 const HallDataMachinesPage = () => {
   const { t } = useTranslation();

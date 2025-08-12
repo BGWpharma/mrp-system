@@ -1,0 +1,158 @@
+{
+  "title": "Asystent AI",
+  "buttons": {
+    "apiSettings": "Ustawienia API",
+    "configureApi": "Skonfiguruj API",
+    "configure": "Konfiguruj",
+    "details": "Szczegóły",
+    "topUpAccount": "Uzupełnij konto",
+    "showInstructions": "Pokaż instrukcje",
+    "hideInstructions": "Ukryj instrukcje"
+  },
+  "instructionsDialog": {
+    "title": "Instrukcje uzyskania klucza API OpenAI",
+    "configureApiKey": "Konfiguruj klucz API"
+  },
+  "settingsDialog": {
+    "title": "Konfiguracja API OpenAI",
+    "description": "Aby korzystać z GPT-4o, potrzebujesz klucza API OpenAI. Klucz będzie przechowywany w bazie danych Firebase i używany tylko do komunikacji z API OpenAI w kontekście tego asystenta.",
+    "apiKeyLabel": "Klucz API OpenAI",
+    "apiKeyPlaceholder": "sk-...",
+    "manageOpenAIAccount": "Zarządzaj kontem OpenAI",
+    "howToGetKey": {
+      "title": "Jak uzyskać klucz API:",
+      "step1": "Odwiedź stronę OpenAI API Keys",
+      "step2": "Zaloguj się lub utwórz konto",
+      "step3": "Kliknij \"Create new secret key\"",
+      "step4": "Skopiuj wygenerowany klucz (zaczyna się od \"sk-\")",
+      "step5": "Wklej klucz w pole powyżej"
+    },
+    "fullInstructions": "Pełne instrukcje",
+    "apiKeysLinkLabel": "Klucz API można uzyskać na stronie"
+  },
+  "quotaDialog": {
+    "title": "Problem z limitem API OpenAI",
+    "goToBilling": "Przejdź do rozliczeń OpenAI"
+  },
+  "snackbar": {
+    "demoMode": "Asystent działa w trybie demo - skonfiguruj klucz API OpenAI, aby używać GPT-4o",
+    "quotaExceeded": "Przekroczono limit dostępnych środków. Uzupełnij konto OpenAI, aby kontynuować korzystanie z asystenta AI."
+  },
+  "quota": {
+    "tooltip": "Pozostało {{remaining}} z {{limit}} wiadomości w tym miesiącu",
+    "title": "Przekroczono limit API OpenAI",
+    "alert": "System wykrył błąd związany z limitem lub wyczerpaniem środków na koncie OpenAI. Aby kontynuować korzystanie z asystenta AI, konieczne jest uzupełnienie konta.",
+    "explainerPrefix": "Komunikat błędu",
+    "explainerSuffix": "oznacza, że wystąpił jeden z poniższych problemów:",
+    "causes": {
+      "freeTier": {
+        "title": "Wyczerpanie darmowego limitu",
+        "desc": "Jeśli korzystasz z darmowego kredytu startowego, możliwe że został on wyczerpany."
+      },
+      "monthlyCap": {
+        "title": "Przekroczenie miesięcznego limitu wydatków",
+        "desc": "Jeśli ustawiłeś limit wydatków na koncie OpenAI, możliwe że został on osiągnięty."
+      },
+      "payment": {
+        "title": "Problem z metodą płatności",
+        "desc": "Jeśli wystąpił problem z metodą płatności, OpenAI mogło zawiesić dostęp do API."
+      },
+      "tooManyRequests": {
+        "title": "Błąd 429 (Too Many Requests)",
+        "desc": "Zbyt wiele zapytań w krótkim czasie. W tym przypadku odczekaj kilka minut i spróbuj ponownie."
+      }
+    },
+    "howTo": {
+      "title": "Jak rozwiązać problem?",
+      "step1": {
+        "title": "Sprawdź stan konta i metody płatności",
+        "desc": "Zaloguj się do panelu OpenAI i przejdź do sekcji rozliczeń, aby sprawdzić status swojego konta."
+      },
+      "step2": {
+        "title": "Uzupełnij środki lub dodaj metodę płatności",
+        "desc": "Upewnij się, że metoda płatności jest poprawna i aktywna. W razie potrzeby dodaj nowe środki."
+      },
+      "step3": {
+        "title": "Zwiększ miesięczny limit (jeśli dotyczy)",
+        "desc": "Jeśli ustaliłeś miesięczny limit wydatków, rozważ jego zwiększenie w ustawieniach konta."
+      },
+      "goToBilling": "Przejdź do rozliczeń OpenAI",
+      "apiErrorsDocs": "Dokumentacja błędów API"
+    },
+    "notice": "Uwaga: Koszt korzystania z modelu GPT-4o jest wyższy niż w przypadku starszych modeli. Jeśli chcesz zmniejszyć koszty, rozważ zmianę modelu w konfiguracji."
+  },
+  "alert": {
+    "configureApiNotice": "Dla pełnej funkcjonalności asystenta AI, skonfiguruj klucz API OpenAI."
+  },
+  "history": {
+    "title": "Historia konwersacji",
+    "newConversation": "Nowa konwersacja",
+    "empty": "Brak historii konwersacji",
+    "today": "Dzisiaj",
+    "clearConversation": "Wyczyść konwersację"
+  },
+  "welcome": {
+    "title": "Witaj w Asystencie AI dla systemu MRP",
+    "description": "Zadaj pytanie dotyczące danych w systemie, zamówień, stanów magazynowych lub innych aspektów działania Twojej firmy. Asystent przeanalizuje dane i udzieli odpowiedzi na podstawie aktualnych informacji.",
+    "hint": "💡 Możesz również załączyć pliki (dokumenty, obrazy, pliki tekstowe) do swojego zapytania używając przycisku załącznika.",
+    "dbAccessTitle": "Asystent ma teraz bezpośredni dostęp do bazy danych!",
+    "dbAccessDescription": "Możesz pytać o dane z modułów: Magazyn, Zamówienia, Produkcja, Dostawcy i Receptury. Asystent analizuje dane w czasie rzeczywistym i dostarcza aktualne odpowiedzi."
+  },
+  "loading": {
+    "replying": "Asystent odpowiada..."
+  },
+  "message": {
+    "you": "Ty",
+    "assistant": "Asystent AI"
+  },
+  "attachments": {
+    "label": "Załączniki:",
+    "title": "Załączniki ({{count}}):"
+  },
+  "input": {
+    "placeholder": "Zadaj pytanie do asystenta AI..."
+  },
+  "instructions": {
+    "title": "Jak uzyskać klucz API OpenAI dla GPT-4o",
+    "intro": "Aby korzystać z zaawansowanych funkcji asystenta AI opartych na GPT-4o, potrzebujesz klucza API OpenAI. Poniżej znajdziesz instrukcje, jak go uzyskać:",
+    "steps": {
+      "step1": {
+        "title": "Krok 1: Utwórz konto OpenAI",
+        "desc": "Odwiedź stronę https://platform.openai.com/signup i utwórz konto, jeśli jeszcze go nie masz."
+      },
+      "step2": {
+        "title": "Krok 2: Zaloguj się na swoje konto",
+        "desc": "Przejdź do https://platform.openai.com/login i zaloguj się na swoje konto OpenAI."
+      },
+      "step3": {
+        "title": "Krok 3: Przejdź do panelu API",
+        "desc": "Po zalogowaniu przejdź do sekcji API w panelu nawigacyjnym."
+      },
+      "step4": {
+        "title": "Krok 4: Dodaj metodę płatności",
+        "desc": "Aby korzystać z API OpenAI, musisz dodać metodę płatności. OpenAI oferuje darmowy kredyt dla nowych użytkowników, ale po jego wyczerpaniu będziesz musiał płacić za użycie API."
+      },
+      "step5": {
+        "title": "Krok 5: Wygeneruj klucz API",
+        "desc": "Przejdź do sekcji 'API keys' i kliknij 'Create new secret key'. Nadaj kluczowi nazwę opisową, np. 'MRP System'."
+      },
+      "step6": {
+        "title": "Krok 6: Skopiuj i zapisz klucz API",
+        "desc": "Skopiuj wygenerowany klucz API (zaczyna się od 'sk-'). UWAGA: Ten klucz będzie pokazany tylko raz, więc upewnij się, że go zapisałeś!"
+      },
+      "step7": {
+        "title": "Krok 7: Wprowadź klucz w ustawieniach asystenta",
+        "desc": "Wklej skopiowany klucz API w polu 'Klucz API OpenAI' w ustawieniach asystenta AI."
+      }
+    },
+    "important": {
+      "title": "Ważne informacje:",
+      "confidential": "Twój klucz API jest poufny - nie udostępniaj go nikomu.",
+      "billing": "OpenAI pobiera opłaty za użycie API na podstawie liczby tokenów (jednostek tekstu) przetwarzanych przez model.",
+      "gpt4oCost": "Model GPT-4o jest najbardziej zaawansowanym modelem oferowanym przez OpenAI i może generować wyższe koszty niż inne modele.",
+      "monitor": "Możesz monitorować swoje zużycie i koszty w panelu OpenAI w sekcji 'Usage'.",
+      "deactivate": "W każdej chwili możesz dezaktywować lub usunąć swój klucz API w panelu OpenAI."
+    },
+    "docsLinkLabel": "Aktualne informacje i dokumentacja API są dostępne na stronie:"
+  }
+}

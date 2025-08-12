@@ -24,7 +24,7 @@ import CalculatorPage from './CalculatorPage';
 import { initializeMissingCostFields } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const ProductionPage = () => {
   const { t } = useTranslation();

@@ -53,7 +53,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs } from '../../services/userService';
 
 // Styled components
@@ -104,7 +104,7 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 const Sidebar = ({ onToggle }) => {
   const location = useLocation();
   const { mode } = useTheme();
-  const { t } = useTranslation();
+  const { t } = useTranslation('sidebar');
   const [drawerWidth, setDrawerWidth] = useState(200);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [openSubmenu, setOpenSubmenu] = useState('');
@@ -185,20 +185,35 @@ const Sidebar = ({ onToggle }) => {
     }
   }, [isDrawerOpen, onToggle]);
   
+  // Stan do śledzenia czy to jest ręczne kliknięcie
+  const [isManualClick, setIsManualClick] = useState(false);
+  const previousPath = useRef(location.pathname);
+  
   useEffect(() => {
+    // Sprawdź czy ścieżka się zmieniła (prawdziwa nawigacja)
+    if (previousPath.current !== location.pathname) {
+      setIsManualClick(false);
+      previousPath.current = location.pathname;
+    }
+    
+    // Nie resetuj submenu jeśli użytkownik ręcznie kliknął w zakładkę
+    if (isManualClick) {
+      return;
+    }
+    
     // Ustawia początkowy stan submenu na podstawie aktualnej ścieżki
     if (location.pathname.startsWith('/production')) {
-      setOpenSubmenu(t('sidebar.production'));
+      setOpenSubmenu(t('production'));
     } else if (location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers')) {
-      setOpenSubmenu(t('sidebar.sales'));
+      setOpenSubmenu(t('sales'));
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders')) {
-      setOpenSubmenu(t('sidebar.inventory'));
+      setOpenSubmenu(t('inventory'));
     } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
-      setOpenSubmenu(t('sidebar.dashboard'));
+      setOpenSubmenu(t('dashboard'));
     } else if (location.pathname.startsWith('/hall-data')) {
-      setOpenSubmenu(t('sidebar.hallData'));
+      setOpenSubmenu(t('hallData'));
     }
-  }, [location.pathname, t]);
+  }, [location.pathname, t, isManualClick]);
   
   // Ładowanie ukrytych zakładek i podzakładek użytkownika
   useEffect(() => {
@@ -257,6 +272,9 @@ const Sidebar = ({ onToggle }) => {
   };
   
   const handleSubmenuClick = (menuTitle) => {
+    // Oznacz że to jest ręczne kliknięcie
+    setIsManualClick(true);
+    
     // Jeśli kliknięto w otwarte submenu, zamykamy je
     if (openSubmenu === menuTitle) {
       setOpenSubmenu('');
@@ -275,84 +293,86 @@ const Sidebar = ({ onToggle }) => {
   const allMenuItems = [
     { 
       id: 'ai-assistant',
-      text: t('sidebar.aiAssistant'),
+      text: t('aiAssistant'),
       icon: <AIAssistantIcon />,
       path: '/ai-assistant',
       hasSubmenu: false
     },
     { 
       id: 'dashboard',
-      text: t('sidebar.dashboard'), 
+      text: t('dashboard'), 
       icon: <DashboardIcon />, 
       path: '/',
       hasSubmenu: true,
       children: [
-        { text: t('sidebar.submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
-        { text: t('sidebar.submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
+        { text: t('submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
+        { text: t('submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
       id: 'hall-data',
-      text: t('sidebar.hallData'),
+      text: t('hallData'),
       icon: <FactoryIcon />,
       path: '/hall-data',
       hasSubmenu: true,
       children: [
-        { text: t('sidebar.submenu.hallData.environmentalConditions'), icon: <FactoryIcon />, path: '/hall-data/conditions' },
-        { text: t('sidebar.submenu.hallData.machines'), icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
+        { text: t('submenu.hallData.environmentalConditions'), icon: <FactoryIcon />, path: '/hall-data/conditions' },
+        { text: t('submenu.hallData.machines'), icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
       ]
     },
     { 
       id: 'sales',
-      text: t('sidebar.sales'),
+      text: t('sales'),
       icon: <CustomersIcon />,
       path: '/customers',
       hasSubmenu: true,
       children: [
-        { text: t('sidebar.submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
-        { text: t('sidebar.submenu.sales.customers'), icon: <CustomersIcon />, path: '/customers' },
-        { text: t('sidebar.submenu.sales.priceLists'), icon: <ListAltIcon />, path: '/sales/price-lists' },
-        { text: t('sidebar.submenu.sales.newProductionTask'), icon: <AddIcon />, path: '/production/create-from-order' },
-        { text: t('sidebar.submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
-        { text: t('sidebar.submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
+        { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
+        { text: t('submenu.sales.customers'), icon: <CustomersIcon />, path: '/customers' },
+        { text: t('submenu.sales.priceLists'), icon: <ListAltIcon />, path: '/sales/price-lists' },
+        { text: t('submenu.sales.newProductionTask'), icon: <AddIcon />, path: '/production/create-from-order' },
+        { text: t('submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
+        { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
       id: 'production',
-      text: t('sidebar.production'),
+      text: t('production'),
       icon: <ProductionIcon />,
       path: '/production',
       hasSubmenu: true,
       children: [
-        { text: t('sidebar.submenu.production.forms'), icon: <ListAltIcon />, path: '/production/forms' },
-        { text: t('sidebar.submenu.production.calculator'), icon: <CalculateIcon />, path: '/production/calculator' },
-        { text: t('sidebar.submenu.production.forecast'), icon: <ForecastIcon />, path: '/production/forecast' },
-        { text: t('sidebar.submenu.production.productionTasks'), icon: <ListIcon />, path: '/production' },
-        { text: t('sidebar.submenu.production.recipes'), icon: <RecipesIcon />, path: '/recipes' },
-        { text: t('sidebar.submenu.production.timeline'), icon: <AnalyticsIcon />, path: '/production/timeline' },
+        { text: t('submenu.production.forms'), icon: <ListAltIcon />, path: '/production/forms' },
+        { text: t('submenu.production.calculator'), icon: <CalculateIcon />, path: '/production/calculator' },
+        { text: t('submenu.production.forecast'), icon: <ForecastIcon />, path: '/production/forecast' },
+        { text: t('submenu.production.productionTasks'), icon: <ListIcon />, path: '/production' },
+        { text: t('submenu.production.recipes'), icon: <RecipesIcon />, path: '/recipes' },
+        { text: t('submenu.production.timeline'), icon: <AnalyticsIcon />, path: '/production/timeline' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
       id: 'inventory',
-      text: t('sidebar.inventory'), 
+      text: t('inventory'), 
       icon: <InventoryIcon />, 
       path: '/inventory', 
       badge: expiringItemsCount > 0 ? expiringItemsCount : null,
       hasSubmenu: true,
       children: [
-        { text: t('sidebar.submenu.inventory.cmr'), icon: <ShippingIcon />, path: '/inventory/cmr' },
-        { text: t('sidebar.submenu.inventory.suppliers'), icon: <SuppliersIcon />, path: '/suppliers' },
-        { text: t('sidebar.submenu.inventory.forms'), icon: <ListAltIcon />, path: '/inventory/forms' },
-        { text: t('sidebar.submenu.inventory.stocktaking'), icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
-        { text: t('sidebar.submenu.inventory.status'), icon: <WarehouseIcon />, path: '/inventory' },
-        { text: t('sidebar.submenu.inventory.expiryDates'), icon: <CalendarIcon />, path: '/inventory/expiry-dates', badge: expiringItemsCount > 0 ? expiringItemsCount : null },
-        { text: t('sidebar.submenu.inventory.componentOrders'), icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
+        { text: t('submenu.inventory.cmr'), icon: <ShippingIcon />, path: '/inventory/cmr' },
+        { text: t('submenu.inventory.suppliers'), icon: <SuppliersIcon />, path: '/suppliers' },
+        { text: t('submenu.inventory.forms'), icon: <ListAltIcon />, path: '/inventory/forms' },
+        { text: t('submenu.inventory.stocktaking'), icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
+        { text: t('submenu.inventory.status'), icon: <WarehouseIcon />, path: '/inventory' },
+        { text: t('submenu.inventory.expiryDates'), icon: <CalendarIcon />, path: '/inventory/expiry-dates', badge: expiringItemsCount > 0 ? expiringItemsCount : null },
+        { text: t('submenu.inventory.componentOrders'), icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     }
   ].sort((a, b) => a.text.localeCompare(b.text));
 
   // Filtrowanie menuItems na podstawie ukrytych zakładek użytkownika
   const menuItems = allMenuItems.filter(item => !hiddenTabs.includes(item.id));
+  
+
 
   return (
     <Drawer
@@ -600,14 +620,14 @@ const Sidebar = ({ onToggle }) => {
           }}
           onClick={() => setBugReportDialogOpen(true)}
         >
-          <Tooltip title={t('sidebar.reportBug')} placement="right" arrow>
+          <Tooltip title={t('reportBug')} placement="right" arrow>
             <ListItemIcon sx={{ minWidth: 36, color: 'error.main' }}>
               <BugReportIcon />
             </ListItemIcon>
           </Tooltip>
           {isDrawerOpen && (
             <ListItemText 
-              primary={t('sidebar.reportBug')} 
+              primary={t('reportBug')} 
               primaryTypographyProps={{ 
                 fontSize: '0.875rem',
                 fontWeight: 'medium',

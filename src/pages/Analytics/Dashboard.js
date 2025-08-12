@@ -40,7 +40,7 @@ import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp } from '../../utils/dateUtils';
 import Charts from './Charts';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // ✅ OPTYMALIZACJA: Cache dla danych analitycznych
 const analyticsCache = {

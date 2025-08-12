@@ -29,7 +29,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const PurchaseOrderList = () => {
   const { t } = useTranslation();

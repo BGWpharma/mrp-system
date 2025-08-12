@@ -2,7 +2,7 @@ import React from 'react';
 import { Container, Typography, Box } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import PurchaseOrderDetails from '../components/purchaseOrders/PurchaseOrderDetails';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../hooks/useTranslation';
 
 const PurchaseOrderDetailsPage = () => {
   const { id } = useParams();

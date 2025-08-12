@@ -1,0 +1,79 @@
+{
+  "title": "Dashboard",
+  "welcome": "Witaj, {{name}}",
+  "overview": "Przegląd",
+  "recentActivity": "Ostatnia aktywność",
+  "quickActions": "Szybkie akcje",
+  "refreshAll": "Odśwież wszystko",
+  "refreshing": "Odświeżanie...",
+  "refresh": "Odśwież",
+  "announcements": "Ogłoszenia",
+  "editAnnouncement": "Edytuj ogłoszenie",
+  "loadingAnnouncements": "Ładowanie ogłoszeń...",
+  "announcementPlaceholder": "Wpisz treść ogłoszenia dla wszystkich użytkowników...",
+  "announcementHelper": "Naciśnij Ctrl+Enter, aby zatwierdzić",
+  "save": "Zapisz",
+  "cancel": "Anuluj",
+  "noAnnouncements": "Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.",
+  "lastUpdate": "Ostatnia aktualizacja: {{date}}{{author}}",
+  "by": " przez {{name}}",
+  "cards": {
+    "recipes": {
+      "title": "Receptury",
+      "description": "Zarządzaj recepturami i składnikami",
+      "goTo": "Przejdź"
+    },
+    "production": {
+      "title": "Produkcja",
+      "description": "Planuj i zarządzaj produkcją",
+      "activeTasks": "{{count}} aktywnych zadań",
+      "goTo": "Przejdź"
+    },
+    "inventory": {
+      "title": "Magazyn",
+      "description": "Zarządzaj stanem magazynowym",
+      "goTo": "Przejdź"
+    },
+    "quality": {
+      "title": "Jakość",
+      "description": "Kontrola jakości produktów",
+      "goTo": "Przejdź"
+    },
+    "orders": {
+      "title": "Zamówienia klientów",
+      "description": "Zarządzaj zamówieniami klientów",
+      "ordersCount": "{{count}} zamówień ({{value}})",
+      "recentOrders": "Ostatnie zamówienia:"
+    },
+    "forms": {
+      "title": "Formularze",
+      "subtitle": "Formularze produkcyjne",
+      "description": "Zarządzaj formularzami produkcyjnymi",
+      "goTo": "Przejdź"
+    }
+  },
+  "production": {
+    "tasksInProgress": "Zadania produkcyjne w trakcie",
+    "seeAll": "Zobacz wszystkie",
+    "inProgress": "W trakcie",
+    "completed": "Ukończone",
+    "orders": "Zamówienia"
+  },
+  "analytics": {
+    "title": "Analityka",
+    "description": "Sprawdź szczegółową analitykę systemu w nowym, uproszczonym widoku. Monitoruj kluczowe wskaźniki dla magazynu, produkcji i zamówień.",
+    "availableStats": "Dostępne statystyki:",
+    "ordersAndSales": "Zamówienia i sprzedaż",
+    "inventoryLevels": "Stany magazynowe",
+    "productionTasks": "Zadania produkcyjne",
+    "goTo": "Przejdź"
+  },
+  "statuses": {
+    "new": "Nowe",
+    "inProgress": "W realizacji",
+    "readyToShip": "Gotowe do wysyłki",
+    "shipped": "Wysłane",
+    "delivered": "Dostarczone",
+    "cancelled": "Anulowane"
+  }
+}

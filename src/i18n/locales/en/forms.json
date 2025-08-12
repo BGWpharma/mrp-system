@@ -1,0 +1,37 @@
+{
+  "productionForms": {
+    "title": "Production Forms",
+    "description": "Forms, documents and tools available for supervisors and production operators",
+    "fillForm": "Fill form",
+    "viewResponses": "View responses",
+    "completedMO": {
+      "title": "Report - Completed MO",
+      "description": "Form for reporting completed production tasks (MO). Fill after completing production order.",
+      "tab": "Completed MO Reports"
+    },
+    "productionControl": {
+      "title": "Report - Production Control",
+      "description": "Form for reporting production quality control. Contains detailed information about production process and atmospheric conditions.",
+      "tab": "Production Control Reports"
+    },
+    "productionShift": {
+      "title": "Report - Production Shift",
+      "description": "Form for reporting work on production shift. Contains information about employees, products made and other activities.",
+      "tab": "Production Shift Reports"
+    }
+  },
+  "inventoryForms": {
+    "title": "Inventory Forms",
+    "description": "Forms, documents and tools available for warehouse employees",
+    "fillForm": "Fill form",
+    "viewResponses": "View responses",
+    "loadingReport": {
+      "title": "Report - Goods Loading",
+      "description": "Form documenting goods loading process. Contains employee identification, carrier information and vehicle technical condition."
+    },
+    "unloadingReport": {
+      "title": "Report - Goods Unloading",
+      "description": "Form documenting goods unloading process. Contains employee identification, supplier information and visual goods assessment."
+    }
+  }
+}

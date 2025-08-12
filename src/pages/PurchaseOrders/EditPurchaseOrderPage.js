@@ -5,7 +5,7 @@ import {
   Grid, Divider, Alert, TextField, IconButton, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { ArrowBack, Save, Delete, Add, ProductionQuantityLimits } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { 

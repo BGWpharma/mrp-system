@@ -29,7 +29,7 @@ import {
   Description as DescriptionIcon,
   CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { uploadBatchCertificate } from '../../services/inventory/batchService';

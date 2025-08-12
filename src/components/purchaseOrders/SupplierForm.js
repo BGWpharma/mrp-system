@@ -16,7 +16,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 import { getSupplierById, createSupplier, updateSupplier } from '../../services/supplierService';
 import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
 

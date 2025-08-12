@@ -1,21 +1,90 @@
 import { useTranslation as useI18nextTranslation } from 'react-i18next';
 
 /**
- * Niestandardowy hook do obsługi tłumaczeń
+ * Niestandardowy hook do obsługi tłumaczeń z kompatybilnością wsteczną
  * Rozszerza standardowy useTranslation z react-i18next o dodatkowe funkcjonalności
+ * Automatycznie mapuje stare klucze do nowych namespace'ów
  */
 export const useTranslation = (namespace) => {
   const { t, i18n, ready } = useI18nextTranslation(namespace);
 
   /**
-   * Funkcja do tłumaczenia z fallback do oryginalnego tekstu
-   * Jeśli klucz nie istnieje, zwraca oryginalny tekst zamiast klucza
+   * Funkcja do tłumaczenia z automatycznym mapowaniem do namespace'ów
+   * Zapewnia kompatybilność wsteczną ze starymi kluczami
    */
   const translate = (key, options = {}) => {
-    const translation = t(key, { ...options, fallback: key });
+    let translationKey = key;
+    
+    // Mapowanie starych kluczy do nowych namespace'ów
+    if (key && typeof key === 'string' && key.includes('.')) {
+      const [firstPart, ...restParts] = key.split('.');
+      const remainingKey = restParts.join('.');
+      
+      // Mapowanie głównych sekcji do namespace'ów
+      const namespaceMapping = {
+        'suppliers': 'suppliers',
+        'inventory': 'inventory',
+        'production': 'production', 
+        'orders': 'orders',
+        'invoices': 'invoices',
+        'customers': 'customers',
+        'recipes': 'recipes',
+        'machines': 'machines',
+        'purchaseOrders': 'purchaseOrders',
+        'cmr': 'cmr',
+        'aiAssistant': 'aiAssistant',
+        'dashboard': 'dashboard',
+        'auth': 'auth',
+        'navigation': 'navigation',
+        'common': 'common',
+        'forms': 'forms',
+        'calculator': 'calculator',
+        'priceLists': 'priceLists',
+        'reports': 'reports',
+        'analytics': 'reports',
+        'coReports': 'reports',
+        'environmentalConditions': 'environmentalConditions',
+        'expiryDates': 'expiryDates',
+        'stocktaking': 'stocktaking',
+        'purchaseInteractions': 'interactions',
+        'interactionDetails': 'interactions',
+        'sidebar': 'sidebar',
+        'productionForms': 'forms',
+        'inventoryForms': 'forms'
+      };
+      
+      // Sprawdź czy pierwszy część klucza pasuje do namespace'u
+      if (namespaceMapping[firstPart]) {
+        const targetNamespace = namespaceMapping[firstPart];
+        
+        // Strategia sprawdzania kluczy w kolejności priorytetów:
+        const keysToTry = [
+          `${targetNamespace}:${remainingKey}`,              // klucz bez prefiksu namespace'a (nowa struktura)
+          `${targetNamespace}:${firstPart}.${remainingKey}`, // pełna zagnieżdżona struktura (stara struktura)
+          `${targetNamespace}:${key}`,                       // cały klucz w namespace'ie
+          `common:${key}`,                                    // fallback do common
+          key                                                 // fallback do oryginalnego klucza
+        ];
+        
+        // Znajdź pierwszy istniejący klucz
+        for (const keyToTry of keysToTry) {
+          if (i18n.exists(keyToTry)) {
+            translationKey = keyToTry;
+            break;
+          }
+        }
+      } else {
+        // Jeśli nie znaleziono mapowania, spróbuj w common
+        if (i18n.exists(`common:${key}`)) {
+          translationKey = `common:${key}`;
+        }
+      }
+    }
+    
+    const translation = t(translationKey, { ...options, fallback: key });
     
     // Jeśli tłumaczenie jest równe kluczowi, prawdopodobnie nie zostało znalezione
-    if (translation === key && options.fallback) {
+    if (translation === translationKey && options.fallback) {
       return options.fallback;
     }
     

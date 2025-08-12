@@ -1,0 +1,55 @@
+{
+  "title": "Product Expiry Dates",
+  "backToInventory": "Back",
+  "loading": "Loading...",
+  "expiredProducts": {
+    "title": "Expired Products",
+    "alertMessage": "There {{count, plural, one {is} other {are}}} {{count}} expired {{count, plural, one {batch} other {batches}}} in the warehouse."
+  },
+  "thresholdSettings": {
+    "label": "Days threshold for expiry",
+    "description": "Shows products expiring within {{days}} days"
+  },
+  "search": {
+    "label": "Search",
+    "clear": "Clear"
+  },
+  "tabs": {
+    "expiring": "Expiring Soon ({{count}})",
+    "expired": "Expired ({{count}})"
+  },
+  "table": {
+    "headers": {
+      "product": "Product",
+      "batchNumber": "Batch Number",
+      "expiryDate": "Expiry Date",
+      "status": "Status",
+      "quantity": "Quantity",
+      "actions": "Actions"
+    },
+    "noData": "-",
+    "actions": {
+      "manageBatches": "Manage Batches",
+      "dispose": "Dispose"
+    }
+  },
+  "status": {
+    "noDate": "No Date",
+    "expired": "Expired",
+    "expiringSoon": "Expiring Soon",
+    "current": "Current"
+  },
+  "noResults": {
+    "expiring": {
+      "withSearch": "No search results for products expiring soon.",
+      "withoutSearch": "No products expiring soon."
+    },
+    "expired": {
+      "withSearch": "No search results for expired products.",
+      "withoutSearch": "No expired products."
+    }
+  },
+  "errors": {
+    "fetchData": "Error loading data: {{message}}"
+  }
+}

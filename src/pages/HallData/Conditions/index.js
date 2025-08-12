@@ -57,7 +57,7 @@ import {
   Timeline as TimelineIcon
 } from '@mui/icons-material';
 import { format, subHours, subDays, subWeeks, subMonths, isValid } from 'date-fns';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 const HallDataConditionsPage = () => {
   const { t } = useTranslation();

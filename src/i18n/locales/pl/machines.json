@@ -1,0 +1,70 @@
+{
+  "title": "Maszyny - monitoring",
+  "refreshData": "Odśwież dane",
+  "availableMachines": "Dostępne maszyny",
+  "noAvailableMachines": "Brak dostępnych maszyn",
+  "lastMeasurement": "Ostatni pomiar",
+  "selectMachine": "Wybierz maszynę, aby zobaczyć szczegóły",
+  "machineNotFound": "Nie znaleziono danych dla wybranej maszyny",
+  "unidentifiedMachine": "Niezidentyfikowana maszyna",
+  "tabs": {
+    "details": "Szczegóły",
+    "history": "Historia"
+  },
+  "status": {
+    "ok": "OK",
+    "errors": "Błędy",
+    "noData": "Brak danych"
+  },
+  "fields": {
+    "duration": "Czas trwania",
+    "totalReadings": "Całkowita ilość odczytów",
+    "nonEmptyReadings": "Niepuste odczyty",
+    "uniqueProducts": "Unikalne produkty",
+    "startTime": "Czas rozpoczęcia",
+    "endTime": "Czas zakończenia",
+    "time": "Czas",
+    "readings": "Odczyty",
+    "averageWeight": "Średnia waga produktu",
+    "okNokProducts": "OK/NOK produktów",
+    "status": "Status"
+  },
+  "weightStats": {
+    "title": "Statystyki wagi",
+    "averageWeight": "Średnia waga",
+    "minWeight": "Min. waga",
+    "maxWeight": "Max. waga",
+    "median": "Mediana",
+    "stdDev": "Odchylenie std.",
+    "count": "Ilość",
+    "rawReadings": "Surowe odczyty wagi",
+    "productInfo": "Informacje o produkcie (waga)",
+    "okReadings": "OK",
+    "nokReadings": "NOK",
+    "readings": "odczytów",
+    "products": "produktów"
+  },
+  "history": {
+    "filterByDate": "Filtruj według daty",
+    "selectDate": "Wybierz datę",
+    "reset": "Resetuj",
+    "filter": "Filtruj",
+    "date": "Data",
+    "noData": "Brak danych historycznych dla tej maszyny",
+    "noDataForDate": "Brak danych historycznych dla {{date}}",
+    "tableLabel": "tabela historii"
+  },
+  "formats": {
+    "noData": "Brak danych",
+    "invalidDate": "Nieprawidłowa data",
+    "grams": "g",
+    "hours": "h",
+    "minutes": "min"
+  },
+  "permissions": {
+    "denied": "Brak uprawnień do odczytu danych z bazy. Skontaktuj się z administratorem systemu."
+  },
+  "errors": {
+    "loadingError": "Wystąpił błąd podczas pobierania danych historycznych"
+  }
+}

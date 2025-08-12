@@ -1,0 +1,70 @@
+{
+  "title": "Machines - monitoring",
+  "refreshData": "Refresh data",
+  "availableMachines": "Available machines",
+  "noAvailableMachines": "No available machines",
+  "lastMeasurement": "Last measurement",
+  "selectMachine": "Select a machine to see details",
+  "machineNotFound": "No data found for selected machine",
+  "unidentifiedMachine": "Unidentified machine",
+  "tabs": {
+    "details": "Details",
+    "history": "History"
+  },
+  "status": {
+    "ok": "OK",
+    "errors": "Errors",
+    "noData": "No data"
+  },
+  "fields": {
+    "duration": "Duration",
+    "totalReadings": "Total readings",
+    "nonEmptyReadings": "Non-empty readings",
+    "uniqueProducts": "Unique products",
+    "startTime": "Start time",
+    "endTime": "End time",
+    "time": "Time",
+    "readings": "Readings",
+    "averageWeight": "Average product weight",
+    "okNokProducts": "OK/NOK products",
+    "status": "Status"
+  },
+  "weightStats": {
+    "title": "Weight statistics",
+    "averageWeight": "Average weight",
+    "minWeight": "Min. weight",
+    "maxWeight": "Max. weight",
+    "median": "Median",
+    "stdDev": "Std. deviation",
+    "count": "Count",
+    "rawReadings": "Raw weight readings",
+    "productInfo": "Product information (weight)",
+    "okReadings": "OK",
+    "nokReadings": "NOK",
+    "readings": "readings",
+    "products": "products"
+  },
+  "history": {
+    "filterByDate": "Filter by date",
+    "selectDate": "Select date",
+    "reset": "Reset",
+    "filter": "Filter",
+    "date": "Date",
+    "noData": "No historical data for this machine",
+    "noDataForDate": "No historical data for {{date}}",
+    "tableLabel": "history table"
+  },
+  "formats": {
+    "noData": "No data",
+    "invalidDate": "Invalid date",
+    "grams": "g",
+    "hours": "h",
+    "minutes": "min"
+  },
+  "permissions": {
+    "denied": "No permissions to read data from database. Contact system administrator."
+  },
+  "errors": {
+    "loadingError": "An error occurred while loading historical data"
+  }
+}

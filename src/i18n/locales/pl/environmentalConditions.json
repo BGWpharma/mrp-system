@@ -1,0 +1,45 @@
+{
+  "title": "Warunki środowiskowe",
+  "sensor": "Czujnik",
+  "timeRange": "Zakres czasu",
+  "view": "Widok",
+  "refreshData": "Odśwież dane",
+  "temperature": "Temperatura",
+  "humidity": "Wilgotność",
+  "dataRange": "Zakres danych",
+  "chartHistory": "Historia odczytów",
+  "lastReading": "Ostatni odczyt",
+  "noHistoricalData": "Brak danych historycznych",
+  "startDate": "Data początkowa",
+  "endDate": "Data końcowa",
+  "timeRanges": {
+    "lastHour": "Ostatnia godzina",
+    "last6Hours": "Ostatnie 6 godzin",
+    "last12Hours": "Ostatnie 12 godzin",
+    "today": "Dzisiaj",
+    "lastDay": "Ostatni dzień",
+    "lastWeek": "Ostatni tydzień",
+    "lastMonth": "Ostatni miesiąc",
+    "custom": "Niestandardowy"
+  },
+  "chartTypes": {
+    "line": "Linia",
+    "area": "Obszar"
+  },
+  "errors": {
+    "permissionDenied": "Brak uprawnień do bazy danych Firebase",
+    "permissionDeniedDescription": "Wykryto błąd \"permission_denied\" podczas dostępu do danych w Realtime Database.",
+    "troubleshooting": "Aby rozwiązać ten problem:",
+    "loginToConsole": "Zaloguj się do konsoli Firebase:",
+    "selectProject": "Wybierz projekt \"bgw-mrp-system\"",
+    "goToRealtimeDb": "Przejdź do sekcji \"Realtime Database\"",
+    "clickRulesTab": "Kliknij zakładkę \"Reguły\"",
+    "changeRules": "Zmień reguły, aby umożliwić odczyt danych (na potrzeby testów możesz ustawić dostęp publiczny):",
+    "productionWarning": "W środowisku produkcyjnym zaleca się bardziej rygorystyczne reguły bezpieczeństwa.",
+    "noSensorData": "Brak danych z czujników w bazie Firebase. Upewnij się, że:",
+    "checkRealtimeDb": "Masz skonfigurowaną bazę Firebase Realtime Database",
+    "checkDataStructure": "Dane są zapisywane w strukturze sensors/{device_id}",
+    "checkHistoryStructure": "Dane historyczne są zapisywane w history/{device_id}",
+    "exampleDataStructure": "Przykładowa struktura danych:"
+  }
+}

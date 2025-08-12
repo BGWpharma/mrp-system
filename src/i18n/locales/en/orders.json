@@ -1,0 +1,497 @@
+{
+  "orders": {
+    "title": "Customer Orders",
+    "newOrder": "New Order",
+    "manageCustomers": "Manage Customers",
+    "searchOrders": "Search orders...",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting...",
+    "filtersToggle": "Filters",
+    "refreshValues": "Refresh Values",
+    "refreshing": "Refreshing...",
+    "applyFilters": "Apply Filters",
+    "reset": "Reset",
+    "noOrders": "No orders",
+    "table": {
+      "details": "Details",
+      "number": "Number",
+      "customer": "Customer",
+      "status": "Status",
+      "date": "Date",
+      "deliveryDeadline": "Delivery Deadline",
+      "value": "Value",
+      "actions": "Actions"
+    },
+    "filters": {
+      "status": "Status",
+      "all": "All",
+      "fromDate": "From Date",
+      "toDate": "To Date",
+      "customer": "Customer",
+      "allCustomers": "All Customers"
+    },
+    "actions": {
+      "edit": "Edit",
+      "details": "Details",
+      "delete": "Delete"
+    },
+    "expandedDetails": {
+      "orderDetails": "Order Details",
+      "contact": "Contact:",
+      "email": "Email:",
+      "phone": "Phone:",
+      "address": "Address:",
+      "paymentInfo": "Payment Information:",
+      "paymentMethod": "Method:",
+      "paymentStatus": "Status:",
+      "delivery": "Delivery:",
+      "products": "Products:",
+      "refreshMO": "Refresh MO",
+      "refreshCMR": "Refresh CMR",
+      "product": "Product",
+      "quantity": "Quantity",
+      "reserved": "Reserved",
+      "price": "Price",
+      "value": "Value",
+      "mo": "MO",
+      "linkedPurchaseOrders": "Linked Purchase Orders:",
+      "refreshPOData": "Refresh PO Data",
+      "poNumber": "PO Number",
+      "supplier": "Supplier",
+      "poValue": "Value",
+      "poStatus": "Status",
+      "noPurchaseOrders": "No linked purchase orders.",
+      "valueSummary": "Value Summary:",
+      "productsValue": "Products Value:",
+      "deliveryCost": "Delivery Cost:",
+      "totalValue": "Total Value:",
+      "withoutPO": "(without PO value)",
+      "changeStatus": "Change Status:"
+    },
+    "dialogs": {
+      "deleteConfirmation": {
+        "title": "Are you sure you want to delete this order?",
+        "description": "Order {{number}} placed by {{customer}} worth {{value}} will be permanently deleted.",
+        "cancel": "Cancel",
+        "confirm": "Delete"
+      },
+      "statusChange": {
+        "title": "Change Order Status",
+        "description": "Change order {{number}} status from \"{{currentStatus}}\" to \"{{newStatus}}\"?",
+        "newTitle": "Change Order Status",
+        "selectStatus": "Select new status for order:",
+        "orderNumber": "Number:",
+        "status": "Status",
+        "cancel": "Cancel",
+        "confirm": "Change Status",
+        "update": "Update"
+      }
+    },
+    "pagination": {
+      "rowsPerPage": "Rows per page:",
+      "displayedRows": "{{from}}-{{to}} of {{count}}"
+    },
+    "notifications": {
+      "orderDeleted": "Order has been deleted",
+      "deleteError": "Error deleting order: {{error}}",
+      "fetchError": "Failed to fetch orders list",
+      "customersError": "Error fetching customers:",
+      "customerOrdersFilter": "Showing orders for customer: {{customerName}}",
+      "refreshingMO": "Refreshing MO data...",
+      "moRefreshed": "MO data has been refreshed",
+      "moRefreshError": "Failed to refresh MO data",
+      "noMOData": "No MO data to refresh",
+      "moSaveError": "Failed to save updated MO data",
+      "refreshingCMR": "Refreshing CMR data...",
+      "cmrRefreshed": "CMR data has been refreshed. Processed {{cmrs}} CMR, updated {{items}} items with {{references}} CMR references.",
+      "cmrRefreshError": "Failed to refresh CMR data: {{error}}",
+      "refreshingValues": "Refreshing values before export...",
+      "valuesRefreshed": "Refreshed values for {{count}} orders",
+      "valuesRefreshError": "Error occurred while refreshing values",
+      "exportSuccess": "Refreshed values and exported {{items}} items from {{orders}} orders to CSV file",
+      "exportError": "Failed to export orders to CSV",
+      "exportErrorGeneral": "An error occurred during export: {{error}}",
+      "statusUpdated": "Order status has been updated",
+      "statusUpdateError": "Failed to update order status"
+    },
+    "constants": {
+      "noCustomerData": "No customer data"
+    }
+  },
+  "orderDetails": {
+    "title": "Order Details",
+    "orderNumber": "Order Number",
+    "orderDate": "Order Date",
+    "expectedDelivery": "Expected Delivery",
+    "completed": "Completed",
+    "totalValue": "Total Value",
+    "refreshOrder": "Refresh order data",
+    "sections": {
+      "customerData": "Customer Data",
+      "paymentAndDelivery": "Payment and Delivery",
+      "products": "Products",
+      "statusHistory": "Status Change History",
+      "additionalCosts": "Additional Costs",
+      "documents": "Documents",
+      "productionTasks": "Production Tasks",
+      "purchaseOrders": "Related Purchase Orders",
+      "invoices": "Invoices",
+      "cmrDocuments": "CMR Documents",
+      "status": "Status",
+      "deliveryProof": "Delivery Proof",
+      "comments": "Comments",
+      "relatedInvoices": "Invoices related to order",
+      "relatedCmrDocuments": "CMR documents related to order",
+      "relatedPurchaseOrders": "Related Purchase Orders"
+    },
+    "customerInfo": {
+      "noCustomerName": "No customer name",
+      "email": "Email",
+      "phone": "Phone",
+      "shippingAddress": "Shipping Address"
+    },
+    "payment": {
+      "paymentMethod": "Payment Method",
+      "paymentStatus": "Payment Status",
+      "deliveryMethod": "Delivery Method",
+      "deliveryCost": "Delivery Cost",
+      "unpaid": "Unpaid"
+    },
+    "table": {
+      "product": "Product",
+      "quantity": "Quantity",
+      "shipped": "Shipped",
+      "price": "Price",
+      "value": "Value",
+      "priceList": "Price List",
+      "productionStatus": "Production Status",
+      "productionCost": "Production Cost",
+      "profit": "Profit",
+      "totalItemValue": "Total Item Value",
+      "totalCostPerUnit": "Total Cost/Unit",
+      "fullProductionCostPerUnit": "Full Prod. Cost/Unit",
+      "actions": "Actions"
+    },
+    "productionStatus": {
+      "noTasks": "No tasks",
+      "completed": "Completed ({{count}})",
+      "cancelled": "Cancelled ({{count}})",
+      "inProgress": "In Progress ({{count}})",
+      "planned": "Planned ({{count}})",
+      "mixed": "Mixed ({{count}})"
+    },
+    "paymentStatusLabels": {
+      "unpaid": "Unpaid",
+      "partiallyPaid": "Partially Paid",
+      "paid": "Paid"
+    },
+    "tooltips": {
+      "printLabel": "Print label",
+      "fullProductionCostPriceList": "Full production cost per unit (all materials - price list item)",
+      "fullProductionCostRegular": "Full production cost per unit (all materials + unit price)",
+      "calculatedRealTime": "calculated in real time",
+      "productionTaskCost": "Production task cost",
+      "refreshProductionTasks": "Refresh production task data",
+      "refreshInvoicesList": "Refresh invoices list",
+      "refreshCmrDocuments": "Refresh CMR documents list"
+    },
+    "deliveryProof": {
+      "altText": "Delivery proof",
+      "clickToOpen": "Click the \"Open\" button to view the document.",
+      "cannotDisplayInBrowser": "Document in a format that cannot be displayed in the browser.",
+      "uploading": "Uploading...",
+      "addFile": "Add file"
+    },
+    "priceListLabels": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "cmrStatuses": {
+      "draft": "Draft",
+      "issued": "Issued",
+      "inTransit": "In Transit",
+      "delivered": "Delivered",
+      "completed": "Completed",
+      "canceled": "Canceled",
+      "unknown": "Unknown"
+    },
+    "productionTasksTable": {
+      "noTasks": "No related production tasks",
+      "moNumber": "MO Number",
+      "taskName": "Task Name",
+      "product": "Product",
+      "quantity": "Quantity",
+      "status": "Status",
+      "batchNumber": "Batch Number",
+      "actions": "Actions",
+      "details": "Details",
+      "batchNumberTooltip": "Production batch number",
+      "noLotNumber": "No LOT number"
+    },
+    "invoicesTable": {
+      "createInvoice": "Create Invoice",
+      "noInvoices": "No invoices related to this order",
+      "invoiceNumber": "Invoice Number",
+      "issueDate": "Issue Date",
+      "dueDate": "Due Date",
+      "paymentStatus": "Payment Status",
+      "value": "Value",
+      "actions": "Actions",
+      "details": "Details"
+    },
+    "cmrTable": {
+      "createCmr": "Create CMR",
+      "noCmrDocuments": "No CMR documents related to this order",
+      "cmrNumber": "CMR Number",
+      "issueDate": "Issue Date",
+      "deliveryDate": "Delivery Date",
+      "recipient": "Recipient",
+      "status": "Status",
+      "actions": "Actions",
+      "details": "Details",
+      "notSet": "Not set"
+    },
+    "actions": {
+      "edit": "Edit",
+      "back": "Back",
+      "print": "Print",
+      "sendEmail": "Send Email",
+      "addDocument": "Add Document",
+      "addPurchaseOrder": "Add Purchase Order",
+      "generateLabel": "Generate Label",
+      "refreshProductionCosts": "Refresh production task data"
+    },
+    "statusHistory": {
+      "title": "Status Change History",
+      "noHistory": "No status change history",
+      "changedBy": "Changed by",
+      "date": "Date",
+      "from": "from",
+      "to": "to",
+      "dateTime": "Date and Time",
+      "previousStatus": "Previous Status",
+      "newStatus": "New Status",
+      "whoChanged": "Who Changed",
+      "noDate": "No date"
+    },
+    "additionalCosts": {
+      "title": "Additional Costs and Discounts",
+      "name": "Name",
+      "value": "Value",
+      "noAdditionalCosts": "No additional costs",
+      "total": "Total additional costs",
+      "discounts": "Discounts"
+    },
+    "documents": {
+      "title": "Order Documents",
+      "upload": "Upload File",
+      "noDocuments": "No documents",
+      "filename": "Filename",
+      "uploadedBy": "Uploaded by",
+      "uploadDate": "Upload Date",
+      "size": "Size"
+    },
+    "notifications": {
+      "orderNotFound": "Order not found",
+      "loadError": "Error loading order details",
+      "documentUploaded": "Document uploaded",
+      "documentUploadError": "Error uploading document",
+      "documentDeleted": "Document deleted",
+      "documentDeleteError": "Error deleting document",
+      "productionTasksRemoved": "Removed {{count}} non-existent production tasks from order",
+      "refreshSuccess": "Order data has been refreshed",
+      "refreshError": "Error refreshing data",
+      "productionCostsRefreshed": "Production cost data has been refreshed",
+      "noProductionTasks": "No production tasks to refresh",
+      "productionCostsRefreshError": "Error refreshing production cost data",
+      "migrationStarted": "Starting CMR data migration...",
+      "migrationSuccess": "Migration completed successfully. Migrated {{count}} orders.",
+      "migrationError": "An error occurred during CMR data migration",
+      "documentUploadSuccess": "Delivery proof uploaded successfully",
+      "documentUploadGenericError": "An error occurred while uploading file",
+      "documentDeleteSuccess": "Delivery proof deleted",
+      "documentDeleteGenericError": "An error occurred while deleting file",
+      "invalidDriveLink": "Enter a valid Google Drive link",
+      "linkMustBeGoogleDrive": "Link must be from Google Drive",
+      "driveLinkAdded": "Google Drive link added as delivery proof",
+      "driveLinkAddError": "An error occurred while adding link",
+      "invoicesLoadError": "Failed to load invoices related to order",
+      "cmrDocumentsLoadError": "Failed to load CMR documents related to order",
+      "emailSent": "Email sent",
+      "emailError": "Error sending email"
+    },
+    "dialogs": {
+      "purchaseOrder": {
+        "title": "Assign Purchase Order",
+        "selectLabel": "Select purchase order",
+        "unknownSupplier": "Unknown supplier",
+        "noAvailableOrders": "No available purchase orders that can be assigned.",
+        "assign": "Assign",
+        "cancel": "Cancel"
+      },
+      "driveLink": {
+        "title": "Add Google Drive Link",
+        "description": "Enter a link to a document in Google Drive that will serve as delivery proof.",
+        "linkLabel": "Google Drive Link",
+        "placeholder": "https://drive.google.com/file/d/...",
+        "helperText": "Link must be from Google Drive and publicly accessible",
+        "add": "Add",
+        "cancel": "Cancel"
+      },
+      "productLabel": {
+        "title": "Select Product for Label",
+        "selectedProduct": "Selected product: {{name}}",
+        "selectProduct": "Select a product from the list for which you want to print a label:",
+        "productLabel": "Product",
+        "printLabel": "Print Label",
+        "cancel": "Cancel"
+      }
+    }
+  },
+  "orderForm": {
+    "title": {
+      "new": "New Order",
+      "edit": "Edit Order"
+    },
+    "buttons": {
+      "back": "Back",
+      "save": "Save",
+      "saving": "Saving...",
+      "addProduct": "Add Product",
+      "calculating": "Calculating...",
+      "calculateEstimatedCosts": "Calculate Estimated Costs",
+      "generating": "Generating...",
+      "generatePurchaseOrders": "Generate Purchase Orders",
+      "creating": "Creating...",
+      "createPurchaseOrders": "Create Purchase Orders",
+      "addCost": "Add Cost",
+      "addDiscount": "Add Discount",
+      "uploading": "Uploading...",
+      "addFile": "Add File",
+      "addGoogleDriveLink": "Add Google Drive Link",
+      "addInvoice": "Add Invoice",
+      "cancel": "Cancel",
+      "add": "Add",
+      "refreshPurchaseOrders": "Refresh PO Data",
+      "assignExistingPO": "Assign Existing PO",
+      "assign": "Assign"
+    },
+    "labels": {
+      "orderNumber": "Customer Order Number",
+      "orderStatus": "Order Status",
+      "client": "Client",
+      "orderDate": "Order Date",
+      "clientEmail": "Client Email",
+      "clientPhone": "Client Phone",
+      "shippingAddress": "Shipping Address",
+      "expectedDeliveryDate": "Expected Delivery Date",
+      "paymentMethod": "Payment Method",
+      "paymentStatus": "Payment Status",
+      "deliveryMethod": "Delivery Method",
+      "deliveryCost": "Delivery Cost",
+      "currency": "Currency",
+      "deliveryProof": "Delivery Proof",
+      "googleDriveLink": "Google Drive Link",
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date"
+    },
+    "sections": {
+      "basicData": "Basic Data",
+      "products": "Products",
+      "paymentAndDelivery": "Payment and Delivery",
+      "notes": "Notes",
+      "deliveryProof": "Delivery Proof",
+      "orderSummary": "Order Value Summary",
+      "additionalCosts": "Additional Costs",
+      "relatedPurchaseOrders": "Related Purchase Orders",
+      "invoices": "Invoices"
+    },
+    "table": {
+      "productRecipe": "Product / Recipe",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "priceEUR": "Price EUR",
+      "value": "Value",
+      "totalCostPerUnit": "Total Cost/Unit",
+      "fullProductionCostPerUnit": "Full Prod. Cost/Unit"
+    },
+    "tooltips": {
+      "addNewClient": "Add New Client",
+      "fullProductionCostPerUnit": "Full production cost per unit (all materials regardless of 'include' flag)"
+    },
+    "placeholders": {
+      "deliveryMethod": "e.g. Courier, Personal pickup",
+      "notes": "Additional information, notes...",
+      "invoiceNumber": "Invoice Number",
+      "enterInvoiceNumber": "Enter invoice number",
+      "addItemDescription": "Add item description..."
+    },
+    "summary": {
+      "productsValue": "Products Value",
+      "deliveryCost": "Delivery Cost",
+      "additionalCosts": "Additional Costs",
+      "discounts": "Discounts",
+      "totalOrderValue": "Total Order Value",
+      "purchaseOrdersValue": "Purchase Orders Value",
+      "total": "Total"
+    },
+    "messages": {
+      "documentNotDisplayable": "Document in a format that cannot be displayed in the browser. Click the \"Open\" button to view the document.",
+      "noDeliveryProof": "No delivery proof attached. Add a scan, photo, or link to a document confirming delivery.",
+      "noPurchaseOrders": "No related purchase orders. Click \"Generate Purchase Orders\" to automatically create orders for recipe materials.",
+      "noInvoices": "No invoices. Use the button above to add an invoice.",
+      "noAdditionalCosts": "No additional costs or discounts. Use the buttons above to add them."
+    },
+    "dialogs": {
+      "generatePurchaseOrders": {
+        "title": "Generate Purchase Orders",
+        "description": "The system will generate purchase orders for materials needed to produce order items that have recipes. Purchase orders will be created and linked to this customer order.",
+        "materialsLabel": "Materials to order"
+      },
+      "addClient": {
+        "title": "Add New Client"
+      },
+      "addGoogleDriveLink": {
+        "title": "Add Google Drive Link"
+      },
+      "assignPurchaseOrder": {
+        "title": "Assign Purchase Order"
+      }
+    },
+    "invoices": {
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date",
+      "status": "Status",
+      "amount": "Amount",
+      "paidAmount": "Paid Amount"
+    },
+    "additionalCosts": {
+      "description": "Description",
+      "amount": "Amount",
+      "currency": "Currency",
+      "vat": "VAT",
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date",
+      "exchangeRate": "Exchange Rate"
+    },
+    "helperText": {
+      "invoiceDate": "Invoice issue date"
+    },
+    "itemDetails": {
+      "title": "Item Details",
+      "description": "Description",
+      "fromPriceList": "From Price List",
+      "productionTask": "Production Task",
+      "productionCost": "Production Cost",
+      "profit": "Profit",
+      "lastCost": "Last Cost",
+      "totalItemValue": "Total Item Value",
+      "estimated": "Estimated",
+      "estimatedMaterialsCost": "Estimated materials cost",
+      "basedOnMaterials": "based on {{count}} materials",
+      "currencyConversionWarning": "Note: Some prices have been converted from other currencies to EUR according to NBP exchange rates",
+      "date": "Date",
+      "convertedFromOtherCurrencies": "converted from other currencies"
+    }
+  }
+}

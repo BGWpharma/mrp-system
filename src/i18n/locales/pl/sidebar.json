@@ -1,0 +1,45 @@
+{
+  "aiAssistant": "Asystent AI",
+  "dashboard": "Dashboard",
+  "hallData": "Parametry hali",
+  "sales": "Sprzedaż",
+  "production": "Produkcja",
+  "inventory": "Stany",
+  "reportBug": "Zgłoś błąd",
+  "submenu": {
+    "dashboard": {
+      "main": "Główny",
+      "analytics": "Analityka"
+    },
+    "hallData": {
+      "environmentalConditions": "Warunki środowiskowe",
+      "machines": "Maszyny"
+    },
+    "sales": {
+      "invoices": "Faktury",
+      "customers": "Klienci",
+      "priceLists": "Listy cenowe",
+      "newProductionTask": "Nowe zadanie produkcyjne",
+      "coReports": "Raporty CO",
+      "customerOrders": "Zamówienia klientów"
+    },
+    "production": {
+      "forms": "Formularze",
+      "calculator": "Kalkulator",
+      "forecast": "Prognoza",
+      "productionTasks": "Zadania produkcyjne",
+      "recipes": "Receptury",
+      "timeline": "Harmonogram"
+    },
+    "inventory": {
+      "cmr": "CMR",
+      "suppliers": "Dostawcy",
+      "forms": "Formularze",
+      "purchaseInteractions": "Interakcje zakupowe",
+      "stocktaking": "Inwentaryzacja",
+      "status": "Stan",
+      "expiryDates": "Terminy ważności",
+      "componentOrders": "Zamówienia komponentów"
+    }
+  }
+}

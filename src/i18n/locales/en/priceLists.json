@@ -1,0 +1,122 @@
+{
+  "title": "Customer Price Lists",
+  "searchPlaceholder": "Search price list...",
+  "newPriceList": "New price list",
+  "noPriceLists": "No price lists found. Click \"New price list\" to create the first one.",
+  "form": {
+    "newTitle": "New price list",
+    "editTitle": "Edit price list",
+    "name": "Price list name",
+    "customer": "Customer",
+    "currency": "Currency",
+    "active": "Active",
+    "validFrom": "Valid from date",
+    "validTo": "Valid to date",
+    "description": "Description",
+    "cancel": "Cancel",
+    "create": "Create price list",
+    "saveChanges": "Save changes",
+    "selectCustomer": "Select customer"
+  },
+  "details": {
+    "notFound": "Price list not found",
+    "backToLists": "Back to price lists",
+    "edit": "Edit",
+    "delete": "Delete",
+    "customer": "Customer",
+    "status": "Status",
+    "currency": "Currency",
+    "createdAt": "Created date",
+    "validFrom": "Valid from",
+    "validTo": "Valid to",
+    "description": "Description",
+    "items": "Price list items"
+  },
+  "table": {
+    "name": "Name",
+    "customer": "Customer",
+    "currency": "Currency",
+    "validFrom": "Valid from",
+    "validTo": "Valid to",
+    "status": "Status",
+    "actions": "Actions",
+    "details": "Details",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "items": {
+    "title": "Price list items",
+    "totalCount": "Total items: {{count}}",
+    "addProduct": "Add product",
+    "noItems": "No products in this price list.",
+    "noItemsAction": " Click \"Add product\" to add the first item.",
+    "table": {
+      "productName": "Product name",
+      "price": "Price",
+      "unit": "Unit",
+      "minQuantity": "Minimum quantity",
+      "notes": "Notes",
+      "actions": "Actions",
+      "edit": "Edit",
+      "delete": "Delete"
+    }
+  },
+  "confirmations": {
+    "deleteTitle": "Confirm deletion",
+    "deleteMessage": "Are you sure you want to delete price list \"{{name}}\"?",
+    "deleteItemMessage": "Are you sure you want to remove product \"{{productName}}\" from price list?"
+  },
+  "dialogs": {
+    "add": {
+      "title": "Add to price list",
+      "recipe": "Recipe",
+      "price": "Price",
+      "minQuantity": "Minimum quantity",
+      "unit": "Unit",
+      "notes": "Notes",
+      "cancel": "Cancel",
+      "add": "Add",
+      "selectRecipe": "Select recipe",
+      "priceValidation": "Price must be a non-negative number",
+      "minQuantityValidation": "Minimum quantity must be a positive number",
+      "recipeAdded": "Recipe has been added to price list",
+      "addError": "Error adding item to price list",
+      "fetchRecipesError": "Error loading recipes"
+    },
+    "edit": {
+      "title": "Edit price list item",
+      "product": "Product",
+      "price": "Price",
+      "minQuantity": "Minimum quantity",
+      "unit": "Unit",
+      "notes": "Notes",
+      "cancel": "Cancel",
+      "save": "Save changes",
+      "priceValidation": "Price must be a non-negative number",
+      "minQuantityValidation": "Minimum quantity must be a positive number",
+      "itemUpdated": "Price list item has been updated",
+      "updateError": "Error updating price list item"
+    }
+  },
+  "messages": {
+    "errors": {
+      "fetchFailed": "Error loading price lists",
+      "fetchDetailsFailed": "Error loading price list",
+      "fetchItemsFailed": "Error loading price list items",
+      "loadDataFailed": "Error occurred while loading data",
+      "deleteFailed": "Error deleting price list",
+      "deleteItemFailed": "Error deleting price list item",
+      "saveFailed": "Error saving price list"
+    },
+    "success": {
+      "deleted": "Price list has been deleted",
+      "itemDeleted": "Item has been removed from price list",
+      "created": "Price list has been created",
+      "updated": "Price list has been updated"
+    }
+  }
+}

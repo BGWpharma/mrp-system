@@ -2,7 +2,7 @@ import React from 'react';
 import { Container, Typography, Box } from '@mui/material';
 import PurchaseOrderList from '../components/purchaseOrders/PurchaseOrderList';
 import { PurchaseOrderListStateProvider } from '../contexts/PurchaseOrderListStateContext';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../hooks/useTranslation';
 
 const PurchaseOrdersPage = () => {
   const { t } = useTranslation();

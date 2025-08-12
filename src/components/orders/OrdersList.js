@@ -70,7 +70,7 @@ import { formatCurrency } from '../../utils/formatUtils';
 import { getRecipeById } from '../../services/recipeService';
 import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const OrdersList = () => {
   const { t } = useTranslation();
