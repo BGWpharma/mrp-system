@@ -9,7 +9,8 @@ import {
   getDoc,
   doc,
   onSnapshot,
-  setDoc
+  setDoc,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { getOrdersStats } from './orderService';
@@ -90,10 +91,19 @@ export const getKpiData = async (options = { sales: true, inventory: true, produ
       }
       
       if (options.inventory) {
-        // Pobieranie danych magazynowych
-        const inventoryPromise = getAllInventoryItems().then(items => {
-          fetchedData.inventoryItems = items;
-        });
+        // OPTYMALIZACJA: Pobieranie liczby przedmiotów magazynowych zamiast całej kolekcji
+        const inventoryPromise = (async () => {
+          try {
+            const inventoryRef = collection(db, 'inventory');
+            const countSnapshot = await getCountFromServer(inventoryRef);
+            const inventoryCount = countSnapshot.data().count;
+            console.log(`Pobrano liczbę przedmiotów magazynowych: ${inventoryCount} (optymalizacja getCountFromServer)`);
+            fetchedData.inventoryItems = { length: inventoryCount };
+          } catch (error) {
+            console.error('Błąd podczas pobierania liczby przedmiotów magazynowych:', error);
+            fetchedData.inventoryItems = { length: 0 };
+          }
+        })();
         fetchPromises.push(inventoryPromise);
       }
       
@@ -127,7 +137,7 @@ export const getKpiData = async (options = { sales: true, inventory: true, produ
         const inventoryItems = fetchedData.inventoryItems;
         result.inventory = {
           totalItems: inventoryItems?.length || 0,
-          totalValue: calculateInventoryValue(inventoryItems)
+          totalValue: 0 // UWAGA: Wartość magazynu nie jest już obliczana, aby uniknąć pobierania całej kolekcji
         };
       }
       

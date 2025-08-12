@@ -5,7 +5,8 @@ import {
   orderBy, 
   limit,
   where,
-  Timestamp
+  Timestamp,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { getOrdersStats } from './orderService';
@@ -54,8 +55,8 @@ const setCacheData = (cacheKey, data) => {
 };
 
 /**
- * Pobiera dane receptur dla Dashboard
- * UWAGA: Pobiera wszystkie receptury dla prawidłowego licznika
+ * Pobiera liczbę receptur dla Dashboard
+ * OPTYMALIZACJA: Używa getCountFromServer() zamiast pobierania całej kolekcji
  */
 export const getDashboardRecipes = async () => {
   const cacheKey = 'recipes';
@@ -67,40 +68,22 @@ export const getDashboardRecipes = async () => {
   }
   
   try {
-    console.log('Pobieram dane receptur dla Dashboard...');
+    console.log('Pobieram liczbę receptur dla Dashboard...');
     
     const recipesRef = collection(db, 'recipes');
-    const q = query(
-      recipesRef, 
-      orderBy('updatedAt', 'desc')
-      // POPRAWKA: Usunięto limit(50) aby pokazywać rzeczywistą liczbę receptur w licznikach
-    );
+    const countSnapshot = await getCountFromServer(recipesRef);
+    const recipesCount = countSnapshot.data().count;
     
-    const querySnapshot = await getDocs(q);
+    // Zwracamy obiekt z liczbą, aby zachować kompatybilność z istniejącym kodem
+    const recipesData = { length: recipesCount };
     
-    // Pobierz tylko najważniejsze pola dla Dashboard
-    const recipes = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        name: data.name,
-        productName: data.productName,
-        customerId: data.customerId,
-        customerName: data.customerName,
-        status: data.status,
-        updatedAt: data.updatedAt,
-        createdAt: data.createdAt
-        // Pomijamy ciężkie pola jak ingredients, notes, procedures itp.
-      };
-    });
+    setCacheData(cacheKey, recipesData);
+    console.log(`Pobrano liczbę receptur dla Dashboard: ${recipesCount} (optymalizacja getCountFromServer)`);
     
-    setCacheData(cacheKey, recipes);
-    console.log(`Pobrano ${recipes.length} receptur dla Dashboard (wszystkie dla prawidłowego licznika)`);
-    
-    return recipes;
+    return recipesData;
   } catch (error) {
-    console.error('Błąd podczas pobierania receptur Dashboard:', error);
-    return [];
+    console.error('Błąd podczas pobierania liczby receptur Dashboard:', error);
+    return { length: 0 };
   }
 };
 
