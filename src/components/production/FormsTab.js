@@ -122,6 +122,7 @@ const FormsTab = ({
                             <TableCell>Straty opakowania</TableCell>
                             <TableCell>Straty wieczka</TableCell>
                             <TableCell>Straty surowca</TableCell>
+                            <TableCell>Strata - Produkt gotowy</TableCell>
                             <TableCell>Waga netto kapsułek</TableCell>
                             <TableCell>Raport mieszań</TableCell>
                             <TableCell>Akcje</TableCell>
@@ -142,6 +143,7 @@ const FormsTab = ({
                               <TableCell>{form.packagingLoss || '-'}</TableCell>
                               <TableCell>{form.bulkLoss || '-'}</TableCell>
                               <TableCell>{form.rawMaterialLoss || '-'}</TableCell>
+                              <TableCell>{form.finishedProductLoss || '-'}</TableCell>
                               <TableCell>{form.netCapsuleWeight || '-'}</TableCell>
                               <TableCell>
                                 {form.mixingPlanReportUrl ? (

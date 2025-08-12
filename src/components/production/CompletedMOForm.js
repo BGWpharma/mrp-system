@@ -137,6 +137,7 @@ const CompletedMOForm = () => {
     packagingLoss: '',
     bulkLoss: '',
     rawMaterialLoss: '',
+    finishedProductLoss: '', // Nowe pole - strata produktu gotowego
     netCapsuleWeight: '', // Nowe pole - waga netto kapsułek
     mixingPlanReport: null,
     mixingPlanReportUrl: '',
@@ -171,6 +172,7 @@ const CompletedMOForm = () => {
           packagingLoss: editData.packagingLoss || '',
           bulkLoss: editData.bulkLoss || '',
           rawMaterialLoss: editData.rawMaterialLoss || '',
+          finishedProductLoss: editData.finishedProductLoss || '', // Nowe pole
           netCapsuleWeight: editData.netCapsuleWeight || '', // Nowe pole
           mixingPlanReport: null,
           mixingPlanReportUrl: editData.mixingPlanReportUrl || '',
@@ -307,6 +309,10 @@ const CompletedMOForm = () => {
       errors.rawMaterialLoss = 'Podaj wartość liczbową';
     }
     
+    if (formData.finishedProductLoss && isNaN(formData.finishedProductLoss)) {
+      errors.finishedProductLoss = 'Podaj wartość liczbową';
+    }
+    
     if (formData.netCapsuleWeight && isNaN(formData.netCapsuleWeight)) {
       errors.netCapsuleWeight = 'Podaj wartość liczbową';
     }
@@ -335,6 +341,7 @@ const CompletedMOForm = () => {
           packagingLoss: formData.packagingLoss,
           bulkLoss: formData.bulkLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
+          finishedProductLoss: formData.finishedProductLoss, // Nowe pole
           netCapsuleWeight: formData.netCapsuleWeight, // Nowe pole
           createdAt: serverTimestamp()
         };
@@ -410,6 +417,7 @@ const CompletedMOForm = () => {
           packagingLoss: '',
           bulkLoss: '',
           rawMaterialLoss: '',
+          finishedProductLoss: '', // Nowe pole
           netCapsuleWeight: '', // Nowe pole
           mixingPlanReport: null,
           mixingPlanReportUrl: '',
@@ -967,6 +975,19 @@ const CompletedMOForm = () => {
                 helperText={validationErrors.rawMaterialLoss}
                 multiline
                 rows={5}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Strata - Produkt gotowy"
+                name="finishedProductLoss"
+                value={formData.finishedProductLoss}
+                onChange={handleChange}
+                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                error={!!validationErrors.finishedProductLoss}
+                helperText={validationErrors.finishedProductLoss}
               />
             </Grid>
             

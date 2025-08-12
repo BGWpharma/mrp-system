@@ -51,6 +51,7 @@ const CompletedMOFormDialog = ({
     packagingLoss: '',
     bulkLoss: '',
     rawMaterialLoss: '',
+    finishedProductLoss: '', // Nowe pole - strata produktu gotowego
     netCapsuleWeight: '', // Nowe pole - waga netto kapsułek
     mixingPlanReport: null
   });
@@ -157,6 +158,10 @@ const CompletedMOFormDialog = ({
       errors.rawMaterialLoss = 'Podaj wartość liczbową';
     }
     
+    if (formData.finishedProductLoss && isNaN(formData.finishedProductLoss)) {
+      errors.finishedProductLoss = 'Podaj wartość liczbową';
+    }
+    
     if (formData.netCapsuleWeight && isNaN(formData.netCapsuleWeight)) {
       errors.netCapsuleWeight = 'Podaj wartość liczbową';
     }
@@ -185,6 +190,7 @@ const CompletedMOFormDialog = ({
           packagingLoss: formData.packagingLoss,
           bulkLoss: formData.bulkLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
+          finishedProductLoss: formData.finishedProductLoss, // Nowe pole
           netCapsuleWeight: formData.netCapsuleWeight, // Nowe pole
           createdAt: serverTimestamp()
         };
@@ -232,6 +238,7 @@ const CompletedMOFormDialog = ({
       packagingLoss: '',
       bulkLoss: '',
       rawMaterialLoss: '',
+      finishedProductLoss: '', // Nowe pole
       netCapsuleWeight: '', // Nowe pole
       mixingPlanReport: null
     });
@@ -811,6 +818,20 @@ const CompletedMOFormDialog = ({
                 onChange={handleChange}
                 error={!!validationErrors.rawMaterialLoss}
                 helperText={validationErrors.rawMaterialLoss}
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Strata - Produkt gotowy"
+                name="finishedProductLoss"
+                type="number"
+                value={formData.finishedProductLoss}
+                onChange={handleChange}
+                error={!!validationErrors.finishedProductLoss}
+                helperText={validationErrors.finishedProductLoss || "W ramach robionego MO. Proszę podać tylko wartość liczbową!"}
                 inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
