@@ -10,7 +10,8 @@ import {
   where,
   orderBy,
   limit,
-  serverTimestamp 
+  serverTimestamp,
+  getCountFromServer
 } from 'firebase/firestore';
 import { 
   ref, 
@@ -369,8 +370,9 @@ export const getUnreadNotificationsCount = async (userId) => {
       where('read', '==', false)
     );
     
-    const querySnapshot = await getDocs(q);
-    const count = querySnapshot.size;
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer zamiast getDocs dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(q);
+    const count = countSnapshot.data().count;
     
     // Zapisz dane w cache
     notificationsCache.unreadCount[userId] = count;

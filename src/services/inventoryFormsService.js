@@ -255,20 +255,28 @@ export const extractStoragePathFromUrl = (url) => {
 };
 
 /**
- * Pobiera statystyki formularzy magazynowych
+ * ✅ ZOPTYMALIZOWANA: Pobiera statystyki formularzy magazynowych z getCountFromServer
  * @returns {Object} - Statystyki formularzy
  */
 export const getInventoryFormsStatistics = async () => {
   try {
+    console.log('🔄 Pobieranie statystyk formularzy magazynowych...');
+    
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer zamiast pobierania wszystkich dokumentów
     const [loadingSnapshot, unloadingSnapshot] = await Promise.all([
-      getDocs(collection(db, INVENTORY_FORMS_COLLECTIONS.LOADING_REPORT)),
-      getDocs(collection(db, INVENTORY_FORMS_COLLECTIONS.UNLOADING_REPORT))
+      getCountFromServer(collection(db, INVENTORY_FORMS_COLLECTIONS.LOADING_REPORT)),
+      getCountFromServer(collection(db, INVENTORY_FORMS_COLLECTIONS.UNLOADING_REPORT))
     ]);
 
+    const loadingCount = loadingSnapshot.data().count;
+    const unloadingCount = unloadingSnapshot.data().count;
+
+    console.log(`✅ Statystyki formularzy magazynowych: załadunek=${loadingCount}, rozładunek=${unloadingCount}`);
+
     return {
-      loadingReports: loadingSnapshot.size,
-      unloadingReports: unloadingSnapshot.size,
-      total: loadingSnapshot.size + unloadingSnapshot.size
+      loadingReports: loadingCount,
+      unloadingReports: unloadingCount,
+      total: loadingCount + unloadingCount
     };
 
   } catch (error) {
@@ -332,7 +340,7 @@ export const searchInventoryForms = async (searchTerm, formType = null, limit = 
             fillDate: data.fillDate?.toDate?.() || null,
             loadingDate: data.loadingDate?.toDate?.() || null,
             unloadingDate: data.unloadingDate?.toDate?.() || null,
-            formType: collectionPath.includes('Zaladunki') ? INVENTORY_FORM_TYPES.LOADING_REPORT : INVENTORY_FORM_TYPES.UNLOADING_REPORT,
+            formType: collectionPath.includes('ZaladunekTowaru') ? INVENTORY_FORM_TYPES.LOADING_REPORT : INVENTORY_FORM_TYPES.UNLOADING_REPORT,
             selectedItems: data.selectedItems?.map(item => ({
               ...item,
               expiryDate: item.expiryDate?.toDate ? item.expiryDate.toDate() : item.expiryDate

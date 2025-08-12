@@ -261,9 +261,10 @@ export const getFormResponsesStats = async (formType = null) => {
           continue;
       }
       
-      const snapshot = await getDocs(collection(db, collectionPath));
+      // ✅ OPTYMALIZACJA: Użyj getCountFromServer zamiast pobierania wszystkich dokumentów
+      const countSnapshot = await getCountFromServer(collection(db, collectionPath));
       stats[type] = {
-        total: snapshot.size,
+        total: countSnapshot.data().count,
         collection: collectionPath
       };
     }

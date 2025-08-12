@@ -6,7 +6,8 @@ import {
   query, 
   where, 
   orderBy, 
-  limit as firestoreLimit
+  limit as firestoreLimit,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 
@@ -155,11 +156,12 @@ export class QueryExecutor {
    */
   static async executeRecipeCount(parameters) {
     const recipesRef = collection(db, 'recipes');
-    const snapshot = await getDocs(recipesRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(recipesRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'recipes'
     };
@@ -351,11 +353,12 @@ export class QueryExecutor {
    */
   static async executeInventoryCount(parameters) {
     const inventoryRef = collection(db, 'inventory');
-    const snapshot = await getDocs(inventoryRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(inventoryRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'inventory'
     };
@@ -498,11 +501,12 @@ export class QueryExecutor {
    */
   static async executeOrdersCount(parameters) {
     const ordersRef = collection(db, 'orders');
-    const snapshot = await getDocs(ordersRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(ordersRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'orders'
     };
@@ -610,11 +614,12 @@ export class QueryExecutor {
    */
   static async executePurchaseOrdersCount(parameters) {
     const purchaseOrdersRef = collection(db, 'purchaseOrders');
-    const snapshot = await getDocs(purchaseOrdersRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(purchaseOrdersRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'purchaseOrders'
     };
@@ -649,11 +654,12 @@ export class QueryExecutor {
    */
   static async executeProductionCount(parameters) {
     const tasksRef = collection(db, 'productionTasks');
-    const snapshot = await getDocs(tasksRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(tasksRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'productionTasks'
     };
@@ -723,15 +729,17 @@ export class QueryExecutor {
     try {
       const tasksRef = collection(db, 'productionTasks');
       const q = query(tasksRef, where('status', '==', targetStatus));
-      const snapshot = await getDocs(q);
+      // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+      const countSnapshot = await getCountFromServer(q);
+      const count = countSnapshot.data().count;
       
       return {
         success: true,
-        count: snapshot.size,
+        count: count,
         type: 'count_by_status',
         collection: 'productionTasks',
         status: targetStatus,
-        message: `Znaleziono ${snapshot.size} zadań produkcyjnych o statusie "${targetStatus}"`
+        message: `Znaleziono ${count} zadań produkcyjnych o statusie "${targetStatus}"`
       };
     } catch (error) {
       console.error(`[QueryExecutor] Błąd podczas liczenia zadań o statusie ${targetStatus}:`, error);
@@ -823,11 +831,12 @@ export class QueryExecutor {
    */
   static async executeSuppliersCount(parameters) {
     const suppliersRef = collection(db, 'suppliers');
-    const snapshot = await getDocs(suppliersRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(suppliersRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'suppliers'
     };
@@ -861,11 +870,12 @@ export class QueryExecutor {
    */
   static async executeCustomersCount(parameters) {
     const customersRef = collection(db, 'customers');
-    const snapshot = await getDocs(customersRef);
+    // ✅ OPTYMALIZACJA: Użyj getCountFromServer dla lepszej wydajności
+    const countSnapshot = await getCountFromServer(customersRef);
     
     return {
       success: true,
-      count: snapshot.size,
+      count: countSnapshot.data().count,
       type: 'count',
       collection: 'customers'
     };
