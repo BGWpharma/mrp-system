@@ -596,6 +596,19 @@ const PurchaseOrderList = () => {
             </IconButton>
           </Tooltip>
           
+          <Tooltip title="Odśwież dane (wyczyść cache)">
+            <IconButton 
+              color="warning" 
+              onClick={async () => {
+                await clearPurchaseOrdersCache();
+                await fetchPurchaseOrdersOptimized();
+              }}
+              size="small"
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          
           <Tooltip title="Konfiguracja kolumn">
             <IconButton 
               color="primary" 
@@ -741,13 +754,63 @@ const PurchaseOrderList = () => {
                       
                       {visibleColumns['orderDate'] && (
                         <TableCell>
-                          {po.orderDate ? new Date(po.orderDate).toLocaleDateString() : '-'}
+                          {(() => {
+                            if (!po.orderDate) return '-';
+                            try {
+                              let dateObj;
+                              
+                              // Obsługa Firestore Timestamp
+                              if (po.orderDate && typeof po.orderDate.toDate === 'function') {
+                                dateObj = po.orderDate.toDate();
+                              } 
+                              // Obsługa stringa ISO
+                              else if (typeof po.orderDate === 'string') {
+                                dateObj = new Date(po.orderDate);
+                              } 
+                              // Obsługa obiektu Date
+                              else if (po.orderDate instanceof Date) {
+                                dateObj = po.orderDate;
+                              } 
+                              else {
+                                return 'Invalid Date';
+                              }
+                              
+                              return dateObj.toLocaleDateString();
+                            } catch (error) {
+                              return 'Invalid Date';
+                            }
+                          })()}
                         </TableCell>
                       )}
                       
                       {visibleColumns['expectedDeliveryDate'] && (
                         <TableCell>
-                          {po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString() : '-'}
+                          {(() => {
+                            if (!po.expectedDeliveryDate) return '-';
+                            try {
+                              let dateObj;
+                              
+                              // Obsługa Firestore Timestamp
+                              if (po.expectedDeliveryDate && typeof po.expectedDeliveryDate.toDate === 'function') {
+                                dateObj = po.expectedDeliveryDate.toDate();
+                              } 
+                              // Obsługa stringa ISO
+                              else if (typeof po.expectedDeliveryDate === 'string') {
+                                dateObj = new Date(po.expectedDeliveryDate);
+                              } 
+                              // Obsługa obiektu Date
+                              else if (po.expectedDeliveryDate instanceof Date) {
+                                dateObj = po.expectedDeliveryDate;
+                              } 
+                              else {
+                                return 'Invalid Date';
+                              }
+                              
+                              return dateObj.toLocaleDateString();
+                            } catch (error) {
+                              return 'Invalid Date';
+                            }
+                          })()}
                         </TableCell>
                       )}
                       

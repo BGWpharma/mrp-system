@@ -842,7 +842,80 @@ const PurchaseOrderForm = ({ orderId }) => {
           return {
             ...item,
             unitPrice: unitPrice.toFixed(6), // Zapewniamy 6 miejsc po przecinku
-            totalPrice: (unitPrice * (parseFloat(item.quantity) || 0)).toFixed(2)
+            totalPrice: (unitPrice * (parseFloat(item.quantity) || 0)).toFixed(2),
+            // Konwertuj daty do ISO string dla kompatybilności z listą
+            invoiceDate: (() => {
+              // Walidacja i czyszczenie nieprawidłowych dat
+              if (!item.invoiceDate) return null;
+              
+              let cleanDate = null;
+              if (item.invoiceDate instanceof Date) {
+                // Sprawdź czy rok jest rozsądny
+                const year = item.invoiceDate.getFullYear();
+                if (year > 1900 && year < 2100) {
+                  cleanDate = item.invoiceDate.toISOString();
+                } else {
+                  cleanDate = null;
+                }
+              } else if (typeof item.invoiceDate === 'string') {
+                // Sprawdź czy string zawiera prawidłowy rok
+                if (item.invoiceDate.match(/^\d{4}-/) && !item.invoiceDate.startsWith('0')) {
+                  cleanDate = item.invoiceDate;
+                } else {
+                  cleanDate = null;
+                }
+              }
+              
+              return cleanDate;
+            })(),
+            plannedDeliveryDate: (() => {
+              // Walidacja i czyszczenie nieprawidłowych dat
+              if (!item.plannedDeliveryDate) return null;
+              
+              let cleanDate = null;
+              if (item.plannedDeliveryDate instanceof Date) {
+                // Sprawdź czy rok jest rozsądny
+                const year = item.plannedDeliveryDate.getFullYear();
+                if (year > 1900 && year < 2100) {
+                  cleanDate = item.plannedDeliveryDate.toISOString();
+                } else {
+                  cleanDate = null;
+                }
+              } else if (typeof item.plannedDeliveryDate === 'string') {
+                // Sprawdź czy string zawiera prawidłowy rok
+                if (item.plannedDeliveryDate.match(/^\d{4}-/) && !item.plannedDeliveryDate.startsWith('0')) {
+                  cleanDate = item.plannedDeliveryDate;
+                } else {
+                  cleanDate = null;
+                }
+              }
+              
+              return cleanDate;
+            })(),
+            actualDeliveryDate: (() => {
+              // Walidacja i czyszczenie nieprawidłowych dat
+              if (!item.actualDeliveryDate) return null;
+              
+              let cleanDate = null;
+              if (item.actualDeliveryDate instanceof Date) {
+                // Sprawdź czy rok jest rozsądny
+                const year = item.actualDeliveryDate.getFullYear();
+                if (year > 1900 && year < 2100) {
+                  cleanDate = item.actualDeliveryDate.toISOString();
+                } else {
+                  cleanDate = null;
+                }
+              } else if (typeof item.actualDeliveryDate === 'string') {
+                // Sprawdź czy string zawiera prawidłowy rok
+                if (item.actualDeliveryDate.match(/^\d{4}-/) && !item.actualDeliveryDate.startsWith('0')) {
+                  cleanDate = item.actualDeliveryDate;
+                } else {
+                  cleanDate = null;
+                }
+              }
+              
+              return cleanDate;
+            })()
           };
         });
       }
@@ -853,7 +926,32 @@ const PurchaseOrderForm = ({ orderId }) => {
           const value = parseFloat(cost.value) || 0;
           return {
             ...cost,
-            value: value.toFixed(6) // Zapewniamy 6 miejsc po przecinku
+            value: value.toFixed(6), // Zapewniamy 6 miejsc po przecinku
+            // Konwertuj datę faktury do ISO string dla kompatybilności z listą
+            invoiceDate: (() => {
+              // Walidacja i czyszczenie nieprawidłowych dat
+              if (!cost.invoiceDate) return null;
+              
+              let cleanDate = null;
+              if (cost.invoiceDate instanceof Date) {
+                // Sprawdź czy rok jest rozsądny
+                const year = cost.invoiceDate.getFullYear();
+                if (year > 1900 && year < 2100) {
+                  cleanDate = cost.invoiceDate.toISOString();
+                } else {
+                  cleanDate = null;
+                }
+              } else if (typeof cost.invoiceDate === 'string') {
+                // Sprawdź czy string zawiera prawidłowy rok
+                if (cost.invoiceDate.match(/^\d{4}-/) && !cost.invoiceDate.startsWith('0')) {
+                  cleanDate = cost.invoiceDate;
+                } else {
+                  cleanDate = null;
+                }
+              }
+              
+              return cleanDate;
+            })()
           };
         });
       }
@@ -865,6 +963,14 @@ const PurchaseOrderForm = ({ orderId }) => {
       orderData.totalValue = totals.totalNet;
       orderData.totalGross = totals.totalGross;
       orderData.totalVat = totals.totalVat;
+      
+      // Konwertuj główne daty zamówienia do ISO string dla kompatybilności z listą
+      if (orderData.orderDate instanceof Date) {
+        orderData.orderDate = orderData.orderDate.toISOString();
+      }
+      if (orderData.expectedDeliveryDate instanceof Date) {
+        orderData.expectedDeliveryDate = orderData.expectedDeliveryDate.toISOString();
+      }
       
       console.log(`Zapisuję PO, wartość brutto: ${totals.totalGross} (netto produkty: ${totals.itemsNetTotal}, VAT produkty: ${totals.itemsVatTotal}, netto koszty: ${totals.additionalCostsNetTotal}, VAT koszty: ${totals.additionalCostsVatTotal})`);
       
@@ -1506,27 +1612,20 @@ const PurchaseOrderForm = ({ orderId }) => {
     if (!currentCost) return;
 
     // Specjalna obsługa dla zmiany daty faktury
-    if (field === 'invoiceDate' && value) {
+    if (field === 'invoiceDate') {
       try {
-        console.log(`Zmiana daty faktury na: ${value}`);
-        
-        // Formatowanie daty do obsługi przez input type="date"
-        const formattedDate = formatDateForInput(value);
-        console.log(`Sformatowana data faktury: ${formattedDate}`);
-        
-        // Uaktualnij datę faktury niezależnie od waluty
+        // Uaktualnij datę faktury zawsze (niezależnie od waluty)
         let updatedCosts = [...poData.additionalCostsItems];
         const costIndex = updatedCosts.findIndex(item => item.id === id);
         
         if (costIndex !== -1) {
-          // Uaktualnij datę faktury
           updatedCosts[costIndex] = {
             ...updatedCosts[costIndex],
-            invoiceDate: formattedDate
+            invoiceDate: value
           };
           
           // Sprawdź czy data jest kompletna i poprawna przed próbą pobrania kursu
-          const invoiceDate = new Date(formattedDate);
+          const invoiceDate = new Date(value);
           const isValidDate = !isNaN(invoiceDate.getTime()) && 
                              invoiceDate.getFullYear() > 1900 && 
                              invoiceDate.getFullYear() < 2100;
@@ -1561,7 +1660,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               // W przypadku błędu nie zmieniamy kursu, tylko aktualizujemy datę
             }
           } else if (!isValidDate && currentCost.currency && currentCost.currency !== poData.currency) {
-            console.log(`Data faktury ${formattedDate} jest niepełna - nie pobieram kursu dla dodatkowego kosztu`);
+            console.log(`Data faktury jest niepełna - nie pobieram kursu dla dodatkowego kosztu`);
           }
           
           setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
@@ -1570,25 +1669,23 @@ const PurchaseOrderForm = ({ orderId }) => {
         return;
       } catch (error) {
         console.error('Błąd podczas przetwarzania daty faktury:', error);
-        showError('Nieprawidłowy format daty faktury');
         // W przypadku błędu, i tak aktualizuj datę faktury
         let updatedCosts = [...poData.additionalCostsItems];
         const costIndex = updatedCosts.findIndex(item => item.id === id);
         if (costIndex !== -1) {
-          const formattedDate = formatDateForInput(value);
           updatedCosts[costIndex] = {
             ...updatedCosts[costIndex],
-            invoiceDate: formattedDate
+            invoiceDate: value
           };
           setPoData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
         }
         return;
       }
-        }
-        
-        // Specjalna obsługa dla zmiany waluty
-        if (field === 'currency') {
-          const newCurrency = value;
+    }
+    
+    // Specjalna obsługa dla zmiany waluty
+    if (field === 'currency') {
+      const newCurrency = value;
       const oldCurrency = currentCost.currency || poData.currency;
           
           // Jeśli zmieniono walutę, przelicz wartość
@@ -2738,16 +2835,13 @@ const PurchaseOrderForm = ({ orderId }) => {
                                           }
                                         })()}
                                         onChange={(newValue) => {
-                                          // Zapisz datę w formacie ISO string tylko dla kompletnych i poprawnych dat
+                                          // Zapisz obiekt Date bezpośrednio
                                           if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
-                                            const formattedDate = formatDateForInput(newValue);
-                                            handleAdditionalCostChange(cost.id, 'invoiceDate', formattedDate);
-                                          } else if (newValue === null) {
-                                            // Tylko jeśli użytkownik jawnie wyczyścił pole (null)
-                                            handleAdditionalCostChange(cost.id, 'invoiceDate', '');
+                                            handleAdditionalCostChange(cost.id, 'invoiceDate', newValue);
+                                          } else {
+                                            // Usuń datę
+                                            handleAdditionalCostChange(cost.id, 'invoiceDate', null);
                                           }
-                                          // W przypadku niepoprawnej daty (ale nie null) - nie robimy nic,
-                                          // zachowujemy obecną wartość w stanie
                                         }}
                                         onError={(error) => {
                                           // Obsługuj błędy parsowania bez resetowania wartości
@@ -2755,7 +2849,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                                         }}
                                         disableHighlightToday={false}
                                         reduceAnimations={true}
-                                        maxDate={new Date()} // Maksymalna data to dzisiaj
+                                        minDate={new Date('1900-01-01')}
+                                        maxDate={new Date('2100-12-31')}
                                         slotProps={{ 
                                           textField: { 
                                             fullWidth: true, 
@@ -2764,7 +2859,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                                             onBlur: (event) => {
                                               // Dodatowa obsługa onBlur żeby zachować wartości podczas edycji
                                               console.log('DatePicker blur:', event.target.value);
-                                            }
+                                            },
+                                            error: false
                                           },
                                           field: { 
                                             clearable: true,
