@@ -1901,12 +1901,14 @@ const CMR_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minuty
  * - Cachuje wszystkie dokumenty CMR po pierwszym pobraniu
  * - Dynamicznie filtruje i sortuje dane w cache
  * - Implementuje debouncing dla wyszukiwania
+ * - Obsługuje filtrowanie po pozycjach CMR
  * 
  * @param {Object} params - Parametry zapytania
  * @param {number} params.page - Numer strony (wymagany)
  * @param {number} params.pageSize - Rozmiar strony (wymagany)
  * @param {string|null} params.searchTerm - Termin wyszukiwania (opcjonalne)
  * @param {string|null} params.statusFilter - Filtr statusu (opcjonalne)
+ * @param {string|null} params.itemFilter - Filtr po pozycjach/towarach CMR (opcjonalne)
  * @param {string|null} params.sortField - Pole do sortowania (opcjonalne)
  * @param {string|null} params.sortOrder - Kierunek sortowania (opcjonalne)
  * @param {boolean} params.forceRefresh - Wymuś odświeżenie cache (opcjonalne)
@@ -1917,13 +1919,14 @@ export const getCmrDocumentsOptimized = async ({
   pageSize,
   searchTerm = null,
   statusFilter = null,
+  itemFilter = null,
   sortField = 'issueDate',
   sortOrder = 'desc',
   forceRefresh = false
 }) => {
   try {
     console.log('🚀 getCmrDocumentsOptimized - rozpoczynam zoptymalizowane pobieranie');
-    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, sortField, sortOrder, forceRefresh });
+    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, itemFilter, sortField, sortOrder, forceRefresh });
 
     // Walidacja wymaganych parametrów
     if (!page || !pageSize) {
@@ -1956,6 +1959,59 @@ export const getCmrDocumentsOptimized = async ({
       cmrDocumentsCacheTimestamp = now;
       
       console.log('💾 Zapisano do cache:', allDocuments.length, 'dokumentów CMR');
+    }
+
+    // KROK 1.5: Jeśli jest filtr po pozycjach, pobierz pozycje dla każdego CMR i filtruj
+    if (itemFilter && itemFilter.trim() !== '') {
+      console.log('🔍 Filtrowanie po pozycjach CMR:', itemFilter);
+      const itemFilterLower = itemFilter.toLowerCase().trim();
+      
+      // Pobierz pozycje dla wszystkich CMR które mogą pasować
+      const cmrDocumentsWithItems = await Promise.all(
+        allDocuments.map(async (cmrDoc) => {
+          try {
+            const itemsRef = collection(db, CMR_ITEMS_COLLECTION);
+            const itemsQuery = query(itemsRef, where('cmrId', '==', cmrDoc.id));
+            const itemsSnapshot = await getDocs(itemsQuery);
+            
+            const items = itemsSnapshot.docs.map(itemDoc => ({
+              id: itemDoc.id,
+              ...itemDoc.data()
+            }));
+            
+            return {
+              ...cmrDoc,
+              items: items
+            };
+          } catch (error) {
+            console.error(`Błąd podczas pobierania pozycji dla CMR ${cmrDoc.id}:`, error);
+            return {
+              ...cmrDoc,
+              items: []
+            };
+          }
+        })
+      );
+      
+      // Filtruj CMR które mają pozycje pasujące do wyszukiwanego terminu
+      allDocuments = cmrDocumentsWithItems.filter(cmrDoc => {
+        if (!cmrDoc.items || cmrDoc.items.length === 0) return false;
+        
+        return cmrDoc.items.some(item => {
+          const description = item.description || '';
+          const unit = item.unit || '';
+          const quantity = item.quantity || item.numberOfPackages || '';
+          
+          // Sprawdź czy którekolwiek pole pozycji zawiera szukany termin
+          return (
+            description.toLowerCase().includes(itemFilterLower) ||
+            unit.toLowerCase().includes(itemFilterLower) ||
+            quantity.toString().toLowerCase().includes(itemFilterLower)
+          );
+        });
+      });
+      
+      console.log('🔍 Po filtrowaniu po pozycjach:', allDocuments.length, 'dokumentów');
     }
 
     // KROK 2: Filtrowanie po terminie wyszukiwania

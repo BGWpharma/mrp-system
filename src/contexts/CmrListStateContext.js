@@ -10,6 +10,7 @@ const STORAGE_KEY = 'cmrListState';
 const initialState = {
   searchTerm: '',
   statusFilter: '',
+  itemFilter: '',
   page: 1,
   pageSize: 10,
   tableSort: {
@@ -23,6 +24,7 @@ const initialState = {
 const actionTypes = {
   SET_SEARCH_TERM: 'SET_SEARCH_TERM',
   SET_STATUS_FILTER: 'SET_STATUS_FILTER',
+  SET_ITEM_FILTER: 'SET_ITEM_FILTER',
   SET_PAGE: 'SET_PAGE',
   SET_PAGE_SIZE: 'SET_PAGE_SIZE',
   SET_TABLE_SORT: 'SET_TABLE_SORT',
@@ -47,6 +49,14 @@ const cmrListStateReducer = (state, action) => {
           ...state, 
           statusFilter: action.payload,
           page: 1, // Reset strony przy zmianie filtru statusu
+          lastUpdated: Date.now()
+        };
+      
+      case actionTypes.SET_ITEM_FILTER:
+        return { 
+          ...state, 
+          itemFilter: action.payload,
+          page: 1, // Reset strony przy zmianie filtru pozycji
           lastUpdated: Date.now()
         };
       
@@ -137,6 +147,7 @@ export const CmrListStateProvider = ({ children }) => {
   const actions = {
     setSearchTerm: (term) => dispatch({ type: actionTypes.SET_SEARCH_TERM, payload: term }),
     setStatusFilter: (status) => dispatch({ type: actionTypes.SET_STATUS_FILTER, payload: status }),
+    setItemFilter: (itemFilter) => dispatch({ type: actionTypes.SET_ITEM_FILTER, payload: itemFilter }),
     setPage: (page) => dispatch({ type: actionTypes.SET_PAGE, payload: page }),
     setPageSize: (size) => dispatch({ type: actionTypes.SET_PAGE_SIZE, payload: size }),
     setTableSort: (sort) => dispatch({ type: actionTypes.SET_TABLE_SORT, payload: sort }),

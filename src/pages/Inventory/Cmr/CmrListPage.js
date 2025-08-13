@@ -157,12 +157,14 @@ const CmrListPage = () => {
   // Zmienne stanu z kontekstu
   const searchTerm = listState.searchTerm;
   const statusFilter = listState.statusFilter;
+  const itemFilter = listState.itemFilter;
   const page = listState.page;
   const pageSize = listState.pageSize;
   const tableSort = listState.tableSort;
   
-  // Debounced search term
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  // Debounced search terms
+  const debouncedSearchTerm = useDebounce(searchTerm || '', 300);
+  const debouncedItemFilter = useDebounce(itemFilter || '', 300);
   
   // Ref do śledzenia pierwszego renderowania
   const isFirstRender = useRef(true);
@@ -224,8 +226,9 @@ const CmrListPage = () => {
       const result = await getCmrDocumentsOptimized({
         page: page,
         pageSize: pageSize,
-        searchTerm: debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
+        searchTerm: debouncedSearchTerm && debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
         statusFilter: statusFilter || null,
+        itemFilter: debouncedItemFilter && debouncedItemFilter.trim() !== '' ? debouncedItemFilter : null,
         sortField: sortFieldToUse,
         sortOrder: sortOrderToUse,
         forceRefresh: false
@@ -282,6 +285,11 @@ const CmrListPage = () => {
   // Obsługa zmiany filtra statusu - używa kontekstu
   const handleStatusFilterChange = (event) => {
     listActions.setStatusFilter(event.target.value);
+  };
+
+  // Obsługa zmiany filtra pozycji - używa kontekstu
+  const handleItemFilterChange = (event) => {
+    listActions.setItemFilter(event.target.value);
   };
 
   // Funkcja do odświeżania cache i danych
@@ -629,10 +637,10 @@ const CmrListPage = () => {
     document.body.removeChild(link);
     };
 
-  // Efekt do pobierania danych - używa debouncedSearchTerm
+  // Efekt do pobierania danych - używa debouncedSearchTerm i debouncedItemFilter
   useEffect(() => {
     fetchCmrDocumentsOptimized();
-  }, [page, pageSize, debouncedSearchTerm, statusFilter]);
+  }, [page, pageSize, debouncedSearchTerm, statusFilter, debouncedItemFilter]);
 
   // Efekt do pobierania klientów przy pierwszym renderze
   useEffect(() => {
@@ -677,6 +685,17 @@ const CmrListPage = () => {
               InputProps={{
                 startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1, my: 0.5 }} />
               }}
+              sx={{ 
+                minWidth: isMobile ? '100%' : 300,
+                backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'
+              }}
+            />
+            
+            <TextField
+              size="small"
+              placeholder="Szukaj po pozycjach (nazwa towaru, ilość, jednostka)..."
+              value={itemFilter}
+              onChange={handleItemFilterChange}
               sx={{ 
                 minWidth: isMobile ? '100%' : 300,
                 backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'
