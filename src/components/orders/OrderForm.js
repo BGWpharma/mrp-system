@@ -164,7 +164,7 @@ const OrderForm = ({ orderId }) => {
 
   const { currentUser } = useAuth();
   const { showSuccess, showError, showInfo } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('orders');
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = React.useRef(null);

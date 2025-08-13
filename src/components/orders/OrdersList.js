@@ -73,7 +73,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const OrdersList = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('orders');
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   
