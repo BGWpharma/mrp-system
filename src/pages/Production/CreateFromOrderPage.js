@@ -41,7 +41,7 @@ import { getIngredientPrices, getInventoryItemById } from '../../services/invent
 import { calculateManufacturingOrderCosts } from '../../utils/costCalculator';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDate, addProductionTime, isWeekend, isWorkingDay, calculateEndDateExcludingWeekends } from '../../utils/dateUtils';
+import { formatDate, addProductionTime, isWeekend, isWorkingDay, calculateEndDateExcludingWeekends, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getPriceForCustomerProduct } from '../../services/priceListService';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -614,8 +614,8 @@ const CreateFromOrderPage = () => {
         // Oblicz datę zakończenia na podstawie szacowanego czasu trwania, uwzględniając dni robocze
         let endDate;
         if (estimatedDuration > 0) {
-          // Użyj tej samej funkcji co w edycji zadań - pomija weekendy ale liczy 24h/dzień
-          endDate = calculateEndDateExcludingWeekends(startDate, estimatedDuration);
+          // Użyj nowej funkcji uwzględniającej godziny pracy zakładu (domyślnie 16h)
+          endDate = calculateEndDateWithWorkingHours(startDate, estimatedDuration, 16);
         } else {
           // Jeśli nie ma czasu produkcji, dodaj 1 dzień roboczy
           endDate = new Date(startDate);
@@ -919,8 +919,8 @@ const CreateFromOrderPage = () => {
           // Oblicz datę zakończenia uwzględniając dni robocze
           let endDate;
           if (estimatedDuration > 0) {
-            // Użyj tej samej funkcji co w edycji zadań - pomija weekendy ale liczy 24h/dzień
-            endDate = calculateEndDateExcludingWeekends(orderItemDate, estimatedDuration);
+            // Użyj nowej funkcji uwzględniającej godziny pracy zakładu (domyślnie 16h)
+            endDate = calculateEndDateWithWorkingHours(orderItemDate, estimatedDuration, 16);
           } else {
             // Jeśli nie ma czasu produkcji, dodaj 1 dzień roboczy
             endDate = new Date(orderItemDate);

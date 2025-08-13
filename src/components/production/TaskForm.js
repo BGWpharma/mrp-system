@@ -61,7 +61,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
 import { generateLOTNumber } from '../../utils/numberGenerators';
-import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends } from '../../utils/dateUtils';
+import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateWithWorkingHours, calculateProductionTimeWithWorkingHours } from '../../utils/dateUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
 
 const TaskForm = ({ taskId }) => {
@@ -98,6 +98,7 @@ const TaskForm = ({ taskId }) => {
     endDate: new Date(new Date().getTime() + 60 * 60 * 1000), // Domyślnie 1 godzina później
     estimatedDuration: '', // w minutach
     productionTimePerUnit: '', // czas produkcji na jednostkę w minutach
+    workingHoursPerDay: 16, // Godziny pracy zakładu dziennie (domyślnie 16h)
     priority: 'Normalny',
     status: 'Zaplanowane',
     notes: '',
@@ -356,7 +357,8 @@ const TaskForm = ({ taskId }) => {
           (task.expiryDate instanceof Date ? task.expiryDate :
            task.expiryDate.toDate ? task.expiryDate.toDate() : 
            new Date(task.expiryDate)) : null,
-        linkedPurchaseOrders: task.linkedPurchaseOrders || []
+        linkedPurchaseOrders: task.linkedPurchaseOrders || [],
+        workingHoursPerDay: task.workingHoursPerDay || 16 // Domyślnie 16h dla istniejących zadań
       };
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
@@ -777,20 +779,28 @@ const TaskForm = ({ taskId }) => {
       // Pobierz aktualny czas produkcji w minutach
       const productionTimeMinutes = prev.estimatedDuration || 0;
       
-      // Oblicz nową datę zakończenia pomijając weekendy
-      const endDateExcludingWeekends = calculateEndDateExcludingWeekends(newDate, productionTimeMinutes);
+      // Oblicz nową datę zakończenia z uwzględnieniem godzin pracy zakładu
+      const endDateWithWorkingHours = calculateEndDateWithWorkingHours(
+        newDate, 
+        productionTimeMinutes, 
+        prev.workingHoursPerDay || 16
+      );
       
       return {
         ...prev,
         scheduledDate: newDate,
-        endDate: endDateExcludingWeekends
+        endDate: endDateWithWorkingHours
       };
     });
   };
 
   const handleEndDateChange = (newDate) => {
-    // Oblicz czas produkcji pomijając weekendy
-    const durationInMinutes = calculateProductionTimeBetweenExcludingWeekends(taskData.scheduledDate, newDate);
+    // Oblicz czas produkcji z uwzględnieniem godzin pracy zakładu
+    const durationInMinutes = calculateProductionTimeWithWorkingHours(
+      taskData.scheduledDate, 
+      newDate, 
+      taskData.workingHoursPerDay || 16
+    );
     
     setTaskData({
       ...taskData,
@@ -817,15 +827,44 @@ const TaskForm = ({ taskId }) => {
         estimatedDuration: estimatedTimeMinutes
       }));
       
-      // Zaktualizuj datę zakończenia pomijając weekendy
+      // Zaktualizuj datę zakończenia z uwzględnieniem godzin pracy zakładu
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDateExcludingWeekends = calculateEndDateExcludingWeekends(startDate, estimatedTimeMinutes);
+        const endDateWithWorkingHours = calculateEndDateWithWorkingHours(
+          startDate, 
+          estimatedTimeMinutes, 
+          taskData.workingHoursPerDay || 16
+        );
         setTaskData(prev => ({
           ...prev,
-          endDate: endDateExcludingWeekends
+          endDate: endDateWithWorkingHours
         }));
       }
+    }
+  };
+  
+  // Handler dla zmiany godzin pracy zakładu
+  const handleWorkingHoursChange = (e) => {
+    const newWorkingHours = parseInt(e.target.value) || 16;
+    
+    setTaskData(prev => ({
+      ...prev,
+      workingHoursPerDay: newWorkingHours
+    }));
+    
+    // Przelicz datę zakończenia z nowymi godzinami pracy
+    if (taskData.scheduledDate && taskData.estimatedDuration) {
+      const startDate = new Date(taskData.scheduledDate);
+      const endDateWithWorkingHours = calculateEndDateWithWorkingHours(
+        startDate, 
+        taskData.estimatedDuration, 
+        newWorkingHours
+      );
+      
+      setTaskData(prev => ({
+        ...prev,
+        endDate: endDateWithWorkingHours
+      }));
     }
   };
 
@@ -836,13 +875,17 @@ const TaskForm = ({ taskId }) => {
       const durationInMinutes = durationInHours * 60;
       
       // Aktualizacja endDate na podstawie scheduledDate i podanego czasu trwania w minutach
-      // Oblicz datę zakończenia pomijając weekendy
-      const endDateExcludingWeekends = calculateEndDateExcludingWeekends(taskData.scheduledDate, durationInMinutes);
+      // Oblicz datę zakończenia z uwzględnieniem godzin pracy zakładu
+      const endDateWithWorkingHours = calculateEndDateWithWorkingHours(
+        taskData.scheduledDate, 
+        durationInMinutes, 
+        taskData.workingHoursPerDay || 16
+      );
       
       setTaskData(prev => ({
         ...prev,
         estimatedDuration: durationInMinutes,
-        endDate: endDateExcludingWeekends
+        endDate: endDateWithWorkingHours
       }));
     } else {
       setTaskData(prev => ({
@@ -907,13 +950,17 @@ const TaskForm = ({ taskId }) => {
         estimatedDuration: totalProductionTime
       }));
 
-      // Zaktualizuj datę zakończenia pomijając weekendy
+      // Zaktualizuj datę zakończenia z uwzględnieniem godzin pracy zakładu
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDateExcludingWeekends = calculateEndDateExcludingWeekends(startDate, totalProductionTime);
+        const endDateWithWorkingHours = calculateEndDateWithWorkingHours(
+          startDate, 
+          totalProductionTime, 
+          taskData.workingHoursPerDay || 16
+        );
         setTaskData(prev => ({
           ...prev,
-          endDate: endDateExcludingWeekends
+          endDate: endDateWithWorkingHours
         }));
       }
 
@@ -947,13 +994,17 @@ const TaskForm = ({ taskId }) => {
         estimatedDuration: estimatedTimeMinutes
       }));
       
-      // Zaktualizuj datę zakończenia pomijając weekendy
+      // Zaktualizuj datę zakończenia z uwzględnieniem godzin pracy zakładu
       if (taskData.scheduledDate) {
         const startDate = new Date(taskData.scheduledDate);
-        const endDateExcludingWeekends = calculateEndDateExcludingWeekends(startDate, estimatedTimeMinutes);
+        const endDateWithWorkingHours = calculateEndDateWithWorkingHours(
+          startDate, 
+          estimatedTimeMinutes, 
+          taskData.workingHoursPerDay || 16
+        );
         setTaskData(prev => ({
           ...prev,
-          endDate: endDateExcludingWeekends
+          endDate: endDateWithWorkingHours
         }));
       }
       
@@ -1499,6 +1550,19 @@ const TaskForm = ({ taskId }) => {
                       </Typography>
                     </Alert>
                   )}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Czas pracy zakładu (godziny/dzień)"
+                    name="workingHoursPerDay"
+                    value={taskData.workingHoursPerDay}
+                    onChange={handleWorkingHoursChange}
+                    type="number"
+                    variant="outlined"
+                    InputProps={{ inputProps: { min: 1, max: 24, step: 1 } }}
+                    helperText="Ile godzin dziennie pracuje zakład (1-24h). Używane do wyliczania terminu zakończenia."
+                  />
                 </Grid>
               </Grid>
             </Paper>

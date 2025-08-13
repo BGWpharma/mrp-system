@@ -277,10 +277,14 @@ export const calculateCustomerOrderProfitability = (customerOrder, productCostsM
  * @param {Number} taskQuantity - Ilość produktu do wyprodukowania w zadaniu
  * @param {Object} options - Opcje obliczania
  * @param {Boolean} options.excludeWeekends - Czy pomijać weekendy (domyślnie true)
+ * @param {Number} options.workingHoursPerDay - Godziny pracy zakładu dziennie (domyślnie 16)
  * @returns {Number} - Szacowany czas trwania w minutach
  */
 export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1, options = {}) => {
-  const { excludeWeekends = true } = options;
+  const { 
+    excludeWeekends = true,
+    workingHoursPerDay = 16 
+  } = options;
 
   if (!recipe) {
     return 0;
@@ -288,10 +292,10 @@ export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1, optio
 
   // Pobierz czas przygotowania z receptury
   let prepTime = 0;
-  if (recipe.preparationTime || recipe.prepTime) {
-    prepTime = parseFloat(recipe.preparationTime || recipe.prepTime);
+  if (recipe.productionTimePerUnit || recipe.preparationTime || recipe.prepTime) {
+    prepTime = parseFloat(recipe.productionTimePerUnit || recipe.preparationTime || recipe.prepTime);
     if (isNaN(prepTime) || prepTime < 0) {
-      console.warn('Nieprawidłowy czas przygotowania:', recipe.preparationTime || recipe.prepTime);
+      console.warn('Nieprawidłowy czas przygotowania:', recipe.productionTimePerUnit || recipe.preparationTime || recipe.prepTime);
       prepTime = 0;
     }
   }
@@ -299,16 +303,9 @@ export const calculateEstimatedProductionTime = (recipe, taskQuantity = 1, optio
   // Oblicz szacowany czas na podstawie czasu przygotowania i ilości produktu
   let estimatedTime = prepTime * taskQuantity;
 
-  // Jeśli ma pomijać weekendy, zastosuj odpowiednią funkcję
-  if (excludeWeekends && estimatedTime > 0) {
-    // Import funkcji z dateUtils
-    try {
-      const { calculateProductionTimeExcludingWeekends } = require('./dateUtils');
-      estimatedTime = calculateProductionTimeExcludingWeekends(estimatedTime);
-    } catch (error) {
-      console.warn('Nie udało się zaimportować funkcji dateUtils, używam podstawowego czasu:', error);
-    }
-  }
+  // Funkcja obecnie zwraca czas w minutach bez uwzględnienia godzin pracy zakładu
+  // Kalkulacja godzin pracy zakładu jest wykonywana w miejscach użycia tej funkcji
+  // przy pomocy calculateEndDateWithWorkingHours
 
   return estimatedTime;
 };

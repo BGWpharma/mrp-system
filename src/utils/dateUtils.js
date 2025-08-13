@@ -623,4 +623,150 @@ export const calculateProductionTimeExcludingWeekends = (baseProductionTimeMinut
   }
   
   return baseProductionTimeMinutes;
+};
+
+/**
+ * Oblicza datę zakończenia z uwzględnieniem godzin pracy zakładu i pominięciem weekendów
+ * @param {Date} startDate - Data rozpoczęcia produkcji
+ * @param {number} productionMinutes - Czas produkcji w minutach (tylko dni robocze)
+ * @param {number} workingHoursPerDay - Godziny pracy zakładu dziennie (domyślnie 16)
+ * @returns {Date} Data zakończenia z uwzględnieniem godzin pracy i weekendów
+ */
+export const calculateEndDateWithWorkingHours = (startDate, productionMinutes, workingHoursPerDay = 16) => {
+  if (!startDate || !(startDate instanceof Date)) {
+    return startDate;
+  }
+  
+  if (!productionMinutes || productionMinutes <= 0) {
+    return new Date(startDate);
+  }
+  
+  const result = new Date(startDate);
+  let remainingMinutes = productionMinutes;
+  
+  // Jeśli zaczynamy w weekend, przesuń do następnego poniedziałku o 8:00
+  while (isWeekend(result)) {
+    result.setDate(result.getDate() + 1);
+    result.setHours(8, 0, 0, 0);
+  }
+  
+  // Upewnij się, że zaczynamy w godzinach roboczych (8:00-24:00 dla 16h lub 8:00-16:00 dla 8h)
+  const startHour = 8;
+  const endHour = startHour + workingHoursPerDay;
+  
+  if (result.getHours() < startHour) {
+    result.setHours(startHour, 0, 0, 0);
+  } else if (result.getHours() >= endHour) {
+    // Jeśli po godzinach roboczych, przenieś do następnego dnia roboczego
+    result.setDate(result.getDate() + 1);
+    while (isWeekend(result)) {
+      result.setDate(result.getDate() + 1);
+    }
+    result.setHours(startHour, 0, 0, 0);
+  }
+  
+  while (remainingMinutes > 0) {
+    const currentHour = result.getHours();
+    const currentMinute = result.getMinutes();
+    
+    // Sprawdź czy jesteśmy w godzinach roboczych i w dniu roboczym
+    if (!isWeekend(result) && currentHour >= startHour && currentHour < endHour) {
+      // Oblicz ile minut pozostało do końca dnia roboczego
+      const minutesUntilEndOfWorkDay = (endHour * 60) - (currentHour * 60 + currentMinute);
+      
+      if (remainingMinutes <= minutesUntilEndOfWorkDay) {
+        // Czas produkcji mieści się w obecnym dniu roboczym
+        result.setMinutes(result.getMinutes() + remainingMinutes);
+        remainingMinutes = 0;
+      } else {
+        // Potrzebujemy więcej czasu - przejdź do następnego dnia roboczego
+        remainingMinutes -= minutesUntilEndOfWorkDay;
+        result.setDate(result.getDate() + 1);
+        
+        // Pomiń weekendy
+        while (isWeekend(result)) {
+          result.setDate(result.getDate() + 1);
+        }
+        result.setHours(startHour, 0, 0, 0);
+      }
+    } else {
+      // Nie jesteśmy w godzinach roboczych lub w dniu roboczym
+      if (isWeekend(result)) {
+        // Przesuń do następnego poniedziałku
+        while (isWeekend(result)) {
+          result.setDate(result.getDate() + 1);
+        }
+        result.setHours(startHour, 0, 0, 0);
+      } else if (currentHour >= endHour) {
+        // Po godzinach roboczych - przejdź do następnego dnia roboczego
+        result.setDate(result.getDate() + 1);
+        while (isWeekend(result)) {
+          result.setDate(result.getDate() + 1);
+        }
+        result.setHours(startHour, 0, 0, 0);
+      } else {
+        // Przed godzinami roboczymi - ustaw na początek dnia roboczego
+        result.setHours(startHour, 0, 0, 0);
+      }
+    }
+  }
+  
+  return result;
+};
+
+/**
+ * Oblicza czas produkcji w minutach między dwiema datami z uwzględnieniem godzin pracy zakładu
+ * @param {Date} startDate - Data rozpoczęcia
+ * @param {Date} endDate - Data zakończenia
+ * @param {number} workingHoursPerDay - Godziny pracy zakładu dziennie (domyślnie 16)
+ * @returns {number} Liczba minut produkcji w ramach godzin roboczych
+ */
+export const calculateProductionTimeWithWorkingHours = (startDate, endDate, workingHoursPerDay = 16) => {
+  if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date)) {
+    return 0;
+  }
+  
+  if (startDate >= endDate) {
+    return 0;
+  }
+  
+  const startHour = 8;
+  const endHour = startHour + workingHoursPerDay;
+  let totalMinutes = 0;
+  const current = new Date(startDate);
+  const end = new Date(endDate);
+  
+  // Upewnij się, że zaczynamy w dniu roboczym
+  while (isWeekend(current) && current < end) {
+    current.setDate(current.getDate() + 1);
+    current.setHours(startHour, 0, 0, 0);
+  }
+  
+  if (current >= end) {
+    return 0;
+  }
+  
+  while (current < end) {
+    if (isWorkingDay(current)) {
+      const dayStart = new Date(current);
+      dayStart.setHours(startHour, 0, 0, 0);
+      
+      const dayEnd = new Date(current);
+      dayEnd.setHours(endHour, 0, 0, 0);
+      
+      const effectiveStart = current < dayStart ? dayStart : current;
+      const effectiveEnd = end > dayEnd ? dayEnd : end;
+      
+      if (effectiveStart < effectiveEnd) {
+        const dailyMinutes = (effectiveEnd - effectiveStart) / (1000 * 60);
+        totalMinutes += dailyMinutes;
+      }
+    }
+    
+    // Przejdź do następnego dnia
+    current.setDate(current.getDate() + 1);
+    current.setHours(startHour, 0, 0, 0);
+  }
+  
+  return Math.round(totalMinutes);
 }; 
