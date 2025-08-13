@@ -35,6 +35,7 @@ import {
   convertTimestampToDate,
   isDefaultDate 
 } from './utils/formatters.js';
+import { preciseAdd } from '../../utils/mathUtils.js';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 
 /**
@@ -479,7 +480,7 @@ export const getBatchReservations = async (batchId) => {
       if (!cancellationsByTask[taskId]) {
         cancellationsByTask[taskId] = 0;
       }
-      cancellationsByTask[taskId] += cancel.quantity || 0;
+      cancellationsByTask[taskId] = preciseAdd(cancellationsByTask[taskId], cancel.quantity || 0);
     });
     
     // Modyfikujemy rezerwacje o anulowania
@@ -581,7 +582,7 @@ export const getReservationsForMultipleBatches = async (batchIds) => {
           if (!cancellationsByTaskAndBatch[key]) {
             cancellationsByTaskAndBatch[key] = 0;
           }
-          cancellationsByTaskAndBatch[key] += cancellation.quantity || 0;
+          cancellationsByTaskAndBatch[key] = preciseAdd(cancellationsByTaskAndBatch[key], cancellation.quantity || 0);
         });
         
         // Aplikuj anulowania do rezerwacji i przenieś do resultMap

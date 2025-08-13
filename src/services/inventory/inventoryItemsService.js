@@ -27,6 +27,7 @@ import {
   formatQuantityPrecision,
   convertTimestampToDate 
 } from './utils/formatters.js';
+import { preciseAdd } from '../../utils/mathUtils.js';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 
 /**
@@ -157,7 +158,7 @@ export const getAllInventoryItems = async (
       let totalQuantity = 0;
       
       itemBatches.forEach(batch => {
-        totalQuantity += parseFloat(batch.quantity || 0);
+        totalQuantity = preciseAdd(totalQuantity, parseFloat(batch.quantity || 0));
       });
       
       // Przypisz obliczone wartości do pozycji
@@ -1281,7 +1282,7 @@ export const getInventoryItemsOptimized = async ({
       let totalQuantity = 0;
 
       itemBatches.forEach(batch => {
-        totalQuantity += parseFloat(batch.quantity || 0);
+        totalQuantity = preciseAdd(totalQuantity, parseFloat(batch.quantity || 0));
       });
 
       // Przypisz obliczone wartości

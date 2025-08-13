@@ -31,6 +31,7 @@ import {
   formatQuantityPrecision,
   convertTimestampToDate 
 } from './utils/formatters.js';
+import { preciseAdd } from '../../utils/mathUtils.js';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 import { generateLOTNumber } from '../../utils/numberGenerators.js';
 
@@ -573,7 +574,7 @@ export const recalculateItemQuantity = async (itemId) => {
     querySnapshot.forEach(doc => {
       const batchData = doc.data();
       // Dodaj ilość niezależnie od daty ważności
-      totalQuantity += Number(batchData.quantity) || 0;
+      totalQuantity = preciseAdd(totalQuantity, Number(batchData.quantity) || 0);
     });
     
     // Formatuj z odpowiednią precyzją

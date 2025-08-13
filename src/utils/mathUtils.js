@@ -76,3 +76,38 @@ export const preciseSubtract = (a, b) => {
   const result = a - b;
   return fixFloatingPointPrecision(result);
 };
+
+/**
+ * Porównuje dwie liczby z uwzględnieniem błędów precyzji
+ * @param {number} a - Pierwsza liczba
+ * @param {number} b - Druga liczba
+ * @param {number} tolerance - Tolerancja porównania (domyślnie 0.001)
+ * @returns {number} - -1 jeśli a < b, 0 jeśli a ≈ b, 1 jeśli a > b
+ */
+export const preciseCompare = (a, b, tolerance = 0.001) => {
+  const diff = fixFloatingPointPrecision(a - b);
+  if (Math.abs(diff) <= tolerance) return 0; // Równe z tolerancją
+  return diff < 0 ? -1 : 1;
+};
+
+/**
+ * Sprawdza czy pierwsza liczba jest mniejsza od drugiej z uwzględnieniem błędów precyzji
+ * @param {number} a - Pierwsza liczba
+ * @param {number} b - Druga liczba  
+ * @param {number} tolerance - Tolerancja porównania (domyślnie 0.001)
+ * @returns {boolean} - true jeśli a < b (z tolerancją)
+ */
+export const preciseIsLessThan = (a, b, tolerance = 0.001) => {
+  return preciseCompare(a, b, tolerance) < 0;
+};
+
+/**
+ * Sprawdza czy pierwsza liczba jest mniejsza lub równa drugiej z uwzględnieniem błędów precyzji
+ * @param {number} a - Pierwsza liczba
+ * @param {number} b - Druga liczba  
+ * @param {number} tolerance - Tolerancja porównania (domyślnie 0.001)
+ * @returns {boolean} - true jeśli a <= b (z tolerancją)
+ */
+export const preciseIsLessOrEqual = (a, b, tolerance = 0.001) => {
+  return preciseCompare(a, b, tolerance) <= 0;
+};

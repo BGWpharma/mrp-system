@@ -33,6 +33,7 @@ import {
   formatQuantityPrecision,
   convertTimestampToDate 
 } from './utils/formatters.js';
+import { preciseSubtract, preciseAdd, preciseIsLessThan, preciseIsLessOrEqual } from '../../utils/mathUtils.js';
 import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
 
 /**
@@ -133,7 +134,7 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
       required: validatedQuantity 
     });
     
-    if (effectivelyAvailable < validatedQuantity) {
+    if (preciseIsLessThan(effectivelyAvailable, validatedQuantity)) {
       const errorMsg = `Niewystarczająca ilość produktu w magazynie po uwzględnieniu rezerwacji. 
       Dostępne fizycznie: ${availableQuantity} ${item.unit}, 
       Zarezerwowane: ${item.bookedQuantity || 0} ${item.unit}, 
@@ -286,7 +287,7 @@ export const cancelBooking = async (itemId, quantity, taskId, userId) => {
     originalBookingSnapshot.forEach((bookingDoc) => {
       const bookingData = bookingDoc.data();
       if (bookingData.quantity) {
-        originalBookedQuantity += parseFloat(bookingData.quantity);
+        originalBookedQuantity = preciseAdd(originalBookedQuantity, parseFloat(bookingData.quantity));
       }
     });
     
@@ -417,8 +418,9 @@ export const updateReservation = async (reservationId, itemId, newQuantity, newB
     const quantityDiff = validatedQuantity - oldQuantity;
     
     // Sprawdź dostępność dla zwiększenia rezerwacji
-    if (quantityDiff > 0 && item.quantity - item.bookedQuantity < quantityDiff) {
-      throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${item.quantity - item.bookedQuantity} ${item.unit}`);
+    const availableQuantity = preciseSubtract(item.quantity, item.bookedQuantity);
+    if (quantityDiff > 0 && preciseIsLessThan(availableQuantity, quantityDiff)) {
+      throw new Error(`Niewystarczająca ilość produktu w magazynie. Dostępne: ${availableQuantity} ${item.unit}`);
     }
     
     // Aktualizuj pole bookedQuantity w produkcie
@@ -704,7 +706,7 @@ export const getReservationsGroupedByTask = async (itemId) => {
       }
       
       acc[taskId].reservations.push(reservation);
-      acc[taskId].totalQuantity += reservation.quantity || 0;
+      acc[taskId].totalQuantity = preciseAdd(acc[taskId].totalQuantity, reservation.quantity || 0);
       
       // Dodaj partię do listy partii dla tego zadania (kompatybilność z oryginalną strukturą)
       if (reservation.batchId) {
@@ -1085,9 +1087,9 @@ const selectBatchesForReservation = async (batches, quantity, taskId, batchId, i
       return sum + (reservation.quantity || 0);
     }, 0);
     
-    const effectivelyAvailableInBatch = selectedBatch.quantity - batchBookedQuantity;
+    const effectivelyAvailableInBatch = preciseSubtract(selectedBatch.quantity, batchBookedQuantity);
     
-    if (effectivelyAvailableInBatch < quantity) {
+    if (preciseIsLessThan(effectivelyAvailableInBatch, quantity)) {
       throw new Error(`Niewystarczająca ilość w partii po uwzględnieniu rezerwacji. 
       Dostępne fizycznie: ${selectedBatch.quantity} ${item.unit}, 
       Zarezerwowane przez inne MO: ${batchBookedQuantity} ${item.unit}, 
@@ -1127,12 +1129,12 @@ const selectBatchesForReservation = async (batches, quantity, taskId, batchId, i
       if (remainingQuantity <= 0) break;
       
       const reservedForThisBatch = batchReservationsMap[batch.id] || 0;
-      const effectivelyAvailable = Math.max(0, batch.quantity - reservedForThisBatch);
+      const effectivelyAvailable = Math.max(0, preciseSubtract(batch.quantity, reservedForThisBatch));
       
-      if (effectivelyAvailable <= 0) continue;
+      if (preciseIsLessOrEqual(effectivelyAvailable, 0)) continue;
       
       const quantityFromBatch = Math.min(effectivelyAvailable, remainingQuantity);
-      if (quantityFromBatch <= 0) continue;
+      if (preciseIsLessOrEqual(quantityFromBatch, 0)) continue;
       
       remainingQuantity -= quantityFromBatch;
       
@@ -1148,7 +1150,7 @@ const selectBatchesForReservation = async (batches, quantity, taskId, batchId, i
       });
     }
     
-    if (remainingQuantity > 0) {
+    if (!preciseIsLessOrEqual(remainingQuantity, 0)) {
       throw new Error(`Nie można zarezerwować wymaganej ilości ${quantity} ${item.unit} produktu ${item.name}. 
       Brakuje ${remainingQuantity} ${item.unit} ze względu na istniejące rezerwacje przez inne zadania produkcyjne.`);
     }
@@ -1429,7 +1431,7 @@ const updateTaskBatchesOnReservationChange = async (taskId, itemId, newBatchId, 
         // Znajdź i zaktualizuj odpowiednią partię
         const batchIndex = materialBatches[itemId].findIndex(b => b.batchId === newBatchId);
         if (batchIndex >= 0) {
-          materialBatches[itemId][batchIndex].quantity += quantityDiff;
+          materialBatches[itemId][batchIndex].quantity = preciseAdd(materialBatches[itemId][batchIndex].quantity, quantityDiff);
           materialBatches[itemId][batchIndex].batchNumber = batchNumber;
         }
       }
@@ -1831,7 +1833,7 @@ export const synchronizeBookedQuantity = async (item, userId = 'system-sync') =>
         reservations.forEach(reservation => {
           // Uwzględnij tylko aktywne rezerwacje (nie anulowane i nie completed)
           if (!reservation.status || reservation.status === 'active' || reservation.status === 'pending') {
-            actualBookedQuantity += parseFloat(reservation.quantity || 0);
+            actualBookedQuantity = preciseAdd(actualBookedQuantity, parseFloat(reservation.quantity || 0));
             reservationCount++;
           }
         });
@@ -2089,7 +2091,7 @@ export const checkBookedQuantitySync = async (itemId) => {
         reservations.forEach(reservation => {
           // Uwzględnij tylko aktywne rezerwacje
           if (!reservation.status || reservation.status === 'active' || reservation.status === 'pending') {
-            actualBookedQuantity += parseFloat(reservation.quantity || 0);
+            actualBookedQuantity = preciseAdd(actualBookedQuantity, parseFloat(reservation.quantity || 0));
             reservationCount++;
             allReservations.push({
               ...reservation,
