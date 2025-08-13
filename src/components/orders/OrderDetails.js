@@ -232,7 +232,11 @@ const OrderDetails = () => {
           try {
             setLoadingInvoices(true);
             const orderInvoices = await getInvoicesByOrderId(orderId);
-            setInvoices(orderInvoices);
+            const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
+            setInvoices(verifiedInvoices);
+            if (removedInvoicesCount > 0) {
+              showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
+            }
           } catch (error) {
             console.error('Błąd podczas pobierania faktur:', error);
           } finally {
@@ -245,7 +249,11 @@ const OrderDetails = () => {
           try {
             setLoadingCmrDocuments(true);
             const orderCmrDocuments = await getCmrDocumentsByOrderId(orderId);
-            setCmrDocuments(orderCmrDocuments);
+            const { cmrDocuments: verifiedCmrDocuments, removedCount: removedCmrCount } = await verifyCmrDocuments(orderCmrDocuments);
+            setCmrDocuments(verifiedCmrDocuments);
+            if (removedCmrCount > 0) {
+              showInfo(`Usunięto ${removedCmrCount} nieistniejących dokumentów CMR z listy`);
+            }
           } catch (error) {
             console.error('Błąd podczas pobierania dokumentów CMR:', error);
           } finally {
@@ -758,7 +766,11 @@ const OrderDetails = () => {
     try {
       setLoadingInvoices(true);
       const orderInvoices = await getInvoicesByOrderId(orderId);
-      setInvoices(orderInvoices);
+      const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
+      setInvoices(verifiedInvoices);
+      if (removedInvoicesCount > 0) {
+        showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania faktur:', error);
       showError(t('orderDetails.notifications.invoicesLoadError'));
@@ -792,7 +804,11 @@ const OrderDetails = () => {
     try {
       setLoadingCmrDocuments(true);
       const orderCmrDocuments = await getCmrDocumentsByOrderId(orderId);
-      setCmrDocuments(orderCmrDocuments);
+      const { cmrDocuments: verifiedCmrDocuments, removedCount: removedCmrCount } = await verifyCmrDocuments(orderCmrDocuments);
+      setCmrDocuments(verifiedCmrDocuments);
+      if (removedCmrCount > 0) {
+        showInfo(`Usunięto ${removedCmrCount} nieistniejących dokumentów CMR z listy`);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania dokumentów CMR:', error);
       showError(t('orderDetails.notifications.cmrDocumentsLoadError'));
@@ -826,6 +842,124 @@ const OrderDetails = () => {
         }}
       />
     );
+  };
+
+  // Funkcja weryfikująca czy faktury istnieją i filtrująca nieistniejące
+  const verifyInvoices = async (fetchedInvoices) => {
+    if (!fetchedInvoices || fetchedInvoices.length === 0) {
+      return { invoices: [], removedCount: 0 };
+    }
+
+    try {
+      const { getInvoiceById } = await import('../../services/invoiceService');
+      const verifiedInvoices = [];
+      let removedCount = 0;
+
+      for (const invoice of fetchedInvoices) {
+        try {
+          // Próba pobrania faktury z bazy
+          await getInvoiceById(invoice.id);
+          // Jeśli dotarliśmy tutaj, faktura istnieje
+          verifiedInvoices.push(invoice);
+        } catch (error) {
+          console.error(`Faktura ${invoice.id} (${invoice.number || 'bez numeru'}) nie istnieje i zostanie pominięta:`, error);
+          removedCount++;
+        }
+      }
+
+      return { invoices: verifiedInvoices, removedCount };
+    } catch (error) {
+      console.error('Błąd podczas weryfikacji faktur:', error);
+      return { invoices: fetchedInvoices, removedCount: 0 };
+    }
+  };
+
+  // Funkcja weryfikująca czy dokumenty CMR istnieją i filtrująca nieistniejące
+  const verifyCmrDocuments = async (fetchedCmrDocuments) => {
+    if (!fetchedCmrDocuments || fetchedCmrDocuments.length === 0) {
+      return { cmrDocuments: [], removedCount: 0 };
+    }
+
+    try {
+      const { getCmrDocumentById } = await import('../../services/cmrService');
+      const verifiedCmrDocuments = [];
+      let removedCount = 0;
+
+      for (const cmr of fetchedCmrDocuments) {
+        try {
+          // Próba pobrania dokumentu CMR z bazy
+          await getCmrDocumentById(cmr.id);
+          // Jeśli dotarliśmy tutaj, dokument CMR istnieje
+          verifiedCmrDocuments.push(cmr);
+        } catch (error) {
+          console.error(`Dokument CMR ${cmr.id} (${cmr.cmrNumber || 'bez numeru'}) nie istnieje i zostanie pominięty:`, error);
+          removedCount++;
+        }
+      }
+
+      return { cmrDocuments: verifiedCmrDocuments, removedCount };
+    } catch (error) {
+      console.error('Błąd podczas weryfikacji dokumentów CMR:', error);
+      return { cmrDocuments: fetchedCmrDocuments, removedCount: 0 };
+    }
+  };
+
+  // Funkcja obliczająca całkowitą wartość zamówienia
+  const calculateOrderTotalValue = () => {
+    // Oblicz wartość produktów
+    const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
+    
+    // Koszt dostawy
+    const shippingCost = parseFloat(order.shippingCost) || 0;
+    
+    // Dodatkowe koszty (tylko pozytywne)
+    const additionalCosts = order.additionalCostsItems ? 
+      order.additionalCostsItems
+        .filter(cost => parseFloat(cost.value) > 0)
+        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+    
+    // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
+    const discounts = order.additionalCostsItems ? 
+      Math.abs(order.additionalCostsItems
+        .filter(cost => parseFloat(cost.value) < 0)
+        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+    
+    // Łączna wartość bez uwzględnienia PO
+    return productsValue + shippingCost + additionalCosts - discounts;
+  };
+
+  // Funkcja obliczająca kwotę już rozliczoną na podstawie faktur
+  const calculateSettledAmount = () => {
+    if (!invoices || invoices.length === 0) {
+      return 0;
+    }
+
+    let totalSettled = 0;
+
+    invoices.forEach(invoice => {
+      // Pomijamy proformy - nie są rzeczywistymi płatnościami
+      if (invoice.isProforma) {
+        return;
+      }
+
+      // Wliczamy tylko kwoty rzeczywiście zapłacone w fakturach (nie proformach)
+      const totalPaid = parseFloat(invoice.totalPaid || 0);
+      totalSettled += totalPaid;
+
+      // Przedpłaty z proform również wliczamy do kwoty rozliczonej
+      // (to są rzeczywiste płatności wykorzystane z proform)
+      if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+        // Nowy system - suma kwot z proformAllocation
+        const advancePayments = invoice.proformAllocation.reduce((sum, allocation) => 
+          sum + (parseFloat(allocation.amount) || 0), 0);
+        totalSettled += advancePayments;
+      } else if (invoice.settledAdvancePayments) {
+        // Stary system - pole settledAdvancePayments
+        totalSettled += parseFloat(invoice.settledAdvancePayments || 0);
+      }
+    });
+
+    return totalSettled;
   };
 
   const getProductionStatus = (item, productionTasks) => {
@@ -1023,31 +1157,29 @@ const OrderDetails = () => {
                   {t('orderDetails.totalValue')}:
                 </Typography>
                 <Typography variant="h4" align="right" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                  {(() => {
-                    // Oblicz wartość produktów
-                    const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
-                    
-                    // Koszt dostawy
-                    const shippingCost = parseFloat(order.shippingCost) || 0;
-                    
-                    // Dodatkowe koszty (tylko pozytywne)
-                    const additionalCosts = order.additionalCostsItems ? 
-                      order.additionalCostsItems
-                        .filter(cost => parseFloat(cost.value) > 0)
-                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-                    
-                    // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-                    const discounts = order.additionalCostsItems ? 
-                      Math.abs(order.additionalCostsItems
-                        .filter(cost => parseFloat(cost.value) < 0)
-                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-                    
-                    // Łączna wartość bez uwzględnienia PO
-                    const total = productsValue + shippingCost + additionalCosts - discounts;
-                    
-                    return formatCurrency(total);
-                  })()}
+                  {formatCurrency(calculateOrderTotalValue())}
                 </Typography>
+                
+                {/* Kwota rozliczona */}
+                <Box sx={{ mt: 2, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" align="right" color="text.secondary">
+                    Kwota rozliczona:
+                  </Typography>
+                  <Typography variant="h6" align="right" color="success.main" sx={{ fontWeight: 'medium' }}>
+                    {formatCurrency(calculateSettledAmount())}
+                  </Typography>
+                  <Typography variant="body2" align="right" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {(() => {
+                      const totalValue = calculateOrderTotalValue();
+                      const settledAmount = calculateSettledAmount();
+                      const remainingAmount = totalValue - settledAmount;
+                      const percentage = totalValue > 0 ? ((settledAmount / totalValue) * 100).toFixed(1) : 0;
+                      
+                      return `${percentage}% • Pozostało: ${formatCurrency(remainingAmount)}`;
+                    })()}
+                  </Typography>
+                </Box>
+                
                 <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
                   <Tooltip title={t('orderDetails.refreshOrder')}>
                     <IconButton
@@ -1448,28 +1580,7 @@ const OrderDetails = () => {
                   Razem:
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
-                  {(() => {
-                    // Oblicz wartość zamówienia jako sumę produktów, kosztów dostawy i dodatkowych kosztów
-                    const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
-                    const shippingCost = parseFloat(order.shippingCost) || 0;
-                    
-                    // Dodatkowe koszty (tylko pozytywne)
-                    const additionalCosts = order.additionalCostsItems ? 
-                      order.additionalCostsItems
-                        .filter(cost => parseFloat(cost.value) > 0)
-                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-                    
-                    // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-                    const discounts = order.additionalCostsItems ? 
-                      Math.abs(order.additionalCostsItems
-                        .filter(cost => parseFloat(cost.value) < 0)
-                        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-                    
-                    // Łączna wartość
-                    const total = productsValue + shippingCost + additionalCosts - discounts;
-                    
-                    return formatCurrency(total);
-                  })()}
+                  {formatCurrency(calculateOrderTotalValue())}
                 </TableCell>
                 <TableCell colSpan={6} />
               </TableRow>

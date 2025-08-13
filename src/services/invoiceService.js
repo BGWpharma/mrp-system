@@ -38,6 +38,10 @@ export const getAllInvoices = async (filters = null) => {
         conditions.push(where('customer.id', '==', filters.customerId));
       }
       
+      if (filters.orderId) {
+        conditions.push(where('orderId', '==', filters.orderId));
+      }
+      
       if (filters.fromDate) {
         const fromTimestamp = Timestamp.fromDate(new Date(filters.fromDate));
         conditions.push(where('issueDate', '>=', fromTimestamp));

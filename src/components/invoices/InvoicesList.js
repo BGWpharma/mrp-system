@@ -50,6 +50,7 @@ import {
   getAvailableProformaAmount
 } from '../../services/invoiceService';
 import { getAllCustomers } from '../../services/customerService';
+import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -78,9 +79,13 @@ const InvoicesList = () => {
   const [filters, setFilters] = useState({
     status: '',
     customerId: '',
+    orderId: '',
     fromDate: null,
     toDate: null
   });
+
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -90,6 +95,7 @@ const InvoicesList = () => {
   useEffect(() => {
     fetchInvoices();
     fetchCustomers();
+    fetchOrders();
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nasłuchuj powrotu do karty/okna aby odświeżyć dane
@@ -164,6 +170,20 @@ const InvoicesList = () => {
       console.error('Error fetching customers:', error);
     } finally {
       setCustomersLoading(false);
+    }
+  };
+
+  const fetchOrders = async () => {
+    setOrdersLoading(true);
+    try {
+      const fetchedOrders = await getAllOrders();
+      // Filtrujemy tylko zamówienia klientów (nie zakupowe)
+      const customerOrders = fetchedOrders.filter(order => order.type !== 'purchase');
+      setOrders(customerOrders);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setOrdersLoading(false);
     }
   };
 
@@ -291,6 +311,7 @@ const InvoicesList = () => {
     setFilters({
       status: '',
       customerId: '',
+      orderId: '',
       fromDate: null,
       toDate: null
     });
@@ -492,6 +513,25 @@ const InvoicesList = () => {
                       {customers.map(customer => (
                         <MenuItem key={customer.id} value={customer.id}>
                           {customer.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Zamówienie klienta</InputLabel>
+                    <Select
+                      name="orderId"
+                      value={filters.orderId}
+                      onChange={handleFilterChange}
+                      label="Zamówienie klienta"
+                      disabled={ordersLoading}
+                    >
+                      <MenuItem value="">Wszystkie zamówienia</MenuItem>
+                      {orders.map(order => (
+                        <MenuItem key={order.id} value={order.id}>
+                          {order.orderNumber || `#${order.id.substring(0, 8).toUpperCase()}`} - {order.customer?.name || 'Bez nazwy'}
                         </MenuItem>
                       ))}
                     </Select>
