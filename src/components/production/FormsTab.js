@@ -26,6 +26,7 @@ import {
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useTranslation } from '../../hooks/useTranslation';
+import FormsSummaryCard from './FormsSummaryCard';
 
 const FormsTab = ({
   task,
@@ -41,6 +42,11 @@ const FormsTab = ({
 
   return (
     <Grid container spacing={3}>
+      {/* Sekcja podsumowania */}
+      <Grid item xs={12}>
+        <FormsSummaryCard formResponses={formResponses} />
+      </Grid>
+      
       <Grid item xs={12}>
         <Paper sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

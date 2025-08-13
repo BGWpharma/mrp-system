@@ -126,6 +126,23 @@
   "thirdProductLoss": "Third product loss",
   "finishedProductLoss": "Finished product loss",
   "netCapsuleWeight": "Net capsule weight",
+  "formsSummary": {
+    "title": "Forms Summary",
+    "completedMO": "Completed MO",
+    "productionControl": "Production Control",
+    "productionShift": "Production Shifts",
+    "totalProductQuantity": "Total product quantity",
+    "totalPackagingLoss": "Total packaging loss",
+    "totalBulkLoss": "Total bulk loss",
+    "totalRawMaterialLossCompletedMO": "Total raw material loss",
+    "totalNetCapsuleWeight": "Total net capsule weight",
+    "averageTemperature": "Average temperature",
+    "averageHumidity": "Average humidity",
+    "totalProductionQuantity": "Total production quantity",
+    "totalRawMaterialLossShift": "Total raw material loss",
+    "totalFinishedProductLoss": "Total finished product loss",
+    "note": "Summary includes all forms for this production task"
+  },
   "otherActivities": "Other activities",
   "machineIssues": "Machine issues"
 }
