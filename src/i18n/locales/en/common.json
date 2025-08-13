@@ -124,6 +124,8 @@
   "thirdProduct": "Third product print",
   "thirdProductQuantity": "Third product quantity",
   "thirdProductLoss": "Third product loss",
+  "finishedProductLoss": "Finished product loss",
+  "netCapsuleWeight": "Net capsule weight",
   "otherActivities": "Other activities",
   "machineIssues": "Machine issues"
 }

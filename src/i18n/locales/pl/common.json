@@ -124,6 +124,8 @@
   "thirdProduct": "Nadruk doypack/tub 3",
   "thirdProductQuantity": "Ilość nadruku 3",
   "thirdProductLoss": "Straty nadruku 3",
+  "finishedProductLoss": "Straty - produkt gotowy",
+  "netCapsuleWeight": "Waga netto kapsułek",
   "otherActivities": "Inne czynności",
   "machineIssues": "Awarie maszyn"
 }

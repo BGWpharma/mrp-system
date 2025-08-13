@@ -316,9 +316,9 @@ const FormsResponsesPage = () => {
     
     // Dodaj nagłówki w zależności od typu danych
     if (tabValue === 0) {
-      csvContent += "Data,Email,Numer MO,Ilość produktu,Straty opakowania,Straty produktu,Straty surowca,Strata - Produkt gotowy,Waga netto kapsułek\n";
+      csvContent += "Data,Email,Numer MO,Ilość produktu,Straty opakowania,Straty produktu,Straty surowca,Waga netto kapsułek\n";
       data.forEach(row => {
-        csvContent += `${formatDateTime(row.date)},${row.email || ''},${row.moNumber || ''},${row.productQuantity || ''},${row.packagingLoss || ''},${row.bulkLoss || ''},${row.rawMaterialLoss || ''},${row.finishedProductLoss || ''},${row.netCapsuleWeight || ''}\n`;
+        csvContent += `${formatDateTime(row.date)},${row.email || ''},${row.moNumber || ''},${row.productQuantity || ''},${row.packagingLoss || ''},${row.bulkLoss || ''},${row.rawMaterialLoss || ''},${row.netCapsuleWeight || ''}\n`;
       });
     } else if (tabValue === 1) {
       csvContent += "Data,Email,Imię i nazwisko,Stanowisko,Manufacturing Order,Customer Order,Nazwa produktu,Numer LOT,Temperatura,Wilgotność,Skan dokumentów,Zdjęcie produktu 1,Zdjęcie produktu 2,Zdjęcie produktu 3\n";
@@ -494,8 +494,7 @@ const FormsResponsesPage = () => {
                   <TableCell align="right">{t('packagingLoss')}</TableCell>
                   <TableCell align="right">{t('bulkLoss')}</TableCell>
                   <TableCell align="right">{t('rawMaterialLoss')}</TableCell>
-                  <TableCell align="right">Strata - Produkt gotowy</TableCell>
-                  <TableCell align="right">Waga netto kapsułek</TableCell>
+                  <TableCell align="right">{t('netCapsuleWeight')}</TableCell>
                   <TableCell>{t('mixingPlanReport')}</TableCell>
                   <TableCell align="center">{t('actions')}</TableCell>
                 </TableRow>
@@ -511,7 +510,6 @@ const FormsResponsesPage = () => {
                     <TableCell align="right">{row.packagingLoss || '-'}</TableCell>
                     <TableCell align="right">{row.bulkLoss || '-'}</TableCell>
                     <TableCell align="right">{row.rawMaterialLoss || '-'}</TableCell>
-                    <TableCell align="right">{row.finishedProductLoss || '-'}</TableCell>
                     <TableCell align="right">{row.netCapsuleWeight || '-'}</TableCell>
                     <TableCell>
                       {row.mixingPlanReportUrl ? (
@@ -927,6 +925,7 @@ const FormsResponsesPage = () => {
                   <TableCell align="right">{t('thirdProductQuantity')}</TableCell>
                   <TableCell align="right">{t('thirdProductLoss')}</TableCell>
                   <TableCell>{t('rawMaterialLoss')}</TableCell>
+                  <TableCell>{t('finishedProductLoss')}</TableCell>
                   <TableCell>{t('otherActivities')}</TableCell>
                   <TableCell>{t('machineIssues')}</TableCell>
                   <TableCell align="center">{t('actions')}</TableCell>
@@ -954,6 +953,7 @@ const FormsResponsesPage = () => {
                     <TableCell align="right">{row.thirdProduct !== 'BRAK' ? row.thirdProductQuantity : '-'}</TableCell>
                     <TableCell align="right">{row.thirdProduct !== 'BRAK' ? (row.thirdProductLoss || '0') : '-'}</TableCell>
                     <TableCell>{row.rawMaterialLoss || '-'}</TableCell>
+                    <TableCell align="right">{row.finishedProductLoss || '-'}</TableCell>
                     <TableCell>{row.otherActivities}</TableCell>
                     <TableCell>{row.machineIssues}</TableCell>
                     <TableCell align="center">

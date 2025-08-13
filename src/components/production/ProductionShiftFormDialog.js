@@ -109,6 +109,7 @@ const ProductionShiftFormDialog = ({
     secondProductLoss: '',
     thirdProductLoss: '',
     rawMaterialLoss: '', // Nowe pole: Straty surowca
+    finishedProductLoss: '', // Nowe pole: Straty - produkt gotowy
     otherActivities: '',
     machineIssues: ''
   });
@@ -273,6 +274,11 @@ const ProductionShiftFormDialog = ({
       errors.thirdProductLoss = 'Podaj wartość liczbową';
     }
     
+    // Walidacja pola strat produktu gotowego
+    if (formData.finishedProductLoss && isNaN(formData.finishedProductLoss)) {
+      errors.finishedProductLoss = 'Podaj wartość liczbową';
+    }
+    
     if (!formData.otherActivities) {
       errors.otherActivities = 'Pozostałe czynności produkcyjne są wymagane';
     }
@@ -314,6 +320,7 @@ const ProductionShiftFormDialog = ({
           secondProductLoss: formData.secondProductLoss,
           thirdProductLoss: formData.thirdProductLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
+          finishedProductLoss: formData.finishedProductLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
           createdAt: serverTimestamp()
@@ -363,6 +370,7 @@ const ProductionShiftFormDialog = ({
       secondProductLoss: '',
       thirdProductLoss: '',
       rawMaterialLoss: '',
+      finishedProductLoss: '',
       otherActivities: '',
       machineIssues: ''
     });
@@ -906,6 +914,20 @@ const ProductionShiftFormDialog = ({
                 onChange={handleChange}
                 placeholder="Opisz straty surowca jeśli wystąpiły (opcjonalne)"
                 helperText="Pole opcjonalne - opisz rodzaj i ilość strat surowca"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Straty - produkt gotowy (kg)"
+                name="finishedProductLoss"
+                type="number"
+                value={formData.finishedProductLoss}
+                onChange={handleChange}
+                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                helperText="Pole opcjonalne - ilość strat produktu gotowego"
+                inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
             

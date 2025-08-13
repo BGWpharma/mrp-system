@@ -107,6 +107,7 @@ const ProductionShiftForm = () => {
     secondProductLoss: '',
     thirdProductLoss: '',
     rawMaterialLoss: '', // Nowe pole: Straty surowca
+    finishedProductLoss: '', // Nowe pole: Straty - produkt gotowy
     otherActivities: '',
     machineIssues: ''
   });
@@ -172,6 +173,7 @@ const ProductionShiftForm = () => {
           secondProductLoss: editData.secondProductLoss || '',
           thirdProductLoss: editData.thirdProductLoss || '',
           rawMaterialLoss: editData.rawMaterialLoss || '',
+          finishedProductLoss: editData.finishedProductLoss || '',
           otherActivities: editData.otherActivities || '',
           machineIssues: editData.machineIssues || ''
         });
@@ -298,6 +300,11 @@ const ProductionShiftForm = () => {
       errors.thirdProductQuantity = 'Podaj ilość dla trzeciego produktu';
     }
     
+    // Walidacja pola strat produktu gotowego
+    if (formData.finishedProductLoss && isNaN(formData.finishedProductLoss)) {
+      errors.finishedProductLoss = 'Podaj wartość liczbową';
+    }
+    
     if (!formData.machineIssues && formData.machineIssues !== 'brak') {
       errors.machineIssues = 'Pole jest wymagane. Jeśli brak awarii, wpisz "brak"';
     }
@@ -341,6 +348,7 @@ const ProductionShiftForm = () => {
           secondProductLoss: formData.secondProductLoss,
           thirdProductLoss: formData.thirdProductLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
+          finishedProductLoss: formData.finishedProductLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
           createdAt: serverTimestamp()
@@ -381,6 +389,7 @@ const ProductionShiftForm = () => {
           secondProductLoss: '',
           thirdProductLoss: '',
           rawMaterialLoss: '',
+          finishedProductLoss: '',
           otherActivities: '',
           machineIssues: ''
         });
@@ -896,6 +905,20 @@ const ProductionShiftForm = () => {
                 onChange={handleChange}
                 placeholder="Opisz straty surowca jeśli wystąpiły (opcjonalne)"
                 helperText="Pole opcjonalne - opisz rodzaj i ilość strat surowca"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Straty - produkt gotowy (kg)"
+                name="finishedProductLoss"
+                type="number"
+                value={formData.finishedProductLoss}
+                onChange={handleChange}
+                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                helperText="Pole opcjonalne - ilość strat produktu gotowego"
+                inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
             
