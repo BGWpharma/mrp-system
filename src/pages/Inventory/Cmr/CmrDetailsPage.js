@@ -43,6 +43,7 @@ import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { 
   getCmrDocumentById, 
   updateCmrStatus, 
@@ -213,6 +214,7 @@ const CmrDetailsPage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation('cmr');
   
   const [loading, setLoading] = useState(true);
   const [cmrData, setCmrData] = useState(null);
@@ -418,7 +420,7 @@ const CmrDetailsPage = () => {
 
     } catch (error) {
       console.error('Błąd podczas obliczania szczegółów wag:', error);
-      showError('Wystąpił błąd podczas obliczania szczegółów wag');
+      showError(t('details.errors.loadingWeights'));
     } finally {
       setWeightDetailsLoading(false);
     }
@@ -563,7 +565,7 @@ const CmrDetailsPage = () => {
       }
     } catch (error) {
       console.error('Błąd podczas pobierania dokumentu CMR:', error);
-      showError('Nie udało się pobrać dokumentu CMR');
+      showError(t('details.errors.loadingDocument'));
       navigate('/inventory/cmr');
     } finally {
       setLoading(false);
@@ -1646,7 +1648,7 @@ const CmrDetailsPage = () => {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Alert severity="error">
-          Nie znaleziono dokumentu CMR o podanym identyfikatorze.
+          {t('details.errors.loadingDocument')}
         </Alert>
         <Button
           variant="outlined"
@@ -1654,7 +1656,7 @@ const CmrDetailsPage = () => {
           onClick={handleBack}
           sx={{ mt: 2 }}
         >
-          Powrót do listy
+          {t('details.backToList')}
         </Button>
       </Container>
     );
@@ -1681,7 +1683,7 @@ const CmrDetailsPage = () => {
               {renderStatusChip(cmrData.status)}
               {getPaymentStatusChip(cmrData.paymentStatus)}
               <Typography variant="body2" color="text.secondary">
-                Utworzono: {formatDate(cmrData.issueDate)}
+                {t('details.basicInfo.created')}: {formatDate(cmrData.issueDate)}
               </Typography>
             </Box>
           </Box>
@@ -1694,7 +1696,7 @@ const CmrDetailsPage = () => {
               onClick={handleBack}
               sx={{ minWidth: 'auto' }}
             >
-              Powrót
+              {t('details.backToList')}
             </Button>
             
             {isEditable && (
@@ -1704,7 +1706,7 @@ const CmrDetailsPage = () => {
                 onClick={handleEdit}
                 color="primary"
               >
-                Edytuj
+                {t('details.editDocument')}
               </Button>
             )}
             
@@ -1715,7 +1717,7 @@ const CmrDetailsPage = () => {
                 color="primary"
                 onClick={() => handleTransportValidation(CMR_STATUSES.ISSUED)}
               >
-                Wystaw dokument
+                {t('details.statusActions.setIssued')}
               </Button>
             )}
             
@@ -1725,7 +1727,7 @@ const CmrDetailsPage = () => {
                 color="warning"
                 onClick={() => handleTransportValidation(CMR_STATUSES.IN_TRANSIT)}
               >
-                Rozpocznij transport
+                {t('details.statusActions.setInTransit')}
               </Button>
             )}
             
@@ -1735,7 +1737,7 @@ const CmrDetailsPage = () => {
                 color="success"
                 onClick={() => handleTransportValidation(CMR_STATUSES.DELIVERED)}
               >
-                Oznacz jako dostarczone
+                {t('details.statusActions.setDelivered')}
               </Button>
             )}
             
@@ -1745,7 +1747,7 @@ const CmrDetailsPage = () => {
                 color="info"
                 onClick={() => handleTransportValidation(CMR_STATUSES.COMPLETED)}
               >
-                Zakończ
+                {t('details.statusActions.setCompleted')}
               </Button>
             )}
             
@@ -1756,7 +1758,7 @@ const CmrDetailsPage = () => {
                 color="error"
                 onClick={() => handleTransportValidation(CMR_STATUSES.CANCELED)}
               >
-                Anuluj
+                {t('details.statusActions.setCanceled')}
               </Button>
             )}
             
@@ -1766,7 +1768,7 @@ const CmrDetailsPage = () => {
               onClick={handleGenerateOfficialCmr}
               color="success"
             >
-              Oficjalny CMR
+              {t('details.actions.generateOfficialCMR')}
             </Button>
             
             {/* Grupa przycisków etykiet - tylko gdy dostępne są szczegółowe dane wag */}
@@ -1780,7 +1782,7 @@ const CmrDetailsPage = () => {
                 color="secondary"
                 disabled={weightSummary.totalBoxes === 0 || !itemsWeightDetails.some(item => item.hasDetailedData && item.hasBoxes)}
               >
-                  Etykiety kartonów ({weightSummary.totalBoxes})
+                  {t('details.actions.boxLabels', { count: weightSummary.totalBoxes })}
               </Button>
               
               <Button
@@ -1791,7 +1793,7 @@ const CmrDetailsPage = () => {
                 color="secondary"
                   disabled={weightSummary.totalPallets === 0}
               >
-                  Etykiety palet ({weightSummary.totalPallets})
+                  {t('details.actions.palletLabels', { count: weightSummary.totalPallets })}
               </Button>
             </Box>
             )}
@@ -1816,13 +1818,13 @@ const CmrDetailsPage = () => {
                 <ListItemIcon>
                   <PrintIcon fontSize="small" />
                 </ListItemIcon>
-                <ListItemText>Drukuj</ListItemText>
+                <ListItemText>{t('details.actions.print')}</ListItemText>
               </MenuItemComponent>
               <MenuItemComponent onClick={handleMigrateFromMenu}>
                 <ListItemIcon>
                   <RefreshIcon fontSize="small" />
                 </ListItemIcon>
-                <ListItemText>Migruj</ListItemText>
+                <ListItemText>{t('details.actions.migrate')}</ListItemText>
               </MenuItemComponent>
             </Menu>
           </Box>
@@ -1840,11 +1842,11 @@ const CmrDetailsPage = () => {
           scrollButtons="auto"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label="Podstawowe" {...a11yProps(0)} />
-          <Tab label="Strony i Transport" {...a11yProps(1)} />
-          <Tab label="Elementy i Wagi" {...a11yProps(2)} />
-          <Tab label="Finanse i Ustalenia" {...a11yProps(3)} />
-          <Tab label="Dodatkowe" {...a11yProps(4)} />
+          <Tab label={t('details.tabs.basic')} {...a11yProps(0)} />
+          <Tab label={t('details.tabs.partiesTransport')} {...a11yProps(1)} />
+          <Tab label={t('details.tabs.itemsWeights')} {...a11yProps(2)} />
+          <Tab label={t('details.tabs.financeSettings')} {...a11yProps(3)} />
+          <Tab label={t('details.tabs.additional')} {...a11yProps(4)} />
         </Tabs>
       </Paper>
 
@@ -1858,7 +1860,7 @@ const CmrDetailsPage = () => {
           {/* Informacje podstawowe */}
           <Card sx={{ mb: 3 }}>
             <CardHeader 
-              title="Informacje podstawowe" 
+              title={t('details.basicInfo.title')} 
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
               sx={{ pb: 1 }}
             />
@@ -1867,7 +1869,7 @@ const CmrDetailsPage = () => {
               <Grid container spacing={3}>
                 <Grid item xs={6} sm={3}>
                   <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Numer CMR
+                    {t('details.basicInfo.cmrNumber')}
                   </Typography>
                   <Typography variant="body1" sx={{ fontWeight: 500 }}>
                     {cmrData.cmrNumber}
@@ -1875,7 +1877,7 @@ const CmrDetailsPage = () => {
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Data wystawienia
+                    {t('details.basicInfo.issueDate')}
                   </Typography>
                   <Typography variant="body1">
                     {formatDate(cmrData.issueDate)}
@@ -1883,7 +1885,7 @@ const CmrDetailsPage = () => {
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Data dostawy
+                    {t('details.basicInfo.deliveryDate')}
                   </Typography>
                   <Typography variant="body1">
                     {formatDate(cmrData.deliveryDate)}
@@ -1891,7 +1893,7 @@ const CmrDetailsPage = () => {
                 </Grid>
                 <Grid item xs={6} sm={3}>
                   <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                    Typ transportu
+                    {t('details.basicInfo.transportType')}
                   </Typography>
                   <Typography variant="body1">
                     {cmrData.transportType}
@@ -1905,7 +1907,7 @@ const CmrDetailsPage = () => {
           {linkedOrders.length > 0 && (
             <Card sx={{ mb: 3 }}>
               <CardHeader 
-                title={`Powiązane zamówienia klienta (${linkedOrders.length})`}
+                title={t('details.linkedOrders.title', { count: linkedOrders.length })}
                 titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                 sx={{ pb: 1 }}
               />
@@ -1929,7 +1931,7 @@ const CmrDetailsPage = () => {
                         <Grid container spacing={2} alignItems="center">
                           <Grid item xs={12} sm={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              Numer zamówienia
+                              {t('details.linkedOrders.orderNumber')}
                             </Typography>
                             <Typography 
                               variant="body1" 
@@ -1943,7 +1945,7 @@ const CmrDetailsPage = () => {
                           </Grid>
                           <Grid item xs={12} sm={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              Klient
+                              {t('details.linkedOrders.customer')}
                             </Typography>
                             <Typography variant="body1">
                               {order.customer?.name || '-'}
@@ -1951,7 +1953,7 @@ const CmrDetailsPage = () => {
                           </Grid>
                           <Grid item xs={6} sm={3}>
                             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              Data zamówienia
+                              {t('details.linkedOrders.orderDate')}
                             </Typography>
                             <Typography variant="body2">
                               {formatDate(order.orderDate)}
@@ -1959,7 +1961,7 @@ const CmrDetailsPage = () => {
                           </Grid>
                           <Grid item xs={6} sm={3}>
                             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                              Status
+                              {t('details.linkedOrders.status')}
                             </Typography>
                             <Chip 
                               label={order.status} 
@@ -1986,7 +1988,7 @@ const CmrDetailsPage = () => {
           {/* Strony */}
           <Card sx={{ mb: 3 }}>
             <CardHeader 
-              title="Strony" 
+              title={t('details.parties.title')} 
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
               sx={{ pb: 1 }}
             />
@@ -1994,7 +1996,7 @@ const CmrDetailsPage = () => {
             <CardContent>
               <Box sx={{ mb: 3 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Nadawca
+                  {t('details.parties.sender')}
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
                   {cmrData.sender}
@@ -2012,7 +2014,7 @@ const CmrDetailsPage = () => {
               
               <Box sx={{ mb: 3 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Odbiorca
+                  {t('details.parties.recipient')}
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
                   {cmrData.recipient}
@@ -2024,7 +2026,7 @@ const CmrDetailsPage = () => {
               
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                  Przewoźnik
+                  {t('details.parties.carrier')}
                 </Typography>
                 <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
                   {cmrData.carrier}
@@ -2055,7 +2057,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title="Strony" 
+                  title={t('details.parties.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2065,7 +2067,7 @@ const CmrDetailsPage = () => {
                     <Grid item xs={12} md={4}>
                       <Box sx={{ mb: 3 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                          Nadawca
+                          {t('details.parties.sender')}
                         </Typography>
                         <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
                           {cmrData.sender}
@@ -2085,7 +2087,7 @@ const CmrDetailsPage = () => {
                     <Grid item xs={12} md={4}>
                       <Box sx={{ mb: 3 }}>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                          Odbiorca
+                          {t('details.parties.recipient')}
                         </Typography>
                         <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
                           {cmrData.recipient}
@@ -2099,7 +2101,7 @@ const CmrDetailsPage = () => {
                     <Grid item xs={12} md={4}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                          Przewoźnik
+                          {t('details.parties.carrier')}
                         </Typography>
                         <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
                           {cmrData.carrier}
@@ -2124,7 +2126,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Card>
                 <CardHeader 
-                  title="Transport i lokalizacje" 
+                  title={t('details.transport.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2132,13 +2134,13 @@ const CmrDetailsPage = () => {
                 <CardContent>
                   <Box sx={{ mb: 3 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      Miejsce załadunku
+                      {t('details.transport.loadingPlace')}
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
                       {cmrData.loadingPlace || '-'}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600, display: 'block', mt: 1 }}>
-                      Data załadunku
+                      {t('details.transport.loadingDate')}
                     </Typography>
                     <Typography variant="body2">
                       {formatDate(cmrData.loadingDate)}
@@ -2147,7 +2149,7 @@ const CmrDetailsPage = () => {
                   
                   <Box>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      Miejsce dostawy
+                      {t('details.transport.deliveryPlace')}
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
                       {cmrData.deliveryPlace || '-'}
@@ -2161,7 +2163,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Card>
                 <CardHeader 
-                  title="Informacje o pojeździe" 
+                  title={t('details.vehicle.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2170,7 +2172,7 @@ const CmrDetailsPage = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Numer rejestracyjny pojazdu
+                        {t('details.vehicle.vehicleRegistration')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500 }}>
                         {cmrData.vehicleInfo?.vehicleRegistration || '-'}
@@ -2179,7 +2181,7 @@ const CmrDetailsPage = () => {
                     
                     <Grid item xs={12}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Numer rejestracyjny naczepy
+                        {t('details.vehicle.trailerRegistration')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500 }}>
                         {cmrData.vehicleInfo?.trailerRegistration || '-'}
@@ -2199,7 +2201,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title="Elementy dokumentu CMR" 
+                  title={t('details.items.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2209,7 +2211,7 @@ const CmrDetailsPage = () => {
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                       <CircularProgress />
                       <Typography variant="body1" sx={{ ml: 2 }}>
-                        Obliczanie szczegółów wag...
+                        {t('details.loading.weights')}
                       </Typography>
                     </Box>
                   ) : cmrData.items && cmrData.items.length > 0 ? (
@@ -2218,14 +2220,14 @@ const CmrDetailsPage = () => {
                         <TableHead>
                           <TableRow>
                             <TableCell>Lp.</TableCell>
-                            <TableCell>Opis</TableCell>
-                            <TableCell>Ilość</TableCell>
-                            <TableCell>Jednostka</TableCell>
-                            <TableCell>Waga (kg)</TableCell>
-                            <TableCell>Palety</TableCell>
-                            <TableCell>Kartony</TableCell>
-                            <TableCell>Szczegóły wag</TableCell>
-                            <TableCell>Powiązane partie</TableCell>
+                            <TableCell>{t('details.items.description')}</TableCell>
+                            <TableCell>{t('details.items.quantity')}</TableCell>
+                            <TableCell>{t('details.items.unit')}</TableCell>
+                            <TableCell>{t('details.items.weight')}</TableCell>
+                            <TableCell>{t('details.palletDetails.title')}</TableCell>
+                            <TableCell>{t('details.boxDetails.title')}</TableCell>
+                            <TableCell>{t('details.items.weightDetails')}</TableCell>
+                            <TableCell>{t('details.items.batchInfo')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -2278,7 +2280,7 @@ const CmrDetailsPage = () => {
                                       {weightDetail.pallets && weightDetail.pallets.length > 0 && (
                                         <Box sx={{ mb: 1 }}>
                                           <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                                            Palety:
+                                            {t('details.palletDetails.title')}:
                                           </Typography>
                                           {weightDetail.pallets.map((pallet, palletIndex) => (
                                             <Typography key={palletIndex} variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
@@ -2294,7 +2296,7 @@ const CmrDetailsPage = () => {
                                       {weightDetail.hasBoxes && weightDetail.boxes && (weightDetail.boxes.fullBox || weightDetail.boxes.partialBox) && (
                                         <Box>
                                           <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                                            Kartony:
+                                            {t('details.boxDetails.title')}:
                                           </Typography>
                                           {weightDetail.boxes.fullBox && (
                                             <Typography variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
@@ -2365,7 +2367,7 @@ const CmrDetailsPage = () => {
                     </TableContainer>
                   ) : (
                     <Typography variant="body1" sx={{ textAlign: 'center', py: 2 }}>
-                      Brak elementów w dokumencie CMR
+                      {t('details.items.noItems')}
                     </Typography>
                   )}
                 </CardContent>
@@ -2377,7 +2379,7 @@ const CmrDetailsPage = () => {
               <Grid item xs={12}>
                 <Card>
                   <CardHeader 
-                    title="Podsumowanie wag i opakowań" 
+                    title={t('details.weightSummary.title')} 
                     titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                     sx={{ pb: 1 }}
                   />
@@ -2393,23 +2395,23 @@ const CmrDetailsPage = () => {
               borderColor: 'info.main' 
             }}>
                           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1, color: 'info.main' }}>
-                            Łączne podsumowanie
+                            {t('details.weightSummary.totalSummary')}
                           </Typography>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">Całkowita waga:</Typography>
+                              <Typography variant="body2">{t('details.weightSummary.totalWeight')}:</Typography>
                               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                 {weightSummary.totalWeight} kg
                               </Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">Łączna liczba palet:</Typography>
+                              <Typography variant="body2">{t('details.weightSummary.totalPallets')}:</Typography>
                               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                 {weightSummary.totalPallets}
                               </Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <Typography variant="body2">Łączna liczba kartonów:</Typography>
+                              <Typography variant="body2">{t('details.weightSummary.totalBoxes')}:</Typography>
                               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                 {weightSummary.totalBoxes}
                               </Typography>
@@ -2421,17 +2423,17 @@ const CmrDetailsPage = () => {
                       {/* Szczegółowy rozkład wag */}
                       <Grid item xs={12} md={8}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
-                          Szczegółowy rozkład wag i opakowań
+                          {t('details.weightSummary.detailedBreakdown')}
                         </Typography>
                         <TableContainer component={Paper} variant="outlined">
                           <Table size="small">
                             <TableHead>
                               <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' }}>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Pozycja</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Waga (kg)</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Palety</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Kartony</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Status danych</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.position')}</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.weight')}</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.pallets')}</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.boxes')}</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>{t('details.weightSummary.dataStatus')}</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -2463,7 +2465,7 @@ const CmrDetailsPage = () => {
                                   <TableCell>
                                     <Chip 
                                       size="small"
-                                      label={item.hasDetailedData ? 'Szczegółowe' : 'Podstawowe'}
+                                      label={item.hasDetailedData ? t('details.weightSummary.detailed') : t('details.weightSummary.basic')}
                                       color={item.hasDetailedData ? 'success' : 'warning'}
                                       variant={item.hasDetailedData ? 'filled' : 'outlined'}
                                     />
@@ -2499,7 +2501,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Card>
                 <CardHeader 
-                  title="Dokumenty i instrukcje" 
+                  title={t('details.documentsInstructions.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2507,7 +2509,7 @@ const CmrDetailsPage = () => {
                 <CardContent>
                   <Box sx={{ mb: 3 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      Załączone dokumenty
+                      {t('details.documentsInstructions.attachedDocuments')}
                     </Typography>
                     <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                       {cmrData.attachedDocuments || '-'}
@@ -2516,7 +2518,7 @@ const CmrDetailsPage = () => {
                   
                   <Box>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                      Instrukcje nadawcy
+                      {t('details.documentsInstructions.senderInstructions')}
                     </Typography>
                     <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                       {cmrData.instructionsFromSender || '-'}
@@ -2530,7 +2532,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Card>
                 <CardHeader 
-                  title="Opłaty i płatności" 
+                  title={t('details.feesPayments.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2539,7 +2541,7 @@ const CmrDetailsPage = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Przewoźne
+                        {t('details.feesPayments.freight')}
                       </Typography>
                       <Typography variant="body1">
                         {cmrData.freight || '-'}
@@ -2548,7 +2550,7 @@ const CmrDetailsPage = () => {
                     
                     <Grid item xs={6}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Koszty dodatkowe
+                        {t('details.feesPayments.additionalCosts')}
                       </Typography>
                       <Typography variant="body1">
                         {cmrData.carriage || '-'}
@@ -2557,7 +2559,7 @@ const CmrDetailsPage = () => {
                     
                     <Grid item xs={6}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Bonifikaty
+                        {t('details.feesPayments.discounts')}
                       </Typography>
                       <Typography variant="body1">
                         {cmrData.discounts || '-'}
@@ -2566,7 +2568,7 @@ const CmrDetailsPage = () => {
                     
                     <Grid item xs={6}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Saldo
+                        {t('details.feesPayments.balance')}
                       </Typography>
                       <Typography variant="body1">
                         {cmrData.balance || '-'}
@@ -2575,12 +2577,12 @@ const CmrDetailsPage = () => {
                     
                     <Grid item xs={12} sx={{ mt: 1 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Sposób płatności
+                        {t('details.feesPayments.paymentMethod')}
                       </Typography>
                       <Typography variant="body1">
-                        {cmrData.paymentMethod === 'sender' ? 'Płaci nadawca' : 
-                         cmrData.paymentMethod === 'recipient' ? 'Płaci odbiorca' : 
-                         'Inny sposób płatności'}
+                        {cmrData.paymentMethod === 'sender' ? t('details.feesPayments.paymentBySender') : 
+                         cmrData.paymentMethod === 'recipient' ? t('details.feesPayments.paymentByRecipient') : 
+                         t('details.feesPayments.otherPaymentMethod')}
                       </Typography>
                     </Grid>
                   </Grid>
@@ -2592,7 +2594,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title="Ustalenia szczególne i uwagi" 
+                  title={t('details.specialAgreements.title')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2601,7 +2603,7 @@ const CmrDetailsPage = () => {
                   <Grid container spacing={3}>
                     <Grid item xs={12} md={6}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Ustalenia szczególne
+                        {t('details.specialAgreements.specialAgreements')}
                       </Typography>
                       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                         {cmrData.specialAgreements || '-'}
@@ -2610,7 +2612,7 @@ const CmrDetailsPage = () => {
                     
                     <Grid item xs={12} md={6}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
-                        Zastrzeżenia i uwagi przewoźnika
+                        {t('details.specialAgreements.carrierReservations')}
                       </Typography>
                       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                         {cmrData.reservations || '-'}
@@ -2630,14 +2632,14 @@ const CmrDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Card>
                 <CardHeader 
-                  title="Uwagi i informacje dodatkowe" 
+                  title={t('details.additionalInfo.notesAndAdditionalInfo')} 
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
                 <Divider />
                 <CardContent>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {cmrData.notes || 'Brak uwag'}
+                    {cmrData.notes || t('details.additionalInfo.noNotes')}
                   </Typography>
                 </CardContent>
               </Card>
@@ -2647,7 +2649,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12} md={6}>
               <Card>
                 <CardHeader 
-                  title={`Raporty załadunku towaru (${loadingFormResponses.length})`}
+                  title={t('details.loadingReports.title', { count: loadingFormResponses.length })}
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2659,7 +2661,7 @@ const CmrDetailsPage = () => {
                     </Box>
                   ) : loadingFormResponses.length === 0 ? (
                     <Typography variant="body1" color="text.secondary">
-                      Brak raportów załadunku towaru dla tego CMR
+                      {t('details.loadingReports.noReports')}
                     </Typography>
                   ) : (
                     <Grid container spacing={3}>
@@ -2667,7 +2669,7 @@ const CmrDetailsPage = () => {
                         <Grid item xs={12} key={index}>
                           <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', opacity: 0.8 }}>
                             <Typography variant="subtitle2" gutterBottom sx={{ color: 'warning.main', fontWeight: 'bold' }}>
-                              Raport załadunku #{index + 1} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                              {t('details.loadingReports.reportTitle', { number: index + 1 })} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : t('details.common.notSet')}
                             </Typography>
                             
                             <Grid container spacing={2}>
@@ -2701,10 +2703,10 @@ const CmrDetailsPage = () => {
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Data załadunku
+                                  {t('details.loadingReports.loadingDate')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                                  {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
@@ -2781,10 +2783,10 @@ const CmrDetailsPage = () => {
                               
                               <Grid item xs={12} sm={6} md={3}>
                                 <Typography variant="body2" color="text.secondary">
-                                  Waga
+                                  {t('details.weightSummary.weight')}
                                 </Typography>
                                 <Typography variant="body1">
-                                  {report.weight || 'Nie podano'}
+                                  {report.weight || t('details.common.notProvided')}
                                 </Typography>
                               </Grid>
                               
@@ -2846,7 +2848,7 @@ const CmrDetailsPage = () => {
             <Grid item xs={12}>
               <Card>
                 <CardHeader 
-                  title={`Załączniki CMR (${attachments.length})`}
+                  title={t('details.attachments.title', { count: attachments.length })}
                   titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                   sx={{ pb: 1 }}
                 />
@@ -2903,28 +2905,28 @@ const CmrDetailsPage = () => {
                   ) : attachments.length === 0 ? (
                     <Paper sx={{ p: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
                       <Typography variant="body2" color="text.secondary" align="center">
-                        Brak załączników
+                        {t('details.attachments.noAttachments')}
                       </Typography>
                       <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
-                        Możesz dodać dokumenty, zdjęcia lub inne pliki związane z tym CMR
+                        {t('details.attachments.addFilesHint')}
                       </Typography>
                     </Paper>
                   ) : (
                     <Box>
                       <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
                         <AttachFileIcon sx={{ mr: 1 }} />
-                        Załączniki ({attachments.length})
+                        {t('details.attachments.attachmentsList', { count: attachments.length })}
                       </Typography>
                       
                       <TableContainer component={Paper} sx={{ mt: 2 }}>
                         <Table size="small">
                           <TableHead>
                             <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
-                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>{t('details.attachments.type')}</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>{t('details.attachments.fileName')}</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>{t('details.attachments.size')}</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>{t('details.attachments.dateAdded')}</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">{t('details.attachments.actions')}</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -3019,10 +3021,10 @@ const CmrDetailsPage = () => {
                         </Table>
                         <Box sx={{ p: 2, backgroundColor: 'action.hover', borderTop: 1, borderColor: 'divider' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            Łączna liczba załączników: {attachments.length}
+                            {t('details.attachments.totalCount', { count: attachments.length })}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            Łączny rozmiar: {formatFileSize(attachments.reduce((sum, attachment) => sum + attachment.size, 0))}
+                            {t('details.attachments.totalSize')}: {formatFileSize(attachments.reduce((sum, attachment) => sum + attachment.size, 0))}
                           </Typography>
                         </Box>
                       </TableContainer>
@@ -3162,7 +3164,7 @@ const CmrDetailsPage = () => {
                   <TableCell>Opis</TableCell>
                   <TableCell>Ilość</TableCell>
                   <TableCell>Jednostka</TableCell>
-                  <TableCell>Waga (kg)</TableCell>
+                  <TableCell>{t('details.weightSummary.weight')} (kg)</TableCell>
                   <TableCell>Palety</TableCell>
                   <TableCell>Kartony</TableCell>
                   <TableCell>Powiązane partie</TableCell>
@@ -3312,7 +3314,7 @@ const CmrDetailsPage = () => {
                 <Grid item xs={12} key={index}>
                   <Paper sx={{ p: 2, backgroundColor: 'background.default', border: 1, borderColor: 'divider' }}>
                     <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      Formularz załadunku #{index + 1} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                      {t('details.loadingReports.formTitle', { number: index + 1 })} - {report.fillDate ? format(report.fillDate, 'dd.MM.yyyy HH:mm', { locale: pl }) : t('details.common.notSet')}
                     </Typography>
                     
                                          <Grid container spacing={2}>
@@ -3368,10 +3370,10 @@ const CmrDetailsPage = () => {
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Data załadunku
+                           {t('details.loadingReports.loadingDate')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : 'Nie podano'}
+                           {report.loadingDate ? format(report.loadingDate, 'dd.MM.yyyy', { locale: pl }) : t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
@@ -3447,10 +3449,10 @@ const CmrDetailsPage = () => {
                        
                        <Grid item xs={12} sm={6} md={3}>
                          <Typography variant="caption" color="text.secondary">
-                           Waga
+                           {t('details.weightSummary.weight')}
                          </Typography>
                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                           {report.weight || 'Nie podano'}
+                           {report.weight || t('details.common.notProvided')}
                          </Typography>
                        </Grid>
                        
@@ -3503,7 +3505,7 @@ const CmrDetailsPage = () => {
                          <>
                            <Grid item xs={12}>
                              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.primary', borderBottom: 1, borderColor: 'divider', pb: 1, mt: 2 }}>
-                               Załączniki
+                               {t('details.attachments.title')}
                              </Typography>
                            </Grid>
                            
@@ -3531,7 +3533,7 @@ const CmrDetailsPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCancelStatusChange} color="inherit">
-            Anuluj
+            {t('dialogs.cancel')}
           </Button>
           <Button 
             onClick={handleConfirmStatusChange} 
@@ -3571,8 +3573,8 @@ const CmrDetailsPage = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPaymentStatusDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handlePaymentStatusUpdate} color="primary">Zapisz</Button>
+          <Button onClick={() => setPaymentStatusDialogOpen(false)}>{t('dialogs.cancel')}</Button>
+          <Button onClick={handlePaymentStatusUpdate} color="primary">{t('dialogs.update')}</Button>
         </DialogActions>
       </Dialog>
 

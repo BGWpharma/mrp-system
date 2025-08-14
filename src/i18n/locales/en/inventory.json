@@ -366,6 +366,19 @@
       "message": "Are you sure you want to delete this form response? This operation is irreversible.",
       "cancel": "Cancel",
       "delete": "Delete"
-    }
+    },
+    "exporting": "Exporting...",
+    "loading": "Loading...",
+    "results": "Results",
+    "page": "Page",
+    "of": "of",
+    "moreThan": "more than",
+    "rowsPerPage": "Rows per page:",
+    "noName": "No name",
+    "noData": "No data",
+    "ordered": "Ordered",
+    "unloaded": "Unloaded",
+    "expiry": "Expiry",
+    "invalidDate": "Invalid date"
   }
 }

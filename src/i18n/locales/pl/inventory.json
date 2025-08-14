@@ -366,6 +366,19 @@
       "message": "Czy na pewno chcesz usunąć tę odpowiedź formularza? Ta operacja jest nieodwracalna.",
       "cancel": "Anuluj",
       "delete": "Usuń"
-    }
+    },
+    "exporting": "Eksportowanie...",
+    "loading": "Ładowanie...",
+    "results": "Wyników",
+    "page": "Strona",
+    "of": "z",
+    "moreThan": "więcej niż",
+    "rowsPerPage": "Wierszy na stronę:",
+    "noName": "Brak nazwy",
+    "noData": "Brak danych",
+    "ordered": "Zamówiono",
+    "unloaded": "Rozładowano",
+    "expiry": "Ważność",
+    "invalidDate": "Nieprawidłowa data"
   }
 }

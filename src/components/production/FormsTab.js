@@ -50,7 +50,7 @@ const FormsTab = ({
       <Grid item xs={12}>
         <Paper sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h2">Formularze produkcyjne</Typography>
+            <Typography variant="h6" component="h2">{t('production.taskDetails.forms.title')}</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               {formTab === 0 && (
                 <Button
@@ -60,7 +60,7 @@ const FormsTab = ({
                   onClick={() => setCompletedMODialogOpen(true)}
                   size="medium"
                 >
-                  Wypełnij raport zakończonego MO
+                  {t('production.taskDetails.forms.fillCompletedMOReport')}
                 </Button>
               )}
               {formTab === 1 && (
@@ -71,7 +71,7 @@ const FormsTab = ({
                   onClick={() => setProductionControlDialogOpen(true)}
                   size="medium"
                 >
-                  Wypełnij raport kontroli produkcji
+                  {t('production.taskDetails.forms.fillProductionControlReport')}
                 </Button>
               )}
               {formTab === 2 && (
@@ -82,7 +82,7 @@ const FormsTab = ({
                   onClick={() => setProductionShiftDialogOpen(true)}
                   size="medium"
                 >
-                  Wypełnij raport zmiany produkcyjnej
+                  {t('production.taskDetails.forms.fillProductionShiftReport')}
                 </Button>
               )}
             </Box>
@@ -113,24 +113,24 @@ const FormsTab = ({
                 <>
                   {formResponses.completedMO.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                      Brak raportów zakończonych MO dla tego zadania.
+                      {t('production.taskDetails.forms.noCompletedMOReports')}
                     </Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Data</TableCell>
-                            <TableCell>Godzina</TableCell>
-                            <TableCell>Email</TableCell>
-                            <TableCell>Numer MO</TableCell>
-                            <TableCell>Ilość produktu</TableCell>
-                            <TableCell>Straty opakowania</TableCell>
-                            <TableCell>Straty wieczka</TableCell>
-                            <TableCell>Straty surowca</TableCell>
-                            <TableCell>Waga netto kapsułek</TableCell>
-                            <TableCell>Raport mieszań</TableCell>
-                            <TableCell>Akcje</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.date')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.time')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.email')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.moNumber')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.productQuantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.packagingLoss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.bulkLoss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.rawMaterialLoss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.netCapsuleWeight')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.mixingReport')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.actions')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -189,38 +189,38 @@ const FormsTab = ({
                 <>
                   {formResponses.productionControl.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                      Brak raportów kontroli produkcji dla tego zadania.
+                      {t('production.taskDetails.forms.noProductionControlReports')}
                     </Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Data wypełnienia</TableCell>
-                            <TableCell>Email</TableCell>
-                            <TableCell>Imię i nazwisko</TableCell>
-                            <TableCell>Stanowisko</TableCell>
-                            <TableCell>Produkt</TableCell>
-                            <TableCell>Nr LOT</TableCell>
-                            <TableCell>Data produkcji</TableCell>
-                            <TableCell>Godzina rozpoczęcia</TableCell>
-                            <TableCell>Data zakończenia</TableCell>
-                            <TableCell>Godzina zakończenia</TableCell>
-                            <TableCell>Data ważności</TableCell>
-                            <TableCell>Ilość</TableCell>
-                            <TableCell>Numer zmiany</TableCell>
-                            <TableCell>Temperatura</TableCell>
-                            <TableCell>Wilgotność</TableCell>
-                            <TableCell>Stan surowca</TableCell>
-                            <TableCell>Stan opakowania</TableCell>
-                            <TableCell>Zamknięcie opakowania</TableCell>
-                            <TableCell>Ilość opakowań</TableCell>
-                            <TableCell>Zamówienie klienta</TableCell>
-                            <TableCell>Skany dokumentów</TableCell>
-                            <TableCell>Zdjęcie produktu 1</TableCell>
-                            <TableCell>Zdjęcie produktu 2</TableCell>
-                            <TableCell>Zdjęcie produktu 3</TableCell>
-                            <TableCell>Akcje</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.fillDate')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.email')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.name')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.position')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.product')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.lotNumber')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.productionDate')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.startTime')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.endDate')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.endTime')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.expiryDate')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.quantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.shiftNumber')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.temperature')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.humidity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.rawMaterialPurity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.packagingPurity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.packagingClosure')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.packagingQuantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.customerOrder')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.documentScans')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.productPhoto1')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.productPhoto2')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.productPhoto3')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.actions')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -336,33 +336,33 @@ const FormsTab = ({
                 <>
                   {formResponses.productionShift.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                      Brak raportów zmian produkcyjnych dla tego zadania.
+                      {t('production.taskDetails.forms.noProductionShiftReports')}
                     </Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Data wypełnienia</TableCell>
-                            <TableCell>Email</TableCell>
-                            <TableCell>Osoba odpowiedzialna</TableCell>
-                            <TableCell>Rodzaj zmiany</TableCell>
-                            <TableCell>Ilość produkcji</TableCell>
-                            <TableCell>Pracownicy</TableCell>
-                            <TableCell>Nadruk 1</TableCell>
-                            <TableCell>Ilość nadruku 1</TableCell>
-                            <TableCell>Straty nadruku 1</TableCell>
-                            <TableCell>Nadruk 2</TableCell>
-                            <TableCell>Ilość nadruku 2</TableCell>
-                            <TableCell>Straty nadruku 2</TableCell>
-                            <TableCell>Nadruk 3</TableCell>
-                            <TableCell>Ilość nadruku 3</TableCell>
-                            <TableCell>Straty nadruku 3</TableCell>
-                            <TableCell>Straty surowca</TableCell>
-                            <TableCell>Straty - produkt gotowy</TableCell>
-                            <TableCell>Problemy maszyn</TableCell>
-                            <TableCell>Inne aktywności</TableCell>
-                            <TableCell>Akcje</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.fillDate')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.email')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.responsiblePerson')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.shiftType')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.productQuantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.workers')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print1')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print1Quantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print1Loss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print2')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print2Quantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print2Loss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print3')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print3Quantity')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.print3Loss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.rawMaterialLoss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.finishedProductLoss')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.machineIssues')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.otherActivities')}</TableCell>
+                            <TableCell>{t('production.taskDetails.forms.table.actions')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>

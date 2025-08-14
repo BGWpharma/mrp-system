@@ -294,24 +294,24 @@ const InventoryFormsResponsesPage = () => {
           {row.selectedItems.map((item, index) => (
             <Box key={index} sx={{ mb: 1, fontSize: '0.875rem' }}>
               <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
-                {item.productName || 'Brak nazwy'}
+                {item.productName || t('inventory.forms.noName')}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                Zamówiono: {item.quantity ? `${item.quantity} ${item.unit || 'szt.'}` : 'Brak danych'}
+                {t('inventory.forms.ordered')}: {item.quantity ? `${item.quantity} ${item.unit || 'szt.'}` : t('inventory.forms.noData')}
               </Typography>
               {item.unloadedQuantity && (
                 <Typography variant="caption" color="primary" sx={{ fontSize: '0.75rem', display: 'block' }}>
-                  Rozładowano: {item.unloadedQuantity}
+                  {t('inventory.forms.unloaded')}: {item.unloadedQuantity}
                 </Typography>
               )}
               {item.expiryDate && (
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block' }}>
-                  Ważność: {(() => {
+                  {t('inventory.forms.expiry')}: {(() => {
                     try {
                       const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
                       return format(date, 'dd.MM.yyyy');
                     } catch (error) {
-                      return 'Nieprawidłowa data';
+                      return t('inventory.forms.invalidDate');
                     }
                   })()}
                 </Typography>
@@ -351,26 +351,26 @@ const InventoryFormsResponsesPage = () => {
       let csvContent = "data:text/csv;charset=utf-8,";
       
       if (tabValue === 0) {
-        csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Numer CMR,Data załadunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Nazwa klienta,Numer zamówienia,Paleta/nazwa produktu,Ilość palet,Waga,Uwagi załadunku,Uwagi towaru\n";
+        csvContent += `${t('inventory.forms.fillDate')},${t('inventory.forms.email')},${t('inventory.forms.employeeName')},${t('inventory.forms.position')},${t('inventory.forms.cmrNumber')},${t('inventory.forms.loadingDate')},${t('inventory.forms.carrierName')},${t('inventory.forms.vehicleRegistration')},${t('inventory.forms.vehicleTechnicalCondition')},${t('inventory.forms.clientName')},${t('inventory.forms.orderNumber')},${t('inventory.forms.palletProductName')},${t('inventory.forms.palletQuantity')},${t('inventory.forms.weight')},${t('inventory.forms.loadingNotes')},${t('inventory.forms.goodsNotes')}\n`;
         result.data.forEach(row => {
           csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.cmrNumber || ''},${row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.clientName || ''},${row.orderNumber || ''},${row.palletProductName || ''},${row.palletQuantity || ''},${row.weight || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
         });
       } else if (tabValue === 1) {
-        csvContent += "Data wypełnienia,Email,Pracownik,Stanowisko,Data rozładunku,Przewoźnik,Nr rejestracyjny,Stan techniczny,Higiena transportu,Dostawca,Numer PO,Pozycje dostarczone,Ilość palet,Ilość kartonów/tub,Waga,Ocena wizualna,Nr certyfikatu ekologicznego,Uwagi rozładunku,Uwagi towaru\n";
+        csvContent += `${t('inventory.forms.fillDate')},${t('inventory.forms.email')},${t('inventory.forms.employeeName')},${t('inventory.forms.position')},${t('inventory.forms.unloadingDate')},${t('inventory.forms.carrierName')},${t('inventory.forms.vehicleRegistration')},${t('inventory.forms.vehicleTechnicalCondition')},${t('inventory.forms.transportHygiene')},${t('inventory.forms.supplierName')},${t('inventory.forms.poNumber')},${t('inventory.forms.deliveredItems')},${t('inventory.forms.palletQuantity')},${t('inventory.forms.cartonsTubsQuantity')},${t('inventory.forms.weight')},${t('inventory.forms.visualInspectionResult')},${t('inventory.forms.ecoCertificateNumber')},${t('inventory.forms.unloadingNotes')},${t('inventory.forms.goodsNotes')}\n`;
         result.data.forEach(row => {
           // Formatuj pozycje dostarczone dla CSV
           let itemsText = '';
           if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
             itemsText = row.selectedItems.map(item => {
-              let itemText = item.productName || 'Brak nazwy';
-              if (item.quantity) itemText += ` (zamówiono: ${item.quantity} ${item.unit || 'szt.'})`;
-              if (item.unloadedQuantity) itemText += ` (rozładowano: ${item.unloadedQuantity})`;
+              let itemText = item.productName || t('inventory.forms.noName');
+              if (item.quantity) itemText += ` (${t('inventory.forms.ordered')}: ${item.quantity} ${item.unit || 'szt.'})`;
+              if (item.unloadedQuantity) itemText += ` (${t('inventory.forms.unloaded')}: ${item.unloadedQuantity})`;
               if (item.expiryDate) {
                 try {
                   const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
-                  itemText += ` (ważność: ${format(date, 'dd.MM.yyyy')})`;
+                  itemText += ` (${t('inventory.forms.expiry')}: ${format(date, 'dd.MM.yyyy')})`;
                 } catch (error) {
-                  itemText += ` (ważność: nieprawidłowa data)`;
+                  itemText += ` (${t('inventory.forms.expiry')}: ${t('inventory.forms.invalidDate')})`;
                 }
               }
               return itemText;
@@ -484,7 +484,7 @@ const InventoryFormsResponsesPage = () => {
             disabled={loading || totalCount === 0}
             sx={{ mr: 1 }}
           >
-            {loading ? 'Eksportowanie...' : t('inventory.forms.exportToCSV')}
+            {loading ? t('inventory.forms.exporting') : t('inventory.forms.exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
@@ -498,12 +498,12 @@ const InventoryFormsResponsesPage = () => {
       {/* ✅ OPTYMALIZACJA: Show loading state and pagination info */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          {loading ? 'Ładowanie...' : `Wyników: ${totalCount}`}
+          {loading ? t('inventory.forms.loading') : `${t('inventory.forms.results')}: ${totalCount}`}
         </Typography>
         {totalCount > 0 && (
           <Chip 
             size="small" 
-            label={`Strona ${page + 1} z ${totalPages}`} 
+            label={`${t('inventory.forms.page')} ${page + 1} ${t('inventory.forms.of')} ${totalPages}`} 
             variant="outlined" 
           />
         )}
@@ -597,9 +597,9 @@ const InventoryFormsResponsesPage = () => {
               page={page}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Wierszy na stronę:"
+              labelRowsPerPage={t('inventory.forms.rowsPerPage')}
               labelDisplayedRows={({ from, to, count }) => 
-                `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+                `${from}-${to} ${t('inventory.forms.of')} ${count !== -1 ? count : `${t('inventory.forms.moreThan')} ${to}`}`
               }
             />
           )}
@@ -620,7 +620,7 @@ const InventoryFormsResponsesPage = () => {
             disabled={loading || totalCount === 0}
             sx={{ mr: 1 }}
           >
-            {loading ? 'Eksportowanie...' : t('inventory.forms.exportToCSV')}
+            {loading ? t('inventory.forms.exporting') : t('inventory.forms.exportToCSV')}
           </Button>
           <Button 
             variant="outlined"
@@ -634,12 +634,12 @@ const InventoryFormsResponsesPage = () => {
       {/* ✅ OPTYMALIZACJA: Show loading state and pagination info */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          {loading ? 'Ładowanie...' : `Wyników: ${totalCount}`}
+          {loading ? t('inventory.forms.loading') : `${t('inventory.forms.results')}: ${totalCount}`}
         </Typography>
         {totalCount > 0 && (
           <Chip 
             size="small" 
-            label={`Strona ${page + 1} z ${totalPages}`} 
+            label={`${t('inventory.forms.page')} ${page + 1} ${t('inventory.forms.of')} ${totalPages}`} 
             variant="outlined" 
           />
         )}
@@ -754,9 +754,9 @@ const InventoryFormsResponsesPage = () => {
               page={page}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Wierszy na stronę:"
+              labelRowsPerPage={t('inventory.forms.rowsPerPage')}
               labelDisplayedRows={({ from, to, count }) => 
-                `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+                `${from}-${to} ${t('inventory.forms.of')} ${count !== -1 ? count : `${t('inventory.forms.moreThan')} ${to}`}`
               }
             />
           )}

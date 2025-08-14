@@ -82,5 +82,236 @@
   "paymentStatuses": {
     "unpaid": "Unpaid",
     "paid": "Paid"
+  },
+  "details": {
+    "title": "CMR Document Details",
+    "backToList": "Back to List",
+    "printDocument": "Print Document",
+    "refreshData": "Refresh Data",
+    "editDocument": "Edit Document",
+    "tabs": {
+      "basic": "Basic",
+      "partiesTransport": "Parties & Transport",
+      "itemsWeights": "Items & Weights",
+      "financeSettings": "Finance & Settings",
+      "additional": "Additional"
+    },
+    "basicInfo": {
+      "title": "Basic Information",
+      "cmrNumber": "CMR Number",
+      "issueDate": "Issue Date",
+      "deliveryDate": "Delivery Date",
+      "transportType": "Transport Type",
+      "created": "Created"
+    },
+    "linkedOrders": {
+      "title": "Linked Customer Orders ({{count}})",
+      "orderNumber": "Order Number",
+      "customer": "Customer",
+      "totalValue": "Total Value",
+      "status": "Status",
+      "orderDate": "Order Date"
+    },
+    "parties": {
+      "title": "Parties",
+      "sender": "Sender",
+      "recipient": "Recipient",
+      "carrier": "Carrier"
+    },
+    "transport": {
+      "title": "Transport & Locations",
+      "loadingPlace": "Loading Place",
+      "loadingDate": "Loading Date",
+      "deliveryPlace": "Delivery Place"
+    },
+    "vehicle": {
+      "title": "Vehicle Information",
+      "vehicleRegistration": "Vehicle Registration Number",
+      "trailerRegistration": "Trailer Registration Number"
+    },
+    "items": {
+      "title": "CMR Document Items",
+      "description": "Description",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "weight": "Weight (kg)",
+      "volume": "Volume (m³)",
+      "batchInfo": "Batch Information",
+      "weightDetails": "Weight Details",
+      "showDetails": "Show Details",
+      "hideDetails": "Hide Details",
+      "noItems": "No items in CMR document"
+    },
+    "weightSummary": {
+      "title": "Weight Summary",
+      "totalWeight": "Total Weight",
+      "totalPallets": "Total Pallets",
+      "totalBoxes": "Total Boxes",
+      "calculating": "Calculating...",
+      "refresh": "Refresh Weights",
+      "totalSummary": "Total Summary",
+      "detailedBreakdown": "Detailed Weight and Packaging Breakdown",
+      "position": "Position",
+      "weight": "Weight",
+      "pallets": "Pallets",
+      "boxes": "Boxes",
+      "dataStatus": "Data Status",
+      "detailed": "Detailed",
+      "basic": "Basic"
+    },
+    "batchDetails": {
+      "title": "Batch Details",
+      "batchNumber": "Batch Number",
+      "quantity": "Quantity",
+      "expiryDate": "Expiry Date",
+      "lotNumber": "LOT Number",
+      "orderNumber": "Order",
+      "moNumber": "MO"
+    },
+    "palletDetails": {
+      "title": "Pallet Details",
+      "fullPallets": "Full Pallets",
+      "partialPallet": "Partial Pallet",
+      "totalPallets": "Total Pallets",
+      "itemsPerPallet": "pcs per pallet",
+      "weightPerPallet": "kg per pallet"
+    },
+    "boxDetails": {
+      "title": "Box Details",
+      "fullBoxes": "Full Boxes",
+      "partialBox": "Partial Box",
+      "totalBoxes": "Total Boxes",
+      "itemsPerBox": "pcs per box",
+      "weightPerBox": "kg per box"
+    },
+    "finance": {
+      "title": "Finance",
+      "paymentStatus": "Payment Status",
+      "changePaymentStatus": "Change Payment Status",
+      "transportCost": "Transport Cost",
+      "currency": "Currency"
+    },
+    "additionalInfo": {
+      "title": "Additional Information",
+      "notes": "Notes",
+      "instructions": "Instructions",
+      "specialHandling": "Special Requirements",
+      "notesAndAdditionalInfo": "Notes and Additional Information",
+      "noNotes": "No notes"
+    },
+    "documentsInstructions": {
+      "title": "Documents and Instructions",
+      "attachedDocuments": "Attached Documents",
+      "senderInstructions": "Sender Instructions"
+    },
+    "feesPayments": {
+      "title": "Fees and Payments",
+      "freight": "Freight",
+      "additionalCosts": "Additional Costs",
+      "discounts": "Discounts",
+      "balance": "Balance",
+      "paymentMethod": "Payment Method",
+      "paymentBySender": "Paid by Sender",
+      "paymentByRecipient": "Paid by Recipient",
+      "otherPaymentMethod": "Other Payment Method"
+    },
+    "specialAgreements": {
+      "title": "Special Agreements and Notes",
+      "specialAgreements": "Special Agreements",
+      "carrierReservations": "Carrier Reservations and Notes"
+    },
+    "attachments": {
+      "title": "CMR Attachments ({{count}})",
+      "upload": "Add Attachment",
+      "download": "Download",
+      "delete": "Delete",
+      "noAttachments": "No attachments",
+      "uploading": "Uploading...",
+      "confirmDelete": "Are you sure you want to delete this attachment?",
+      "addFilesHint": "You can add documents, photos or other files related to this CMR",
+      "attachmentsList": "Attachments ({{count}})",
+      "type": "Type",
+      "fileName": "File Name",
+      "size": "Size",
+      "dateAdded": "Date Added",
+      "actions": "Actions",
+      "totalCount": "Total attachments: {{count}}",
+      "totalSize": "Total size"
+    },
+    "labels": {
+      "title": "Labels",
+      "generateLabels": "Generate Labels",
+      "viewLabels": "View Labels",
+      "noLabels": "No labels to display"
+    },
+    "actions": {
+      "changeStatus": "Change Status",
+      "updatePaymentStatus": "Update Payment Status",
+      "generateLabels": "Generate Labels",
+      "printDocument": "Print Document",
+      "editDocument": "Edit Document",
+      "deleteDocument": "Delete Document",
+      "generateOfficialCMR": "Official CMR",
+      "boxLabels": "Box Labels ({{count}})",
+      "palletLabels": "Pallet Labels ({{count}})",
+      "print": "Print",
+      "migrate": "Migrate"
+    },
+    "statusActions": {
+      "setDraft": "Set as Draft",
+      "setIssued": "Issue Document",
+      "setInTransit": "Start Transport",
+      "setDelivered": "Mark as Delivered",
+      "setCompleted": "Complete",
+      "setCanceled": "Cancel"
+    },
+    "loading": {
+      "document": "Loading document...",
+      "weights": "Calculating weights...",
+      "attachments": "Loading attachments...",
+      "updating": "Updating...",
+      "saving": "Saving..."
+    },
+    "errors": {
+      "loadingDocument": "CMR document with the specified identifier was not found.",
+      "updatingStatus": "Error updating status",
+      "loadingWeights": "Error calculating weights",
+      "uploadingAttachment": "Error uploading attachment",
+      "deletingAttachment": "Error deleting attachment"
+    },
+    "success": {
+      "statusUpdated": "Status has been updated",
+      "paymentStatusUpdated": "Payment status has been updated",
+      "attachmentUploaded": "Attachment has been added",
+      "attachmentDeleted": "Attachment has been deleted"
+    },
+    "validation": {
+      "requiredForTransit": "To change status to \"In Transit\", loading forms are required.",
+      "completeForms": "Complete required forms"
+    },
+    "common": {
+      "notAvailable": "Not Available",
+      "notSet": "Not Set",
+      "unknown": "Unknown",
+      "total": "Total",
+      "weight": "Weight",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "description": "Description",
+      "pallets": "Pallets",
+      "boxes": "Boxes",
+      "notProvided": "Not provided"
+    },
+    "dialogs": {
+      "cancel": "Cancel",
+      "update": "Save"
+    },
+    "loadingReports": {
+      "title": "Cargo Loading Reports ({{count}})",
+      "noReports": "No cargo loading reports for this CMR",
+      "reportTitle": "Loading Report #{{number}}",
+      "formTitle": "Loading Form #{{number}}",
+      "loadingDate": "Loading Date"
+    }
   }
 }

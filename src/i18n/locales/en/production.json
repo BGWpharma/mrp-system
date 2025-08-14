@@ -155,6 +155,99 @@
     "createdAt": "Created Date",
     "createdBy": "Created By"
   },
+  "createFromOrder": {
+    "title": "Creating Production Task from Order",
+    "backToOrders": "Back to Orders",
+    "selectOrder": "Select Customer Order",
+    "orderLabel": "Order",
+    "selectOrderPlaceholder": "Select Order",
+    "orderDetails": "Order Details:",
+    "orderNumber": "Number:",
+    "customer": "Customer:",
+    "date": "Date:",
+    "status": "Status:",
+    "taskDataTitle": "Production Task Data:",
+    "taskName": "Task Name",
+    "priority": "Priority",
+    "reservationMethod": "Material Reservation Method",
+    "autoReserveMaterials": "Automatic Material Reservation",
+    "selectProductsTitle": "Select Products to Produce:",
+    "productTable": {
+      "product": "Product",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "price": "Price (€)",
+      "value": "Value (€)",
+      "status": "Status",
+      "productionTime": "Production Time",
+      "productionDate": "Production Date",
+      "workstation": "Workstation"
+    },
+    "taskDescription": "Task Description",
+    "createTasks": "Create Production Tasks",
+    "priorities": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "reservationMethods": {
+      "fifo": "FIFO (First In, First Out)",
+      "expiry": "By Expiry Date (Shortest Term First)"
+    },
+    "autoReserveOptions": {
+      "yes": "Yes - Automatically Reserve Materials",
+      "no": "No - Manual Reservation Later"
+    },
+    "statuses": {
+      "taskCreated": "Task Created",
+      "waiting": "Waiting",
+      "noRecipe": "No Recipe"
+    },
+    "alerts": {
+      "existingTasks": "Warning: {{count}} production tasks have already been created for this order:",
+      "duplicateWarning": "Creating additional tasks may lead to duplication.",
+      "seeTasksButton": "View Tasks",
+      "selectAtLeastOne": "Select at least one product from the order",
+      "noProductsSelected": "No products selected for production.",
+      "loadingDataError": "Error loading data: {{error}}",
+      "loadingOrderError": "Error loading order details: {{error}}",
+      "creatingTasksError": "Error creating production tasks: {{error}}",
+      "loadingWorkstationsError": "Error loading workstations: {{error}}",
+      "tasksCreated": "Created {{count}} production tasks",
+      "cleanedUpTasks": "Removed {{count}} non-existent production tasks from the order."
+    },
+    "messages": {
+      "noOrders": "No orders found. Create and confirm orders in the Customer Orders section.",
+      "selectOrderToCreate": "Select an order from the list to create production tasks.",
+      "orderHasNoItems": "Order contains no products.",
+      "orderHasNoRecipes": "Order contains no products with assigned recipes.",
+      "recipeBound": "Linked product \"{{product}}\" with recipe \"{{recipe}}\"",
+      "noRecipeForProduct": "No recipe for product {{product}}. Task was not created.",
+      "taskCreatedWithMO": "Task created: {{taskId}}, MO: {{moNumber}}",
+      "assignWorkstationFromRecipe": "Assign Workstation from Recipe",
+      "taskCreatedFromOrder": "Task created from customer order"
+    },
+    "loading": {
+      "creating": "Creating...",
+      "updating": "Updating..."
+    },
+    "tooltips": {
+      "recipeChip": "Recipe",
+      "productionTimeError": "No time in recipe",
+      "workstationFromRecipe": "Workstation assigned from recipe"
+    },
+    "placeholders": {
+      "noWorkstation": "None",
+      "noCustomer": "No customer data",
+      "productionDateTime": "Production Date and Time"
+    },
+    "validation": {
+      "missingRecipe": "Recipe not found with ID: {{recipeId}}",
+      "recipeNotFound": "No recipe found for product {{product}}",
+      "cannotCreateTask": "Cannot create task for item {{item}}"
+    }
+  },
   "timeline": {
     "title": "Production Timeline",
     "legend": "Legend:",
@@ -265,6 +358,73 @@
       "noWorkstations": "No workstation data. Refresh the page and try again.",
       "noTasksInDateRange": "No tasks in the selected date range.",
       "buttonText": "Export Timeline"
+    },
+    "taskDetails": {
+      "forms": {
+        "title": "Production Forms",
+        "fillCompletedMOReport": "Fill Completed MO Report",
+        "fillProductionControlReport": "Fill Production Control Report",
+        "fillProductionShiftReport": "Fill Production Shift Report",
+        "noCompletedMOReports": "No completed MO reports for this task.",
+        "noProductionControlReports": "No production control reports for this task.",
+        "noProductionShiftReports": "No production shift reports for this task.",
+        "table": {
+          "date": "Date",
+          "time": "Time",
+          "email": "Email",
+          "moNumber": "MO Number",
+          "productQuantity": "Product Quantity",
+          "packagingLoss": "Packaging Loss",
+          "bulkLoss": "Bulk Loss",
+          "rawMaterialLoss": "Raw Material Loss",
+          "netCapsuleWeight": "Net Capsule Weight",
+          "mixingReport": "Mixing Report",
+          "actions": "Actions",
+          "fillDate": "Fill Date",
+          "name": "Name",
+          "position": "Position",
+          "product": "Product",
+          "lotNumber": "Lot Number",
+          "productionDate": "Production Date",
+          "startTime": "Start Time",
+          "endDate": "End Date",
+          "endTime": "End Time",
+          "expiryDate": "Expiry Date",
+          "quantity": "Quantity",
+          "shiftNumber": "Shift Number",
+          "temperature": "Temperature",
+          "humidity": "Humidity",
+          "rawMaterialPurity": "Raw Material Purity",
+          "packagingPurity": "Packaging Purity",
+          "packagingClosure": "Packaging Closure",
+          "packagingQuantity": "Packaging Quantity",
+          "customerOrder": "Customer Order",
+          "documentScans": "Document Scans",
+          "productPhoto1": "Product Photo 1",
+          "productPhoto2": "Product Photo 2",
+          "productPhoto3": "Product Photo 3",
+          "responsiblePerson": "Responsible Person",
+          "shiftType": "Shift Type",
+          "workers": "Workers",
+          "print1": "Print 1",
+          "print1Quantity": "Print 1 Quantity",
+          "print1Loss": "Print 1 Loss",
+          "print2": "Print 2",
+          "print2Quantity": "Print 2 Quantity",
+          "print2Loss": "Print 2 Loss",
+          "print3": "Print 3",
+          "print3Quantity": "Print 3 Quantity",
+          "print3Loss": "Print 3 Loss",
+          "finishedProductLoss": "Finished Product Loss",
+          "machineIssues": "Machine Issues",
+          "otherActivities": "Other Activities"
+        }
+      },
+      "formTabs": {
+        "completedMO": "Completed MO",
+        "productionControl": "Production Control",
+        "productionShift": "Production Shift"
+      }
     }
   }
 }

@@ -155,6 +155,99 @@
     "createdAt": "Data utworzenia",
     "createdBy": "Utworzony przez"
   },
+  "createFromOrder": {
+    "title": "Tworzenie zadania produkcyjnego z zamówienia",
+    "backToOrders": "Powrót do zamówień",
+    "selectOrder": "Wybierz zamówienie klienta",
+    "orderLabel": "Zamówienie",
+    "selectOrderPlaceholder": "Wybierz zamówienie",
+    "orderDetails": "Szczegóły zamówienia:",
+    "orderNumber": "Numer:",
+    "customer": "Klient:",
+    "date": "Data:",
+    "status": "Status:",
+    "taskDataTitle": "Dane zadania produkcyjnego:",
+    "taskName": "Nazwa zadania",
+    "priority": "Priorytet",
+    "reservationMethod": "Metoda rezerwacji materiałów",
+    "autoReserveMaterials": "Automatyczna rezerwacja surowców",
+    "selectProductsTitle": "Wybierz produkty do wyprodukowania:",
+    "productTable": {
+      "product": "Produkt",
+      "quantity": "Ilość",
+      "unit": "J.m.",
+      "price": "Cena (€)",
+      "value": "Wartość (€)",
+      "status": "Status",
+      "productionTime": "Czas produkcji",
+      "productionDate": "Data produkcji",
+      "workstation": "Stanowisko produkcyjne"
+    },
+    "taskDescription": "Opis zadania",
+    "createTasks": "Utwórz zadania produkcyjne",
+    "priorities": {
+      "low": "Niski",
+      "normal": "Normalny",
+      "high": "Wysoki",
+      "urgent": "Pilny"
+    },
+    "reservationMethods": {
+      "fifo": "FIFO (pierwsze weszło, pierwsze wyszło)",
+      "expiry": "Według daty ważności (najkrótszy termin)"
+    },
+    "autoReserveOptions": {
+      "yes": "Tak - automatycznie rezerwuj surowce",
+      "no": "Nie - rezerwacja ręczna później"
+    },
+    "statuses": {
+      "taskCreated": "Zadanie utworzone",
+      "waiting": "Oczekuje",
+      "noRecipe": "Brak receptury"
+    },
+    "alerts": {
+      "existingTasks": "Uwaga: Dla tego zamówienia utworzono już {{count}} zadań produkcyjnych:",
+      "duplicateWarning": "Tworzenie dodatkowych może prowadzić do duplikacji.",
+      "seeTasksButton": "Zobacz zadania",
+      "selectAtLeastOne": "Wybierz co najmniej jeden produkt z zamówienia",
+      "noProductsSelected": "Nie wybrano żadnych produktów do wyprodukowania.",
+      "loadingDataError": "Błąd podczas ładowania danych: {{error}}",
+      "loadingOrderError": "Błąd podczas pobierania szczegółów zamówienia: {{error}}",
+      "creatingTasksError": "Błąd podczas tworzenia zadań produkcyjnych: {{error}}",
+      "loadingWorkstationsError": "Błąd podczas pobierania stanowisk produkcyjnych: {{error}}",
+      "tasksCreated": "Utworzono {{count}} zadań produkcyjnych",
+      "cleanedUpTasks": "Usunięto {{count}} nieistniejących zadań produkcyjnych z zamówienia."
+    },
+    "messages": {
+      "noOrders": "Nie znaleziono żadnych zamówień. Utwórz i potwierdź zamówienia w sekcji Zamówienia klientów.",
+      "selectOrderToCreate": "Wybierz zamówienie z listy, aby utworzyć zadania produkcyjne.",
+      "orderHasNoItems": "Zamówienie nie zawiera żadnych produktów.",
+      "orderHasNoRecipes": "Zamówienie nie zawiera produktów z przypisanymi recepturami.",
+      "recipeBound": "Powiązano produkt \"{{product}}\" z recepturą \"{{recipe}}\"",
+      "noRecipeForProduct": "Brak receptury dla produktu {{product}}. Zadanie nie zostało utworzone.",
+      "taskCreatedWithMO": "Zadanie utworzone: {{taskId}}, MO: {{moNumber}}",
+      "assignWorkstationFromRecipe": "Przypisz stanowisko z receptury",
+      "taskCreatedFromOrder": "Zadanie utworzone na podstawie zamówienia klienta"
+    },
+    "loading": {
+      "creating": "Tworzenie...",
+      "updating": "Aktualizowanie..."
+    },
+    "tooltips": {
+      "recipeChip": "Receptura",
+      "productionTimeError": "Brak czasu w recepturze",
+      "workstationFromRecipe": "Stanowisko przypisane z receptury"
+    },
+    "placeholders": {
+      "noWorkstation": "Brak",
+      "noCustomer": "Brak danych klienta",
+      "productionDateTime": "Data i godzina produkcji"
+    },
+    "validation": {
+      "missingRecipe": "Nie znaleziono receptury o ID: {{recipeId}}",
+      "recipeNotFound": "Nie znaleziono receptury dla produktu {{product}}",
+      "cannotCreateTask": "Nie udało się utworzyć zadania dla pozycji {{item}}"
+    }
+  },
   "timeline": {
     "title": "Harmonogram produkcji",
     "legend": "Legenda:",
@@ -265,6 +358,73 @@
       "noWorkstations": "Brak danych o stanowiskach. Odśwież stronę i spróbuj ponownie.",
       "noTasksInDateRange": "Brak zadań w wybranym zakresie dat.",
       "buttonText": "Eksportuj harmonogram"
+    },
+    "taskDetails": {
+      "forms": {
+        "title": "Formularze produkcyjne",
+        "fillCompletedMOReport": "Wypełnij raport zakończonego MO",
+        "fillProductionControlReport": "Wypełnij raport kontroli produkcji",
+        "fillProductionShiftReport": "Wypełnij raport zmiany produkcyjnej",
+        "noCompletedMOReports": "Brak raportów zakończonych MO dla tego zadania.",
+        "noProductionControlReports": "Brak raportów kontroli produkcji dla tego zadania.",
+        "noProductionShiftReports": "Brak raportów zmian produkcyjnych dla tego zadania.",
+        "table": {
+          "date": "Data",
+          "time": "Godzina",
+          "email": "Email",
+          "moNumber": "Numer MO",
+          "productQuantity": "Ilość produktu",
+          "packagingLoss": "Straty opakowania",
+          "bulkLoss": "Straty wieczka",
+          "rawMaterialLoss": "Straty surowca",
+          "netCapsuleWeight": "Waga netto kapsułek",
+          "mixingReport": "Raport mieszań",
+          "actions": "Akcje",
+          "fillDate": "Data wypełnienia",
+          "name": "Imię i nazwisko",
+          "position": "Stanowisko",
+          "product": "Produkt",
+          "lotNumber": "Nr LOT",
+          "productionDate": "Data produkcji",
+          "startTime": "Godzina rozpoczęcia",
+          "endDate": "Data zakończenia",
+          "endTime": "Godzina zakończenia",
+          "expiryDate": "Data ważności",
+          "quantity": "Ilość",
+          "shiftNumber": "Numer zmiany",
+          "temperature": "Temperatura",
+          "humidity": "Wilgotność",
+          "rawMaterialPurity": "Stan surowca",
+          "packagingPurity": "Stan opakowania",
+          "packagingClosure": "Zamknięcie opakowania",
+          "packagingQuantity": "Ilość opakowań",
+          "customerOrder": "Zamówienie klienta",
+          "documentScans": "Skany dokumentów",
+          "productPhoto1": "Zdjęcie produktu 1",
+          "productPhoto2": "Zdjęcie produktu 2",
+          "productPhoto3": "Zdjęcie produktu 3",
+          "responsiblePerson": "Osoba odpowiedzialna",
+          "shiftType": "Rodzaj zmiany",
+          "workers": "Pracownicy",
+          "print1": "Nadruk 1",
+          "print1Quantity": "Ilość nadruku 1",
+          "print1Loss": "Straty nadruku 1",
+          "print2": "Nadruk 2",
+          "print2Quantity": "Ilość nadruku 2",
+          "print2Loss": "Straty nadruku 2",
+          "print3": "Nadruk 3",
+          "print3Quantity": "Ilość nadruku 3",
+          "print3Loss": "Straty nadruku 3",
+          "finishedProductLoss": "Straty - produkt gotowy",
+          "machineIssues": "Problemy maszyn",
+          "otherActivities": "Inne aktywności"
+        }
+      },
+      "formTabs": {
+        "completedMO": "Zakończone MO",
+        "productionControl": "Kontrola produkcji",
+        "productionShift": "Zmiana produkcyjna"
+      }
     }
   }
 }

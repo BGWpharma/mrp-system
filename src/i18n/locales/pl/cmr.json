@@ -82,5 +82,236 @@
   "paymentStatuses": {
     "unpaid": "Nieopłacone",
     "paid": "Opłacone"
+  },
+  "details": {
+    "title": "Szczegóły dokumentu CMR",
+    "backToList": "Powrót do listy",
+    "printDocument": "Drukuj dokument",
+    "refreshData": "Odśwież dane",
+    "editDocument": "Edytuj dokument",
+    "tabs": {
+      "basic": "Podstawowe",
+      "partiesTransport": "Strony i Transport",
+      "itemsWeights": "Elementy i Wagi",
+      "financeSettings": "Finanse i Ustalenia",
+      "additional": "Dodatkowe"
+    },
+    "basicInfo": {
+      "title": "Informacje podstawowe",
+      "cmrNumber": "Numer CMR",
+      "issueDate": "Data wystawienia",
+      "deliveryDate": "Data dostawy",
+      "transportType": "Typ transportu",
+      "created": "Utworzono"
+    },
+    "linkedOrders": {
+      "title": "Powiązane zamówienia klienta ({{count}})",
+      "orderNumber": "Numer zamówienia",
+      "customer": "Klient",
+      "totalValue": "Wartość",
+      "status": "Status",
+      "orderDate": "Data zamówienia"
+    },
+    "parties": {
+      "title": "Strony",
+      "sender": "Nadawca",
+      "recipient": "Odbiorca",
+      "carrier": "Przewoźnik"
+    },
+    "transport": {
+      "title": "Transport i lokalizacje",
+      "loadingPlace": "Miejsce załadunku",
+      "loadingDate": "Data załadunku",
+      "deliveryPlace": "Miejsce dostawy"
+    },
+    "vehicle": {
+      "title": "Informacje o pojeździe",
+      "vehicleRegistration": "Numer rejestracyjny pojazdu",
+      "trailerRegistration": "Numer rejestracyjny naczepy"
+    },
+    "items": {
+      "title": "Elementy dokumentu CMR",
+      "description": "Opis",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "weight": "Waga (kg)",
+      "volume": "Objętość (m³)",
+      "batchInfo": "Informacje o partiach",
+      "weightDetails": "Szczegóły wag",
+      "showDetails": "Pokaż szczegóły",
+      "hideDetails": "Ukryj szczegóły",
+      "noItems": "Brak elementów w dokumencie CMR"
+    },
+    "weightSummary": {
+      "title": "Podsumowanie wag",
+      "totalWeight": "Całkowita waga",
+      "totalPallets": "Łączna liczba palet",
+      "totalBoxes": "Łączna liczba kartonów",
+      "calculating": "Obliczanie...",
+      "refresh": "Odśwież wagi",
+      "totalSummary": "Łączne podsumowanie",
+      "detailedBreakdown": "Szczegółowy rozkład wag i opakowań",
+      "position": "Pozycja",
+      "weight": "Waga",
+      "pallets": "Palety",
+      "boxes": "Kartony",
+      "dataStatus": "Status danych",
+      "detailed": "Szczegółowe",
+      "basic": "Podstawowe"
+    },
+    "batchDetails": {
+      "title": "Szczegóły partii",
+      "batchNumber": "Numer partii",
+      "quantity": "Ilość",
+      "expiryDate": "Data ważności",
+      "lotNumber": "Numer LOT",
+      "orderNumber": "Zamówienie",
+      "moNumber": "MO"
+    },
+    "palletDetails": {
+      "title": "Szczegóły palet",
+      "fullPallets": "Pełne palety",
+      "partialPallet": "Paleta częściowa",
+      "totalPallets": "Łącznie palet",
+      "itemsPerPallet": "szt. na palecie",
+      "weightPerPallet": "kg na palecie"
+    },
+    "boxDetails": {
+      "title": "Szczegóły kartonów",
+      "fullBoxes": "Pełne kartony",
+      "partialBox": "Karton częściowy",
+      "totalBoxes": "Łącznie kartonów",
+      "itemsPerBox": "szt. w kartonie",
+      "weightPerBox": "kg w kartonie"
+    },
+    "finance": {
+      "title": "Finanse",
+      "paymentStatus": "Status płatności",
+      "changePaymentStatus": "Zmień status płatności",
+      "transportCost": "Koszt transportu",
+      "currency": "Waluta"
+    },
+    "additionalInfo": {
+      "title": "Informacje dodatkowe",
+      "notes": "Uwagi",
+      "instructions": "Instrukcje",
+      "specialHandling": "Specjalne wymagania",
+      "notesAndAdditionalInfo": "Uwagi i informacje dodatkowe",
+      "noNotes": "Brak uwag"
+    },
+    "documentsInstructions": {
+      "title": "Dokumenty i instrukcje",
+      "attachedDocuments": "Załączone dokumenty",
+      "senderInstructions": "Instrukcje nadawcy"
+    },
+    "feesPayments": {
+      "title": "Opłaty i płatności",
+      "freight": "Przewoźne",
+      "additionalCosts": "Koszty dodatkowe",
+      "discounts": "Bonifikaty",
+      "balance": "Saldo",
+      "paymentMethod": "Sposób płatności",
+      "paymentBySender": "Płaci nadawca",
+      "paymentByRecipient": "Płaci odbiorca",
+      "otherPaymentMethod": "Inny sposób płatności"
+    },
+    "specialAgreements": {
+      "title": "Ustalenia szczególne i uwagi",
+      "specialAgreements": "Ustalenia szczególne",
+      "carrierReservations": "Zastrzeżenia i uwagi przewoźnika"
+    },
+    "attachments": {
+      "title": "Załączniki CMR ({{count}})",
+      "upload": "Dodaj załącznik",
+      "download": "Pobierz",
+      "delete": "Usuń",
+      "noAttachments": "Brak załączników",
+      "uploading": "Przesyłanie...",
+      "confirmDelete": "Czy na pewno chcesz usunąć ten załącznik?",
+      "addFilesHint": "Możesz dodać dokumenty, zdjęcia lub inne pliki związane z tym CMR",
+      "attachmentsList": "Załączniki ({{count}})",
+      "type": "Typ",
+      "fileName": "Nazwa pliku",
+      "size": "Rozmiar",
+      "dateAdded": "Data dodania",
+      "actions": "Akcje",
+      "totalCount": "Łączna liczba załączników: {{count}}",
+      "totalSize": "Łączny rozmiar"
+    },
+    "labels": {
+      "title": "Etykiety",
+      "generateLabels": "Generuj etykiety",
+      "viewLabels": "Podgląd etykiet",
+      "noLabels": "Brak etykiet do wyświetlenia"
+    },
+    "actions": {
+      "changeStatus": "Zmień status",
+      "updatePaymentStatus": "Zaktualizuj status płatności",
+      "generateLabels": "Generuj etykiety",
+      "printDocument": "Drukuj dokument",
+      "editDocument": "Edytuj dokument",
+      "deleteDocument": "Usuń dokument",
+      "generateOfficialCMR": "Oficjalny CMR",
+      "boxLabels": "Etykiety kartonów ({{count}})",
+      "palletLabels": "Etykiety palet ({{count}})",
+      "print": "Drukuj",
+      "migrate": "Migruj"
+    },
+    "statusActions": {
+      "setDraft": "Ustaw jako szkic",
+      "setIssued": "Wystaw dokument",
+      "setInTransit": "Rozpocznij transport",
+      "setDelivered": "Oznacz jako dostarczone",
+      "setCompleted": "Zakończ",
+      "setCanceled": "Anuluj"
+    },
+    "loading": {
+      "document": "Ładowanie dokumentu...",
+      "weights": "Obliczanie wag...",
+      "attachments": "Ładowanie załączników...",
+      "updating": "Aktualizowanie...",
+      "saving": "Zapisywanie..."
+    },
+    "errors": {
+      "loadingDocument": "Nie znaleziono dokumentu CMR o podanym identyfikatorze.",
+      "updatingStatus": "Błąd podczas aktualizacji statusu",
+      "loadingWeights": "Błąd podczas obliczania wag",
+      "uploadingAttachment": "Błąd podczas przesyłania załącznika",
+      "deletingAttachment": "Błąd podczas usuwania załącznika"
+    },
+    "success": {
+      "statusUpdated": "Status został zaktualizowany",
+      "paymentStatusUpdated": "Status płatności został zaktualizowany",
+      "attachmentUploaded": "Załącznik został dodany",
+      "attachmentDeleted": "Załącznik został usunięty"
+    },
+    "validation": {
+      "requiredForTransit": "Aby zmienić status na \"W transporcie\", wymagane są formularze załadunku.",
+      "completeForms": "Uzupełnij wymagane formularze"
+    },
+    "common": {
+      "notAvailable": "Nie dotyczy",
+      "notSet": "Nie ustawiono",
+      "unknown": "Nieznane",
+      "total": "Razem",
+      "weight": "Waga",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "description": "Opis",
+      "pallets": "Palety",
+      "boxes": "Kartony",
+      "notProvided": "Nie podano"
+    },
+    "dialogs": {
+      "cancel": "Anuluj",
+      "update": "Zapisz"
+    },
+    "loadingReports": {
+      "title": "Raporty załadunku towaru ({{count}})",
+      "noReports": "Brak raportów załadunku towaru dla tego CMR",
+      "reportTitle": "Raport załadunku #{{number}}",
+      "formTitle": "Formularz załadunku #{{number}}",
+      "loadingDate": "Data załadunku"
+    }
   }
 }
