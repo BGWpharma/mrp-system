@@ -1294,7 +1294,7 @@ const TaskDetailsPage = () => {
         onClick={handlePrintMODetails}
         sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
       >
-        Drukuj MO
+        {t('buttons.printMO')}
       </Button>
     );
 
@@ -1307,7 +1307,7 @@ const TaskDetailsPage = () => {
         onClick={handlePrintMaterialsAndLots}
         sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
       >
-        Raport materiałów
+        {t('buttons.materialReport')}
       </Button>
     );
 

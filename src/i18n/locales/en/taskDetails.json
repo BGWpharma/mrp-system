@@ -117,6 +117,35 @@
         "relatedPOsWithLots": "Related Purchase Orders with LOTs",
         "viewOrder": "View Order"
     },
+    "materialBatches": {
+        "table": {
+            "lot": "LOT",
+            "material": "Material",
+            "quantity": "Quantity",
+            "poNumber": "PO Number",
+            "supplier": "Supplier",
+            "actions": "Actions",
+            "noLotNumber": "No LOT number",
+            "unknownMaterial": "Unknown material",
+            "noPOConnection": "No PO connection",
+            "unknownSupplier": "Unknown supplier",
+            "viewPODetails": "PO Details"
+        }
+    },
+    "buttons": {
+        "printMO": "Print MO",
+        "materialReport": "Material Report",
+        "printReport": "Print Report",
+        "printDocument": "Print Document"
+    },
+    "mixingPlan": {
+        "title": "Mixing Plan",
+        "report": "Mixing Plan Report",
+        "reportFile": "PDF file with mixing report (optional)",
+        "downloadReport": "Download Report",
+        "reportFrom": "Report from mixing plan",
+        "generatedAutomatically": "PDF file generated automatically - ready to send"
+    },
     "productionHistory": {
         "title": "Production History",
         "machineSelector": "Machine for readings",
@@ -255,5 +284,6 @@
             "machineIssues": "Machine Issues",
             "otherActivities": "Other Activities"
         }
-    }
+    },
+    "mixingReportTooltip": "Open report"
 }

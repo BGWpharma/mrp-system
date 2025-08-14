@@ -157,7 +157,7 @@ const FormsTab = ({
                                     component="a" 
                                     href={form.mixingPlanReportUrl} 
                                     target="_blank" 
-                                    title="Otwórz raport"
+                                    title={t('mixingReportTooltip')}
                                   >
                                     <VisibilityIcon fontSize="small" />
                                   </IconButton>

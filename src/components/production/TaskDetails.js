@@ -482,31 +482,31 @@ const TaskDetails = ({ task }) => {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>LOT</TableCell>
-                      <TableCell>Materiał</TableCell>
-                      <TableCell align="right">Ilość</TableCell>
-                      <TableCell>Nr zamówienia (PO)</TableCell>
-                      <TableCell>Dostawca</TableCell>
-                      <TableCell>Akcje</TableCell>
+                      <TableCell>{t('materialBatches.table.lot')}</TableCell>
+                      <TableCell>{t('materialBatches.table.material')}</TableCell>
+                      <TableCell align="right">{t('materialBatches.table.quantity')}</TableCell>
+                      <TableCell>{t('materialBatches.table.poNumber')}</TableCell>
+                      <TableCell>{t('materialBatches.table.supplier')}</TableCell>
+                      <TableCell>{t('materialBatches.table.actions')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {relatedBatches.map((batch) => (
                       <TableRow key={batch.id} hover>
                         <TableCell sx={{ fontWeight: 'medium' }}>
-                          {batch.lotNumber || "Brak numeru LOT"}
+                          {batch.lotNumber || t('materialBatches.table.noLotNumber')}
                         </TableCell>
                         <TableCell>
-                          {batch.materialName || "Nieznany materiał"}
+                          {batch.materialName || t('materialBatches.table.unknownMaterial')}
                         </TableCell>
                         <TableCell align="right">
                           {batch.quantity || 0}
                         </TableCell>
                         <TableCell>
-                          {batch.purchaseOrderDetails?.number || "Brak powiązania z PO"}
+                          {batch.purchaseOrderDetails?.number || t('materialBatches.table.noPOConnection')}
                         </TableCell>
                         <TableCell>
-                          {batch.purchaseOrderDetails?.supplier?.name || "Nieznany dostawca"}
+                          {batch.purchaseOrderDetails?.supplier?.name || t('materialBatches.table.unknownSupplier')}
                         </TableCell>
                         <TableCell>
                           {batch.purchaseOrderDetails?.id && (
@@ -517,7 +517,7 @@ const TaskDetails = ({ task }) => {
                               to={`/purchase-orders/${batch.purchaseOrderDetails.id}`}
                               startIcon={<ShoppingBasketIcon />}
                             >
-                              Szczegóły PO
+                              {t('materialBatches.table.viewPODetails')}
                             </Button>
                           )}
                         </TableCell>

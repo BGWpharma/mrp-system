@@ -365,7 +365,7 @@ const ProductionPlanTab = ({
         <Grid item xs={12}>
           <Paper sx={{ p: 2, mb: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">Plan mieszań</Typography>
+              <Typography variant="h6">{t('mixingPlan.title')}</Typography>
             </Box>
             
             {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
