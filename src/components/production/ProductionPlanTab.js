@@ -31,6 +31,7 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/formatters';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const ProductionPlanTab = ({
   task,
@@ -54,6 +55,7 @@ const ProductionPlanTab = ({
   fromLocalDateTimeString,
   onChecklistItemUpdate
 }) => {
+  const { t } = useTranslation('taskDetails');
 
   // Helper function to format quantity with specified precision
   const formatQuantityPrecision = (value, precision = 3) => {
@@ -117,20 +119,20 @@ const ProductionPlanTab = ({
       {/* Sekcja historii produkcji */}
       <Grid item xs={12}>
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" component="h2" gutterBottom>Historia produkcji</Typography>
+          <Typography variant="h6" component="h2" gutterBottom>{t('productionHistory.title')}</Typography>
           
           {/* Selektor maszyny i przycisk dodawania */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel>Maszyna dla odczytów</InputLabel>
+                <InputLabel>{t('productionHistory.machineSelector')}</InputLabel>
                 <Select
                   value={selectedMachineId}
-                  label="Maszyna dla odczytów"
+                  label={t('productionHistory.machineSelector')}
                   onChange={(e) => setSelectedMachineId(e.target.value)}
                 >
                   <MenuItem value="">
-                    <em>Brak</em>
+                    <em>{t('productionHistory.noMachine')}</em>
                   </MenuItem>
                   {availableMachines.map((machine) => (
                     <MenuItem key={machine.id} value={machine.id}>
@@ -157,7 +159,7 @@ const ProductionPlanTab = ({
               onClick={handleAddHistoryClick}
               size="small"
             >
-              Dodaj wpis
+              {t('productionHistory.addRecord')}
             </Button>
           </Box>
 
@@ -170,19 +172,19 @@ const ProductionPlanTab = ({
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Data rozpoczęcia</TableCell>
-                    <TableCell>Data zakończenia</TableCell>
-                    <TableCell>Czas trwania</TableCell>
-                    <TableCell>Wyprodukowana ilość</TableCell>
+                    <TableCell>{t('productionHistory.table.startTime')}</TableCell>
+                    <TableCell>{t('productionHistory.table.endTime')}</TableCell>
+                    <TableCell>{t('productionHistory.table.duration')}</TableCell>
+                    <TableCell>{t('productionHistory.table.quantity')}</TableCell>
                     {selectedMachineId && (
                       <>
-                        <TableCell>OK z maszyny</TableCell>
-                        <TableCell>NOK z maszyny</TableCell>
-                        <TableCell>Razem z maszyny</TableCell>
+                        <TableCell>{t('productionHistory.table.machine')} OK</TableCell>
+                        <TableCell>{t('productionHistory.table.machine')} NOK</TableCell>
+                        <TableCell>{t('productionHistory.table.machine')} Σ</TableCell>
                       </>
                     )}
-                    <TableCell>Operator</TableCell>
-                    <TableCell>Akcje</TableCell>
+                    <TableCell>{t('productionHistory.table.operator')}</TableCell>
+                    <TableCell>{t('productionHistory.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

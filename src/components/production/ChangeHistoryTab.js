@@ -16,8 +16,10 @@ import {
 import {
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
+import { useTranslation } from '../../hooks/useTranslation';
 
 const ChangeHistoryTab = ({ task, getUserName }) => {
+  const { t } = useTranslation('taskDetails');
   return (
     <Grid container spacing={3}>
       {task.statusHistory && task.statusHistory.length > 0 && (
@@ -26,7 +28,7 @@ const ChangeHistoryTab = ({ task, getUserName }) => {
             <Accordion defaultExpanded>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography variant="h6" component="h2">
-                  Historia zmian statusu ({task.statusHistory.length})
+                  {t('sections.changeHistory')} ({task.statusHistory.length})
                 </Typography>
               </AccordionSummary>
               <AccordionDetails>
@@ -34,10 +36,10 @@ const ChangeHistoryTab = ({ task, getUserName }) => {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Data i godzina</TableCell>
-                        <TableCell>Poprzedni status</TableCell>
-                        <TableCell>Nowy status</TableCell>
-                        <TableCell>Kto zmienił</TableCell>
+                        <TableCell>{t('changeHistory.table.dateTime')}</TableCell>
+                        <TableCell>{t('changeHistory.table.previousStatus')}</TableCell>
+                        <TableCell>{t('changeHistory.table.newStatus')}</TableCell>
+                        <TableCell>{t('changeHistory.table.changedBy')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -46,7 +48,7 @@ const ChangeHistoryTab = ({ task, getUserName }) => {
                           <TableCell>
                             {change.changedAt 
                               ? new Date(change.changedAt).toLocaleString('pl') 
-                              : 'Brak daty'}
+                              : t('changeHistory.table.noDate')}
                           </TableCell>
                           <TableCell>{change.oldStatus}</TableCell>
                           <TableCell>{change.newStatus}</TableCell>
@@ -67,10 +69,10 @@ const ChangeHistoryTab = ({ task, getUserName }) => {
         <Grid item xs={12}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" component="h2" gutterBottom>
-              Historia zmian
+              {t('changeHistory.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" align="center">
-              Brak historii zmian dla tego zadania
+              {t('changeHistory.noHistory')}
             </Typography>
           </Paper>
         </Grid>

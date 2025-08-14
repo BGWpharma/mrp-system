@@ -29,6 +29,7 @@ import expiryDatesPL from './locales/pl/expiryDates.json';
 import stocktakingPL from './locales/pl/stocktaking.json';
 import interactionsPL from './locales/pl/interactions.json';
 import sidebarPL from './locales/pl/sidebar.json';
+import taskDetailsPL from './locales/pl/taskDetails.json';
 
 // Angielskie tłumaczenia
 import commonEN from './locales/en/common.json';
@@ -55,6 +56,7 @@ import expiryDatesEN from './locales/en/expiryDates.json';
 import stocktakingEN from './locales/en/stocktaking.json';
 import interactionsEN from './locales/en/interactions.json';
 import sidebarEN from './locales/en/sidebar.json';
+import taskDetailsEN from './locales/en/taskDetails.json';
 
 // Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
@@ -82,7 +84,8 @@ const resources = {
     expiryDates: expiryDatesPL,
     stocktaking: stocktakingPL,
     interactions: interactionsPL,
-    sidebar: sidebarPL
+    sidebar: sidebarPL,
+    taskDetails: taskDetailsPL
   },
   en: {
     common: commonEN,
@@ -108,7 +111,8 @@ const resources = {
     expiryDates: expiryDatesEN,
     stocktaking: stocktakingEN,
     interactions: interactionsEN,
-    sidebar: sidebarEN
+    sidebar: sidebarEN,
+    taskDetails: taskDetailsEN
   }
 };
 
@@ -140,7 +144,7 @@ i18n
       'machines', 'purchaseOrders', 'cmr', 'forms',
       'calculator', 'priceLists', 'aiAssistant', 
       'environmentalConditions', 'expiryDates', 'stocktaking',
-      'interactions', 'sidebar'
+      'interactions', 'sidebar', 'taskDetails'
     ],
     
     // Konfiguracja wykrywania języka

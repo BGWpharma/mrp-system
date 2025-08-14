@@ -161,7 +161,7 @@ const FormsTab = lazy(() => import('../../components/production/FormsTab'));
 const ProductionPlanTab = lazy(() => import('../../components/production/ProductionPlanTab'));
 
 const TaskDetailsPage = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('taskDetails');
   const { id } = useParams();
   const navigate = useNavigate();
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
@@ -4187,22 +4187,22 @@ const TaskDetailsPage = () => {
       <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
-            <Typography variant="h6">Podsumowanie kosztów materiałów</Typography>
+            <Typography variant="h6">{t('materialsSummary.title')}</Typography>
             {costChanged && (
               <Alert severity="info" sx={{ mt: 1 }}>
-                Obliczone koszty różnią się od zapisanych w bazie danych. Użyj przycisku "Aktualizuj ręcznie" aby zapisać nowe koszty.
+                {t('materialsSummary.costChanged')}
               </Alert>
             )}
             {consumedCosts.totalCost > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Skonsumowane: {consumedCosts.totalCost.toFixed(2)} € | 
-                Zarezerwowane: {reservedCosts.totalCost.toFixed(2)} €
+                {t('materialsSummary.consumed')}: {consumedCosts.totalCost.toFixed(2)} € | 
+                {t('materialsSummary.reserved')}: {reservedCosts.totalCost.toFixed(2)} €
               </Typography>
             )}
           </Grid>
           <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
             <Typography variant="body1">
-              <strong>Całkowity koszt materiałów:</strong> {totalMaterialCost.toFixed(2)} €
+              <strong>{t('materialsSummary.totalCost')}:</strong> {totalMaterialCost.toFixed(2)} €
               {task.totalMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   (W bazie: {task.totalMaterialCost.toFixed(2)} €)
@@ -4210,7 +4210,7 @@ const TaskDetailsPage = () => {
               )}
             </Typography>
             <Typography variant="body1">
-              <strong>Koszt materiałów na jednostkę:</strong> ~{unitMaterialCost.toFixed(4)} €/{task.unit}
+              <strong>{t('materialsSummary.unitCost')}:</strong> ~{unitMaterialCost.toFixed(4)} €/{task.unit}
               {task.unitMaterialCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   (W bazie: ~{task.unitMaterialCost.toFixed(4)} €/{task.unit})
@@ -4242,7 +4242,7 @@ const TaskDetailsPage = () => {
                 sx={{ mt: 1 }}
                 size="small"
               >
-                Aktualizuj ręcznie
+                {t('materialsSummary.updateManually')}
               </Button>
             )}
           </Grid>
@@ -6501,7 +6501,7 @@ const TaskDetailsPage = () => {
               startIcon={<ArrowBackIcon />}
               sx={{ mb: isMobile ? 2 : 0 }}
             >
-              Powrót do listy zadań
+              {t('backToTaskList')}
             </Button>
 
             <Box sx={{
@@ -6516,7 +6516,7 @@ const TaskDetailsPage = () => {
                 color="primary"
                 component={Link}
                 to={`/production/tasks/${id}/edit?returnTo=details`}
-                title="Edytuj zadanie"
+                title={t('editTask')}
                 sx={{ mr: isMobile ? 1 : 1 }}
               >
                 <EditIcon />
@@ -6524,7 +6524,7 @@ const TaskDetailsPage = () => {
               <IconButton
                 color="error"
                 onClick={() => setDeleteDialog(true)}
-                title="Usuń zadanie"
+                title={t('deleteTask')}
               >
                 <DeleteIcon />
               </IconButton>
@@ -6534,12 +6534,12 @@ const TaskDetailsPage = () => {
           {/* Główne zakładki */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={mainTab} onChange={handleMainTabChange} aria-label="Główne zakładki szczegółów zadania" variant="scrollable" scrollButtons="auto">
-              <Tab label={t('production.taskDetails.tabs.basicData')} icon={<InfoIcon />} iconPosition="start" />
-              <Tab label={t('production.taskDetails.tabs.materialsAndCosts')} icon={<Materials2Icon />} iconPosition="start" />
-              <Tab label={t('production.taskDetails.tabs.productionAndPlan')} icon={<ProductionIcon />} iconPosition="start" />
-              <Tab label={t('production.taskDetails.tabs.forms')} icon={<FormIcon />} iconPosition="start" />
-              <Tab label={t('production.taskDetails.tabs.changeHistory')} icon={<TimelineIcon />} iconPosition="start" />
-              <Tab label={t('production.taskDetails.tabs.finishedProductReport')} icon={<AssessmentIcon />} iconPosition="start" />
+              <Tab label={t('tabs.basicData')} icon={<InfoIcon />} iconPosition="start" />
+              <Tab label={t('tabs.materialsAndCosts')} icon={<Materials2Icon />} iconPosition="start" />
+              <Tab label={t('tabs.productionAndPlan')} icon={<ProductionIcon />} iconPosition="start" />
+              <Tab label={t('tabs.forms')} icon={<FormIcon />} iconPosition="start" />
+              <Tab label={t('tabs.changeHistory')} icon={<TimelineIcon />} iconPosition="start" />
+              <Tab label={t('tabs.finishedProductReport')} icon={<AssessmentIcon />} iconPosition="start" />
             </Tabs>
           </Box>
 
@@ -6573,7 +6573,7 @@ const TaskDetailsPage = () => {
                         
                         return (
                           <Chip 
-                            label={`Materiały: ${reservationStatus.label}`} 
+                            label={`${t('materialsLabel')}: ${reservationStatus.label}`} 
                             size="small" 
                             sx={{ 
                               ml: 1,
@@ -6590,10 +6590,10 @@ const TaskDetailsPage = () => {
                     </Box>
                   </Box>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Produkt:</Typography><Typography variant="body1">{task.productName}</Typography></Grid>
-                    <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Ilość:</Typography><Typography variant="body1">{task.quantity} {task.unit}</Typography></Grid>
+                    <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('product')}:</Typography><Typography variant="body1">{task.productName}</Typography></Grid>
+                    <Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('quantity')}:</Typography><Typography variant="body1">{task.quantity} {task.unit}</Typography></Grid>
                     <Grid item xs={12} md={6}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Wyprodukowano:</Typography>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('produced')}:</Typography>
                       <Typography variant="body1">
                         {task.totalCompletedQuantity || 0} {task.unit}
                         {task.totalCompletedQuantity > 0 && (
@@ -6605,7 +6605,7 @@ const TaskDetailsPage = () => {
                     </Grid>
                     {task.inventoryProductId && (
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Pozycja magazynowa:</Typography>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('inventoryItem')}:</Typography>
                         <Box sx={{ mt: 1 }}>
                           <Chip 
                             label={task.productName}
@@ -6625,23 +6625,23 @@ const TaskDetailsPage = () => {
                         </Box>
                       </Grid>
                     )}
-                    {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Szacowany czas produkcji:</Typography><Typography variant="body1">{(task.estimatedDuration / 60).toFixed(1)} godz.</Typography></Grid>)}
+                    {task.estimatedDuration > 0 && (<Grid item xs={12} md={6}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('estimatedDuration')}:</Typography><Typography variant="body1">{(task.estimatedDuration / 60).toFixed(1)} {t('hours')}</Typography></Grid>)}
                     {(task.recipe && task.recipe.recipeName) || (task.recipeId && task.recipeName) ? (
                       <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Receptura:</Typography>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('recipe')}:</Typography>
                         <Typography variant="body1">
                           <Link to={`/recipes/${task.recipe?.recipeId || task.recipeId}`}>
                             {task.recipe?.recipeName || task.recipeName}
                             {task.recipeVersion && (
                               <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                                (wersja {task.recipeVersion})
+                                ({t('version')} {task.recipeVersion})
                               </Typography>
                             )}
                           </Link>
                         </Typography>
                       </Grid>
                     ) : null}
-                    <Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Opis:</Typography><Typography variant="body1">{task.description || 'Brak opisu'}</Typography></Grid>
+                    <Grid item xs={12}><Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{t('description')}:</Typography><Typography variant="body1">{task.description || t('noDescription')}</Typography></Grid>
                   </Grid>
                 </Paper>
               </Grid>
@@ -6657,17 +6657,17 @@ const TaskDetailsPage = () => {
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" component="h2">Materiały</Typography>
+                    <Typography variant="h6" component="h2">{t('materials.title')}</Typography>
                     <Box>
-                      <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj opakowania</Button>
-                      <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>Dodaj surowce</Button>
-                      <Button variant="outlined" color="primary" startIcon={<BookmarkAddIcon />} onClick={() => setReserveDialogOpen(true)} sx={{ mt: 2, mb: 2, mr: 2 }}>Rezerwuj surowce</Button>
-                      <Button variant="outlined" color="warning" startIcon={<InventoryIcon />} onClick={handleOpenConsumeMaterialsDialog} sx={{ mt: 2, mb: 2 }} disabled={!materials.some(material => { const materialId = material.inventoryItemId || material.id; const reservedBatches = task.materialBatches && task.materialBatches[materialId]; return reservedBatches && reservedBatches.length > 0; })}>Konsumuj materiały</Button>
+                      <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.addPackaging')}</Button>
+                      <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.addRawMaterials')}</Button>
+                      <Button variant="outlined" color="primary" startIcon={<BookmarkAddIcon />} onClick={() => setReserveDialogOpen(true)} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.reserveMaterials')}</Button>
+                      <Button variant="outlined" color="warning" startIcon={<InventoryIcon />} onClick={handleOpenConsumeMaterialsDialog} sx={{ mt: 2, mb: 2 }} disabled={!materials.some(material => { const materialId = material.inventoryItemId || material.id; const reservedBatches = task.materialBatches && task.materialBatches[materialId]; return reservedBatches && reservedBatches.length > 0; })}>{t('materials.consumeMaterials')}</Button>
                     </Box>
                   </Box>
                   <TableContainer>
                     <Table>
-                      <TableHead><TableRow><TableCell>Nazwa</TableCell><TableCell>Ilość</TableCell><TableCell>Jednostka</TableCell><TableCell>Rzeczywista ilość</TableCell><TableCell>Ilość skonsumowana</TableCell><TableCell>Cena jedn.</TableCell><TableCell>Koszt</TableCell><TableCell>Zarezerwowane partie (LOT)</TableCell><TableCell>Wliczaj</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                      <TableHead><TableRow><TableCell>{t('materials.table.name')}</TableCell><TableCell>{t('materials.table.quantity')}</TableCell><TableCell>{t('materials.table.unit')}</TableCell><TableCell>{t('materials.table.actualQuantity')}</TableCell><TableCell>{t('materials.table.consumedQuantity')}</TableCell><TableCell>{t('materials.table.unitPrice')}</TableCell><TableCell>{t('materials.table.cost')}</TableCell><TableCell>{t('materials.table.reservedBatches')}</TableCell><TableCell>{t('materials.table.include')}</TableCell><TableCell>{t('materials.table.actions')}</TableCell></TableRow></TableHead>
                       <TableBody>
                         {materials.map((material) => {
                           const materialId = material.inventoryItemId || material.id;
@@ -6799,7 +6799,7 @@ const TaskDetailsPage = () => {
                 <Grid item xs={12}>
                   <Paper sx={{ p: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="h6" component="h2">Skonsumowane materiały</Typography>
+                      <Typography variant="h6" component="h2">{t('consumedMaterials.title')}</Typography>
                       {(() => {
                         const totalCompletedQuantity = task.totalCompletedQuantity || 0;
                         const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
@@ -6807,14 +6807,14 @@ const TaskDetailsPage = () => {
                         if (isFullyProduced) {
                           const isConsumptionConfirmed = task.materialConsumptionConfirmed === true;
                           const buttonColor = isConsumptionConfirmed ? "success" : "info";
-                          const buttonText = isConsumptionConfirmed ? "Zatwierdzona konsumpcja" : "Zarządzaj zużyciem";
+                          const buttonText = isConsumptionConfirmed ? t('consumedMaterials.confirmedConsumption') : t('consumedMaterials.manageConsumption');
                           return (<Button variant="outlined" color={buttonColor} startIcon={<BuildCircleIcon />} component={Link} to={`/production/consumption/${task.id}`} size="small">{buttonText}</Button>);
                         } return null;
                       })()}
                     </Box>
                     <TableContainer>
                       <Table size="small">
-                        <TableHead><TableRow><TableCell>Materiał</TableCell><TableCell>Partia (LOT)</TableCell><TableCell>Skonsumowana ilość</TableCell><TableCell>Cena jedn.</TableCell><TableCell>Wliczaj</TableCell><TableCell>Data konsumpcji</TableCell><TableCell>Użytkownik</TableCell><TableCell>Akcje</TableCell></TableRow></TableHead>
+                        <TableHead><TableRow><TableCell>{t('consumedMaterials.table.material')}</TableCell><TableCell>{t('consumedMaterials.table.batch')}</TableCell><TableCell>{t('consumedMaterials.table.consumedQuantity')}</TableCell><TableCell>{t('consumedMaterials.table.unitPrice')}</TableCell><TableCell>{t('consumedMaterials.table.include')}</TableCell><TableCell>{t('consumedMaterials.table.consumptionDate')}</TableCell><TableCell>{t('consumedMaterials.table.user')}</TableCell><TableCell>{t('consumedMaterials.table.actions')}</TableCell></TableRow></TableHead>
                         <TableBody>
                           {task.consumedMaterials.map((consumed, index) => {
                             const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
@@ -6846,7 +6846,7 @@ const TaskDetailsPage = () => {
                 </Grid>
               )}
               
-              {/* Sekcja rezerwacji z zamówień zakupowych (PO) */}
+              {/* {t('poReservations.title')} */}
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <POReservationManager 

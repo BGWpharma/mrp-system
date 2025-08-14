@@ -1,0 +1,259 @@
+{
+    "backToTaskList": "Back to Task List",
+    "editTask": "Edit Task",
+    "deleteTask": "Delete Task",
+    "materialsLabel": "Materials",
+    "product": "Product",
+    "quantity": "Quantity",
+    "produced": "Produced",
+    "inventoryItem": "Inventory Item",
+    "estimatedDuration": "Estimated Production Time",
+    "hours": "hrs",
+    "recipe": "Recipe",
+    "version": "version",
+    "description": "Description",
+    "noDescription": "No description",
+    "tabs": {
+        "basicData": "Basic Data",
+        "materialsAndCosts": "Materials & Costs",
+        "productionAndPlan": "Production & Plan",
+        "forms": "Forms",
+        "changeHistory": "Change History",
+        "finishedProductReport": "Finished Product Report"
+    },
+    "materials": {
+        "title": "Materials",
+        "addPackaging": "Add Packaging",
+        "addRawMaterials": "Add Raw Materials",
+        "reserveMaterials": "Reserve Materials",
+        "consumeMaterials": "Consume Materials",
+        "table": {
+            "name": "Name",
+            "quantity": "Quantity",
+            "unit": "Unit",
+            "actualQuantity": "Actual Quantity",
+            "consumedQuantity": "Consumed Quantity",
+            "unitPrice": "Unit Price",
+            "cost": "Cost",
+            "reservedBatches": "Reserved Batches (LOT)",
+            "include": "Include",
+            "actions": "Actions"
+        }
+    },
+    "production": {
+        "title": "Production",
+        "sessions": "Production Sessions",
+        "startProduction": "Start Production",
+        "stopProduction": "Stop Production",
+        "addSession": "Add Session",
+        "currentSession": "Current Session",
+        "completedQuantity": "Completed Quantity",
+        "startTime": "Start Time",
+        "endTime": "End Time",
+        "duration": "Duration",
+        "efficiency": "Efficiency",
+        "workstation": "Workstation",
+        "operator": "Operator",
+        "notes": "Notes",
+        "status": "Status"
+    },
+    "history": {
+        "title": "Change History",
+        "timestamp": "Timestamp",
+        "user": "User",
+        "action": "Action",
+        "details": "Details",
+        "noHistory": "No change history"
+    },
+    "dialogs": {
+        "confirmDelete": {
+            "title": "Confirm Deletion",
+            "message": "Are you sure you want to delete this task? This operation is irreversible.",
+            "cancel": "Cancel",
+            "confirm": "Delete"
+        },
+        "materialReservation": {
+            "title": "Material Reservation",
+            "automatic": "Automatic",
+            "manual": "Manual",
+            "selectMethod": "Select reservation method",
+            "reserve": "Reserve",
+            "cancel": "Cancel"
+        },
+        "materialConsumption": {
+            "title": "Material Consumption",
+            "confirm": "Confirm Consumption",
+            "cancel": "Cancel"
+        }
+    },
+    "reports": {
+        "generate": "Generate Report",
+        "materialsAndLots": "Materials & Lots Report",
+        "endProduct": "End Product Report",
+        "generating": "Generating report...",
+        "success": "Report generated successfully",
+        "error": "Error generating report"
+    },
+    "statuses": {
+        "pending": "Pending",
+        "inProgress": "In Progress",
+        "completed": "Completed",
+        "cancelled": "Cancelled",
+        "onHold": "On Hold"
+        },
+        "sections": {
+            "relatedOrders": "Related Orders",
+            "productionTimeInfo": "Production Time Information",
+            "endProductBatchData": "End Product Batch Data",
+            "materialCostsSummary": "Material Costs Summary",
+            "consumedMaterials": "Consumed Materials",
+            "poReservations": "Purchase Order Reservations",
+            "productionHistory": "Production History",
+            "changeHistory": "Status Change History",
+            "materialBatches": "Material Batches Related to Purchase Orders (PO)"
+        },
+        "relatedOrders": {
+            "customerOrder": "Customer Order",
+            "relatedPOsWithLots": "Related Purchase Orders with LOTs",
+            "viewOrder": "View Order"
+        },
+        "productionHistory": {
+        "title": "Production History",
+        "machineSelector": "Machine for readings",
+        "noMachine": "None",
+        "addRecord": "Add Record",
+        "table": {
+            "quantity": "Quantity",
+            "startTime": "Start",
+            "endTime": "End",
+            "duration": "Duration",
+            "machine": "Machine",
+            "operator": "Operator",
+            "comment": "Comment",
+            "actions": "Actions"
+        }
+    },
+    "materialsSummary": {
+        "title": "Material Costs Summary",
+        "totalCost": "Total Material Cost",
+        "unitCost": "Unit Cost",
+        "consumed": "Consumed",
+        "reserved": "Reserved",
+        "updateManually": "Update Manually",
+        "costChanged": "Calculated costs differ from those saved in the database. Use the \"Update Manually\" button to save new costs."
+    },
+    "consumedMaterials": {
+        "title": "Consumed Materials",
+        "manageConsumption": "Manage Consumption",
+        "confirmedConsumption": "Confirmed Consumption",
+        "table": {
+            "material": "Material",
+            "batch": "Batch (LOT)",
+            "consumedQuantity": "Consumed Quantity",
+            "unitPrice": "Unit Price",
+            "include": "Include",
+            "consumptionDate": "Consumption Date",
+            "user": "User",
+            "actions": "Actions"
+            }
+        },
+        "poReservations": {
+            "title": "Purchase Order Reservations (PO)",
+            "addReservation": "Add Reservation",
+            "noReservations": "No purchase order reservations",
+            "noReservationsDescription": "No PO reservations have been created for this task yet.",
+            "clickToStart": "Click \"Add Reservation\" to start.",
+            "addFromPO": "Add reservation from purchase order",
+            "material": "Material",
+            "delivered": "Delivered",
+            "reserved": "Reserved",
+            "poNumber": "PO Number"
+        },
+        "changeHistory": {
+            "title": "Change History",
+            "noHistory": "No change history for this task",
+            "table": {
+                "dateTime": "Date & Time",
+                "previousStatus": "Previous Status",
+                "newStatus": "New Status", 
+                "changedBy": "Changed By",
+                "noDate": "No date"
+            }
+        },
+        "productionTimeInfo": {
+            "estimatedDuration": "Estimated Production Time",
+            "totalPlannedTime": "Total planned production time",
+            "timePerUnit": "Production Time Per Unit",
+            "scheduledStart": "Scheduled start date and time",
+            "plannedEnd": "Planned end date and time",
+            "workstation": "Production workstation",
+            "location": "location",
+            "notSpecified": "Not specified",
+            "hours": "hours",
+            "minutesPerUnit": "min./unit"
+        },
+        "endProductBatch": {
+            "lotNumber": "LOT Number",
+            "expiryDate": "Expiry Date"
+        },
+        "forms": {
+            "title": "Production Forms",
+            "fillCompletedMOReport": "Fill Completed MO Report",
+            "fillProductionControlReport": "Fill Production Control Report",
+            "fillProductionShiftReport": "Fill Production Shift Report",
+            "noCompletedMOReports": "No completed MO reports for this task.",
+            "noProductionControlReports": "No production control reports for this task.",
+            "noProductionShiftReports": "No production shift reports for this task.",
+            "table": {
+                "date": "Date",
+                "time": "Time",
+                "email": "Email",
+                "moNumber": "MO Number",
+                "productQuantity": "Product Quantity",
+                "packagingLoss": "Packaging Loss",
+                "bulkLoss": "Bulk Loss",
+                "rawMaterialLoss": "Raw Material Loss",
+                "netCapsuleWeight": "Net Capsule Weight",
+                "mixingReport": "Mixing Report",
+                "actions": "Actions",
+                "fillDate": "Fill Date",
+                "name": "Name",
+                "position": "Position",
+                "product": "Product",
+                "lotNumber": "Lot Number",
+                "productionDate": "Production Date",
+                "startTime": "Start Time",
+                "endDate": "End Date",
+                "endTime": "End Time",
+                "expiryDate": "Expiry Date",
+                "quantity": "Quantity",
+                "shiftNumber": "Shift Number",
+                "temperature": "Temperature",
+                "humidity": "Humidity",
+                "rawMaterialPurity": "Raw Material Purity",
+                "packagingPurity": "Packaging Purity",
+                "packagingClosure": "Packaging Closure",
+                "packagingQuantity": "Packaging Quantity",
+                "customerOrder": "Customer Order",
+                "documentScans": "Document Scans",
+                "productPhoto1": "Product Photo 1",
+                "productPhoto2": "Product Photo 2",
+                "productPhoto3": "Product Photo 3",
+                "responsiblePerson": "Responsible Person",
+                "shiftType": "Shift Type",
+                "workers": "Workers",
+                "print1": "Print 1",
+                "print1Quantity": "Print 1 Quantity",
+                "print1Loss": "Print 1 Loss",
+                "print2": "Print 2",
+                "print2Quantity": "Print 2 Quantity",
+                "print2Loss": "Print 2 Loss",
+                "print3": "Print 3",
+                "print3Quantity": "Print 3 Quantity",
+                "print3Loss": "Print 3 Loss",
+                "finishedProductLoss": "Finished Product Loss",
+                "machineIssues": "Machine Issues",
+                "otherActivities": "Other Activities"
+            }
+        }
+}

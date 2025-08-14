@@ -14,12 +14,14 @@ import {
   ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/formatters';
+import { useTranslation } from '../../hooks/useTranslation';
 import { getWorkstationById } from '../../services/workstationService';
 import { useNotification } from '../../hooks/useNotification';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
 const TaskDetails = ({ task }) => {
+  const { t } = useTranslation('taskDetails');
   const { showError } = useNotification();
   const [workstation, setWorkstation] = useState(null);
   const [relatedBatches, setRelatedBatches] = useState([]);
@@ -211,7 +213,7 @@ const TaskDetails = ({ task }) => {
           >
             <Tooltip title="Kliknij, aby zwinąć/rozwinąć sekcję">
               <Typography variant="h6">
-                Powiązane zamówienia
+                {t('sections.relatedOrders')}
               </Typography>
             </Tooltip>
             <IconButton size="small">
@@ -223,7 +225,7 @@ const TaskDetails = ({ task }) => {
             {hasCustomerOrder && (
               <Box sx={{ mb: 3 }}>
                 <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
-                  Zamówienie klienta
+                  {t('relatedOrders.customerOrder')}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <Button
@@ -250,7 +252,7 @@ const TaskDetails = ({ task }) => {
             
             <Box>
               <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'medium' }}>
-                Powiązane zamówienia zakupowe z LOTami
+                {t('relatedOrders.relatedPOsWithLots')}
               </Typography>
               {relatedBatches.length > 0 ? (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
@@ -338,7 +340,7 @@ const TaskDetails = ({ task }) => {
               onClick={() => toggleSection('productionTime')}
             >
               <Typography variant="h6">
-                Informacje o czasie produkcji
+                {t('sections.productionTimeInfo')}
               </Typography>
               <IconButton size="small">
                 {expandedSections.productionTime ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -349,7 +351,7 @@ const TaskDetails = ({ task }) => {
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <ScheduleIcon color="primary" sx={{ mr: 1 }} />
                 <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                  Zaplanowana data i godzina rozpoczęcia:
+                  {t('productionTimeInfo.scheduledStart')}:
                 </Typography>
                 <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                   {formatDateTime(task.scheduledDate)}
@@ -359,7 +361,7 @@ const TaskDetails = ({ task }) => {
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <ScheduleIcon color="primary" sx={{ mr: 1 }} />
                 <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                  Planowana data i godzina zakończenia:
+                  {t('productionTimeInfo.plannedEnd')}:
                 </Typography>
                 <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                   {formatDateTime(task.endDate)}
@@ -370,10 +372,10 @@ const TaskDetails = ({ task }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
                   <ScheduleIcon color="primary" sx={{ mr: 1 }} />
                   <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    Czas produkcji na jednostkę:
+                    {t('productionTimeInfo.timePerUnit')}:
                   </Typography>
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
-                    {parseFloat(task.productionTimePerUnit).toFixed(2)} min./szt.
+                    {parseFloat(task.productionTimePerUnit).toFixed(2)} {t('productionTimeInfo.minutesPerUnit')}
                   </Typography>
                 </Box>
               )}
@@ -382,10 +384,10 @@ const TaskDetails = ({ task }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
                   <ScheduleIcon color="primary" sx={{ mr: 1 }} />
                   <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    Całkowity planowany czas produkcji:
+                    {t('productionTimeInfo.totalPlannedTime')}:
                   </Typography>
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
-                    {(task.estimatedDuration / 60).toFixed(2)} godz.
+                    {(task.estimatedDuration / 60).toFixed(2)} {t('productionTimeInfo.hours')}
                   </Typography>
                 </Box>
               )}
@@ -395,11 +397,11 @@ const TaskDetails = ({ task }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
                   <BusinessIcon color="primary" sx={{ mr: 1 }} />
                   <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    Stanowisko produkcyjne:
+                    {t('productionTimeInfo.workstation')}:
                   </Typography>
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                     {workstation.name}
-                    {workstation.location && ` (lokalizacja: ${workstation.location})`}
+                    {workstation.location && ` (${t('productionTimeInfo.location')}: ${workstation.location})`}
                   </Typography>
                 </Box>
               )}
@@ -417,7 +419,7 @@ const TaskDetails = ({ task }) => {
               onClick={() => toggleSection('productBatch')}
             >
               <Typography variant="h6">
-                Dane partii produktu końcowego
+                {t('sections.endProductBatchData')}
               </Typography>
               <IconButton size="small">
                 {expandedSections.productBatch ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -429,7 +431,7 @@ const TaskDetails = ({ task }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <BatchIcon color="primary" sx={{ mr: 1 }} />
                   <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    Numer partii (LOT):
+                    {t('endProductBatch.lotNumber')}:
                   </Typography>
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                     {task.lotNumber}
@@ -441,7 +443,7 @@ const TaskDetails = ({ task }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <DateIcon color="primary" sx={{ mr: 1 }} />
                   <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
-                    Data ważności:
+                    {t('endProductBatch.expiryDate')}:
                   </Typography>
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                     {task.expiryDate instanceof Date 
@@ -450,7 +452,7 @@ const TaskDetails = ({ task }) => {
                         ? new Date(task.expiryDate).toLocaleDateString('pl-PL')
                         : task.expiryDate && task.expiryDate.toDate
                           ? task.expiryDate.toDate().toLocaleDateString('pl-PL')
-                          : 'Nie określono'}
+                          : t('productionTimeInfo.notSpecified')}
                   </Typography>
                 </Box>
               )}
@@ -468,7 +470,7 @@ const TaskDetails = ({ task }) => {
               onClick={() => toggleSection('materialBatches')}
             >
               <Typography variant="h6">
-                Partie materiałów powiązane z zamówieniami zakupowymi (PO)
+                {t('sections.materialBatches')}
               </Typography>
               <IconButton size="small">
                 {expandedSections.materialBatches ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -537,7 +539,7 @@ const TaskDetails = ({ task }) => {
               onClick={() => toggleSection('linkedPurchaseOrders')}
             >
               <Typography variant="h6">
-                Powiązane zamówienia zakupowe
+                {t('sections.poReservations')}
               </Typography>
               <IconButton size="small">
                 {expandedSections.linkedPurchaseOrders ? <ExpandLessIcon /> : <ExpandMoreIcon />}

@@ -63,6 +63,7 @@ import {
 } from '@mui/icons-material';
 import { formatDateTime, formatCurrency } from '../../utils/formatters';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../hooks/useAuth';
 import {
   getPOReservationsForTask,
@@ -76,6 +77,7 @@ import {
 } from '../../services/poReservationService';
 
 const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
+  const { t } = useTranslation('taskDetails');
   const { showSuccess, showError, showInfo } = useNotification();
   const { currentUser } = useAuth();
   
@@ -516,7 +518,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
       {/* Nagłówek */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6" component="h2">
-          Rezerwacje z zamówień zakupowych
+          {t('poReservations.title')}
         </Typography>
         <Box>
           <Button
@@ -526,7 +528,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
             disabled={!materials.length}
             sx={{ mr: 1 }}
           >
-            Dodaj rezerwację
+            {t('poReservations.addReservation')}
           </Button>
           {stats.total > 0 && (
             <>
@@ -559,9 +561,9 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
       {/* Lista rezerwacji */}
       {reservations.length === 0 ? (
         <Alert severity="info">
-          <AlertTitle>Brak rezerwacji z zamówień zakupowych</AlertTitle>
-          Nie utworzono jeszcze żadnych rezerwacji z PO dla tego zadania.
-          {materials.length > 0 && ' Kliknij "Dodaj rezerwację" aby rozpocząć.'}
+          <AlertTitle>{t('poReservations.noReservations')}</AlertTitle>
+          {t('poReservations.noReservationsDescription')}
+          {materials.length > 0 && ' ' + t('poReservations.clickToStart')}
         </Alert>
       ) : (
         <TableContainer component={Paper} variant="outlined">
@@ -683,7 +685,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
       
       {/* Dialog dodawania rezerwacji */}
       <Dialog open={dialogOpen && dialogType === 'add'} maxWidth="md" fullWidth>
-        <DialogTitle>Dodaj rezerwację z zamówienia zakupowego</DialogTitle>
+        <DialogTitle>{t('poReservations.addFromPO')}</DialogTitle>
         <DialogContent>
           <Grid container spacing={3} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -810,7 +812,7 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
             variant="contained"
             disabled={!selectedMaterial || !selectedPOItem || !reservationQuantity}
           >
-            Dodaj rezerwację
+            {t('poReservations.addReservation')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -823,10 +825,10 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
             <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12}>
                 <Alert severity="info">
-                  <AlertTitle>Rezerwacja z PO {selectedReservation.poNumber}</AlertTitle>
-                  Materiał: {selectedReservation.materialName}<br/>
-                  Zarezerwowane: {selectedReservation.reservedQuantity} {selectedReservation.unit}<br/>
-                  Dostarczone: {selectedReservation.deliveredQuantity} {selectedReservation.unit}<br/>
+                  <AlertTitle>Rezerwacja z {t('poReservations.poNumber')} {selectedReservation.poNumber}</AlertTitle>
+                  {t('poReservations.material')}: {selectedReservation.materialName}<br/>
+                  {t('poReservations.reserved')}: {selectedReservation.reservedQuantity} {selectedReservation.unit}<br/>
+                  {t('poReservations.delivered')}: {selectedReservation.deliveredQuantity} {selectedReservation.unit}<br/>
                   Już przekształcone: {selectedReservation.convertedQuantity} {selectedReservation.unit}<br/>
                   Dostępne do przekształcenia: {Math.min(
                     selectedReservation.reservedQuantity - selectedReservation.convertedQuantity,

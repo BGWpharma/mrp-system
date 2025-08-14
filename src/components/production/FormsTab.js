@@ -38,7 +38,7 @@ const FormsTab = ({
   setProductionControlDialogOpen,
   setProductionShiftDialogOpen
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('taskDetails');
 
   return (
     <Grid container spacing={3}>
@@ -50,7 +50,7 @@ const FormsTab = ({
       <Grid item xs={12}>
         <Paper sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h2">{t('production.taskDetails.forms.title')}</Typography>
+            <Typography variant="h6" component="h2">{t('forms.title')}</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               {formTab === 0 && (
                 <Button
@@ -60,7 +60,7 @@ const FormsTab = ({
                   onClick={() => setCompletedMODialogOpen(true)}
                   size="medium"
                 >
-                  {t('production.taskDetails.forms.fillCompletedMOReport')}
+                  {t('forms.fillCompletedMOReport')}
                 </Button>
               )}
               {formTab === 1 && (
@@ -71,7 +71,7 @@ const FormsTab = ({
                   onClick={() => setProductionControlDialogOpen(true)}
                   size="medium"
                 >
-                  {t('production.taskDetails.forms.fillProductionControlReport')}
+                  {t('forms.fillProductionControlReport')}
                 </Button>
               )}
               {formTab === 2 && (
@@ -82,7 +82,7 @@ const FormsTab = ({
                   onClick={() => setProductionShiftDialogOpen(true)}
                   size="medium"
                 >
-                  {t('production.taskDetails.forms.fillProductionShiftReport')}
+                  {t('forms.fillProductionShiftReport')}
                 </Button>
               )}
             </Box>
@@ -113,24 +113,24 @@ const FormsTab = ({
                 <>
                   {formResponses.completedMO.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                      {t('production.taskDetails.forms.noCompletedMOReports')}
+                      {t('forms.noCompletedMOReports')}
                     </Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>{t('production.taskDetails.forms.table.date')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.time')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.email')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.moNumber')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.productQuantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.packagingLoss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.bulkLoss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.rawMaterialLoss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.netCapsuleWeight')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.mixingReport')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.actions')}</TableCell>
+                            <TableCell>{t('forms.table.date')}</TableCell>
+                            <TableCell>{t('forms.table.time')}</TableCell>
+                            <TableCell>{t('forms.table.email')}</TableCell>
+                            <TableCell>{t('forms.table.moNumber')}</TableCell>
+                            <TableCell>{t('forms.table.productQuantity')}</TableCell>
+                            <TableCell>{t('forms.table.packagingLoss')}</TableCell>
+                            <TableCell>{t('forms.table.bulkLoss')}</TableCell>
+                            <TableCell>{t('forms.table.rawMaterialLoss')}</TableCell>
+                            <TableCell>{t('forms.table.netCapsuleWeight')}</TableCell>
+                            <TableCell>{t('forms.table.mixingReport')}</TableCell>
+                            <TableCell>{t('forms.table.actions')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -189,38 +189,38 @@ const FormsTab = ({
                 <>
                   {formResponses.productionControl.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                      {t('production.taskDetails.forms.noProductionControlReports')}
+                      {t('forms.noProductionControlReports')}
                     </Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>{t('production.taskDetails.forms.table.fillDate')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.email')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.name')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.position')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.product')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.lotNumber')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.productionDate')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.startTime')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.endDate')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.endTime')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.expiryDate')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.quantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.shiftNumber')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.temperature')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.humidity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.rawMaterialPurity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.packagingPurity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.packagingClosure')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.packagingQuantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.customerOrder')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.documentScans')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.productPhoto1')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.productPhoto2')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.productPhoto3')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.actions')}</TableCell>
+                            <TableCell>{t('forms.table.fillDate')}</TableCell>
+                            <TableCell>{t('forms.table.email')}</TableCell>
+                            <TableCell>{t('forms.table.name')}</TableCell>
+                            <TableCell>{t('forms.table.position')}</TableCell>
+                            <TableCell>{t('forms.table.product')}</TableCell>
+                            <TableCell>{t('forms.table.lotNumber')}</TableCell>
+                            <TableCell>{t('forms.table.productionDate')}</TableCell>
+                            <TableCell>{t('forms.table.startTime')}</TableCell>
+                            <TableCell>{t('forms.table.endDate')}</TableCell>
+                            <TableCell>{t('forms.table.endTime')}</TableCell>
+                            <TableCell>{t('forms.table.expiryDate')}</TableCell>
+                            <TableCell>{t('forms.table.quantity')}</TableCell>
+                            <TableCell>{t('forms.table.shiftNumber')}</TableCell>
+                            <TableCell>{t('forms.table.temperature')}</TableCell>
+                            <TableCell>{t('forms.table.humidity')}</TableCell>
+                            <TableCell>{t('forms.table.rawMaterialPurity')}</TableCell>
+                            <TableCell>{t('forms.table.packagingPurity')}</TableCell>
+                            <TableCell>{t('forms.table.packagingClosure')}</TableCell>
+                            <TableCell>{t('forms.table.packagingQuantity')}</TableCell>
+                            <TableCell>{t('forms.table.customerOrder')}</TableCell>
+                            <TableCell>{t('forms.table.documentScans')}</TableCell>
+                            <TableCell>{t('forms.table.productPhoto1')}</TableCell>
+                            <TableCell>{t('forms.table.productPhoto2')}</TableCell>
+                            <TableCell>{t('forms.table.productPhoto3')}</TableCell>
+                            <TableCell>{t('forms.table.actions')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -336,33 +336,33 @@ const FormsTab = ({
                 <>
                   {formResponses.productionShift.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
-                      {t('production.taskDetails.forms.noProductionShiftReports')}
+                      {t('forms.noProductionShiftReports')}
                     </Typography>
                   ) : (
                     <TableContainer>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>{t('production.taskDetails.forms.table.fillDate')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.email')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.responsiblePerson')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.shiftType')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.productQuantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.workers')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print1')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print1Quantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print1Loss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print2')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print2Quantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print2Loss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print3')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print3Quantity')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.print3Loss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.rawMaterialLoss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.finishedProductLoss')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.machineIssues')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.otherActivities')}</TableCell>
-                            <TableCell>{t('production.taskDetails.forms.table.actions')}</TableCell>
+                            <TableCell>{t('forms.table.fillDate')}</TableCell>
+                            <TableCell>{t('forms.table.email')}</TableCell>
+                            <TableCell>{t('forms.table.responsiblePerson')}</TableCell>
+                            <TableCell>{t('forms.table.shiftType')}</TableCell>
+                            <TableCell>{t('forms.table.productQuantity')}</TableCell>
+                            <TableCell>{t('forms.table.workers')}</TableCell>
+                            <TableCell>{t('forms.table.print1')}</TableCell>
+                            <TableCell>{t('forms.table.print1Quantity')}</TableCell>
+                            <TableCell>{t('forms.table.print1Loss')}</TableCell>
+                            <TableCell>{t('forms.table.print2')}</TableCell>
+                            <TableCell>{t('forms.table.print2Quantity')}</TableCell>
+                            <TableCell>{t('forms.table.print2Loss')}</TableCell>
+                            <TableCell>{t('forms.table.print3')}</TableCell>
+                            <TableCell>{t('forms.table.print3Quantity')}</TableCell>
+                            <TableCell>{t('forms.table.print3Loss')}</TableCell>
+                            <TableCell>{t('forms.table.rawMaterialLoss')}</TableCell>
+                            <TableCell>{t('forms.table.finishedProductLoss')}</TableCell>
+                            <TableCell>{t('forms.table.machineIssues')}</TableCell>
+                            <TableCell>{t('forms.table.otherActivities')}</TableCell>
+                            <TableCell>{t('forms.table.actions')}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
