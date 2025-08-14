@@ -35,6 +35,7 @@ import {
 } from 'chart.js';
 import { getChartData } from '../../services/analyticsService';
 import { formatCurrency } from '../../utils/formatUtils';
+import { useTranslation } from '../../hooks/useTranslation';
 
 ChartJS.register(
   CategoryScale,
@@ -48,16 +49,20 @@ ChartJS.register(
   ArcElement
 );
 
-const timeRanges = [
-  { value: 'week', label: 'Ostatnie 7 dni' },
-  { value: 'month', label: 'Ostatnie 30 dni' },
-  { value: 'quarter', label: 'Ostatnie 90 dni' },
-  { value: 'year', label: 'Ostatni rok' },
-  { value: 'custom', label: 'Niestandardowy zakres' }
-];
+// Nie definiujemy już timeRanges jako stałej, użyjemy t() w komponencie
 
 const Charts = () => {
+  const { t } = useTranslation('analytics');
   const [loading, setLoading] = useState(true);
+  
+  // Dynamiczne zakresy czasowe z tłumaczeniami
+  const timeRanges = [
+    { value: 'week', label: t('charts.timeRanges.week') },
+    { value: 'month', label: t('charts.timeRanges.month') },
+    { value: 'quarter', label: t('charts.timeRanges.quarter') },
+    { value: 'year', label: t('charts.timeRanges.year') },
+    { value: 'custom', label: t('charts.timeRanges.custom') }
+  ];
   const [timeRange, setTimeRange] = useState('month');
   const [chartType, setChartType] = useState('line');
   const [productionView, setProductionView] = useState('completed'); // 'completed' lub 'both'
@@ -73,7 +78,7 @@ const Charts = () => {
     sales: {
       labels: [],
       datasets: [{
-        label: 'Sprzedaż (PLN)',
+        label: t('charts.sales.label'),
         data: [],
         borderColor: 'rgb(75, 192, 192)',
         backgroundColor: 'rgba(75, 192, 192, 0.5)',
@@ -83,7 +88,7 @@ const Charts = () => {
     production: {
       labels: [],
       datasets: [{
-        label: 'Ukończone zadania',
+        label: t('charts.production.completedLabel'),
         data: [],
         borderColor: 'rgb(255, 99, 132)',
         backgroundColor: 'rgba(255, 99, 132, 0.5)',
@@ -93,7 +98,7 @@ const Charts = () => {
     inventory: {
       labels: [],
       datasets: [{
-        label: 'Wartość magazynu (PLN)',
+        label: t('charts.inventory.label'),
         data: [],
         borderColor: 'rgb(54, 162, 235)',
         backgroundColor: 'rgba(54, 162, 235, 0.5)',
@@ -103,7 +108,7 @@ const Charts = () => {
     categories: {
       labels: [],
       datasets: [{
-        label: 'Wartość według kategorii (PLN)',
+        label: t('charts.categories.valueLabel'),
         data: [],
         backgroundColor: [
           'rgba(255, 99, 132, 0.7)',
@@ -175,7 +180,7 @@ const Charts = () => {
         const salesChartData = {
           labels: [],
           datasets: [{
-            label: 'Sprzedaż (PLN)',
+            label: t('charts.sales.label'),
             data: [],
             borderColor: 'rgb(75, 192, 192)',
             backgroundColor: 'rgba(75, 192, 192, 0.5)',
@@ -222,7 +227,7 @@ const Charts = () => {
         const productionChartData = {
           labels: [],
           datasets: [{
-            label: 'Ukończone zadania',
+            label: t('charts.production.completedLabel'),
             data: [],
             borderColor: 'rgb(255, 99, 132)',
             backgroundColor: 'rgba(255, 99, 132, 0.5)',
@@ -263,7 +268,7 @@ const Charts = () => {
               
               if (validPlannedData.length > 0) {
                 productionChartData.datasets.push({
-                  label: 'Zaplanowane zadania',
+                  label: t('charts.production.plannedLabel'),
                   data: validPlannedData,
                   borderColor: 'rgb(54, 162, 235)',
                   backgroundColor: 'rgba(54, 162, 235, 0.5)',
@@ -280,7 +285,7 @@ const Charts = () => {
             
             if (productionView === 'both') {
               productionChartData.datasets.push({
-                label: 'Zaplanowane zadania',
+                label: t('charts.production.plannedLabel'),
                 data: [60, 65, 70, 75, 85, 90],
                 borderColor: 'rgb(54, 162, 235)',
                 backgroundColor: 'rgba(54, 162, 235, 0.5)',
@@ -297,7 +302,7 @@ const Charts = () => {
           
           if (productionView === 'both') {
             productionChartData.datasets.push({
-              label: 'Zaplanowane zadania',
+              label: t('charts.production.plannedLabel'),
               data: [60, 65, 70, 75, 85, 90],
               borderColor: 'rgb(54, 162, 235)',
               backgroundColor: 'rgba(54, 162, 235, 0.5)',
@@ -310,7 +315,7 @@ const Charts = () => {
         const inventoryChartData = {
           labels: [],
           datasets: [{
-            label: 'Wartość magazynu (PLN)',
+            label: t('charts.inventory.label'),
             data: [],
             borderColor: 'rgb(54, 162, 235)',
             backgroundColor: 'rgba(54, 162, 235, 0.5)',
@@ -365,7 +370,7 @@ const Charts = () => {
         const categoriesChartData = {
           labels: [],
           datasets: [{
-            label: categoriesView === 'value' ? 'Wartość według kategorii (PLN)' : 'Liczba produktów',
+            label: categoriesView === 'value' ? t('charts.categories.valueLabel') : t('charts.categories.countLabel'),
             data: [],
             backgroundColor: [
               'rgba(255, 99, 132, 0.7)',
@@ -421,14 +426,26 @@ const Charts = () => {
               categoriesChartData.datasets[0].data = validPairs.map(pair => pair.value);
             } else {
               // Jeśli nie ma poprawnych danych, użyj danych przykładowych
-              categoriesChartData.labels = ['Surowce', 'Produkty gotowe', 'Opakowania', 'Półprodukty', 'Inne'];
+              categoriesChartData.labels = [
+                t('charts.categories.defaultCategories.rawMaterials'),
+                t('charts.categories.defaultCategories.finishedProducts'), 
+                t('charts.categories.defaultCategories.packaging'),
+                t('charts.categories.defaultCategories.semiFinished'),
+                t('charts.categories.defaultCategories.other')
+              ];
               categoriesChartData.datasets[0].data = categoriesView === 'value' 
                 ? [120000, 85000, 45000, 30000, 15000]
                 : [25, 30, 15, 10, 5];
             }
           } else {
             // Jeśli dane są niezgodne, użyj danych przykładowych
-            categoriesChartData.labels = ['Surowce', 'Produkty gotowe', 'Opakowania', 'Półprodukty', 'Inne'];
+            categoriesChartData.labels = [
+              t('charts.categories.defaultCategories.rawMaterials'),
+              t('charts.categories.defaultCategories.finishedProducts'), 
+              t('charts.categories.defaultCategories.packaging'),
+              t('charts.categories.defaultCategories.semiFinished'),
+              t('charts.categories.defaultCategories.other')
+            ];
             categoriesChartData.datasets[0].data = categoriesView === 'value' 
               ? [120000, 85000, 45000, 30000, 15000]
               : [25, 30, 15, 10, 5];
@@ -452,7 +469,7 @@ const Charts = () => {
 
         setLoading(false);
       } catch (error) {
-        console.error('Błąd podczas ładowania danych:', error);
+        console.error(t('charts.errors.loadingData') + ':', error);
         
         // W przypadku błędu, użyj domyślnych danych
         const defaultLabels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze'];
@@ -461,7 +478,7 @@ const Charts = () => {
           sales: {
             labels: defaultLabels,
             datasets: [{
-              label: 'Sprzedaż (PLN)',
+              label: t('charts.sales.label'),
               data: [20000, 25000, 23000, 30000, 29000, 35000],
               borderColor: 'rgb(75, 192, 192)',
               backgroundColor: 'rgba(75, 192, 192, 0.5)',
@@ -472,7 +489,7 @@ const Charts = () => {
           production: {
             labels: defaultLabels,
             datasets: [{
-              label: 'Ukończone zadania',
+              label: t('charts.production.completedLabel'),
               data: [50, 55, 60, 65, 70, 75],
               borderColor: 'rgb(255, 99, 132)',
               backgroundColor: 'rgba(255, 99, 132, 0.5)',
@@ -487,7 +504,7 @@ const Charts = () => {
               return `${date.getDate()}.${date.getMonth() + 1}`;
             }),
             datasets: [{
-              label: 'Wartość magazynu (PLN)',
+              label: t('charts.inventory.label'),
               data: Array.from({length: 30}, (_, i) => 200000 + (i * 100)),
               borderColor: 'rgb(54, 162, 235)',
               backgroundColor: 'rgba(54, 162, 235, 0.5)',
@@ -496,9 +513,15 @@ const Charts = () => {
             }]
           },
           categories: {
-            labels: ['Surowce', 'Produkty gotowe', 'Opakowania', 'Półprodukty', 'Inne'],
+            labels: [
+              t('charts.categories.defaultCategories.rawMaterials'),
+              t('charts.categories.defaultCategories.finishedProducts'), 
+              t('charts.categories.defaultCategories.packaging'),
+              t('charts.categories.defaultCategories.semiFinished'),
+              t('charts.categories.defaultCategories.other')
+            ],
             datasets: [{
-              label: categoriesView === 'value' ? 'Wartość według kategorii (PLN)' : 'Liczba produktów',
+              label: categoriesView === 'value' ? t('charts.categories.valueLabel') : t('charts.categories.countLabel'),
               data: categoriesView === 'value' 
                 ? [120000, 85000, 45000, 30000, 15000]
                 : [25, 30, 15, 10, 5],
@@ -593,7 +616,7 @@ const Charts = () => {
       },
       title: {
         display: true,
-        text: 'Trendy w czasie'
+        text: t('charts.sales.chartTitle')
       },
       tooltip: {
         callbacks: {
@@ -642,7 +665,7 @@ const Charts = () => {
             
             // Formatuj wartości powyżej 1000 w skróconej formie
             if (value >= 1000) {
-              return (value / 1000).toFixed(1) + ' tys.';
+              return (value / 1000).toFixed(1) + ' ' + t('charts.tooltips.thousands');
             }
             return value;
           }
@@ -684,7 +707,7 @@ const Charts = () => {
             if (categoriesView === 'value') {
               return label + formatCurrency(value);
             } else {
-              return label + value + ' produktów';
+              return label + value + ' ' + t('charts.categories.tooltips.products');
             }
           }
         }
@@ -694,17 +717,17 @@ const Charts = () => {
 
   const validateChartData = (chartData) => {
     if (!chartData || !chartData.labels || !chartData.datasets || !chartData.datasets[0] || !chartData.datasets[0].data) {
-      console.error('Nieprawidłowy format danych wykresu', chartData);
+      console.error(t('charts.errors.invalidChartData'), chartData);
       return false;
     }
     
     if (!Array.isArray(chartData.labels) || !Array.isArray(chartData.datasets[0].data)) {
-      console.error('Nieprawidłowy format danych wykresu - brak tablic', chartData);
+      console.error(t('charts.errors.invalidLabels'), chartData);
       return false;
     }
     
     if (chartData.labels.length === 0 || chartData.datasets[0].data.length === 0) {
-      console.error('Puste dane wykresu', chartData);
+      console.error(t('charts.errors.emptyData'), chartData);
       return false;
     }
     
@@ -721,23 +744,23 @@ const Charts = () => {
   
   const validateCategoriesChartData = (chartData) => {
     if (!chartData || !chartData.labels || !chartData.datasets || !chartData.datasets[0] || !chartData.datasets[0].data) {
-      console.error('Nieprawidłowy format danych wykresu kategorii', chartData);
+      console.error(t('charts.errors.invalidCategoriesData'), chartData);
       return false;
     }
     
     if (!Array.isArray(chartData.labels) || !Array.isArray(chartData.datasets[0].data)) {
-      console.error('Nieprawidłowy format danych wykresu kategorii - brak tablic', chartData);
+      console.error(t('charts.errors.invalidLabels'), chartData);
       return false;
     }
     
     if (chartData.labels.length === 0 || chartData.datasets[0].data.length === 0) {
-      console.error('Puste dane wykresu kategorii', chartData);
+      console.error(t('charts.errors.emptyData'), chartData);
       return false;
     }
     
     // Długości tablic labels i data muszą być takie same
     if (chartData.labels.length !== chartData.datasets[0].data.length) {
-      console.error('Niezgodność długości tablic labels i data', chartData);
+      console.error(t('charts.errors.mismatchedArrays'), chartData);
       return false;
     }
     
@@ -752,6 +775,7 @@ const Charts = () => {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
+        <Typography sx={{ ml: 2 }}>{t('charts.loading')}</Typography>
       </Box>
     );
   }
@@ -761,10 +785,10 @@ const Charts = () => {
       <Box sx={{ mb: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', md: 'center' }, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, width: { xs: '100%', md: 'auto' } }}>
           <FormControl sx={{ minWidth: 180 }}>
-            <InputLabel>Zakres czasowy</InputLabel>
+            <InputLabel>{t('charts.timeRangeLabel')}</InputLabel>
             <Select
               value={timeRange}
-              label="Zakres czasowy"
+              label={t('charts.timeRangeLabel')}
               onChange={handleTimeRangeChange}
             >
               {timeRanges.map((range) => (
@@ -779,28 +803,28 @@ const Charts = () => {
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                 <DatePicker
-                  label="Data początkowa"
+                  label={t('charts.startDate')}
                   value={startDate}
                   onChange={handleStartDateChange}
                   slotProps={{
                     textField: {
                       size: "small",
                       error: dateRangeError,
-                      helperText: dateRangeError ? "Nieprawidłowy zakres" : null,
+                      helperText: dateRangeError ? t('charts.invalidRange') : null,
                       sx: { width: 150 }
                     }
                   }}
                 />
                 <Box sx={{ mx: 0.5 }}>-</Box>
                 <DatePicker
-                  label="Data końcowa"
+                  label={t('charts.endDate')}
                   value={endDate}
                   onChange={handleEndDateChange}
                   slotProps={{
                     textField: {
                       size: "small",
                       error: dateRangeError,
-                      helperText: dateRangeError ? "Nieprawidłowy zakres" : null,
+                      helperText: dateRangeError ? t('charts.invalidRange') : null,
                       sx: { width: 150 }
                     }
                   }}
@@ -814,10 +838,10 @@ const Charts = () => {
           value={chartType}
           exclusive
           onChange={handleChartTypeChange}
-          aria-label="typ wykresu"
+          aria-label={t('charts.chartTypeLabel')}
         >
-          <ToggleButton value="line">Liniowy</ToggleButton>
-          <ToggleButton value="bar">Słupkowy</ToggleButton>
+          <ToggleButton value="line">{t('charts.chartTypes.line')}</ToggleButton>
+          <ToggleButton value="bar">{t('charts.chartTypes.bar')}</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
@@ -827,10 +851,10 @@ const Charts = () => {
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Typography variant="h6" gutterBottom>
-                Trend sprzedaży
+                {t('charts.sales.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Wartość sprzedaży w czasie pokazująca trendy wzrostowe lub spadkowe w przychodach firmy.
+                {t('charts.sales.description')}
               </Typography>
               <Box sx={{ flexGrow: 1, height: '280px' }}>
                 <ChartComponent options={chartOptions} data={chartData.sales} />
@@ -844,21 +868,21 @@ const Charts = () => {
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="h6">
-                  Trend produkcji
+                  {t('charts.production.title')}
                 </Typography>
                 <ToggleButtonGroup
                   size="small"
                   value={productionView}
                   exclusive
                   onChange={handleProductionViewChange}
-                  aria-label="widok produkcji"
+                  aria-label={t('charts.production.viewLabel')}
                 >
-                  <ToggleButton value="completed">Ukończone</ToggleButton>
-                  <ToggleButton value="both">Oba typy</ToggleButton>
+                  <ToggleButton value="completed">{t('charts.production.views.completed')}</ToggleButton>
+                  <ToggleButton value="both">{t('charts.production.views.both')}</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Liczba zadań produkcyjnych ukończonych i zaplanowanych w kolejnych miesiącach.
+                {t('charts.production.description')}
               </Typography>
               <Box sx={{ flexGrow: 1, height: '280px' }}>
                 <ChartComponent options={chartOptions} data={chartData.production} />
@@ -871,10 +895,10 @@ const Charts = () => {
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Typography variant="h6" gutterBottom>
-                Trend wartości magazynu
+                {t('charts.inventory.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Zmiana całkowitej wartości zapasów magazynowych w czasie - pozwala monitorować zapasy i planować zakupy.
+                {t('charts.inventory.description')}
               </Typography>
               <Box sx={{ flexGrow: 1, height: '280px' }}>
                 <ChartComponent options={chartOptions} data={chartData.inventory} />
@@ -888,7 +912,7 @@ const Charts = () => {
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="h6">
-                  Kategorie produktów
+                  {t('charts.categories.title')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <ToggleButtonGroup
@@ -896,10 +920,10 @@ const Charts = () => {
                     value={categoriesView}
                     exclusive
                     onChange={handleCategoriesViewChange}
-                    aria-label="widok kategorii"
+                    aria-label={t('charts.categories.viewLabel')}
                   >
-                    <ToggleButton value="value">Wartość</ToggleButton>
-                    <ToggleButton value="count">Liczba</ToggleButton>
+                    <ToggleButton value="value">{t('charts.categories.views.value')}</ToggleButton>
+                    <ToggleButton value="count">{t('charts.categories.views.count')}</ToggleButton>
                   </ToggleButtonGroup>
                   
                   <ToggleButtonGroup
@@ -907,15 +931,15 @@ const Charts = () => {
                     value={categoriesChartType}
                     exclusive
                     onChange={handleCategoriesChartTypeChange}
-                    aria-label="typ wykresu kategorii"
+                    aria-label={t('charts.categories.chartTypeLabel')}
                   >
-                    <ToggleButton value="pie">Kołowy</ToggleButton>
-                    <ToggleButton value="doughnut">Pierścieniowy</ToggleButton>
+                    <ToggleButton value="pie">{t('charts.categories.chartTypes.pie')}</ToggleButton>
+                    <ToggleButton value="doughnut">{t('charts.categories.chartTypes.doughnut')}</ToggleButton>
                   </ToggleButtonGroup>
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Porównanie kategorii produktów według {categoriesView === 'value' ? 'wartości magazynowej' : 'liczby produktów'}.
+                {t('charts.categories.description')} {categoriesView === 'value' ? t('charts.categories.valueDescription') : t('charts.categories.countDescription')}.
               </Typography>
               <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '280px' }}>
                 <Box sx={{ width: '100%', height: '100%', maxWidth: '280px' }}>

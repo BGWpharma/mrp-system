@@ -1,0 +1,84 @@
+{
+    "charts": {
+        "title": "Wykresy",
+        "loading": "Ładowanie danych wykresów...",
+        "timeRanges": {
+            "week": "Ostatnie 7 dni",
+            "month": "Ostatnie 30 dni", 
+            "quarter": "Ostatnie 90 dni",
+            "year": "Ostatni rok",
+            "custom": "Niestandardowy zakres"
+        },
+        "timeRangeLabel": "Zakres czasowy",
+        "startDate": "Data początkowa",
+        "endDate": "Data końcowa",
+        "invalidRange": "Nieprawidłowy zakres",
+        "chartTypes": {
+            "line": "Liniowy",
+            "bar": "Słupkowy"
+        },
+        "chartTypeLabel": "typ wykresu",
+        "sales": {
+            "title": "Trend sprzedaży",
+            "description": "Wartość sprzedaży w czasie pokazująca trendy wzrostowe lub spadkowe w przychodach firmy.",
+            "label": "Sprzedaż (PLN)",
+            "chartTitle": "Trendy w czasie"
+        },
+        "production": {
+            "title": "Trend produkcji",
+            "description": "Liczba zadań produkcyjnych ukończonych i zaplanowanych w kolejnych miesiącach.",
+            "completedLabel": "Ukończone zadania",
+            "plannedLabel": "Zaplanowane zadania",
+            "viewLabel": "widok produkcji",
+            "views": {
+                "completed": "Ukończone",
+                "both": "Oba typy"
+            }
+        },
+        "inventory": {
+            "title": "Trend wartości magazynu",
+            "description": "Zmiana całkowitej wartości zapasów magazynowych w czasie - pozwala monitorować zapasy i planować zakupy.",
+            "label": "Wartość magazynu (PLN)"
+        },
+        "categories": {
+            "title": "Kategorie produktów",
+            "description": "Porównanie kategorii produktów według",
+            "valueDescription": "wartości magazynowej",
+            "countDescription": "liczby produktów",
+            "valueLabel": "Wartość według kategorii (PLN)",
+            "countLabel": "Liczba produktów",
+            "viewLabel": "widok kategorii",
+            "chartTypeLabel": "typ wykresu kategorii",
+            "views": {
+                "value": "Wartość",
+                "count": "Liczba"
+            },
+            "chartTypes": {
+                "pie": "Kołowy",
+                "doughnut": "Pierścieniowy"
+            },
+            "defaultCategories": {
+                "rawMaterials": "Surowce",
+                "finishedProducts": "Produkty gotowe",
+                "packaging": "Opakowania",
+                "semiFinished": "Półprodukty",
+                "other": "Inne"
+            },
+            "tooltips": {
+                "products": "produktów"
+            }
+        },
+        "tooltips": {
+            "currency": "PLN",
+            "thousands": "tys."
+        },
+        "errors": {
+            "loadingData": "Błąd podczas ładowania danych",
+            "invalidChartData": "Nieprawidłowy format danych wykresu",
+            "invalidLabels": "Nieprawidłowy format danych wykresu - brak tablic",
+            "emptyData": "Puste dane wykresu",
+            "invalidCategoriesData": "Nieprawidłowy format danych wykresu kategorii",
+            "mismatchedArrays": "Niezgodność długości tablic labels i data"
+        }
+    }
+}

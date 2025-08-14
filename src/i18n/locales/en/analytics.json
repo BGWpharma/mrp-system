@@ -1,0 +1,84 @@
+{
+    "charts": {
+        "title": "Charts",
+        "loading": "Loading chart data...",
+        "timeRanges": {
+            "week": "Last 7 days",
+            "month": "Last 30 days",
+            "quarter": "Last 90 days", 
+            "year": "Last year",
+            "custom": "Custom range"
+        },
+        "timeRangeLabel": "Time range",
+        "startDate": "Start date",
+        "endDate": "End date",
+        "invalidRange": "Invalid range",
+        "chartTypes": {
+            "line": "Line",
+            "bar": "Bar"
+        },
+        "chartTypeLabel": "chart type",
+        "sales": {
+            "title": "Sales Trend",
+            "description": "Sales value over time showing growth or declining trends in company revenue.",
+            "label": "Sales (PLN)",
+            "chartTitle": "Trends over time"
+        },
+        "production": {
+            "title": "Production Trend",
+            "description": "Number of production tasks completed and planned in consecutive months.",
+            "completedLabel": "Completed tasks",
+            "plannedLabel": "Planned tasks",
+            "viewLabel": "production view",
+            "views": {
+                "completed": "Completed",
+                "both": "Both types"
+            }
+        },
+        "inventory": {
+            "title": "Inventory Value Trend",
+            "description": "Change in total inventory value over time - helps monitor stock levels and plan purchases.",
+            "label": "Inventory value (PLN)"
+        },
+        "categories": {
+            "title": "Product Categories",
+            "description": "Comparison of product categories by",
+            "valueDescription": "inventory value",
+            "countDescription": "number of products",
+            "valueLabel": "Value by category (PLN)",
+            "countLabel": "Number of products",
+            "viewLabel": "category view",
+            "chartTypeLabel": "category chart type",
+            "views": {
+                "value": "Value",
+                "count": "Count"
+            },
+            "chartTypes": {
+                "pie": "Pie",
+                "doughnut": "Doughnut"
+            },
+            "defaultCategories": {
+                "rawMaterials": "Raw Materials",
+                "finishedProducts": "Finished Products",
+                "packaging": "Packaging",
+                "semiFinished": "Semi-finished",
+                "other": "Other"
+            },
+            "tooltips": {
+                "products": "products"
+            }
+        },
+        "tooltips": {
+            "currency": "PLN",
+            "thousands": "k"
+        },
+        "errors": {
+            "loadingData": "Error loading data",
+            "invalidChartData": "Invalid chart data format",
+            "invalidLabels": "Invalid chart data format - missing arrays",
+            "emptyData": "Empty chart data",
+            "invalidCategoriesData": "Invalid category chart data format",
+            "mismatchedArrays": "Mismatched length of labels and data arrays"
+        }
+    }
+}

@@ -30,6 +30,7 @@ import stocktakingPL from './locales/pl/stocktaking.json';
 import interactionsPL from './locales/pl/interactions.json';
 import sidebarPL from './locales/pl/sidebar.json';
 import taskDetailsPL from './locales/pl/taskDetails.json';
+import analyticsPL from './locales/pl/analytics.json';
 
 // Angielskie tłumaczenia
 import commonEN from './locales/en/common.json';
@@ -57,6 +58,7 @@ import stocktakingEN from './locales/en/stocktaking.json';
 import interactionsEN from './locales/en/interactions.json';
 import sidebarEN from './locales/en/sidebar.json';
 import taskDetailsEN from './locales/en/taskDetails.json';
+import analyticsEN from './locales/en/analytics.json';
 
 // Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
@@ -85,7 +87,8 @@ const resources = {
     stocktaking: stocktakingPL,
     interactions: interactionsPL,
     sidebar: sidebarPL,
-    taskDetails: taskDetailsPL
+    taskDetails: taskDetailsPL,
+    analytics: analyticsPL
   },
   en: {
     common: commonEN,
@@ -112,7 +115,8 @@ const resources = {
     stocktaking: stocktakingEN,
     interactions: interactionsEN,
     sidebar: sidebarEN,
-    taskDetails: taskDetailsEN
+    taskDetails: taskDetailsEN,
+    analytics: analyticsEN
   }
 };
 
@@ -144,7 +148,7 @@ i18n
       'machines', 'purchaseOrders', 'cmr', 'forms',
       'calculator', 'priceLists', 'aiAssistant', 
       'environmentalConditions', 'expiryDates', 'stocktaking',
-      'interactions', 'sidebar', 'taskDetails'
+      'interactions', 'sidebar', 'taskDetails', 'analytics'
     ],
     
     // Konfiguracja wykrywania języka
