@@ -7225,10 +7225,10 @@ const TaskDetailsPage = () => {
             maxWidth="md"
             fullWidth
           >
-            <DialogTitle>Dodaj wpis historii produkcji</DialogTitle>
+            <DialogTitle>{t('dialogs.addProductionHistory.title')}</DialogTitle>
             <DialogContent>
               <DialogContentText sx={{ mb: 2 }}>
-                Wprowadź dane nowej sesji produkcyjnej.
+                {t('dialogs.addProductionHistory.description')}
               </DialogContentText>
               
               {historyInventoryError && (
@@ -7240,7 +7240,7 @@ const TaskDetailsPage = () => {
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={12}>
                   <TextField
-                    label="Wyprodukowana ilość"
+                    label={t('dialogs.addProductionHistory.producedQuantity')}
                     type="number"
                     value={editedHistoryItem.quantity}
                     onChange={(e) => setEditedHistoryItem(prev => ({ 
@@ -7257,7 +7257,7 @@ const TaskDetailsPage = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Data i czas rozpoczęcia"
+                    label={t('dialogs.addProductionHistory.startDateTime')}
                     type="datetime-local"
                     value={editedHistoryItem.startTime instanceof Date 
                       ? toLocalDateTimeString(editedHistoryItem.startTime) 
@@ -7276,7 +7276,7 @@ const TaskDetailsPage = () => {
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Data i czas zakończenia"
+                    label={t('dialogs.addProductionHistory.endDateTime')}
                     type="datetime-local"
                     value={editedHistoryItem.endTime instanceof Date 
                       ? toLocalDateTimeString(editedHistoryItem.endTime) 
@@ -7305,7 +7305,7 @@ const TaskDetailsPage = () => {
                         color="primary"
                       />
                     }
-                    label="Dodaj produkt do magazynu po zakończeniu sesji"
+                    label={t('dialogs.addProductionHistory.addToInventory')}
                   />
                 </Grid>
                 
@@ -7392,7 +7392,7 @@ const TaskDetailsPage = () => {
                 color="primary"
                 disabled={loading}
               >
-                {loading ? <CircularProgress size={24} /> : (addToInventoryOnHistory ? 'Dodaj sesję i do magazynu' : 'Dodaj sesję')}
+                {loading ? <CircularProgress size={24} /> : (addToInventoryOnHistory ? t('dialogs.addProductionHistory.addSessionAndInventory') : t('dialogs.addProductionHistory.addSession'))}
               </Button>
             </DialogActions>
           </Dialog>

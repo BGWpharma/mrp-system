@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatDateTime } from '../../utils/formatters';
 import { generateEndProductReportPDF } from '../../services/endProductReportService';
 
@@ -80,6 +81,7 @@ const EndProductReportTab = ({
   const { showSuccess, showError, showInfo } = useNotification();
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const { currentUser } = useAuth();
+  const { t } = useTranslation('taskDetails');
 
   // Funkcja do obsługi zmiany alergenów
   const handleAllergenChange = (event, newValue) => {
@@ -97,7 +99,7 @@ const EndProductReportTab = ({
       const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
       
       // Pobierz nazwę materiału
-      const materialName = consumed.materialName || material?.name || 'Nieznany materiał';
+      const materialName = consumed.materialName || material?.name || t('endProductReport.unknownMaterial');
       
       // Pobierz jednostkę materiału
       const materialUnit = consumed.unit || material?.unit || '-';
@@ -115,7 +117,7 @@ const EndProductReportTab = ({
       
       // Pobierz datę ważności - najpierw z konsumpcji, potem spróbuj z partii
       let expiryDate = consumed.expiryDate;
-      let formattedExpiryDate = 'Nie określono';
+      let formattedExpiryDate = t('endProductReport.notSpecified');
       
       if (expiryDate) {
         const expiry = expiryDate instanceof Date 
@@ -157,13 +159,13 @@ const EndProductReportTab = ({
   // Funkcja do generowania raportu PDF
   const handleGenerateEndProductReport = async () => {
     if (!task) {
-      showError('Brak danych zadania do wygenerowania raportu');
+      showError(t('endProductReport.noTaskData'));
       return;
     }
 
     try {
       setGeneratingPDF(true);
-      showInfo('Generowanie raportu PDF...');
+      showInfo(t('endProductReport.generatingPDFInfo'));
 
       // Przygotowanie załączników w formacie oczekiwanym przez funkcję PDF
       const attachments = [];
@@ -247,7 +249,7 @@ const EndProductReportTab = ({
         productionControlReports: formResponses?.productionControl || [],
         
         // Dane użytkownika
-        userName: currentUser?.displayName || currentUser?.email || 'Nieznany użytkownik'
+        userName: currentUser?.displayName || currentUser?.email || t('endProductReport.unknownUser')
       };
 
       // Wywołanie funkcji generowania PDF
@@ -268,10 +270,10 @@ const EndProductReportTab = ({
         <Paper sx={{ p: 3 }}>
           <Box sx={{ mb: 3, textAlign: 'center' }}>
             <Typography variant="h5" component="h1" sx={{ mb: 1 }}>
-              RAPORT GOTOWEGO PRODUKTU
+              {t('endProductReport.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-              Szczegółowy raport kontroli jakości i produkcji
+              {t('endProductReport.subtitle')}
             </Typography>
             
             {/* Przycisk generowania PDF */}
@@ -282,21 +284,21 @@ const EndProductReportTab = ({
               onClick={handleGenerateEndProductReport}
               disabled={generatingPDF}
             >
-              {generatingPDF ? 'Generating PDF Report...' : 'Generate PDF Report'}
+              {generatingPDF ? t('endProductReport.generatingPDF') : t('endProductReport.generatePDF')}
             </Button>
           </Box>
           
           {/* Product identification */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              1. Product identification
+              {t('endProductReport.productIdentification')}
             </Typography>
             
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Box sx={{ mb: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
-                    SKU
+                    {t('endProductReport.sku')}
                   </Typography>
                   <TextField
                     fullWidth
@@ -307,7 +309,7 @@ const EndProductReportTab = ({
                       readOnly: true,
                       sx: { backgroundColor: 'action.hover' }
                     }}
-                    helperText="Nazwa receptury"
+                    helperText={t('endProductReport.recipeName')}
                   />
                 </Box>
               </Grid>
@@ -315,7 +317,7 @@ const EndProductReportTab = ({
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Description"
+                  label={t('endProductReport.description')}
                   value={task?.recipe?.description || task?.description || ''}
                   variant="outlined"
                   multiline
@@ -330,7 +332,7 @@ const EndProductReportTab = ({
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Version"
+                  label={t('endProductReport.version')}
                   value={task?.recipeVersion || '1'}
                   variant="outlined"
                   InputProps={{
@@ -343,7 +345,7 @@ const EndProductReportTab = ({
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Report creation date"
+                  label={t('endProductReport.reportCreationDate')}
                   value={new Date().toLocaleDateString('pl-PL', {
                     day: '2-digit',
                     month: '2-digit',
@@ -362,7 +364,7 @@ const EndProductReportTab = ({
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="User"
+                  label={t('endProductReport.user')}
                   value={currentUser?.displayName || currentUser?.email || 'Nieznany użytkownik'}
                   variant="outlined"
                   InputProps={{
@@ -378,7 +380,7 @@ const EndProductReportTab = ({
           <Paper sx={{ p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">
-                2. TDS Specification
+                {t('endProductReport.sections.tdsSpecification')}
               </Typography>
               <Button
                 variant="outlined"
@@ -397,7 +399,7 @@ const EndProductReportTab = ({
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                   <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                    Mikroelementy + Dane żywieniowe:
+                    {t('endProductReport.sections.micronutrients')}:
                   </Typography>
                 </Box>
                 
@@ -406,13 +408,13 @@ const EndProductReportTab = ({
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Kod</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Nazwa</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.code')}</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.name')}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                            Ilość per {task?.recipe?.nutritionalBasis || '1 caps'}
+                            {t('endProductReport.tableHeaders.quantity')} per {task?.recipe?.nutritionalBasis || '1 caps'}
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Kategoria</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.unit')}</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.category')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -457,7 +459,7 @@ const EndProductReportTab = ({
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Date"
+                  label={t('endProductReport.date')}
                   value={task?.recipe?.updatedAt 
                     ? (task.recipe.updatedAt && typeof task.recipe.updatedAt === 'object' && typeof task.recipe.updatedAt.toDate === 'function'
                       ? task.recipe.updatedAt.toDate().toLocaleDateString('pl-PL', {
@@ -482,7 +484,7 @@ const EndProductReportTab = ({
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Expiration date"
+                  label={t('endProductReport.expirationDate')}
                   value={task?.expiryDate 
                     ? (task.expiryDate instanceof Date 
                       ? task.expiryDate.toLocaleDateString('pl-PL', {
@@ -518,7 +520,7 @@ const EndProductReportTab = ({
           <Paper sx={{ p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">
-                3. Active Ingredients
+                {t('endProductReport.sections.activeIngredients')}
               </Typography>
               <Button
                 variant="outlined"
@@ -532,12 +534,12 @@ const EndProductReportTab = ({
               </Button>
             </Box>
             
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
-              3.1 List of materials
+                        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 2 }}>
+              {t('endProductReport.sections.materialsList')}
             </Typography>
-            
+
             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-              Ingredients:
+              {t('endProductReport.sections.ingredients')}:
             </Typography>
             
             {task?.recipe?.ingredients && task.recipe.ingredients.length > 0 ? (
@@ -545,12 +547,12 @@ const EndProductReportTab = ({
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Nazwa składnika</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Numer CAS</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Uwagi</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Załączniki z partii</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.ingredientName')}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.quantity')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.unit')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.casNumber')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.notes')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.batchAttachments')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -640,18 +642,18 @@ const EndProductReportTab = ({
           {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
             <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                3.2 Expiration date of materials
+                {t('endProductReport.sections.expirationDateMaterials')}
               </Typography>
                 
                 <TableContainer component={Paper} sx={{ mt: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Nazwa materiału</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Partia</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Jednostka</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Data ważności</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.materialName')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.batch')}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.quantity')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.unit')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.expiryDate')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -708,14 +710,14 @@ const EndProductReportTab = ({
           {/* 3.3 Certificates */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              3.3 Certificates
+              {t('endProductReport.sections.certificates')}
             </Typography>
             
             {/* Sekcja przesyłania plików */}
             <Box sx={{ mb: 3, p: 2, backgroundColor: 'info.light', borderRadius: 1, border: 1, borderColor: 'info.main', borderStyle: 'dashed', opacity: 0.8 }}>
               <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                 <CloudUploadIcon sx={{ mr: 1 }} />
-                Dodaj certyfikaty
+                {t('endProductReport.sections.addCertificates')}
               </Typography>
               
               <input
@@ -747,20 +749,20 @@ const EndProductReportTab = ({
             {/* Lista załączników */}
             {clinicalAttachments.length > 0 ? (
               <Box>
-                <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
                   <AttachFileIcon sx={{ mr: 1 }} />
-                  Załączone certyfikaty ({clinicalAttachments.length})
+                  {t('endProductReport.sections.attachedCertificates')} ({clinicalAttachments.length})
                 </Typography>
-                
+
                 <TableContainer component={Paper} sx={{ mt: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                        <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 60 }}>{t('endProductReport.tableHeaders.type')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.fileName')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 100 }}>{t('endProductReport.tableHeaders.size')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 120 }}>{t('endProductReport.tableHeaders.dateAdded')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">{t('endProductReport.tableHeaders.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -830,7 +832,7 @@ const EndProductReportTab = ({
           {/* 4. Physicochemical properties */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              4. Physicochemical properties (CoA)
+              {t('endProductReport.sections.physicochemicalProperties')}
             </Typography>
             
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -981,7 +983,7 @@ const EndProductReportTab = ({
           {/* 5. Production */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              5. Production
+              {t('endProductReport.sections.production')}
             </Typography>
             
             <Grid container spacing={3}>
@@ -1149,7 +1151,7 @@ const EndProductReportTab = ({
             
             {/* History of production */}
             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 3, mb: 2 }}>
-              History of production:
+              {t('endProductReport.sections.productionHistory')}:
             </Typography>
             
             {productionHistory && productionHistory.length > 0 ? (
@@ -1157,10 +1159,10 @@ const EndProductReportTab = ({
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Start date</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>End date</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>Quantity</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>Time spent</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.startDate')}</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.endDate')}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.quantity')}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.timeSpent')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1178,7 +1180,7 @@ const EndProductReportTab = ({
                     ))}
                     {/* Wiersz podsumowania */}
                     <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
-                      <TableCell colSpan={2} align="right">Suma:</TableCell>
+                      <TableCell colSpan={2} align="right">{t('endProductReport.tableHeaders.sum')}:</TableCell>
                       <TableCell align="right">
                         {formatQuantityPrecision(
                           productionHistory.reduce((sum, session) => sum + (parseFloat(session.quantity) || 0), 0), 
@@ -1205,7 +1207,7 @@ const EndProductReportTab = ({
             
             {/* Dane z raportu zakończonych MO */}
             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mt: 4, mb: 2 }}>
-              Report Data from Completed MO Forms:
+              {t('endProductReport.sections.reportDataFromForms')}:
             </Typography>
             
             {formResponses?.completedMO && formResponses.completedMO.length > 0 ? (
@@ -1227,7 +1229,7 @@ const EndProductReportTab = ({
                         <Grid item xs={12} sm={6} md={3}>
                           <TextField
                             fullWidth
-                            label="Data wypełnienia"
+                            label={t('endProductReport.formLabels.fillDate')}
                             value={formatDateTime(report.date)}
                             variant="outlined"
                             size="small"
@@ -1238,8 +1240,8 @@ const EndProductReportTab = ({
                         <Grid item xs={12} sm={6} md={3}>
                           <TextField
                             fullWidth
-                            label="Godzina"
-                            value={report.time || 'Nie podano'}
+                            label={t('endProductReport.formLabels.time')}
+                            value={report.time || t('endProductReport.formLabels.notProvided')}
                             variant="outlined"
                             size="small"
                             InputProps={{ readOnly: true }}
@@ -1249,8 +1251,8 @@ const EndProductReportTab = ({
                         <Grid item xs={12} sm={6} md={3}>
                           <TextField
                             fullWidth
-                            label="Odpowiedzialny"
-                            value={report.email || 'Nie podano'}
+                            label={t('endProductReport.formLabels.responsible')}
+                            value={report.email || t('endProductReport.formLabels.notProvided')}
                             variant="outlined"
                             size="small"
                             InputProps={{ readOnly: true }}
@@ -1350,7 +1352,7 @@ const EndProductReportTab = ({
           {/* 6. Quality control */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              6. Quality control
+              {t('endProductReport.sections.qualityControl')}
             </Typography>
             
             {formResponses?.productionControl && formResponses.productionControl.length > 0 ? (
@@ -1371,7 +1373,7 @@ const EndProductReportTab = ({
                         {/* Identyfikacja */}
                         <Grid item xs={12}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            Identyfikacja:
+                            {t('endProductReport.sections.identification')}:
                           </Typography>
                         </Grid>
                         
@@ -1411,7 +1413,7 @@ const EndProductReportTab = ({
                         {/* Protokół kontroli produkcji */}
                         <Grid item xs={12} sx={{ mt: 2 }}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            Protokół kontroli produkcji:
+                            {t('endProductReport.sections.productionControlProtocol')}:
                           </Typography>
                         </Grid>
                         
@@ -1495,7 +1497,7 @@ const EndProductReportTab = ({
                         {/* Dane produktu */}
                         <Grid item xs={12} sx={{ mt: 2 }}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            Dane produktu:
+                            {t('endProductReport.sections.productData')}:
                           </Typography>
                         </Grid>
                         
@@ -1557,7 +1559,7 @@ const EndProductReportTab = ({
                         {/* Warunki atmosferyczne */}
                         <Grid item xs={12} sx={{ mt: 2 }}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            Warunki atmosferyczne:
+                            {t('endProductReport.sections.atmosphericConditions')}:
                           </Typography>
                         </Grid>
                         
@@ -1608,7 +1610,7 @@ const EndProductReportTab = ({
                         {/* Kontrola jakości */}
                         <Grid item xs={12} sx={{ mt: 2 }}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            Kontrola jakości:
+                            {t('endProductReport.sections.qualityControlDetails')}:
                           </Typography>
                         </Grid>
                         
@@ -1680,7 +1682,7 @@ const EndProductReportTab = ({
                         {(report.documentScansUrl || report.productPhoto1Url || report.productPhoto2Url || report.productPhoto3Url) && (
                           <Grid item xs={12} sx={{ mt: 2 }}>
                             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                              Załączniki:
+                              {t('endProductReport.sections.attachments')}:
                             </Typography>
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                               {report.documentScansUrl && (
@@ -1757,7 +1759,7 @@ const EndProductReportTab = ({
           {/* 7. Allergens */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              7. Allergens
+              {t('endProductReport.sections.allergens')}
             </Typography>
             
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -1774,7 +1776,7 @@ const EndProductReportTab = ({
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Alergeny"
+                  label={t('endProductReport.sections.allergens')}
                   placeholder="Wybierz z listy lub wpisz własny alergen..."
                   variant="outlined"
                   fullWidth
@@ -1797,7 +1799,7 @@ const EndProductReportTab = ({
             {/* Podsumowanie wybranych alergenów */}
             <Box sx={{ mt: 3, p: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Wybrane alergeny ({selectedAllergens.length}):
+                {t('endProductReport.sections.selectedAllergens')} ({selectedAllergens.length}):
               </Typography>
               {selectedAllergens.length > 0 ? (
                 <Typography variant="body2">
@@ -1814,7 +1816,7 @@ const EndProductReportTab = ({
           {/* 8. Disclaimer & Terms of Use */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2, color: 'error.main' }}>
-              8. Disclaimer & Terms of Use
+              {t('endProductReport.sections.disclaimer')}
             </Typography>
             
             <Box sx={{ 
@@ -1878,7 +1880,7 @@ const EndProductReportTab = ({
           {/* 9. Additional Attachments */}
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              9. Additional Attachments
+              {t('endProductReport.sections.additionalAttachments')}
             </Typography>
             
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -1889,7 +1891,7 @@ const EndProductReportTab = ({
             <Box sx={{ mb: 3, p: 2, backgroundColor: 'secondary.light', borderRadius: 1, border: 1, borderColor: 'secondary.main', borderStyle: 'dashed', opacity: 0.8 }}>
               <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                 <CloudUploadIcon sx={{ mr: 1 }} />
-                Dodaj dodatkowe załączniki
+                {t('endProductReport.sections.addAdditionalAttachments')}
               </Typography>
               
               <input
@@ -1921,20 +1923,20 @@ const EndProductReportTab = ({
             {/* Lista załączników */}
             {additionalAttachments.length > 0 ? (
               <Box>
-                <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                                <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
                   <AttachFileIcon sx={{ mr: 1 }} />
-                  Dodatkowe załączniki ({additionalAttachments.length})
+                  {t('endProductReport.sections.additionalAttachments')} ({additionalAttachments.length})
                 </Typography>
-                
+
                 <TableContainer component={Paper} sx={{ mt: 2 }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                        <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 60 }}>{t('endProductReport.tableHeaders.type')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.fileName')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 100 }}>{t('endProductReport.tableHeaders.size')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 120 }}>{t('endProductReport.tableHeaders.dateAdded')}</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">{t('endProductReport.tableHeaders.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
