@@ -23,8 +23,8 @@ import WorkstationsPage from './WorkstationsPage';
 import CalculatorPage from './CalculatorPage';
 import { initializeMissingCostFields } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
-import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useNotification } from '../../hooks/useNotification';
 
 const ProductionPage = () => {
   const { t } = useTranslation();
@@ -111,7 +111,7 @@ const ProductionPage = () => {
       <Box sx={{ mb: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
           <Typography variant="h5" gutterBottom sx={{ fontSize: isMobile ? '1.25rem' : '1.5rem', mb: 0 }}>
-            Produkcja
+            {t('production.title')}
           </Typography>
           
           {isMobile && isAdmin && (

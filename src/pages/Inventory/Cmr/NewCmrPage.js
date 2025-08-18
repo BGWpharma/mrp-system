@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Box, Typography, Paper } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from '../../../hooks/useTranslation';
 import NewCmrForm from './NewCmrForm';
 import { addCmr, updateCmr, getCmrById } from '../../../services/cmrService';
 import { useEffect } from 'react';
@@ -11,6 +12,7 @@ import { useEffect } from 'react';
 const NewCmrPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { t } = useTranslation();
   const [cmrData, setCmrData] = useState(null);
   const [loading, setLoading] = useState(!!id);
   const [error, setError] = useState(null);
@@ -64,12 +66,12 @@ const NewCmrPage = () => {
       <Paper elevation={3} sx={{ p: 3, mt: 3 }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" component="h1" gutterBottom>
-            {id ? 'Edycja dokumentu CMR' : 'Nowy dokument CMR'}
+            {id ? t('cmr.buttons.editDocument') : t('cmr.buttons.createDocument')}
           </Typography>
           <Typography variant="subtitle1" color="text.secondary">
             {id 
-              ? 'Edytuj istniejący międzynarodowy list przewozowy CMR' 
-              : 'Utwórz nowy międzynarodowy list przewozowy CMR na podstawie oficjalnego dokumentu'}
+              ? t('cmr.buttons.editDescription') 
+              : t('cmr.buttons.createDescription')}
           </Typography>
         </Box>
         

@@ -34,6 +34,7 @@ import {
 } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import SupplierPricesList from './SupplierPricesList';
 
 const InventoryItemForm = ({ itemId }) => {
@@ -43,6 +44,7 @@ const InventoryItemForm = ({ itemId }) => {
   const [selectedPackageItem, setSelectedPackageItem] = useState(null);
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   
   const [itemData, setItemData] = useState({
@@ -178,7 +180,7 @@ const InventoryItemForm = ({ itemId }) => {
             px: 3
           }}
         >
-          {saving ? 'Zapisywanie...' : 'Zapisz'}
+          {saving ? t('inventory.itemForm.saving') : t('inventory.itemForm.save')}
         </Button>
       </Paper>
 
@@ -213,7 +215,7 @@ const InventoryItemForm = ({ itemId }) => {
           }}
         >
           <InventoryIcon color="primary" />
-          <Typography variant="h6" fontWeight="500">Dane podstawowe</Typography>
+          <Typography variant="h6" fontWeight="500">{t('inventory.itemForm.basicData')}</Typography>
         </Box>
         
         <Box sx={{ p: 3 }}>
@@ -222,7 +224,7 @@ const InventoryItemForm = ({ itemId }) => {
               <TextField
                 required
                 fullWidth
-                label="SKU"
+                label={t('inventory.itemForm.sku')}
                 name="name"
                 value={itemData.name}
                 onChange={handleChange}
@@ -243,27 +245,27 @@ const InventoryItemForm = ({ itemId }) => {
             
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel>Kategoria</InputLabel>
+                <InputLabel>{t('inventory.itemForm.categoryLabel')}</InputLabel>
                 <Select
                   name="category"
                   value={itemData.category || ''}
                   onChange={handleChange}
-                  label="Kategoria"
+                  label={t('inventory.itemForm.category')}
                   startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}><CategoryIcon fontSize="small" /></Box>}
                 >
-                  <MenuItem value="">Brak kategorii</MenuItem>
-                  <MenuItem value="Surowce">Surowce</MenuItem>
-                  <MenuItem value="Opakowania zbiorcze">Opakowania zbiorcze</MenuItem>
-                  <MenuItem value="Opakowania jednostkowe">Opakowania jednostkowe</MenuItem>
-                  <MenuItem value="Gotowe produkty">Gotowe produkty</MenuItem>
-                  <MenuItem value="Inne">Inne</MenuItem>
+                  <MenuItem value="">{t('inventory.itemForm.noCategory')}</MenuItem>
+                  <MenuItem value="Surowce">{t('inventory.itemForm.rawMaterials')}</MenuItem>
+                  <MenuItem value="Opakowania zbiorcze">{t('inventory.itemForm.collectivePackaging')}</MenuItem>
+                  <MenuItem value="Opakowania jednostkowe">{t('inventory.itemForm.individualPackaging')}</MenuItem>
+                  <MenuItem value="Gotowe produkty">{t('inventory.itemForm.finishedProducts')}</MenuItem>
+                  <MenuItem value="Inne">{t('inventory.itemForm.other')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
               <TextField
-                label="Opis"
+                label={t('inventory.itemForm.description')}
                 name="description"
                 value={itemData.description || ''}
                 onChange={handleChange}
@@ -276,27 +278,27 @@ const InventoryItemForm = ({ itemId }) => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Numer CAS"
+                label={t('inventory.itemForm.casNumber')}
                 name="casNumber"
                 value={itemData.casNumber || ''}
                 onChange={handleChange}
                 fullWidth
                 helperText="Chemical Abstracts Service number (opcjonalny)"
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                placeholder="np. 64-17-5"
+                placeholder={t('inventory.itemForm.casPlaceholder')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Kod kreskowy (Barcode)"
+                label={t('inventory.itemForm.barcode')}
                 name="barcode"
                 value={itemData.barcode || ''}
                 onChange={handleChange}
                 fullWidth
                 helperText="Kod kreskowy produktu (opcjonalny)"
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                placeholder="np. 1234567890123"
+                placeholder={t('inventory.itemForm.barcodePlaceholder')}
                 InputProps={{
                   startAdornment: (
                     <Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}>
@@ -311,7 +313,7 @@ const InventoryItemForm = ({ itemId }) => {
               <TextField
                 fullWidth
                 required
-                label="Jednostka miary"
+                label={t('inventory.itemForm.unit')}
                 name="unit"
                 value={itemData.unit || 'szt.'}
                 onChange={handleChange}
@@ -327,7 +329,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Lokalizacja"
+                label={t('inventory.itemForm.location')}
                 name="location"
                 value={itemData.location || ''}
                 onChange={handleChange}
@@ -369,7 +371,7 @@ const InventoryItemForm = ({ itemId }) => {
           }}
         >
           <ShippingIcon color="primary" />
-          <Typography variant="h6" fontWeight="500">Parametry magazynowe</Typography>
+          <Typography variant="h6" fontWeight="500">{t('inventory.itemForm.warehouseParameters')}</Typography>
         </Box>
         
         <Box sx={{ p: 3 }}>
@@ -377,7 +379,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Minimalny stan"
+                label={t('inventory.itemForm.minStock')}
                 name="minStock"
                 type="number"
                 value={itemData.minStock || ''}
@@ -389,7 +391,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Maksymalny stan"
+                label={t('inventory.itemForm.maxStock')}
                 name="maxStock"
                 type="number"
                 value={itemData.maxStock || ''}
@@ -401,7 +403,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Minimalna ilość zakupu"
+                label={t('inventory.itemForm.minOrderQuantity')}
                 name="minOrderQuantity"
                 type="number"
                 value={itemData.minOrderQuantity || ''}
@@ -414,7 +416,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Ilość kartonów na paletę"
+                label={t('inventory.itemForm.boxesPerPallet')}
                 name="boxesPerPallet"
                 type="number"
                 value={itemData.boxesPerPallet || ''}
@@ -426,7 +428,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Ilość produktu per karton"
+                label={t('inventory.itemForm.itemsPerBox')}
                 name="itemsPerBox"
                 type="number"
                 value={itemData.itemsPerBox || ''}
@@ -438,7 +440,7 @@ const InventoryItemForm = ({ itemId }) => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Waga (kg)"
+                label={t('inventory.itemForm.weight')}
                 name="weight"
                 type="number"
                 value={itemData.weight || ''}
@@ -464,7 +466,7 @@ const InventoryItemForm = ({ itemId }) => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Powiązanie z kartonem (opakowanie zbiorcze)"
+                    label={t('inventory.itemForm.packageRelation')}
                     fullWidth
                     helperText="Wybierz pozycję magazynową kartonu, w którym pakowana jest ta pozycja"
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}

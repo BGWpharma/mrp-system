@@ -851,7 +851,7 @@ const ForecastPage = () => {
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
             <FormControl fullWidth variant="outlined" sx={{ mb: 1 }}>
-              <InputLabel>Zakres czasowy</InputLabel>
+              <InputLabel>{t('production.forecast.timeRangeLabel')}</InputLabel>
               <Select
                 value={timeRange}
                 onChange={handleTimeRangeChange}

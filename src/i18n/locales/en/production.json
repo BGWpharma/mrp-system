@@ -2,6 +2,8 @@
   "title": "Production",
   "taskList": {
     "title": "Production Tasks",
+    "searchPlaceholder": "Search tasks...",
+    "searchPlaceholderMobile": "Search...",
     "tabs": {
       "taskList": "Task List",
       "timeline": "Timeline",
@@ -10,7 +12,9 @@
       "forecast": "Demand Forecast",
       "calculator": "Calculator",
       "workstations": "Workstations"
-    }
+    },
+    "newTask": "New Task",
+    "exportCsv": "Export CSV"
   },
   "forecast": {
     "title": "Materials Demand Forecast",
@@ -43,6 +47,7 @@
     "materialDetails": "Material Details",
     "close": "Close",
     "orderMaterial": "Order Material",
+    "timeRangeLabel": "Time Range",
     "table": {
       "material": "Material",
       "availableQuantity": "Available Quantity",
@@ -79,6 +84,42 @@
     "productionTasksInPeriod": "Production Tasks in Selected Period",
     "taskWithoutName": "Task without name"
   },
+  "reports": {
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "taskCount": "Task Count",
+    "completedTasks": "Completed Tasks",
+    "tasksInProgress": "Tasks in Progress",
+    "workTime": "Work Time",
+    "tasksByStatus": "Tasks by Status",
+    "tasksByCustomer": "Tasks by Customer",
+    "consumption": {
+      "filters": "Material Consumption Filters",
+      "summary": "Material Consumption Summary",
+      "detailedList": "Detailed Consumption List",
+      "allOrders": "All orders",
+      "allMaterials": "All materials",
+      "tableHeaders": {
+        "material": "Material",
+        "totalQuantity": "Total Quantity",
+        "unit": "Unit",
+        "averagePrice": "Average Unit Price",
+        "totalCost": "Total Cost",
+        "batchCount": "Batch Count",
+        "taskCount": "Task Count",
+        "consumptionDate": "Consumption Date",
+        "task": "Task MO",
+        "order": "Order (CO)",
+        "product": "Product",
+        "batch": "Batch",
+        "quantity": "Quantity",
+        "unitPrice": "Unit Price",
+        "cost": "Cost",
+        "user": "User",
+        "includeInCosts": "Include in Costs"
+      }
+    }
+  },
   "taskDetails": {
     "tabs": {
       "basicData": "Basic Data",
@@ -95,6 +136,10 @@
     }
   },
   "productionReport": {
+    "generalReport": "General Report",
+    "moConsumption": "MO Consumption",
+    "orderCO": "Order (CO)",
+    "material": "Material",
     "tabs": {
       "taskList": "Task List",
       "detailedTaskList": "Detailed Task List"

@@ -679,7 +679,7 @@ const CmrListPage = () => {
           }}>
             <TextField
               size="small"
-              placeholder="Szukaj po numerze CMR, nadawcy, odbiorcy..."
+              placeholder={translate('cmr.search.placeholder')}
               value={searchTerm}
               onChange={handleSearchChange}
               InputProps={{
@@ -693,7 +693,7 @@ const CmrListPage = () => {
             
             <TextField
               size="small"
-              placeholder="Szukaj po pozycjach (nazwa towaru, ilość, jednostka)..."
+              placeholder={translate('cmr.search.itemsPlaceholder')}
               value={itemFilter}
               onChange={handleItemFilterChange}
               sx={{ 
@@ -710,7 +710,7 @@ const CmrListPage = () => {
                 onChange={handleStatusFilterChange}
                 label="Status"
               >
-                <MenuItem value="">Wszystkie</MenuItem>
+                <MenuItem value="">{translate('cmr.buttons.allStatuses')}</MenuItem>
                 {Object.values(CMR_STATUSES).map((status) => (
                   <MenuItem key={status} value={status}>
                     {status}
@@ -741,12 +741,12 @@ const CmrListPage = () => {
                 flex: isMobile ? 1 : 'none'
               }}
             >
-              {isMobile ? "Raport" : "Generuj raport"}
+{isMobile ? translate('cmr.buttons.generateReport') : translate('cmr.buttons.generateReportFull')}
             </Button>
             
             {/* Przycisk odświeżania - tylko na desktop jako IconButton */}
             {!isMobile && (
-              <Tooltip title="Odśwież listę i wyczyść cache">
+              <Tooltip title={translate('cmr.buttons.refreshData')}>
                 <IconButton 
                   onClick={handleRefreshData}
                   color="primary"
@@ -803,7 +803,7 @@ const CmrListPage = () => {
                 flex: isMobile ? 1 : 'none'
               }}
             >
-              {isMobile ? "Nowy" : "Nowy dokument CMR"}
+              {isMobile ? translate('cmr.buttons.newDocumentShort') : translate('cmr.buttons.newDocument')}
             </Button>
           </Box>
         </Box>
@@ -1008,8 +1008,8 @@ const CmrListPage = () => {
       >
         <DialogTitle>
           {reportData 
-            ? (reportFilters.language === 'en' ? 'Report Results' : 'Wyniki raportu') 
-            : (reportFilters.language === 'en' ? 'Generate CMR Report' : 'Generuj raport z dokumentów CMR')
+            ? translate('cmr.report.results') 
+            : translate('cmr.report.generateFromDocuments')
           }
           <Box sx={{ position: 'absolute', right: 16, top: 8, display: 'flex', alignItems: 'center' }}>
             PL
@@ -1256,7 +1256,7 @@ const CmrListPage = () => {
             >
               {generatingReport 
                 ? <CircularProgress size={24} /> 
-                : (reportFilters.language === 'en' ? 'Generate Report' : 'Generuj raport')
+                : translate('cmr.report.generating')
               }
             </Button>
           )}

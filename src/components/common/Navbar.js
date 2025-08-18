@@ -58,6 +58,7 @@ import NotificationsMenu from './NotificationsMenu';
 import BugReportDialog from './BugReportDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
 import LanguageSwitcher from './LanguageSwitcher';
+import { useTranslation } from '../../hooks/useTranslation';
 import debounce from 'lodash.debounce';
 
 // Funkcja zwracająca kolor dla danego typu wyszukiwania
@@ -114,6 +115,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const { mode, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
   const [anchorEl, setAnchorEl] = useState(null);
@@ -480,7 +482,7 @@ const Navbar = () => {
               <SearchIcon />
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder={isMobile ? "Szukaj..." : "Szukaj PO, CO, MO, LOT... (min. 2 znaki)"}
+              placeholder={isMobile ? t('common.navbar.searchPlaceholderMobile') : t('common.navbar.searchPlaceholder')}
               inputProps={{ 'aria-label': 'search' }}
               value={searchQuery}
               onChange={handleSearchChange}
@@ -508,7 +510,7 @@ const Navbar = () => {
             )}
             {searchQuery.length > 0 && !isSearching && (
               <IconButton
-                aria-label="Wyczyść wyszukiwanie"
+                aria-label={t('common.navbar.clearSearch')}
                 onClick={handleClearSearch}
                 sx={{
                   position: 'absolute',
@@ -621,12 +623,12 @@ const Navbar = () => {
           {/* Right side items */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {/* Na urządzeniach mobilnych pokazujemy tylko ikony z najważniejszymi funkcjami */}
-            <Tooltip title={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}>
+            <Tooltip title={t('common.navbar.themeToggleTooltip')}>
               <IconButton 
                 color="inherit" 
                 sx={{ ml: isMobile ? 0.5 : 1 }}
                 onClick={toggleTheme}
-                aria-label={mode === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
+                aria-label={t('common.navbar.themeToggleTooltip')}
               >
                 {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
@@ -711,22 +713,22 @@ const Navbar = () => {
                   <Box component="div">
                     <Divider />
                     <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 1, display: 'block' }}>
-                      Administracja
+                      {t('common.navbar.administration')}
                     </Typography>
                     
                     <MenuItem component={Link} to="/admin/users" onClick={handleClose}>
                       <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
-                      Użytkownicy
+                      {t('common.navbar.users')}
                     </MenuItem>
                     
                     <MenuItem component={Link} to="/admin/system" onClick={handleClose}>
                       <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
-                      Narzędzia systemowe
+                      {t('common.navbar.systemTools')}
                     </MenuItem>
                     
                     <MenuItem component={Link} to="/admin/bug-reports" onClick={handleClose}>
                       <ListItemIcon><BugReportIcon fontSize="small" /></ListItemIcon>
-                      Zgłoszenia błędów
+                      {t('common.navbar.bugReports')}
                     </MenuItem>
                     <Divider />
                   </Box>
@@ -734,14 +736,14 @@ const Navbar = () => {
                 
                 <MenuItem component={Link} to="/notifications/history" onClick={handleClose}>
                   <ListItemIcon><NotificationsIcon fontSize="small" /></ListItemIcon>
-                  Historia powiadomień
+                  {t('common.navbar.notificationHistory')}
                 </MenuItem>
                 
 
                 
                 <MenuItem onClick={handleLogout}>
                   <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>
-                  Wyloguj
+                  {t('common.navbar.logout')}
                 </MenuItem>
               </Menu>
             </Box>

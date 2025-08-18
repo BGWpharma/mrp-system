@@ -33,9 +33,27 @@
     "selectNewPaymentStatus": "Select new payment status for CMR document:",
     "update": "Update"
   },
+  "search": {
+    "placeholder": "Search by CMR number, sender, recipient...",
+    "itemsPlaceholder": "Search by items (item name, quantity, unit)...",
+    "taskPlaceholder": "Search tasks..."
+  },
+  "buttons": {
+    "generateReport": "Generate report",
+    "generateReportFull": "Generate report",
+    "refreshData": "Refresh list and clear cache",
+    "allStatuses": "All",
+    "newDocument": "New CMR document",
+    "newDocumentShort": "New",
+    "editDocument": "Edit CMR document",
+    "createDocument": "New CMR document",
+    "editDescription": "Edit existing international CMR consignment note",
+    "createDescription": "Create new international CMR consignment note based on official document"
+  },
   "report": {
     "title": "CMR Report",
     "generate": "Generate CMR Documents Report",
+    "generateFromDocuments": "Generate CMR Report",
     "results": "Report Results",
     "generating": "Generate Report",
     "exportToCsv": "Export to CSV",

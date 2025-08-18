@@ -33,9 +33,27 @@
     "selectNewPaymentStatus": "Wybierz nowy status płatności dla dokumentu CMR:",
     "update": "Zaktualizuj"
   },
+  "search": {
+    "placeholder": "Szukaj po numerze CMR, nadawcy, odbiorcy...",
+    "itemsPlaceholder": "Szukaj po pozycjach (nazwa towaru, ilość, jednostka)...",
+    "taskPlaceholder": "Szukaj zadań..."
+  },
+  "buttons": {
+    "generateReport": "Generuj raport",
+    "generateReportFull": "Generuj raport",
+    "refreshData": "Odśwież listę i wyczyść cache",
+    "allStatuses": "Wszystkie",
+    "newDocument": "Nowy dokument CMR",
+    "newDocumentShort": "Nowy",
+    "editDocument": "Edycja dokumentu CMR",
+    "createDocument": "Nowy dokument CMR",
+    "editDescription": "Edytuj istniejący międzynarodowy list przewozowy CMR",
+    "createDescription": "Utwórz nowy międzynarodowy list przewozowy CMR na podstawie oficjalnego dokumentu"
+  },
   "report": {
     "title": "Raport CMR",
     "generate": "Generuj raport z dokumentów CMR",
+    "generateFromDocuments": "Generuj raport z dokumentów CMR",
     "results": "Wyniki raportu",
     "generating": "Generuj raport",
     "exportToCsv": "Eksportuj do CSV",

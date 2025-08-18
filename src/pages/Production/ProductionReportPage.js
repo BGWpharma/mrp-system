@@ -372,13 +372,13 @@ const ProductionReportPage = () => {
           }}
         >
           <Tab 
-            label="Ogólny raport" 
+            label={t('production.productionReport.generalReport')} 
             icon={<AssessmentIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />
           <Tab 
-            label="Konsumpcja MO"
+            label={t('production.productionReport.moConsumption')}
             icon={<InventoryIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
@@ -394,18 +394,18 @@ const ProductionReportPage = () => {
             <Grid container spacing={isMobile ? 1 : 3} alignItems="center">
               <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-                  Data początkowa
+                  {t('production.reports.startDate')}
                 </Typography>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
-                    label={isMobile ? "" : "Data początkowa"}
+                    label={isMobile ? "" : t('production.reports.startDate')}
                     value={startDate}
                     onChange={(newDate) => setStartDate(newDate)}
                     slotProps={{ 
                       textField: { 
                         fullWidth: true,
                         size: "small",
-                        placeholder: isMobile ? "Data początkowa" : "",
+                        placeholder: isMobile ? t('production.reports.startDate') : "",
                         sx: {
                           '& .MuiInputLabel-root': {
                             display: isMobile ? 'none' : 'block'
@@ -418,18 +418,18 @@ const ProductionReportPage = () => {
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-                  Data końcowa
+                  {t('production.reports.endDate')}
                 </Typography>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
-                    label={isMobile ? "" : "Data końcowa"}
+                    label={isMobile ? "" : t('production.reports.endDate')}
                     value={endDate}
                     onChange={(newDate) => setEndDate(newDate)}
                     slotProps={{ 
                       textField: { 
                         fullWidth: true,
                         size: "small",
-                        placeholder: isMobile ? "Data końcowa" : "",
+                        placeholder: isMobile ? t('production.reports.endDate') : "",
                         sx: {
                           '& .MuiInputLabel-root': {
                             display: isMobile ? 'none' : 'block'
@@ -514,7 +514,7 @@ const ProductionReportPage = () => {
               <Card>
                 <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
                   <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    Liczba zadań
+                    {t('production.reports.taskCount')}
                   </Typography>
                   <Typography variant="h5" color="primary" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                     {filteredTasks.length}
@@ -526,7 +526,7 @@ const ProductionReportPage = () => {
               <Card>
                 <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
                   <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    Zadania zakończone
+                    {t('production.reports.completedTasks')}
                   </Typography>
                   <Typography variant="h5" color="success.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                     {filteredTasks.filter(task => task.status === 'Zakończone').length}
@@ -538,7 +538,7 @@ const ProductionReportPage = () => {
               <Card>
                 <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
                   <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    Zadania w trakcie
+                    {t('production.reports.tasksInProgress')}
                   </Typography>
                   <Typography variant="h5" color="warning.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                     {filteredTasks.filter(task => task.status === 'W trakcie').length}
@@ -550,7 +550,7 @@ const ProductionReportPage = () => {
               <Card>
                 <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
                   <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    Czas pracy
+                    {t('production.reports.workTime')}
                   </Typography>
                   <Typography variant="h5" color="info.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
                     {formatTime(timeStats.totalMinutes)}
@@ -565,7 +565,7 @@ const ProductionReportPage = () => {
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: isMobile ? 1 : 3, height: '100%' }}>
                 <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mb: 1, fontSize: isMobile ? '0.8rem' : '1rem' }}>
-                  Zadania według statusu
+                  {t('production.reports.tasksByStatus')}
                 </Typography>
                 <Box sx={{ height: isMobile ? 200 : 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -595,7 +595,7 @@ const ProductionReportPage = () => {
               <Grid item xs={12} md={6}>
                 <Paper sx={{ p: 3, height: '100%' }}>
                   <Typography variant="h6" gutterBottom align="center">
-                    Zadania wg klienta
+                    {t('production.reports.tasksByCustomer')}
                   </Typography>
                   <Box sx={{ height: 300 }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -614,7 +614,7 @@ const ProductionReportPage = () => {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="value" name="Liczba zadań" fill="#8884d8" />
+                        <Bar dataKey="value" name={t('production.reports.taskCount')} fill="#8884d8" />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box>
@@ -778,6 +778,7 @@ const ProductionReportPage = () => {
 
 // Komponent zakładki konsumpcji MO
 const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }) => {
+  const { t } = useTranslation();
   const [consumptionData, setConsumptionData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filteredConsumption, setFilteredConsumption] = useState([]);
@@ -1105,13 +1106,13 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
       {/* Filtry dla konsumpcji */}
       <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
         <Typography variant="h6" gutterBottom>
-          Filtry konsumpcji materiałów
+          {t('production.reports.consumption.filters')}
         </Typography>
         <Grid container spacing={isMobile ? 1 : 3} alignItems="center">
           <Grid item xs={12} sm={6} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label="Data początkowa"
+                label={t('production.reports.startDate')}
                 value={consumptionStartDate}
                 onChange={(newDate) => setConsumptionStartDate(newDate)}
                 slotProps={{ 
@@ -1126,7 +1127,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
           <Grid item xs={12} sm={6} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label="Data końcowa"
+                label={t('production.reports.endDate')}
                 value={consumptionEndDate}
                 onChange={(newDate) => setConsumptionEndDate(newDate)}
                 slotProps={{ 
@@ -1140,13 +1141,13 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Zamówienie (CO)</InputLabel>
+              <InputLabel>{t('production.productionReport.orderCO')}</InputLabel>
               <Select
                 value={selectedOrder}
                 onChange={(e) => setSelectedOrder(e.target.value)}
-                label="Zamówienie (CO)"
+                label={t('production.productionReport.orderCO')}
               >
-                <MenuItem value="all">Wszystkie zamówienia</MenuItem>
+                <MenuItem value="all">{t('production.reports.consumption.allOrders')}</MenuItem>
                 {ordersList.map(order => (
                   <MenuItem key={order.id} value={order.id}>
                     CO #{order.number}
@@ -1158,13 +1159,13 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Materiał</InputLabel>
+              <InputLabel>{t('production.productionReport.material')}</InputLabel>
               <Select
                 value={selectedMaterial}
                 onChange={(e) => setSelectedMaterial(e.target.value)}
-                label="Materiał"
+                label={t('production.productionReport.material')}
               >
-                <MenuItem value="all">Wszystkie materiały</MenuItem>
+                <MenuItem value="all">{t('production.reports.consumption.allMaterials')}</MenuItem>
                 {materialsList.map(material => (
                   <MenuItem key={material.id} value={material.id}>
                     {material.name}
@@ -1179,7 +1180,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
       {/* Podsumowanie konsumpcji materiałów */}
       <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
         <Typography variant="h6" gutterBottom>
-          Podsumowanie konsumpcji materiałów
+          {t('production.reports.consumption.summary')}
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
           Okres: {format(consumptionStartDate, 'dd.MM.yyyy')} - {format(consumptionEndDate, 'dd.MM.yyyy')}
@@ -1199,13 +1200,13 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Materiał</TableCell>
-                  <TableCell align="right">Łączna ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
-                  <TableCell align="right">Średnia cena jedn.</TableCell>
-                  <TableCell align="right">Łączny koszt</TableCell>
-                  <TableCell align="center">Liczba partii</TableCell>
-                  <TableCell align="center">Liczba zadań</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.material')}</TableCell>
+                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.totalQuantity')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.unit')}</TableCell>
+                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.averagePrice')}</TableCell>
+                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.totalCost')}</TableCell>
+                  <TableCell align="center">{t('production.reports.consumption.tableHeaders.batchCount')}</TableCell>
+                  <TableCell align="center">{t('production.reports.consumption.tableHeaders.taskCount')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1266,7 +1267,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
       {/* Szczegółowa lista konsumpcji */}
       <Paper sx={{ p: isMobile ? 1.5 : 3 }}>
         <Typography variant="h6" gutterBottom>
-          Szczegółowa lista konsumpcji
+          {t('production.reports.consumption.detailedList')}
         </Typography>
         
         {filteredConsumption.length === 0 ? (
@@ -1297,18 +1298,18 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Data konsumpcji</TableCell>
-                  <TableCell>Zadanie MO</TableCell>
-                  <TableCell>Zamówienie (CO)</TableCell>
-                  <TableCell>Produkt</TableCell>
-                  <TableCell>Materiał</TableCell>
-                  <TableCell>Partia</TableCell>
-                  <TableCell align="right">Ilość</TableCell>
-                  <TableCell>Jednostka</TableCell>
-                  <TableCell align="right">Cena jedn.</TableCell>
-                  <TableCell align="right">Koszt</TableCell>
-                  <TableCell>Użytkownik</TableCell>
-                  <TableCell align="center">Wliczaj w koszty</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.consumptionDate')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.task')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.order')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.product')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.material')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.batch')}</TableCell>
+                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.quantity')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.unit')}</TableCell>
+                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.unitPrice')}</TableCell>
+                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.cost')}</TableCell>
+                  <TableCell>{t('production.reports.consumption.tableHeaders.user')}</TableCell>
+                  <TableCell align="center">{t('production.reports.consumption.tableHeaders.includeInCosts')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>

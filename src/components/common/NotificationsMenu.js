@@ -40,6 +40,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { 
   getUserNotifications, 
   markNotificationAsRead, 
@@ -67,6 +68,7 @@ const NotificationsMenu = () => {
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const open = Boolean(anchorEl);
   
@@ -435,11 +437,11 @@ const NotificationsMenu = () => {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      <Tooltip title="Powiadomienia">
+      <Tooltip title={t('common.navbar.notificationsTooltip')}>
         <IconButton 
           color="inherit" 
           onClick={handleClick}
-          aria-label="Powiadomienia"
+          aria-label={t('common.navbar.notificationsTooltip')}
         >
           <StyledBadge badgeContent={unreadCount} max={99}>
             <NotificationsIcon />
@@ -447,7 +449,7 @@ const NotificationsMenu = () => {
         </IconButton>
       </Tooltip>
       
-      <Tooltip title="Odśwież liczbę powiadomień">
+      <Tooltip title={t('common.navbar.refreshNotificationsTooltip')}>
         <IconButton 
           color="inherit" 
           onClick={handleRefreshUnreadCount} 
@@ -476,7 +478,7 @@ const NotificationsMenu = () => {
       >
         <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Powiadomienia
+            {t('common.navbar.notifications')}
           </Typography>
         </Box>
         

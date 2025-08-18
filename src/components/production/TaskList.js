@@ -1396,7 +1396,7 @@ const TaskList = () => {
             <TextField
               variant="outlined"
               size="small"
-              placeholder={isMobile ? "Szukaj..." : "Szukaj zadania..."}
+              placeholder={isMobile ? t('production.taskList.searchPlaceholderMobile') : t('production.taskList.searchPlaceholder')}
               value={searchTerm}
               onChange={handleSearchChange}
               sx={{ 
@@ -1472,7 +1472,7 @@ const TaskList = () => {
                 flex: isMobile ? 1 : 'none'
               }}
             >
-              {isMobile ? "Nowe" : "Nowe Zadanie"}
+              {isMobile ? "Nowe" : t('production.taskList.newTask')}
             </Button>
             
             {/* Przycisk odświeżania - tylko na desktop jako IconButton */}
@@ -1535,7 +1535,7 @@ const TaskList = () => {
                 flex: isMobile ? 1 : 'none'
               }}
             >
-              {loading ? (isMobile ? 'Export...' : 'Eksportowanie...') : (isMobile ? 'CSV' : 'Eksportuj CSV')}
+              {loading ? (isMobile ? 'Export...' : 'Eksportowanie...') : (isMobile ? 'CSV' : t('production.taskList.exportCsv'))}
             </Button>
             
             {/* Sortowanie - tylko na mobile */}

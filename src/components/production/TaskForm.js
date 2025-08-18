@@ -1,6 +1,7 @@
 // src/components/production/TaskForm.js
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   Box,
   Button,
@@ -72,6 +73,7 @@ const TaskForm = ({ taskId }) => {
   const [inventoryProducts, setInventoryProducts] = useState([]);
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning } = useNotification();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -1145,7 +1147,7 @@ const TaskForm = ({ taskId }) => {
     <Container maxWidth="md">
       <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
         <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3, color: 'primary.main', fontWeight: 'bold' }}>
-          {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : 'Nowe zadanie produkcyjne'}
+          {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : t('production.taskList.newTask') + ' produkcyjne'}
         </Typography>
         
         {/* Wyświetlanie numeru MO w trybie edycji */}

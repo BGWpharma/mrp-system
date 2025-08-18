@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   Box,
   Typography,
@@ -47,6 +48,7 @@ import SupplierPriceHistory from './SupplierPriceHistory';
 const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
   
   const [supplierPrices, setSupplierPrices] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -262,7 +264,7 @@ const SupplierPricesList = ({ itemId, currency = DEFAULT_CURRENCY }) => {
   return (
     <Box sx={{ mt: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">Ceny dostawców</Typography>
+        <Typography variant="h6">{t('inventory.itemForm.supplierPrices')}</Typography>
         <Button
           variant="contained"
           color="primary"

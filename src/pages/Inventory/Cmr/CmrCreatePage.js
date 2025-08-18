@@ -3,6 +3,7 @@ import { Container, Typography, Box, Paper } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNotification } from '../../../hooks/useNotification';
+import { useTranslation } from '../../../hooks/useTranslation';
 import CmrForm from './CmrForm';
 import { createCmrDocument } from '../../../services/cmrService';
 
@@ -10,6 +11,7 @@ const CmrCreatePage = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
+  const { t } = useTranslation();
 
   const handleSubmit = async (formData) => {
     try {
@@ -42,7 +44,7 @@ const CmrCreatePage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h5">Nowy dokument CMR</Typography>
+        <Typography variant="h5">{t('cmr.buttons.createDocument')}</Typography>
       </Box>
       <Paper sx={{ p: 3 }}>
         <CmrForm onSubmit={handleSubmit} onCancel={handleCancel} />

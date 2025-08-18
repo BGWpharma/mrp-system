@@ -2,6 +2,8 @@
   "title": "Produkcja",
   "taskList": {
     "title": "Zadania Produkcyjne",
+    "searchPlaceholder": "Szukaj zadania...",
+    "searchPlaceholderMobile": "Szukaj...",
     "tabs": {
       "taskList": "Lista zadań",
       "timeline": "Harmonogram",
@@ -10,7 +12,9 @@
       "forecast": "Prognoza zapotrzebowania",
       "calculator": "Kalkulator",
       "workstations": "Stanowiska produkcyjne"
-    }
+    },
+    "newTask": "Nowe zadanie",
+    "exportCsv": "Eksportuj CSV"
   },
   "forecast": {
     "title": "Prognoza zapotrzebowania materiałów",
@@ -43,6 +47,7 @@
     "materialDetails": "Szczegóły materiału",
     "close": "Zamknij",
     "orderMaterial": "Zamów materiał",
+    "timeRangeLabel": "Zakres czasowy",
     "table": {
       "material": "Materiał",
       "availableQuantity": "Dostępna ilość",
@@ -79,6 +84,42 @@
     "productionTasksInPeriod": "Zadania produkcyjne w wybranym okresie",
     "taskWithoutName": "Zadanie bez nazwy"
   },
+  "reports": {
+    "startDate": "Data początkowa",
+    "endDate": "Data końcowa",
+    "taskCount": "Liczba zadań",
+    "completedTasks": "Zadania zakończone",
+    "tasksInProgress": "Zadania w trakcie",
+    "workTime": "Czas pracy",
+    "tasksByStatus": "Zadania według statusu",
+    "tasksByCustomer": "Zadania wg klienta",
+    "consumption": {
+      "filters": "Filtry konsumpcji materiałów",
+      "summary": "Podsumowanie konsumpcji materiałów",
+      "detailedList": "Szczegółowa lista konsumpcji",
+      "allOrders": "Wszystkie zamówienia",
+      "allMaterials": "Wszystkie materiały",
+      "tableHeaders": {
+        "material": "Materiał",
+        "totalQuantity": "Łączna ilość",
+        "unit": "Jednostka",
+        "averagePrice": "Średnia cena jedn.",
+        "totalCost": "Łączny koszt",
+        "batchCount": "Liczba partii",
+        "taskCount": "Liczba zadań",
+        "consumptionDate": "Data konsumpcji",
+        "task": "Zadanie MO",
+        "order": "Zamówienie (CO)",
+        "product": "Produkt",
+        "batch": "Partia",
+        "quantity": "Ilość",
+        "unitPrice": "Cena jedn.",
+        "cost": "Koszt",
+        "user": "Użytkownik",
+        "includeInCosts": "Wliczaj w koszty"
+      }
+    }
+  },
   "taskDetails": {
     "tabs": {
       "basicData": "Dane podstawowe",
@@ -95,6 +136,10 @@
     }
   },
   "productionReport": {
+    "generalReport": "Ogólny raport",
+    "moConsumption": "Konsumpcja MO",
+    "orderCO": "Zamówienie (CO)",
+    "material": "Materiał",
     "tabs": {
       "taskList": "Lista zadań",
       "detailedTaskList": "Szczegółowa lista zadań"

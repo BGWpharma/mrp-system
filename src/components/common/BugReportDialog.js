@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { addBugReportWithScreenshot } from '../../services/bugReportService';
 import { 
   getCapturedLogs, 
@@ -101,6 +102,7 @@ const DropZone = styled(Paper)(({ theme }) => ({
 const BugReportDialog = ({ open, onClose }) => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showWarning, showInfo } = useNotification();
+  const { t } = useTranslation();
   
   const [formData, setFormData] = useState({
     title: '',
@@ -165,7 +167,7 @@ const BugReportDialog = ({ open, onClose }) => {
       
       // Znacznie zwiększamy czas oczekiwania przed wykonaniem zrzutu, aby dać czas na zamknięcie dialogu
       // i zniknięcie wszelkich elementów UI przeglądarki (np. menu kontekstowe)
-      showInfo('Przygotowanie do zrzutu ekranu za 2 sekundy...');
+      showInfo(t('common.bugReport.screenshotPreparing'));
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Próba użycia API Screenshot (dostępne tylko w niektórych przeglądarkach)
@@ -214,15 +216,15 @@ const BugReportDialog = ({ open, onClose }) => {
         setScreenshotPreview(URL.createObjectURL(file));
         
         // Pokazujemy powiadomienie o sukcesie
-        showSuccess('Zrzut ekranu został wykonany pomyślnie');
+        showSuccess(t('common.bugReport.screenshotSuccess'));
       } else {
         throw new Error('API Screenshot nie jest obsługiwane przez tę przeglądarkę');
       }
     } catch (error) {
       console.error('Błąd podczas robienia zrzutu ekranu:', error);
-      showError('Nie udało się zrobić zrzutu ekranu. Spróbuj załączyć go ręcznie.');
+      showError(t('common.bugReport.screenshotError'));
     }
-  }, [onClose, showError, showSuccess, showInfo]);
+  }, [onClose, showError, showSuccess, showInfo, t]);
   
   // Obsługa zmiany pliku zrzutu ekranu
   const handleScreenshotChange = (event) => {
@@ -254,7 +256,7 @@ const BugReportDialog = ({ open, onClose }) => {
   // Dodaję funkcję czyszczenia logów
   const handleClearLogs = () => {
     clearCapturedLogs();
-    showInfo('Logi konsoli zostały wyczyszczone');
+    showInfo(t('common.bugReport.logsClearedInfo'));
   };
   
   // Dodaję funkcję do obsługi wklejania ze schowka
@@ -273,13 +275,13 @@ const BugReportDialog = ({ open, onClose }) => {
         setScreenshotPreview(URL.createObjectURL(file));
         
         // Pokazujemy powiadomienie
-        showSuccess('Zrzut ekranu został wklejony ze schowka');
+        showSuccess(t('common.bugReport.screenshotPasted'));
         
         // Przerywamy pętlę po znalezieniu obrazu
         break;
       }
     }
-  }, [showSuccess]);
+  }, [showSuccess, t]);
   
   // Dodajemy efekt do nasłuchiwania zdarzeń wklejania
   useEffect(() => {
@@ -306,12 +308,12 @@ const BugReportDialog = ({ open, onClose }) => {
       if (file.type.startsWith('image/')) {
         setScreenshot(file);
         setScreenshotPreview(URL.createObjectURL(file));
-        showSuccess('Zrzut ekranu został dodany');
+        showSuccess(t('common.bugReport.screenshotAdded'));
       } else {
-        showWarning('Przeciągnięty plik nie jest obrazem');
+        showWarning(t('common.bugReport.invalidFile'));
       }
     }
-  }, [showSuccess, showWarning]);
+  }, [showSuccess, showWarning, t]);
 
   // Funkcje do obsługi przeciągania (dla wizualnego feedbacku)
   const handleDragOver = useCallback((event) => {
@@ -369,12 +371,12 @@ const BugReportDialog = ({ open, onClose }) => {
   const handleSubmit = async () => {
     // Sprawdzamy czy tytuł i opis są wprowadzone
     if (!formData.title.trim()) {
-      setError('Wprowadź tytuł zgłoszenia');
+      setError(t('common.bugReport.validation.titleRequired'));
       return;
     }
     
     if (!formData.description.trim()) {
-      setError('Wprowadź opis problemu');
+      setError(t('common.bugReport.validation.descriptionRequired'));
       return;
     }
     
@@ -403,7 +405,7 @@ const BugReportDialog = ({ open, onClose }) => {
       await addBugReportWithScreenshot(reportData, screenshot, currentUser.uid);
       
       // Informujemy o sukcesie
-      showSuccess('Zgłoszenie błędu zostało wysłane. Dziękujemy!');
+      showSuccess(t('common.bugReport.success'));
       
       // Resetujemy formularz i zamykamy dialog
       setFormData({
@@ -417,7 +419,7 @@ const BugReportDialog = ({ open, onClose }) => {
     } catch (error) {
       console.error('Błąd podczas wysyłania zgłoszenia:', error);
       setError(`Wystąpił błąd podczas wysyłania zgłoszenia: ${error.message}`);
-      showError('Nie udało się wysłać zgłoszenia. Spróbuj ponownie później.');
+      showError(t('common.bugReport.error'));
     } finally {
       setLoading(false);
     }
@@ -442,7 +444,7 @@ const BugReportDialog = ({ open, onClose }) => {
     if (screenshotPreview) {
       setIsEditingScreenshot(true);
     } else {
-      showWarning('Najpierw dodaj zrzut ekranu, aby móc go edytować');
+      showWarning(t('common.bugReport.editing.editWarning'));
     }
   };
 
@@ -459,7 +461,7 @@ const BugReportDialog = ({ open, onClose }) => {
         setScreenshotPreview(URL.createObjectURL(file));
         setIsEditingScreenshot(false);
         
-        showSuccess('Zrzut ekranu został przycięty');
+        showSuccess(t('common.bugReport.editing.croppedSuccess'));
       });
   };
 
@@ -600,7 +602,7 @@ const BugReportDialog = ({ open, onClose }) => {
             <img 
               ref={imageRef} 
               src={screenshotPreview} 
-              alt="Edycja zrzutu ekranu" 
+              alt={t('common.bugReport.editing.editingAlt')} 
               style={{ display: 'none' }} 
             />
             <canvas
@@ -616,7 +618,7 @@ const BugReportDialog = ({ open, onClose }) => {
         
         <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
           <Button onClick={handleCancelEditing} color="inherit">
-            Anuluj
+            {t('common.bugReport.editing.cancel')}
           </Button>
           <Box>
             <Button 
@@ -624,10 +626,10 @@ const BugReportDialog = ({ open, onClose }) => {
               color="inherit" 
               sx={{ mr: 1 }}
             >
-              Resetuj zaznaczenie
+              {t('common.bugReport.editing.resetSelection')}
             </Button>
             <Button onClick={handleCrop} variant="contained" color="primary">
-              Przytnij
+              {t('common.bugReport.editing.crop')}
             </Button>
           </Box>
         </Box>
@@ -659,7 +661,7 @@ const BugReportDialog = ({ open, onClose }) => {
           padding: '16px 24px'
         }}>
           <BugIcon color="error" />
-          <Typography component="span" variant="h6">Zgłoś błąd</Typography>
+          <Typography component="span" variant="h6">{t('common.bugReport.title')}</Typography>
         </DialogTitle>
         
         <DialogContent sx={{ p: 3, mt: 1 }}>
@@ -671,18 +673,18 @@ const BugReportDialog = ({ open, onClose }) => {
           
           <TextField
             name="title"
-            label="Tytuł zgłoszenia"
+            label={t('common.bugReport.titleField')}
             value={formData.title}
             onChange={handleChange}
             fullWidth
             required
             margin="dense"
-            placeholder="Krótko opisz problem, np. 'Błąd podczas dodawania produktu'"
+            placeholder={t('common.bugReport.titlePlaceholder')}
           />
           
           <TextField
             name="description"
-            label="Opis problemu"
+            label={t('common.bugReport.descriptionField')}
             value={formData.description}
             onChange={handleChange}
             fullWidth
@@ -690,13 +692,13 @@ const BugReportDialog = ({ open, onClose }) => {
             multiline
             rows={4}
             margin="dense"
-            placeholder="Opisz szczegółowo, co się stało, jakie działania wykonywałeś/aś oraz jakie powinno być prawidłowe zachowanie"
+            placeholder={t('common.bugReport.descriptionPlaceholder')}
             sx={{ mt: 2 }}
           />
           
           <Box sx={{ mt: 3 }}>
             <Typography variant="subtitle1" gutterBottom>
-              Zrzut ekranu
+              {t('common.bugReport.screenshot')}
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
@@ -705,7 +707,7 @@ const BugReportDialog = ({ open, onClose }) => {
                 startIcon={<UploadIcon />}
                 component="label"
               >
-                Wybierz plik
+{t('common.bugReport.selectFile')}
                 <input
                   id="screenshot-file-input"
                   type="file"
@@ -719,9 +721,9 @@ const BugReportDialog = ({ open, onClose }) => {
                 variant="outlined"
                 color="secondary"
                 startIcon={<ContentPasteIcon />}
-                onClick={() => showInfo('Użyj skrótu Ctrl+V, aby wkleić obraz ze schowka')}
+                onClick={() => showInfo(t('common.bugReport.pasteInfo'))}
               >
-                Wklej ze schowka
+                {t('common.bugReport.pasteFromClipboard')}
               </Button>
               
               <Button
@@ -730,7 +732,7 @@ const BugReportDialog = ({ open, onClose }) => {
                 startIcon={<ScreenshotIcon />}
                 onClick={takeScreenshot}
               >
-                Zrób zrzut ekranu
+                {t('common.bugReport.takeScreenshot')}
               </Button>
               
               {screenshot && (
@@ -747,7 +749,7 @@ const BugReportDialog = ({ open, onClose }) => {
             {screenshotPreview ? (
               <Box sx={{ mt: 2, position: 'relative' }}>
                 <Paper elevation={2} sx={{ p: 1 }}>
-                  <PreviewImage src={screenshotPreview} alt="Podgląd zrzutu ekranu" />
+                  <PreviewImage src={screenshotPreview} alt={t('common.bugReport.screenshotPreview')} />
                   <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 1 }}>
                     <IconButton
                       size="small"
@@ -777,10 +779,10 @@ const BugReportDialog = ({ open, onClose }) => {
               >
                 <UploadIcon color="action" sx={{ fontSize: 40, mb: 1, opacity: 0.7 }} />
                 <Typography variant="body1" gutterBottom>
-                  Przeciągnij i upuść zrzut ekranu tutaj
+                  {t('common.bugReport.dragDropText')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  lub kliknij, aby wybrać plik (możesz też użyć Ctrl+V, aby wkleić ze schowka)
+                  {t('common.bugReport.dragDropSubtext')}
                 </Typography>
               </DropZone>
             )}
@@ -789,7 +791,7 @@ const BugReportDialog = ({ open, onClose }) => {
           <Box sx={{ mt: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="subtitle1" gutterBottom>
-                Logi konsoli
+                {t('common.bugReport.consoleLogs')}
               </Typography>
               <Button 
                 size="small"
@@ -797,7 +799,7 @@ const BugReportDialog = ({ open, onClose }) => {
                 color="primary"
                 onClick={handleClearLogs}
               >
-                Wyczyść logi
+                {t('common.bugReport.clearLogs')}
               </Button>
             </Box>
             
@@ -809,12 +811,12 @@ const BugReportDialog = ({ open, onClose }) => {
                   onChange={handleChange}
                 />
               }
-              label="Dołącz logi konsoli do zgłoszenia"
+              label={t('common.bugReport.includeConsoleLogs')}
             />
             
             {formData.includeConsoleLogs && (
               <ConsoleLogBox elevation={0}>
-                {consoleLogs || 'Nie przechwycono żadnych logów konsoli. Wykonaj akcję powodującą błąd, a następnie zgłoś problem.'}
+                {consoleLogs || t('common.bugReport.noLogsMessage')}
               </ConsoleLogBox>
             )}
           </Box>
@@ -822,7 +824,7 @@ const BugReportDialog = ({ open, onClose }) => {
         
         <DialogActions sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
           <Button onClick={handleClose} disabled={loading}>
-            Anuluj
+            {t('common.bugReport.cancel')}
           </Button>
           <Button 
             variant="contained" 
@@ -831,7 +833,7 @@ const BugReportDialog = ({ open, onClose }) => {
             disabled={loading || !formData.title.trim() || !formData.description.trim()}
             startIcon={loading ? <CircularProgress size={20} /> : null}
           >
-            {loading ? 'Wysyłanie...' : 'Wyślij zgłoszenie'}
+            {loading ? t('common.bugReport.submitting') : t('common.bugReport.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -843,7 +845,7 @@ const BugReportDialog = ({ open, onClose }) => {
         fullWidth
       >
         <DialogTitle>
-          Przytnij zrzut ekranu
+          {t('common.bugReport.editing.cropTitle')}
           <IconButton
             aria-label="close"
             onClick={handleCancelEditing}
