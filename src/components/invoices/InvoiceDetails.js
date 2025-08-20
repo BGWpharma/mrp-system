@@ -24,7 +24,8 @@ import {
   DialogContentText,
   DialogActions,
   Snackbar,
-  Alert
+  Alert,
+  Link
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
@@ -581,20 +582,45 @@ const InvoiceDetails = () => {
                       <CircularProgress size={20} />
                     ) : (
                       relatedInvoices.map((relInvoice) => (
-                        <Box key={relInvoice.id} sx={{ mb: 1, p: 1, bgcolor: relInvoice.isProforma ? 'warning.light' : 'info.light', borderRadius: 1 }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {relInvoice.isProforma ? '📋 Proforma' : '📄 Faktura'} {relInvoice.number}
-                          </Typography>
-                          {relInvoice.isProforma && (
-                            <Typography variant="body2" color="warning.dark" fontWeight="bold">
-                              {t('invoices.details.amount')}: {parseFloat(relInvoice.total || 0).toFixed(2)} {relInvoice.currency || 'EUR'}
+                        <Box 
+                          key={relInvoice.id} 
+                          sx={{ 
+                            mb: 1, 
+                            p: 1, 
+                            bgcolor: relInvoice.isProforma ? 'warning.light' : 'info.light', 
+                            borderRadius: 1,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              bgcolor: relInvoice.isProforma ? 'warning.main' : 'info.main',
+                              transform: 'translateY(-1px)',
+                              boxShadow: 2
+                            }
+                          }}
+                          onClick={() => navigate(`/invoices/${relInvoice.id}`)}
+                        >
+                          <Link
+                            component="div"
+                            sx={{
+                              textDecoration: 'none',
+                              color: 'inherit',
+                              display: 'block'
+                            }}
+                          >
+                            <Typography variant="body2" fontWeight="bold">
+                              {relInvoice.isProforma ? '📋 Proforma' : '📄 Faktura'} {relInvoice.number}
                             </Typography>
-                          )}
-                          {relInvoice.issueDate && (
-                            <Typography variant="caption" color="text.secondary">
-                              {t('invoices.details.date')}: {new Date(relInvoice.issueDate).toLocaleDateString()}
-                            </Typography>
-                          )}
+                            {relInvoice.isProforma && (
+                              <Typography variant="body2" color="warning.dark" fontWeight="bold">
+                                {t('invoices.details.amount')}: {parseFloat(relInvoice.total || 0).toFixed(2)} {relInvoice.currency || 'EUR'}
+                              </Typography>
+                            )}
+                            {relInvoice.issueDate && (
+                              <Typography variant="caption" color="text.secondary">
+                                {t('invoices.details.date')}: {new Date(relInvoice.issueDate).toLocaleDateString()}
+                              </Typography>
+                            )}
+                          </Link>
                         </Box>
                       ))
                     )}
