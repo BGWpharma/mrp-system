@@ -49,7 +49,6 @@ import {
   Add as AddIcon, 
   Search as SearchIcon, 
   Edit as EditIcon,
-  Delete as DeleteIcon,
   PlayArrow as StartIcon,
   Stop as StopIcon,
   CheckCircle as CompleteIcon,
@@ -65,7 +64,7 @@ import {
   Sort as SortIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { getAllTasks, updateTaskStatus, deleteTask, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache } from '../../services/productionService';
+import { getAllTasks, updateTaskStatus, addTaskProductToInventory, stopProduction, pauseProduction, getTasksWithPagination, startProduction, getProductionTasksOptimized, clearProductionTasksCache, forceRefreshProductionTasksCache, removeDuplicatesFromCache, updateTaskInCache, addTaskToCache, removeTaskFromCache } from '../../services/productionService';
 import { db } from '../../services/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getAllWarehouses } from '../../services/inventory';
@@ -500,19 +499,7 @@ const TaskList = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Czy na pewno chcesz usunąć to zadanie?')) {
-      try {
-        await deleteTask(id);
-        showSuccess('Zadanie zostało usunięte');
-        // Odśwież listę zadań
-        fetchTasksOptimized();
-      } catch (error) {
-        showError('Błąd podczas usuwania zadania: ' + error.message);
-        console.error('Error deleting task:', error);
-      }
-    }
-  };
+
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -900,6 +887,7 @@ const TaskList = () => {
     switch (status) {
       case 'Zaplanowane':
       case 'planned':
+      case 'scheduled':
         return '#1976d2'; // oryginalny niebieski
       case 'W trakcie':
       case 'in_progress':
@@ -1350,15 +1338,7 @@ const TaskList = () => {
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Usuń zadanie">
-            <IconButton
-              size="small"
-              onClick={() => handleDelete(task.id)}
-              color="error"
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+
         </CardActions>
       </Card>
     );
@@ -1871,15 +1851,7 @@ const TaskList = () => {
                               </IconButton>
                             </Tooltip>
 
-                            <Tooltip title="Usuń zadanie">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDelete(task.id)}
-                                color="error"
-                              >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
+
                           </Box>
                         </TableCell>
                       )}

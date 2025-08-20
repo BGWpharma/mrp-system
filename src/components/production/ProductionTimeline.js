@@ -242,6 +242,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
   const getStatusColor = (status) => {
     switch (status) {
       case 'Zaplanowane':
+      case 'scheduled':
         return '#3788d8';
       case 'W trakcie':
         return '#f39c12';
@@ -691,6 +692,7 @@ const ProductionTimeline = React.memo(() => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'Zaplanowane':
+      case 'scheduled':
         return '#3788d8';
       case 'W trakcie':
         return '#f39c12';

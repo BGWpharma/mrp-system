@@ -79,7 +79,7 @@ const CreateFromOrderPage = () => {
     name: '',
     priority: 'normal',
     description: '',
-    status: 'scheduled',
+    status: 'Zaplanowane',
     reservationMethod: 'fifo', // 'expiry' - wg daty ważności, 'fifo' - FIFO
     autoReserveMaterials: false // Domyślnie wyłączone automatyczne rezerwowanie surowców
   });
@@ -392,7 +392,7 @@ const CreateFromOrderPage = () => {
         name: `${t('orders.labels.order', 'Zamówienie')} #${verifiedOrderData.orderNumber || verifiedOrderData.id.substring(0, 8)}`,
         priority: 'normal',
         description: `${t('createFromOrder.messages.taskCreatedFromOrder', 'Zadanie utworzone na podstawie zamówienia klienta')} ${verifiedOrderData.customer?.name || t('createFromOrder.placeholders.noCustomer')}`,
-        status: 'scheduled',
+        status: 'Zaplanowane',
         reservationMethod: 'fifo',
         autoReserveMaterials: false
       });
