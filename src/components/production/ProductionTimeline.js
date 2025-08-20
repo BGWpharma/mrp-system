@@ -69,7 +69,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import TimelineExport from './TimelineExport';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
-import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend } from '../../utils/dateUtils';
+import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
 
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
@@ -948,7 +948,8 @@ const ProductionTimeline = React.memo(() => {
         task: taskForTooltip,
         backgroundColor: getItemColor(task),
         // Metadane do zachowania rozmiaru podczas przeciągania
-        originalDuration: productionTimeMinutes
+        originalDuration: productionTimeMinutes,
+        workingHoursPerDay: task.workingHoursPerDay || 16
       };
     });
     
@@ -1241,8 +1242,9 @@ const ProductionTimeline = React.memo(() => {
       // Użyj oryginalnego czasu produkcji z metadanych lub oblicz z różnicy dat
       const originalDurationMinutes = item.originalDuration || item.task?.estimatedDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
       
-      // Oblicz nową datę zakończenia pomijając weekendy - zachowaj oryginalny czas produkcji (timeline version)
-      let newEndTime = calculateEndDateForTimeline(newStartTime, originalDurationMinutes);
+      // Oblicz nową datę zakończenia uwzględniając godziny pracy zadania - zachowaj oryginalny czas produkcji
+      const workingHours = item.workingHoursPerDay || task.workingHoursPerDay || 16;
+      let newEndTime = calculateEndDateWithWorkingHours(newStartTime, originalDurationMinutes, workingHours);
       
       // Zachowano oryginalny czas produkcji podczas przesunięcia
 
@@ -1359,8 +1361,9 @@ const ProductionTimeline = React.memo(() => {
         // Oblicz czas produkcji do żądanej daty zakończenia
         duration = calculateProductionTimeBetweenExcludingWeekends(newStartTime, requestedEndTime);
         
-        // Przelicz datę zakończenia na podstawie czasu produkcji pomijając weekendy (timeline version)
-        newEndTime = calculateEndDateForTimeline(newStartTime, duration);
+        // Przelicz datę zakończenia na podstawie czasu produkcji uwzględniając godziny pracy zadania
+        const workingHours = item.task?.workingHoursPerDay || 16;
+        newEndTime = calculateEndDateWithWorkingHours(newStartTime, duration, workingHours);
       }
 
       const updateData = {
@@ -2475,7 +2478,8 @@ const ProductionTimeline = React.memo(() => {
             if (action === 'move') {
               const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
               const newStartTime = roundToMinute(new Date(time));
-              const newEndTime = calculateEndDateForTimeline(newStartTime, originalDurationMinutes);
+              const workingHours = item.workingHoursPerDay || 16;
+              const newEndTime = calculateEndDateWithWorkingHours(newStartTime, originalDurationMinutes, workingHours);
               
               // Pozwól na płynne przeciąganie - korekta weekendu nastąpi w handleItemMove
               
@@ -2499,8 +2503,9 @@ const ProductionTimeline = React.memo(() => {
               const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
               const newStartTime = roundToMinute(new Date(time));
               
-              // Oblicz nową datę zakończenia pomijając weekendy (timeline version)
-              const newEndTime = calculateEndDateForTimeline(newStartTime, originalDurationMinutes);
+              // Oblicz nową datę zakończenia uwzględniając godziny pracy zadania
+              const workingHours = item.workingHoursPerDay || 16;
+              const newEndTime = calculateEndDateWithWorkingHours(newStartTime, originalDurationMinutes, workingHours);
               
               // Debug log można usunąć w produkcji
               if (process.env.NODE_ENV === 'development') {
