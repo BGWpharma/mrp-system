@@ -19,6 +19,52 @@ class InvoicePdfGenerator {
   }
 
   /**
+   * Formatuje kwotę z separatorami i walutą dla PDF
+   */
+  formatCurrency(amount, currency = null) {
+    if (amount === undefined || amount === null || isNaN(amount)) return '0,00';
+    const usedCurrency = currency || this.invoice.currency || 'EUR';
+    
+    // Formatuj liczbę z separatorami tysięcy i przecinkiem dziesiętnym
+    const formattedNumber = this.formatNumberWithSeparators(amount, 2);
+    return `${formattedNumber} ${usedCurrency}`;
+  }
+
+  /**
+   * Formatuje liczbę z separatorami tysięcy i przecinkiem dziesiętnym
+   */
+  formatNumberWithSeparators(value, precision = 2) {
+    if (value === undefined || value === null || isNaN(value)) return precision > 0 ? '0,00' : '0';
+    
+    // Zaokrąglij do odpowiedniej precyzji
+    const rounded = Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+    
+    // Jeśli precision = 0, zwróć tylko część całkowitą z separatorami
+    if (precision === 0) {
+      const integerPart = Math.round(rounded).toString();
+      const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      console.log(`Formatowanie (całkowite): ${value} -> ${formattedInteger}`);
+      return formattedInteger;
+    }
+    
+    // Dla precision > 0, rozdziel część całkowitą i dziesiętną
+    const parts = rounded.toFixed(precision).split('.');
+    const integerPart = parts[0];
+    const decimalPart = parts[1] || '00'; // fallback jeśli brak części dziesiętnej
+    
+    // Dodaj separatory tysięcy (spacje)
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    
+    // Połącz z przecinkiem jako separatorem dziesiętnym
+    const result = `${formattedInteger},${decimalPart}`;
+    
+    // Debug log dla testowania
+    console.log(`Formatowanie: ${value} -> ${result}`);
+    
+    return result;
+  }
+
+  /**
    * Funkcja do tłumaczenia jednostek miary na angielski
    */
   translateUnit(unit) {
@@ -377,11 +423,11 @@ class InvoicePdfGenerator {
       tableRows.push({
         description: fullDescription,
         cnCode: item.cnCode || '-',
-        quantity: `${quantity} ${this.translateUnit(item.unit)}`,
-        unitPrice: `${price.toFixed(2)} ${this.invoice.currency}`,
+        quantity: `${this.formatNumberWithSeparators(quantity, quantity % 1 === 0 ? 0 : 2)} ${this.translateUnit(item.unit)}`,
+        unitPrice: this.formatCurrency(price),
         vat: vatDisplay,
-        netValue: `${netValue.toFixed(2)} ${this.invoice.currency}`,
-        grossValue: `${grossValue.toFixed(2)} ${this.invoice.currency}`
+        netValue: this.formatCurrency(netValue),
+        grossValue: this.formatCurrency(grossValue)
       });
     });
     
@@ -513,10 +559,10 @@ class InvoicePdfGenerator {
         return {
           number: po.number || po.id,
           supplier: po.supplier?.name || t.unknownSupplier,
-          net: `${productsValue.toFixed(2)} ${this.invoice.currency}`,
-          additional: `${additionalCostsValue.toFixed(2)} ${this.invoice.currency}`,
+          net: this.formatCurrency(productsValue),
+          additional: this.formatCurrency(additionalCostsValue),
           vat: vatDisplay,
-          gross: `${totalGross.toFixed(2)} ${this.invoice.currency}`
+          gross: this.formatCurrency(totalGross)
         };
       });
       
@@ -591,43 +637,41 @@ class InvoicePdfGenerator {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
-    // Suma częściowa
-    doc.text(`${t.totalPartial}`, summaryX, summaryY);
-    doc.text(`${totalNetto.toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+    // Stawka netto
+    doc.text(`${t.netValue}`, summaryX, summaryY);
+    doc.text(this.formatCurrency(totalNetto), summaryX + summaryWidth, summaryY, { align: 'right' });
     summaryY += 6;
     
-    // VAT
-    if (totalVat > 0) {
-      doc.text('VAT', summaryX, summaryY);
-      doc.text(`${totalVat.toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
-      summaryY += 6;
-    }
+    // VAT (zawsze wyświetlaj)
+    doc.text('VAT', summaryX, summaryY);
+    doc.text(this.formatCurrency(totalVat), summaryX + summaryWidth, summaryY, { align: 'right' });
+    summaryY += 6;
     
     // Dodatkowe koszty
     if (additionalCostsValue > 0) {
       doc.text(t.additionalCosts, summaryX, summaryY);
-      doc.text(`${additionalCostsValue.toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+      doc.text(this.formatCurrency(additionalCostsValue), summaryX + summaryWidth, summaryY, { align: 'right' });
       summaryY += 6;
     }
     
     // Koszty wysyłki
     if (this.invoice.shippingInfo && this.invoice.shippingInfo.cost > 0) {
       doc.text(`${t.shippingCost}`, summaryX, summaryY);
-      doc.text(`${parseFloat(this.invoice.shippingInfo.cost).toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+      doc.text(this.formatCurrency(parseFloat(this.invoice.shippingInfo.cost)), summaryX + summaryWidth, summaryY, { align: 'right' });
       summaryY += 6;
     }
     
     // Koszty z powiązanych PO
     if (advancePaymentsValue > 0) {
       doc.text(`${t.purchaseCosts}`, summaryX, summaryY);
-      doc.text(`${advancePaymentsValue.toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+      doc.text(this.formatCurrency(advancePaymentsValue), summaryX + summaryWidth, summaryY, { align: 'right' });
       summaryY += 6;
     }
     
     // Rozliczone zaliczki
     if (settledAdvancePaymentsCalculated > 0) {
       doc.text(`${t.settledAdvancePayments}`, summaryX, summaryY);
-      doc.text(`-${settledAdvancePaymentsCalculated.toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+      doc.text(`-${this.formatCurrency(settledAdvancePaymentsCalculated)}`, summaryX + summaryWidth, summaryY, { align: 'right' });
       summaryY += 6;
     }
     
@@ -641,7 +685,7 @@ class InvoicePdfGenerator {
     
     doc.setFont('helvetica', 'bold');
     doc.text(`${t.total}`, summaryX, summaryY);
-    doc.text(`${finalAmountCalculated.toFixed(2)} ${this.invoice.currency}`, summaryX + summaryWidth, summaryY, { align: 'right' });
+    doc.text(this.formatCurrency(finalAmountCalculated), summaryX + summaryWidth, summaryY, { align: 'right' });
     
     return summaryY;
   }
