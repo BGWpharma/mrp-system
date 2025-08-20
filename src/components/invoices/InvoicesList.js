@@ -663,13 +663,25 @@ const InvoicesList = () => {
                                   const paid = parseFloat(invoice.totalPaid || 0);
                                   
                                   if (invoice.isProforma) {
-                                    // Dla proform wyświetl kwotę do zapłaty (całkowita kwota minus wykorzystana)
-                                    const available = proformaAmounts[invoice.id] 
-                                      ? proformaAmounts[invoice.id].available 
-                                      : total;
-                                    const used = total - available;
-                                    const remaining = Math.max(0, total - used);
-                                    return `Do zapłaty: ${formatCurrency(remaining, invoice.currency)}`;
+                                    // Dla proform sprawdź czy została opłacona
+                                    const isFullyPaid = paid >= total;
+                                    
+                                    if (!isFullyPaid) {
+                                      // Proforma nie została opłacona - pokaż kwotę do zapłaty
+                                      const remaining = Math.max(0, total - paid);
+                                      return `Do zapłaty: ${formatCurrency(remaining, invoice.currency)}`;
+                                    } else {
+                                      // Proforma została opłacona - pokaż status wykorzystania
+                                      const available = proformaAmounts[invoice.id] 
+                                        ? proformaAmounts[invoice.id].available 
+                                        : total;
+                                      const used = total - available;
+                                      if (used > 0) {
+                                        return `Wykorzystano: ${formatCurrency(used, invoice.currency)}`;
+                                      } else {
+                                        return `Dostępne: ${formatCurrency(total, invoice.currency)}`;
+                                      }
+                                    }
                                   } else {
                                     // Dla zwykłych faktur oblicz kwotę do zapłaty uwzględniając przedpłaty
                                     let advancePayments = 0;
@@ -688,18 +700,41 @@ const InvoicesList = () => {
                           </TableCell>
                           <TableCell>
                             {invoice.isProforma ? (
-                              // Dla proform wyświetl dostępną kwotę
-                              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                <Typography variant="body2" color="success.main" fontWeight="bold">
-                                  {proformaAmounts[invoice.id] 
-                                    ? formatCurrency(proformaAmounts[invoice.id].available, invoice.currency)
-                                    : formatCurrency(invoice.total, invoice.currency)
-                                  }
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {t('invoices.form.filters.availableFrom')} {formatCurrency(invoice.total, invoice.currency)}
-                                </Typography>
-                              </Box>
+                              (() => {
+                                // Sprawdź czy proforma została opłacona
+                                const total = parseFloat(invoice.total || 0);
+                                const paid = parseFloat(invoice.totalPaid || 0);
+                                const isFullyPaid = paid >= total;
+                                
+                                if (!isFullyPaid) {
+                                  // Proforma nie została opłacona - nie wyświetlaj kwoty dostępnej
+                                  return (
+                                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                      <Typography variant="body2" color="warning.main" fontWeight="bold">
+                                        -
+                                      </Typography>
+                                      <Typography variant="caption" color="warning.main">
+                                        Wymaga opłacenia
+                                      </Typography>
+                                    </Box>
+                                  );
+                                }
+                                
+                                // Proforma została opłacona - wyświetl dostępną kwotę
+                                return (
+                                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                    <Typography variant="body2" color="success.main" fontWeight="bold">
+                                      {proformaAmounts[invoice.id] 
+                                        ? formatCurrency(proformaAmounts[invoice.id].available, invoice.currency)
+                                        : formatCurrency(invoice.total, invoice.currency)
+                                      }
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {t('invoices.form.filters.availableFrom')} {formatCurrency(invoice.total, invoice.currency)}
+                                    </Typography>
+                                  </Box>
+                                );
+                              })()
                             ) : (
                               // Dla zwykłych faktur pusta kolumna "Kwota dostępna"
                               '-'

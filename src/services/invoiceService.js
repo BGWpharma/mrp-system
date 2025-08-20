@@ -1170,12 +1170,18 @@ export const getAvailableProformaAmount = async (proformaId) => {
     }
     
     const total = parseFloat(proformaData.total || 0);
+    const paid = parseFloat(proformaData.totalPaid || 0);
     const used = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    
+    // Sprawdź czy proforma została w pełni opłacona
+    const isFullyPaid = paid >= total;
     
     return {
       total,
+      paid,
       used,
-      available: total - used
+      available: isFullyPaid ? (total - used) : 0, // Kwota dostępna tylko jeśli proforma jest opłacona
+      isFullyPaid
     };
   } catch (error) {
     console.error('Błąd podczas pobierania dostępnej kwoty proformy:', error);
@@ -1209,15 +1215,22 @@ export const getAvailableProformasForOrder = async (orderId) => {
             ...proforma,
             amountInfo: {
               total: parseFloat(proforma.total || 0),
+              paid: parseFloat(proforma.totalPaid || 0),
               used: 0,
-              available: parseFloat(proforma.total || 0)
+              available: 0, // Dla błędnych proform nie pozwalamy na użycie
+              isFullyPaid: false
             }
           };
         }
       })
     );
     
-    return proformasWithAmounts;
+    // Filtruj tylko opłacone proformy z dostępną kwotą
+    const availableProformas = proformasWithAmounts.filter(proforma => 
+      proforma.amountInfo.isFullyPaid && proforma.amountInfo.available > 0
+    );
+    
+    return availableProformas;
   } catch (error) {
     console.error('Błąd podczas pobierania proform dla zamówienia:', error);
     throw error;
@@ -1257,7 +1270,7 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
           
                      // Jeśli edytujemy fakturę, dodaj z powrotem kwoty już przez nią wykorzystane
            let adjustedAvailable = amountInfo.available;
-           if (excludeInvoiceId) {
+           if (excludeInvoiceId && amountInfo.isFullyPaid) {
              const usageFromExcluded = excludedInvoiceProformUsage.find(u => u.proformaId === proforma.id);
              if (usageFromExcluded) {
                console.log(`Dodaję z powrotem kwotę ${usageFromExcluded.amount} do proformy ${proforma.number} (było dostępne: ${adjustedAvailable})`);
@@ -1279,15 +1292,22 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
             ...proforma,
             amountInfo: {
               total: parseFloat(proforma.total || 0),
+              paid: parseFloat(proforma.totalPaid || 0),
               used: 0,
-              available: parseFloat(proforma.total || 0)
+              available: 0, // Dla błędnych proform nie pozwalamy na użycie
+              isFullyPaid: false
             }
           };
         }
       })
     );
     
-    return proformasWithAmounts;
+    // Filtruj tylko opłacone proformy z dostępną kwotą
+    const availableProformas = proformasWithAmounts.filter(proforma => 
+      proforma.amountInfo.isFullyPaid && proforma.amountInfo.available > 0
+    );
+    
+    return availableProformas;
   } catch (error) {
     console.error('Błąd podczas pobierania proform dla zamówienia:', error);
     throw error;

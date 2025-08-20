@@ -980,6 +980,12 @@ const InvoiceForm = ({ invoiceId }) => {
           return false;
         }
         
+        // Sprawdź czy proforma została opłacona
+        if (!proforma.amountInfo.isFullyPaid) {
+          showError(`Proforma ${allocation.proformaNumber} nie została w pełni opłacona i nie może być użyta`);
+          return false;
+        }
+        
         // Dodaj tolerancję dla różnic zaokrągleń (1 grosz = 0.01)
         const tolerance = 0.01;
         if (allocation.amount > (proforma.amountInfo.available + tolerance)) {
@@ -1771,6 +1777,10 @@ const InvoiceForm = ({ invoiceId }) => {
             {!invoice.isProforma && availableProformas.length === 0 && relatedInvoices.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mt: 2 }}>
                 Brak dostępnych proform dla tego zamówienia do rozliczenia zaliczek.
+                <br />
+                <Typography variant="caption" color="warning.main">
+                  Uwaga: Tylko w pełni opłacone proformy mogą być użyte do rozliczenia.
+                </Typography>
               </Typography>
             )}
             
