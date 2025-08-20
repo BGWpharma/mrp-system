@@ -13,10 +13,9 @@
     "client": "Client",
     "issueDate": "Issue Date",
     "dueDate": "Due Date",
-    "amount": "Amount",
-    "amountToPay": "To Pay/Available",
-    "invoiceStatus": "Invoice Status",
-    "paymentStatus": "Payment Status",
+    "amountAndToPay": "Amount/To Pay",
+    "availableAmount": "Available Amount",
+    "status": "Status",
     "actions": "Actions"
   },
   "filters": {

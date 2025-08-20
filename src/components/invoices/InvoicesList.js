@@ -602,21 +602,20 @@ const InvoicesList = () => {
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 120, width: '14%' }}>{t('invoices.table.invoiceNumber')}</TableCell>
-                    <TableCell sx={{ minWidth: 150, width: '18%' }}>{t('invoices.table.client')}</TableCell>
+                    <TableCell sx={{ minWidth: 120, width: '15%' }}>{t('invoices.table.invoiceNumber')}</TableCell>
+                    <TableCell sx={{ minWidth: 150, width: '20%' }}>{t('invoices.table.client')}</TableCell>
                     <TableCell sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.issueDate')}</TableCell>
                     <TableCell sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.dueDate')}</TableCell>
-                    <TableCell sx={{ minWidth: 90, width: '10%' }}>{t('invoices.table.amount')}</TableCell>
-                    <TableCell sx={{ minWidth: 90, width: '10%' }}>{t('invoices.table.amountToPay')}</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '10%' }}>{t('invoices.table.invoiceStatus')}</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '10%' }}>{t('invoices.table.paymentStatus')}</TableCell>
-                    <TableCell align="right" sx={{ minWidth: 100, width: '14%' }}>{t('invoices.table.actions')}</TableCell>
+                    <TableCell sx={{ minWidth: 120, width: '15%' }}>{t('invoices.table.amountAndToPay')}</TableCell>
+                    <TableCell sx={{ minWidth: 90, width: '12%' }}>{t('invoices.table.availableAmount')}</TableCell>
+                    <TableCell sx={{ minWidth: 120, width: '12%' }}>{t('invoices.table.status')}</TableCell>
+                    <TableCell align="right" sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} align="center">
+                      <TableCell colSpan={8} align="center">
                         {t('invoices.noInvoicesFound')}
                       </TableCell>
                     </TableRow>
@@ -652,7 +651,41 @@ const InvoicesList = () => {
                           </TableCell>
                           <TableCell>{formatDate(invoice.issueDate)}</TableCell>
                           <TableCell>{formatDate(invoice.dueDate)}</TableCell>
-                          <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
+                          <TableCell>
+                            {/* Połączona kolumna Kwota/Do zapłaty */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {formatCurrency(invoice.total, invoice.currency)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {(() => {
+                                  const total = parseFloat(invoice.total || 0);
+                                  const paid = parseFloat(invoice.totalPaid || 0);
+                                  
+                                  if (invoice.isProforma) {
+                                    // Dla proform wyświetl kwotę do zapłaty (całkowita kwota minus wykorzystana)
+                                    const available = proformaAmounts[invoice.id] 
+                                      ? proformaAmounts[invoice.id].available 
+                                      : total;
+                                    const used = total - available;
+                                    const remaining = Math.max(0, total - used);
+                                    return `Do zapłaty: ${formatCurrency(remaining, invoice.currency)}`;
+                                  } else {
+                                    // Dla zwykłych faktur oblicz kwotę do zapłaty uwzględniając przedpłaty
+                                    let advancePayments = 0;
+                                    if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+                                      advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+                                    } else {
+                                      advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+                                    }
+                                    
+                                    const remaining = Math.max(0, total - paid - advancePayments);
+                                    return `Do zapłaty: ${formatCurrency(remaining, invoice.currency)}`;
+                                  }
+                                })()}
+                              </Typography>
+                            </Box>
+                          </TableCell>
                           <TableCell>
                             {invoice.isProforma ? (
                               // Dla proform wyświetl dostępną kwotę
@@ -668,10 +701,17 @@ const InvoicesList = () => {
                                 </Typography>
                               </Box>
                             ) : (
-                              // Dla zwykłych faktur wyświetl kwotę do zapłaty
-                              (() => {
-                                const total = parseFloat(invoice.total || 0);
-                                const paid = parseFloat(invoice.totalPaid || 0);
+                              // Dla zwykłych faktur pusta kolumna "Kwota dostępna"
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {/* Połączona kolumna Status faktury i Status płatności */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              {renderInvoiceStatus(invoice.status)}
+                              {(() => {
+                                // Oblicz status płatności uwzględniając przedpłaty z proform
+                                const totalPaid = parseFloat(invoice.totalPaid || 0);
                                 
                                 // Oblicz przedpłaty z proform
                                 let advancePayments = 0;
@@ -681,39 +721,21 @@ const InvoicesList = () => {
                                   advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
                                 }
                                 
-                                const remaining = Math.max(0, total - paid - advancePayments);
-                                return formatCurrency(remaining, invoice.currency);
-                              })()
-                            )}
-                          </TableCell>
-                          <TableCell>{renderInvoiceStatus(invoice.status)}</TableCell>
-                          <TableCell>
-                            {(() => {
-                              // Oblicz status płatności uwzględniając przedpłaty z proform
-                              const totalPaid = parseFloat(invoice.totalPaid || 0);
-                              
-                              // Oblicz przedpłaty z proform
-                              let advancePayments = 0;
-                              if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
-                                advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
-                              } else {
-                                advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
-                              }
-                              
-                              const invoiceTotal = parseFloat(invoice.total || 0);
-                              const totalSettled = totalPaid + advancePayments;
-                              
-                              let calculatedStatus;
-                              if (totalSettled >= invoiceTotal) {
-                                calculatedStatus = 'paid';
-                              } else if (totalSettled > 0) {
-                                calculatedStatus = 'partially_paid';
-                              } else {
-                                calculatedStatus = 'unpaid';
-                              }
-                              
-                              return renderPaymentStatus(calculatedStatus);
-                            })()}
+                                const invoiceTotal = parseFloat(invoice.total || 0);
+                                const totalSettled = totalPaid + advancePayments;
+                                
+                                let calculatedStatus;
+                                if (totalSettled >= invoiceTotal) {
+                                  calculatedStatus = 'paid';
+                                } else if (totalSettled > 0) {
+                                  calculatedStatus = 'partially_paid';
+                                } else {
+                                  calculatedStatus = 'unpaid';
+                                }
+                                
+                                return renderPaymentStatus(calculatedStatus);
+                              })()}
+                            </Box>
                           </TableCell>
                           <TableCell align="right">
                             <Box sx={{ 

@@ -13,10 +13,9 @@
     "client": "Klient",
     "issueDate": "Data wystawienia",
     "dueDate": "Termin płatności",
-    "amount": "Kwota",
-    "amountToPay": "Do zapłaty/Dostępne",
-    "invoiceStatus": "Status faktury",
-    "paymentStatus": "Status płatności",
+    "amountAndToPay": "Kwota/Do zapłaty",
+    "availableAmount": "Kwota dostępna",
+    "status": "Status",
     "actions": "Akcje"
   },
   "filters": {
