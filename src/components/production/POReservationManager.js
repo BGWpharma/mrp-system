@@ -102,6 +102,8 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
   // Stan synchronizacji
   const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoSyncCompleted, setAutoSyncCompleted] = useState(false);
+  const [backgroundSyncEnabled] = useState(true); // Można wyłączyć synchronizację w tle
   
   // Stan dostępnych ilości w partiach (batchId -> dostępna ilość)
   const [batchAvailableQuantities, setBatchAvailableQuantities] = useState({});
@@ -110,6 +112,54 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
   useEffect(() => {
     loadReservations();
   }, [taskId]);
+
+  // 📅 Opcjonalna synchronizacja w tle co 5 minut
+  useEffect(() => {
+    if (!backgroundSyncEnabled || !taskId) return;
+
+    const backgroundSyncInterval = setInterval(async () => {
+      try {
+        console.log('🔄 Synchronizacja w tle rezerwacji PO...');
+        
+        // Sprawdź tylko ilości w partiach (lżejsza operacja)
+        const refreshResult = await refreshLinkedBatchesQuantities();
+        
+        if (refreshResult.updatedCount > 0) {
+          console.log(`✅ Synchronizacja w tle: zaktualizowano ${refreshResult.updatedCount} rezerwacji`);
+          
+          // Odśwież dane tylko jeśli były zmiany
+          const [updatedReservations, updatedStats] = await Promise.all([
+            getPOReservationsForTask(taskId),
+            getPOReservationStats(taskId)
+          ]);
+          
+          setReservations(updatedReservations);
+          setStats(updatedStats);
+          
+          if (updatedReservations.length > 0) {
+            await calculateBatchAvailableQuantities(updatedReservations);
+          }
+          
+          // Subtelne powiadomienie o zmianach w tle
+          if (refreshResult.updatedCount >= 3) {
+            showInfo(`Zaktualizowano ${refreshResult.updatedCount} rezerwacji PO z najnowszymi danymi`);
+          }
+          
+          if (onUpdate) {
+            onUpdate();
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Błąd synchronizacji w tle:', error);
+        // Nie pokazujemy błędów - synchronizacja w tle nie powinna zakłócać pracy
+      }
+    }, 5 * 60 * 1000); // Co 5 minut
+
+    // Cleanup przy unmount lub zmianie taskId
+    return () => {
+      clearInterval(backgroundSyncInterval);
+    };
+  }, [taskId, backgroundSyncEnabled, onUpdate]);
   
   const loadReservations = async () => {
     try {
@@ -122,6 +172,18 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
       setReservations(reservationsData);
       setStats(statsData);
       
+      // 🔄 Automatyczna synchronizacja przy pierwszym załadowaniu (tylko raz)
+      if (reservationsData.length > 0 && !autoSyncCompleted) {
+        console.log('🔄 Automatyczna synchronizacja rezerwacji PO przy wejściu w MO...');
+        try {
+          await performAutoSyncOnLoad(reservationsData);
+          setAutoSyncCompleted(true);
+        } catch (error) {
+          console.warn('⚠️ Automatyczna synchronizacja się nie powiodła:', error);
+          // Nie pokazujemy błędu użytkownikowi - to nie jest krytyczne
+        }
+      }
+      
       // Oblicz dostępne ilości w partiach
       if (reservationsData.length > 0) {
         setTimeout(() => calculateBatchAvailableQuantities(reservationsData), 100);
@@ -131,6 +193,74 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
       showError('Nie udało się pobrać rezerwacji z zamówień zakupowych');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 🔄 Automatyczna synchronizacja przy wejściu w MO (bez popup-ów)
+  const performAutoSyncOnLoad = async (reservationsData) => {
+    try {
+      console.log('🔄 Rozpoczynam automatyczną synchronizację rezerwacji PO...');
+      
+      let totalUpdated = 0;
+      let messages = [];
+      
+      // Sprawdź czy są rezerwacje które potrzebują synchronizacji
+      const needSync = reservationsData.some(r => 
+        !r.linkedBatches || r.linkedBatches.length === 0
+      );
+      
+      if (needSync) {
+        console.log('📋 Synchronizuję rezerwacje z partiami magazynowymi...');
+        const syncResult = await syncPOReservationsWithBatches(taskId, currentUser.uid);
+        if (syncResult.syncedCount > 0) {
+          totalUpdated += syncResult.syncedCount;
+          messages.push(`${syncResult.syncedCount} nowych powiązań z partiami`);
+        }
+      }
+      
+      // Zawsze sprawdź aktualne ilości w partiach
+      console.log('🔢 Sprawdzam aktualne ilości w powiązanych partiach...');
+      const refreshResult = await refreshLinkedBatchesQuantities();
+      if (refreshResult.updatedCount > 0) {
+        totalUpdated += refreshResult.updatedCount;
+        messages.push(`${refreshResult.updatedCount} zaktualizowanych ilości`);
+      }
+      
+      // Pokaż informację o zmianach tylko jeśli były znaczące
+      if (totalUpdated > 0) {
+        console.log(`✅ Automatyczna synchronizacja zakończona: ${messages.join(', ')}`);
+        
+        // Pokazuj subtelną informację tylko jeśli było sporo zmian
+        if (totalUpdated >= 2) {
+          showInfo(`Zaktualizowano rezerwacje PO: ${messages.join(', ')}`);
+        }
+        
+        // Odśwież dane po krótkim opóźnieniu
+        setTimeout(async () => {
+          const [updatedReservations, updatedStats] = await Promise.all([
+            getPOReservationsForTask(taskId),
+            getPOReservationStats(taskId)
+          ]);
+          
+          setReservations(updatedReservations);
+          setStats(updatedStats);
+          
+          if (updatedReservations.length > 0) {
+            await calculateBatchAvailableQuantities(updatedReservations);
+          }
+          
+          if (onUpdate) {
+            onUpdate();
+          }
+        }, 500);
+      } else {
+        console.log('✅ Wszystkie rezerwacje PO są aktualne');
+      }
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas automatycznej synchronizacji:', error);
+      // Nie pokazujemy błędu użytkownikowi - automatyczna synchronizacja nie jest krytyczna
+      throw error;
     }
   };
   
