@@ -55,7 +55,8 @@ import {
   NavigateBefore as PrevIcon,
   NavigateNext as NextIcon,
   ArrowDropDown as DropdownIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Schedule as ScheduleIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
@@ -65,6 +66,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { PRODUCTION_TASK_STATUSES } from '../../utils/constants';
+import ProductionTimeAnalysisTab from '../../components/production/ProductionTimeAnalysisTab';
 
 const ProductionReportPage = () => {
   const { t } = useTranslation();
@@ -355,6 +357,8 @@ const ProductionReportPage = () => {
           value={selectedTab} 
           onChange={handleTabChange} 
           aria-label="raport mo tabs"
+          variant={isMobile ? "scrollable" : "standard"}
+          scrollButtons={isMobile ? "auto" : false}
           sx={{
             '& .MuiTab-root': {
               fontWeight: 'bold',
@@ -375,13 +379,19 @@ const ProductionReportPage = () => {
             label={t('production.productionReport.generalReport')} 
             icon={<AssessmentIcon />} 
             iconPosition="start"
-            sx={{ fontSize: '1rem' }}
+            sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
           <Tab 
             label={t('production.productionReport.moConsumption')}
             icon={<InventoryIcon />} 
             iconPosition="start"
-            sx={{ fontSize: '1rem' }}
+            sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
+          />
+          <Tab 
+            label={t('production.productionReport.productionTime')}
+            icon={<ScheduleIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
         </Tabs>
       </Box>
@@ -766,6 +776,16 @@ const ProductionReportPage = () => {
       {selectedTab === 1 && (
         <ConsumptionReportTab 
           tasks={filteredTasks}
+          startDate={startDate}
+          endDate={endDate}
+          customers={customers}
+          isMobile={isMobile}
+        />
+      )}
+
+      {/* Nowa zakładka Czas Produkcji */}
+      {selectedTab === 2 && (
+        <ProductionTimeAnalysisTab 
           startDate={startDate}
           endDate={endDate}
           customers={customers}

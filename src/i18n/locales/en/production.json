@@ -138,11 +138,57 @@
   "productionReport": {
     "generalReport": "General Report",
     "moConsumption": "MO Consumption",
+    "productionTime": "Production Time",
     "orderCO": "Order (CO)",
     "material": "Material",
     "tabs": {
       "taskList": "Task List",
       "detailedTaskList": "Detailed Task List"
+    },
+    "timeAnalysis": {
+      "title": "Production Time Analysis",
+      "totalTime": "Total Time",
+      "totalSessions": "Total Sessions",
+      "totalQuantity": "Total Quantity",
+      "averageTimePerSession": "Average Time per Session",
+      "averageTimePerUnit": "Average Time per Unit",
+      "timeByPeriod": "Time by Period",
+      "sessionsList": "Production Sessions List",
+      "taskBreakdown": "Breakdown by Task",
+      "dailyBreakdown": "Daily Breakdown",
+      "weeklyBreakdown": "Weekly Breakdown",
+      "monthlyBreakdown": "Monthly Breakdown",
+      "tableHeaders": {
+        "date": "Date",
+        "task": "MO Task",
+        "startTime": "Start",
+        "endTime": "End",
+        "timeSpent": "Time",
+        "quantity": "Quantity",
+        "totalTime": "Total Time",
+        "sessionsCount": "Sessions Count",
+        "averageTime": "Average Time",
+        "period": "Period",
+        "taskName": "Task Name",
+        "moNumber": "MO Number"
+      },
+      "charts": {
+        "timeDistribution": "Time Distribution",
+        "dailyTrend": "Daily Trend",
+        "weeklyTrend": "Weekly Trend",
+        "monthlyTrend": "Monthly Trend"
+      },
+      "filters": {
+        "dateRange": "Date Range",
+        "task": "Task",
+        "allTasks": "All Tasks"
+      },
+      "summary": {
+        "noData": "No data for selected period",
+        "dataRange": "Data for period from {{startDate}} to {{endDate}}",
+        "totalTimeSpent": "Total time spent on production",
+        "productionEfficiency": "Production Efficiency"
+      }
     },
     "tableHeaders": {
       "taskName": "Task Name",

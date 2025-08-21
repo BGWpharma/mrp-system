@@ -138,11 +138,57 @@
   "productionReport": {
     "generalReport": "Ogólny raport",
     "moConsumption": "Konsumpcja MO",
+    "productionTime": "Czas produkcji",
     "orderCO": "Zamówienie (CO)",
     "material": "Materiał",
     "tabs": {
       "taskList": "Lista zadań",
       "detailedTaskList": "Szczegółowa lista zadań"
+    },
+    "timeAnalysis": {
+      "title": "Analiza czasu produkcji",
+      "totalTime": "Łączny czas",
+      "totalSessions": "Liczba sesji",
+      "totalQuantity": "Łączna ilość",
+      "averageTimePerSession": "Średni czas na sesję",
+      "averageTimePerUnit": "Średni czas na jednostkę",
+      "timeByPeriod": "Czas według okresu",
+      "sessionsList": "Lista sesji produkcyjnych",
+      "taskBreakdown": "Rozłożenie według zadań",
+      "dailyBreakdown": "Rozłożenie dzienne",
+      "weeklyBreakdown": "Rozłożenie tygodniowe",
+      "monthlyBreakdown": "Rozłożenie miesięczne",
+      "tableHeaders": {
+        "date": "Data",
+        "task": "Zadanie MO",
+        "startTime": "Początek",
+        "endTime": "Koniec",
+        "timeSpent": "Czas",
+        "quantity": "Ilość",
+        "totalTime": "Łączny czas",
+        "sessionsCount": "Liczba sesji",
+        "averageTime": "Średni czas",
+        "period": "Okres",
+        "taskName": "Nazwa zadania",
+        "moNumber": "Nr MO"
+      },
+      "charts": {
+        "timeDistribution": "Rozkład czasu",
+        "dailyTrend": "Trend dzienny",
+        "weeklyTrend": "Trend tygodniowy",
+        "monthlyTrend": "Trend miesięczny"
+      },
+      "filters": {
+        "dateRange": "Zakres dat",
+        "task": "Zadanie",
+        "allTasks": "Wszystkie zadania"
+      },
+      "summary": {
+        "noData": "Brak danych dla wybranego okresu",
+        "dataRange": "Dane za okres od {{startDate}} do {{endDate}}",
+        "totalTimeSpent": "Łączny czas poświęcony na produkcję",
+        "productionEfficiency": "Wydajność produkcji"
+      }
     },
     "tableHeaders": {
       "taskName": "Nazwa zadania",
