@@ -865,7 +865,49 @@ export const DEFAULT_INVOICE = {
   statusHistory: [],
   createdBy: null,
   createdAt: null,
-  updatedAt: null
+  updatedAt: null,
+  // Nowe pole dla wymaganej przedpłaty
+  requiredAdvancePaymentPercentage: 0 // Wymagana przedpłata w procentach (0-100)
+};
+
+/**
+ * Oblicza wymaganą kwotę przedpłaty na podstawie procentu
+ * @param {number} totalAmount - Całkowita kwota faktury
+ * @param {number} percentage - Procent wymaganej przedpłaty (0-100)
+ * @returns {number} Wymagana kwota przedpłaty
+ */
+export const calculateRequiredAdvancePayment = (totalAmount, percentage) => {
+  if (!percentage || percentage <= 0) return 0;
+  return (parseFloat(totalAmount) * parseFloat(percentage)) / 100;
+};
+
+/**
+ * Sprawdza czy faktura ma wystarczającą przedpłatę
+ * @param {object} invoice - Dane faktury
+ * @returns {boolean} Czy przedpłata jest wystarczająca
+ */
+export const hasRequiredAdvancePayment = (invoice) => {
+  if (!invoice.requiredAdvancePaymentPercentage || invoice.requiredAdvancePaymentPercentage <= 0) {
+    return true; // Brak wymagań przedpłaty
+  }
+
+  const totalAmount = parseFloat(invoice.total || 0);
+  const requiredAmount = calculateRequiredAdvancePayment(totalAmount, invoice.requiredAdvancePaymentPercentage);
+  
+  // Oblicz łączne płatności
+  const totalPaid = (invoice.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
+  
+  // Oblicz przedpłaty z proform
+  let advancePayments = 0;
+  if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+    advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+  } else {
+    advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+  }
+  
+  const totalSettled = totalPaid + advancePayments;
+  
+  return totalSettled >= requiredAmount;
 };
 
 /**
@@ -920,11 +962,25 @@ export const addPaymentToInvoice = async (invoiceId, paymentData, userId) => {
     let paymentStatus = 'unpaid';
     let paymentDate = null;
     
-    if (totalSettled >= invoiceTotal) {
-      paymentStatus = 'paid';
-      paymentDate = newPayment.date;
-    } else if (totalSettled > 0) {
-      paymentStatus = 'partially_paid';
+    // Sprawdź czy jest wymagana przedpłata
+    const requiredAdvancePercentage = currentInvoice.requiredAdvancePaymentPercentage || 0;
+    if (requiredAdvancePercentage > 0) {
+      const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
+      
+      if (totalSettled >= requiredAdvanceAmount) {
+        paymentStatus = 'paid';
+        paymentDate = newPayment.date;
+      } else if (totalSettled > 0) {
+        paymentStatus = 'partially_paid';
+      }
+    } else {
+      // Standardowa logika
+      if (totalSettled >= invoiceTotal) {
+        paymentStatus = 'paid';
+        paymentDate = newPayment.date;
+      } else if (totalSettled > 0) {
+        paymentStatus = 'partially_paid';
+      }
     }
 
     // Zaktualizuj fakturę
@@ -985,17 +1041,37 @@ export const removePaymentFromInvoice = async (invoiceId, paymentId, userId) => 
     let paymentStatus = 'unpaid';
     let paymentDate = null;
     
-    if (totalSettled >= invoiceTotal) {
-      paymentStatus = 'paid';
-      // Znajdź najnowszą płatność jako datę płatności
-      if (updatedPayments.length > 0) {
-        const latestPayment = updatedPayments.reduce((latest, payment) => 
-          payment.date.toDate() > latest.date.toDate() ? payment : latest
-        );
-        paymentDate = latestPayment.date;
+    // Sprawdź czy jest wymagana przedpłata
+    const requiredAdvancePercentage = currentInvoice.requiredAdvancePaymentPercentage || 0;
+    if (requiredAdvancePercentage > 0) {
+      const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
+      
+      if (totalSettled >= requiredAdvanceAmount) {
+        paymentStatus = 'paid';
+        // Znajdź najnowszą płatność jako datę płatności
+        if (updatedPayments.length > 0) {
+          const latestPayment = updatedPayments.reduce((latest, payment) => 
+            payment.date.toDate() > latest.date.toDate() ? payment : latest
+          );
+          paymentDate = latestPayment.date;
+        }
+      } else if (totalSettled > 0) {
+        paymentStatus = 'partially_paid';
       }
-    } else if (totalSettled > 0) {
-      paymentStatus = 'partially_paid';
+    } else {
+      // Standardowa logika
+      if (totalSettled >= invoiceTotal) {
+        paymentStatus = 'paid';
+        // Znajdź najnowszą płatność jako datę płatności
+        if (updatedPayments.length > 0) {
+          const latestPayment = updatedPayments.reduce((latest, payment) => 
+            payment.date.toDate() > latest.date.toDate() ? payment : latest
+          );
+          paymentDate = latestPayment.date;
+        }
+      } else if (totalSettled > 0) {
+        paymentStatus = 'partially_paid';
+      }
     }
 
     // Zaktualizuj fakturę
@@ -1071,15 +1147,33 @@ export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymen
     let paymentStatus = 'unpaid';
     let paymentDate = null;
     
-    if (totalSettled >= invoiceTotal) {
-      paymentStatus = 'paid';
-      // Znajdź najnowszą płatność jako datę płatności
-      const latestPayment = updatedPayments.reduce((latest, payment) => 
-        payment.date.toDate() > latest.date.toDate() ? payment : latest
-      );
-      paymentDate = latestPayment.date;
-    } else if (totalSettled > 0) {
-      paymentStatus = 'partially_paid';
+    // Sprawdź czy jest wymagana przedpłata
+    const requiredAdvancePercentage = currentInvoice.requiredAdvancePaymentPercentage || 0;
+    if (requiredAdvancePercentage > 0) {
+      const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
+      
+      if (totalSettled >= requiredAdvanceAmount) {
+        paymentStatus = 'paid';
+        // Znajdź najnowszą płatność jako datę płatności
+        const latestPayment = updatedPayments.reduce((latest, payment) => 
+          payment.date.toDate() > latest.date.toDate() ? payment : latest
+        );
+        paymentDate = latestPayment.date;
+      } else if (totalSettled > 0) {
+        paymentStatus = 'partially_paid';
+      }
+    } else {
+      // Standardowa logika
+      if (totalSettled >= invoiceTotal) {
+        paymentStatus = 'paid';
+        // Znajdź najnowszą płatność jako datę płatności
+        const latestPayment = updatedPayments.reduce((latest, payment) => 
+          payment.date.toDate() > latest.date.toDate() ? payment : latest
+        );
+        paymentDate = latestPayment.date;
+      } else if (totalSettled > 0) {
+        paymentStatus = 'partially_paid';
+      }
     }
 
     // Zaktualizuj fakturę
@@ -1142,17 +1236,38 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
     let newPaymentStatus = 'unpaid';
     let paymentDate = null;
     
-    if (totalSettled >= invoiceTotal) {
-      newPaymentStatus = 'paid';
-      // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
-      if (currentPayments.length > 0) {
-        const latestPayment = currentPayments.reduce((latest, payment) => 
-          payment.date.toDate() > latest.date.toDate() ? payment : latest
-        );
-        paymentDate = latestPayment.date;
+    // Sprawdź czy jest wymagana przedpłata
+    const requiredAdvancePercentage = currentInvoice.requiredAdvancePaymentPercentage || 0;
+    if (requiredAdvancePercentage > 0) {
+      const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
+      
+      // Jeśli wymagana jest przedpłata, uznaj za opłaconą gdy osiągnięto wymaganą kwotę
+      if (totalSettled >= requiredAdvanceAmount) {
+        newPaymentStatus = 'paid';
+        // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
+        if (currentPayments.length > 0) {
+          const latestPayment = currentPayments.reduce((latest, payment) => 
+            payment.date.toDate() > latest.date.toDate() ? payment : latest
+          );
+          paymentDate = latestPayment.date;
+        }
+      } else if (totalSettled > 0) {
+        newPaymentStatus = 'partially_paid';
       }
-    } else if (totalSettled > 0) {
-      newPaymentStatus = 'partially_paid';
+    } else {
+      // Standardowa logika gdy nie ma wymaganej przedpłaty
+      if (totalSettled >= invoiceTotal) {
+        newPaymentStatus = 'paid';
+        // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
+        if (currentPayments.length > 0) {
+          const latestPayment = currentPayments.reduce((latest, payment) => 
+            payment.date.toDate() > latest.date.toDate() ? payment : latest
+          );
+          paymentDate = latestPayment.date;
+        }
+      } else if (totalSettled > 0) {
+        newPaymentStatus = 'partially_paid';
+      }
     }
 
     // Sprawdź czy status się zmienił

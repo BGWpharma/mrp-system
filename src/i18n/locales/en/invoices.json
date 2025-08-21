@@ -83,9 +83,11 @@
       "used": "used",
       "amountToSettle": "Amount to Settle",
       "exceedsAvailable": "Exceeds available amount",
-      "proformaFullyUsed": "This proforma has been fully utilized",
-      "settlementSummary": "Settlement Summary:",
-      "totalAdvanceAmount": "Total Advance Amount:"
+              "proformaFullyUsed": "This proforma has been fully utilized",
+        "settlementSummary": "Settlement Summary:",
+        "totalAdvanceAmount": "Total Advance Amount:",
+        "requiredAdvancePayment": "Required Advance Payment (%)",
+        "requiredAdvancePaymentHelper": "Percentage of invoice amount required as advance payment (0-100%). When this amount is reached, invoice will be marked as paid."
     },
     "buttons": {
       "save": "Save",
@@ -204,9 +206,10 @@
         "loadPayments": "Error loading payments",
         "savePayment": "Error saving payment",
         "deletePayment": "Error deleting payment",
-        "amountMustBePositive": "Payment amount must be greater than zero"
-      }
-    }
+                  "amountMustBePositive": "Payment amount must be greater than zero"
+        }
+      },
+      "requiredAdvancePayment": "Required Advance Payment"
   },
   "dialogs": {
     "deleteConfirm": {

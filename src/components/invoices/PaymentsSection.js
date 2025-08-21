@@ -32,7 +32,8 @@ import {
   addPaymentToInvoice, 
   removePaymentFromInvoice, 
   updatePaymentInInvoice,
-  getInvoicePayments 
+  getInvoicePayments,
+  calculateRequiredAdvancePayment
 } from '../../services/invoiceService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -209,18 +210,40 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
     return Math.max(0, total - paid - advancePayments);
   };
 
+  const getRequiredAdvancePayment = () => {
+    if (!invoice.requiredAdvancePaymentPercentage || invoice.requiredAdvancePaymentPercentage <= 0) {
+      return 0;
+    }
+    return calculateRequiredAdvancePayment(invoice.total, invoice.requiredAdvancePaymentPercentage);
+  };
+
   const getPaymentStatusChip = () => {
     const totalPaid = getTotalPaid();
     const advancePayments = getTotalAdvancePayments();
     const invoiceTotal = parseFloat(invoice.total || 0);
     const totalSettled = totalPaid + advancePayments;
     
-    if (totalSettled >= invoiceTotal) {
-      return <Chip label="Opłacona" color="success" size="small" />;
-    } else if (totalSettled > 0) {
-      return <Chip label="Częściowo opłacona" color="warning" size="small" />;
+    // Sprawdź czy jest wymagana przedpłata
+    const requiredAdvancePercentage = invoice.requiredAdvancePaymentPercentage || 0;
+    if (requiredAdvancePercentage > 0) {
+      const requiredAdvanceAmount = getRequiredAdvancePayment();
+      
+      if (totalSettled >= requiredAdvanceAmount) {
+        return <Chip label="Opłacona (przedpłata)" color="success" size="small" />;
+      } else if (totalSettled > 0) {
+        return <Chip label="Częściowo opłacona" color="warning" size="small" />;
+      } else {
+        return <Chip label="Nieopłacona" color="error" size="small" />;
+      }
     } else {
-      return <Chip label="Nieopłacona" color="error" size="small" />;
+      // Standardowa logika
+      if (totalSettled >= invoiceTotal) {
+        return <Chip label="Opłacona" color="success" size="small" />;
+      } else if (totalSettled > 0) {
+        return <Chip label="Częściowo opłacona" color="warning" size="small" />;
+      } else {
+        return <Chip label="Nieopłacona" color="error" size="small" />;
+      }
     }
   };
 
@@ -257,6 +280,23 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
             </Typography>
           </Paper>
         </Grid>
+        
+        {invoice.requiredAdvancePaymentPercentage > 0 && (
+          <Grid item xs={12} md={3}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('invoices.payments.requiredAdvancePayment')}
+              </Typography>
+              <Typography variant="h6" color="primary.main">
+                {formatCurrency(getRequiredAdvancePayment(), invoice.currency)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                ({invoice.requiredAdvancePaymentPercentage}%)
+              </Typography>
+            </Paper>
+          </Grid>
+        )}
+        
         <Grid item xs={12} md={3}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">

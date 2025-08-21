@@ -47,7 +47,8 @@ import {
   getAllInvoices, 
   updateInvoiceStatus, 
   deleteInvoice,
-  getAvailableProformaAmount
+  getAvailableProformaAmount,
+  calculateRequiredAdvancePayment
 } from '../../services/invoiceService';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -759,12 +760,27 @@ const InvoicesList = () => {
                                 const totalSettled = totalPaid + advancePayments;
                                 
                                 let calculatedStatus;
-                                if (totalSettled >= invoiceTotal) {
-                                  calculatedStatus = 'paid';
-                                } else if (totalSettled > 0) {
-                                  calculatedStatus = 'partially_paid';
+                                // Sprawdź czy jest wymagana przedpłata
+                                const requiredAdvancePercentage = invoice.requiredAdvancePaymentPercentage || 0;
+                                if (requiredAdvancePercentage > 0) {
+                                  const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
+                                  
+                                  if (totalSettled >= requiredAdvanceAmount) {
+                                    calculatedStatus = 'paid';
+                                  } else if (totalSettled > 0) {
+                                    calculatedStatus = 'partially_paid';
+                                  } else {
+                                    calculatedStatus = 'unpaid';
+                                  }
                                 } else {
-                                  calculatedStatus = 'unpaid';
+                                  // Standardowa logika
+                                  if (totalSettled >= invoiceTotal) {
+                                    calculatedStatus = 'paid';
+                                  } else if (totalSettled > 0) {
+                                    calculatedStatus = 'partially_paid';
+                                  } else {
+                                    calculatedStatus = 'unpaid';
+                                  }
                                 }
                                 
                                 return renderPaymentStatus(calculatedStatus);
