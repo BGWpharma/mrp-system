@@ -256,6 +256,16 @@ export const createInvoice = async (invoiceData, userId) => {
       }
     }
     
+    // Automatycznie przelicz i zaktualizuj status płatności po utworzeniu faktury (jeśli nie jest proformą)
+    if (!invoiceData.isProforma) {
+      try {
+        await recalculatePaymentStatus(newInvoiceId, userId);
+      } catch (paymentStatusError) {
+        console.warn('Błąd podczas automatycznego przeliczania statusu płatności dla nowej faktury:', paymentStatusError);
+        // Nie przerywamy procesu tworzenia faktury z powodu błędu statusu płatności
+      }
+    }
+    
     return newInvoiceId;
   } catch (error) {
     console.error('Błąd podczas tworzenia faktury:', error);
@@ -501,6 +511,14 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
         console.warn('Błąd podczas aktualizacji wykorzystania proform:', proformaError);
         // Nie przerywamy procesu aktualizacji faktury z powodu błędu proform
       }
+    }
+    
+    // Automatycznie przelicz i zaktualizuj status płatności po zapisaniu faktury
+    try {
+      await recalculatePaymentStatus(invoiceId, userId);
+    } catch (paymentStatusError) {
+      console.warn('Błąd podczas automatycznego przeliczania statusu płatności:', paymentStatusError);
+      // Nie przerywamy procesu aktualizacji faktury z powodu błędu statusu płatności
     }
     
     return true;
@@ -1074,6 +1092,104 @@ export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymen
     return { success: true, totalPaid, paymentStatus };
   } catch (error) {
     console.error('Błąd podczas edycji płatności:', error);
+    throw error;
+  }
+};
+
+/**
+ * Automatycznie przelicza i aktualizuje status płatności faktury na podstawie płatności i alokacji proform
+ * @param {string} invoiceId - ID faktury do przeliczenia statusu płatności
+ * @param {string} userId - ID użytkownika wykonującego operację
+ * @returns {Promise<object>} Wynik operacji z informacjami o statusie płatności
+ */
+export const recalculatePaymentStatus = async (invoiceId, userId) => {
+  try {
+    // Pobierz aktualne dane faktury
+    const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+    if (!invoiceDoc.exists()) {
+      throw new Error('Faktura nie została znaleziona');
+    }
+
+    const currentInvoice = invoiceDoc.data();
+    
+    // Nie przeliczaj dla proform
+    if (currentInvoice.isProforma) {
+      return { success: true, paymentStatus: currentInvoice.paymentStatus || 'unpaid', message: 'Proforma - status nie zmieniony' };
+    }
+
+    const currentPayments = currentInvoice.payments || [];
+    const invoiceTotal = parseFloat(currentInvoice.total || 0);
+    
+    // Oblicz całkowitą kwotę płatności
+    const totalPaid = currentPayments.reduce((sum, payment) => sum + payment.amount, 0);
+    
+    // Oblicz przedpłaty z proform
+    let advancePayments = 0;
+    if (currentInvoice.proformAllocation && currentInvoice.proformAllocation.length > 0) {
+      advancePayments = currentInvoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+    } else {
+      advancePayments = parseFloat(currentInvoice.settledAdvancePayments || 0);
+    }
+    
+    // Oblicz łączną kwotę rozliczoną
+    const totalSettled = totalPaid + advancePayments;
+    
+    // Oblicz nowy status płatności
+    let newPaymentStatus = 'unpaid';
+    let paymentDate = null;
+    
+    if (totalSettled >= invoiceTotal) {
+      newPaymentStatus = 'paid';
+      // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
+      if (currentPayments.length > 0) {
+        const latestPayment = currentPayments.reduce((latest, payment) => 
+          payment.date.toDate() > latest.date.toDate() ? payment : latest
+        );
+        paymentDate = latestPayment.date;
+      }
+    } else if (totalSettled > 0) {
+      newPaymentStatus = 'partially_paid';
+    }
+
+    // Sprawdź czy status się zmienił
+    const currentPaymentStatus = currentInvoice.paymentStatus || 'unpaid';
+    if (currentPaymentStatus === newPaymentStatus) {
+      return { 
+        success: true, 
+        paymentStatus: newPaymentStatus, 
+        totalPaid, 
+        totalSettled,
+        message: 'Status płatności nie zmienił się' 
+      };
+    }
+
+    // Zaktualizuj status płatności w faktury
+    const updateData = {
+      paymentStatus: newPaymentStatus,
+      totalPaid: totalPaid,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    };
+
+    // Dodaj datę płatności jeśli faktura jest w pełni opłacona
+    if (paymentDate) {
+      updateData.paymentDate = paymentDate;
+    }
+
+    await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updateData);
+
+    console.log(`Automatycznie zaktualizowano status płatności faktury ${invoiceId} z "${currentPaymentStatus}" na "${newPaymentStatus}"`);
+    
+    return { 
+      success: true, 
+      paymentStatus: newPaymentStatus, 
+      oldPaymentStatus: currentPaymentStatus,
+      totalPaid, 
+      totalSettled,
+      message: 'Status płatności został automatycznie zaktualizowany' 
+    };
+  } catch (error) {
+    console.error('Błąd podczas automatycznego przeliczania statusu płatności:', error);
     throw error;
   }
 };

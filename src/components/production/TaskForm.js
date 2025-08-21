@@ -182,6 +182,7 @@ const TaskForm = ({ taskId }) => {
   const statusOptions = useMemo(() => [
     <MenuItem key="zaplanowane" value="Zaplanowane">Zaplanowane</MenuItem>,
     <MenuItem key="w-trakcie" value="W trakcie">W trakcie</MenuItem>,
+    <MenuItem key="wstrzymane" value="Wstrzymane">Wstrzymane</MenuItem>,
     <MenuItem key="zakonczone" value="Zakończone">Zakończone</MenuItem>,
     <MenuItem key="anulowane" value="Anulowane">Anulowane</MenuItem>
   ], []);

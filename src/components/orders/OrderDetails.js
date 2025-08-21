@@ -110,8 +110,41 @@ const verifyProductionTasks = async (orderToVerify) => {
       try {
         // Próba pobrania zadania z bazy
         const taskDoc = await getTaskById(task.id);
-        // Jeśli dotarliśmy tutaj, zadanie istnieje
-        verifiedTasks.push(task);
+        
+        // Sprawdź czy dane są aktualne i wymagają synchronizacji
+        const needsUpdate = 
+          task.status !== taskDoc.status ||
+          Math.abs((task.totalMaterialCost || 0) - (taskDoc.totalMaterialCost || 0)) > 0.01 ||
+          Math.abs((task.totalFullProductionCost || 0) - (taskDoc.totalFullProductionCost || 0)) > 0.01 ||
+          task.moNumber !== taskDoc.moNumber ||
+          task.name !== taskDoc.name ||
+          task.productName !== taskDoc.productName ||
+          task.quantity !== taskDoc.quantity;
+        
+        if (needsUpdate) {
+          console.log(`[SYNC] Wykryto nieaktualne dane zadania ${task.id}, synchronizuję z bazą danych`);
+          
+          // Aktualizuj dane zadania w zamówieniu
+          const updatedTask = {
+            ...task,
+            status: taskDoc.status,
+            totalMaterialCost: taskDoc.totalMaterialCost || 0,
+            unitMaterialCost: taskDoc.unitMaterialCost || 0,
+            totalFullProductionCost: taskDoc.totalFullProductionCost || 0,
+            unitFullProductionCost: taskDoc.unitFullProductionCost || 0,
+            moNumber: taskDoc.moNumber,
+            name: taskDoc.name,
+            productName: taskDoc.productName,
+            quantity: taskDoc.quantity,
+            unit: taskDoc.unit,
+            updatedAt: new Date().toISOString()
+          };
+          
+          verifiedTasks.push(updatedTask);
+        } else {
+          // Dane są aktualne
+          verifiedTasks.push(task);
+        }
       } catch (error) {
         console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);
         tasksToRemove.push(task);
@@ -134,9 +167,15 @@ const verifyProductionTasks = async (orderToVerify) => {
       }
     }
     
-    // Jeśli znaleziono nieistniejące zadania, usuń ich referencje z zamówienia
-    if (tasksToRemove.length > 0) {
-      if (orderToVerify.id) {
+    // Sprawdź czy są zadania do usunięcia lub dane zostały zaktualizowane
+    const hasChanges = tasksToRemove.length > 0 || verifiedTasks.some((task, index) => {
+      const originalTask = orderToVerify.productionTasks[index];
+      return JSON.stringify(task) !== JSON.stringify(originalTask);
+    });
+    
+    if (hasChanges) {
+      // Usuń nieistniejące zadania z zamówienia
+      if (tasksToRemove.length > 0 && orderToVerify.id) {
         for (const task of tasksToRemove) {
           try {
             await removeProductionTaskFromOrder(orderToVerify.id, task.id);
@@ -147,16 +186,33 @@ const verifyProductionTasks = async (orderToVerify) => {
         }
       }
       
+      // Zapisz zaktualizowane dane zadań do zamówienia w bazie
+      if (orderToVerify.id && verifiedTasks.length > 0) {
+        try {
+          const { updateOrder } = await import('../../services/orderService');
+          const updatedOrderData = {
+            ...orderToVerify,
+            productionTasks: verifiedTasks,
+            updatedAt: new Date().toISOString()
+          };
+          
+          await updateOrder(orderToVerify.id, updatedOrderData, 'system');
+          console.log(`[SYNC] Zaktualizowano dane zadań produkcyjnych w zamówieniu ${orderToVerify.id}`);
+        } catch (error) {
+          console.error(`[SYNC] Błąd podczas zapisywania zaktualizowanych zadań:`, error);
+        }
+      }
+      
       // Zaktualizuj dane zamówienia lokalnie
       const updatedOrder = {
         ...orderToVerify,
         productionTasks: verifiedTasks
       };
       
-      return { order: updatedOrder, removedCount: tasksToRemove.length };
+      return { order: updatedOrder, removedCount: tasksToRemove.length, updatedCount: verifiedTasks.length };
     }
     
-    return { order: orderToVerify, removedCount: 0 };
+    return { order: orderToVerify, removedCount: 0, updatedCount: 0 };
   } catch (error) {
     console.error('Błąd podczas weryfikacji zadań produkcyjnych:', error);
     return { order: orderToVerify, removedCount: 0 };
@@ -284,6 +340,66 @@ const OrderDetails = () => {
       fetchOrderDetails();
     }
   }, [orderId, showError, navigate, location.pathname]);
+
+  // Automatyczne odświeżanie danych co 30 sekund - WYŁĄCZONE aby uniknąć niepotrzebnych zapytań do bazy
+  /*
+  useEffect(() => {
+    if (!orderId || loading) return;
+
+    const interval = setInterval(() => {
+      console.log('[AUTO-REFRESH] Automatyczne odświeżanie danych zamówienia');
+      refreshOrderData();
+    }, 30000); // Co 30 sekund
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [orderId, loading]);
+  */
+
+  // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań produkcyjnych
+  useEffect(() => {
+    if (!orderId) return;
+
+    let channel;
+    try {
+      // Stwórz BroadcastChannel do nasłuchiwania aktualizacji kosztów
+      channel = new BroadcastChannel('production-costs-update');
+      
+      const handleCostUpdate = (event) => {
+        if (event.data.type === 'TASK_COSTS_UPDATED') {
+          const { taskId, costs, timestamp } = event.data;
+          console.log(`[BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${taskId}:`, costs);
+          
+          // Sprawdź czy to zamówienie ma to zadanie produkcyjne
+          if (order && (
+            (order.items && order.items.some(item => item.productionTaskId === taskId)) ||
+            (order.productionTasks && order.productionTasks.some(task => task.id === taskId))
+          )) {
+            console.log(`[BROADCAST] Zadanie ${taskId} jest powiązane z tym zamówieniem, odświeżam dane`);
+            
+            // Odśwież dane zamówienia po krótkiej przerwie, aby upewnić się, że baza danych została zaktualizowana
+            setTimeout(() => {
+              refreshOrderData();
+            }, 500);
+          }
+        }
+      };
+
+      channel.addEventListener('message', handleCostUpdate);
+      console.log(`[BROADCAST] Nasłuchiwanie powiadomień o kosztach dla zamówienia ${orderId}`);
+      
+    } catch (error) {
+      console.warn('Nie można utworzyć BroadcastChannel:', error);
+    }
+
+    return () => {
+      if (channel) {
+        channel.close();
+        console.log(`[BROADCAST] Zamknięto nasłuchiwanie powiadomień dla zamówienia ${orderId}`);
+      }
+    };
+  }, [orderId, order]);
 
   // Funkcja do ręcznego odświeżania danych zamówienia
   const refreshOrderData = async (retries = 3, delay = 1000) => {

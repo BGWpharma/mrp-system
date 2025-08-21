@@ -4642,6 +4642,29 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
 
       console.log(`[AUTO] Zaktualizowano koszty zadania ${taskId}: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
 
+      // Wyślij powiadomienie o zmianie kosztów zadania (do odświeżenia UI)
+      try {
+        // Użyj BroadcastChannel do powiadomienia wszystkich otwartych okien/zakładek
+        if (typeof BroadcastChannel !== 'undefined') {
+          const channel = new BroadcastChannel('production-costs-update');
+          channel.postMessage({
+            type: 'TASK_COSTS_UPDATED',
+            taskId: taskId,
+            costs: {
+              totalMaterialCost,
+              unitMaterialCost,
+              totalFullProductionCost,
+              unitFullProductionCost
+            },
+            timestamp: new Date().toISOString()
+          });
+          channel.close();
+          console.log(`[AUTO] Wysłano powiadomienie BroadcastChannel o aktualizacji kosztów zadania ${taskId}`);
+        }
+      } catch (broadcastError) {
+        console.warn('[AUTO] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
+      }
+
       // Automatycznie aktualizuj związane zamówienia klientów
       let relatedOrders = [];
       try {

@@ -2062,7 +2062,12 @@ export const getOrdersByProductionTaskId = async (productionTaskId) => {
       const orderData = doc.data();
       
       // Sprawdź czy zamówienie ma pozycje powiązane z tym zadaniem
-      if (orderData.items && orderData.items.some(item => item.productionTaskId === productionTaskId)) {
+      const hasRelatedItem = orderData.items && orderData.items.some(item => item.productionTaskId === productionTaskId);
+      
+      // Sprawdź czy zamówienie ma zadanie produkcyjne w tablicy productionTasks
+      const hasRelatedTask = orderData.productionTasks && orderData.productionTasks.some(task => task.id === productionTaskId);
+      
+      if (hasRelatedItem || hasRelatedTask) {
         relatedOrders.push({
           id: doc.id,
           ...orderData
