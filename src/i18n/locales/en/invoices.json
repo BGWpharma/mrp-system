@@ -31,7 +31,6 @@
   "status": {
     "draft": "Draft",
     "issued": "Issued",
-    "sent": "Sent",
     "paid": "Paid",
     "partiallyPaid": "Partially Paid",
     "overdue": "Overdue",

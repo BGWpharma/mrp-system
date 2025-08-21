@@ -460,7 +460,7 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updatedInvoice);
     
     // Jeśli faktura jest już wystawiona (status 'issued' lub wyżej), regeneruj PDF z nowymi danymi
-    if (invoiceData.status && ['issued', 'sent', 'paid', 'partially_paid', 'overdue'].includes(invoiceData.status)) {
+    if (invoiceData.status && ['issued', 'paid', 'partially_paid', 'overdue'].includes(invoiceData.status)) {
       try {
         console.log('Regenerowanie PDF faktury po edycji...');
         const pdfInfo = await generateAndSaveInvoicePdf(invoiceId, userId);
@@ -578,7 +578,7 @@ export const deleteInvoice = async (invoiceId) => {
  */
 export const updateInvoiceStatus = async (invoiceId, status, userId) => {
   try {
-    const validStatuses = ['draft', 'issued', 'sent', 'paid', 'partially_paid', 'overdue', 'cancelled'];
+    const validStatuses = ['draft', 'issued', 'paid', 'partially_paid', 'overdue', 'cancelled'];
     
     if (!validStatuses.includes(status)) {
       throw new Error('Nieprawidłowy status faktury');

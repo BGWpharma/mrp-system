@@ -1041,7 +1041,7 @@ const InvoiceForm = ({ invoiceId }) => {
         submittedInvoiceId = invoiceId;
         
         // Sprawdź czy PDF został zaktualizowany
-        if (['issued', 'sent', 'paid', 'partially_paid', 'overdue'].includes(invoiceToSubmit.status)) {
+        if (['issued', 'paid', 'partially_paid', 'overdue'].includes(invoiceToSubmit.status)) {
           showSuccess('Faktura została zaktualizowana i PDF został wygenerowany');
         } else {
           showSuccess('Faktura została zaktualizowana');
@@ -1211,7 +1211,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   >
                     <MenuItem value="draft">{t('invoices.status.draft')}</MenuItem>
                     <MenuItem value="issued">{t('invoices.status.issued')}</MenuItem>
-                    <MenuItem value="sent">{t('invoices.status.sent')}</MenuItem>
+
                     <MenuItem value="paid">{t('invoices.status.paid')}</MenuItem>
                     <MenuItem value="partially_paid">{t('invoices.status.partiallyPaid')}</MenuItem>
                     <MenuItem value="overdue">{t('invoices.status.overdue')}</MenuItem>

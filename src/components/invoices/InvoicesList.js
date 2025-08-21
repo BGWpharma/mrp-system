@@ -331,7 +331,7 @@ const InvoicesList = () => {
     const statusConfig = {
       'draft': { color: 'default', label: t('invoices.status.draft') },
       'issued': { color: 'primary', label: t('invoices.status.issued') },
-      'sent': { color: 'info', label: t('invoices.status.sent') },
+
       'paid': { color: 'success', label: t('invoices.status.paid') },
       'partially_paid': { color: 'warning', label: t('invoices.status.partiallyPaid') },
       'overdue': { color: 'error', label: t('invoices.status.overdue') },
@@ -491,7 +491,7 @@ const InvoicesList = () => {
                       <MenuItem value="">{t('invoices.filters.allStatuses')}</MenuItem>
                       <MenuItem value="draft">{t('invoices.status.draft')}</MenuItem>
                       <MenuItem value="issued">{t('invoices.status.issued')}</MenuItem>
-                      <MenuItem value="sent">{t('invoices.status.sent')}</MenuItem>
+
                       <MenuItem value="paid">{t('invoices.status.paid')}</MenuItem>
                       <MenuItem value="partially_paid">{t('invoices.status.partiallyPaid')}</MenuItem>
                       <MenuItem value="overdue">{t('invoices.status.overdue')}</MenuItem>
@@ -812,16 +812,7 @@ const InvoicesList = () => {
                                   <ReceiptIcon fontSize="small" />
                                 </IconButton>
                               )}
-                              {invoice.status === 'issued' && (
-                                <IconButton 
-                                  size="small" 
-                                  onClick={() => handleUpdateStatus(invoice.id, 'sent')}
-                                  title={t('invoices.form.buttons.markAsSent')}
-                                  color="info"
-                                >
-                                  <SendIcon fontSize="small" />
-                                </IconButton>
-                              )}
+
                             </Box>
                           </TableCell>
                         </TableRow>

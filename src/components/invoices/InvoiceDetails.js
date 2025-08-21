@@ -209,7 +209,7 @@ const InvoiceDetails = () => {
     const statusConfig = {
       'draft': { color: 'default', label: 'Szkic' },
       'issued': { color: 'primary', label: 'Wystawiona' },
-      'sent': { color: 'info', label: 'Wysłana' },
+
       'paid': { color: 'success', label: 'Opłacona' },
       'partially_paid': { color: 'warning', label: 'Częściowo opłacona' },
       'overdue': { color: 'error', label: 'Przeterminowana' },
@@ -683,17 +683,7 @@ const InvoiceDetails = () => {
                   {t('invoices.details.actions')}
                 </Typography>
                 
-                {invoice.status === 'issued' && (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<EmailIcon />}
-                    onClick={() => handleUpdateStatus('sent')}
-                    sx={{ mb: 1 }}
-                  >
-                    {t('invoices.details.buttons.markAsSent')}
-                  </Button>
-                )}
+
                 
 
                 

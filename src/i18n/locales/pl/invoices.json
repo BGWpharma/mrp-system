@@ -31,7 +31,6 @@
   "status": {
     "draft": "Szkic",
     "issued": "Wystawiona",
-    "sent": "Wysłana",
     "paid": "Opłacona",
     "partiallyPaid": "Częściowo opłacona",
     "overdue": "Przeterminowana",
@@ -99,7 +98,6 @@
       "refresh": "Odśwież",
       "selectOrder": "Wybierz zamówienie",
       "markAsIssued": "Oznacz jako wystawioną",
-      "markAsSent": "Oznacz jako wysłaną",
       "refreshProformaAmounts": "Odśwież dostępne kwoty proform",
       "selectAll": "Zaznacz wszystkie",
       "deselectAll": "Odznacz wszystkie",
@@ -273,8 +271,7 @@
       "delete": "Usuń",
       "downloadPdf": "Pobierz PDF",
       "generating": "Generowanie...",
-      "deleteInvoice": "Usuń fakturę",
-      "markAsSent": "Oznacz jako wysłaną"
+      "deleteInvoice": "Usuń fakturę"
     },
     "notifications": {
       "invoiceDeleted": "Faktura została usunięta",
