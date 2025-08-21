@@ -69,7 +69,7 @@ import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
-import { getInvoicesByOrderId } from '../../services/invoiceService';
+import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, migrateInvoiceItemsOrderIds } from '../../services/invoiceService';
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -243,6 +243,7 @@ const OrderDetails = () => {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [cmrDocuments, setCmrDocuments] = useState([]);
   const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
+  const [invoicedAmounts, setInvoicedAmounts] = useState({});
 
   useEffect(() => {
     const fetchOrderDetails = async (retries = 3, delay = 1000) => {
@@ -290,6 +291,11 @@ const OrderDetails = () => {
             const orderInvoices = await getInvoicesByOrderId(orderId);
             const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
             setInvoices(verifiedInvoices);
+            
+            // Pobierz zafakturowane kwoty dla pozycji zamówienia
+            const invoicedData = await getInvoicedAmountsByOrderItems(orderId);
+            setInvoicedAmounts(invoicedData);
+            
             if (removedInvoicesCount > 0) {
               showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
             }
@@ -884,12 +890,37 @@ const OrderDetails = () => {
       const orderInvoices = await getInvoicesByOrderId(orderId);
       const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
       setInvoices(verifiedInvoices);
+      
+      // Pobierz zafakturowane kwoty dla pozycji zamówienia
+      const invoicedData = await getInvoicedAmountsByOrderItems(orderId);
+      setInvoicedAmounts(invoicedData);
+      
       if (removedInvoicesCount > 0) {
         showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
       }
     } catch (error) {
       console.error('Błąd podczas pobierania faktur:', error);
       showError(t('orderDetails.notifications.invoicesLoadError'));
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
+  // Funkcja do migracji faktur - dodaje orderItemId do pozycji
+  const handleMigrateInvoices = async () => {
+    try {
+      setLoadingInvoices(true);
+      showInfo('Rozpoczynam migrację faktur...');
+      
+      await migrateInvoiceItemsOrderIds(orderId);
+      
+      // Odśwież faktury po migracji
+      await fetchInvoices();
+      
+      showSuccess('Migracja faktur zakończona pomyślnie!');
+    } catch (error) {
+      console.error('Błąd podczas migracji faktur:', error);
+      showError('Błąd podczas migracji faktur: ' + error.message);
     } finally {
       setLoadingInvoices(false);
     }
@@ -1398,6 +1429,7 @@ const OrderDetails = () => {
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.shipped')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.price')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.value')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">Zafakturowana kwota</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.priceList')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.productionStatus')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">
@@ -1458,6 +1490,31 @@ const OrderDetails = () => {
                   </TableCell>
                   <TableCell align="right">{formatCurrency(item.price)}</TableCell>
                   <TableCell align="right">{formatCurrency(item.quantity * item.price)}</TableCell>
+                  <TableCell align="right">
+                    {(() => {
+                      const itemId = item.id || `${orderId}_item_${index}`;
+                      const invoicedData = invoicedAmounts[itemId];
+                      
+                      if (invoicedData && invoicedData.totalInvoiced > 0) {
+                        return (
+                          <Tooltip title={`Zafakturowano w ${invoicedData.invoices.length} fakturach`}>
+                            <Typography sx={{ 
+                              fontWeight: 'medium',
+                              color: 'success.main'
+                            }}>
+                              {formatCurrency(invoicedData.totalInvoiced)}
+                            </Typography>
+                          </Tooltip>
+                        );
+                      } else {
+                        return (
+                          <Typography variant="body2" color="text.secondary">
+                            0,00 €
+                          </Typography>
+                        );
+                      }
+                    })()}
+                  </TableCell>
                   <TableCell>
                     {item.fromPriceList ? (
                                     <Chip 
@@ -1593,28 +1650,24 @@ const OrderDetails = () => {
                 </TableRow>
               ))}
               <TableRow>
-                <TableCell colSpan={2} />
+                <TableCell colSpan={3} />
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   Suma częściowa:
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
                 </TableCell>
-                <TableCell colSpan={3} />
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
-                </TableCell>
-                <TableCell colSpan={3} />
+                <TableCell colSpan={7} />
               </TableRow>
               <TableRow>
-                <TableCell colSpan={2} />
+                <TableCell colSpan={3} />
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   Koszt dostawy:
                 </TableCell>
                 <TableCell align="right">
                   {formatCurrency(order.shippingCost || 0)}
                 </TableCell>
-                <TableCell colSpan={6} />
+                <TableCell colSpan={7} />
               </TableRow>
               
               {/* Dodatkowe koszty (tylko jeśli istnieją) */}
@@ -1627,19 +1680,19 @@ const OrderDetails = () => {
                         .filter(cost => parseFloat(cost.value) > 0)
                         .map((cost, index) => (
                           <TableRow key={`cost-${cost.id || index}`}>
-                            <TableCell colSpan={2} />
+                            <TableCell colSpan={3} />
                             <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                               {cost.description || `Dodatkowy koszt ${index + 1}`}:
                             </TableCell>
                             <TableCell align="right">
                               {formatCurrency(parseFloat(cost.value) || 0)}
                             </TableCell>
-                            <TableCell colSpan={6} />
+                            <TableCell colSpan={7} />
                           </TableRow>
                         ))
                       }
                       <TableRow>
-                        <TableCell colSpan={2} />
+                        <TableCell colSpan={3} />
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                           Suma dodatkowych kosztów:
                         </TableCell>
@@ -1649,7 +1702,7 @@ const OrderDetails = () => {
                             .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                           )}
                         </TableCell>
-                        <TableCell colSpan={6} />
+                        <TableCell colSpan={7} />
                       </TableRow>
                     </>
                   )}
@@ -1661,19 +1714,19 @@ const OrderDetails = () => {
                         .filter(cost => parseFloat(cost.value) < 0)
                         .map((cost, index) => (
                           <TableRow key={`discount-${cost.id || index}`}>
-                            <TableCell colSpan={2} />
+                            <TableCell colSpan={3} />
                             <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
                               {cost.description || `Rabat ${index + 1}`}:
                             </TableCell>
                             <TableCell align="right" sx={{ color: 'secondary.main' }}>
                               {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
                             </TableCell>
-                            <TableCell colSpan={6} />
+                            <TableCell colSpan={7} />
                           </TableRow>
                         ))
                       }
                       <TableRow>
-                        <TableCell colSpan={2} />
+                        <TableCell colSpan={3} />
                         <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
                           Suma rabatów:
                         </TableCell>
@@ -1683,7 +1736,7 @@ const OrderDetails = () => {
                             .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
                           ))}
                         </TableCell>
-                        <TableCell colSpan={6} />
+                        <TableCell colSpan={7} />
                       </TableRow>
                     </>
                   )}
@@ -1691,14 +1744,14 @@ const OrderDetails = () => {
               )}
               
               <TableRow>
-                <TableCell colSpan={2} />
+                <TableCell colSpan={3} />
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                   Razem:
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
                   {formatCurrency(calculateOrderTotalValue())}
                 </TableCell>
-                <TableCell colSpan={6} />
+                <TableCell colSpan={7} />
               </TableRow>
             </TableBody>
           </Table>
@@ -2025,6 +2078,16 @@ const OrderDetails = () => {
                 sx={{ ml: 1 }}
               >
                 {t('orderDetails.invoicesTable.createInvoice')}
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                color="secondary"
+                onClick={handleMigrateInvoices}
+                disabled={loadingInvoices || invoices.length === 0}
+                sx={{ ml: 1 }}
+              >
+                Migruj faktury
               </Button>
             </Box>
           </Box>

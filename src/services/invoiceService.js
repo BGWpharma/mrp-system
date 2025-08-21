@@ -302,7 +302,7 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
     // Dodatkowe dane zależnie od typu zamówienia
     // Funkcja mapująca pozycje z uwzględnieniem kosztów z produkcji
     const mapItemsWithProductionCosts = (items, isProformaInvoice = false) => {
-      return (items || []).map(item => {
+      return (items || []).map((item, index) => {
         let finalPrice;
         
         // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
@@ -319,8 +319,12 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
             : parseFloat(item.price || 0);
         }
 
+        const orderItemId = item.id || `${orderId}_item_${index}`;
+        console.log(`[INVOICE_DEBUG] Mapowanie pozycji faktury - originalItemId: ${item.id}, orderItemId: ${orderItemId}, itemName: ${item.name}`);
+        
         return {
           ...item,
+          orderItemId: orderItemId, // Dodaj ID pozycji zamówienia
           description: item.description || '', // Kopiuj opis z pozycji CO
           price: finalPrice,
           netValue: parseFloat(item.quantity || 0) * finalPrice,
@@ -1519,6 +1523,166 @@ export const getInvoicePayments = async (invoiceId) => {
     })).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sortuj od najnowszych
   } catch (error) {
     console.error('Błąd podczas pobierania płatności faktury:', error);
+    throw error;
+  }
+};
+
+/**
+ * Oblicza zafakturowane kwoty dla pozycji zamówienia
+ * @param {string} orderId - ID zamówienia
+ * @returns {Promise<Object>} Obiekt z zafakturowanymi kwotami dla każdej pozycji
+ */
+export const getInvoicedAmountsByOrderItems = async (orderId) => {
+  try {
+    const invoices = await getInvoicesByOrderId(orderId);
+    const invoicedAmounts = {};
+    
+    // Pobierz dane zamówienia aby móc lepiej dopasować pozycje
+    let orderData = null;
+    try {
+      const orderDoc = await getDoc(doc(db, 'orders', orderId));
+      if (orderDoc.exists()) {
+        orderData = orderDoc.data();
+      }
+    } catch (error) {
+      console.warn('Nie można pobrać danych zamówienia dla lepszego dopasowania pozycji:', error);
+    }
+    
+    invoices.forEach((invoice, invoiceIndex) => {
+      // Pomijaj proformy - nie są rzeczywistymi fakturami
+      if (invoice.isProforma) {
+        console.log(`[INVOICED_AMOUNTS_DEBUG] Pomijam proformę ${invoice.number} - nie wliczam do kwoty zafakturowanej`);
+        return;
+      }
+      
+      if (invoice.items && Array.isArray(invoice.items)) {
+        invoice.items.forEach((invoiceItem, itemIndex) => {
+          let itemId = invoiceItem.orderItemId;
+          
+          if (!itemId) {
+            // Spróbuj dopasować pozycję do zamówienia na podstawie nazwy i ilości
+            if (orderData && orderData.items) {
+              const matchingOrderItem = orderData.items.find((orderItem, orderIndex) => {
+                return orderItem.name === invoiceItem.name && 
+                       parseFloat(orderItem.quantity) === parseFloat(invoiceItem.quantity);
+              });
+              
+              if (matchingOrderItem) {
+                itemId = matchingOrderItem.id || `${orderId}_item_${orderData.items.indexOf(matchingOrderItem)}`;
+                console.log(`[INVOICED_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" przez nazwę i ilość: ${itemId}`);
+              } else {
+                // Fallback - używaj indeksu pozycji w fakturze
+                itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
+                console.log(`[INVOICED_AMOUNTS_DEBUG] Nie udało się dopasować pozycji "${invoiceItem.name}", używam fallback: ${itemId}`);
+              }
+            } else {
+              itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
+              console.log(`[INVOICED_AMOUNTS_DEBUG] Brak danych zamówienia, używam fallback dla "${invoiceItem.name}": ${itemId}`);
+            }
+          }
+          
+          if (!invoicedAmounts[itemId]) {
+            invoicedAmounts[itemId] = {
+              totalInvoiced: 0,
+              invoices: []
+            };
+          }
+          
+          const itemValue = parseFloat(invoiceItem.netValue || invoiceItem.totalPrice || 0);
+          invoicedAmounts[itemId].totalInvoiced += itemValue;
+          invoicedAmounts[itemId].invoices.push({
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.number,
+            itemValue: itemValue,
+            quantity: parseFloat(invoiceItem.quantity || 0)
+          });
+        });
+      }
+    });
+    
+    return invoicedAmounts;
+  } catch (error) {
+    console.error('Błąd podczas obliczania zafakturowanych kwot:', error);
+    return {};
+  }
+};
+
+/**
+ * Migruje istniejące faktury dodając orderItemId do pozycji
+ * @param {string} orderId - ID zamówienia
+ * @returns {Promise<void>}
+ */
+export const migrateInvoiceItemsOrderIds = async (orderId) => {
+  try {
+    console.log(`[MIGRATION] Rozpoczynam migrację faktur dla zamówienia ${orderId}`);
+    
+    // Pobierz dane zamówienia
+    const orderDoc = await getDoc(doc(db, 'orders', orderId));
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    const orderData = orderDoc.data();
+    
+    // Pobierz faktury
+    const invoices = await getInvoicesByOrderId(orderId);
+    
+    for (const invoice of invoices) {
+      // Pomijaj proformy podczas migracji
+      if (invoice.isProforma) {
+        console.log(`[MIGRATION] Pomijam proformę ${invoice.number} podczas migracji`);
+        continue;
+      }
+      
+      let needsUpdate = false;
+      const updatedItems = invoice.items.map((invoiceItem, itemIndex) => {
+        // Jeśli pozycja już ma orderItemId, nie zmieniaj jej
+        if (invoiceItem.orderItemId) {
+          return invoiceItem;
+        }
+        
+        needsUpdate = true;
+        
+        // Spróbuj dopasować pozycję do zamówienia
+        let orderItemId;
+        if (orderData.items) {
+          const matchingOrderItem = orderData.items.find(orderItem => {
+            return orderItem.name === invoiceItem.name && 
+                   parseFloat(orderItem.quantity) === parseFloat(invoiceItem.quantity);
+          });
+          
+          if (matchingOrderItem) {
+            orderItemId = matchingOrderItem.id || `${orderId}_item_${orderData.items.indexOf(matchingOrderItem)}`;
+            console.log(`[MIGRATION] Dopasowano pozycję "${invoiceItem.name}" przez nazwę i ilość: ${orderItemId}`);
+          } else {
+            orderItemId = `${orderId}_item_${itemIndex}`;
+            console.log(`[MIGRATION] Nie udało się dopasować pozycji "${invoiceItem.name}", używam fallback: ${orderItemId}`);
+          }
+        } else {
+          orderItemId = `${orderId}_item_${itemIndex}`;
+          console.log(`[MIGRATION] Brak pozycji w zamówieniu, używam fallback dla "${invoiceItem.name}": ${orderItemId}`);
+        }
+        
+        return {
+          ...invoiceItem,
+          orderItemId: orderItemId
+        };
+      });
+      
+      // Aktualizuj fakturę jeśli potrzeba
+      if (needsUpdate) {
+        console.log(`[MIGRATION] Aktualizuję fakturę ${invoice.number} (${invoice.id})`);
+        await updateDoc(doc(db, INVOICES_COLLECTION, invoice.id), {
+          items: updatedItems,
+          updatedAt: serverTimestamp(),
+          updatedBy: 'migration_script'
+        });
+        console.log(`[MIGRATION] Zaktualizowano fakturę ${invoice.number}`);
+      }
+    }
+    
+    console.log(`[MIGRATION] Migracja zakończona dla zamówienia ${orderId}`);
+  } catch (error) {
+    console.error('Błąd podczas migracji orderItemId w fakturach:', error);
     throw error;
   }
 };

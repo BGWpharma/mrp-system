@@ -597,19 +597,18 @@ const InvoicesList = () => {
         </Box>
       ) : (
         <>
-          <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-            <TableContainer sx={{ overflowX: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
-              <Table stickyHeader>
+          <TableContainer component={Paper}>
+            <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 120, width: '15%' }}>{t('invoices.table.invoiceNumber')}</TableCell>
-                    <TableCell sx={{ minWidth: 150, width: '20%' }}>{t('invoices.table.client')}</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.issueDate')}</TableCell>
-                    <TableCell sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.dueDate')}</TableCell>
-                    <TableCell sx={{ minWidth: 120, width: '15%' }}>{t('invoices.table.amountAndToPay')}</TableCell>
-                    <TableCell sx={{ minWidth: 90, width: '12%' }}>{t('invoices.table.availableAmount')}</TableCell>
-                    <TableCell sx={{ minWidth: 120, width: '12%' }}>{t('invoices.table.status')}</TableCell>
-                    <TableCell align="right" sx={{ minWidth: 100, width: '12%' }}>{t('invoices.table.actions')}</TableCell>
+                    <TableCell>{t('invoices.table.invoiceNumber')}</TableCell>
+                    <TableCell>{t('invoices.table.client')}</TableCell>
+                    <TableCell>{t('invoices.table.issueDate')}</TableCell>
+                    <TableCell>{t('invoices.table.dueDate')}</TableCell>
+                    <TableCell>{t('invoices.table.amountAndToPay')}</TableCell>
+                    <TableCell>{t('invoices.table.availableAmount')}</TableCell>
+                    <TableCell>{t('invoices.table.status')}</TableCell>
+                    <TableCell align="right">{t('invoices.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -773,14 +772,7 @@ const InvoicesList = () => {
                             </Box>
                           </TableCell>
                           <TableCell align="right">
-                            <Box sx={{ 
-                              display: 'flex', 
-                              flexWrap: 'wrap',
-                              gap: 0.25,
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              minWidth: 100
-                            }}>
+                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                               <IconButton 
                                 size="small" 
                                 onClick={() => handleViewInvoice(invoice.id)}
@@ -812,7 +804,6 @@ const InvoicesList = () => {
                                   <ReceiptIcon fontSize="small" />
                                 </IconButton>
                               )}
-
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -821,23 +812,22 @@ const InvoicesList = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-            <TablePagination
-              rowsPerPageOptions={[10, 25, 50, 100]}
-              component="div"
-              count={filteredInvoices.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={(event, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(event) => {
-                setRowsPerPage(parseInt(event.target.value, 10));
-                setPage(0);
-              }}
-              labelRowsPerPage={t('common.rowsPerPage') + ':'}
-              labelDisplayedRows={({ from, to, count }) => 
-                t('common.displayedRows', { from, to, count: count !== -1 ? count : `więcej niż ${to}` })
-              }
-            />
-          </Paper>
+          <TablePagination
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            component="div"
+            count={filteredInvoices.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={(event, newPage) => setPage(newPage)}
+            onRowsPerPageChange={(event) => {
+              setRowsPerPage(parseInt(event.target.value, 10));
+              setPage(0);
+            }}
+            labelRowsPerPage={t('common.rowsPerPage') + ':'}
+            labelDisplayedRows={({ from, to, count }) => 
+              t('common.displayedRows', { from, to, count: count !== -1 ? count : `więcej niż ${to}` })
+            }
+          />
         </>
       )}
 
