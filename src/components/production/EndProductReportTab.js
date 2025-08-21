@@ -217,6 +217,82 @@ const EndProductReportTab = ({
           }
         });
       }
+      
+      // Dodaj załączniki z partii składników
+      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
+        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
+          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL || attachment.fileUrl
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki z raportów CompletedMO
+      if (formResponses?.completedMO && formResponses.completedMO.length > 0) {
+        formResponses.completedMO.forEach((report, index) => {
+          if (report.mixingPlanReportUrl && report.mixingPlanReportName) {
+            const fileExtension = report.mixingPlanReportName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: `CompletedMO_Report_${index + 1}_${report.mixingPlanReportName}`,
+              fileType: fileType,
+              fileUrl: report.mixingPlanReportUrl
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki z raportów ProductionControl
+      if (formResponses?.productionControl && formResponses.productionControl.length > 0) {
+        formResponses.productionControl.forEach((report, index) => {
+          // Document scans
+          if (report.documentScansUrl && report.documentScansName) {
+            const fileExtension = report.documentScansName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            
+            attachments.push({
+              fileName: `ProductionControl_Report_${index + 1}_${report.documentScansName}`,
+              fileType: fileType,
+              fileUrl: report.documentScansUrl
+            });
+          }
+          
+          // Product photos
+          const photoFields = [
+            { url: report.productPhoto1Url, name: report.productPhoto1Name, label: 'Photo1' },
+            { url: report.productPhoto2Url, name: report.productPhoto2Name, label: 'Photo2' },
+            { url: report.productPhoto3Url, name: report.productPhoto3Name, label: 'Photo3' }
+          ];
+          
+          photoFields.forEach(photo => {
+            if (photo.url && photo.name) {
+              const fileExtension = photo.name.split('.').pop().toLowerCase();
+              const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'jpg';
+              
+              attachments.push({
+                fileName: `ProductionControl_Report_${index + 1}_${photo.label}_${photo.name}`,
+                fileType: fileType,
+                fileUrl: photo.url
+              });
+            }
+          });
+        });
+      }
+
+      // Usunięcie duplikatów załączników na podstawie nazwy pliku
+      const uniqueAttachments = attachments.filter((attachment, index, self) => 
+        index === self.findIndex(a => a.fileName === attachment.fileName)
+      );
+
+      console.log('Załączniki do dodania do raportu:', uniqueAttachments);
 
       // Przygotowanie danych do PDF
       const productData = {
@@ -239,7 +315,22 @@ const EndProductReportTab = ({
         consumedMaterials: task.consumedMaterials || [],
         
         // Załączniki
-        attachments: attachments,
+        attachments: uniqueAttachments,
+        
+        // Opcje kompresji
+        options: {
+          useTemplate: true,
+          imageQuality: 0.75,
+          enableCompression: true,
+          precision: 2,
+          attachmentCompression: {
+            enabled: true,
+            imageQuality: 0.75,
+            maxImageWidth: 1200,
+            maxImageHeight: 1600,
+            convertPngToJpeg: true
+          }
+        },
         
         // Alergeny
         allergens: selectedAllergens || [],

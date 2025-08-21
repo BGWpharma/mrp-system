@@ -6362,9 +6362,17 @@ const TaskDetailsPage = () => {
         attachments: uniqueAttachments, // Dodajemy załączniki w odpowiednim formacie
         options: {
           useTemplate: true,           // Użyj szablon tła (można zmienić na false dla oszczędności miejsca)
-          imageQuality: 0.85,          // Jakość kompresji obrazu (0.1-1.0) - zbalansowane dla jakości i rozmiaru
+          imageQuality: 0.75,          // Jakość kompresji obrazu (0.1-1.0) - zoptymalizowane dla rozmiaru
           enableCompression: true,     // Włącz kompresję PDF
-          precision: 2                 // Ogranicz precyzję do 2 miejsc po przecinku
+          precision: 2,                // Ogranicz precyzję do 2 miejsc po przecinku
+          // Zaawansowane opcje kompresji załączników
+          attachmentCompression: {
+            enabled: true,
+            imageQuality: 0.75,        // Jakość kompresji załączników obrazowych (75% - dobry balans)
+            maxImageWidth: 1200,       // Maksymalna szerokość obrazu w pikselach
+            maxImageHeight: 1600,      // Maksymalna wysokość obrazu w pikselach
+            convertPngToJpeg: true     // Konwertuj PNG na JPEG dla lepszej kompresji
+          }
         }
       };
 

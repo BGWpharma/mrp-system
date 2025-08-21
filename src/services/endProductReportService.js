@@ -97,13 +97,24 @@ const normalizePolishChars = (text) => {
 };
 
 // Function to append attachments to the PDF report
-const appendAttachmentsToReport = async (doc, attachments) => {
+const appendAttachmentsToReport = async (doc, attachments, compressionOptions = {}) => {
   if (!attachments || attachments.length === 0) {
     console.log('No attachments provided to append');
     return null;
   }
 
-  console.log(`Starting to process ${attachments.length} attachments:`, attachments);
+  // Default compression settings
+  const defaultOptions = {
+    enabled: true,
+    imageQuality: 0.75,
+    maxImageWidth: 1200,
+    maxImageHeight: 1600,
+    convertPngToJpeg: true
+  };
+  
+  const compOptions = { ...defaultOptions, ...compressionOptions };
+  
+  console.log(`Starting to process ${attachments.length} attachments with compression:`, compOptions);
 
   try {
     // Get the current PDF as ArrayBuffer
@@ -147,12 +158,24 @@ const appendAttachmentsToReport = async (doc, attachments) => {
           copiedPages.forEach((page) => existingPdfDoc.addPage(page));
           
         } else if (['png', 'jpg', 'jpeg'].includes(attachment.fileType.toLowerCase())) {
-          // Handle image files
+          // Handle image files with advanced compression
+          console.log(`Compressing image: ${attachment.fileName}`);
+          
+          // Compress image before embedding using compression options
+          const compressedImageData = compOptions.enabled 
+            ? await compressImageForPdf(arrayBuffer, attachment.fileType.toLowerCase(), {
+                maxWidth: compOptions.maxImageWidth,
+                maxHeight: compOptions.maxImageHeight,
+                quality: compOptions.imageQuality
+              })
+            : arrayBuffer;
+          
           let image;
           if (attachment.fileType.toLowerCase() === 'png') {
-            image = await existingPdfDoc.embedPng(arrayBuffer);
+            // Convert PNG to JPEG for better compression (unless transparency is needed)
+            image = await existingPdfDoc.embedJpg(compressedImageData);
           } else {
-            image = await existingPdfDoc.embedJpg(arrayBuffer);
+            image = await existingPdfDoc.embedJpg(compressedImageData);
           }
           
           // Create a new page for the image (A4 size)
@@ -237,12 +260,13 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       options = {}
     } = additionalData;
 
-    // PDF optimization options (similar to invoice generator)
+    // PDF optimization options with enhanced compression settings
     const pdfOptions = {
-      useTemplate: true,              // Whether to use template background
-      imageQuality: 0.85,             // Image compression quality (0.1-1.0)
+      useTemplate: true,              // Whether to use template background (set to false for max compression)
+      imageQuality: 0.75,             // Image compression quality (0.1-1.0) - optimized for size
       enableCompression: true,        // Enable PDF compression
       precision: 2,                   // Limit precision to 2 decimal places
+      compressLevel: 9,               // Maximum compression level (1-9)
       ...options
     };
 
@@ -1605,7 +1629,11 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
     if (additionalData.attachments && additionalData.attachments.length > 0) {
       try {
         console.log('Processing attachments for PDF report...');
-        const modifiedPdfBytes = await appendAttachmentsToReport(doc, additionalData.attachments);
+        const modifiedPdfBytes = await appendAttachmentsToReport(
+          doc, 
+          additionalData.attachments, 
+          additionalData.options?.attachmentCompression
+        );
         
         if (modifiedPdfBytes) {
           // Create a download link for the modified PDF
@@ -1657,6 +1685,101 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
     console.error('Error generating End Product Report PDF:', error);
     throw new Error(`Failed to generate PDF report: ${error.message}`);
   }
+};
+
+// Helper function to compress images for PDF attachments
+const compressImageForPdf = async (arrayBuffer, fileType, options = {}) => {
+  const {
+    maxWidth = 1200,
+    maxHeight = 1600,
+    quality = 0.75
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    try {
+      // Create blob from array buffer
+      const blob = new Blob([arrayBuffer], { type: `image/${fileType}` });
+      
+      // Create image element
+      const img = new Image();
+      
+      img.onload = () => {
+        try {
+          // Create canvas for compression
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions while maintaining aspect ratio
+          let { width, height } = img;
+          
+          if (width > maxWidth || height > maxHeight) {
+            const aspectRatio = width / height;
+            
+            if (width > height) {
+              width = Math.min(width, maxWidth);
+              height = width / aspectRatio;
+            } else {
+              height = Math.min(height, maxHeight);
+              width = height * aspectRatio;
+            }
+          }
+          
+          // Set canvas dimensions
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Set high quality rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          // Draw image on canvas
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to JPEG with compression
+          canvas.toBlob((compressedBlob) => {
+            if (compressedBlob) {
+              // Convert blob to array buffer
+              const reader = new FileReader();
+              reader.onload = () => {
+                const originalSize = arrayBuffer.byteLength;
+                const compressedSize = reader.result.byteLength;
+                const compressionRatio = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
+                
+                console.log(`Image compressed: ${originalSize} bytes → ${compressedSize} bytes (${compressionRatio}% reduction)`);
+                resolve(reader.result);
+              };
+              reader.onerror = reject;
+              reader.readAsArrayBuffer(compressedBlob);
+            } else {
+              reject(new Error('Failed to compress image'));
+            }
+          }, 'image/jpeg', quality);
+          
+        } catch (error) {
+          console.warn('Error during image compression, using original:', error);
+          resolve(arrayBuffer);
+        }
+      };
+      
+      img.onerror = () => {
+        console.warn('Failed to load image for compression, using original');
+        resolve(arrayBuffer);
+      };
+      
+      // Load image from blob
+      const objectUrl = URL.createObjectURL(blob);
+      const originalOnload = img.onload;
+      img.onload = () => {
+        originalOnload(); // Call the actual onload
+        URL.revokeObjectURL(objectUrl);
+      };
+      img.src = objectUrl;
+      
+    } catch (error) {
+      console.warn('Error setting up image compression, using original:', error);
+      resolve(arrayBuffer);
+    }
+  });
 };
 
 // Helper function to load background template with optimization

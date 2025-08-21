@@ -255,12 +255,12 @@ const FormsTab = ({
                               <TableCell>{form.packagingQuantity || '-'}</TableCell>
                               <TableCell>{form.customerOrder || '-'}</TableCell>
                               <TableCell>
-                                {form.documentScanUrl ? (
+                                {form.documentScansUrl ? (
                                   <IconButton 
                                     size="small" 
                                     color="primary" 
                                     component="a" 
-                                    href={form.documentScanUrl} 
+                                    href={form.documentScansUrl} 
                                     target="_blank" 
                                     title="Otwórz skan dokumentu"
                                   >
