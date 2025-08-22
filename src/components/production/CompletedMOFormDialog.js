@@ -327,7 +327,7 @@ const CompletedMOFormDialog = ({
               <thead>
                 <tr>
                   <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Nazwa</th>
-                  <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Rzeczywista ilość</th>
+                  <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Zaplanowana ilość</th>
                   <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Jednostka</th>
                 </tr>
               </thead>
@@ -504,7 +504,7 @@ const CompletedMOFormDialog = ({
           doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
           doc.text('Nazwa', 25, yPos);
-          doc.text('Rzeczywista ilość', 100, yPos);
+          doc.text('Zaplanowana ilość', 100, yPos);
           doc.text('Jednostka', 150, yPos);
           yPos += 6;
           

@@ -31,7 +31,7 @@
             "name": "Name",
             "quantity": "Quantity",
             "unit": "Unit",
-            "actualQuantity": "Actual Quantity",
+            "actualQuantity": "Planned Quantity",
             "consumedQuantity": "Consumed Quantity",
             "unitPrice": "Unit Price",
             "cost": "Cost",

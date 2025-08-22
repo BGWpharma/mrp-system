@@ -3495,7 +3495,7 @@ const TaskDetailsPage = () => {
             <thead>
               <tr>
                 <th>Nazwa</th>
-                <th>Rzeczywista ilość</th>
+                <th>Zaplanowana ilość</th>
                 <th>Jednostka</th>
               </tr>
             </thead>

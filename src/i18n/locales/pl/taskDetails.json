@@ -31,7 +31,7 @@
             "name": "Nazwa",
             "quantity": "Ilość",
             "unit": "Jednostka",
-            "actualQuantity": "Rzeczywista ilość",
+            "actualQuantity": "Zaplanowana ilość",
             "consumedQuantity": "Ilość skonsumowana",
             "unitPrice": "Cena jedn.",
             "cost": "Koszt",
