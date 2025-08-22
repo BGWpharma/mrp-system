@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { setNutritionalComponentWithId } from './nutritionalComponentsService';
 import { ALL_NUTRITIONAL_COMPONENTS } from '../utils/constants';
@@ -123,7 +123,125 @@ export const migrateNutritionalComponents = async () => {
   }
 };
 
+/**
+ * Funkcja do bezpiecznego czyszczenia sierocych wpisów historii produkcji
+ * Znajduje i opcjonalnie usuwa wpisy productionHistory, które nie mają odpowiadających zadań produkcyjnych
+ * @param {boolean} dryRun - Jeśli true, tylko sprawdza bez usuwania (domyślnie true)
+ * @returns {Promise<{success: boolean, orphanedCount: number, deletedCount: number, errors: number}>}
+ */
+export const cleanupOrphanedProductionHistory = async (dryRun = true) => {
+  try {
+    console.log(`[CLEANUP] Rozpoczynam ${dryRun ? 'sprawdzanie' : 'czyszczenie'} sierocych wpisów historii produkcji...`);
+    
+    // Krok 1: Pobierz wszystkie wpisy z historii produkcji
+    const productionHistoryRef = collection(db, 'productionHistory');
+    const historySnapshot = await getDocs(productionHistoryRef);
+    
+    console.log(`[CLEANUP] Znaleziono ${historySnapshot.docs.length} wpisów w historii produkcji`);
+    
+    // Krok 2: Pobierz wszystkie istniejące zadania produkcyjne
+    const productionTasksRef = collection(db, 'productionTasks');
+    const tasksSnapshot = await getDocs(productionTasksRef);
+    
+    const existingTaskIds = new Set(tasksSnapshot.docs.map(doc => doc.id));
+    console.log(`[CLEANUP] Znaleziono ${existingTaskIds.size} istniejących zadań produkcyjnych`);
+    
+    // Krok 3: Znajdź sierocze wpisy (te, które mają taskId nieistniejący w productionTasks)
+    const orphanedEntries = [];
+    
+    for (const historyDoc of historySnapshot.docs) {
+      const historyData = historyDoc.data();
+      const taskId = historyData.taskId;
+      
+      if (!taskId) {
+        console.warn(`[CLEANUP] Wpis historii ${historyDoc.id} nie ma taskId`);
+        orphanedEntries.push({
+          id: historyDoc.id,
+          reason: 'missing_taskId',
+          data: historyData
+        });
+      } else if (!existingTaskIds.has(taskId)) {
+        console.log(`[CLEANUP] Znaleziono sierocza wpis: ${historyDoc.id} (taskId: ${taskId})`);
+        orphanedEntries.push({
+          id: historyDoc.id,
+          reason: 'task_not_exists',
+          taskId: taskId,
+          data: historyData
+        });
+      }
+    }
+    
+    console.log(`[CLEANUP] Znaleziono ${orphanedEntries.length} sierocych wpisów`);
+    
+    // Krok 4: Wyświetl szczegóły sierocych wpisów
+    if (orphanedEntries.length > 0) {
+      console.log('[CLEANUP] Szczegóły sierocych wpisów:');
+      orphanedEntries.forEach((entry, index) => {
+        console.log(`  ${index + 1}. ID: ${entry.id}`);
+        console.log(`     Powód: ${entry.reason}`);
+        if (entry.taskId) {
+          console.log(`     TaskId: ${entry.taskId}`);
+        }
+        if (entry.data.startTime && entry.data.endTime) {
+          const startTime = entry.data.startTime.toDate ? 
+            entry.data.startTime.toDate() : 
+            new Date(entry.data.startTime);
+          console.log(`     Data: ${startTime.toLocaleDateString()}`);
+        }
+        if (entry.data.quantity) {
+          console.log(`     Ilość: ${entry.data.quantity}`);
+        }
+        console.log('');
+      });
+    }
+    
+    let deletedCount = 0;
+    let errors = 0;
+    
+    // Krok 5: Usuń sierocze wpisy (tylko jeśli nie jest to dry run)
+    if (!dryRun && orphanedEntries.length > 0) {
+      console.log(`[CLEANUP] Usuwam ${orphanedEntries.length} sierocych wpisów...`);
+      
+      const deletionPromises = orphanedEntries.map(async (entry) => {
+        try {
+          await deleteDoc(doc(db, 'productionHistory', entry.id));
+          console.log(`[CLEANUP] Usunięto sierocza wpis: ${entry.id}`);
+          deletedCount++;
+        } catch (error) {
+          console.error(`[CLEANUP] Błąd podczas usuwania wpisu ${entry.id}:`, error);
+          errors++;
+        }
+      });
+      
+      await Promise.allSettled(deletionPromises);
+    }
+    
+    const result = {
+      success: true,
+      orphanedCount: orphanedEntries.length,
+      deletedCount,
+      errors,
+      dryRun
+    };
+    
+    console.log(`[CLEANUP] Zakończono ${dryRun ? 'sprawdzanie' : 'czyszczenie'}:`, result);
+    return result;
+    
+  } catch (error) {
+    console.error('[CLEANUP] Błąd podczas czyszczenia sierocych wpisów:', error);
+    return {
+      success: false,
+      orphanedCount: 0,
+      deletedCount: 0,
+      errors: 1,
+      error: error.message,
+      dryRun
+    };
+  }
+};
+
 export default {
   migrateAIMessageLimits,
-  migrateNutritionalComponents
-}; 
+  migrateNutritionalComponents,
+  cleanupOrphanedProductionHistory
+};

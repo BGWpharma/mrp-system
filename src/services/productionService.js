@@ -1488,7 +1488,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       }
       
       // OPTYMALIZACJA 4: Równoległe wykonanie operacji sprawdzania partii i pobierania transakcji
-      const [batchesCheck, transactionsSnapshot, orderRemovalResult] = await Promise.allSettled([
+      const [batchesCheck, transactionsSnapshot, orderRemovalResult, productionHistoryResult] = await Promise.allSettled([
         // Sprawdź partie produktów
         (async () => {
           try {
@@ -1527,6 +1527,29 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             }
           }
           return null;
+        })(),
+        
+        // NOWE: Usuń historię produkcji związaną z tym zadaniem
+        (async () => {
+          try {
+            const productionHistoryRef = collection(db, 'productionHistory');
+            const historyQuery = query(productionHistoryRef, where('taskId', '==', taskId));
+            const historySnapshot = await getDocs(historyQuery);
+            
+            if (historySnapshot.docs.length > 0) {
+              // Usuń wszystkie wpisy historii równolegle
+              const historyDeletions = historySnapshot.docs.map(doc => deleteDoc(doc.ref));
+              await Promise.all(historyDeletions);
+              console.log(`Usunięto ${historySnapshot.docs.length} wpisów historii produkcji dla zadania ${taskId}`);
+              return historySnapshot.docs.length;
+            } else {
+              console.log(`Brak wpisów historii produkcji do usunięcia dla zadania ${taskId}`);
+              return 0;
+            }
+          } catch (error) {
+            console.error(`Błąd podczas usuwania historii produkcji dla zadania ${taskId}:`, error);
+            throw error; // Rzuć błąd dalej, bo chcemy wiedzieć o problemach z usuwaniem historii
+          }
         })()
       ]);
       
@@ -1539,6 +1562,14 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         // Wykonaj usuwanie transakcji równolegle
         await Promise.all(transactionDeletions);
         console.log(`Usunięto ${transactionDeletions.length} transakcji związanych z zadaniem ${taskId}`);
+      }
+      
+      // OPTYMALIZACJA 6: Weryfikuj usunięcie historii produkcji
+      if (productionHistoryResult.status === 'fulfilled') {
+        console.log(`Historia produkcji usunięta pomyślnie: ${productionHistoryResult.value} wpisów`);
+      } else {
+        console.error(`Błąd podczas usuwania historii produkcji:`, productionHistoryResult.reason);
+        // Nie przerywaj usuwania zadania, ale zaloguj błąd
       }
       
       // Na końcu usuń samo zadanie

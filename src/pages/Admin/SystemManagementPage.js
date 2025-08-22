@@ -20,11 +20,13 @@ import {
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  CleaningServices as CleaningIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
-import { migrateAIMessageLimits, migrateNutritionalComponents } from '../../services/migrationService';
+import { migrateAIMessageLimits, migrateNutritionalComponents, cleanupOrphanedProductionHistory } from '../../services/migrationService';
 import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';
@@ -47,6 +49,10 @@ const SystemManagementPage = () => {
   const [componentsMigrationResults, setComponentsMigrationResults] = useState(null);
   const [updatingPrices, setUpdatingPrices] = useState(false);
   const [priceUpdateDays, setPriceUpdateDays] = useState(30);
+  
+  // Nowe stany dla czyszczenia historii produkcji
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupResults, setCleanupResults] = useState(null);
   
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
@@ -115,6 +121,64 @@ const SystemManagementPage = () => {
     }
   };
 
+  // Funkcja do sprawdzenia sierocych wpisów historii produkcji
+  const handleCheckOrphanedHistory = async () => {
+    try {
+      setCleanupLoading(true);
+      setCleanupResults(null);
+      
+      const results = await cleanupOrphanedProductionHistory(true); // dry run
+      
+      if (results.success) {
+        setCleanupResults(results);
+        if (results.orphanedCount > 0) {
+          showNotification(`Znaleziono ${results.orphanedCount} sierocych wpisów historii produkcji. Sprawdź szczegóły w konsoli.`, 'warning');
+        } else {
+          showSuccess('Nie znaleziono sierocych wpisów historii produkcji. Baza danych jest czysta!');
+        }
+      } else {
+        showError(`Błąd podczas sprawdzania: ${results.error}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas sprawdzania sierocych wpisów:', error);
+      showError('Wystąpił błąd podczas sprawdzania. Sprawdź konsolę.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
+
+  // Funkcja do usunięcia sierocych wpisów historii produkcji
+  const handleCleanupOrphanedHistory = async () => {
+    if (!cleanupResults || cleanupResults.orphanedCount === 0) {
+      showError('Najpierw sprawdź sierocze wpisy!');
+      return;
+    }
+
+    const confirmMessage = `Czy na pewno chcesz usunąć ${cleanupResults.orphanedCount} sierocych wpisów historii produkcji? Ta operacja jest nieodwracalna!`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setCleanupLoading(true);
+      
+      const results = await cleanupOrphanedProductionHistory(false); // rzeczywiste usuwanie
+      
+      if (results.success) {
+        showSuccess(`Pomyślnie usunięto ${results.deletedCount} sierocych wpisów historii produkcji.`);
+        setCleanupResults(results);
+      } else {
+        showError(`Błąd podczas czyszczenia: ${results.error}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas czyszczenia sierocych wpisów:', error);
+      showError('Wystąpił błąd podczas czyszczenia. Sprawdź konsolę.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -140,6 +204,82 @@ const SystemManagementPage = () => {
         
         {/* Zarządzanie składnikami odżywczymi */}
         <NutritionalComponentsManager />
+        
+        {/* NOWA SEKCJA: Czyszczenie sierocych wpisów historii produkcji */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              🧹 Czyszczenie historii produkcji
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              To narzędzie znajdzie i usunie wpisy z historii produkcji, które nie mają odpowiadających im zadań produkcyjnych.
+              Takie "sierocze" wpisy mogą powstać gdy zadanie produkcyjne zostało usunięte, ale jego historia nie została oczyszczona.
+              Wpisy te powodują wyświetlanie "Brak MO" w raportach czasu produkcji.
+            </Typography>
+            
+            {cleanupResults && (
+              <Box sx={{ mt: 2 }}>
+                <Alert 
+                  severity={
+                    cleanupResults.orphanedCount === 0 ? "success" :
+                    cleanupResults.dryRun ? "warning" : "info"
+                  }
+                >
+                  {cleanupResults.dryRun ? 'Sprawdzanie zakończone' : 'Czyszczenie zakończone'}. Wyniki:
+                </Alert>
+                <List dense>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Sierocze wpisy: ${cleanupResults.orphanedCount}`} 
+                    />
+                  </ListItem>
+                  {!cleanupResults.dryRun && (
+                    <ListItem>
+                      <ListItemText 
+                        primary={`Usunięto: ${cleanupResults.deletedCount} wpisów`} 
+                      />
+                    </ListItem>
+                  )}
+                  {cleanupResults.errors > 0 && (
+                    <ListItem>
+                      <ListItemText 
+                        primary={`Błędy: ${cleanupResults.errors}`} 
+                        secondary="Sprawdź konsolę dla szczegółów" 
+                      />
+                    </ListItem>
+                  )}
+                </List>
+                {cleanupResults.dryRun && cleanupResults.orphanedCount > 0 && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    Szczegóły sierocych wpisów zostały wyświetlone w konsoli przeglądarki (F12).
+                  </Alert>
+                )}
+              </Box>
+            )}
+          </CardContent>
+          <CardActions>
+            <Button 
+              startIcon={cleanupLoading ? <CircularProgress size={20} /> : <SearchIcon />}
+              variant="outlined" 
+              color="primary"
+              onClick={handleCheckOrphanedHistory}
+              disabled={cleanupLoading}
+              sx={{ mr: 1 }}
+            >
+              {cleanupLoading ? 'Sprawdzanie...' : 'Sprawdź sierocze wpisy'}
+            </Button>
+            
+            <Button 
+              startIcon={cleanupLoading ? <CircularProgress size={20} /> : <CleaningIcon />}
+              variant="contained" 
+              color="warning"
+              onClick={handleCleanupOrphanedHistory}
+              disabled={cleanupLoading || !cleanupResults || cleanupResults.orphanedCount === 0}
+            >
+              {cleanupLoading ? 'Usuwanie...' : `Usuń ${cleanupResults?.orphanedCount || 0} wpisów`}
+            </Button>
+          </CardActions>
+        </Card>
         
         <Card sx={{ mb: 3 }}>
           <CardContent>
@@ -241,7 +381,7 @@ const SystemManagementPage = () => {
           </CardActions>
         </Card>
         
-        {/* Nowa sekcja zarządzania cenami dostawców */}
+        {/* Sekcja zarządzania cenami dostawców */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -315,4 +455,4 @@ const SystemManagementPage = () => {
   );
 };
 
-export default SystemManagementPage; 
+export default SystemManagementPage;

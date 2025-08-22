@@ -24,6 +24,7 @@ import {
   useTheme,
   useMediaQuery
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import {
   BarChart,
   Bar,
@@ -62,6 +63,7 @@ import {
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
   const { t } = useTranslation();
   const { showError } = useNotification();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobileView = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -525,8 +527,26 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                     {format(session.startTime, 'dd.MM.yyyy')}
                   </TableCell>
                   <TableCell>
-                    <Box>
-                      <Typography variant="body2" fontWeight="bold">
+                    <Box
+                      sx={{ 
+                        cursor: 'pointer',
+                        '&:hover': {
+                          '& .task-title': {
+                            textDecoration: 'underline'
+                          }
+                        }
+                      }}
+                      onClick={() => navigate(`/production/tasks/${session.taskId}`)}
+                    >
+                      <Typography 
+                        variant="body2" 
+                        fontWeight="bold"
+                        className="task-title"
+                        sx={{
+                          color: 'primary.main',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
                         {tasksMap[session.taskId]?.moNumber || 'Brak MO'}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
