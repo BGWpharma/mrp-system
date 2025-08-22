@@ -8,7 +8,8 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db } from './firebase/config';
-import { format, isWithinInterval, parseISO } from 'date-fns';
+import { format, isWithinInterval, parseISO, eachDayOfInterval, isWeekend, setHours, setMinutes, isAfter, isBefore, differenceInMinutes } from 'date-fns';
+import plLocale from 'date-fns/locale/pl';
 
 /**
  * Pobiera historię produkcji w określonym zakresie czasu
@@ -256,4 +257,391 @@ export const getTasksForTimeAnalysis = async (taskIds) => {
     console.error('Błąd podczas pobierania zadań:', error);
     return {};
   }
+};
+
+/**
+ * Sprawdza luki w czasach produkcji w zadanym okresie
+ * @param {Date} startDate - Data początkowa analizy
+ * @param {Date} endDate - Data końcowa analizy
+ * @param {Object} options - Opcje analizy
+ * @param {number} options.workStartHour - Godzina rozpoczęcia pracy (domyślnie 6)
+ * @param {number} options.workEndHour - Godzina zakończenia pracy (domyślnie 22)
+ * @param {boolean} options.includeWeekends - Czy uwzględniać weekendy (domyślnie false)
+ * @param {number} options.minGapMinutes - Minimalna długość luki w minutach do raportowania (domyślnie 30)
+ * @returns {Promise<Object>} - Analiza luk w produkcji
+ */
+export const analyzeProductionGaps = async (startDate, endDate, options = {}) => {
+  const {
+    workStartHour = 6,
+    workEndHour = 22,
+    includeWeekends = false,
+    minGapMinutes = 30
+  } = options;
+
+  try {
+    console.log(`[ANALIZA LUK] Rozpoczęcie analizy luk od ${format(startDate, 'dd.MM.yyyy')} do ${format(endDate, 'dd.MM.yyyy')}`);
+    
+    // Pobierz historię produkcji dla zadanego okresu
+    const productionHistory = await getProductionHistoryByDateRange(startDate, endDate);
+    
+    // Pobierz informacje o zadaniach dla tych sesji
+    const taskIds = [...new Set(productionHistory.map(session => session.taskId).filter(Boolean))];
+    const tasksMap = taskIds.length > 0 ? await getTasksForTimeAnalysis(taskIds) : {};
+    
+    // Sortuj sesje według czasu rozpoczęcia
+    const sortedSessions = productionHistory
+      .map(session => {
+        let startTime = session.startTime;
+        if (startTime.toDate) {
+          startTime = startTime.toDate();
+        } else if (typeof startTime === 'string') {
+          startTime = parseISO(startTime);
+        } else if (!(startTime instanceof Date)) {
+          startTime = new Date(startTime);
+        }
+
+        let endTime = session.endTime;
+        if (endTime.toDate) {
+          endTime = endTime.toDate();
+        } else if (typeof endTime === 'string') {
+          endTime = parseISO(endTime);
+        } else if (!(endTime instanceof Date)) {
+          endTime = new Date(endTime);
+        }
+
+        return {
+          ...session,
+          startTime,
+          endTime
+        };
+      })
+      .filter(session => session.startTime && session.endTime)
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+    // Generuj wszystkie dni robocze w zadanym okresie, ale nie dalej niż dzisiaj
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Ustaw na koniec dnia dzisiejszego
+    
+    const effectiveEndDate = endDate > today ? today : endDate;
+    const allDays = eachDayOfInterval({ start: startDate, end: effectiveEndDate });
+    const workDays = includeWeekends ? allDays : allDays.filter(day => !isWeekend(day));
+
+    const gaps = [];
+    const dailyAnalysis = {};
+    let totalWorkMinutes = 0;
+    let totalProductionMinutes = 0;
+    let totalGapMinutes = 0;
+
+    for (const day of workDays) {
+      const dayStart = setMinutes(setHours(day, workStartHour), 0);
+      const dayEnd = setMinutes(setHours(day, workEndHour), 0);
+      const dayKey = format(day, 'yyyy-MM-dd');
+
+      // Oblicz całkowity czas pracy w dniu (w minutach)
+      const workMinutesInDay = (workEndHour - workStartHour) * 60;
+      totalWorkMinutes += workMinutesInDay;
+
+      // Znajdź wszystkie sesje produkcyjne w tym dniu
+      const daysSessions = sortedSessions.filter(session => {
+        return format(session.startTime, 'yyyy-MM-dd') === dayKey;
+      });
+
+      dailyAnalysis[dayKey] = {
+        date: dayKey,
+        formattedDate: format(day, 'dd.MM.yyyy'),
+        dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
+        workStart: format(dayStart, 'HH:mm'),
+        workEnd: format(dayEnd, 'HH:mm'),
+        workStartTime: dayStart,
+        workEndTime: dayEnd,
+        totalWorkMinutes: workMinutesInDay,
+        sessions: daysSessions.length,
+        sessionDetails: daysSessions, // Dodaj szczegóły sesji
+        productionMinutes: 0,
+        gapMinutes: 0,
+        gaps: [],
+        coverage: 0 // procent pokrycia czasu pracy przez produkcję
+      };
+
+      if (daysSessions.length === 0) {
+        // Cały dzień bez produkcji
+        const gap = {
+          type: 'full_day',
+          date: dayKey,
+          formattedDate: format(day, 'dd.MM.yyyy'),
+          dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
+          startTime: dayStart,
+          endTime: dayEnd,
+          formattedStartTime: format(dayStart, 'HH:mm'),
+          formattedEndTime: format(dayEnd, 'HH:mm'),
+          gapMinutes: workMinutesInDay,
+          description: `Brak produkcji przez cały dzień roboczy (${format(dayStart, 'HH:mm')} - ${format(dayEnd, 'HH:mm')})`
+        };
+        
+        gaps.push(gap);
+        dailyAnalysis[dayKey].gaps.push(gap);
+        dailyAnalysis[dayKey].gapMinutes = workMinutesInDay;
+        totalGapMinutes += workMinutesInDay;
+        continue;
+      }
+
+      // Sprawdź lukę przed pierwszą sesją
+      const firstSession = daysSessions[0];
+      if (isAfter(firstSession.startTime, dayStart)) {
+        const gapMinutes = differenceInMinutes(firstSession.startTime, dayStart);
+        if (gapMinutes >= minGapMinutes) {
+          const gap = {
+            type: 'before_first_session',
+            date: dayKey,
+            formattedDate: format(day, 'dd.MM.yyyy'),
+            dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
+            startTime: dayStart,
+            endTime: firstSession.startTime,
+            formattedStartTime: format(dayStart, 'HH:mm'),
+            formattedEndTime: format(firstSession.startTime, 'HH:mm'),
+            gapMinutes,
+            nextSession: {
+              id: firstSession.id,
+              taskId: firstSession.taskId,
+              quantity: firstSession.quantity,
+              task: tasksMap[firstSession.taskId] || null
+            },
+            description: `Luka przed pierwszą sesją produkcyjną (${format(dayStart, 'HH:mm')} - ${format(firstSession.startTime, 'HH:mm')})`
+          };
+          
+          gaps.push(gap);
+          dailyAnalysis[dayKey].gaps.push(gap);
+          dailyAnalysis[dayKey].gapMinutes += gapMinutes;
+          totalGapMinutes += gapMinutes;
+        }
+      }
+
+      // Sprawdź luki między sesjami
+      for (let i = 0; i < daysSessions.length - 1; i++) {
+        const currentSession = daysSessions[i];
+        const nextSession = daysSessions[i + 1];
+        
+        if (isAfter(nextSession.startTime, currentSession.endTime)) {
+          const gapMinutes = differenceInMinutes(nextSession.startTime, currentSession.endTime);
+          if (gapMinutes >= minGapMinutes) {
+            const gap = {
+              type: 'between_sessions',
+              date: dayKey,
+              formattedDate: format(day, 'dd.MM.yyyy'),
+              dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
+              startTime: currentSession.endTime,
+              endTime: nextSession.startTime,
+              formattedStartTime: format(currentSession.endTime, 'HH:mm'),
+              formattedEndTime: format(nextSession.startTime, 'HH:mm'),
+              gapMinutes,
+              beforeSession: {
+                id: currentSession.id,
+                taskId: currentSession.taskId,
+                quantity: currentSession.quantity,
+                task: tasksMap[currentSession.taskId] || null
+              },
+              afterSession: {
+                id: nextSession.id,
+                taskId: nextSession.taskId,
+                quantity: nextSession.quantity,
+                task: tasksMap[nextSession.taskId] || null
+              },
+              description: `Luka między sesjami produkcyjnymi (${format(currentSession.endTime, 'HH:mm')} - ${format(nextSession.startTime, 'HH:mm')})`
+            };
+            
+            gaps.push(gap);
+            dailyAnalysis[dayKey].gaps.push(gap);
+            dailyAnalysis[dayKey].gapMinutes += gapMinutes;
+            totalGapMinutes += gapMinutes;
+          }
+        }
+      }
+
+      // Sprawdź lukę po ostatniej sesji
+      const lastSession = daysSessions[daysSessions.length - 1];
+      if (isBefore(lastSession.endTime, dayEnd)) {
+        const gapMinutes = differenceInMinutes(dayEnd, lastSession.endTime);
+        if (gapMinutes >= minGapMinutes) {
+          const gap = {
+            type: 'after_last_session',
+            date: dayKey,
+            formattedDate: format(day, 'dd.MM.yyyy'),
+            dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
+            startTime: lastSession.endTime,
+            endTime: dayEnd,
+            formattedStartTime: format(lastSession.endTime, 'HH:mm'),
+            formattedEndTime: format(dayEnd, 'HH:mm'),
+            gapMinutes,
+            previousSession: {
+              id: lastSession.id,
+              taskId: lastSession.taskId,
+              quantity: lastSession.quantity,
+              task: tasksMap[lastSession.taskId] || null
+            },
+            description: `Luka po ostatniej sesji produkcyjnej (${format(lastSession.endTime, 'HH:mm')} - ${format(dayEnd, 'HH:mm')})`
+          };
+          
+          gaps.push(gap);
+          dailyAnalysis[dayKey].gaps.push(gap);
+          dailyAnalysis[dayKey].gapMinutes += gapMinutes;
+          totalGapMinutes += gapMinutes;
+        }
+      }
+
+      // Oblicz łączny czas produkcji w dniu
+      daysSessions.forEach(session => {
+        if (session.timeSpent) {
+          dailyAnalysis[dayKey].productionMinutes += session.timeSpent;
+          totalProductionMinutes += session.timeSpent;
+        }
+      });
+
+      // Oblicz pokrycie procentowe
+      dailyAnalysis[dayKey].coverage = dailyAnalysis[dayKey].productionMinutes > 0 
+        ? Math.round((dailyAnalysis[dayKey].productionMinutes / workMinutesInDay) * 100)
+        : 0;
+    }
+
+    // Przygotuj podsumowanie
+    const analysis = {
+      period: {
+        startDate: format(startDate, 'dd.MM.yyyy'),
+        endDate: format(effectiveEndDate, 'dd.MM.yyyy'),
+        originalEndDate: format(endDate, 'dd.MM.yyyy'),
+        limitedToToday: endDate > today,
+        totalDays: workDays.length,
+        weekendsIncluded: includeWeekends
+      },
+      workSchedule: {
+        startHour: workStartHour,
+        endHour: workEndHour,
+        dailyWorkHours: workEndHour - workStartHour,
+        dailyWorkMinutes: (workEndHour - workStartHour) * 60
+      },
+      summary: {
+        totalWorkMinutes,
+        totalWorkHours: Math.round((totalWorkMinutes / 60) * 100) / 100,
+        totalProductionMinutes,
+        totalProductionHours: Math.round((totalProductionMinutes / 60) * 100) / 100,
+        totalGapMinutes,
+        totalGapHours: Math.round((totalGapMinutes / 60) * 100) / 100,
+        overallCoverage: totalWorkMinutes > 0 
+          ? Math.round((totalProductionMinutes / totalWorkMinutes) * 100)
+          : 0,
+        gapsCount: gaps.length,
+        daysWithGaps: Object.values(dailyAnalysis).filter(day => day.gaps.length > 0).length,
+        daysWithoutProduction: Object.values(dailyAnalysis).filter(day => day.sessions === 0).length
+      },
+      gaps: gaps.sort((a, b) => b.gapMinutes - a.gapMinutes), // Sortuj od największych luk
+      dailyAnalysis,
+      recommendations: generateProductionRecommendations(gaps, dailyAnalysis, { workStartHour, workEndHour, minGapMinutes }),
+      tasksMap // Dodaj mapę zadań do wyników
+    };
+
+    console.log(`[ANALIZA LUK] Znaleziono ${gaps.length} luk o łącznej długości ${totalGapMinutes} minut`);
+    console.log(`[ANALIZA LUK] Pokrycie produkcją: ${analysis.summary.overallCoverage}%`);
+    if (endDate > today) {
+      console.log(`[ANALIZA LUK] Okres analizy ograniczony do dzisiaj (${format(today, 'dd.MM.yyyy')}) zamiast ${format(endDate, 'dd.MM.yyyy')}`);
+    }
+
+    return analysis;
+
+  } catch (error) {
+    console.error('Błąd podczas analizy luk w produkcji:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generuje zalecenia na podstawie analizy luk w produkcji
+ * @param {Array} gaps - Lista znalezionych luk
+ * @param {Object} dailyAnalysis - Analiza dzienna
+ * @param {Object} options - Opcje analizy
+ * @returns {Array} - Lista zaleceń
+ */
+const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
+  const recommendations = [];
+  const { workStartHour, workEndHour, minGapMinutes } = options;
+
+  // Sprawdź czy są długie luki
+  const longGaps = gaps.filter(gap => gap.gapMinutes > 120); // Powyżej 2 godzin
+  if (longGaps.length > 0) {
+    recommendations.push({
+      type: 'long_gaps',
+      severity: 'high',
+      title: 'Wykryto długie przerwy w produkcji',
+      description: `Znaleziono ${longGaps.length} luk dłuższych niż 2 godziny. Najdłuższa luka: ${Math.round(Math.max(...longGaps.map(g => g.gapMinutes)) / 60 * 100) / 100} godzin.`,
+      suggestions: [
+        'Sprawdź czy wszystkie sesje produkcyjne zostały prawidłowo zarejestrowane',
+        'Zweryfikuj czy w czasie długich przerw nie odbywała się produkcja',
+        'Rozważ wprowadzenie automatycznego monitorowania czasu pracy'
+      ]
+    });
+  }
+
+  // Sprawdź dni bez produkcji
+  const daysWithoutProduction = Object.values(dailyAnalysis).filter(day => day.sessions === 0);
+  if (daysWithoutProduction.length > 0) {
+    recommendations.push({
+      type: 'no_production_days',
+      severity: 'medium',
+      title: 'Dni bez zarejestrowanej produkcji',
+      description: `Wykryto ${daysWithoutProduction.length} dni roboczych bez żadnej zarejestrowanej produkcji.`,
+      suggestions: [
+        'Sprawdź czy w te dni faktycznie nie odbywała się produkcja',
+        'Zweryfikuj poprawność rejestrowania sesji produkcyjnych',
+        'Upewnij się, że pracownicy prawidłowo korzystają z systemu'
+      ]
+    });
+  }
+
+  // Sprawdź niskie pokrycie
+  const lowCoverageDays = Object.values(dailyAnalysis).filter(day => day.coverage < 50 && day.sessions > 0);
+  if (lowCoverageDays.length > 0) {
+    recommendations.push({
+      type: 'low_coverage',
+      severity: 'medium',
+      title: 'Niskie pokrycie czasu pracy',
+      description: `Wykryto ${lowCoverageDays.length} dni z pokryciem produkcją poniżej 50% czasu pracy.`,
+      suggestions: [
+        'Sprawdź czy czas trwania sesji jest prawidłowo rejestrowany',
+        'Zweryfikuj czy wszystkie czynności produkcyjne są uwzględniane',
+        'Rozważ optymalizację procesów produkcyjnych'
+      ]
+    });
+  }
+
+  // Sprawdź wzorce luk
+  const earlyGaps = gaps.filter(gap => gap.type === 'before_first_session');
+  const lateGaps = gaps.filter(gap => gap.type === 'after_last_session');
+
+  if (earlyGaps.length > 3) {
+    recommendations.push({
+      type: 'early_gaps_pattern',
+      severity: 'low',
+      title: 'Wzorzec opóźnień rozpoczęcia pracy',
+      description: `Wykryto ${earlyGaps.length} przypadków opóźnionego rozpoczęcia produkcji względem godzin pracy zakładu.`,
+      suggestions: [
+        'Sprawdź czy godziny rozpoczęcia pracy są prawidłowo ustawione',
+        'Zweryfikuj procedury przygotowania do produkcji',
+        'Rozważ dostosowanie harmonogramu pracy'
+      ]
+    });
+  }
+
+  if (lateGaps.length > 3) {
+    recommendations.push({
+      type: 'late_gaps_pattern',
+      severity: 'low',
+      title: 'Wzorzec przedwczesnego zakończenia pracy',
+      description: `Wykryto ${lateGaps.length} przypadków przedwczesnego zakończenia produkcji względem godzin pracy zakładu.`,
+      suggestions: [
+        'Sprawdź czy godziny zakończenia pracy są prawidłowo ustawione',
+        'Zweryfikuj procedury kończenia produkcji',
+        'Rozważ optymalizację harmonogramu pracy'
+      ]
+    });
+  }
+
+  return recommendations;
 };

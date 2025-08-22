@@ -174,6 +174,77 @@
       "noMo": "Brak MO",
       "withFilter": "(z filtrem)",
       "taskDeletedLabel": "Zadanie usunięte",
+      "gapAnalysis": {
+        "title": "Analiza luk w produkcji",
+        "description": "Sprawdzenie ciągłości czasu produkcji",
+        "workingHours": "Godziny pracy zakładu",
+        "from": "od",
+        "to": "do",
+        "includeWeekends": "Uwzględnij weekendy",
+        "minGapMinutes": "Minimalna luka (minuty)",
+        "analyze": "Analizuj",
+        "summary": {
+          "title": "Podsumowanie analizy",
+          "period": "Okres analizy",
+          "totalWorkTime": "Łączny czas pracy",
+          "totalProductionTime": "Łączny czas produkcji",
+          "totalGapTime": "Łączny czas luk",
+          "coverage": "Pokrycie produkcją",
+          "gapsFound": "Znalezione luki",
+          "daysWithGaps": "Dni z lukami",
+          "daysWithoutProduction": "Dni bez produkcji"
+        },
+        "gaps": {
+          "title": "Wykryte luki w produkcji",
+          "type": "Typ luki",
+          "date": "Data",
+          "time": "Czas",
+          "duration": "Czas trwania",
+          "relatedTasks": "Powiązane zadania MO",
+          "description": "Opis",
+          "types": {
+            "full_day": "Cały dzień bez produkcji",
+            "before_first_session": "Przed pierwszą sesją",
+            "between_sessions": "Między sesjami",
+            "after_last_session": "Po ostatniej sesji"
+          }
+        },
+        "dailyAnalysis": {
+          "title": "Analiza dzienna",
+          "day": "Dzień",
+          "workTime": "Czas pracy",
+          "productionTime": "Czas produkcji",
+          "gapTime": "Czas luk",
+          "coverage": "Pokrycie",
+          "sessions": "Sesje",
+          "gaps": "Luki"
+        },
+        "recommendations": {
+          "title": "Zalecenia",
+          "severity": {
+            "high": "Wysoki priorytet",
+            "medium": "Średni priorytet",
+            "low": "Niski priorytet"
+          }
+        },
+        "noGapsFound": "Nie znaleziono luk w produkcji dla wybranego okresu",
+        "analysisInProgress": "Analiza w toku...",
+        "errorDuringAnalysis": "Błąd podczas analizy",
+        "limitedToToday": "Analiza ograniczona do dzisiaj (pierwotnie do {{originalEndDate}})",
+        "timeline": {
+          "title": "Timeline produkcji i luk",
+          "legend": {
+            "workTime": "Czas pracy",
+            "production": "Produkcja",
+            "gaps": "Luki"
+          },
+          "noGapsInPeriod": "Brak luk w produkcji dla tego okresu",
+          "coverage": "Pokrycie",
+          "duration": "Czas trwania",
+          "quantity": "Ilość",
+          "product": "Produkt"
+        }
+      },
       "noSessionsForCriteria": "Brak sesji dla wybranych kryteriów",
       "noDataForPeriod": "Brak danych dla wybranego okresu",
       "taskNotExistsError": "To zadanie produkcyjne już nie istnieje w systemie",

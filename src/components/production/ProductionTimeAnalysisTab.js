@@ -22,7 +22,9 @@ import {
   Alert,
   Divider,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -49,7 +51,8 @@ import {
   AccessTime as TimeIcon,
   Assignment as TaskIcon,
   TrendingUp as TrendIcon,
-  Assessment as AnalysisIcon
+  Assessment as AnalysisIcon,
+  Timeline as TimelineIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
@@ -59,6 +62,7 @@ import {
   getTasksForTimeAnalysis,
   formatMinutes
 } from '../../services/productionTimeAnalysisService';
+import ProductionGapAnalysisTab from './ProductionGapAnalysisTab';
 
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
   const { t } = useTranslation('production');
@@ -67,6 +71,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
   const theme = useTheme();
   const isMobileView = useMediaQuery(theme.breakpoints.down('sm'));
 
+  const [selectedTab, setSelectedTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [timeAnalysisStartDate, setTimeAnalysisStartDate] = useState(startDate);
   const [timeAnalysisEndDate, setTimeAnalysisEndDate] = useState(endDate);
@@ -126,8 +131,10 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
 
   // Załaduj dane przy montowaniu komponentu i zmianie dat
   useEffect(() => {
-    fetchTimeAnalysisData();
-  }, [timeAnalysisStartDate, timeAnalysisEndDate]);
+    if (selectedTab === 0) { // Tylko dla zakładki analizy czasu
+      fetchTimeAnalysisData();
+    }
+  }, [timeAnalysisStartDate, timeAnalysisEndDate, selectedTab]);
 
   // Przygotuj dane do wykresów
   const chartData = useMemo(() => {
@@ -243,7 +250,12 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
     };
   }, [filteredSessions]);
 
-  if (loading) {
+  // Handler dla zmiany zakładki
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+  };
+
+  if (loading && selectedTab === 0) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
@@ -251,6 +263,96 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
     );
   }
 
+  return (
+    <Box sx={{ width: '100%' }}>
+      {/* Nawigacja zakładek */}
+      <Paper sx={{ mb: 2 }}>
+        <Tabs 
+          value={selectedTab} 
+          onChange={handleTabChange}
+          variant={isMobileView ? "scrollable" : "standard"}
+          scrollButtons="auto"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab 
+            icon={<TrendIcon />} 
+            label="Analiza czasu" 
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
+          <Tab 
+            icon={<TimelineIcon />} 
+            label="Analiza luk" 
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
+        </Tabs>
+      </Paper>
+
+      {/* Zawartość zakładek */}
+      {selectedTab === 0 && (
+        <TimeAnalysisContent 
+          timeAnalysis={timeAnalysis}
+          filteredAnalysis={filteredAnalysis}
+          filteredSessions={filteredSessions}
+          tasksMap={tasksMap}
+          chartData={chartData}
+          tasksPieData={tasksPieData}
+          chartColors={chartColors}
+          chartType={chartType}
+          setChartType={setChartType}
+          selectedTask={selectedTask}
+          setSelectedTask={setSelectedTask}
+          selectedCustomer={selectedCustomer}
+          setSelectedCustomer={setSelectedCustomer}
+          timeAnalysisStartDate={timeAnalysisStartDate}
+          setTimeAnalysisStartDate={setTimeAnalysisStartDate}
+          timeAnalysisEndDate={timeAnalysisEndDate}
+          setTimeAnalysisEndDate={setTimeAnalysisEndDate}
+          customers={customers}
+          navigate={navigate}
+          isMobileView={isMobileView}
+          showError={showError}
+          t={t}
+        />
+      )}
+
+      {selectedTab === 1 && (
+        <ProductionGapAnalysisTab
+          startDate={startDate}
+          endDate={endDate}
+          isMobile={isMobile}
+        />
+      )}
+    </Box>
+  );
+};
+
+// Komponent zawartości analizy czasu (wydzielony dla przejrzystości)
+const TimeAnalysisContent = ({
+  timeAnalysis,
+  filteredAnalysis,
+  filteredSessions,
+  tasksMap,
+  chartData,
+  tasksPieData,
+  chartColors,
+  chartType,
+  setChartType,
+  selectedTask,
+  setSelectedTask,
+  selectedCustomer,
+  setSelectedCustomer,
+  timeAnalysisStartDate,
+  setTimeAnalysisStartDate,
+  timeAnalysisEndDate,
+  setTimeAnalysisEndDate,
+  customers,
+  navigate,
+  isMobileView,
+  showError,
+  t
+}) => {
   if (!timeAnalysis || timeAnalysis.totalSessions === 0) {
     return (
       <Paper sx={{ p: 3, textAlign: 'center' }}>
