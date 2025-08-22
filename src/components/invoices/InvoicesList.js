@@ -332,7 +332,7 @@ const InvoicesList = () => {
     const statusConfig = {
       'draft': { color: 'default', label: t('invoices.status.draft') },
       'issued': { color: 'primary', label: t('invoices.status.issued') },
-
+      'unpaid': { color: 'error', label: t('invoices.status.unpaid') },
       'paid': { color: 'success', label: t('invoices.status.paid') },
       'partially_paid': { color: 'warning', label: t('invoices.status.partiallyPaid') },
       'overdue': { color: 'error', label: t('invoices.status.overdue') },
@@ -492,7 +492,7 @@ const InvoicesList = () => {
                       <MenuItem value="">{t('invoices.filters.allStatuses')}</MenuItem>
                       <MenuItem value="draft">{t('invoices.status.draft')}</MenuItem>
                       <MenuItem value="issued">{t('invoices.status.issued')}</MenuItem>
-
+                      <MenuItem value="unpaid">{t('invoices.status.unpaid')}</MenuItem>
                       <MenuItem value="paid">{t('invoices.status.paid')}</MenuItem>
                       <MenuItem value="partially_paid">{t('invoices.status.partiallyPaid')}</MenuItem>
                       <MenuItem value="overdue">{t('invoices.status.overdue')}</MenuItem>

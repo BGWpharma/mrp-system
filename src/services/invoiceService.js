@@ -31,7 +31,12 @@ export const getAllInvoices = async (filters = null) => {
       const conditions = [];
       
       if (filters.status && filters.status !== 'all') {
-        conditions.push(where('status', '==', filters.status));
+        // Jeśli filtrujemy po statusie płatności 'unpaid', używamy pola paymentStatus
+        if (filters.status === 'unpaid') {
+          conditions.push(where('paymentStatus', '==', 'unpaid'));
+        } else {
+          conditions.push(where('status', '==', filters.status));
+        }
       }
       
       if (filters.customerId) {
@@ -582,7 +587,7 @@ export const deleteInvoice = async (invoiceId) => {
  */
 export const updateInvoiceStatus = async (invoiceId, status, userId) => {
   try {
-    const validStatuses = ['draft', 'issued', 'paid', 'partially_paid', 'overdue', 'cancelled'];
+    const validStatuses = ['draft', 'issued', 'unpaid', 'paid', 'partially_paid', 'overdue', 'cancelled'];
     
     if (!validStatuses.includes(status)) {
       throw new Error('Nieprawidłowy status faktury');
