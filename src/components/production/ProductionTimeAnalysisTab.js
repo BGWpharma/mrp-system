@@ -61,7 +61,7 @@ import {
 } from '../../services/productionTimeAnalysisService';
 
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('production');
   const { showError } = useNotification();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -181,7 +181,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
         const task = tasksMap[taskData.taskId];
         const displayName = task?.moNumber ? 
           `${task.moNumber}` :
-          `${task?.name || task?.productName || 'Bez nazwy'}`;
+          `${task?.name || task?.productName || t('productionReport.timeAnalysis.noTaskSelected')}`;
         
         return {
           name: displayName,
@@ -194,7 +194,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
       })
       .sort((a, b) => b.value - a.value)
       .slice(0, 8); // Pokaż tylko top 8 zadań
-  }, [timeAnalysis, tasksMap]);
+  }, [timeAnalysis, tasksMap, t]);
 
   // Filtruj sesje według wybranego zadania i klienta
   const filteredSessions = useMemo(() => {
@@ -255,7 +255,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
     return (
       <Paper sx={{ p: 3, textAlign: 'center' }}>
         <Alert severity="info">
-          Brak danych dla wybranego okresu
+          {t('productionReport.timeAnalysis.noDataForPeriod')}
         </Alert>
       </Paper>
     );
@@ -266,13 +266,13 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
       {/* Filtry */}
       <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
         <Typography variant="h6" gutterBottom>
-          Zakres dat
+          {t('productionReport.timeAnalysis.dateRange')}
         </Typography>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={2.4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label={t('production.reports.startDate')}
+                label={t('reports.startDate')}
                 value={timeAnalysisStartDate}
                 onChange={(newDate) => setTimeAnalysisStartDate(newDate)}
                 slotProps={{ 
@@ -287,7 +287,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           <Grid item xs={12} sm={6} md={2.4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label={t('production.reports.endDate')}
+                label={t('reports.endDate')}
                 value={timeAnalysisEndDate}
                 onChange={(newDate) => setTimeAnalysisEndDate(newDate)}
                 slotProps={{ 
@@ -301,20 +301,20 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small">
-              <InputLabel>Zadanie</InputLabel>
+              <InputLabel>{t('productionReport.timeAnalysis.taskFilter')}</InputLabel>
               <Select
                 value={selectedTask}
                 onChange={(e) => setSelectedTask(e.target.value)}
-                label="Zadanie"
+                label={t('productionReport.timeAnalysis.taskFilter')}
               >
                 <MenuItem value="all">
-                  Wszystkie zadania
+                  {t('productionReport.timeAnalysis.allTasks')}
                 </MenuItem>
                 {Object.entries(timeAnalysis.sessionsByTask).map(([taskId, taskData]) => {
                   const task = tasksMap[taskId];
                   const displayName = task?.moNumber ? 
-                    `${task.moNumber} - ${task.name || task.productName || 'Bez nazwy'}` :
-                    `${task?.name || task?.productName || 'Bez nazwy'}`;
+                    `${task.moNumber} - ${task.name || task.productName || t('productionReport.timeAnalysis.noTaskSelected')}` :
+                    `${task?.name || task?.productName || t('productionReport.timeAnalysis.noTaskSelected')}`;
                   
                   return (
                     <MenuItem key={taskId} value={taskId}>
@@ -327,14 +327,14 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small">
-              <InputLabel>Klient</InputLabel>
+              <InputLabel>{t('productionReport.timeAnalysis.customerFilter')}</InputLabel>
               <Select
                 value={selectedCustomer}
                 onChange={(e) => setSelectedCustomer(e.target.value)}
-                label="Klient"
+                label={t('productionReport.timeAnalysis.customerFilter')}
               >
                 <MenuItem value="all">
-                  Wszyscy klienci
+                  {t('productionReport.timeAnalysis.allCustomers')}
                 </MenuItem>
                 {customers && customers.map((customer) => (
                   <MenuItem key={customer.id} value={customer.id}>
@@ -346,15 +346,15 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small">
-              <InputLabel>Typ wykresu</InputLabel>
+              <InputLabel>{t('productionReport.timeAnalysis.chartType')}</InputLabel>
               <Select
                 value={chartType}
                 onChange={(e) => setChartType(e.target.value)}
-                label="Typ wykresu"
+                label={t('productionReport.timeAnalysis.chartType')}
               >
-                <MenuItem value="daily">Rozłożenie dzienne</MenuItem>
-                <MenuItem value="weekly">Rozłożenie tygodniowe</MenuItem>
-                <MenuItem value="monthly">Rozłożenie miesięczne</MenuItem>
+                <MenuItem value="daily">{t('productionReport.timeAnalysis.dailyChart')}</MenuItem>
+                <MenuItem value="weekly">{t('productionReport.timeAnalysis.weeklyChart')}</MenuItem>
+                <MenuItem value="monthly">{t('productionReport.timeAnalysis.monthlyChart')}</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -371,11 +371,11 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                 {formatMinutes(filteredAnalysis.totalTimeMinutes)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Łączny czas
+                {t('productionReport.timeAnalysis.totalTime')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  (z filtrem)
+                  {t('productionReport.timeAnalysis.withFilter')}
                 </Typography>
               )}
             </CardContent>
@@ -389,11 +389,11 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                 {filteredAnalysis.totalSessions}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Liczba sesji
+                {t('productionReport.timeAnalysis.totalSessions')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  (z filtrem)
+                  {t('productionReport.timeAnalysis.withFilter')}
                 </Typography>
               )}
             </CardContent>
@@ -407,11 +407,11 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                 {formatMinutes(filteredAnalysis.averageTimePerSession)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Średni czas na sesję
+                {t('productionReport.timeAnalysis.averageTimePerSession')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  (z filtrem)
+                  {t('productionReport.timeAnalysis.withFilter')}
                 </Typography>
               )}
             </CardContent>
@@ -425,11 +425,11 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                 {formatMinutes(filteredAnalysis.averageTimePerUnit)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Średni czas na jednostkę
+                {t('productionReport.timeAnalysis.averageTimePerUnit')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  (z filtrem)
+                  {t('productionReport.timeAnalysis.withFilter')}
                 </Typography>
               )}
             </CardContent>
@@ -443,7 +443,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Rozkład czasu
+              {t('productionReport.timeAnalysis.charts.timeDistribution')}
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData}>
@@ -453,13 +453,13 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                 <Tooltip 
                   formatter={(value, name) => [
                     name === 'timeHours' ? `${value} h` : value,
-                    name === 'timeHours' ? 'Czas (h)' : 
-                    name === 'sessions' ? 'Sesje' : 'Ilość'
+                    name === 'timeHours' ? t('productionReport.timeAnalysis.charts.timeHours') : 
+                    name === 'sessions' ? t('productionReport.timeAnalysis.charts.sessions') : t('productionReport.timeAnalysis.charts.quantity')
                   ]}
                 />
                 <Legend />
-                <Bar dataKey="timeHours" fill={chartColors[0]} name="Czas (h)" />
-                <Bar dataKey="sessions" fill={chartColors[1]} name="Sesje" />
+                <Bar dataKey="timeHours" fill={chartColors[0]} name={t('productionReport.timeAnalysis.charts.timeHours')} />
+                <Bar dataKey="sessions" fill={chartColors[1]} name={t('productionReport.timeAnalysis.charts.sessions')} />
               </BarChart>
             </ResponsiveContainer>
           </Paper>
@@ -469,7 +469,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Rozłożenie według zadań
+              {t('productionReport.timeAnalysis.taskBreakdown')}
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -498,7 +498,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
       {/* Tabela sesji */}
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" gutterBottom>
-          Lista sesji produkcyjnych
+          {t('productionReport.timeAnalysis.sessionsList')}
           {selectedTask !== 'all' && (
             <Chip 
               label={tasksMap[selectedTask]?.moNumber || tasksMap[selectedTask]?.name || selectedTask} 
@@ -512,12 +512,12 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           <Table size={isMobileView ? "small" : "medium"}>
             <TableHead>
               <TableRow>
-                <TableCell>Data</TableCell>
-                <TableCell>Zadanie MO</TableCell>
-                <TableCell>Początek</TableCell>
-                <TableCell>Koniec</TableCell>
-                <TableCell>Czas</TableCell>
-                <TableCell align="right">Ilość</TableCell>
+                <TableCell>{t('productionReport.timeAnalysis.tableHeaders.date')}</TableCell>
+                <TableCell>{t('productionReport.timeAnalysis.tableHeaders.task')}</TableCell>
+                <TableCell>{t('productionReport.timeAnalysis.tableHeaders.startTime')}</TableCell>
+                <TableCell>{t('productionReport.timeAnalysis.tableHeaders.endTime')}</TableCell>
+                <TableCell>{t('productionReport.timeAnalysis.tableHeaders.timeSpent')}</TableCell>
+                <TableCell align="right">{t('productionReport.timeAnalysis.tableHeaders.quantity')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -527,32 +527,52 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
                     {format(session.startTime, 'dd.MM.yyyy')}
                   </TableCell>
                   <TableCell>
-                    <Box
-                      sx={{ 
-                        cursor: 'pointer',
-                        '&:hover': {
-                          '& .task-title': {
-                            textDecoration: 'underline'
-                          }
+                    {(() => {
+                      const taskExists = tasksMap[session.taskId];
+                      const isClickable = taskExists && tasksMap[session.taskId].moNumber;
+                      
+                      const handleTaskClick = () => {
+                        if (isClickable) {
+                          navigate(`/production/tasks/${session.taskId}`);
+                        } else {
+                          showError(t('productionReport.timeAnalysis.taskNotExistsError'));
                         }
-                      }}
-                      onClick={() => navigate(`/production/tasks/${session.taskId}`)}
-                    >
-                      <Typography 
-                        variant="body2" 
-                        fontWeight="bold"
-                        className="task-title"
-                        sx={{
-                          color: 'primary.main',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        {tasksMap[session.taskId]?.moNumber || 'Brak MO'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {tasksMap[session.taskId]?.name || tasksMap[session.taskId]?.productName || 'Nieznane zadanie'}
-                      </Typography>
-                    </Box>
+                      };
+
+                      return (
+                        <Box
+                          sx={{ 
+                            cursor: isClickable ? 'pointer' : 'default',
+                            '&:hover': isClickable ? {
+                              '& .task-title': {
+                                textDecoration: 'underline'
+                              }
+                            } : {}
+                          }}
+                          onClick={handleTaskClick}
+                        >
+                          <Typography 
+                            variant="body2" 
+                            fontWeight="bold"
+                            className="task-title"
+                            sx={{
+                              color: isClickable ? 'primary.main' : 'text.disabled',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            {tasksMap[session.taskId]?.moNumber || t('productionReport.timeAnalysis.noMo')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {tasksMap[session.taskId]?.name || tasksMap[session.taskId]?.productName || t('productionReport.timeAnalysis.unknownTask')}
+                          </Typography>
+                          {!taskExists && (
+                            <Typography variant="caption" color="error" sx={{ display: 'block', fontStyle: 'italic' }}>
+                              {t('productionReport.timeAnalysis.taskDeletedLabel')}
+                            </Typography>
+                          )}
+                        </Box>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>{session.formattedStartTime}</TableCell>
                   <TableCell>{session.formattedEndTime}</TableCell>
@@ -576,7 +596,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
         {filteredSessions.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 3 }}>
             <Typography color="text.secondary">
-              Brak sesji dla wybranych kryteriów
+              {t('productionReport.timeAnalysis.noSessionsForCriteria')}
             </Typography>
           </Box>
         )}

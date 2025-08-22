@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { setNutritionalComponentWithId } from './nutritionalComponentsService';
 import { ALL_NUTRITIONAL_COMPONENTS } from '../utils/constants';
@@ -143,7 +143,7 @@ export const cleanupOrphanedProductionHistory = async (dryRun = true) => {
     const productionTasksRef = collection(db, 'productionTasks');
     const tasksSnapshot = await getDocs(productionTasksRef);
     
-    const existingTaskIds = new Set(tasksSnapshot.docs.map(doc => doc.id));
+    const existingTaskIds = new Set(tasksSnapshot.docs.map(docItem => docItem.id));
     console.log(`[CLEANUP] Znaleziono ${existingTaskIds.size} istniejących zadań produkcyjnych`);
     
     // Krok 3: Znajdź sierocze wpisy (te, które mają taskId nieistniejący w productionTasks)
@@ -240,8 +240,10 @@ export const cleanupOrphanedProductionHistory = async (dryRun = true) => {
   }
 };
 
-export default {
+const migrationServiceExports = {
   migrateAIMessageLimits,
   migrateNutritionalComponents,
   cleanupOrphanedProductionHistory
 };
+
+export default migrationServiceExports;
