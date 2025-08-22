@@ -263,14 +263,51 @@ const OrderForm = ({ orderId }) => {
             });
           }
           
-          // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia
+          // Przypisz informacje o zadaniach produkcyjnych do pozycji zamówienia - ZOPTYMALIZOWANE BATCH QUERIES
           if (fetchedOrder.productionTasks && fetchedOrder.productionTasks.length > 0 && fetchedOrder.items.length > 0) {
-            const { getTaskById, updateTask } = await import('../../services/productionService');
+            const { updateTask } = await import('../../services/productionService');
+            const { query, collection, where, getDocs } = await import('firebase/firestore');
+            const { db } = await import('../../services/firebase/config');
             
             console.log("Ładowanie zadań produkcyjnych dla zamówienia:", orderId);
             console.log("Elementy zamówienia:", fetchedOrder.items);
             console.log("Zadania produkcyjne:", fetchedOrder.productionTasks);
             
+            // OPTYMALIZACJA 1: Batch pobieranie wszystkich zadań produkcyjnych jednym zapytaniem
+            const taskIds = fetchedOrder.productionTasks.map(task => task.id);
+            const tasksDetailsMap = new Map();
+            
+            // Pobierz wszystkie zadania w batchach (Firebase limit 10 dla where...in)
+            const batchSize = 10;
+            for (let i = 0; i < taskIds.length; i += batchSize) {
+              const batchIds = taskIds.slice(i, i + batchSize);
+              if (batchIds.length > 0) {
+                try {
+                  const tasksQuery = query(
+                    collection(db, 'productionTasks'),
+                    where('__name__', 'in', batchIds)
+                  );
+                  const tasksSnapshot = await getDocs(tasksQuery);
+                  
+                  tasksSnapshot.docs.forEach(doc => {
+                    tasksDetailsMap.set(doc.id, {
+                      id: doc.id,
+                      ...doc.data()
+                    });
+                  });
+                } catch (error) {
+                  console.error(`Błąd podczas pobierania batch zadań produkcyjnych:`, error);
+                }
+              }
+            }
+            
+            console.log(`Pobrano szczegóły ${tasksDetailsMap.size} zadań produkcyjnych w batch queries`);
+            
+            // OPTYMALIZACJA 2: Zbierz wszystkie zadania wymagające aktualizacji
+            const tasksToUpdate = [];
+            const orderUpdates = [];
+            
+            // Przypisz zadania do pozycji zamówienia
             for (let i = 0; i < fetchedOrder.items.length; i++) {
               const item = fetchedOrder.items[i];
               console.log(`Sprawdzanie elementu zamówienia ${i}:`, item);
@@ -284,7 +321,7 @@ const OrderForm = ({ orderId }) => {
               const alternativeTask = !matchingTask ? fetchedOrder.productionTasks.find(task => 
                 task.productName === item.name && 
                 parseFloat(task.quantity) === parseFloat(item.quantity) &&
-                !fetchedOrder.productionTasks.some(t => t.orderItemId === item.id) // upewnij się, że zadanie nie jest już przypisane
+                !fetchedOrder.productionTasks.some(t => t.orderItemId === item.id)
               ) : null;
               
               const taskToUse = matchingTask || alternativeTask;
@@ -292,27 +329,31 @@ const OrderForm = ({ orderId }) => {
               if (taskToUse) {
                 console.log(`Znaleziono dopasowane zadanie dla elementu ${item.name}:`, taskToUse);
                 
-                // Pobierz pełne dane zadania produkcyjnego, aby uzyskać aktualny koszt
-                try {
-                  const taskDetails = await getTaskById(taskToUse.id);
-                  
-                  // Zawsze aktualizuj orderItemId w zadaniu produkcyjnym, aby upewnić się, że jest poprawnie przypisane
+                // Pobierz szczegóły zadania z mapy (już załadowane)
+                const taskDetails = tasksDetailsMap.get(taskToUse.id);
+                
+                if (taskDetails) {
                   const currentOrderItemId = taskDetails.orderItemId;
                   
-                  // Jeśli zadanie ma inny orderItemId niż bieżący element zamówienia, aktualizuj go
+                  // Jeśli zadanie ma inny orderItemId niż bieżący element zamówienia, zaplanuj aktualizację
                   if (currentOrderItemId !== item.id) {
-                    console.log(`Aktualizacja zadania ${taskToUse.id} - przypisywanie orderItemId: ${item.id} (było: ${currentOrderItemId || 'brak'})`);
-                    await updateTask(taskToUse.id, {
-                      orderItemId: item.id,
-                      orderId: orderId,
-                      orderNumber: fetchedOrder.orderNumber || null
-                    }, currentUser?.uid || 'system');
+                    console.log(`Planowanie aktualizacji zadania ${taskToUse.id} - przypisywanie orderItemId: ${item.id} (było: ${currentOrderItemId || 'brak'})`);
                     
-                    // Zaktualizuj orderItemId w zadaniu produkcyjnym w zamówieniu
-                    const { updateProductionTaskInOrder } = await import('../../services/orderService');
-                    await updateProductionTaskInOrder(orderId, taskToUse.id, {
-                      orderItemId: item.id
-                    }, currentUser?.uid || 'system');
+                    tasksToUpdate.push({
+                      taskId: taskToUse.id,
+                      updateData: {
+                        orderItemId: item.id,
+                        orderId: orderId,
+                        orderNumber: fetchedOrder.orderNumber || null
+                      }
+                    });
+                    
+                    orderUpdates.push({
+                      taskId: taskToUse.id,
+                      updateData: {
+                        orderItemId: item.id
+                      }
+                    });
                   }
                   
                   // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
@@ -321,17 +362,15 @@ const OrderForm = ({ orderId }) => {
                     productionTaskId: taskToUse.id,
                     productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
                     productionStatus: taskToUse.status || taskDetails.status,
-                    // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
                     productionCost: taskDetails.totalMaterialCost || taskToUse.totalMaterialCost || 0,
-                    // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
                     fullProductionCost: taskDetails.totalFullProductionCost || taskToUse.totalFullProductionCost || 0
                   };
                   
                   console.log(`Przypisano zadanie produkcyjne ${taskToUse.moNumber} do elementu zamówienia ${item.name} z kosztem ${fetchedOrder.items[i].productionCost}`);
-                } catch (error) {
-                  console.error(`Błąd podczas pobierania szczegółów zadania ${taskToUse.id}:`, error);
+                } else {
+                  console.error(`Nie znaleziono szczegółów zadania ${taskToUse.id} w załadowanych danych`);
                   
-                  // W przypadku błędu, użyj podstawowych danych z matchingTask
+                  // Fallback - użyj podstawowych danych z fetchedOrder.productionTasks
                   fetchedOrder.items[i] = {
                     ...item,
                     productionTaskId: taskToUse.id,
@@ -345,28 +384,89 @@ const OrderForm = ({ orderId }) => {
                 console.log(`Nie znaleziono dopasowanego zadania dla elementu ${item.name}`);
               }
             }
+            
+            // OPTYMALIZACJA 3: Wykonaj wszystkie aktualizacje równolegle
+            if (tasksToUpdate.length > 0 || orderUpdates.length > 0) {
+              console.log(`Wykonywanie ${tasksToUpdate.length} aktualizacji zadań i ${orderUpdates.length} aktualizacji zamówień równolegle`);
+              
+              try {
+                const updatePromises = [];
+                
+                // Dodaj aktualizacje zadań
+                tasksToUpdate.forEach(({ taskId, updateData }) => {
+                  updatePromises.push(
+                    updateTask(taskId, updateData, currentUser?.uid || 'system')
+                  );
+                });
+                
+                // Dodaj aktualizacje zamówień
+                if (orderUpdates.length > 0) {
+                  const { updateProductionTaskInOrder } = await import('../../services/orderService');
+                  orderUpdates.forEach(({ taskId, updateData }) => {
+                    updatePromises.push(
+                      updateProductionTaskInOrder(orderId, taskId, updateData, currentUser?.uid || 'system')
+                    );
+                  });
+                }
+                
+                // Wykonaj wszystkie aktualizacje równolegle
+                await Promise.allSettled(updatePromises);
+                console.log(`Zakończono ${updatePromises.length} aktualizacji równolegle`);
+                
+              } catch (error) {
+                console.error('Błąd podczas równoległych aktualizacji zadań:', error);
+              }
+            }
           }
           
-          // Filtruj powiązane zamówienia zakupu, aby usunąć nieistniejące/usunięte
+          // OPTYMALIZACJA: Batch weryfikacja powiązanych zamówień zakupu
           let validLinkedPOs = [];
           if (fetchedOrder.linkedPurchaseOrders && fetchedOrder.linkedPurchaseOrders.length > 0) {
-            // Sprawdź, które zamówienia zakupu nadal istnieją
-            validLinkedPOs = [];
-            for (const po of fetchedOrder.linkedPurchaseOrders) {
-              try {
-                // Spróbuj pobrać zamówienie zakupu aby sprawdzić czy istnieje
-                const { doc, getDoc } = await import('firebase/firestore');
-                const { db } = await import('../../services/firebase/config');
-                const poDoc = await getDoc(doc(db, 'purchaseOrders', po.id));
-                
-                if (poDoc.exists()) {
-                  validLinkedPOs.push(po);
-                } else {
+            console.log(`Weryfikacja ${fetchedOrder.linkedPurchaseOrders.length} powiązanych zamówień zakupu w batch queries`);
+            
+            try {
+              const { query, collection, where, getDocs } = await import('firebase/firestore');
+              const { db } = await import('../../services/firebase/config');
+              
+              const poIds = fetchedOrder.linkedPurchaseOrders.map(po => po.id);
+              const existingPOsMap = new Map();
+              
+              // Pobierz wszystkie PO w batchach (Firebase limit 10 dla where...in)
+              const batchSize = 10;
+              for (let i = 0; i < poIds.length; i += batchSize) {
+                const batchIds = poIds.slice(i, i + batchSize);
+                if (batchIds.length > 0) {
+                  try {
+                    const poQuery = query(
+                      collection(db, 'purchaseOrders'),
+                      where('__name__', 'in', batchIds)
+                    );
+                    const poSnapshot = await getDocs(poQuery);
+                    
+                    poSnapshot.docs.forEach(doc => {
+                      existingPOsMap.set(doc.id, true);
+                    });
+                  } catch (error) {
+                    console.error(`Błąd podczas pobierania batch zamówień zakupu:`, error);
+                  }
+                }
+              }
+              
+              // Filtruj tylko istniejące PO
+              validLinkedPOs = fetchedOrder.linkedPurchaseOrders.filter(po => {
+                const exists = existingPOsMap.has(po.id);
+                if (!exists) {
                   console.log(`Zamówienie zakupu o ID ${po.id} zostało usunięte i nie będzie wyświetlane`);
                 }
-              } catch (err) {
-                console.error(`Błąd podczas sprawdzania istnienia zamówienia zakupu ${po.id}:`, err);
-              }
+                return exists;
+              });
+              
+              console.log(`Zweryfikowano ${fetchedOrder.linkedPurchaseOrders.length} PO w batch queries, ${validLinkedPOs.length} jest aktywnych`);
+              
+            } catch (error) {
+              console.error('Błąd podczas batch weryfikacji zamówień zakupu:', error);
+              // Fallback - pozostaw wszystkie PO bez weryfikacji
+              validLinkedPOs = fetchedOrder.linkedPurchaseOrders;
             }
           }
           
@@ -388,29 +488,26 @@ const OrderForm = ({ orderId }) => {
           setOrderData(verifiedOrder);
         }
         
-        // Pobierz klientów
-        const fetchedCustomers = await getAllCustomers();
+        // OPTYMALIZACJA: Równoległe pobieranie wszystkich danych referencyjnych
+        console.log('🚀 OrderForm - rozpoczynam równoległe pobieranie danych referencyjnych...');
+        
+        const [fetchedCustomers, servicesResult, fetchedRecipes, fetchedSuppliers] = await Promise.all([
+          getAllCustomers(),
+          getInventoryItemsByCategory('Inne'), // Tylko usługi z kategorii "Inne" zamiast wszystkich produktów
+          getAllRecipes(),
+          getAllSuppliers()
+        ]);
+        
+        // Ustaw pobrane dane
         setCustomers(fetchedCustomers);
-          
-        // OPTYMALIZACJA: Pobierz tylko usługi z kategorii "Inne" zamiast wszystkich produktów
-        // PRZED: getAllInventoryItems() pobierało 1000+ produktów, używaliśmy tylko ~20 usług
-        // TERAZ: getInventoryItemsByCategory('Inne') pobiera tylko ~20 usług bezpośrednio z Firebase
-        console.log('🔍 OrderForm - pobieranie usług z kategorii "Inne"...');
-        const servicesResult = await getInventoryItemsByCategory('Inne');
+        
         const servicesData = servicesResult?.items || [];
         setServices(servicesData);
         
-        console.log('🔍 OrderForm - pobrano', servicesData.length, 'usług (wcześniej pobierano wszystkie produkty)');
-        
-        // USUNIĘTO: setProducts() - produkty magazynowe nie są używane w interfejsie
-        // Tylko pole tekstowe bez AutoComplete, więc niepotrzebne pobieranie z Firebase
-          
-        // Pobierz wszystkie receptury
-        const fetchedRecipes = await getAllRecipes();
         setRecipes(fetchedRecipes);
-        
-        const fetchedSuppliers = await getAllSuppliers();
         setSuppliers(fetchedSuppliers);
+        
+        console.log(`✅ OrderForm - pobrano równolegle: ${fetchedCustomers.length} klientów, ${servicesData.length} usług, ${fetchedRecipes.length} receptur, ${fetchedSuppliers.length} dostawców`);
         
         // Jeśli tworzymy nowe zamówienie na podstawie PO, pokaż informację
         if (fromPO && poNumber) {

@@ -276,52 +276,100 @@ const OrderDetails = () => {
         
         setOrder(verifiedOrder);
         
-        // Jeśli zamówienie ma historię zmian statusu, pobierz dane użytkowników
+        // OPTYMALIZACJA: Równoległe pobieranie wszystkich powiązanych danych
+        console.log('🚀 OrderDetails - rozpoczynam równoległe pobieranie danych powiązanych...');
+        
+        // Przygotuj promises dla równoległego wykonania
+        const fetchPromises = [];
+        
+        // 1. Dane użytkowników (jeśli potrzebne)
+        let userNamesPromise = null;
         if (verifiedOrder.statusHistory && verifiedOrder.statusHistory.length > 0) {
           const userIds = verifiedOrder.statusHistory.map(change => change.changedBy).filter(id => id);
           const uniqueUserIds = [...new Set(userIds)];
-          const names = await getUsersDisplayNames(uniqueUserIds);
-          setUserNames(names);
+          if (uniqueUserIds.length > 0) {
+            userNamesPromise = getUsersDisplayNames(uniqueUserIds);
+            fetchPromises.push(userNamesPromise);
+          }
         }
-
-        // Pobierz faktury powiązane z zamówieniem (osobno, po ustawieniu głównych danych)
-        setTimeout(async () => {
-          try {
-            setLoadingInvoices(true);
-            const orderInvoices = await getInvoicesByOrderId(orderId);
-            const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
-            setInvoices(verifiedInvoices);
-            
-            // Pobierz zafakturowane kwoty dla pozycji zamówienia
-            const invoicedData = await getInvoicedAmountsByOrderItems(orderId);
-            setInvoicedAmounts(invoicedData);
-            
-            if (removedInvoicesCount > 0) {
-              showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
+        
+        // 2. Faktury i zafakturowane kwoty
+        setLoadingInvoices(true);
+        const invoicesPromise = getInvoicesByOrderId(orderId);
+        fetchPromises.push(invoicesPromise);
+        
+        // 3. Dokumenty CMR
+        setLoadingCmrDocuments(true);
+        const cmrDocumentsPromise = getCmrDocumentsByOrderId(orderId);
+        fetchPromises.push(cmrDocumentsPromise);
+        
+        try {
+          // Wykonaj wszystkie zapytania równolegle
+          const results = await Promise.allSettled(fetchPromises);
+          
+          let resultIndex = 0;
+          
+          // Przetwórz wyniki - nazwy użytkowników
+          if (userNamesPromise) {
+            const userNamesResult = results[resultIndex++];
+            if (userNamesResult.status === 'fulfilled') {
+              setUserNames(userNamesResult.value);
+              console.log('✅ OrderDetails - pobrano nazwy użytkowników');
+            } else {
+              console.error('Błąd podczas pobierania nazw użytkowników:', userNamesResult.reason);
             }
-          } catch (error) {
-            console.error('Błąd podczas pobierania faktur:', error);
-          } finally {
-            setLoadingInvoices(false);
           }
-        }, 100);
-
-        // Pobierz dokumenty CMR powiązane z zamówieniem
-        setTimeout(async () => {
-          try {
-            setLoadingCmrDocuments(true);
-            const orderCmrDocuments = await getCmrDocumentsByOrderId(orderId);
-            const { cmrDocuments: verifiedCmrDocuments, removedCount: removedCmrCount } = await verifyCmrDocuments(orderCmrDocuments);
-            setCmrDocuments(verifiedCmrDocuments);
-            if (removedCmrCount > 0) {
-              showInfo(`Usunięto ${removedCmrCount} nieistniejących dokumentów CMR z listy`);
+          
+          // Przetwórz wyniki - faktury
+          const invoicesResult = results[resultIndex++];
+          if (invoicesResult.status === 'fulfilled') {
+            try {
+              const orderInvoices = invoicesResult.value;
+              const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
+              setInvoices(verifiedInvoices);
+              
+              // Pobierz zafakturowane kwoty (używając już pobranych faktur)
+              const invoicedData = await getInvoicedAmountsByOrderItems(orderId, verifiedInvoices);
+              setInvoicedAmounts(invoicedData);
+              
+              if (removedInvoicesCount > 0) {
+                showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
+              }
+              console.log('✅ OrderDetails - pobrano faktury i zafakturowane kwoty');
+            } catch (error) {
+              console.error('Błąd podczas przetwarzania faktur:', error);
             }
-          } catch (error) {
-            console.error('Błąd podczas pobierania dokumentów CMR:', error);
-          } finally {
-            setLoadingCmrDocuments(false);
+          } else {
+            console.error('Błąd podczas pobierania faktur:', invoicesResult.reason);
           }
-        }, 150);
+          setLoadingInvoices(false);
+          
+          // Przetwórz wyniki - dokumenty CMR
+          const cmrResult = results[resultIndex++];
+          if (cmrResult.status === 'fulfilled') {
+            try {
+              const orderCmrDocuments = cmrResult.value;
+              const { cmrDocuments: verifiedCmrDocuments, removedCount: removedCmrCount } = await verifyCmrDocuments(orderCmrDocuments);
+              setCmrDocuments(verifiedCmrDocuments);
+              if (removedCmrCount > 0) {
+                showInfo(`Usunięto ${removedCmrCount} nieistniejących dokumentów CMR z listy`);
+              }
+              console.log('✅ OrderDetails - pobrano dokumenty CMR');
+            } catch (error) {
+              console.error('Błąd podczas przetwarzania dokumentów CMR:', error);
+            }
+          } else {
+            console.error('Błąd podczas pobierania dokumentów CMR:', cmrResult.reason);
+          }
+          setLoadingCmrDocuments(false);
+          
+          console.log('🎉 OrderDetails - zakończono równoległe pobieranie wszystkich danych powiązanych');
+          
+        } catch (error) {
+          console.error('Błąd podczas równoległego pobierania danych powiązanych:', error);
+          setLoadingInvoices(false);
+          setLoadingCmrDocuments(false);
+        }
       } catch (error) {
         // Sprawdź, czy nie jesteśmy na stronie zamówienia zakupowego
         if (!location.pathname.includes('/purchase-orders/')) {

@@ -1650,22 +1650,27 @@ export const getInvoicePayments = async (invoiceId) => {
 /**
  * Oblicza zafakturowane kwoty dla pozycji zamówienia
  * @param {string} orderId - ID zamówienia
+ * @param {Array} [preloadedInvoices] - Opcjonalna lista już pobranych faktur (optymalizacja)
+ * @param {Object} [preloadedOrderData] - Opcjonalne dane zamówienia już pobrane (optymalizacja)
  * @returns {Promise<Object>} Obiekt z zafakturowanymi kwotami dla każdej pozycji
  */
-export const getInvoicedAmountsByOrderItems = async (orderId) => {
+export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices = null, preloadedOrderData = null) => {
   try {
-    const invoices = await getInvoicesByOrderId(orderId);
+    // OPTYMALIZACJA: Użyj już pobranych faktur jeśli dostępne
+    const invoices = preloadedInvoices || await getInvoicesByOrderId(orderId);
     const invoicedAmounts = {};
     
-    // Pobierz dane zamówienia aby móc lepiej dopasować pozycje
-    let orderData = null;
-    try {
-      const orderDoc = await getDoc(doc(db, 'orders', orderId));
-      if (orderDoc.exists()) {
-        orderData = orderDoc.data();
+    // OPTYMALIZACJA: Użyj już pobranych danych zamówienia jeśli dostępne
+    let orderData = preloadedOrderData;
+    if (!orderData) {
+      try {
+        const orderDoc = await getDoc(doc(db, 'orders', orderId));
+        if (orderDoc.exists()) {
+          orderData = orderDoc.data();
+        }
+      } catch (error) {
+        console.warn('Nie można pobrać danych zamówienia dla lepszego dopasowania pozycji:', error);
       }
-    } catch (error) {
-      console.warn('Nie można pobrać danych zamówienia dla lepszego dopasowania pozycji:', error);
     }
     
     invoices.forEach((invoice, invoiceIndex) => {
