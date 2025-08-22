@@ -250,12 +250,12 @@ const createDarkTheme = () => {
         contrastText: '#ffffff',
       },
       background: {
-        default: '#111827',
-        paper: '#182136',
-        darker: '#0a101f',
-        card: '#1e293b',
-        dialog: '#1e293b',
-        tooltip: '#1e293b',
+        default: 'transparent',
+        paper: 'rgba(31, 41, 55, 0.8)',
+        darker: '#0f172a',
+        card: 'rgba(30, 41, 59, 0.8)',
+        dialog: 'rgba(30, 41, 59, 0.9)',
+        tooltip: 'rgba(30, 41, 59, 0.9)',
       },
       text: {
         primary: '#ffffff',
@@ -282,14 +282,17 @@ const createDarkTheme = () => {
         root: {
           boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.2)',
           backgroundImage: 'none',
-          backgroundColor: '#182136',
+          backgroundColor: 'rgba(31, 41, 55, 0.9)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
         },
       },
     },
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#182136',
+          backgroundColor: 'rgba(31, 41, 55, 0.9)',
+          backdropFilter: 'blur(8px)',
           backgroundImage: 'none',
           borderRight: '1px solid rgba(255, 255, 255, 0.05)',
         },
@@ -299,8 +302,16 @@ const createDarkTheme = () => {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: '#1e293b',
+          backgroundColor: 'rgba(31, 41, 55, 0.8)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
           boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.15)',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.25)',
+            borderColor: 'rgba(59, 130, 246, 0.3)',
+          },
         },
       },
     },
@@ -349,15 +360,19 @@ const createDarkTheme = () => {
     MuiTableContainer: {
       styleOverrides: {
         root: {
-          backgroundColor: '#1e293b',
+          backgroundColor: 'rgba(30, 41, 59, 0.8)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#1e293b',
+          backgroundColor: 'rgba(30, 41, 59, 0.9)',
+          backdropFilter: 'blur(8px)',
           backgroundImage: 'none',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
         },
       },
     },
@@ -477,11 +492,11 @@ const createLightTheme = () => {
         contrastText: '#ffffff',
     },
     background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
+      default: 'transparent',
+      paper: 'rgba(255, 255, 255, 0.8)',
       darker: '#eaeaea',
-        card: '#ffffff',
-        dialog: '#ffffff',
+        card: 'rgba(255, 255, 255, 0.8)',
+        dialog: 'rgba(255, 255, 255, 0.9)',
         tooltip: '#616161',
     },
     text: {
@@ -509,7 +524,9 @@ const createLightTheme = () => {
         root: {
           boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.1)',
           backgroundImage: 'none',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
           color: 'rgba(0, 0, 0, 0.87)',
         },
       },
@@ -517,7 +534,8 @@ const createLightTheme = () => {
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#ffffff',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
           backgroundImage: 'none',
           borderRight: '1px solid rgba(0, 0, 0, 0.08)',
         },
@@ -527,7 +545,16 @@ const createLightTheme = () => {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(0, 0, 0, 0.05)',
           boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.08)',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.15)',
+            borderColor: 'rgba(25, 118, 210, 0.3)',
+          },
         },
       },
     },
@@ -576,15 +603,19 @@ const createLightTheme = () => {
     MuiTableContainer: {
       styleOverrides: {
         root: {
-          backgroundColor: '#ffffff',
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(0, 0, 0, 0.05)',
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundColor: '#ffffff',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
           backgroundImage: 'none',
+          border: '1px solid rgba(0, 0, 0, 0.05)',
         },
       },
     },

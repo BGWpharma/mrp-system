@@ -98,6 +98,7 @@ import AnalyticsDashboard from './pages/Analytics/Dashboard';
 import AIAssistantPage from './pages/AIAssistant/AIAssistantPage';
 
 // Common Components
+import BackgroundEffects from './components/common/BackgroundEffects';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import PrivateRoute from './components/common/PrivateRoute';
@@ -374,9 +375,12 @@ function PrivateLayout({ children }) {
   return (
     <PrivateRoute>
       <div className={`layout ${isOpen && isMobile ? 'sidebar-open' : ''}`} style={{ 
-        backgroundColor: mode === 'dark' ? '#111827' : '#f5f5f5', 
-        color: mode === 'dark' ? 'white' : 'rgba(0, 0, 0, 0.87)'
+        backgroundColor: 'transparent', 
+        color: mode === 'dark' ? 'white' : 'rgba(0, 0, 0, 0.87)',
+        position: 'relative',
+        minHeight: '100vh'
       }}>
+        <BackgroundEffects />
         <Navbar />
         <div className="content-container">
           <Sidebar onToggle={handleSidebarToggle} />
