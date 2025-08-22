@@ -38,6 +38,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { preciseCompare } from '../../utils/mathUtils';
 import { formatCurrency } from '../../utils/formatters';
 
 const PaymentsSection = ({ invoice, onPaymentChange }) => {
@@ -228,7 +229,8 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
     if (requiredAdvancePercentage > 0) {
       const requiredAdvanceAmount = getRequiredAdvancePayment();
       
-      if (totalSettled >= requiredAdvanceAmount) {
+      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+      if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
         return <Chip label="Opłacona (przedpłata)" color="success" size="small" />;
       } else if (totalSettled > 0) {
         return <Chip label="Częściowo opłacona" color="warning" size="small" />;
@@ -236,8 +238,8 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         return <Chip label="Nieopłacona" color="error" size="small" />;
       }
     } else {
-      // Standardowa logika
-      if (totalSettled >= invoiceTotal) {
+      // Standardowa logika z tolerancją dla błędów precyzji
+      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
         return <Chip label="Opłacona" color="success" size="small" />;
       } else if (totalSettled > 0) {
         return <Chip label="Częściowo opłacona" color="warning" size="small" />;

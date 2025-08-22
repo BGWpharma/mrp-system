@@ -50,6 +50,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { preciseCompare } from '../../utils/mathUtils';
 import { format } from 'date-fns';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
@@ -407,7 +408,8 @@ const InvoiceDetails = () => {
                       const invoiceTotal = parseFloat(invoice.total || 0);
                       const totalSettled = totalPaid + advancePayments;
                       
-                      if (totalSettled >= invoiceTotal) {
+                      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+                      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
                         return 'Opłacona';
                       } else if (totalSettled > 0) {
                         return 'Częściowo opłacona';

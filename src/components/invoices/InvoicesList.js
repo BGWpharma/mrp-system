@@ -50,6 +50,7 @@ import {
   getAvailableProformaAmount,
   calculateRequiredAdvancePayment
 } from '../../services/invoiceService';
+import { preciseCompare } from '../../utils/mathUtils';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
@@ -765,7 +766,8 @@ const InvoicesList = () => {
                                 if (requiredAdvancePercentage > 0) {
                                   const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
                                   
-                                  if (totalSettled >= requiredAdvanceAmount) {
+                                  // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+                                  if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
                                     calculatedStatus = 'paid';
                                   } else if (totalSettled > 0) {
                                     calculatedStatus = 'partially_paid';
@@ -773,8 +775,8 @@ const InvoicesList = () => {
                                     calculatedStatus = 'unpaid';
                                   }
                                 } else {
-                                  // Standardowa logika
-                                  if (totalSettled >= invoiceTotal) {
+                                  // Standardowa logika z tolerancją dla błędów precyzji
+                                  if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
                                     calculatedStatus = 'paid';
                                   } else if (totalSettled > 0) {
                                     calculatedStatus = 'partially_paid';

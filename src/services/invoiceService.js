@@ -15,6 +15,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase/config';
 import { formatDateForInput } from '../utils/dateUtils';
+import { preciseCompare, preciseIsLessOrEqual } from '../utils/mathUtils';
 
 const INVOICES_COLLECTION = 'invoices';
 const INVOICE_ITEMS_COLLECTION = 'invoiceItems';
@@ -912,7 +913,8 @@ export const hasRequiredAdvancePayment = (invoice) => {
   
   const totalSettled = totalPaid + advancePayments;
   
-  return totalSettled >= requiredAmount;
+  // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+  return preciseCompare(totalSettled, requiredAmount, 0.01) >= 0;
 };
 
 /**
@@ -972,15 +974,16 @@ export const addPaymentToInvoice = async (invoiceId, paymentData, userId) => {
     if (requiredAdvancePercentage > 0) {
       const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
       
-      if (totalSettled >= requiredAdvanceAmount) {
+      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+      if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
         paymentStatus = 'paid';
         paymentDate = newPayment.date;
       } else if (totalSettled > 0) {
         paymentStatus = 'partially_paid';
       }
     } else {
-      // Standardowa logika
-      if (totalSettled >= invoiceTotal) {
+      // Standardowa logika z tolerancją dla błędów precyzji
+      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
         paymentStatus = 'paid';
         paymentDate = newPayment.date;
       } else if (totalSettled > 0) {
@@ -1051,7 +1054,8 @@ export const removePaymentFromInvoice = async (invoiceId, paymentId, userId) => 
     if (requiredAdvancePercentage > 0) {
       const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
       
-      if (totalSettled >= requiredAdvanceAmount) {
+      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+      if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
         paymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności
         if (updatedPayments.length > 0) {
@@ -1064,8 +1068,8 @@ export const removePaymentFromInvoice = async (invoiceId, paymentId, userId) => 
         paymentStatus = 'partially_paid';
       }
     } else {
-      // Standardowa logika
-      if (totalSettled >= invoiceTotal) {
+      // Standardowa logika z tolerancją dla błędów precyzji
+      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
         paymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności
         if (updatedPayments.length > 0) {
@@ -1157,7 +1161,8 @@ export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymen
     if (requiredAdvancePercentage > 0) {
       const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
       
-      if (totalSettled >= requiredAdvanceAmount) {
+      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+      if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
         paymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności
         const latestPayment = updatedPayments.reduce((latest, payment) => 
@@ -1168,8 +1173,8 @@ export const updatePaymentInInvoice = async (invoiceId, paymentId, updatedPaymen
         paymentStatus = 'partially_paid';
       }
     } else {
-      // Standardowa logika
-      if (totalSettled >= invoiceTotal) {
+      // Standardowa logika z tolerancją dla błędów precyzji
+      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
         paymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności
         const latestPayment = updatedPayments.reduce((latest, payment) => 
@@ -1246,8 +1251,8 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
     if (requiredAdvancePercentage > 0) {
       const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
       
-      // Jeśli wymagana jest przedpłata, uznaj za opłaconą gdy osiągnięto wymaganą kwotę
-      if (totalSettled >= requiredAdvanceAmount) {
+      // Jeśli wymagana jest przedpłata, uznaj za opłaconą gdy osiągnięto wymaganą kwotę z tolerancją 0.01 EUR
+      if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
         newPaymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
         if (currentPayments.length > 0) {
@@ -1260,8 +1265,8 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
         newPaymentStatus = 'partially_paid';
       }
     } else {
-      // Standardowa logika gdy nie ma wymaganej przedpłaty
-      if (totalSettled >= invoiceTotal) {
+      // Standardowa logika gdy nie ma wymaganej przedpłaty z tolerancją dla błędów precyzji
+      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
         newPaymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
         if (currentPayments.length > 0) {
