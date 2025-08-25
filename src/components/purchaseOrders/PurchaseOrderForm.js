@@ -2536,25 +2536,6 @@ const PurchaseOrderForm = ({ orderId }) => {
               </FormControl>
             </Grid>
             
-            {/* Waluta */}
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>{t('purchaseOrders.form.currency')}</InputLabel>
-                <Select
-                  name="currency"
-                  value={poData.currency}
-                  onChange={handleChange}
-                  label={t('purchaseOrders.form.currency')}
-                >
-                  <MenuItem value="EUR">EUR</MenuItem>
-                  <MenuItem value="PLN">PLN</MenuItem>
-                  <MenuItem value="USD">USD</MenuItem>
-                  <MenuItem value="GBP">GBP</MenuItem>
-                  <MenuItem value="CHF">CHF</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
             {/* Data zamówienia */}
             <Grid item xs={12} md={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
