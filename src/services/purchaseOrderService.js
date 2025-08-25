@@ -1130,10 +1130,19 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     // Sprawdź czy zaktualizowano pozycje z cenami jednostkowymi
     const hasItemsUpdate = updatedData.items !== undefined;
     
+    console.log(`🔍 [PO_UPDATE_DEBUG] Aktualizacja PO ${purchaseOrderId}:`, {
+      hasItemsUpdate,
+      hasOldData: !!oldPoData,
+      oldItemsCount: oldPoData?.items?.length || 0,
+      newItemsCount: newPoData?.items?.length || 0
+    });
+    
     // Jeśli zaktualizowano pozycje, sprawdź zmiany cen jednostkowych
     if (hasItemsUpdate) {
-      console.log('Wykryto aktualizację pozycji, sprawdzam zmiany cen jednostkowych');
+      console.log('🔍 [PO_UPDATE_DEBUG] Wykryto aktualizację pozycji, sprawdzam zmiany cen jednostkowych');
       await updateBatchBasePricesOnUnitPriceChange(purchaseOrderId, oldPoData, newPoData, userId || 'system');
+    } else {
+      console.log('🔍 [PO_UPDATE_DEBUG] Brak aktualizacji pozycji - pomijam sprawdzanie zmian cen');
     }
     
     // Jeśli zaktualizowano dodatkowe koszty, zaktualizuj również powiązane partie
@@ -1862,10 +1871,11 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
       additionalCostsGrossTotal = parseFloat(poData.additionalCosts) || 0;
     }
     
-    // Jeśli brak dodatkowych kosztów, nie ma potrzeby aktualizacji
+    // Zawsze kontynuuj aktualizację - jeśli additionalCostsGrossTotal = 0, 
+    // to zresetujemy ceny partii do wartości bazowych
+    console.log(`Dodatkowe koszty do rozliczenia w zamówieniu ${purchaseOrderId}: ${additionalCostsGrossTotal}`);
     if (additionalCostsGrossTotal <= 0) {
-      console.log(`Brak dodatkowych kosztów do rozliczenia w zamówieniu ${purchaseOrderId}`);
-      return;
+      console.log(`Resetowanie cen partii do wartości bazowych (dodatkowe koszty = 0)`);
     }
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
@@ -1957,19 +1967,25 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
         ? batchData.baseUnitPrice 
         : batchData.unitPrice || 0;
       
-      // Oblicz proporcjonalny udział dodatkowych kosztów dla tej partii
-      const batchProportion = batchInitialQuantity / totalInitialQuantity;
-      const batchAdditionalCostTotal = additionalCostsGrossTotal * batchProportion;
+      let additionalCostPerUnit = 0;
+      let newUnitPrice = parseFloat(baseUnitPrice);
       
-      // Oblicz dodatkowy koszt na jednostkę dla tej konkretnej partii
-      const additionalCostPerUnit = batchInitialQuantity > 0 
-        ? batchAdditionalCostTotal / batchInitialQuantity 
-        : 0;
+      // Oblicz dodatkowy koszt tylko jeśli są dodatkowe koszty i ilość całkowita > 0
+      if (additionalCostsGrossTotal > 0 && totalInitialQuantity > 0) {
+        // Oblicz proporcjonalny udział dodatkowych kosztów dla tej partii
+        const batchProportion = batchInitialQuantity / totalInitialQuantity;
+        const batchAdditionalCostTotal = additionalCostsGrossTotal * batchProportion;
+        
+        // Oblicz dodatkowy koszt na jednostkę dla tej konkretnej partii
+        additionalCostPerUnit = batchInitialQuantity > 0 
+          ? batchAdditionalCostTotal / batchInitialQuantity 
+          : 0;
+        
+        // Ustawienie nowej ceny jednostkowej: cena bazowa + koszt dodatkowy na jednostkę
+        newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
+      }
       
-      // Ustawienie nowej ceny jednostkowej: cena bazowa + koszt dodatkowy na jednostkę
-      const newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
-      
-      console.log(`Aktualizuję partię ${batchData.id}: initialQuantity=${batchInitialQuantity}, proportion=${batchProportion}, additionalCostTotal=${batchAdditionalCostTotal}, additionalCostPerUnit=${additionalCostPerUnit}, basePrice=${baseUnitPrice}, newPrice=${newUnitPrice}`);
+      console.log(`Aktualizuję partię ${batchData.id}: initialQuantity=${batchInitialQuantity}, additionalCostPerUnit=${additionalCostPerUnit}, basePrice=${baseUnitPrice}, newPrice=${newUnitPrice}`);
       
       // Aktualizuj dokument partii
       updatePromises.push(updateDoc(batchRef, {
@@ -2039,7 +2055,9 @@ export const clearAllCache = () => {
  */
 const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData, newPoData, userId) => {
   try {
-    console.log(`Sprawdzam zmiany cen jednostkowych dla zamówienia ${purchaseOrderId}`);
+    console.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam zmiany cen jednostkowych dla zamówienia ${purchaseOrderId}`);
+    console.log(`🔍 [BATCH_PRICE_DEBUG] Stare dane PO:`, { itemsCount: oldPoData.items?.length || 0, items: oldPoData.items?.map(i => ({ id: i.id, name: i.name, unitPrice: i.unitPrice })) });
+    console.log(`🔍 [BATCH_PRICE_DEBUG] Nowe dane PO:`, { itemsCount: newPoData.items?.length || 0, items: newPoData.items?.map(i => ({ id: i.id, name: i.name, unitPrice: i.unitPrice })) });
     
     // Sprawdź czy są zmiany cen jednostkowych w pozycjach
     const oldItems = oldPoData.items || [];
@@ -2049,6 +2067,8 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     const itemsWithPriceChanges = [];
     
     for (const newItem of newItems) {
+      console.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam pozycję:`, { id: newItem.id, name: newItem.name, unitPrice: newItem.unitPrice });
+      
       const oldItem = oldItems.find(item => 
         item.id === newItem.id || 
         item.inventoryItemId === newItem.inventoryItemId ||
@@ -2059,25 +2079,50 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         const oldUnitPrice = parseFloat(oldItem.unitPrice) || 0;
         const newUnitPrice = parseFloat(newItem.unitPrice) || 0;
         
-        // Sprawdź czy cena się zmieniła (z tolerancją na błędy zaokrąglenia)
-        if (Math.abs(oldUnitPrice - newUnitPrice) > 0.0001) {
-          itemsWithPriceChanges.push({
+        console.log(`🔍 [BATCH_PRICE_DEBUG] Znaleziono starą pozycję:`, { 
+          oldId: oldItem.id, 
+          oldName: oldItem.name, 
+          oldUnitPrice, 
+          newUnitPrice, 
+          difference: newUnitPrice - oldUnitPrice,
+          absDifference: Math.abs(oldUnitPrice - newUnitPrice)
+        });
+        
+        // Sprawdź czy cena się zmieniła (bez tolerancji - wykryj każdą zmianę)
+        if (oldUnitPrice !== newUnitPrice) {
+          const priceChangeData = {
             ...newItem,
             oldUnitPrice,
             newUnitPrice,
             priceDifference: newUnitPrice - oldUnitPrice
-          });
+          };
           
-          console.log(`Wykryto zmianę ceny dla pozycji ${newItem.name}: ${oldUnitPrice} -> ${newUnitPrice} (różnica: ${newUnitPrice - oldUnitPrice})`);
+          itemsWithPriceChanges.push(priceChangeData);
+          
+          console.log(`✅ [BATCH_PRICE_DEBUG] Wykryto zmianę ceny dla pozycji ${newItem.name}: ${oldUnitPrice} -> ${newUnitPrice} (różnica: ${newUnitPrice - oldUnitPrice})`);
+          console.log(`✅ [BATCH_PRICE_DEBUG] Dane zmiany:`, priceChangeData);
+        } else {
+          console.log(`⚪ [BATCH_PRICE_DEBUG] Brak zmiany ceny dla pozycji ${newItem.name} (${oldUnitPrice} -> ${newUnitPrice})`);
         }
+      } else {
+        console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono starej pozycji dla:`, { id: newItem.id, name: newItem.name });
       }
     }
     
     // Jeśli nie ma zmian cen, zakończ
     if (itemsWithPriceChanges.length === 0) {
-      console.log(`Brak zmian cen jednostkowych w zamówieniu ${purchaseOrderId}`);
+      console.log(`⚪ [BATCH_PRICE_DEBUG] Brak zmian cen jednostkowych w zamówieniu ${purchaseOrderId}`);
       return;
     }
+    
+    console.log(`🎯 [BATCH_PRICE_DEBUG] Znaleziono ${itemsWithPriceChanges.length} pozycji z zmienionymi cenami:`, 
+      itemsWithPriceChanges.map(item => ({ 
+        id: item.id, 
+        name: item.name, 
+        oldPrice: item.oldUnitPrice, 
+        newPrice: item.newUnitPrice 
+      }))
+    );
     
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
@@ -2130,10 +2175,22 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
-    console.log(`Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    console.log(`🔍 [BATCH_PRICE_DEBUG] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    console.log(`🔍 [BATCH_PRICE_DEBUG] Szczegóły partii:`, 
+      batchesToUpdate.map(batch => ({
+        id: batch.id,
+        itemId: batch.itemId,
+        itemName: batch.itemName,
+        unitPrice: batch.unitPrice,
+        baseUnitPrice: batch.baseUnitPrice,
+        additionalCostPerUnit: batch.additionalCostPerUnit,
+        itemPoId: batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId,
+        warehouseId: batch.warehouseId
+      }))
+    );
     
     if (batchesToUpdate.length === 0) {
-      console.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
       return;
     }
     
@@ -2141,36 +2198,64 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
     const updatePromises = [];
     
     for (const batchData of batchesToUpdate) {
+      console.log(`🔍 [BATCH_PRICE_DEBUG] Przetwarzam partię ${batchData.id}:`, {
+        itemId: batchData.itemId,
+        itemName: batchData.itemName,
+        currentUnitPrice: batchData.unitPrice,
+        currentBaseUnitPrice: batchData.baseUnitPrice,
+        additionalCostPerUnit: batchData.additionalCostPerUnit
+      });
+      
       // NAJPIERW: Spróbuj dopasować partię do konkretnej pozycji w zamówieniu używając itemPoId
       let matchingItem = null;
       
       // 1. Sprawdź czy partia ma zapisane itemPoId (ID konkretnej pozycji w zamówieniu)
       const batchItemPoId = batchData.purchaseOrderDetails?.itemPoId || batchData.sourceDetails?.itemPoId;
       
+      console.log(`🔍 [BATCH_PRICE_DEBUG] Partia ${batchData.id} - itemPoId: ${batchItemPoId}`);
+      
       if (batchItemPoId) {
         // Znajdź pozycję o dokładnie tym ID
         matchingItem = itemsWithPriceChanges.find(item => item.id === batchItemPoId);
         
         if (matchingItem) {
-          console.log(`Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
+          console.log(`✅ [BATCH_PRICE_DEBUG] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
+        } else {
+          console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono pozycji z ID ${batchItemPoId} w liście zmian cen`);
         }
+      } else {
+        console.log(`⚠️ [BATCH_PRICE_DEBUG] Partia ${batchData.id} nie ma itemPoId - użyję fallback`);
       }
       
       // 2. Jeśli nie znaleziono dopasowania po itemPoId, spróbuj starszej metody (tylko jako fallback)
       if (!matchingItem) {
+        console.log(`🔍 [BATCH_PRICE_DEBUG] Próbuję fallback dla partii ${batchData.id}`);
+        
         // Znajdź odpowiadającą pozycję w zamówieniu na podstawie inventoryItemId lub nazwy
         matchingItem = itemsWithPriceChanges.find(item => {
-          // Sprawdź różne sposoby dopasowania
-          return (
-            (item.inventoryItemId && batchData.inventoryItemId === item.inventoryItemId) ||
-            (item.itemId && batchData.itemId === item.itemId) ||
-            (item.name && batchData.itemName === item.name) ||
-            (item.name && batchData.name === item.name)
-          );
+          const matchByInventoryItemId = item.inventoryItemId && batchData.inventoryItemId === item.inventoryItemId;
+          const matchByItemId = item.itemId && batchData.itemId === item.itemId;
+          const matchByItemName = item.name && batchData.itemName === item.name;
+          const matchByName = item.name && batchData.name === item.name;
+          
+          console.log(`🔍 [BATCH_PRICE_DEBUG] Sprawdzam dopasowanie fallback:`, {
+            itemId: item.id,
+            itemName: item.name,
+            batchId: batchData.id,
+            batchItemName: batchData.itemName,
+            matchByInventoryItemId,
+            matchByItemId,
+            matchByItemName,
+            matchByName
+          });
+          
+          return matchByInventoryItemId || matchByItemId || matchByItemName || matchByName;
         });
         
         if (matchingItem) {
-          console.log(`Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie inventoryItemId/nazwy (fallback)`);
+          console.log(`✅ [BATCH_PRICE_DEBUG] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie inventoryItemId/nazwy (fallback)`);
+        } else {
+          console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono dopasowania fallback dla partii ${batchData.id}`);
         }
       }
       
@@ -2179,6 +2264,7 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         
         // Aktualizuj cenę bazową partii na nową cenę jednostkową z pozycji
         const newBaseUnitPrice = matchingItem.newUnitPrice;
+        const currentBaseUnitPrice = batchData.baseUnitPrice || batchData.unitPrice || 0;
         
         // Zachowaj dodatkowy koszt na jednostkę jeśli istnieje
         const additionalCostPerUnit = parseFloat(batchData.additionalCostPerUnit) || 0;
@@ -2186,25 +2272,53 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         // Oblicz nową cenę końcową: nowa cena bazowa + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
-        console.log(`Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}: basePrice ${batchData.baseUnitPrice || batchData.unitPrice} -> ${newBaseUnitPrice}, finalPrice -> ${newFinalUnitPrice}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] AKTUALIZACJA PARTII ${batchData.id}:`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Pozycja: ${matchingItem.name} (ID: ${matchingItem.id})`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena bazowa: ${currentBaseUnitPrice}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena bazowa: ${newBaseUnitPrice}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Dodatkowy koszt/jednostka: ${additionalCostPerUnit}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena końcowa: ${batchData.unitPrice}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena końcowa: ${newFinalUnitPrice}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Zmiana ceny bazowej: ${newBaseUnitPrice - currentBaseUnitPrice}`);
         
-        // Aktualizuj dokument partii
-        updatePromises.push(updateDoc(batchRef, {
+        const updateData = {
           baseUnitPrice: newBaseUnitPrice,
           unitPrice: newFinalUnitPrice,
           updatedAt: serverTimestamp(),
           updatedBy: userId
-        }));
+        };
+        
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Dane aktualizacji:`, updateData);
+        
+        // Aktualizuj dokument partii
+        updatePromises.push(updateDoc(batchRef, updateData));
+        
+        console.log(`✅ [BATCH_PRICE_DEBUG] Dodano partię ${batchData.id} do kolejki aktualizacji`);
       } else {
-        console.log(`Nie znaleziono dopasowania dla partii ${batchData.id} (itemPoId: ${batchItemPoId}, inventoryItemId: ${batchData.inventoryItemId})`);
+        console.log(`❌ [BATCH_PRICE_DEBUG] Nie znaleziono dopasowania dla partii ${batchData.id}:`, {
+          itemPoId: batchItemPoId,
+          inventoryItemId: batchData.inventoryItemId,
+          itemId: batchData.itemId,
+          itemName: batchData.itemName,
+          name: batchData.name
+        });
       }
     }
     
+    console.log(`🎯 [BATCH_PRICE_DEBUG] Kolejka aktualizacji zawiera ${updatePromises.length} partii`);
+    
     if (updatePromises.length > 0) {
-      await Promise.all(updatePromises);
-      console.log(`Zaktualizowano ceny bazowe ${updatePromises.length} partii na podstawie zmian cen pozycji`);
+      console.log(`🎯 [BATCH_PRICE_DEBUG] Wykonuję aktualizację ${updatePromises.length} partii...`);
+      
+      try {
+        await Promise.all(updatePromises);
+        console.log(`✅ [BATCH_PRICE_DEBUG] Pomyślnie zaktualizowano ceny bazowe ${updatePromises.length} partii na podstawie zmian cen pozycji`);
+      } catch (error) {
+        console.error(`❌ [BATCH_PRICE_DEBUG] Błąd podczas aktualizacji partii:`, error);
+        throw error;
+      }
     } else {
-      console.log(`Nie znaleziono partii do aktualizacji na podstawie zmian cen pozycji`);
+      console.log(`⚪ [BATCH_PRICE_DEBUG] Nie znaleziono partii do aktualizacji na podstawie zmian cen pozycji`);
     }
     
   } catch (error) {
