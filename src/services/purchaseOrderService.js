@@ -900,6 +900,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       currency = 'EUR', 
       additionalCostsItems = [], 
       additionalCosts = 0,
+      globalDiscount = 0, // Rabat globalny w procentach
       status = 'draft', 
       targetWarehouseId = '',
       orderDate = new Date(),
@@ -958,14 +959,22 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
         additionalCostsNetTotal += parseFloat(additionalCosts) || 0;
       }
       
-      // Suma wartości netto: produkty + dodatkowe koszty
-      calculatedTotalValue = itemsNetTotal + additionalCostsNetTotal;
+      // Suma wartości netto przed rabatem: produkty + dodatkowe koszty
+      const totalNetBeforeDiscount = itemsNetTotal + additionalCostsNetTotal;
       
-      // Suma VAT: VAT od produktów + VAT od dodatkowych kosztów
-      calculatedTotalVat = itemsVatTotal + additionalCostsVatTotal;
+      // Suma VAT przed rabatem: VAT od produktów + VAT od dodatkowych kosztów
+      const totalVatBeforeDiscount = itemsVatTotal + additionalCostsVatTotal;
       
-      // Wartość brutto: suma netto + suma VAT
-      calculatedTotalGross = calculatedTotalValue + calculatedTotalVat;
+      // Wartość brutto przed rabatem: suma netto + suma VAT
+      const totalGrossBeforeDiscount = totalNetBeforeDiscount + totalVatBeforeDiscount;
+      
+      // Obliczanie rabatu globalnego (stosowany do wartości brutto)
+      const globalDiscountMultiplier = (100 - parseFloat(globalDiscount || 0)) / 100;
+      
+      // Końcowe wartości z uwzględnieniem rabatu globalnego
+      calculatedTotalValue = totalNetBeforeDiscount * globalDiscountMultiplier;
+      calculatedTotalVat = totalVatBeforeDiscount * globalDiscountMultiplier;
+      calculatedTotalGross = totalGrossBeforeDiscount * globalDiscountMultiplier;
     }
     
     // Zapisujemy tylko ID dostawcy, a nie cały obiekt - z zabezpieczeniem przed undefined
@@ -1001,6 +1010,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       totalGross: calculatedTotalGross, // Wartość brutto
       totalVat: calculatedTotalVat, // Wartość VAT (nowe pole)
       additionalCostsItems,
+      globalDiscount, // Rabat globalny w procentach
       currency,
       status,
       targetWarehouseId,

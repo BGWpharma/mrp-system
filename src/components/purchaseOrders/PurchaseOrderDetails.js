@@ -996,7 +996,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
     return mainAddress || supplier.addresses[0];
   };
 
-  const calculateVATValues = (items = [], additionalCostsItems = []) => {
+  const calculateVATValues = (items = [], additionalCostsItems = [], globalDiscount = 0) => {
     let itemsNetTotal = 0;
     let itemsVatTotal = 0;
     
@@ -1021,15 +1021,33 @@ const PurchaseOrderDetails = ({ orderId }) => {
       additionalCostsVatTotal += costVat;
     });
     
-    const totalNet = itemsNetTotal + additionalCostsNetTotal;
-    const totalVat = itemsVatTotal + additionalCostsVatTotal;
-    const totalGross = totalNet + totalVat;
+    // Suma wartości netto przed rabatem: produkty + dodatkowe koszty
+    const totalNetBeforeDiscount = itemsNetTotal + additionalCostsNetTotal;
+    
+    // Suma VAT przed rabatem: VAT od produktów + VAT od dodatkowych kosztów
+    const totalVatBeforeDiscount = itemsVatTotal + additionalCostsVatTotal;
+    
+    // Wartość brutto przed rabatem: suma netto + suma VAT
+    const totalGrossBeforeDiscount = totalNetBeforeDiscount + totalVatBeforeDiscount;
+    
+    // Obliczanie rabatu globalnego (stosowany do wartości brutto)
+    const globalDiscountMultiplier = (100 - parseFloat(globalDiscount || 0)) / 100;
+    const discountAmount = totalGrossBeforeDiscount * (parseFloat(globalDiscount || 0) / 100);
+    
+    // Końcowe wartości z uwzględnieniem rabatu globalnego
+    const totalNet = totalNetBeforeDiscount * globalDiscountMultiplier;
+    const totalVat = totalVatBeforeDiscount * globalDiscountMultiplier;
+    const totalGross = totalGrossBeforeDiscount * globalDiscountMultiplier;
     
     return {
       itemsNetTotal,
       itemsVatTotal,
       additionalCostsNetTotal,
       additionalCostsVatTotal,
+      totalNetBeforeDiscount,
+      totalVatBeforeDiscount,
+      totalGrossBeforeDiscount,
+      discountAmount,
       totalNet,
       totalVat,
       totalGross,
@@ -1335,6 +1353,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell align="right">{t('purchaseOrders.details.table.quantity')}</TableCell>
                       <TableCell>{t('purchaseOrders.details.table.unit')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.unitPrice')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.discount')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.netValue')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.originalAmount')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.plannedDeliveryDate')}</TableCell>
@@ -1382,6 +1401,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             <TableCell align="right">{item.quantity}</TableCell>
                             <TableCell>{item.unit}</TableCell>
                             <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency, 6)}</TableCell>
+                            <TableCell align="right">
+                              {item.discount ? `${item.discount}%` : '-'}
+                            </TableCell>
                             <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
                             <TableCell align="right">
                               {item.currency && item.currency !== purchaseOrder.currency && item.originalUnitPrice 
@@ -1579,15 +1601,25 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     
                     {/* Podsumowanie */}
                     {(() => {
-                      const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems);
+                      const vatValues = calculateVATValues(purchaseOrder.items, purchaseOrder.additionalCostsItems, purchaseOrder.globalDiscount);
                       return (
                         <>
+                          {parseFloat(purchaseOrder.globalDiscount || 0) > 0 && (
+                            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                              {t('purchaseOrders.details.summary.beforeDiscount')}: <strong>{formatCurrency(vatValues.totalGrossBeforeDiscount, purchaseOrder.currency)}</strong>
+                            </Typography>
+                          )}
                           <Typography variant="subtitle1" gutterBottom>
                             <strong>{t('purchaseOrders.details.summary.netValue')}:</strong> {formatCurrency(vatValues.totalNet, purchaseOrder.currency)}
                           </Typography>
                           <Typography variant="subtitle1" gutterBottom>
                             <strong>{t('purchaseOrders.details.summary.totalVAT')}:</strong> {formatCurrency(vatValues.totalVat, purchaseOrder.currency)}
                           </Typography>
+                          {parseFloat(purchaseOrder.globalDiscount || 0) > 0 && (
+                            <Typography variant="body2" sx={{ color: 'success.main', mb: 1 }}>
+                              {t('purchaseOrders.details.summary.globalDiscount')} ({purchaseOrder.globalDiscount}%): <strong>-{formatCurrency(vatValues.discountAmount, purchaseOrder.currency)}</strong>
+                            </Typography>
+                          )}
                           <Typography variant="h6" sx={{ mt: 1 }}>
                             <strong>{t('purchaseOrders.details.summary.grossValue')}:</strong> {formatCurrency(vatValues.totalGross, purchaseOrder.currency)}
                           </Typography>

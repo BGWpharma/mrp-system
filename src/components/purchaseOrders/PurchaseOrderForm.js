@@ -178,6 +178,8 @@ const PurchaseOrderForm = ({ orderId }) => {
             generalAttachments = [...poDetails.attachments];
           }
 
+          // Używamy oryginalnych pozycji z bazy - totalPrice już uwzględnia rabaty po naprawieniu zapisywania
+          
           // Ustaw cały stan formularza za jednym razem, zamiast wielu wywołań setState
           setPoData({
             ...poData,
@@ -185,6 +187,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             orderDate: orderDate,
             expectedDeliveryDate: deliveryDate,
             supplier: matchedSupplier,
+            items: poDetails.items || [], // Użyj oryginalnych pozycji z bazy
             additionalCostsItems: additionalCostsItems,
             attachments: poDetails.attachments || [], // Stare pole dla kompatybilności
             coaAttachments: coaAttachments,
@@ -363,6 +366,34 @@ const PurchaseOrderForm = ({ orderId }) => {
       discountAmount: totals.discountAmount
     }));
   }, [poData.items, poData.additionalCostsItems, poData.globalDiscount, calculateTotals]);
+  
+  // Funkcja do przeliczania totalPrice pozycji z uwzględnieniem rabatu
+  const recalculateItemTotalPrice = (item) => {
+    const quantity = parseFloat(item.quantity) || 0;
+    const discount = parseFloat(item.discount) || 0;
+    const discountMultiplier = (100 - discount) / 100;
+    
+    // Dla pozycji w walucie obcej, najpierw zastosuj rabat do originalUnitPrice, potem przelicz na walutę PO
+    if (item.currency && item.currency !== poData.currency && item.originalUnitPrice && item.exchangeRate) {
+      const originalPrice = parseFloat(item.originalUnitPrice) || 0;
+      const exchangeRate = parseFloat(item.exchangeRate) || 1;
+      
+      // Zastosuj rabat do oryginalnej ceny, potem przelicz na walutę PO
+      const originalPriceAfterDiscount = originalPrice * discountMultiplier;
+      const convertedPriceAfterDiscount = originalPriceAfterDiscount * exchangeRate;
+      
+      return quantity * convertedPriceAfterDiscount;
+    }
+    
+    // Dla pozycji w walucie PO używaj unitPrice
+    const unitPrice = parseFloat(item.unitPrice) || 0;
+    const priceAfterDiscount = unitPrice * discountMultiplier;
+    
+    return quantity * priceAfterDiscount;
+  };
+  
+  // Funkcja recalculateAllItemPrices usunięta - nie jest już potrzebna
+  // ponieważ totalPrice jest poprawnie zapisywany w bazie z uwzględnieniem rabatów
   
   const handleChange = (e, value) => {
     // Obsługa przypadku gdy funkcja jest wywoływana z nazwą i wartością
@@ -547,9 +578,11 @@ const PurchaseOrderForm = ({ orderId }) => {
             updatedItems[index] = {
               ...updatedItems[index],
               exchangeRate: 1,
-              unitPrice: originalPrice.toFixed(6),
-              totalPrice: (originalPrice * currentItem.quantity).toFixed(2)
+              unitPrice: originalPrice.toFixed(6)
             };
+            
+            // Użyj recalculateItemTotalPrice żeby uwzględnić rabat
+            updatedItems[index].totalPrice = recalculateItemTotalPrice(updatedItems[index]).toFixed(2);
             
             setPoData(prev => ({ ...prev, items: updatedItems }));
             return;
@@ -575,9 +608,11 @@ const PurchaseOrderForm = ({ orderId }) => {
               updatedItems[index] = {
                 ...updatedItems[index],
                 exchangeRate: rate,
-                unitPrice: convertedPrice.toFixed(6),
-                totalPrice: (convertedPrice * currentItem.quantity).toFixed(2)
+                unitPrice: convertedPrice.toFixed(6)
               };
+              
+              // Użyj funkcji recalculateItemTotalPrice do obliczenia totalPrice z rabatem
+              updatedItems[index].totalPrice = recalculateItemTotalPrice(updatedItems[index]).toFixed(2);
               
               // Aktualizacja kursów dla wszystkich pozycji z tą samą walutą i datą faktury
               if (rate > 0) {
@@ -610,9 +645,11 @@ const PurchaseOrderForm = ({ orderId }) => {
               updatedItems[index] = {
                 ...updatedItems[index],
                 exchangeRate: rate,
-                unitPrice: convertedPrice.toFixed(6),
-                totalPrice: (convertedPrice * currentItem.quantity).toFixed(2)
+                unitPrice: convertedPrice.toFixed(6)
               };
+              
+              // Użyj funkcji recalculateItemTotalPrice do obliczenia totalPrice z rabatem
+              updatedItems[index].totalPrice = recalculateItemTotalPrice(updatedItems[index]).toFixed(2);
               
               showSuccess(`Zastosowano kurs z dnia utworzenia PO (${orderDate.toISOString().split('T')[0]}) dla waluty ${newCurrency}: ${rate}`);
             } catch (error) {
@@ -647,12 +684,14 @@ const PurchaseOrderForm = ({ orderId }) => {
           
           const updatedItems = poData.items.map((item, i) => {
             if (i === index) {
-              return { 
+              const updatedItem = { 
                 ...item, 
                 exchangeRate: newRate,
-                unitPrice: convertedPrice.toFixed(6),
-                totalPrice: (convertedPrice * item.quantity).toFixed(2)
+                unitPrice: convertedPrice.toFixed(6)
               };
+              // Użyj funkcji recalculateItemTotalPrice do obliczenia totalPrice z rabatem
+              updatedItem.totalPrice = recalculateItemTotalPrice(updatedItem).toFixed(2);
+              return updatedItem;
             }
             return item;
           });
@@ -713,20 +752,38 @@ const PurchaseOrderForm = ({ orderId }) => {
     
     updatedItems[index][field] = value;
     
-    // Przelicz totalPrice jeśli zmieniono quantity, unitPrice lub discount
-    if (field === 'quantity' || field === 'unitPrice' || field === 'discount') {
+    // Przelicz totalPrice jeśli zmieniono quantity, unitPrice, discount lub currency
+    if (field === 'quantity' || field === 'unitPrice' || field === 'discount' || field === 'currency') {
       const quantity = field === 'quantity' ? value : updatedItems[index].quantity;
       const unitPrice = field === 'unitPrice' ? value : updatedItems[index].unitPrice;
       const discount = field === 'discount' ? value : (updatedItems[index].discount || 0);
       
-      // Oblicz cenę po rabacie
-      const discountMultiplier = (100 - parseFloat(discount || 0)) / 100;
-      const priceAfterDiscount = unitPrice * discountMultiplier;
-      updatedItems[index].totalPrice = quantity * priceAfterDiscount;
+      // Użyj poprawionej funkcji przeliczania która uwzględnia waluty obce
+      updatedItems[index].totalPrice = recalculateItemTotalPrice(updatedItems[index]).toFixed(2);
       
       // Jeśli zmieniono unitPrice i waluta pozycji jest taka sama jak waluta zamówienia
       if (field === 'unitPrice' && (!updatedItems[index].currency || updatedItems[index].currency === poData.currency)) {
         updatedItems[index].originalUnitPrice = unitPrice;
+      }
+      
+      // Jeśli zmieniono walutę pozycji, wyzeruj kursy wymiany aby wymusić ponowne pobieranie
+      if (field === 'currency') {
+        const newCurrency = updatedItems[index].currency;
+        
+        if (newCurrency === poData.currency) {
+          // Powrót do waluty bazowej PO - przywróć oryginalną cenę
+          updatedItems[index].exchangeRate = 1;
+          
+          // Przywróć oryginalną cenę z originalUnitPrice (przed przeliczeniem na obcą walutę)
+          const originalPrice = parseFloat(currentItem.originalUnitPrice) || 0;
+          updatedItems[index].unitPrice = originalPrice;
+          updatedItems[index].originalUnitPrice = originalPrice;
+        } else {
+          // Zmiana na walutę obcą - wyzeruj kurs aby wymusić pobieranie
+          updatedItems[index].exchangeRate = 0;
+          // Zachowaj aktualną cenę jako oryginalną dla nowej waluty
+          updatedItems[index].originalUnitPrice = updatedItems[index].unitPrice || 0;
+        }
       }
     }
     
@@ -839,10 +896,30 @@ const PurchaseOrderForm = ({ orderId }) => {
       if (orderData.items && orderData.items.length > 0) {
         orderData.items = orderData.items.map(item => {
           const unitPrice = parseFloat(item.unitPrice) || 0;
+          const quantity = parseFloat(item.quantity) || 0;
+          const discount = parseFloat(item.discount) || 0;
+          
+          // Oblicz totalPrice z uwzględnieniem rabatu
+          const discountMultiplier = (100 - discount) / 100;
+          let totalPrice;
+          
+          // Dla pozycji w walucie obcej, zastosuj rabat do originalUnitPrice przed przeliczeniem
+          if (item.currency && item.currency !== poData.currency && item.originalUnitPrice && item.exchangeRate) {
+            const originalPrice = parseFloat(item.originalUnitPrice) || 0;
+            const exchangeRate = parseFloat(item.exchangeRate) || 1;
+            const originalPriceAfterDiscount = originalPrice * discountMultiplier;
+            const convertedPriceAfterDiscount = originalPriceAfterDiscount * exchangeRate;
+            totalPrice = (quantity * convertedPriceAfterDiscount).toFixed(2);
+          } else {
+            // Dla pozycji w walucie PO
+            const priceAfterDiscount = unitPrice * discountMultiplier;
+            totalPrice = (quantity * priceAfterDiscount).toFixed(2);
+          }
+          
           return {
             ...item,
             unitPrice: unitPrice.toFixed(6), // Zapewniamy 6 miejsc po przecinku
-            totalPrice: (unitPrice * (parseFloat(item.quantity) || 0)).toFixed(2),
+            totalPrice: totalPrice,
             // Konwertuj daty do ISO string dla kompatybilności z listą
             invoiceDate: (() => {
               // Walidacja i czyszczenie nieprawidłowych dat
@@ -2460,7 +2537,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             </Grid>
             
             {/* Waluta */}
-            <Grid item xs={12} md={3} style={{display: 'none'}}>
+            <Grid item xs={12} md={3}>
               <FormControl fullWidth>
                 <InputLabel>{t('purchaseOrders.form.currency')}</InputLabel>
                 <Select
@@ -2472,6 +2549,8 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <MenuItem value="EUR">EUR</MenuItem>
                   <MenuItem value="PLN">PLN</MenuItem>
                   <MenuItem value="USD">USD</MenuItem>
+                  <MenuItem value="GBP">GBP</MenuItem>
+                  <MenuItem value="CHF">CHF</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

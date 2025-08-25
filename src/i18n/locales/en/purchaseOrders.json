@@ -201,6 +201,7 @@
       "quantity": "Quantity",
       "unit": "Unit",
       "unitPrice": "Unit price",
+      "discount": "Discount",
       "netValue": "Net value",
       "originalAmount": "Original amount",
       "plannedDeliveryDate": "Planned delivery date",
@@ -225,7 +226,9 @@
       "productsNetValue": "Products net value",
       "vatFromProducts": "VAT from products",
       "vatRate": "Rate {{rate}}%",
-      "from": "from"
+      "from": "from",
+      "beforeDiscount": "Value before discount",
+      "globalDiscount": "Global discount"
     },
     "batches": {
       "allRelatedBatches": "All batches (LOT) related to order",
