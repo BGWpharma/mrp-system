@@ -264,7 +264,19 @@
         "reportFile": "Plik PDF z raportem mieszań (opcjonalnie)",
         "downloadReport": "Pobierz raport",
         "reportFrom": "Raport z planu mieszań",
-        "generatedAutomatically": "Plik PDF wygenerowany automatycznie - gotowy do wysłania"
+        "generatedAutomatically": "Plik PDF wygenerowany automatycznie - gotowy do wysłania",
+        "linkIngredient": "Powiąż składnik",
+        "unlinkIngredient": "Usuń powiązanie",
+        "linkWithReservation": "Powiąż z rezerwacją",
+        "linkedReservations": "Powiązane rezerwacje",
+        "availableReservations": "Dostępne rezerwacje",
+        "noReservationsAvailable": "Brak dostępnych rezerwacji",
+        "ingredientLinkedSuccessfully": "Składnik został powiązany z rezerwacją",
+        "ingredientUnlinkedSuccessfully": "Powiązanie zostało usunięte",
+        "linkageStats": "Statystyki powiązań",
+        "totalIngredients": "Wszystkie składniki",
+        "linkedIngredients": "Powiązane składniki",
+        "linkagePercentage": "Procent powiązań"
     },
     "productionHistory": {
         "title": "Historia produkcji",

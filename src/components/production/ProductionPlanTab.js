@@ -22,6 +22,7 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
+import EnhancedMixingPlan from './EnhancedMixingPlan';
 import {
   Add as AddIcon,
   Save as SaveIcon,
@@ -360,91 +361,17 @@ const ProductionPlanTab = ({
         </Paper>
       </Grid>
 
-      {/* Sekcja planu mieszań (checklista) - kompaktowa wersja */}
+      {/* Sekcja planu mieszań (checklista) - ulepszona wersja */}
       {task?.mixingPlanChecklist && task.mixingPlanChecklist.length > 0 && (
         <Grid item xs={12}>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">{t('mixingPlan.title')}</Typography>
-            </Box>
-            
-            {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
-              const ingredients = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'ingredient');
-              const checkItems = task.mixingPlanChecklist.filter(item => item.parentId === headerItem.id && item.type === 'check');
-              
-              return (
-                <Box key={headerItem.id} sx={{ mb: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
-                  {/* Nagłówek mieszania */}
-                  <Box sx={{ mb: 1.5 }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {headerItem.text}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {headerItem.details}
-                    </Typography>
-                  </Box>
-                  
-                  <Grid container spacing={2}>
-                    {/* Składniki - kompaktowe wyświetlanie */}
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                        Składniki:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {ingredients.map((ingredient) => (
-                          <Box key={ingredient.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                              {ingredient.text}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                              {ingredient.details}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Grid>
-                    
-                    {/* Status - kompaktowe checkboxy */}
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                        Status wykonania:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {checkItems.map((item) => (
-                          <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <FormControlLabel 
-                              control={
-                                <Checkbox 
-                                  checked={item.completed || false}
-                                  size="small"
-                                  onChange={(e) => onChecklistItemUpdate(item.id, e.target.checked)}
-                                />
-                              } 
-                              label={
-                                <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                                  {item.text}
-                                </Typography>
-                              }
-                              sx={{ margin: 0, '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-                            />
-                            {item.completed && (
-                              <Chip 
-                                size="small" 
-                                label={item.completedAt ? new Date(item.completedAt).toLocaleDateString('pl-PL') : '-'} 
-                                color="success" 
-                                variant="outlined" 
-                                sx={{ height: 20, fontSize: '0.7rem' }}
-                              />
-                            )}
-                          </Box>
-                        ))}
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
-              );
-            })}
-          </Paper>
+          <EnhancedMixingPlan
+            task={task}
+            onChecklistItemUpdate={onChecklistItemUpdate}
+            onPlanUpdate={() => {
+              // Opcjonalnie: odśwież dane zadania po aktualizacji planu
+              console.log('Plan mieszań został zaktualizowany');
+            }}
+          />
         </Grid>
       )}
     </Grid>
