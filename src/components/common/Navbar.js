@@ -40,7 +40,8 @@ import {
   AdminPanelSettings as AdminIcon,
   BugReport as BugReportIcon,
   Cancel as CancelIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  Computer as KioskIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -739,7 +740,12 @@ const Navbar = () => {
                   {t('common.navbar.notificationHistory')}
                 </MenuItem>
                 
-
+                <Divider />
+                
+                <MenuItem component={Link} to="/kiosk" onClick={handleClose}>
+                  <ListItemIcon><KioskIcon fontSize="small" /></ListItemIcon>
+                  Kiosk
+                </MenuItem>
                 
                 <MenuItem onClick={handleLogout}>
                   <ListItemIcon><ExitToApp fontSize="small" /></ListItemIcon>

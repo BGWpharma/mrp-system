@@ -285,49 +285,158 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
   return (
       <Box>
         {/* Pole wyszukiwania */}
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-          <TextField
-            variant="outlined"
-            size="small"
-            placeholder="Wyszukaj zadania..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            sx={{ 
-              width: isMobile ? '100%' : 400,
-              '& .MuiInputBase-root': {
-                fontSize: '0.875rem'
-              }
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" sx={{ fontSize: isMobile ? '1.1rem' : '1.25rem' }} />
-                </InputAdornment>
-              ),
-              sx: {
-                borderRadius: '8px',
-                backgroundColor: colors.paper,
-              }
+        <Box sx={{ 
+          mb: 3, 
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 4,
+          background: mode === 'dark' 
+            ? `linear-gradient(135deg, ${colors.paper} 0%, rgba(33, 150, 243, 0.03) 100%)`
+            : `linear-gradient(135deg, ${colors.paper} 0%, rgba(33, 150, 243, 0.01) 100%)`,
+          border: `1px solid ${mode === 'dark' ? 'rgba(33, 150, 243, 0.15)' : 'rgba(33, 150, 243, 0.08)'}`,
+          boxShadow: `0 4px 20px rgba(33, 150, 243, 0.08)`,
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Decorative gradient */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+              background: `linear-gradient(90deg, transparent 0%, rgba(33, 150, 243, 0.6) 50%, transparent 100%)`,
             }}
           />
           
-          {/* Informacja o liczbie wyników */}
-          {searchTerm && (
-            <Typography 
-              variant={isMobile ? "caption" : "body2"} 
-              sx={{ 
-                color: colors.text.secondary,
-                mt: isMobile ? 0.5 : 0,
-                display: isMobile ? 'block' : 'inline',
-                width: isMobile ? '100%' : 'auto'
-              }}
-            >
-              Znaleziono: {filteredTasks.length} z {tasks.length} zadań
-            </Typography>
-          )}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            flexWrap: 'wrap', 
+            gap: 2,
+            position: 'relative',
+            zIndex: 1
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 2, 
+              width: isMobile ? '100%' : 'auto',
+              flex: 1
+            }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  background: `linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: 'auto'
+                }}
+              >
+                <SearchIcon sx={{ 
+                  color: 'primary.main', 
+                  fontSize: { xs: 20, md: 24 }
+                }} />
+              </Box>
+              
+              <TextField
+                variant="outlined"
+                size="medium"
+                placeholder="Wyszukaj zadania produkcyjne..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                sx={{ 
+                  flex: 1,
+                  maxWidth: isMobile ? '100%' : 500,
+                  '& .MuiOutlinedInput-root': {
+                    fontSize: { xs: '0.9rem', md: '1rem' },
+                    backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.8)',
+                    borderRadius: 3,
+                    border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.95)',
+                      boxShadow: `0 4px 12px rgba(33, 150, 243, 0.15)`
+                    },
+                    '&.Mui-focused': {
+                      borderColor: 'primary.main',
+                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                      boxShadow: `0 6px 20px rgba(33, 150, 243, 0.2)`
+                    },
+                    '& fieldset': {
+                      border: 'none'
+                    }
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    py: { xs: 1.5, md: 2 },
+                    px: 2,
+                    fontWeight: 500,
+                    '&::placeholder': {
+                      color: colors.text.secondary,
+                      opacity: 0.8,
+                      fontStyle: 'italic'
+                    }
+                  }
+                }}
+              />
+            </Box>
+            
+            {/* Informacja o liczbie wyników */}
+            {searchTerm && (
+              <Box sx={{ 
+                px: 2, 
+                py: 1,
+                borderRadius: 2,
+                background: `linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, rgba(76, 175, 80, 0.05) 100%)`,
+                border: `1px solid rgba(76, 175, 80, 0.2)`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                minWidth: 'auto'
+              }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    backgroundColor: 'success.main',
+                    animation: 'pulse 2s infinite',
+                    '@keyframes pulse': {
+                      '0%': {
+                        opacity: 1,
+                        transform: 'scale(1)'
+                      },
+                      '50%': {
+                        opacity: 0.7,
+                        transform: 'scale(1.1)'
+                      },
+                      '100%': {
+                        opacity: 1,
+                        transform: 'scale(1)'
+                      }
+                    }
+                  }}
+                />
+                <Typography 
+                  variant="body2"
+                  sx={{ 
+                    color: 'success.main',
+                    fontWeight: 600,
+                    fontSize: { xs: '0.8rem', md: '0.875rem' }
+                  }}
+                >
+                  {filteredTasks.length} z {tasks.length} zadań
+                </Typography>
+              </Box>
+            )}
+          </Box>
         </Box>
 
-        <Grid container spacing={isFullscreen ? 2 : 1.5}>
+        <Grid container spacing={isFullscreen ? 3 : 2.5}>
         {filteredTasks.map((task) => {
           const statusInfo = getStatusInfo(task.status);
           const progress = calculateProgress(task);
@@ -336,43 +445,64 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
           const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
           
           return (
-            <Grid item xs={12} sm={6} md={isFullscreen ? 3 : 4} lg={isFullscreen ? 3 : 4} xl={isFullscreen ? 3 : 3} key={task.id}>
+            <Grid item xs={12} sm={6} md={isFullscreen ? 4 : 6} lg={isFullscreen ? 4 : 4} xl={isFullscreen ? 3 : 4} key={task.id}>
               <Card 
                 elevation={0}
                 sx={{ 
                   height: '100%',
+                  minHeight: { xs: 280, md: 320 },
                   display: 'flex',
                   flexDirection: 'column',
-                  borderRadius: 3,
-                  border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                  borderRadius: 4,
+                  border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
                   bgcolor: colors.paper,
                   cursor: 'pointer',
                   overflow: 'hidden',
+                  position: 'relative',
                   '&:hover': {
-                    transform: 'translateY(-1px)',
-                    transition: 'all 0.2s ease-in-out',
-                    boxShadow: `0 8px 25px ${statusColors.main}15`,
-                    borderColor: statusColors.main
+                    transform: 'translateY(-2px)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: `0 12px 40px ${statusColors.main}20`,
+                    borderColor: statusColors.main,
+                    '&::before': {
+                      opacity: 1
+                    }
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: `linear-gradient(135deg, ${statusColors.main}05 0%, transparent 50%)`,
+                    opacity: 0,
+                    transition: 'opacity 0.3s ease-in-out',
+                    pointerEvents: 'none',
+                    zIndex: 0
                   }
                 }}
                 onClick={() => onTaskClick && onTaskClick(task)}
               >
                 {/* Status header bar */}
                 <Box sx={{ 
-                  height: 4, 
-                  bgcolor: statusColors.main,
-                  width: '100%'
+                  height: 6, 
+                  background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+                  width: '100%',
+                  position: 'relative',
+                  zIndex: 1
                 }} />
                 
-                <CardContent sx={{ p: 2.5, flexGrow: 1 }}>
+                <CardContent sx={{ p: { xs: 2.5, md: 3 }, flexGrow: 1, position: 'relative', zIndex: 1 }}>
                   {/* Header z nazwą i statusem */}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
                     <Typography variant="h6" sx={{ 
                       color: colors.text.primary,
                       fontWeight: 700,
-                      fontSize: '1.1rem',
-                      lineHeight: 1.2,
-                      flex: 1
+                      fontSize: { xs: '1.1rem', md: '1.2rem' },
+                      lineHeight: 1.3,
+                      flex: 1,
+                      pr: 1
                     }}>
                       {task.name}
                     </Typography>
@@ -380,12 +510,15 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                       label={statusInfo.label} 
                       size="small"
                       sx={{ 
-                        backgroundColor: statusColors.main,
+                        background: `linear-gradient(135deg, ${statusColors.main} 0%, ${statusColors.dark || statusColors.main} 100%)`,
                         color: 'white',
                         fontWeight: 600,
                         fontSize: '0.75rem',
-                        height: 24,
-                        ml: 1
+                        height: 28,
+                        borderRadius: 2,
+                        boxShadow: `0 2px 8px ${statusColors.main}40`,
+                        ml: 1,
+                        minWidth: 'auto'
                       }}
                     />
                   </Box>
@@ -394,27 +527,30 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                   <Typography variant="body1" sx={{ 
                     color: colors.text.primary,
                     fontWeight: 600,
-                    mb: 1.5,
-                    fontSize: '0.95rem'
+                    mb: 2,
+                    fontSize: { xs: '0.95rem', md: '1rem' },
+                    lineHeight: 1.4
                   }}>
                     {task.productName}
                   </Typography>
                   
                   {/* MO Number i Client w jednej linii */}
-                  <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap' }}>
                     {task.moNumber && (
                       <Box sx={{ 
-                        px: 1.5, 
-                        py: 0.5, 
-                        borderRadius: 1.5, 
-                        bgcolor: colors.background,
-                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
+                        px: 2, 
+                        py: 0.75, 
+                        borderRadius: 2, 
+                        background: `linear-gradient(135deg, ${colors.background} 0%, rgba(33, 150, 243, 0.03) 100%)`,
+                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+                        boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
                       }}>
                         <Typography variant="caption" sx={{ 
                           color: colors.text.secondary,
-                          fontSize: '0.7rem',
+                          fontSize: '0.75rem',
                           textTransform: 'uppercase',
-                          fontWeight: 600
+                          fontWeight: 600,
+                          letterSpacing: '0.5px'
                         }}>
                           MO: {task.moNumber}
                         </Typography>
@@ -423,15 +559,16 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                     
                     {task.clientName && (
                       <Box sx={{ 
-                        px: 1.5, 
-                        py: 0.5, 
-                        borderRadius: 1.5, 
-                        bgcolor: colors.background,
-                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
+                        px: 2, 
+                        py: 0.75, 
+                        borderRadius: 2, 
+                        background: `linear-gradient(135deg, ${colors.background} 0%, rgba(76, 175, 80, 0.03) 100%)`,
+                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+                        boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
                       }}>
                         <Typography variant="caption" sx={{ 
                           color: colors.text.secondary,
-                          fontSize: '0.7rem',
+                          fontSize: '0.75rem',
                           fontWeight: 600
                         }}>
                           {task.clientName}
@@ -442,24 +579,36 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                   
                   {/* Postęp produkcji */}
                   <Box sx={{ 
-                    p: 1.5, 
-                    borderRadius: 2, 
-                    bgcolor: `${statusColors.main}08`,
-                    border: `1px solid ${statusColors.main}20`,
-                    mb: 1.5
+                    p: 2, 
+                    borderRadius: 3, 
+                    background: `linear-gradient(135deg, ${statusColors.main}05 0%, ${statusColors.main}02 100%)`,
+                    border: `1px solid ${statusColors.main}15`,
+                    mb: 2,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 2,
+                      background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+                      opacity: 0.6
+                    }
                   }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
                       <Typography variant="body2" sx={{ 
                         color: colors.text.primary,
                         fontWeight: 600,
-                        fontSize: '0.85rem'
+                        fontSize: '0.9rem'
                       }}>
                         Postęp
                       </Typography>
                       <Typography variant="body2" sx={{ 
                         color: statusColors.main,
                         fontWeight: 700,
-                        fontSize: '0.85rem'
+                        fontSize: '0.9rem'
                       }}>
                         {totalCompletedQuantity} / {task.quantity} {task.unit}
                       </Typography>
@@ -469,12 +618,29 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                       variant="determinate" 
                       value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
                       sx={{
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: `${statusColors.main}20`,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: `${statusColors.main}15`,
+                        position: 'relative',
+                        overflow: 'hidden',
                         '& .MuiLinearProgress-bar': {
-                          backgroundColor: statusColors.main,
-                          borderRadius: 3
+                          background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+                          borderRadius: 4,
+                          position: 'relative',
+                          '&::after': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
+                            animation: 'shimmer 2s infinite linear'
+                          }
+                        },
+                        '@keyframes shimmer': {
+                          '0%': { transform: 'translateX(-100%)' },
+                          '100%': { transform: 'translateX(100%)' }
                         }
                       }}
                     />
@@ -484,8 +650,8 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                         color: 'warning.main',
                         fontWeight: 600,
                         display: 'block',
-                        mt: 0.5,
-                        fontSize: '0.75rem'
+                        mt: 1,
+                        fontSize: '0.8rem'
                       }}>
                         Pozostało: {remainingQuantity} {task.unit}
                       </Typography>
@@ -493,16 +659,27 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                   </Box>
                   
                   {/* Data rozpoczęcia */}
-                  <Typography variant="body2" sx={{ 
-                    color: colors.text.secondary,
-                    fontSize: '0.8rem',
+                  <Box sx={{ 
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 0.5
+                    gap: 1,
+                    p: 1.5,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, ${colors.background} 0%, rgba(158, 158, 158, 0.02) 100%)`,
+                    border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'}`
                   }}>
-                    <ScheduleIcon sx={{ fontSize: 14 }} />
-                    {formatDateTime(task.scheduledDate)}
-                  </Typography>
+                    <ScheduleIcon sx={{ 
+                      fontSize: 16, 
+                      color: colors.text.secondary 
+                    }} />
+                    <Typography variant="body2" sx={{ 
+                      color: colors.text.secondary,
+                      fontSize: '0.85rem',
+                      fontWeight: 500
+                    }}>
+                      {formatDateTime(task.scheduledDate)}
+                    </Typography>
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
