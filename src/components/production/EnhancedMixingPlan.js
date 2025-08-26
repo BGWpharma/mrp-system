@@ -54,6 +54,8 @@ import {
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
+import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 import {
   getStandardReservationsForTask,
   linkIngredientToReservation,
@@ -83,6 +85,9 @@ const EnhancedMixingPlan = ({
   const [linkQuantity, setLinkQuantity] = useState('');
   const [maxAvailableQuantity, setMaxAvailableQuantity] = useState(0);
   const [requiredQuantity, setRequiredQuantity] = useState(0);
+  const [realtimeTask, setRealtimeTask] = useState(null);
+  const [isTaskUpdating, setIsTaskUpdating] = useState(false);
+  const [isLinksUpdating, setIsLinksUpdating] = useState(false);
 
   // Oblicz statystyki powiązań
   const totalIngredients = task?.mixingPlanChecklist
@@ -93,12 +98,87 @@ const EnhancedMixingPlan = ({
     ? Math.round((linkedIngredients / totalIngredients) * 100)
     : 0;
 
-  // Pobierz dane początkowe
+  // Real-time listener dla zadania (dla synchronizacji zmian checklisty z kiosku)
   useEffect(() => {
-    if (task?.id) {
-      loadData();
-    }
-  }, [task?.id]);
+    if (!task?.id) return;
+
+    let unsubscribeTask = null;
+    let unsubscribeLinks = null;
+
+    const setupRealtimeListeners = async () => {
+      try {
+        // 1. Real-time listener dla zadania produkcyjnego (dla checklisty)
+        const taskRef = doc(db, 'productionTasks', task.id);
+        unsubscribeTask = onSnapshot(taskRef, (docSnapshot) => {
+          if (docSnapshot.exists()) {
+            const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
+            
+            // Sprawdź czy checklist się zmienił
+            const newChecklist = taskData.mixingPlanChecklist || [];
+            const oldChecklist = task.mixingPlanChecklist || [];
+            
+            const checklistChanged = JSON.stringify(newChecklist) !== JSON.stringify(oldChecklist);
+            
+            if (checklistChanged) {
+              setIsTaskUpdating(true);
+              setRealtimeTask(taskData);
+              
+              // Animacja aktualizacji
+              setTimeout(() => setIsTaskUpdating(false), 500);
+              
+              console.log('🔄 Plan mieszań zaktualizowany w czasie rzeczywistym z kiosku');
+              showInfo('Plan mieszań został zaktualizowany automatycznie');
+            }
+          }
+        }, (error) => {
+          console.error('Błąd listenera zadania w planie mieszań:', error);
+        });
+
+        // 2. Real-time listener dla powiązań rezerwacji
+        const linksRef = collection(db, 'ingredientReservationLinks');
+        const linksQuery = query(linksRef, where('taskId', '==', task.id), where('isActive', '==', true));
+        
+        unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
+          try {
+            setIsLinksUpdating(true);
+            
+            // Odśwież powiązania gdy coś się zmieni
+            const updatedLinks = await getIngredientReservationLinks(task.id);
+            setIngredientLinks(updatedLinks);
+            
+            // Animacja aktualizacji
+            setTimeout(() => setIsLinksUpdating(false), 800);
+            
+            console.log('🔄 Powiązania rezerwacji zaktualizowane w czasie rzeczywistym');
+            showInfo('Powiązania rezerwacji zostały zaktualizowane automatycznie');
+          } catch (error) {
+            console.error('Błąd podczas aktualizacji powiązań:', error);
+            setIsLinksUpdating(false);
+          }
+        });
+
+        // 3. Pobierz dane początkowe
+        await loadData();
+        
+      } catch (error) {
+        console.error('Błąd podczas konfiguracji real-time listenerów:', error);
+      }
+    };
+
+    setupRealtimeListeners();
+
+    // Cleanup function
+    return () => {
+      if (unsubscribeTask) {
+        unsubscribeTask();
+        console.log('🛑 Odłączono listener zadania w planie mieszań');
+      }
+      if (unsubscribeLinks) {
+        unsubscribeLinks();
+        console.log('🛑 Odłączono listener powiązań w planie mieszań');
+      }
+    };
+  }, [task?.id, showInfo]);
 
   const loadData = async () => {
     try {
@@ -231,8 +311,8 @@ const EnhancedMixingPlan = ({
         currentUser.uid
       );
 
-      // Odśwież dane
-      await loadData();
+      // Nie odświeżaj manualnie - real-time listener to zrobi automatycznie
+      console.log('✅ Powiązanie utworzone, czekam na real-time listener...');
       
       // Zamknij dialog
       setLinkDialogOpen(false);
@@ -259,8 +339,8 @@ const EnhancedMixingPlan = ({
     try {
       await unlinkIngredientFromReservation(task.id, ingredientId, currentUser.uid);
       
-      // Odśwież dane
-      await loadData();
+      // Nie odświeżaj manualnie - real-time listener to zrobi automatycznie
+      console.log('✅ Powiązanie usunięte, czekam na real-time listener...');
       
       showSuccess('Powiązanie zostało usunięte');
       
@@ -429,22 +509,48 @@ const EnhancedMixingPlan = ({
             </Typography>
           )}
         </Box>
-        <Button
-          startIcon={<RefreshIcon />}
-          onClick={refreshData}
-          disabled={refreshing}
-          size="small"
-        >
-          Odśwież
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Wskaźnik synchronizacji */}
+          {(isTaskUpdating || isLinksUpdating) && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: 'success.main',
+                  animation: 'pulse 1.5s infinite',
+                  '@keyframes pulse': {
+                    '0%': { opacity: 1 },
+                    '50%': { opacity: 0.5 },
+                    '100%': { opacity: 1 }
+                  }
+                }}
+              />
+              <Typography variant="caption" sx={{ color: 'success.main', fontSize: '0.7rem' }}>
+                {isLinksUpdating ? 'Aktualizacja powiązań...' : 'Synchronizacja...'}
+              </Typography>
+            </Box>
+          )}
+          
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={refreshData}
+            disabled={refreshing}
+            size="small"
+          >
+            Odśwież
+          </Button>
+        </Box>
       </Box>
 
-      {/* Lista mieszań */}
-      {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
-        const ingredients = task.mixingPlanChecklist.filter(
+      {/* Lista mieszań - użyj danych real-time jeśli dostępne */}
+      {(realtimeTask || task).mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
+        const currentTask = realtimeTask || task;
+        const ingredients = currentTask.mixingPlanChecklist.filter(
           item => item.parentId === headerItem.id && item.type === 'ingredient'
         );
-        const checkItems = task.mixingPlanChecklist.filter(
+        const checkItems = currentTask.mixingPlanChecklist.filter(
           item => item.parentId === headerItem.id && item.type === 'check'
         );
         

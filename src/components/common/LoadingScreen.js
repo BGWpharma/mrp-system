@@ -131,7 +131,7 @@ const LoadingScreen = ({
         )}
 
         {/* Dodatkowe style CSS dla animacji */}
-        <style jsx>{`
+        <style>{`
           @keyframes fadeInOut {
             0%, 100% { opacity: 0.7; }
             50% { opacity: 1; }

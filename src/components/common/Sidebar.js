@@ -43,6 +43,7 @@ import {
   Menu as MenuIcon,
   LocalShipping as ShippingIcon,
   SmartToy as AIAssistantIcon,
+  Computer as KioskIcon,
   Calculate as CalculateIcon,
   Factory as FactoryIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
@@ -296,6 +297,13 @@ const Sidebar = ({ onToggle }) => {
       text: t('aiAssistant'),
       icon: <AIAssistantIcon />,
       path: '/ai-assistant',
+      hasSubmenu: false
+    },
+    { 
+      id: 'kiosk',
+      text: 'Kiosk',
+      icon: <KioskIcon />,
+      path: '/kiosk',
       hasSubmenu: false
     },
     { 

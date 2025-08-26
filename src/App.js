@@ -97,6 +97,9 @@ import AnalyticsDashboard from './pages/Analytics/Dashboard';
 // AI Assistant
 import AIAssistantPage from './pages/AIAssistant/AIAssistantPage';
 
+// Kiosk
+import KioskPage from './pages/Kiosk/KioskPage';
+
 // Common Components
 import BackgroundEffects from './components/common/BackgroundEffects';
 import Navbar from './components/common/Navbar';
@@ -321,6 +324,9 @@ function App() {
                     
                     {/* AI Assistant Routes */}
                     <Route path="/ai-assistant" element={<PrivateLayout><AIAssistantPage /></PrivateLayout>} />
+                    
+                    {/* Kiosk Routes */}
+                    <Route path="/kiosk" element={<KioskPage />} />
                     
                     {/* Hall Data Routes */}
                     <Route path="/hall-data/conditions" element={<PrivateLayout><HallDataConditionsPage /></PrivateLayout>} />
