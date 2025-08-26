@@ -907,6 +907,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
         templatePath: '/templates/PO-template.png',
         language: 'en',
         hidePricing: hidePricing,
+        useOriginalCurrency: true,  // Wyświetlaj ceny w oryginalnych walutach
         imageQuality: 0.95,         // Jakość kompresji obrazu dla zbalansowanego rozmiaru i jakości
         enableCompression: true,    // Włącz kompresję PDF
         precision: 2,               // Ogranicz precyzję do 2 miejsc po przecinku
