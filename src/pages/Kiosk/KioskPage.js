@@ -99,14 +99,13 @@ const KioskPage = () => {
         }}
       >
         {/* Nagłówek */}
-        <Paper 
-          elevation={2}
+        <Box
           sx={{
-            p: { xs: 2, md: 3 },
-            mb: 2,
-            background: `linear-gradient(135deg, ${palettes.primary.main}20, ${palettes.primary.dark}10)`,
-            borderLeft: `4px solid ${palettes.primary.main}`,
-            position: 'relative'
+            p: 2.5,
+            mb: 3,
+            borderRadius: 3,
+            bgcolor: colors.paper,
+            border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
           }}
         >
           <Box sx={{ 
@@ -121,33 +120,38 @@ const KioskPage = () => {
                 variant={isMobile ? "h5" : "h4"} 
                 component="h1"
                 sx={{ 
-                  fontWeight: 600,
-                  color: palettes.primary.dark,
-                  mb: 0.5
+                  fontWeight: 700,
+                  color: colors.text.primary,
+                  mb: 0.5,
+                  fontSize: isMobile ? '1.5rem' : '2rem'
                 }}
               >
-                🏭 Kiosk Produkcyjny
+                Kiosk Produkcyjny
               </Typography>
               <Typography 
                 variant="body2" 
                 sx={{ 
                   color: colors.text.secondary,
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  fontWeight: 500
                 }}
               >
-                Lista zadań produkcyjnych • Ostatnia aktualizacja: {lastRefresh.toLocaleTimeString('pl-PL')}
+                Aktualizacja: {lastRefresh.toLocaleTimeString('pl-PL')}
               </Typography>
             </Box>
             
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
               <Button
                 variant="outlined"
-                size="small"
+                size="medium"
                 startIcon={<RefreshIcon />}
                 onClick={() => setLastRefresh(new Date())}
                 sx={{
                   borderColor: palettes.primary.main,
                   color: palettes.primary.main,
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  px: 2,
                   '&:hover': {
                     borderColor: palettes.primary.dark,
                     backgroundColor: `${palettes.primary.main}10`
@@ -159,11 +163,14 @@ const KioskPage = () => {
               
               <IconButton
                 onClick={toggleFullscreen}
-                size="small"
+                size="medium"
                 sx={{
                   color: palettes.primary.main,
+                  borderRadius: 2,
+                  border: `1px solid ${palettes.primary.main}30`,
                   '&:hover': {
-                    backgroundColor: `${palettes.primary.main}10`
+                    backgroundColor: `${palettes.primary.main}10`,
+                    borderColor: palettes.primary.main
                   }
                 }}
               >
@@ -171,7 +178,7 @@ const KioskPage = () => {
               </IconButton>
             </Box>
           </Box>
-        </Paper>
+        </Box>
 
         {/* Lista zadań lub szczegóły zadania */}
         {showDetails ? (

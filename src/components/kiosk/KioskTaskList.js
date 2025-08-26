@@ -29,8 +29,6 @@ import {
   Schedule as ScheduleIcon,
   Assignment as TaskIcon,
   Factory as ProductionIcon,
-  Person as PersonIcon,
-  CalendarToday as CalendarIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -41,7 +39,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDateTime } from '../../utils/formatters';
 import { getUsersDisplayNames } from '../../services/userService';
-import { calculateMaterialReservationStatus } from '../../utils/productionUtils';
 
 const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
   const { mode } = useThemeContext();
@@ -242,7 +239,7 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
       <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
         <CircularProgress size={60} sx={{ color: palettes.primary.main }} />
         <Typography variant="h6" sx={{ mt: 2, color: colors.text.secondary }}>
-          Ładowanie zadań produkcyjnych...
+          Ładowanie zadań...
         </Typography>
       </Paper>
     );
@@ -261,10 +258,10 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
       <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
         <ProductionIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
         <Typography variant="h6" sx={{ color: colors.text.secondary }}>
-          Brak aktywnych zadań produkcyjnych
+          Brak aktywnych zadań
         </Typography>
         <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
-          Wszystkie zadania zostały zakończone lub nie ma zaplanowanych zadań
+          Wszystkie zadania zostały zakończone
         </Typography>
       </Paper>
     );
@@ -278,7 +275,7 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
           Brak wyników wyszukiwania
         </Typography>
         <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
-          Spróbuj użyć innych słów kluczowych lub wyczyść wyszukiwanie
+          Sprawdź wpisane frazy lub wyczyść wyszukiwanie
         </Typography>
       </Paper>
     );
@@ -341,157 +338,171 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
           return (
             <Grid item xs={12} sm={6} md={isFullscreen ? 3 : 4} lg={isFullscreen ? 3 : 4} xl={isFullscreen ? 3 : 3} key={task.id}>
               <Card 
-                variant="outlined" 
+                elevation={0}
                 sx={{ 
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  bgcolor: mode === 'dark' ? 'background.paper' : 'rgb(249, 249, 249)',
-                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)',
-                  borderLeft: `4px solid ${statusColors.main}`,
+                  borderRadius: 3,
+                  border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                  bgcolor: colors.paper,
                   cursor: 'pointer',
+                  overflow: 'hidden',
                   '&:hover': {
-                    elevation: 4,
-                    transform: 'translateY(-2px)',
+                    transform: 'translateY(-1px)',
                     transition: 'all 0.2s ease-in-out',
-                    borderColor: statusColors.main,
-                    boxShadow: `0 4px 20px ${statusColors.main}30`
+                    boxShadow: `0 8px 25px ${statusColors.main}15`,
+                    borderColor: statusColors.main
                   }
                 }}
                 onClick={() => onTaskClick && onTaskClick(task)}
               >
-                <CardContent sx={{ pb: 1.5, pt: 2, px: 2, flexGrow: 1 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <Typography variant="subtitle1" sx={{ 
-                        color: palettes.primary.main,
-                        fontWeight: 'semibold',
-                        fontSize: isMobile ? '0.95rem' : '1.1rem',
-                        lineHeight: 1.3
-                      }}>
-                        {task.name}
-                      </Typography>
-                      <Chip 
-                        label={statusInfo.label} 
-                        size={isMobile ? "small" : "medium"}
-                        sx={{ 
-                          fontSize: isMobile ? '0.7rem' : '0.8rem', 
-                          height: isMobile ? '24px' : '28px',
-                          backgroundColor: statusColors.main,
-                          color: 'white',
-                          fontWeight: 'medium'
-                        }}
-                      />
-                    </Box>
-                    
-                    {task.moNumber && (
-                      <Chip 
-                        size="small" 
-                        label={`MO: ${task.moNumber}`} 
-                        color="secondary" 
-                        variant="outlined" 
-                        sx={{ 
-                          alignSelf: 'flex-start', 
-                          fontSize: isMobile ? '0.7rem' : '0.75rem', 
-                          height: isMobile ? '20px' : '24px',
-                          mt: 0.5
-                        }}
-                      />
-                    )}
-                    
-                    <Typography variant="body2" sx={{ 
-                      fontSize: isMobile ? '0.85rem' : '1rem',
+                {/* Status header bar */}
+                <Box sx={{ 
+                  height: 4, 
+                  bgcolor: statusColors.main,
+                  width: '100%'
+                }} />
+                
+                <CardContent sx={{ p: 2.5, flexGrow: 1 }}>
+                  {/* Header z nazwą i statusem */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Typography variant="h6" sx={{ 
                       color: colors.text.primary,
-                      fontWeight: 'medium',
-                      mt: 0.5
+                      fontWeight: 700,
+                      fontSize: '1.1rem',
+                      lineHeight: 1.2,
+                      flex: 1
                     }}>
-                      {task.productName}
+                      {task.name}
                     </Typography>
-                    
-                    {task.clientName && (
-                      <Typography variant="body2" sx={{ 
-                        color: colors.text.secondary,
-                        fontSize: isMobile ? '0.8rem' : '0.9rem'
+                    <Chip 
+                      label={statusInfo.label} 
+                      size="small"
+                      sx={{ 
+                        backgroundColor: statusColors.main,
+                        color: 'white',
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        height: 24,
+                        ml: 1
+                      }}
+                    />
+                  </Box>
+                  
+                  {/* Produkt */}
+                  <Typography variant="body1" sx={{ 
+                    color: colors.text.primary,
+                    fontWeight: 600,
+                    mb: 1.5,
+                    fontSize: '0.95rem'
+                  }}>
+                    {task.productName}
+                  </Typography>
+                  
+                  {/* MO Number i Client w jednej linii */}
+                  <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+                    {task.moNumber && (
+                      <Box sx={{ 
+                        px: 1.5, 
+                        py: 0.5, 
+                        borderRadius: 1.5, 
+                        bgcolor: colors.background,
+                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
                       }}>
-                        Klient: {task.clientName}
-                      </Typography>
-                    )}
-                    
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                      <Typography variant="body2" sx={{ 
-                        color: colors.text.secondary,
-                        fontSize: isMobile ? '0.8rem' : '0.9rem'
-                      }}>
-                        Ilość: {totalCompletedQuantity} / {task.quantity} {task.unit}
-                      </Typography>
-                      <Typography variant="body2" sx={{ 
-                        color: remainingQuantity > 0 ? 'warning.main' : 'success.main',
-                        fontWeight: 'medium',
-                        fontSize: isMobile ? '0.8rem' : '0.9rem'
-                      }}>
-                        {remainingQuantity > 0 ? `Pozostało: ${remainingQuantity}` : 'Zakończone'}
-                      </Typography>
-                    </Box>
-                    
-                    {task.quantity > 0 && (
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
-                        sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: `${statusColors.main}20`,
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: statusColors.main,
-                            borderRadius: 3
-                          }
-                        }}
-                      />
-                    )}
-                    
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <CalendarIcon sx={{ fontSize: isMobile ? 14 : 16, color: colors.text.secondary }} />
-                        <Typography variant="body2" sx={{ 
+                        <Typography variant="caption" sx={{ 
                           color: colors.text.secondary,
-                          fontSize: isMobile ? '0.75rem' : '0.85rem'
+                          fontSize: '0.7rem',
+                          textTransform: 'uppercase',
+                          fontWeight: 600
                         }}>
-                          Start: {formatDateTime(task.scheduledDate)}
+                          MO: {task.moNumber}
                         </Typography>
                       </Box>
-                      
-                      {task.endDate && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <CalendarIcon sx={{ fontSize: isMobile ? 14 : 16, color: colors.text.secondary }} />
-                          <Typography variant="body2" sx={{ 
-                            color: colors.text.secondary,
-                            fontSize: isMobile ? '0.75rem' : '0.85rem'
-                          }}>
-                            Koniec: {formatDateTime(task.endDate)}
-                          </Typography>
-                        </Box>
-                      )}
-                      
-                      {(() => {
-                        const reservationStatus = calculateMaterialReservationStatus(task);
-                        const statusText = reservationStatus.isFullyReserved ? 'Materiały zarezerwowane' : 
-                                          reservationStatus.isPartiallyReserved ? 'Materiały częściowo zarezerwowane' : 'Materiały nie zarezerwowane';
-                        const statusColor = reservationStatus.isFullyReserved ? 'success.main' : 
-                                           reservationStatus.isPartiallyReserved ? 'warning.main' : 'error.main';
-                        
-                        return (
-                          <Typography variant="body2" sx={{ 
-                            color: statusColor,
-                            fontWeight: 'medium',
-                            fontSize: isMobile ? '0.75rem' : '0.85rem',
-                            mt: 0.5
-                          }}>
-                            {statusText}
-                          </Typography>
-                        );
-                      })()}
-                    </Box>
+                    )}
+                    
+                    {task.clientName && (
+                      <Box sx={{ 
+                        px: 1.5, 
+                        py: 0.5, 
+                        borderRadius: 1.5, 
+                        bgcolor: colors.background,
+                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`
+                      }}>
+                        <Typography variant="caption" sx={{ 
+                          color: colors.text.secondary,
+                          fontSize: '0.7rem',
+                          fontWeight: 600
+                        }}>
+                          {task.clientName}
+                        </Typography>
+                      </Box>
+                    )}
                   </Box>
+                  
+                  {/* Postęp produkcji */}
+                  <Box sx={{ 
+                    p: 1.5, 
+                    borderRadius: 2, 
+                    bgcolor: `${statusColors.main}08`,
+                    border: `1px solid ${statusColors.main}20`,
+                    mb: 1.5
+                  }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body2" sx={{ 
+                        color: colors.text.primary,
+                        fontWeight: 600,
+                        fontSize: '0.85rem'
+                      }}>
+                        Postęp
+                      </Typography>
+                      <Typography variant="body2" sx={{ 
+                        color: statusColors.main,
+                        fontWeight: 700,
+                        fontSize: '0.85rem'
+                      }}>
+                        {totalCompletedQuantity} / {task.quantity} {task.unit}
+                      </Typography>
+                    </Box>
+                    
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: `${statusColors.main}20`,
+                        '& .MuiLinearProgress-bar': {
+                          backgroundColor: statusColors.main,
+                          borderRadius: 3
+                        }
+                      }}
+                    />
+                    
+                    {remainingQuantity > 0 && (
+                      <Typography variant="caption" sx={{ 
+                        color: 'warning.main',
+                        fontWeight: 600,
+                        display: 'block',
+                        mt: 0.5,
+                        fontSize: '0.75rem'
+                      }}>
+                        Pozostało: {remainingQuantity} {task.unit}
+                      </Typography>
+                    )}
+                  </Box>
+                  
+                  {/* Data rozpoczęcia */}
+                  <Typography variant="body2" sx={{ 
+                    color: colors.text.secondary,
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5
+                  }}>
+                    <ScheduleIcon sx={{ fontSize: 14 }} />
+                    {formatDateTime(task.scheduledDate)}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>

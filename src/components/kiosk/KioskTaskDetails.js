@@ -11,14 +11,7 @@ import {
   CardContent,
   Chip,
   IconButton,
-  Divider,
   LinearProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Checkbox,
   FormControlLabel,
   useTheme,
@@ -32,11 +25,8 @@ import {
   CalendarToday as CalendarIcon,
   CheckCircle as CheckCircleIcon,
   RadioButtonUnchecked as UncheckedIcon,
-  Assignment as PlanIcon,
   Factory as ProductionIcon
 } from '@mui/icons-material';
-import { getTaskById } from '../../services/productionService';
-import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 import { doc, updateDoc, serverTimestamp, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { baseColors, palettes, getStatusColor } from '../../styles/colorConfig';
@@ -44,6 +34,7 @@ import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils/formatters';
+import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 
 const KioskTaskDetails = ({ taskId, onBack }) => {
   const { mode } = useThemeContext();
@@ -60,6 +51,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const colors = baseColors[mode];
+  const borderColor = mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)';
 
   // Real-time synchronizacja zadania i powiązań rezerwacji
   useEffect(() => {
@@ -82,9 +74,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
             setTask(taskData);
             setLastUpdate(new Date());
             
-            // Animacja "migania" przy aktualizacji
             setTimeout(() => setIsUpdating(false), 500);
-            
             console.log('🔄 Zadanie zaktualizowane w czasie rzeczywistym:', taskData.name);
           } else {
             setError('Zadanie nie zostało znalezione');
@@ -105,7 +95,6 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
         
         unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
           try {
-            // Odśwież powiązania gdy coś się zmieni
             const updatedLinks = await getIngredientReservationLinks(taskId);
             setIngredientLinks(updatedLinks);
             setIsUpdating(true);
@@ -127,7 +116,6 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
 
     setupRealtimeListeners();
 
-    // Cleanup function - odłącz listenery przy unmount
     return () => {
       if (unsubscribeTask) {
         unsubscribeTask();
@@ -213,173 +201,239 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
 
   return (
     <Box>
-             {/* Nagłówek z przyciskiem powrotu i wskaźnikiem synchronizacji */}
-       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-         <IconButton
-           onClick={onBack}
-           sx={{
-             mr: 2,
-             color: palettes.primary.main,
-             '&:hover': {
-               backgroundColor: `${palettes.primary.main}10`
-             }
-           }}
-         >
-           <ArrowBackIcon />
-         </IconButton>
-         <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 600, color: palettes.primary.dark }}>
-           Szczegóły zadania
-         </Typography>
-         
-         {/* Wskaźnik synchronizacji */}
-         <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-           <Box
-             sx={{
-               width: 8,
-               height: 8,
-               borderRadius: '50%',
-               backgroundColor: isUpdating ? 'warning.main' : 'success.main',
-               animation: isUpdating ? 'pulse 1.5s infinite' : 'none',
-               '@keyframes pulse': {
-                 '0%': { opacity: 1 },
-                 '50%': { opacity: 0.5 },
-                 '100%': { opacity: 1 }
-               }
-             }}
-           />
-           <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem' }}>
-             {isUpdating ? 'Synchronizacja...' : `Ostatnia aktualizacja: ${lastUpdate.toLocaleTimeString('pl-PL')}`}
-           </Typography>
-         </Box>
-       </Box>
+      {/* Nagłówek z przyciskiem powrotu i wskaźnikiem synchronizacji */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+        <IconButton
+          onClick={onBack}
+          sx={{
+            mr: 2,
+            color: palettes.primary.main,
+            '&:hover': {
+              backgroundColor: `${palettes.primary.main}10`
+            }
+          }}
+        >
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant={isMobile ? "h5" : "h4"} sx={{ fontWeight: 600, color: palettes.primary.dark }}>
+          Szczegóły zadania
+        </Typography>
+        
+        {/* Wskaźnik synchronizacji */}
+        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: isUpdating ? 'warning.main' : 'success.main',
+              animation: isUpdating ? 'pulse 1.5s infinite' : 'none',
+              '@keyframes pulse': {
+                '0%': { opacity: 1 },
+                '50%': { opacity: 0.5 },
+                '100%': { opacity: 1 }
+              }
+            }}
+          />
+          <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem' }}>
+            {isUpdating ? 'Synchronizacja...' : `Ostatnia aktualizacja: ${lastUpdate.toLocaleTimeString('pl-PL')}`}
+          </Typography>
+        </Box>
+      </Box>
 
       <Grid container spacing={3}>
         {/* Podstawowe informacje o zadaniu */}
-        <Grid item xs={12} md={8}>
-          <Card elevation={3} sx={{ borderLeft: `4px solid ${statusColors.main}` }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                <Typography variant="h5" sx={{ fontWeight: 600, color: palettes.primary.main }}>
-                  {task.name}
-                </Typography>
+        <Grid item xs={12}>
+          <Card elevation={0} sx={{ 
+            borderRadius: 3,
+            border: `1px solid ${borderColor}`,
+            background: colors.paper
+          }}>
+            <CardContent sx={{ p: 2.5 }}>
+              {/* Header z nazwą i statusem */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h5" sx={{ 
+                    fontWeight: 700, 
+                    color: colors.text.primary,
+                    mb: 0.5,
+                    lineHeight: 1.2
+                  }}>
+                    {task.name}
+                  </Typography>
+                  <Typography variant="h6" sx={{ 
+                    color: colors.text.secondary, 
+                    fontWeight: 400,
+                    mb: 1
+                  }}>
+                    {task.productName}
+                  </Typography>
+                  {task.clientName && (
+                    <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                      {task.clientName}
+                    </Typography>
+                  )}
+                </Box>
                 <Chip
                   label={task.status}
                   sx={{
                     backgroundColor: statusColors.main,
                     color: 'white',
-                    fontWeight: 'medium',
-                    fontSize: '0.875rem'
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    height: 32,
+                    borderRadius: 2
                   }}
                 />
               </Box>
 
-              <Typography variant="h6" sx={{ mb: 1, fontWeight: 500 }}>
-                {task.productName}
-              </Typography>
-
-              {task.clientName && (
-                <Typography variant="body1" sx={{ color: colors.text.secondary, mb: 2 }}>
-                  Klient: {task.clientName}
-                </Typography>
-              )}
-
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <TaskIcon sx={{ fontSize: 20, color: colors.text.secondary }} />
-                    <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                      Numer MO: <strong>{task.moNumber || 'Nie przypisano'}</strong>
-                    </Typography>
+              {/* Informacje szczegółowe */}
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={8}>
+                  <Box sx={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                    gap: 2,
+                    mb: 3
+                  }}>
+                    <Box sx={{ 
+                      p: 2, 
+                      borderRadius: 2, 
+                      bgcolor: colors.background,
+                      border: `1px solid ${borderColor}`
+                    }}>
+                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                        Numer MO
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                        {task.moNumber || 'Nie przypisano'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box sx={{ 
+                      p: 2, 
+                      borderRadius: 2, 
+                      bgcolor: colors.background,
+                      border: `1px solid ${borderColor}`
+                    }}>
+                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                        Numer LOT
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                        {task.lotNumber || 'Nie przypisano'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box sx={{ 
+                      p: 2, 
+                      borderRadius: 2, 
+                      bgcolor: colors.background,
+                      border: `1px solid ${borderColor}`
+                    }}>
+                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                        Data ważności
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                        {task.expiryDate ? formatDateTime(task.expiryDate) : 'Nie ustawiono'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box sx={{ 
+                      p: 2, 
+                      borderRadius: 2, 
+                      bgcolor: colors.background,
+                      border: `1px solid ${borderColor}`
+                    }}>
+                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                        Planowany start
+                      </Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                        {formatDateTime(task.scheduledDate)}
+                      </Typography>
+                    </Box>
                   </Box>
                 </Grid>
-                
-                <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <LotIcon sx={{ fontSize: 20, color: colors.text.secondary }} />
-                    <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                      Numer LOT: <strong>{task.lotNumber || 'Nie przypisano'}</strong>
-                    </Typography>
-                  </Box>
-                </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <CalendarIcon sx={{ fontSize: 20, color: colors.text.secondary }} />
-                    <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                      Data ważności: <strong>{task.expiryDate ? formatDateTime(task.expiryDate) : 'Nie ustawiono'}</strong>
+                {/* Postęp produkcji */}
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ 
+                    p: 2.5, 
+                    borderRadius: 2, 
+                    bgcolor: `${statusColors.main}08`,
+                    border: `1px solid ${statusColors.main}20`,
+                    height: 'fit-content'
+                  }}>
+                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 2, color: colors.text.primary }}>
+                      Postęp produkcji
                     </Typography>
-                  </Box>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <ScheduleIcon sx={{ fontSize: 20, color: colors.text.secondary }} />
-                    <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                      Planowany start: <strong>{formatDateTime(task.scheduledDate)}</strong>
-                    </Typography>
+                    
+                    <Box sx={{ mb: 2 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                          {totalCompletedQuantity} / {task.quantity} {task.unit}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: statusColors.main }}>
+                          {progress.toFixed(1)}%
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={progress}
+                        sx={{
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: `${statusColors.main}20`,
+                          '& .MuiLinearProgress-bar': {
+                            backgroundColor: statusColors.main,
+                            borderRadius: 4
+                          }
+                        }}
+                      />
+                      {remainingQuantity > 0 && (
+                        <Typography variant="caption" sx={{ 
+                          color: 'warning.main', 
+                          mt: 1, 
+                          fontWeight: 500,
+                          display: 'block'
+                        }}>
+                          Pozostało: {remainingQuantity} {task.unit}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                 </Grid>
               </Grid>
-
-              <Divider sx={{ my: 2 }} />
-
-              {/* Postęp produkcji */}
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 500 }}>
-                Postęp produkcji
-              </Typography>
-              
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body1">
-                    {totalCompletedQuantity} / {task.quantity} {task.unit}
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                    {progress.toFixed(1)}%
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={progress}
-                  sx={{
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: `${statusColors.main}20`,
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: statusColors.main,
-                      borderRadius: 5
-                    }
-                  }}
-                />
-                {remainingQuantity > 0 && (
-                  <Typography variant="body2" sx={{ color: 'warning.main', mt: 1, fontWeight: 500 }}>
-                    Pozostało do wyprodukowania: {remainingQuantity} {task.unit}
-                  </Typography>
-                )}
-              </Box>
             </CardContent>
           </Card>
         </Grid>
 
         {/* Plan mieszań - szczegółowy widok */}
         <Grid item xs={12}>
-          <Card elevation={3}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                <PlanIcon sx={{ color: palettes.primary.main }} />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Plan mieszań
-                </Typography>
-              </Box>
+          <Card elevation={0} sx={{ 
+            borderRadius: 3,
+            border: `1px solid ${borderColor}`,
+            background: colors.paper
+          }}>
+            <CardContent sx={{ p: 2.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, color: colors.text.primary }}>
+                Plan mieszań
+              </Typography>
 
               {totalItems > 0 ? (
                 <>
                   {/* Ogólny postęp */}
-                  <Box sx={{ mb: 3, p: 2, bgcolor: colors.paperDarker, borderRadius: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                        Ogólny postęp planu mieszań
+                  <Box sx={{ 
+                    mb: 3, 
+                    p: 2.5, 
+                    bgcolor: `${palettes.success.main}08`, 
+                    borderRadius: 2,
+                    border: `1px solid ${palettes.success.main}20`
+                  }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                        Postęp ogólny
                       </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 700, color: palettes.success.main }}>
                         {completedItems} / {totalItems} ({mixingProgress.toFixed(0)}%)
                       </Typography>
                     </Box>
@@ -387,12 +441,12 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                       variant="determinate"
                       value={mixingProgress}
                       sx={{
-                        height: 10,
-                        borderRadius: 5,
+                        height: 8,
+                        borderRadius: 4,
                         backgroundColor: `${palettes.success.main}20`,
                         '& .MuiLinearProgress-bar': {
                           backgroundColor: palettes.success.main,
-                          borderRadius: 5
+                          borderRadius: 4
                         }
                       }}
                     />
@@ -414,32 +468,38 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                     return (
                       <Box key={headerItem.id} sx={{ 
                         mb: 3, 
-                        border: `2px solid ${palettes.primary.main}20`, 
-                        borderRadius: 2, 
-                        overflow: 'hidden'
+                        border: `1px solid ${borderColor}`, 
+                        borderRadius: 3, 
+                        overflow: 'hidden',
+                        bgcolor: colors.paper
                       }}>
                         {/* Nagłówek mieszania */}
                         <Box sx={{ 
-                          p: 2, 
-                          bgcolor: `${palettes.primary.main}10`,
-                          borderBottom: `1px solid ${palettes.primary.main}20`
+                          p: 2.5, 
+                          bgcolor: colors.background,
+                          borderBottom: `1px solid ${borderColor}`
                         }}>
-                          <Typography variant="h6" sx={{ fontWeight: 600, color: palettes.primary.main, mb: 0.5 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: colors.text.primary, mb: 0.5 }}>
                             {headerItem.text}
                           </Typography>
                           {headerItem.details && (
-                            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                            <Typography variant="body2" sx={{ color: colors.text.secondary, mb: 2 }}>
                               {headerItem.details}
                             </Typography>
                           )}
                           
                           {/* Postęp mieszania */}
-                          <Box sx={{ mt: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                              <Typography variant="caption">
-                                Postęp mieszania: {completedInMixing} / {totalInMixing}
+                          <Box sx={{ 
+                            p: 2, 
+                            bgcolor: `${palettes.info.main}08`, 
+                            borderRadius: 2,
+                            border: `1px solid ${palettes.info.main}20`
+                          }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                                Postęp: {completedInMixing} / {totalInMixing}
                               </Typography>
-                              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: palettes.info.main }}>
                                 {mixingProgressPercent.toFixed(0)}%
                               </Typography>
                             </Box>
@@ -459,145 +519,184 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                           </Box>
                         </Box>
                         
-                        <Box sx={{ p: 2 }}>
+                        <Box sx={{ p: 2.5 }}>
                           <Grid container spacing={3}>
                             {/* Składniki z rezerwacjami */}
                             {ingredients.length > 0 && (
                               <Grid item xs={12} md={8}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: palettes.secondary.main }}>
-                                  📦 Składniki i powiązane rezerwacje
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2.5, color: colors.text.primary }}>
+                                  Składniki i rezerwacje
                                 </Typography>
                                 
-                                <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
-                                  <Table size="small">
-                                    <TableHead>
-                                      <TableRow>
-                                        <TableCell sx={{ fontWeight: 600 }}>Składnik</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Ilość</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>Rezerwacja</TableCell>
-                                      </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                      {ingredients.map((ingredient) => {
-                                        const link = ingredientLinks[ingredient.id];
+                                <Box sx={{ 
+                                  border: `1px solid ${borderColor}`,
+                                  borderRadius: 2,
+                                  overflow: 'hidden'
+                                }}>
+                                  <Box sx={{ 
+                                    display: 'grid', 
+                                    gridTemplateColumns: '2fr 1fr 2fr',
+                                    gap: 0,
+                                    bgcolor: colors.background,
+                                    p: 1.5,
+                                    borderBottom: `1px solid ${borderColor}`
+                                  }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
+                                      Składnik
+                                    </Typography>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
+                                      Ilość
+                                    </Typography>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
+                                      Rezerwacja
+                                    </Typography>
+                                  </Box>
+                                  
+                                  {ingredients.map((ingredient, index) => {
+                                    const link = ingredientLinks[ingredient.id];
+                                    
+                                    return (
+                                      <Box key={ingredient.id} sx={{ 
+                                        display: 'grid', 
+                                        gridTemplateColumns: '2fr 1fr 2fr',
+                                        gap: 2,
+                                        p: 1.5,
+                                        borderBottom: index < ingredients.length - 1 ? `1px solid ${borderColor}` : 'none',
+                                        '&:hover': {
+                                          bgcolor: colors.background
+                                        }
+                                      }}>
+                                        <Box>
+                                          <Typography variant="body2" sx={{ fontWeight: 600, color: colors.text.primary }}>
+                                            {ingredient.text}
+                                          </Typography>
+                                        </Box>
                                         
-                                        return (
-                                          <TableRow key={ingredient.id}>
-                                            <TableCell>
-                                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                {ingredient.text}
+                                        <Box>
+                                          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                                            {ingredient.details}
+                                          </Typography>
+                                        </Box>
+                                        
+                                        <Box>
+                                          {link ? (
+                                            <Box>
+                                              <Chip
+                                                size="small"
+                                                label={`LOT: ${link.batchSnapshot?.batchNumber || 'Brak numeru'}`}
+                                                sx={{
+                                                  bgcolor: `${palettes.secondary.main}20`,
+                                                  color: palettes.secondary.main,
+                                                  fontWeight: 600,
+                                                  mb: 0.5
+                                                }}
+                                              />
+                                              <Typography variant="caption" display="block" sx={{ color: colors.text.secondary, mb: 0.5 }}>
+                                                Powiązano: {link.linkedQuantity || link.quantity} {link.batchSnapshot?.unit || 'szt.'}
                                               </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                              <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                                                {ingredient.details}
-                                              </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                              {link ? (
-                                                <Box>
-                                                  <Chip
-                                                    size="small"
-                                                    label={`LOT: ${link.batchSnapshot?.batchNumber || 'Brak numeru'}`}
-                                                    color="secondary"
-                                                    variant="outlined"
-                                                    sx={{ mb: 0.5 }}
-                                                  />
-                                                  <Typography variant="caption" display="block" sx={{ color: colors.text.secondary }}>
-                                                    Powiązano: {link.linkedQuantity || link.quantity} {link.batchSnapshot?.unit || 'szt.'}
-                                                  </Typography>
-                                                  {link.consumedQuantity > 0 && (
-                                                    <Typography variant="caption" display="block" sx={{ 
-                                                      color: link.isFullyConsumed ? 'success.main' : 'warning.main' 
-                                                    }}>
-                                                      Użyto: {link.consumedQuantity} / Pozostało: {link.remainingQuantity}
-                                                    </Typography>
-                                                  )}
-                                                  {link.batchSnapshot?.warehouseName && (
-                                                    <Typography variant="caption" display="block" sx={{ color: colors.text.disabled }}>
-                                                      📍 {link.batchSnapshot.warehouseName}
-                                                    </Typography>
-                                                  )}
-                                                </Box>
-                                              ) : (
-                                                <Chip
-                                                  size="small"
-                                                  label="Nie powiązano"
-                                                  color="default"
-                                                  variant="outlined"
-                                                />
+                                              {link.consumedQuantity > 0 && (
+                                                <Typography variant="caption" display="block" sx={{ 
+                                                  color: link.isFullyConsumed ? 'success.main' : 'warning.main',
+                                                  fontWeight: 500,
+                                                  mb: 0.5
+                                                }}>
+                                                  Użyto: {link.consumedQuantity} / Pozostało: {link.remainingQuantity}
+                                                </Typography>
                                               )}
-                                            </TableCell>
-                                          </TableRow>
-                                        );
-                                      })}
-                                    </TableBody>
-                                  </Table>
-                                </TableContainer>
+                                              {link.batchSnapshot?.warehouseName && (
+                                                <Typography variant="caption" display="block" sx={{ color: colors.text.disabled }}>
+                                                  {link.batchSnapshot.warehouseName}
+                                                </Typography>
+                                              )}
+                                            </Box>
+                                          ) : (
+                                            <Chip
+                                              size="small"
+                                              label="Nie powiązano"
+                                              sx={{
+                                                bgcolor: `${colors.text.disabled}20`,
+                                                color: colors.text.disabled
+                                              }}
+                                            />
+                                          )}
+                                        </Box>
+                                      </Box>
+                                    );
+                                  })}
+                                </Box>
                               </Grid>
                             )}
                             
                             {/* Status wykonania - pokazuj tylko jeśli są elementy do sprawdzenia */}
                             {checkItems.length > 0 && (
                               <Grid item xs={12} md={ingredients.length > 0 ? 4 : 12}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2, color: palettes.success.main }}>
-                                  ✅ Status wykonania
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2.5, color: colors.text.primary }}>
+                                  Status wykonania
                                 </Typography>
                               
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                {checkItems.map((item) => (
-                                  <FormControlLabel
-                                    key={item.id}
-                                    control={
-                                      <Checkbox
-                                        checked={item.completed || false}
-                                        onChange={(e) => handleChecklistUpdate(item.id, e.target.checked)}
-                                        icon={<UncheckedIcon />}
-                                        checkedIcon={<CheckCircleIcon />}
+                                <Box sx={{ 
+                                  border: `1px solid ${borderColor}`,
+                                  borderRadius: 2,
+                                  overflow: 'hidden'
+                                }}>
+                                  {checkItems.map((item, index) => (
+                                    <Box
+                                      key={item.id}
+                                      sx={{
+                                        p: 1.5,
+                                        borderBottom: index < checkItems.length - 1 ? `1px solid ${borderColor}` : 'none',
+                                        '&:hover': {
+                                          bgcolor: colors.background
+                                        }
+                                      }}
+                                    >
+                                      <FormControlLabel
+                                        control={
+                                          <Checkbox
+                                            checked={item.completed || false}
+                                            onChange={(e) => handleChecklistUpdate(item.id, e.target.checked)}
+                                            icon={<UncheckedIcon />}
+                                            checkedIcon={<CheckCircleIcon />}
+                                            sx={{
+                                              color: colors.text.secondary,
+                                              '&.Mui-checked': {
+                                                color: palettes.success.main,
+                                              },
+                                            }}
+                                          />
+                                        }
+                                        label={
+                                          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                                            <Typography
+                                              variant="body2"
+                                              sx={{
+                                                textDecoration: item.completed ? 'line-through' : 'none',
+                                                color: item.completed ? colors.text.disabled : colors.text.primary,
+                                                fontWeight: 600,
+                                                mb: item.completed && item.completedAt ? 0.5 : 0
+                                              }}
+                                            >
+                                              {item.text}
+                                            </Typography>
+                                            {item.completed && item.completedAt && (
+                                              <Typography variant="caption" sx={{ 
+                                                color: palettes.success.main,
+                                                fontWeight: 500
+                                              }}>
+                                                Ukończono: {new Date(item.completedAt).toLocaleDateString('pl-PL')}
+                                              </Typography>
+                                            )}
+                                          </Box>
+                                        }
                                         sx={{
-                                          color: palettes.primary.main,
-                                          '&.Mui-checked': {
-                                            color: palettes.success.main,
-                                          },
+                                          width: '100%',
+                                          alignItems: 'flex-start',
+                                          m: 0
                                         }}
                                       />
-                                    }
-                                    label={
-                                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                        <Typography
-                                          variant="body2"
-                                          sx={{
-                                            textDecoration: item.completed ? 'line-through' : 'none',
-                                            color: item.completed ? colors.text.disabled : colors.text.primary,
-                                            fontWeight: 500
-                                          }}
-                                        >
-                                          {item.text}
-                                        </Typography>
-                                        {item.completed && item.completedAt && (
-                                          <Chip 
-                                            size="small" 
-                                            label={new Date(item.completedAt).toLocaleDateString('pl-PL')} 
-                                            color="success" 
-                                            variant="outlined" 
-                                            sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
-                                          />
-                                        )}
-                                      </Box>
-                                    }
-                                    sx={{
-                                      width: '100%',
-                                      alignItems: 'flex-start',
-                                      m: 0,
-                                      p: 1,
-                                      borderRadius: 1,
-                                      '&:hover': {
-                                        bgcolor: `${palettes.primary.main}05`
-                                      }
-                                    }}
-                                  />
-                                ))}
-                              </Box>
+                                    </Box>
+                                  ))}
+                                </Box>
                               </Grid>
                             )}
                           </Grid>
