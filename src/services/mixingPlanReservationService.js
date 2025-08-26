@@ -260,7 +260,7 @@ export const getVirtualReservationsFromSnapshots = async (taskId) => {
     const virtualReservations = [];
     
     Object.values(ingredientLinks).forEach(link => {
-      if (link.batchSnapshot && link.isActive) {
+      if (link.batchSnapshot) {
         virtualReservations.push({
           id: link.reservationId,
           taskId: taskId,
@@ -300,8 +300,7 @@ export const getIngredientReservationLinks = async (taskId) => {
   try {
     const q = query(
       collection(db, INGREDIENT_LINKS_COLLECTION),
-      where('taskId', '==', taskId),
-      where('isActive', '==', true) // Tylko aktywne powiązania
+      where('taskId', '==', taskId)
     );
     
     const snapshot = await getDocs(q);
@@ -378,7 +377,6 @@ export const linkIngredientToReservation = async (
       remainingQuantity: quantity, // Ile pozostało (początkowo = linkedQuantity)
       consumptionHistory: [], // Historia konsumpcji
       batchSnapshot: reservationSnapshot, // Snapshot informacji o partii
-      isActive: true,
       isFullyConsumed: false,
       updatedAt: serverTimestamp(),
       updatedBy: userId
@@ -498,17 +496,9 @@ export const unlinkIngredientFromReservation = async (taskId, ingredientId, user
       throw new Error('Nie znaleziono powiązania do usunięcia');
     }
     
-    // Oznacz powiązania jako nieaktywne zamiast fizycznego usuwania
-    const updatePromises = snapshot.docs.map(doc => 
-      updateDoc(doc.ref, {
-        isActive: false,
-        unlinkedAt: serverTimestamp(),
-        unlinkedBy: userId,
-        updatedAt: serverTimestamp(),
-        updatedBy: userId
-      })
-    );
-    await Promise.all(updatePromises);
+    // Fizycznie usuń powiązania
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
     
     return {
       success: true,

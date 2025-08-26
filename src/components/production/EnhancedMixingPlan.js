@@ -136,7 +136,7 @@ const EnhancedMixingPlan = ({
 
         // 2. Real-time listener dla powiązań rezerwacji
         const linksRef = collection(db, 'ingredientReservationLinks');
-        const linksQuery = query(linksRef, where('taskId', '==', task.id), where('isActive', '==', true));
+        const linksQuery = query(linksRef, where('taskId', '==', task.id));
         
         unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
           try {

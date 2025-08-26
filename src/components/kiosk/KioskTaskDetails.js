@@ -101,7 +101,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
 
         // 3. Real-time listener dla powiązań rezerwacji
         const linksRef = collection(db, 'ingredientReservationLinks');
-        const linksQuery = query(linksRef, where('taskId', '==', taskId), where('isActive', '==', true));
+        const linksQuery = query(linksRef, where('taskId', '==', taskId));
         
         unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
           try {
