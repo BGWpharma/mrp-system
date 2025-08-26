@@ -13,9 +13,11 @@ import {
   query, 
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase/config';
+import { getAllWarehouses } from './inventoryService';
 const INGREDIENT_LINKS_COLLECTION = 'ingredientReservationLinks';
 
 /**
@@ -56,6 +58,13 @@ export const getStandardReservationsForTask = async (taskId) => {
     
     console.log('Powiązane ilości na rezerwację:', linkedQuantities);
     
+    // Pobierz informacje o magazynach
+    const warehouses = await getAllWarehouses();
+    const warehousesMap = warehouses.reduce((map, warehouse) => {
+      map[warehouse.id] = warehouse;
+      return map;
+    }, {});
+    
     const reservations = [];
     
     // Pobierz informacje o zarezerwowanych partiach z zadania
@@ -77,6 +86,38 @@ export const getStandardReservationsForTask = async (taskId) => {
             const baseAvailableQuantity = batch.quantity - (batch.consumedQuantity || 0);
             const finalAvailableQuantity = baseAvailableQuantity - linkedQuantity;
             
+            // Pobierz szczegółowe informacje o partii z bazy danych
+            let batchDetails = null;
+            try {
+              const batchRef = doc(db, 'inventoryBatches', batch.batchId);
+              const batchDoc = await getDoc(batchRef);
+              if (batchDoc.exists()) {
+                batchDetails = batchDoc.data();
+              }
+            } catch (batchError) {
+              console.warn(`Nie udało się pobrać szczegółów partii ${batch.batchId}:`, batchError);
+            }
+            
+            // Przygotuj informacje o magazynie
+            const warehouseInfo = batchDetails?.warehouseId ? warehousesMap[batchDetails.warehouseId] : null;
+            
+            // Przygotuj informacje o dacie ważności
+            let expiryDate = null;
+            if (batchDetails?.expiryDate) {
+              if (batchDetails.expiryDate instanceof Timestamp) {
+                expiryDate = batchDetails.expiryDate.toDate();
+              } else if (batchDetails.expiryDate.toDate) {
+                expiryDate = batchDetails.expiryDate.toDate();
+              } else {
+                expiryDate = new Date(batchDetails.expiryDate);
+              }
+              
+              // Sprawdź czy to nie jest domyślna data (1.01.1970)
+              if (expiryDate.getFullYear() <= 1970) {
+                expiryDate = null;
+              }
+            }
+            
             const reservation = {
               id: reservationId,
               taskId: taskId,
@@ -88,7 +129,13 @@ export const getStandardReservationsForTask = async (taskId) => {
               availableQuantity: Math.max(0, finalAvailableQuantity), // Nie może być ujemna
               linkedQuantity: linkedQuantity, // Dodaj info o powiązanej ilości
               unit: material.unit || 'szt.',
-              type: 'standard'
+              type: 'standard',
+              // Dodane informacje o lokalizacji i dacie ważności
+              warehouseId: batchDetails?.warehouseId || null,
+              warehouseName: warehouseInfo?.name || 'Nieznany magazyn',
+              warehouseAddress: warehouseInfo?.address || '',
+              expiryDate: expiryDate,
+              expiryDateString: expiryDate ? expiryDate.toLocaleDateString('pl-PL') : null
             };
             
             console.log(`Rezerwacja ${reservationId}: bazowa dostępna=${baseAvailableQuantity}, powiązana=${linkedQuantity}, finalna dostępna=${finalAvailableQuantity}`);

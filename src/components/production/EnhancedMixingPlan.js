@@ -46,7 +46,9 @@ import {
   Cancel as UnlinkIcon,
   Info as InfoIcon,
   Assignment as AssignmentIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  LocationOn as LocationIcon,
+  Schedule as ExpiryIcon
 } from '@mui/icons-material';
 
 import { useTranslation } from '../../hooks/useTranslation';
@@ -503,6 +505,27 @@ const EnhancedMixingPlan = ({
                           </span>
                         )}
                       </Typography>
+                      
+                      {/* Informacje o lokalizacji */}
+                      {option.warehouseName && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                          <LocationIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                          <Typography variant="caption" color="text.secondary">
+                            {option.warehouseName}
+                            {option.warehouseAddress && ` (${option.warehouseAddress})`}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {/* Informacje o dacie ważności */}
+                      {option.expiryDateString && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                          <ExpiryIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                          <Typography variant="caption" color="text.secondary">
+                            Ważność: {option.expiryDateString}
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
                   </Box>
                 )}
@@ -516,6 +539,49 @@ const EnhancedMixingPlan = ({
                 )}
                 sx={{ mb: 2 }}
               />
+
+              {/* Szczegóły wybranej rezerwacji */}
+              {selectedReservation && (
+                <Paper sx={{ 
+                  mb: 2, 
+                  p: 2, 
+                  bgcolor: (theme) => theme.palette.mode === 'dark' 
+                    ? theme.palette.grey[900] 
+                    : theme.palette.grey[50],
+                  elevation: 1
+                }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Szczegóły wybranej partii:
+                  </Typography>
+                  
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {/* Lokalizacja */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <LocationIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                      <Typography variant="body2">
+                        <strong>Lokalizacja:</strong> {selectedReservation.warehouseName || 'Nieznana'}
+                        {selectedReservation.warehouseAddress && ` (${selectedReservation.warehouseAddress})`}
+                      </Typography>
+                    </Box>
+                    
+                    {/* Data ważności */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ExpiryIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                      <Typography variant="body2">
+                        <strong>Data ważności:</strong> {selectedReservation.expiryDateString || 'Brak terminu ważności'}
+                      </Typography>
+                    </Box>
+                    
+                    {/* Numer partii */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <AssignmentIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                      <Typography variant="body2">
+                        <strong>Numer partii:</strong> {selectedReservation.batchNumber}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Paper>
+              )}
 
               {/* Kontrola ilości powiązania */}
               {selectedReservation && (
