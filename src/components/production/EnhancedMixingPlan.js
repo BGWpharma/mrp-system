@@ -58,7 +58,8 @@ import {
   getStandardReservationsForTask,
   linkIngredientToReservation,
   unlinkIngredientFromReservation,
-  getIngredientReservationLinks
+  getIngredientReservationLinks,
+  getVirtualReservationsFromSnapshots
 } from '../../services/mixingPlanReservationService';
 
 const EnhancedMixingPlan = ({ 
@@ -106,16 +107,22 @@ const EnhancedMixingPlan = ({
       console.log('=== ŁADOWANIE DANYCH PLANU MIESZAŃ ===');
       console.log('ID zadania:', task.id);
       
-      const [standardRes, links] = await Promise.all([
-        getStandardReservationsForTask(task.id),
+      const [standardRes, virtualRes, links] = await Promise.all([
+        getStandardReservationsForTask(task.id), // Dla nowych powiązań
+        getVirtualReservationsFromSnapshots(task.id), // Z snapshotów dla istniejących
         getIngredientReservationLinks(task.id)
       ]);
 
-      console.log('Pobrane rezerwacje standardowe:', standardRes);
+      console.log('Pobrane rezerwacje standardowe (nowe):', standardRes);
+      console.log('Pobrane wirtualne rezerwacje (snapshoty):', virtualRes);
       console.log('Pobrane powiązania:', links);
+      
+      // Połącz rzeczywiste rezerwacje z wirtualnymi ze snapshotów
+      const allReservations = [...standardRes, ...virtualRes];
+      console.log('Wszystkie dostępne rezerwacje:', allReservations);
       console.log('=====================================');
 
-      setStandardReservations(standardRes);
+      setStandardReservations(allReservations);
       setIngredientLinks(links);
     } catch (error) {
       console.error('Błąd podczas pobierania danych planu mieszań:', error);
@@ -163,10 +170,19 @@ const EnhancedMixingPlan = ({
     // Przygotuj listę dostępnych rezerwacji dla tego składnika
     const ingredientName = ingredient.text;
     
-    // Filtruj tylko rezerwacje standardowe (rzeczywiste rezerwacje magazynowe)
+    // Filtruj tylko rzeczywiste rezerwacje (nie wirtualne ze snapshotów) dla tego składnika
     const available = standardReservations.filter(res => {
-      console.log(`Sprawdzam standardową rezerwację - Nazwa materiału: "${res.materialName}", Składnik: "${ingredientName}", Pasuje: ${res.materialName === ingredientName}`);
-      return res.materialName === ingredientName && res.availableQuantity > 0;
+      console.log(`Sprawdzam rezerwację - Nazwa materiału: "${res.materialName}", Składnik: "${ingredientName}", AvailableQty: ${res.availableQuantity}, ReservedQty: ${res.reservedQuantity}`);
+      
+      // Sprawdź czy to rzeczywista rezerwacja (ma reservedQuantity > linkedQuantity)
+      // Wirtualne rezerwacje ze snapshotów mają reservedQuantity === linkedQuantity
+      const isRealReservation = res.reservedQuantity > res.linkedQuantity;
+      const matchesIngredient = res.materialName === ingredientName;
+      const hasAvailableQuantity = res.availableQuantity > 0;
+      
+      console.log(`- IsReal: ${isRealReservation}, Matches: ${matchesIngredient}, HasQty: ${hasAvailableQuantity}`);
+      
+      return matchesIngredient && hasAvailableQuantity && isRealReservation;
     }).map(res => ({ ...res, type: 'standard' }));
     
     console.log('Dostępne rezerwacje po filtrowaniu:', available);
@@ -271,34 +287,104 @@ const EnhancedMixingPlan = ({
     );
   };
 
-  // Renderuj status powiązania składnika
+  // Renderuj status powiązania składnika (używa snapshotu zamiast standardReservations)
   const renderIngredientLinkStatus = (ingredient) => {
     const link = ingredientLinks[ingredient.id];
     
     if (link) {
-      const reservation = standardReservations.find(res => res.id === link.reservationId);
+      // UŻYJ DANYCH ZE SNAPSHOTU zamiast szukania w standardReservations
+      const reservationFromSnapshot = {
+        id: link.reservationId,
+        batchNumber: link.batchSnapshot?.batchNumber || 'Brak numeru',
+        unit: link.batchSnapshot?.unit || 'szt.',
+        materialName: link.batchSnapshot?.materialName || 'Nieznany materiał',
+        warehouseName: link.batchSnapshot?.warehouseName,
+        warehouseAddress: link.batchSnapshot?.warehouseAddress,
+        expiryDateString: link.batchSnapshot?.expiryDateString
+      };
       
-      if (reservation) {
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              {renderReservationChip({ ...reservation, type: link.reservationType })}
-              {link.quantity && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Powiązano: {link.quantity} {reservation.unit || 'szt.'}
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flexGrow: 1 }}>
+            {renderReservationChip({ ...reservationFromSnapshot, type: link.reservationType })}
+            
+            {/* Podstawowe informacje o powiązaniu */}
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+              Powiązano: {link.linkedQuantity || link.quantity} {reservationFromSnapshot.unit}
+            </Typography>
+            
+            {/* Informacje o konsumpcji jeśli istnieją */}
+            {link.consumedQuantity > 0 && (
+              <Box sx={{ width: '100%', mt: 0.5 }}>
+                <Typography variant="caption" sx={{ 
+                  color: link.isFullyConsumed ? 'success.main' : 'warning.main' 
+                }}>
+                  Skonsumowano: {link.consumedQuantity} / Pozostało: {link.remainingQuantity} {reservationFromSnapshot.unit}
                 </Typography>
-              )}
-            </Box>
+                
+                {/* Pasek postępu konsumpcji */}
+                {link.consumptionPercentage !== undefined && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Box sx={{ 
+                      width: '60px', 
+                      height: '4px', 
+                      bgcolor: 'grey.200', 
+                      borderRadius: 2,
+                      overflow: 'hidden'
+                    }}>
+                      <Box sx={{
+                        width: `${link.consumptionPercentage}%`,
+                        height: '100%',
+                        bgcolor: link.consumptionPercentage === 100 ? 'success.main' : 'primary.main',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      {link.consumptionPercentage}%
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
+            
+            {/* Historia konsumpcji - tylko jeśli istnieje */}
+            {link.consumptionHistory && link.consumptionHistory.length > 0 && (
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: 'primary.main', 
+                  cursor: 'help',
+                  textDecoration: 'underline',
+                  fontSize: '0.7rem',
+                  mt: 0.5
+                }}
+                title={`Historia konsumpcji: ${link.consumptionHistory.length} wpisów`}
+              >
+                Historia ({link.consumptionHistory.length} wpisów)
+              </Typography>
+            )}
+          </Box>
+          
+          {/* Pokazuj przycisk odłączenia tylko jeśli nie jest w pełni skonsumowane */}
+          {!link.isFullyConsumed && (
             <IconButton
               size="small"
               onClick={() => handleUnlinkIngredient(ingredient.id)}
               color="error"
+              sx={{ alignSelf: 'flex-start' }}
             >
               <UnlinkIcon fontSize="small" />
             </IconButton>
-          </Box>
-        );
-      }
+          )}
+          
+          {/* Ikona informacji dla w pełni skonsumowanych */}
+          {link.isFullyConsumed && (
+            <Tooltip title="Powiązanie zostało w pełni skonsumowane">
+              <InfoIcon fontSize="small" color="success" sx={{ alignSelf: 'flex-start' }} />
+            </Tooltip>
+          )}
+        </Box>
+      );
     }
     
     return (

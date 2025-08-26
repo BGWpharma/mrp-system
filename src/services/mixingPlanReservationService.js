@@ -21,6 +21,96 @@ import { getAllWarehouses } from './inventoryService';
 const INGREDIENT_LINKS_COLLECTION = 'ingredientReservationLinks';
 
 /**
+ * Pobiera snapshot informacji o rezerwacji do zapisania w powiązaniu
+ * @param {string} taskId - ID zadania produkcyjnego
+ * @param {string} reservationId - ID rezerwacji
+ * @returns {Promise<Object>} - Snapshot informacji o partii
+ */
+const getReservationSnapshot = async (taskId, reservationId) => {
+  try {
+    // Pobierz zadanie produkcyjne
+    const taskRef = doc(db, 'productionTasks', taskId);
+    const taskDoc = await getDoc(taskRef);
+    
+    if (!taskDoc.exists()) {
+      throw new Error('Zadanie nie istnieje');
+    }
+    
+    const task = taskDoc.data();
+    
+    // Znajdź partię w materialBatches
+    if (task.materialBatches) {
+      for (const [materialId, batches] of Object.entries(task.materialBatches)) {
+        for (const batch of batches) {
+          const currentReservationId = `${taskId}_${materialId}_${batch.batchId}`;
+          if (currentReservationId === reservationId) {
+            // Znajdź materiał
+            const material = task.materials?.find(m => 
+              (m.id === materialId || m.inventoryItemId === materialId)
+            );
+            
+            // Pobierz szczegóły partii z bazy
+            let batchDetails = null;
+            try {
+              const batchRef = doc(db, 'inventoryBatches', batch.batchId);
+              const batchDoc = await getDoc(batchRef);
+              if (batchDoc.exists()) {
+                batchDetails = batchDoc.data();
+              }
+            } catch (error) {
+              console.warn(`Nie udało się pobrać szczegółów partii ${batch.batchId}:`, error);
+            }
+            
+            // Pobierz informacje o magazynie
+            const warehouses = await getAllWarehouses();
+            const warehouseInfo = batchDetails?.warehouseId 
+              ? warehouses.find(w => w.id === batchDetails.warehouseId)
+              : null;
+            
+            // Przygotuj datę ważności
+            let expiryDate = null;
+            let expiryDateString = null;
+            if (batchDetails?.expiryDate) {
+              if (batchDetails.expiryDate instanceof Timestamp) {
+                expiryDate = batchDetails.expiryDate.toDate();
+              } else if (batchDetails.expiryDate.toDate) {
+                expiryDate = batchDetails.expiryDate.toDate();
+              } else {
+                expiryDate = new Date(batchDetails.expiryDate);
+              }
+              
+              if (expiryDate.getFullYear() > 1970) {
+                expiryDateString = expiryDate.toLocaleDateString('pl-PL');
+              }
+            }
+            
+            return {
+              batchId: batch.batchId,
+              batchNumber: batch.batchNumber || batch.lotNumber || 'Brak numeru',
+              materialId: materialId,
+              materialName: material?.name || 'Nieznany materiał',
+              warehouseId: batchDetails?.warehouseId || null,
+              warehouseName: warehouseInfo?.name || 'Nieznany magazyn',
+              warehouseAddress: warehouseInfo?.address || '',
+              expiryDate: expiryDate,
+              expiryDateString: expiryDateString,
+              unit: material?.unit || 'szt.',
+              // Timestamp snapshotu
+              snapshotCreatedAt: new Date().toISOString()
+            };
+          }
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Błąd podczas tworzenia snapshotu rezerwacji:', error);
+    return null;
+  }
+};
+
+/**
  * Pobiera standardowe rezerwacje magazynowe dla zadania
  * @param {string} taskId - ID zadania produkcyjnego
  * @returns {Promise<Array>} - Lista standardowych rezerwacji
@@ -48,11 +138,12 @@ export const getStandardReservationsForTask = async (taskId) => {
     const ingredientLinks = await getIngredientReservationLinks(taskId);
     console.log('Powiązania składników:', ingredientLinks);
     
-    // Oblicz łączną powiązaną ilość dla każdej rezerwacji
+    // Oblicz łączną powiązaną ilość dla każdej rezerwacji (używaj linkedQuantity lub quantity dla kompatybilności)
     const linkedQuantities = {};
     Object.values(ingredientLinks).forEach(link => {
-      if (link.reservationId && link.quantity) {
-        linkedQuantities[link.reservationId] = (linkedQuantities[link.reservationId] || 0) + parseFloat(link.quantity);
+      if (link.reservationId && (link.linkedQuantity || link.quantity)) {
+        const quantity = link.linkedQuantity || link.quantity;
+        linkedQuantities[link.reservationId] = (linkedQuantities[link.reservationId] || 0) + parseFloat(quantity);
       }
     });
     
@@ -158,6 +249,49 @@ export const getStandardReservationsForTask = async (taskId) => {
 };
 
 /**
+ * Pobiera "wirtualne" rezerwacje na podstawie snapshotów z powiązań
+ * (Używana do wyświetlania istniejących powiązań niezależnie od stanu zadania)
+ * @param {string} taskId - ID zadania produkcyjnego
+ * @returns {Promise<Array>} - Lista wirtualnych rezerwacji z snapshotów
+ */
+export const getVirtualReservationsFromSnapshots = async (taskId) => {
+  try {
+    const ingredientLinks = await getIngredientReservationLinks(taskId);
+    const virtualReservations = [];
+    
+    Object.values(ingredientLinks).forEach(link => {
+      if (link.batchSnapshot && link.isActive) {
+        virtualReservations.push({
+          id: link.reservationId,
+          taskId: taskId,
+          materialId: link.batchSnapshot.materialId,
+          materialName: link.batchSnapshot.materialName,
+          batchId: link.batchSnapshot.batchId,
+          batchNumber: link.batchSnapshot.batchNumber,
+          unit: link.batchSnapshot.unit,
+          type: 'standard',
+          // Dane z snapshotu
+          warehouseId: link.batchSnapshot.warehouseId,
+          warehouseName: link.batchSnapshot.warehouseName,
+          warehouseAddress: link.batchSnapshot.warehouseAddress,
+          expiryDateString: link.batchSnapshot.expiryDateString,
+          // Informacje o powiązaniu
+          linkedQuantity: link.linkedQuantity,
+          availableQuantity: link.remainingQuantity,
+          reservedQuantity: link.linkedQuantity
+        });
+      }
+    });
+    
+    console.log('Wirtualne rezerwacje z snapshotów:', virtualReservations);
+    return virtualReservations;
+  } catch (error) {
+    console.error('Błąd podczas pobierania wirtualnych rezerwacji:', error);
+    return [];
+  }
+};
+
+/**
  * Pobiera powiązania składników z rezerwacjami dla zadania
  * @param {string} taskId - ID zadania produkcyjnego
  * @returns {Promise<Object>} - Obiekt mapujący ID składnika na powiązanie
@@ -166,7 +300,8 @@ export const getIngredientReservationLinks = async (taskId) => {
   try {
     const q = query(
       collection(db, INGREDIENT_LINKS_COLLECTION),
-      where('taskId', '==', taskId)
+      where('taskId', '==', taskId),
+      where('isActive', '==', true) // Tylko aktywne powiązania
     );
     
     const snapshot = await getDocs(q);
@@ -174,9 +309,24 @@ export const getIngredientReservationLinks = async (taskId) => {
     
     snapshot.docs.forEach(doc => {
       const data = doc.data();
+      
+      // Oblicz procent konsumpcji
+      const consumptionPercentage = data.linkedQuantity > 0 
+        ? Math.round((data.consumedQuantity / data.linkedQuantity) * 100)
+        : 0;
+      
       links[data.ingredientId] = {
         id: doc.id,
-        ...data
+        ...data,
+        consumptionPercentage: consumptionPercentage,
+        // Używaj danych ze snapshotu zamiast pobierania na bieżąco
+        warehouseName: data.batchSnapshot?.warehouseName,
+        warehouseAddress: data.batchSnapshot?.warehouseAddress,
+        expiryDateString: data.batchSnapshot?.expiryDateString,
+        batchNumber: data.batchSnapshot?.batchNumber,
+        // Zachowaj kompatybilność wsteczną
+        quantity: data.linkedQuantity, // Dla komponentów używających starego pola
+        reservationType: data.reservationType
       };
     });
     
@@ -206,6 +356,9 @@ export const linkIngredientToReservation = async (
   userId
 ) => {
   try {
+    // Pobierz snapshot rezerwacji
+    const reservationSnapshot = await getReservationSnapshot(taskId, reservationId);
+    
     // Sprawdź czy składnik nie jest już powiązany
     const existingQuery = query(
       collection(db, INGREDIENT_LINKS_COLLECTION),
@@ -220,14 +373,28 @@ export const linkIngredientToReservation = async (
       ingredientId: ingredientId,
       reservationId: reservationId,
       reservationType: reservationType,
-      quantity: quantity, // Zapisz ilość powiązania
+      linkedQuantity: quantity, // Ile powiązano
+      consumedQuantity: 0, // Ile skonsumowano (początkowo 0)
+      remainingQuantity: quantity, // Ile pozostało (początkowo = linkedQuantity)
+      consumptionHistory: [], // Historia konsumpcji
+      batchSnapshot: reservationSnapshot, // Snapshot informacji o partii
+      isActive: true,
+      isFullyConsumed: false,
       updatedAt: serverTimestamp(),
       updatedBy: userId
     };
     
     if (!existingSnapshot.empty) {
-      // Aktualizuj istniejące powiązanie
+      // Aktualizuj istniejące powiązanie - zachowaj historię konsumpcji
       const existingDoc = existingSnapshot.docs[0];
+      const existingData = existingDoc.data();
+      
+      // Zachowaj istniejącą historię konsumpcji
+      linkData.consumedQuantity = existingData.consumedQuantity || 0;
+      linkData.consumptionHistory = existingData.consumptionHistory || [];
+      linkData.remainingQuantity = quantity - linkData.consumedQuantity;
+      linkData.isFullyConsumed = linkData.remainingQuantity <= 0;
+      
       await updateDoc(doc(db, INGREDIENT_LINKS_COLLECTION, existingDoc.id), linkData);
     } else {
       // Utwórz nowe powiązanie
@@ -244,6 +411,68 @@ export const linkIngredientToReservation = async (
     };
   } catch (error) {
     console.error('Błąd podczas powiązania składnika z rezerwacją:', error);
+    throw error;
+  }
+};
+
+/**
+ * Aktualizuje konsumpcję powiązanego składnika
+ * @param {string} taskId - ID zadania produkcyjnego
+ * @param {string} ingredientId - ID składnika
+ * @param {number} consumedQuantity - Ilość skonsumowana
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik operacji
+ */
+export const updateIngredientConsumption = async (taskId, ingredientId, consumedQuantity, userId) => {
+  try {
+    const q = query(
+      collection(db, INGREDIENT_LINKS_COLLECTION),
+      where('taskId', '==', taskId),
+      where('ingredientId', '==', ingredientId)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      throw new Error('Nie znaleziono powiązania składnika');
+    }
+    
+    const linkDoc = snapshot.docs[0];
+    const linkData = linkDoc.data();
+    
+    // Oblicz nowe wartości
+    const newConsumedQuantity = parseFloat(consumedQuantity);
+    const remainingQuantity = linkData.linkedQuantity - newConsumedQuantity;
+    const isFullyConsumed = remainingQuantity <= 0;
+    
+    // Aktualizuj historię konsumpcji
+    const consumptionHistory = linkData.consumptionHistory || [];
+    const consumptionDiff = newConsumedQuantity - (linkData.consumedQuantity || 0);
+    
+    if (consumptionDiff > 0) {
+      consumptionHistory.push({
+        quantity: consumptionDiff,
+        consumedAt: serverTimestamp(),
+        consumedBy: userId
+      });
+    }
+    
+    // Aktualizuj dokument
+    await updateDoc(doc(db, INGREDIENT_LINKS_COLLECTION, linkDoc.id), {
+      consumedQuantity: newConsumedQuantity,
+      remainingQuantity: Math.max(0, remainingQuantity),
+      isFullyConsumed: isFullyConsumed,
+      consumptionHistory: consumptionHistory,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    return {
+      success: true,
+      message: 'Konsumpcja składnika została zaktualizowana'
+    };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji konsumpcji składnika:', error);
     throw error;
   }
 };
@@ -269,9 +498,17 @@ export const unlinkIngredientFromReservation = async (taskId, ingredientId, user
       throw new Error('Nie znaleziono powiązania do usunięcia');
     }
     
-    // Usuń wszystkie powiązania dla tego składnika (powinno być tylko jedno)
-    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-    await Promise.all(deletePromises);
+    // Oznacz powiązania jako nieaktywne zamiast fizycznego usuwania
+    const updatePromises = snapshot.docs.map(doc => 
+      updateDoc(doc.ref, {
+        isActive: false,
+        unlinkedAt: serverTimestamp(),
+        unlinkedBy: userId,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      })
+    );
+    await Promise.all(updatePromises);
     
     return {
       success: true,

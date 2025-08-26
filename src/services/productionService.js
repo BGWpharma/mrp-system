@@ -35,6 +35,7 @@ import {
     recalculateItemQuantity,
     getInventoryBatch
   } from './inventory';
+  import { updateIngredientConsumption } from './mixingPlanReservationService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
@@ -3035,7 +3036,40 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         }
       }
       
-      console.log("[DEBUG REZERWACJE] Zakończono anulowanie rezerwacji, aktualizuję status zadania");
+      console.log("[DEBUG REZERWACJE] Zakończono anulowanie rezerwacji, aktualizuję składniki w planie mieszań");
+      
+      // Zaktualizuj powiązania składników w planie mieszań
+      if (task.mixingPlanChecklist) {
+        const ingredients = task.mixingPlanChecklist.filter(item => item.type === 'ingredient');
+        
+        for (const ingredient of ingredients) {
+          // Znajdź materiał odpowiadający składnikowi
+          const matchingMaterial = materials.find(material => 
+            material.name === ingredient.text
+          );
+          
+          if (matchingMaterial) {
+            const materialConsumedQty = actualUsage[matchingMaterial.id] !== undefined 
+              ? parseFloat(actualUsage[matchingMaterial.id]) 
+              : parseFloat(matchingMaterial.quantity);
+            
+            try {
+              await updateIngredientConsumption(
+                taskId, 
+                ingredient.id, 
+                materialConsumedQty, 
+                userId || 'system'
+              );
+              console.log(`[DEBUG PLAN MIESZAŃ] Zaktualizowano konsumpcję składnika ${ingredient.text}: ${materialConsumedQty}`);
+            } catch (error) {
+              console.warn(`Nie udało się zaktualizować konsumpcji składnika ${ingredient.text}:`, error);
+              // Kontynuuj mimo błędu - nie przerywaj procesu konsumpcji
+            }
+          }
+        }
+      }
+      
+      console.log("[DEBUG REZERWACJE] Zakończono aktualizację składników, aktualizuję status zadania");
       
       // Oznacz zużycie jako potwierdzone i zapisz informacje o wykorzystanych partiach
       const updates = {
