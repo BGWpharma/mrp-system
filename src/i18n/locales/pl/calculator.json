@@ -2,9 +2,9 @@
   "title": "Kalkulator mieszań produkcyjnych",
   "description": "Narzędzie pomaga w planowaniu mieszań produkcyjnych, obliczając optymalną liczbę mieszań oraz ilości składników dla każdego mieszania.",
   "warning": "Uwaga: Kalkulator automatycznie pomija składniki z kategorii \"Opakowania\" oraz te, których nazwa zawiera \"PACK\" podczas obliczeń.",
-  "mixerVolume": "Objętość mieszalnika (max weight per mixing)",
+  "mainIngredientQuantity": "Ilość głównego składnika na mieszanie",
   "targetQuantity": "Docelowa ilość produktu",
-  "calculationMode": "Tryb kalkulacji",
+  "piecesOnlyMode": "Kalkulator działa tylko w trybie sztuk",
   "selectRecipe": "Wybierz recepturę",
   "selectRecipePlaceholder": "-- Wybierz recepturę --",
   "searchTask": "Wyszukaj zadanie produkcyjne (MO)",
@@ -21,7 +21,7 @@
   "detailedPlan": "Szczegółowy plan mieszań:",
   "product": "Produkt",
   "targetAmount": "Docelowa ilość",
-  "mixerVolumeLabel": "Objętość mieszalnika",
+  "mainIngredientLabel": "Główny składnik na mieszanie",
   "numberOfMixings": "Liczba mieszań",
   "mixingNumber": "Nr mieszania",
   "volume": "Objętość",
@@ -30,16 +30,46 @@
   "quantity": "Ilość",
   "unit": "Jednostka",
   "ingredientsSum": "suma składników",
-  "weightMode": "Waga (kg)",
-  "piecesMode": "Sztuki",
+
   "kg": "kg",
   "pieces": "szt.",
+  "selectRecipeFirst": "Najpierw wybierz recepturę",
+  "summary": {
+    "title": "Podsumowanie planu mieszań",
+    "totalMixings": "Łącznie mieszań",
+    "totalPieces": "Łącznie sztuk",
+    "totalWeight": "Łączna waga",
+    "mainIngredientTotal": "Łącznie głównego składnika",
+    "roundingTooltip": "Znak ~ oznacza wartość zaokrągloną (nie jest to liczba całkowita)"
+  },
   "errors": {
     "selectRecipe": "Wybierz recepturę przed obliczeniem",
+    "mainIngredientQuantityPositive": "Ilość głównego składnika musi być większa od zera",
+    "noMainIngredientFound": "Nie znaleziono głównego składnika w recepturze",
     "mixerVolumePositive": "Objętość mieszalnika musi być większa od zera",
     "targetAmountPositive": "Docelowa ilość musi być większa od zera",
     "fetchRecipesFailed": "Nie udało się pobrać receptur",
     "fetchTasksFailed": "Nie udało się pobrać zadań produkcyjnych",
+    "csv": {
+      "volume": "Objętość",
+      "piecesCount": "Liczba sztuk",
+      "productName": "Nazwa produktu", 
+      "ingredient": "Składnik",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "checked": "Sprawdzone",
+      "addedToMixer": "Dodane do mieszalnika",
+      "completed": "Zakończone",
+      "mixing": "Mieszanie nr {{number}}",
+      "summary": "Podsumowanie",
+      "totalsPerIngredient": "Sumy składników",
+      "targetQuantity": "Docelowa ilość",
+      "mainIngredient": "Główny składnik",
+      "mainIngredientQuantity": "Ilość głównego składnika",
+      "numberOfMixings": "Liczba mieszań",
+      "totalPieces": "Łącznie sztuk",
+      "totalWeight": "Łączna waga"
+    },
     "selectedRecipeNoIngredients": "Wybrana receptura nie zawiera składników",
     "fetchRecipeDetailsFailed": "Nie udało się pobrać szczegółów receptury",
     "calculateFailed": "Nie udało się obliczyć planu mieszań",
@@ -82,10 +112,8 @@
     "targetQuantity": "Docelowa ilość:"
   },
   "alerts": {
-    "piecesGenerated": "Wygenerowano plan {{totalMixings}} mieszań dla {{targetAmount}} sztuk produktu (waga 1 szt. ≈ {{singlePieceWeight}} kg, łączna waga {{totalWeight}} kg). {{fullMixingsText}}{{lastMixingText}}",
-    "weightGenerated": "Wygenerowano plan {{totalMixings}} mieszań: {{fullMixingsCount}} pełnych mieszań po {{mixerVolume}} kg{{remainingText}}.",
+    "piecesGenerated": "Wygenerowano plan {{totalMixings}} mieszań dla {{targetAmount}} sztuk produktu. Główny składnik: {{mainIngredientName}} ({{mainIngredientQuantity}} {{mainIngredientUnit}} na mieszanie). {{fullMixingsText}}{{lastMixingText}}",
     "fullMixingsText": " {{count}} pełnych mieszań po {{pieces}} szt.",
-    "lastMixingText": " oraz 1 mieszanie zawierające {{pieces}} szt.",
-    "remainingText": " oraz 1 mieszanie o objętości {{amount}} kg"
+    "lastMixingText": " oraz 1 mieszanie zawierające {{pieces}} szt."
   }
 }

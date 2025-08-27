@@ -22,10 +22,6 @@ import {
   Divider,
   Tooltip,
   IconButton,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
   FormHelperText,
   Autocomplete,
   InputAdornment
@@ -53,9 +49,8 @@ const CalculatorPage = () => {
   const { t } = useTranslation();
   
   // Główne stany kalkulatora
-  const [mixerVolume, setMixerVolume] = useState(100);
+  const [mainIngredientQuantity, setMainIngredientQuantity] = useState(100);
   const [targetAmount, setTargetAmount] = useState(1000);
-  const [usePieces, setUsePieces] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   
   // Stany pomocnicze
@@ -195,8 +190,8 @@ const CalculatorPage = () => {
       return;
     }
     
-    if (mixerVolume <= 0) {
-      showError(t('calculator.errors.mixerVolumePositive'));
+    if (mainIngredientQuantity <= 0) {
+      showError(t('calculator.errors.mainIngredientQuantityPositive'));
       return;
     }
     
@@ -204,136 +199,126 @@ const CalculatorPage = () => {
       showError(t('calculator.errors.targetAmountPositive'));
       return;
     }
+
+    // Znajdź główny składnik w recepturze
+    const mainIngredient = findMainIngredient(selectedRecipe);
+    if (!mainIngredient) {
+      showError(t('calculator.errors.noMainIngredientFound'));
+      return;
+    }
     
     try {
       console.log(`[DEBUG] Rozpoczynam obliczenia dla receptury: ${selectedRecipe.name}`);
-      console.log(`[DEBUG] Objętość mieszalnika: ${mixerVolume} kg, Docelowa ilość: ${targetAmount}`);
-      console.log(`[DEBUG] Tryb kalkulacji: ${usePieces ? 'Sztuki' : 'Kilogramy'}`);
+      console.log(`[DEBUG] Główny składnik: ${mainIngredient.name} (${mainIngredient.quantity} ${mainIngredient.unit})`);
+      console.log(`[DEBUG] Ilość głównego składnika na mieszanie: ${mainIngredientQuantity} ${mainIngredient.unit}`);
+      console.log(`[DEBUG] Docelowa ilość: ${targetAmount} szt.`);
       
       let mixingPlan = [];
       
-      // Sprawdź, czy używamy trybu sztuk czy kilogramów
-      // true = sztuki, false = kilogramy
-      console.log(`Tryb kalkulacji: ${usePieces ? 'Sztuki' : 'Kilogramy'}`);
+      console.log(`[DEBUG] Tryb kalkulacji: Sztuki (jedyny dostępny tryb)`);
       
-      // Najpierw obliczamy przybliżoną wagę jednej sztuki produktu na podstawie składników
-      // (tylko gdy używamy trybu sztuk)
-      if (usePieces) {
-        // Pobierz składniki dla 1 sztuki
-        const testIngredients = calculateIngredientsForBatch(1, selectedRecipe, true);
-        
-        // Oblicz sumę wag składników na 1 sztukę
-        const singlePieceWeight = testIngredients
+      // Logika oparta na ilości głównego składnika - tylko tryb sztuk
+      // Oblicz współczynnik skalowania na podstawie głównego składnika
+      const mainIngredientOriginalQuantity = parseFloat(mainIngredient.quantity);
+      const scaleFactor = mainIngredientQuantity / mainIngredientOriginalQuantity;
+      
+      console.log(`[DEBUG] Oryginalana ilość głównego składnika w recepturze: ${mainIngredientOriginalQuantity} ${mainIngredient.unit}`);
+      console.log(`[DEBUG] Współczynnik skalowania: ${scaleFactor.toFixed(6)}`);
+      
+      // Oblicz ile sztuk można wyprodukować z jednego mieszania
+      const recipeYield = selectedRecipe.yield?.quantity || 1;
+      const piecesPerMixing = scaleFactor * recipeYield;
+      
+      console.log(`[DEBUG] Wydajność receptury: ${recipeYield} szt.`);
+      console.log(`[DEBUG] Sztuki z jednego mieszania: ${piecesPerMixing.toFixed(6)}`);
+      
+      // Oblicz liczbę mieszań potrzebnych do wyprodukowania docelowej ilości
+      const totalMixingsNeeded = targetAmount / piecesPerMixing;
+      const fullMixingsCount = Math.floor(totalMixingsNeeded);
+      
+      // Używamy precyzyjnej arytmetyki aby uniknąć błędów zmiennoprzecinkowych
+      // Obliczamy dokładną liczbę sztuk które pozostały
+      const piecesInFullMixings = fullMixingsCount * piecesPerMixing;
+      const remainingPieces = Math.round((targetAmount - piecesInFullMixings) * 1000000) / 1000000; // Zaokrąglenie do 6 miejsc po przecinku
+      
+      console.log(`[DEBUG] Całkowita liczba mieszań potrzebnych: ${totalMixingsNeeded.toFixed(6)}`);
+      console.log(`[DEBUG] Liczba pełnych mieszań: ${fullMixingsCount}`);
+      console.log(`[DEBUG] Sztuki w pełnych mieszaniach: ${piecesInFullMixings.toFixed(6)}`);
+      console.log(`[DEBUG] Pozostałe sztuki: ${remainingPieces.toFixed(6)}`);
+      
+      // Dodanie pełnych mieszań
+      for (let i = 0; i < fullMixingsCount; i++) {
+        const ingredients = calculateIngredientsForBatch(piecesPerMixing, selectedRecipe, true);
+        const totalWeight = ingredients
+          .filter(ing => ing.unit === 'kg')
+          .reduce((sum, ing) => sum + ing.quantity, 0);
+          
+        mixingPlan.push({
+          mixingNumber: i + 1,
+          volumeToMix: totalWeight,
+          calculatedWeight: totalWeight,
+          piecesCount: piecesPerMixing,
+          recipeName: selectedRecipe.name,
+          mainIngredientName: mainIngredient.name,
+          mainIngredientQuantity: mainIngredientQuantity,
+          ingredients: ingredients
+        });
+      }
+      
+      // Dodanie mieszania dla pozostałych sztuk, jeśli istnieją
+      if (remainingPieces > 0.000001) { // Precyzyjny próg
+        const ingredients = calculateIngredientsForBatch(remainingPieces, selectedRecipe, true);
+        const totalWeight = ingredients
           .filter(ing => ing.unit === 'kg')
           .reduce((sum, ing) => sum + ing.quantity, 0);
         
-        console.log(`[DEBUG] Waga jednej sztuki produktu: ${singlePieceWeight.toFixed(6)} kg`);
-        
-        // Całkowita waga potrzebna do produkcji wszystkich sztuk
-        const totalWeight = singlePieceWeight * targetAmount;
-        console.log(`[DEBUG] Całkowita waga do wyprodukowania ${targetAmount} szt.: ${totalWeight.toFixed(6)} kg`);
-        
-        // Obliczenie liczby pełnych mieszań na podstawie całkowitej wagi
-        const fullMixingsCount = Math.floor(totalWeight / mixerVolume);
-        console.log(`[DEBUG] Liczba pełnych mieszań: ${fullMixingsCount}, totalWeight/mixerVolume = ${(totalWeight/mixerVolume).toFixed(6)}`);
-        
-        // Obliczenie wagi pozostałej po pełnych mieszaniach
-        const remainingWeight = totalWeight % mixerVolume;
-        console.log(`[DEBUG] Pozostała waga: ${remainingWeight.toFixed(6)} kg`);
-        
-        // Obliczenie liczby sztuk w każdym pełnym mieszaniu
-        const piecesPerFullMixing = Math.round((mixerVolume / totalWeight) * targetAmount);
-        console.log(`[DEBUG] Liczba sztuk w pełnym mieszaniu: ${piecesPerFullMixing}, wzór: (${mixerVolume}/${totalWeight.toFixed(6)})*${targetAmount} = ${((mixerVolume / totalWeight) * targetAmount).toFixed(6)}`);
-        
-        // Liczba sztuk w ostatnim, niepełnym mieszaniu
-        const piecesInLastMixing = targetAmount - (piecesPerFullMixing * fullMixingsCount);
-        console.log(`[DEBUG] Sztuki w ostatnim mieszaniu: ${piecesInLastMixing} (${targetAmount} - ${piecesPerFullMixing} * ${fullMixingsCount})`);
-        
-        // Dodanie pełnych mieszań
-        for (let i = 0; i < fullMixingsCount; i++) {
-          mixingPlan.push({
-            mixingNumber: i + 1,
-            volumeToMix: mixerVolume,
-            calculatedWeight: mixerVolume,
-            piecesCount: piecesPerFullMixing,
-            recipeName: selectedRecipe.name,
-            ingredients: calculateIngredientsForBatch(piecesPerFullMixing, selectedRecipe, true)
-          });
-        }
-        
-        // Dodanie mieszania dla pozostałych sztuk, jeśli istnieją
-        if (piecesInLastMixing > 0) {
-          mixingPlan.push({
-            mixingNumber: fullMixingsCount + 1,
-            volumeToMix: remainingWeight,
-            calculatedWeight: remainingWeight,
-            piecesCount: piecesInLastMixing,
-            recipeName: selectedRecipe.name,
-            ingredients: calculateIngredientsForBatch(piecesInLastMixing, selectedRecipe, true)
-          });
-        }
-        
-        // Ustawienie wyniku obliczenia
-        setCalculationResult({
-          targetAmount,
-          mixerVolume,
-          fullMixingsCount,
-          remainingWeight,
-          singlePieceWeight, 
-          totalWeight,
-          piecesPerFullMixing,
-          piecesInLastMixing,
-          totalMixings: remainingWeight > 0 ? fullMixingsCount + 1 : fullMixingsCount,
+        // Oblicz proporcjonalną ilość głównego składnika dla ostatniego mieszania
+        const lastMixingMainIngredientQuantity = (remainingPieces / piecesPerMixing) * mainIngredientQuantity;
+          
+        mixingPlan.push({
+          mixingNumber: fullMixingsCount + 1,
+          volumeToMix: totalWeight,
+          calculatedWeight: totalWeight,
+          piecesCount: remainingPieces,
           recipeName: selectedRecipe.name,
-          isProductPieces: usePieces
+          mainIngredientName: mainIngredient.name,
+          mainIngredientQuantity: lastMixingMainIngredientQuantity,
+          ingredients: ingredients
         });
-      } else {
-        // Tradycyjny tryb wg objętości (kg)
-        // Obliczenie liczby pełnych mieszań
-        const fullMixingsCount = Math.floor(targetAmount / mixerVolume);
-        console.log(`Tryb kilogramy: Docelowa ilość ${targetAmount} kg, objętość mieszalnika ${mixerVolume} kg`);
-        console.log(`Liczba pełnych mieszań: ${fullMixingsCount}, każde po ${mixerVolume} kg`);
-        
-        // Obliczenie ilości pozostałej po pełnych mieszaniach
-        const remainingAmount = targetAmount % mixerVolume;
-        if (remainingAmount > 0) {
-          console.log(`Pozostała ilość: ${remainingAmount} kg`);
+      }
+      
+      // Ustawienie wyniku obliczenia
+      setCalculationResult({
+        targetAmount,
+        mainIngredientQuantity,
+        mainIngredientName: mainIngredient.name,
+        mainIngredientUnit: mainIngredient.unit,
+        fullMixingsCount,
+        remainingPieces,
+        piecesPerMixing,
+        totalMixings: remainingPieces > 0.000001 ? fullMixingsCount + 1 : fullMixingsCount,
+        recipeName: selectedRecipe.name,
+        isProductPieces: true
+      });
+      
+      // Walidacja i korekta sumy sztuk
+      let totalCalculatedPieces = 0;
+      mixingPlan.forEach(mixing => {
+        totalCalculatedPieces += mixing.piecesCount || 0;
+      });
+      
+      console.log(`[DEBUG] Suma wyliczonych sztuk przed korektą: ${totalCalculatedPieces.toFixed(6)}`);
+      console.log(`[DEBUG] Docelowa liczba sztuk: ${targetAmount}`);
+      
+      // Jeśli różnica jest minimalna (błąd zmiennoprzecinkowy), skoryguj ostatnie mieszanie
+      const piecesDiscrepancy = targetAmount - totalCalculatedPieces;
+      if (Math.abs(piecesDiscrepancy) > 0.000001 && Math.abs(piecesDiscrepancy) < 0.01) {
+        console.log(`[DEBUG] Korygujemy różnicę w sztukach: ${piecesDiscrepancy.toFixed(6)}`);
+        if (mixingPlan.length > 0) {
+          const lastMixing = mixingPlan[mixingPlan.length - 1];
+          lastMixing.piecesCount = (lastMixing.piecesCount || 0) + piecesDiscrepancy;
+          console.log(`[DEBUG] Nowa liczba sztuk w ostatnim mieszaniu: ${lastMixing.piecesCount.toFixed(6)}`);
         }
-        
-        // Dodanie pełnych mieszań
-        for (let i = 0; i < fullMixingsCount; i++) {
-          const ingredients = calculateIngredientsForBatch(mixerVolume, selectedRecipe, false);
-          mixingPlan.push({
-            mixingNumber: i + 1,
-            volumeToMix: mixerVolume,
-            calculatedWeight: mixerVolume,
-            recipeName: selectedRecipe.name,
-            ingredients: ingredients
-          });
-        }
-        
-        // Dodanie mieszania dla pozostałej ilości, jeśli istnieje
-        if (remainingAmount > 0) {
-          const ingredients = calculateIngredientsForBatch(remainingAmount, selectedRecipe, false);
-          mixingPlan.push({
-            mixingNumber: fullMixingsCount + 1,
-            volumeToMix: remainingAmount,
-            calculatedWeight: remainingAmount,
-            recipeName: selectedRecipe.name,
-            ingredients: ingredients
-          });
-        }
-        
-        // Ustawienie wyniku obliczenia
-        setCalculationResult({
-          targetAmount,
-          mixerVolume,
-          fullMixingsCount,
-          remainingAmount,
-          totalMixings: remainingAmount > 0 ? fullMixingsCount + 1 : fullMixingsCount,
-          recipeName: selectedRecipe.name,
-          isProductPieces: usePieces
-        });
       }
       
       setMixings(mixingPlan);
@@ -367,6 +352,10 @@ const CalculatorPage = () => {
       
       console.log(`Całkowita suma wag wszystkich mieszań: ${totalCalculatedWeight.toFixed(2)} kg`);
       
+      // Pokaż ostateczną sumę sztuk
+      const finalTotalPieces = mixingPlan.reduce((sum, mixing) => sum + (mixing.piecesCount || 0), 0);
+      console.log(`[DEBUG] Ostateczna suma sztuk: ${finalTotalPieces.toFixed(6)}`);
+      
       showSuccess(t('calculator.success.planCalculated'));
     } catch (error) {
       console.error('Błąd podczas obliczania planu mieszań:', error);
@@ -374,6 +363,55 @@ const CalculatorPage = () => {
     }
   };
   
+  // Funkcja pomocnicza do znajdowania głównego składnika (o największym udziale w recepturze)
+  const findMainIngredient = (recipe) => {
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+      return null;
+    }
+
+    // Przefiltruj składniki, pomijając opakowania
+    const filteredIngredients = recipe.ingredients.filter(ingredient => {
+      const categoryFromIngredient = ingredient.category;
+      const categoryFromItem = ingredient.inventoryItem?.category;
+      const categoryDirectly = ingredient.inventoryItemCategory;
+      const effectiveCategory = categoryFromIngredient || categoryFromItem || categoryDirectly;
+      const isPackaging = effectiveCategory === 'Opakowania';
+      const isPackagingByName = ingredient.name && 
+        (ingredient.name.startsWith('PACK') || ingredient.name.includes('PACK'));
+      return !isPackaging && !isPackagingByName;
+    });
+
+    if (filteredIngredients.length === 0) {
+      return null;
+    }
+
+    // Znajdź składnik o największej ilości (w kg)
+    let mainIngredient = null;
+    let maxQuantity = 0;
+
+    filteredIngredients.forEach(ingredient => {
+      const quantity = parseFloat(ingredient.quantity || 0);
+      if (ingredient.unit === 'kg' && quantity > maxQuantity) {
+        maxQuantity = quantity;
+        mainIngredient = ingredient;
+      }
+    });
+
+    // Jeśli nie znaleziono składnika w kg, znajdź największy w innych jednostkach
+    if (!mainIngredient) {
+      filteredIngredients.forEach(ingredient => {
+        const quantity = parseFloat(ingredient.quantity || 0);
+        if (quantity > maxQuantity) {
+          maxQuantity = quantity;
+          mainIngredient = ingredient;
+        }
+      });
+    }
+
+    console.log(`[DEBUG] Główny składnik w recepturze ${recipe.name}: ${mainIngredient?.name} (${maxQuantity} ${mainIngredient?.unit})`);
+    return mainIngredient;
+  };
+
   // Funkcja pomocnicza do przeliczania składników dla danej partii
   const calculateIngredientsForBatch = (batchSize, recipe, useProductPieces = false) => {
     if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
@@ -511,10 +549,8 @@ const CalculatorPage = () => {
     }
     
     try {
-      // Przygotowanie nagłówków CSV
-      let csvContent = usePieces ? 
-        `${t('calculator.csv.volume')};${t('calculator.csv.piecesCount')};${t('calculator.csv.productName')};${t('calculator.csv.ingredient')};${t('calculator.csv.quantity')};${t('calculator.csv.unit')};${t('calculator.csv.checked')};${t('calculator.csv.addedToMixer')};${t('calculator.csv.completed')}\n` : 
-        `${t('calculator.csv.volume')};${t('calculator.csv.productName')};${t('calculator.csv.ingredient')};${t('calculator.csv.quantity')};${t('calculator.csv.unit')};${t('calculator.csv.checked')};${t('calculator.csv.addedToMixer')};${t('calculator.csv.completed')}\n`;
+      // Przygotowanie nagłówków CSV (zawsze z kolumną liczby sztuk)
+      let csvContent = `${t('calculator.csv.volume')};${t('calculator.csv.piecesCount')};${t('calculator.csv.productName')};${t('calculator.csv.ingredient')};${t('calculator.csv.quantity')};${t('calculator.csv.unit')};${t('calculator.csv.checked')};${t('calculator.csv.addedToMixer')};${t('calculator.csv.completed')}\n`;
       
       // Przygotowanie sumy dla każdego surowca
       let ingredientTotals = {};
@@ -522,19 +558,17 @@ const CalculatorPage = () => {
       // Dodanie wierszy dla każdego mieszania i jego składników
       mixings.forEach(mixing => {
         // Dodaj wyróżniony nagłówek dla każdego mieszania
-        const headerColumns = usePieces ? 9 : 8; // Zwiększono liczbę kolumn
+        const headerColumns = 9; // Zawsze 9 kolumn (włącznie z liczbą sztuk)
         csvContent += `"${t('calculator.csv.mixing', { number: mixing.mixingNumber })}"${';'.repeat(headerColumns - 1)}\n`;
         
         // Dodaj wiersz z informacją o objętości mieszania i liczbie sztuk (jeśli w trybie sztuk)
         const formattedVolumeToMix = `="${Number(mixing.volumeToMix).toFixed(4)}"`;
         
         // Dodaj jednorazowo objętość i liczbę sztuk pod nagłówkiem mieszania
-        if (usePieces) {
-          const formattedPiecesCount = `="${mixing.piecesCount || 0}"`;
-          csvContent += `${formattedVolumeToMix};${formattedPiecesCount};${mixing.recipeName};;;;;\n`;
-        } else {
-          csvContent += `${formattedVolumeToMix};${mixing.recipeName};;;;;\n`;
-        }
+        const pieces = mixing.piecesCount || 0;
+        const isRounded = Math.abs(pieces - Math.round(pieces)) > 0.001;
+        const formattedPiecesCount = `="${isRounded ? '~' : ''}${pieces.toFixed(3)}"`;
+        csvContent += `${formattedVolumeToMix};${formattedPiecesCount};${mixing.recipeName};;;;;\n`;
         
         // Używamy przefiltrowanych składników bez opakowań
         mixing.ingredients.forEach(ingredient => {
@@ -557,13 +591,8 @@ const CalculatorPage = () => {
               formattedQuantity = '="0.0000"';
             }
             
-            if (usePieces) {
-              // Format dla trybu sztuk produktu - bez powtarzania objętości i liczby sztuk
-              csvContent += `;;;${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
-            } else {
-              // Format dla trybu kilogramów - bez powtarzania objętości
-              csvContent += `;;${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
-            }
+            // Format zawsze z miejscem na liczbę sztuk
+            csvContent += `;;;${ingredient.name};${formattedQuantity};${ingredient.unit};;;\n`;
           }
         });
         
@@ -573,37 +602,39 @@ const CalculatorPage = () => {
       
       // Dodaj podsumowanie na końcu pliku CSV
       if (calculationResult) {
-        csvContent += `${';'.repeat(usePieces ? 5 : 4)}\n`;
+        csvContent += `${';'.repeat(5)}\n`;
         
         // Dodaj podsumowanie dla każdego surowca
-        csvContent += `"${t('calculator.csv.summary')}"${';'.repeat(usePieces ? 8 : 7)}\n`;
+        csvContent += `"${t('calculator.csv.summary')}"${';'.repeat(8)}\n`;
         
         // Dodaj sumy dla każdego surowca
-        csvContent += `"${t('calculator.csv.totalsPerIngredient')}"${';'.repeat(usePieces ? 8 : 7)}\n`;
+        csvContent += `"${t('calculator.csv.totalsPerIngredient')}"${';'.repeat(8)}\n`;
         Object.keys(ingredientTotals).forEach(ingredientName => {
           const ingredientData = ingredientTotals[ingredientName];
           const formattedQuantity = `="${ingredientData.quantity.toFixed(4)}"`;
           
-          if (usePieces) {
-            csvContent += `;;;${ingredientName};${formattedQuantity};${ingredientData.unit};;;\n`;
-          } else {
-            csvContent += `;;${ingredientName};${formattedQuantity};${ingredientData.unit};;;\n`;
-          }
+          csvContent += `;;;${ingredientName};${formattedQuantity};${ingredientData.unit};;;\n`;
         });
         
-        csvContent += `${';'.repeat(usePieces ? 8 : 7)}\n`;
+        csvContent += `${';'.repeat(8)}\n`;
         
-        if (usePieces) {
-          // Podsumowanie dla trybu sztuk
-          csvContent += `"${t('calculator.csv.totalPieces')}";="${calculationResult.targetAmount}";;;;;\n`;
-          csvContent += `"${t('calculator.csv.pieceWeight')}";="${calculationResult.singlePieceWeight?.toFixed(4)}";${t('calculator.kg')};;;;;\n`;
-          csvContent += `"${t('calculator.csv.totalWeight')}";="${calculationResult.totalWeight?.toFixed(4)}";${t('calculator.kg')};;;;;\n`;
-          csvContent += `"${t('calculator.csv.numberOfMixings')}";="${calculationResult.totalMixings}";;;;;\n`;
-        } else {
-          // Podsumowanie dla trybu kilogramów
-          csvContent += `"${t('calculator.csv.targetQuantity')}";="${calculationResult.targetAmount}";${t('calculator.kg')};;;;;\n`;
-          csvContent += `"${t('calculator.csv.numberOfMixings')}";="${calculationResult.totalMixings}";;;;;\n`;
-        }
+        // Podsumowanie zawsze z informacją o sztukach
+        csvContent += `"${t('calculator.csv.targetQuantity')}";="${calculationResult.targetAmount}";${t('calculator.pieces')};;;;;\n`;
+        csvContent += `"${t('calculator.csv.mainIngredient')}";="${calculationResult.mainIngredientName}";;;;;;\n`;
+        csvContent += `"${t('calculator.csv.mainIngredientQuantity')}";="${calculationResult.mainIngredientQuantity}";${calculationResult.mainIngredientUnit};;;;;\n`;
+        csvContent += `"${t('calculator.csv.numberOfMixings')}";="${calculationResult.totalMixings}";;;;;\n`;
+        
+        // Dodaj podsumowanie łącznych wartości
+        const totalPieces = mixings.reduce((sum, mixing) => sum + (mixing.piecesCount || 0), 0);
+        const isPiecesRounded = Math.abs(totalPieces - Math.round(totalPieces)) > 0.001;
+        csvContent += `"${t('calculator.csv.totalPieces')}";="${isPiecesRounded ? '~' : ''}${totalPieces.toFixed(3)}";;;;;;\n`;
+        
+        const totalWeight = mixings.reduce((sum, mixing) => {
+          const weight = mixing.totalIngredientsWeight || mixing.volumeToMix || 0;
+          return sum + weight;
+        }, 0);
+        const isWeightRounded = Math.abs(totalWeight - Math.round(totalWeight)) > 0.001;
+        csvContent += `"${t('calculator.csv.totalWeight')}";="${isWeightRounded ? '~' : ''}${totalWeight.toFixed(3)}";kg;;;;;\n`;
       }
       
       // Utworzenie i pobranie pliku CSV
@@ -611,7 +642,7 @@ const CalculatorPage = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       
-      const fileName = `plan_mieszan_${selectedRecipe.name.replace(/\s+/g, '_')}_${usePieces ? 'sztuki' : 'kg'}_${new Date().toISOString().slice(0, 10)}.csv`;
+      const fileName = `plan_mieszan_${selectedRecipe.name.replace(/\s+/g, '_')}_sztuki_${new Date().toISOString().slice(0, 10)}.csv`;
       link.setAttribute('href', url);
       link.setAttribute('download', fileName);
       link.style.visibility = 'hidden';
@@ -629,14 +660,13 @@ const CalculatorPage = () => {
   
   // Resetowanie kalkulatora
   const resetCalculator = () => {
-    setMixerVolume(100);
+    setMainIngredientQuantity(100);
     setTargetAmount(1000);
     setSelectedRecipeId('');
     setSelectedTaskId('');
     setMoSearchQuery('');
     setCalculationResult(null);
     setMixings([]);
-    setUsePieces(false);
     showInfo(t('calculator.success.calculatorReset'));
   };
 
@@ -680,10 +710,6 @@ const CalculatorPage = () => {
       
       // Ustawiamy ilość docelową na podstawie ilości z zadania produkcyjnego
       setTargetAmount(task.quantity);
-      
-      // Ustawiamy tryb kalkulacji na podstawie jednostki z zadania
-      const isPiecesUnit = task.unit === 'szt.' || task.unit === 'pcs' || task.unit === 'ea';
-      setUsePieces(isPiecesUnit);
       
       // Wywołujemy funkcję do obliczenia planu mieszań
       calculateMixings();
@@ -751,22 +777,27 @@ const CalculatorPage = () => {
         <Divider sx={{ my: 3 }} />
         
         <Grid container spacing={3}>
-          {/* Wybór objętości mieszalnika */}
+          {/* Wybór ilości głównego składnika na mieszanie */}
           <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               type="number"
-              label={t('calculator.mixerVolume')}
-              value={mixerVolume}
-              onChange={(e) => setMixerVolume(Number(e.target.value))}
+              label={t('calculator.mainIngredientQuantity')}
+              value={mainIngredientQuantity}
+              onChange={(e) => setMainIngredientQuantity(Number(e.target.value))}
               InputProps={{
                 endAdornment: (
                   <Typography variant="caption" color="text.secondary">
-                    kg
+                    {selectedRecipe && findMainIngredient(selectedRecipe) 
+                      ? findMainIngredient(selectedRecipe).unit 
+                      : 'kg'}
                   </Typography>
                 )
               }}
               variant="outlined"
+              helperText={selectedRecipe && findMainIngredient(selectedRecipe) 
+                ? `Główny składnik: ${findMainIngredient(selectedRecipe).name}`
+                : t('calculator.selectRecipeFirst')}
             />
           </Grid>
           
@@ -781,35 +812,13 @@ const CalculatorPage = () => {
               InputProps={{
                 endAdornment: (
                   <Typography variant="caption" color="text.secondary">
-                    {usePieces ? t('calculator.pieces') : t('calculator.kg')}
+                    {t('calculator.pieces')}
                   </Typography>
                 )
               }}
               variant="outlined"
+              helperText={t('calculator.piecesOnlyMode')}
             />
-          </Grid>
-          
-          {/* Wybór trybu kalkulacji */}
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth component="fieldset">
-              <FormLabel component="legend">{t('calculator.calculationMode')}</FormLabel>
-              <RadioGroup
-                row
-                value={usePieces ? 'pieces' : 'weight'}
-                onChange={(e) => setUsePieces(e.target.value === 'pieces')}
-              >
-                <FormControlLabel
-                  value="weight"
-                  control={<Radio />}
-                  label={t('calculator.weightMode')}
-                />
-                <FormControlLabel
-                  value="pieces"
-                  control={<Radio />}
-                  label={t('calculator.piecesMode')}
-                />
-              </RadioGroup>
-            </FormControl>
           </Grid>
           
           {/* Wybór receptury */}
@@ -915,7 +924,7 @@ const CalculatorPage = () => {
                 variant="contained"
                 color="primary"
                 onClick={calculateMixings}
-                disabled={loading || !selectedRecipeId || mixerVolume <= 0 || targetAmount <= 0}
+                disabled={loading || !selectedRecipeId || mainIngredientQuantity <= 0 || targetAmount <= 0}
                 startIcon={<CalculateIcon />}
               >
                 {t('calculator.calculate')}
@@ -1001,7 +1010,7 @@ const CalculatorPage = () => {
                   {t('calculator.targetAmount')}
                 </Typography>
                 <Typography variant="h6">
-                  {calculationResult.targetAmount} {usePieces ? t('calculator.pieces') : t('calculator.kg')}
+                  {calculationResult.targetAmount} {t('calculator.pieces')}
                 </Typography>
               </Paper>
             </Grid>
@@ -1013,10 +1022,13 @@ const CalculatorPage = () => {
                 color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
               }}>
                 <Typography variant="body2" color={theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'}>
-                  {t('calculator.mixerVolumeLabel')}
+                  {t('calculator.mainIngredientLabel')}
                 </Typography>
                 <Typography variant="h6">
-                  {calculationResult.mixerVolume} {t('calculator.kg')}
+                  {calculationResult.mainIngredientQuantity} {calculationResult.mainIngredientUnit}
+                </Typography>
+                <Typography variant="caption" display="block">
+                  {calculationResult.mainIngredientName}
                 </Typography>
               </Paper>
             </Grid>
@@ -1057,7 +1069,7 @@ const CalculatorPage = () => {
                 }}>
                   <TableCell>{t('calculator.mixingNumber')}</TableCell>
                   <TableCell>{t('calculator.volume')}</TableCell>
-                  {usePieces && <TableCell>{t('calculator.piecesCount')}</TableCell>}
+                  <TableCell>{t('calculator.piecesCount')}</TableCell>
                   <TableCell>{t('calculator.ingredient')}</TableCell>
                   <TableCell align="right">{t('calculator.quantity')}</TableCell>
                   <TableCell>{t('calculator.unit')}</TableCell>
@@ -1083,14 +1095,20 @@ const CalculatorPage = () => {
                             <Typography variant="caption" display="block" color={theme => 
                               theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'
                             }>
-                              ({t('calculator.ingredientsSum')}: {mixing.totalIngredientsWeight.toFixed(4)} {t('calculator.kg')})
+                              ({t('calculator.ingredientsSum')}: {mixing.totalIngredientsWeight ? mixing.totalIngredientsWeight.toFixed(4) : mixing.volumeToMix.toFixed(4)} {t('calculator.kg')})
                             </Typography>
                           </TableCell>
-                          {usePieces && (
-                            <TableCell rowSpan={mixing.ingredients.length}>
-                              {mixing.piecesCount}
-                            </TableCell>
-                          )}
+                          <TableCell rowSpan={mixing.ingredients.length}>
+                            <Tooltip title={t('calculator.summary.roundingTooltip')} arrow>
+                              <span style={{ cursor: 'help' }}>
+                                {(() => {
+                                  const pieces = mixing.piecesCount || 0;
+                                  const isRounded = Math.abs(pieces - Math.round(pieces)) > 0.001;
+                                  return `${isRounded ? '~' : ''}${pieces.toFixed(3)}`;
+                                })()}
+                              </span>
+                            </Tooltip>
+                          </TableCell>
                         </>
                       )}
                       <TableCell>{ingredient.name}</TableCell>
@@ -1102,35 +1120,89 @@ const CalculatorPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Sekcja z sumą planu mieszań */}
+          <Paper sx={{ 
+            p: 2, 
+            mt: 2, 
+            backgroundColor: theme => theme.palette.mode === 'dark' ? '#2a3f5f' : '#e3f2fd',
+            border: theme => `1px solid ${theme.palette.mode === 'dark' ? '#4a6fa5' : '#90caf9'}`
+          }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+              {t('calculator.summary.title')}
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={6} md={3}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('calculator.summary.totalMixings')}
+                </Typography>
+                <Typography variant="h6">
+                  {calculationResult.totalMixings}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('calculator.summary.totalPieces')}
+                </Typography>
+                <Tooltip title={t('calculator.summary.roundingTooltip')} arrow>
+                  <Typography variant="h6" sx={{ cursor: 'help' }}>
+                    {(() => {
+                      const totalPieces = mixings.reduce((sum, mixing) => sum + (mixing.piecesCount || 0), 0);
+                      const isRounded = Math.abs(totalPieces - Math.round(totalPieces)) > 0.001;
+                      return `${isRounded ? '~' : ''}${totalPieces.toFixed(3)}`;
+                    })()}
+                  </Typography>
+                </Tooltip>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('calculator.summary.totalWeight')}
+                </Typography>
+                <Typography variant="h6">
+                  {(() => {
+                    const totalWeight = mixings.reduce((sum, mixing) => {
+                      const weight = mixing.totalIngredientsWeight || mixing.volumeToMix || 0;
+                      return sum + weight;
+                    }, 0);
+                    const isRounded = Math.abs(totalWeight - Math.round(totalWeight)) > 0.001;
+                    return `${isRounded ? '~' : ''}${totalWeight.toFixed(3)} kg`;
+                  })()}
+                </Typography>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('calculator.summary.mainIngredientTotal')}
+                </Typography>
+                <Typography variant="h6">
+                  {(() => {
+                    const totalMainIngredient = mixings.reduce((sum, mixing) => {
+                      return sum + (mixing.mainIngredientQuantity || 0);
+                    }, 0);
+                    const isRounded = Math.abs(totalMainIngredient - Math.round(totalMainIngredient)) > 0.001;
+                    return `${isRounded ? '~' : ''}${totalMainIngredient.toFixed(3)} ${calculationResult.mainIngredientUnit}`;
+                  })()}
+                </Typography>
+              </Grid>
+            </Grid>
+          </Paper>
            
           <Alert severity="info" sx={{ mt: 2 }}>
-            {calculationResult.isProductPieces ? (
-              t('calculator.alerts.piecesGenerated', {
-                totalMixings: calculationResult.totalMixings,
-                targetAmount: calculationResult.targetAmount,
-                singlePieceWeight: calculationResult.singlePieceWeight?.toFixed(4),
-                totalWeight: calculationResult.totalWeight?.toFixed(4),
-                fullMixingsText: calculationResult.fullMixingsCount > 0 ? 
-                  t('calculator.alerts.fullMixingsText', { 
-                    count: calculationResult.fullMixingsCount, 
-                    pieces: calculationResult.piecesPerFullMixing 
-                  }) : '',
-                lastMixingText: calculationResult.piecesInLastMixing > 0 ? 
-                  t('calculator.alerts.lastMixingText', { 
-                    pieces: calculationResult.piecesInLastMixing 
-                  }) : ''
-              })
-            ) : (
-              t('calculator.alerts.weightGenerated', {
-                totalMixings: calculationResult.totalMixings,
-                fullMixingsCount: calculationResult.fullMixingsCount,
-                mixerVolume: calculationResult.mixerVolume,
-                remainingText: calculationResult.remainingAmount > 0 ? 
-                  t('calculator.alerts.remainingText', { 
-                    amount: calculationResult.remainingAmount.toFixed(4) 
-                  }) : ''
-              })
-            )}
+            {t('calculator.alerts.piecesGenerated', {
+              totalMixings: calculationResult.totalMixings,
+              targetAmount: calculationResult.targetAmount,
+              mainIngredientName: calculationResult.mainIngredientName,
+              mainIngredientQuantity: calculationResult.mainIngredientQuantity,
+              mainIngredientUnit: calculationResult.mainIngredientUnit,
+              fullMixingsText: calculationResult.fullMixingsCount > 0 ? 
+                t('calculator.alerts.fullMixingsText', { 
+                  count: calculationResult.fullMixingsCount, 
+                  pieces: calculationResult.piecesPerMixing?.toFixed(3) 
+                }) : '',
+              lastMixingText: calculationResult.remainingPieces > 0.000001 ? 
+                t('calculator.alerts.lastMixingText', { 
+                  pieces: calculationResult.remainingPieces?.toFixed(3) 
+                }) : ''
+            })}
           </Alert>
         </Paper>
       )}
