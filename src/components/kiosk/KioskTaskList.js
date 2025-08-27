@@ -20,7 +20,11 @@ import {
   useTheme,
   useMediaQuery,
   TextField,
-  InputAdornment
+  InputAdornment,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   PlayArrow as StartIcon,
@@ -29,7 +33,8 @@ import {
   Schedule as ScheduleIcon,
   Assignment as TaskIcon,
   Factory as ProductionIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Sort as SortIcon
 } from '@mui/icons-material';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -56,31 +61,45 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
 
   const searchTermTimerRef = useRef(null);
   const colors = baseColors[mode];
 
 
 
-  // Funkcja filtrowania zadań na podstawie wyszukiwania
-  const filterTasks = useCallback((tasks, searchTerm) => {
-    if (!searchTerm.trim()) {
-      return tasks;
+  // Funkcja filtrowania zadań na podstawie wyszukiwania i statusu
+  const filterTasks = useCallback((tasks, searchTerm, statusFilter) => {
+    let filtered = tasks;
+
+    // Filtrowanie po statusie
+    if (statusFilter) {
+      filtered = filtered.filter(task => task.status === statusFilter);
     }
 
-    const lowercaseSearch = searchTerm.toLowerCase();
-    return tasks.filter(task => 
-      task.name?.toLowerCase().includes(lowercaseSearch) ||
-      task.moNumber?.toLowerCase().includes(lowercaseSearch) ||
-      task.productName?.toLowerCase().includes(lowercaseSearch) ||
-      task.clientName?.toLowerCase().includes(lowercaseSearch) ||
-      task.recipeName?.toLowerCase().includes(lowercaseSearch)
-    );
+    // Filtrowanie po tekście wyszukiwania
+    if (searchTerm.trim()) {
+      const lowercaseSearch = searchTerm.toLowerCase();
+      filtered = filtered.filter(task => 
+        task.name?.toLowerCase().includes(lowercaseSearch) ||
+        task.moNumber?.toLowerCase().includes(lowercaseSearch) ||
+        task.productName?.toLowerCase().includes(lowercaseSearch) ||
+        task.clientName?.toLowerCase().includes(lowercaseSearch) ||
+        task.recipeName?.toLowerCase().includes(lowercaseSearch)
+      );
+    }
+
+    return filtered;
   }, []);
 
   // Obsługa zmiany pola wyszukiwania
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
+  };
+
+  // Obsługa zmiany filtra statusu
+  const handleStatusFilterChange = (event) => {
+    setStatusFilter(event.target.value);
   };
 
   // Debouncing dla wyszukiwania
@@ -100,11 +119,11 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
     };
   }, [searchTerm]);
 
-  // Filtrowanie zadań gdy zmieni się search term lub lista zadań
+  // Filtrowanie zadań gdy zmieni się search term, status filter lub lista zadań
   useEffect(() => {
-    const filtered = filterTasks(tasks, debouncedSearchTerm);
+    const filtered = filterTasks(tasks, debouncedSearchTerm, statusFilter);
     setFilteredTasks(filtered);
-  }, [tasks, debouncedSearchTerm, filterTasks]);
+  }, [tasks, debouncedSearchTerm, statusFilter, filterTasks]);
 
   // Real-time synchronizacja zadań produkcyjnych
   useEffect(() => {
@@ -119,7 +138,7 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
         const tasksRef = collection(db, 'productionTasks');
         const activeTasksQuery = query(
           tasksRef,
-          where('status', '!=', 'completed')
+          where('status', '!=', 'Anulowane')
         );
 
         unsubscribe = onSnapshot(activeTasksQuery, async (snapshot) => {
@@ -131,23 +150,23 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
               ...doc.data()
             }));
 
-            // Filtrujemy tylko aktywne zadania (nie zakończone i nie anulowane)
+            // Filtrujemy zadania - wyłączamy tylko anulowane
             const activeTasks = tasksData.filter(task => 
-              task.status !== 'completed' && 
-              task.status !== 'cancelled'
+              task.status !== 'Anulowane'
             );
 
             // Sortujemy według statusu i daty
             const sortedTasks = activeTasks.sort((a, b) => {
               const statusPriority = {
-                'in-progress': 1,
-                'ready': 2,
-                'pending': 3,
-                'on-hold': 4
+                'W trakcie': 1,
+                'Wstrzymane': 2,
+                'Zaplanowane': 3,
+                'Zakończone': 4,
+                'Potwierdzenie zużycia': 5
               };
               
-              const priorityA = statusPriority[a.status] || 5;
-              const priorityB = statusPriority[b.status] || 5;
+              const priorityA = statusPriority[a.status] || 6;
+              const priorityB = statusPriority[b.status] || 6;
               
               if (priorityA !== priorityB) {
                 return priorityA - priorityB;
@@ -207,11 +226,12 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
   // Funkcja formatowania statusu
   const getStatusInfo = (status) => {
     const statusConfig = {
-      'pending': { label: 'Oczekujące', icon: <ScheduleIcon />, color: 'warning' },
-      'ready': { label: 'Gotowe', icon: <TaskIcon />, color: 'info' },
-      'in-progress': { label: 'W trakcie', icon: <StartIcon />, color: 'primary' },
-      'on-hold': { label: 'Wstrzymane', icon: <PauseIcon />, color: 'secondary' },
-      'completed': { label: 'Zakończone', icon: <CompleteIcon />, color: 'success' }
+      'Zaplanowane': { label: 'Zaplanowane', icon: <ScheduleIcon />, color: 'warning' },
+      'W trakcie': { label: 'W trakcie', icon: <StartIcon />, color: 'primary' },
+      'Wstrzymane': { label: 'Wstrzymane', icon: <PauseIcon />, color: 'secondary' },
+      'Zakończone': { label: 'Zakończone', icon: <CompleteIcon />, color: 'success' },
+      'Potwierdzenie zużycia': { label: 'Potwierdzenie zużycia', icon: <TaskIcon />, color: 'info' },
+      'Anulowane': { label: 'Anulowane', icon: <TaskIcon />, color: 'error' }
     };
     
     return statusConfig[status] || { label: status, icon: <TaskIcon />, color: 'default' };
@@ -272,10 +292,14 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
       <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
         <SearchIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
         <Typography variant="h6" sx={{ color: colors.text.secondary }}>
-          Brak wyników wyszukiwania
+          {searchTerm && statusFilter ? 'Brak wyników dla podanych kryteriów' : 
+           searchTerm ? 'Brak wyników wyszukiwania' : 
+           statusFilter ? 'Brak zadań z wybranym statusem' : 'Brak wyników'}
         </Typography>
         <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
-          Sprawdź wpisane frazy lub wyczyść wyszukiwanie
+          {searchTerm && statusFilter ? 'Sprawdź wpisane frazy i wybrany status' :
+           searchTerm ? 'Sprawdź wpisane frazy lub wyczyść wyszukiwanie' :
+           statusFilter ? 'Wybierz inny status lub wyczyść filtr' : 'Sprawdź filtry'}
         </Typography>
       </Paper>
     );
@@ -323,7 +347,8 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
               alignItems: 'center', 
               gap: 2, 
               width: isMobile ? '100%' : 'auto',
-              flex: 1
+              flex: 1,
+              flexWrap: 'wrap'
             }}>
               <Box
                 sx={{
@@ -350,7 +375,7 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                 onChange={handleSearchChange}
                 sx={{ 
                   flex: 1,
-                  maxWidth: isMobile ? '100%' : 500,
+                  maxWidth: isMobile ? '100%' : 400,
                   '& .MuiOutlinedInput-root': {
                     fontSize: { xs: '0.9rem', md: '1rem' },
                     backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.8)',
@@ -383,10 +408,86 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
                   }
                 }}
               />
+
+              {/* Filtr statusu */}
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 1,
+                minWidth: isMobile ? '100%' : 200
+              }}>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 'auto'
+                  }}
+                >
+                  <SortIcon sx={{ 
+                    color: 'primary.main', 
+                    fontSize: { xs: 20, md: 24 }
+                  }} />
+                </Box>
+                
+                <FormControl 
+                  size="medium"
+                  sx={{ 
+                    flex: 1,
+                    '& .MuiOutlinedInput-root': {
+                      fontSize: { xs: '0.9rem', md: '1rem' },
+                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.8)',
+                      borderRadius: 3,
+                      border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.95)',
+                        boxShadow: `0 4px 12px rgba(33, 150, 243, 0.15)`
+                      },
+                      '&.Mui-focused': {
+                        borderColor: 'primary.main',
+                        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                        boxShadow: `0 6px 20px rgba(33, 150, 243, 0.2)`
+                      },
+                      '& fieldset': {
+                        border: 'none'
+                      }
+                    }
+                  }}
+                >
+                  <Select
+                    value={statusFilter}
+                    onChange={handleStatusFilterChange}
+                    displayEmpty
+                    sx={{
+                      '& .MuiSelect-select': {
+                        py: { xs: 1.5, md: 2 },
+                        px: 2,
+                        fontWeight: 500,
+                        color: statusFilter ? colors.text.primary : colors.text.secondary
+                      }
+                    }}
+                  >
+                    <MenuItem value="">
+                      <Typography sx={{ fontStyle: 'italic', color: colors.text.secondary }}>
+                        Wszystkie statusy
+                      </Typography>
+                    </MenuItem>
+                    <MenuItem value="W trakcie">W trakcie</MenuItem>
+                    <MenuItem value="Wstrzymane">Wstrzymane</MenuItem>
+                    <MenuItem value="Zaplanowane">Zaplanowane</MenuItem>
+                    <MenuItem value="Zakończone">Zakończone</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
             </Box>
             
             {/* Informacja o liczbie wyników */}
-            {searchTerm && (
+            {(searchTerm || statusFilter) && (
               <Box sx={{ 
                 px: 2, 
                 py: 1,

@@ -88,16 +88,22 @@ const KioskPage = () => {
     <Box 
       ref={containerRef}
       sx={{
+        height: isFullscreen ? '100vh' : 'auto',
         minHeight: '100vh',
         backgroundColor: colors.background,
-        p: isFullscreen ? 2 : { xs: 1, md: 2 }
+        p: isFullscreen ? 2 : { xs: 1, md: 2 },
+        overflowY: isFullscreen ? 'auto' : 'visible',
+        overflowX: 'hidden'
       }}
     >
       <Container 
         maxWidth={false} 
         sx={{ 
-          height: '100%',
-          maxWidth: isFullscreen ? '100%' : '1400px'
+          height: isFullscreen ? 'fit-content' : '100%',
+          minHeight: isFullscreen ? '100%' : 'auto',
+          maxWidth: isFullscreen ? '100%' : '1400px',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
         {/* Nagłówek */}

@@ -4172,6 +4172,16 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         throw new Error('Nie znaleziono zadania produkcyjnego');
       }
       
+      // NOWE: Usuń wszystkie istniejące powiązania składników przed zapisaniem nowego planu
+      try {
+        const { clearAllIngredientLinksForTask } = await import('./mixingPlanReservationService');
+        const clearResult = await clearAllIngredientLinksForTask(taskId, userId);
+        console.log(`Usunięto ${clearResult.deletedCount} starych powiązań składników przed zapisaniem nowego planu`);
+      } catch (error) {
+        console.warn('Ostrzeżenie: Nie udało się usunąć starych powiązań składników:', error);
+        // Kontynuuj mimo błędu - nie przerywaj procesu zapisywania planu
+      }
+      
       // Przygotuj elementy checklisty na podstawie planu mieszań
       const checklistItems = [];
       

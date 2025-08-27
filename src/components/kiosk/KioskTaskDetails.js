@@ -202,7 +202,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
   return (
     <Box>
       {/* Nagłówek z przyciskiem powrotu i wskaźnikiem synchronizacji */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <IconButton
           onClick={onBack}
           sx={{
@@ -241,7 +241,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
         </Box>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={2}>
         {/* Podstawowe informacje o zadaniu */}
         <Grid item xs={12}>
           <Card elevation={0} sx={{ 
@@ -249,9 +249,9 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
             border: `1px solid ${borderColor}`,
             background: colors.paper
           }}>
-            <CardContent sx={{ p: 2.5 }}>
+            <CardContent sx={{ p: 2 }}>
               {/* Header z nazwą i statusem */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h5" sx={{ 
                     fontWeight: 700, 
@@ -288,16 +288,16 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
               </Box>
 
               {/* Informacje szczegółowe */}
-              <Grid container spacing={3}>
+              <Grid container spacing={2}>
                 <Grid item xs={12} md={8}>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                    gap: 2,
-                    mb: 3
+                    gap: 1.5,
+                    mb: 2
                   }}>
                     <Box sx={{ 
-                      p: 2, 
+                      p: 1.5, 
                       borderRadius: 2, 
                       bgcolor: colors.background,
                       border: `1px solid ${borderColor}`
@@ -311,7 +311,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                     </Box>
                     
                     <Box sx={{ 
-                      p: 2, 
+                      p: 1.5, 
                       borderRadius: 2, 
                       bgcolor: colors.background,
                       border: `1px solid ${borderColor}`
@@ -325,7 +325,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                     </Box>
                     
                     <Box sx={{ 
-                      p: 2, 
+                      p: 1.5, 
                       borderRadius: 2, 
                       bgcolor: colors.background,
                       border: `1px solid ${borderColor}`
@@ -338,36 +338,24 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                       </Typography>
                     </Box>
                     
-                    <Box sx={{ 
-                      p: 2, 
-                      borderRadius: 2, 
-                      bgcolor: colors.background,
-                      border: `1px solid ${borderColor}`
-                    }}>
-                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                        Planowany start
-                      </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
-                        {formatDateTime(task.scheduledDate)}
-                      </Typography>
-                    </Box>
+
                   </Box>
                 </Grid>
 
                 {/* Postęp produkcji */}
                 <Grid item xs={12} md={4}>
                   <Box sx={{ 
-                    p: 2.5, 
+                    p: 2, 
                     borderRadius: 2, 
                     bgcolor: `${statusColors.main}08`,
                     border: `1px solid ${statusColors.main}20`,
                     height: 'fit-content'
                   }}>
-                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 2, color: colors.text.primary }}>
+                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 1.5, color: colors.text.primary }}>
                       Postęp produkcji
                     </Typography>
                     
-                    <Box sx={{ mb: 2 }}>
+                    <Box sx={{ mb: 1.5 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                         <Typography variant="body2" sx={{ color: colors.text.secondary }}>
                           {totalCompletedQuantity} / {task.quantity} {task.unit}
@@ -414,8 +402,8 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
             border: `1px solid ${borderColor}`,
             background: colors.paper
           }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3, color: colors.text.primary }}>
+            <CardContent sx={{ p: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: colors.text.primary }}>
                 Plan mieszań
               </Typography>
 
@@ -423,13 +411,13 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                 <>
                   {/* Ogólny postęp */}
                   <Box sx={{ 
-                    mb: 3, 
-                    p: 2.5, 
+                    mb: 2, 
+                    p: 2, 
                     bgcolor: `${palettes.success.main}08`, 
                     borderRadius: 2,
                     border: `1px solid ${palettes.success.main}20`
                   }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body1" sx={{ fontWeight: 600, color: colors.text.primary }}>
                         Postęp ogólny
                       </Typography>
@@ -467,7 +455,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                     
                     return (
                       <Box key={headerItem.id} sx={{ 
-                        mb: 3, 
+                        mb: 2, 
                         border: `1px solid ${borderColor}`, 
                         borderRadius: 3, 
                         overflow: 'hidden',
@@ -475,7 +463,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                       }}>
                         {/* Nagłówek mieszania */}
                         <Box sx={{ 
-                          p: 2.5, 
+                          p: 2, 
                           bgcolor: colors.background,
                           borderBottom: `1px solid ${borderColor}`
                         }}>
@@ -483,14 +471,14 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                             {headerItem.text}
                           </Typography>
                           {headerItem.details && (
-                            <Typography variant="body2" sx={{ color: colors.text.secondary, mb: 2 }}>
+                            <Typography variant="body2" sx={{ color: colors.text.secondary, mb: 1.5 }}>
                               {headerItem.details}
                             </Typography>
                           )}
                           
                           {/* Postęp mieszania */}
                           <Box sx={{ 
-                            p: 2, 
+                            p: 1.5, 
                             bgcolor: `${palettes.info.main}08`, 
                             borderRadius: 2,
                             border: `1px solid ${palettes.info.main}20`
@@ -519,12 +507,12 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                           </Box>
                         </Box>
                         
-                        <Box sx={{ p: 2.5 }}>
-                          <Grid container spacing={3}>
+                        <Box sx={{ p: 2 }}>
+                          <Grid container spacing={2}>
                             {/* Składniki z rezerwacjami */}
                             {ingredients.length > 0 && (
                               <Grid item xs={12} md={8}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2.5, color: colors.text.primary }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: colors.text.primary }}>
                                   Składniki i rezerwacje
                                 </Typography>
                                 
@@ -538,7 +526,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                     gridTemplateColumns: '2fr 1fr 2fr',
                                     gap: 0,
                                     bgcolor: colors.background,
-                                    p: 1.5,
+                                    p: 1,
                                     borderBottom: `1px solid ${borderColor}`
                                   }}>
                                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
@@ -560,7 +548,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                         display: 'grid', 
                                         gridTemplateColumns: '2fr 1fr 2fr',
                                         gap: 2,
-                                        p: 1.5,
+                                        p: 1,
                                         borderBottom: index < ingredients.length - 1 ? `1px solid ${borderColor}` : 'none',
                                         '&:hover': {
                                           bgcolor: colors.background
@@ -630,7 +618,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                             {/* Status wykonania - pokazuj tylko jeśli są elementy do sprawdzenia */}
                             {checkItems.length > 0 && (
                               <Grid item xs={12} md={ingredients.length > 0 ? 4 : 12}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2.5, color: colors.text.primary }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: colors.text.primary }}>
                                   Status wykonania
                                 </Typography>
                               
@@ -643,7 +631,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                     <Box
                                       key={item.id}
                                       sx={{
-                                        p: 1.5,
+                                        p: 1,
                                         borderBottom: index < checkItems.length - 1 ? `1px solid ${borderColor}` : 'none',
                                         '&:hover': {
                                           bgcolor: colors.background
@@ -706,7 +694,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                   })}
                 </>
               ) : (
-                <Box sx={{ textAlign: 'center', py: 6 }}>
+                                                <Box sx={{ textAlign: 'center', py: 4 }}>
                   <ProductionIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
                   <Typography variant="h6" sx={{ color: colors.text.secondary, mb: 1 }}>
                     Brak planu mieszań

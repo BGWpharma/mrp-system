@@ -608,4 +608,46 @@ export const getDetailedIngredientLinksReport = async (taskId) => {
   }
 };
 
+/**
+ * Usuwa wszystkie powiązania składników dla zadania produkcyjnego
+ * @param {string} taskId - ID zadania produkcyjnego
+ * @param {string} userId - ID użytkownika wykonującego operację
+ * @returns {Promise<Object>} - Wynik operacji
+ */
+export const clearAllIngredientLinksForTask = async (taskId, userId) => {
+  try {
+    // Pobierz wszystkie powiązania dla tego zadania
+    const q = query(
+      collection(db, INGREDIENT_LINKS_COLLECTION),
+      where('taskId', '==', taskId)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      console.log(`Brak powiązań do usunięcia dla zadania ${taskId}`);
+      return {
+        success: true,
+        message: 'Brak powiązań do usunięcia',
+        deletedCount: 0
+      };
+    }
+    
+    // Usuń wszystkie powiązania
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    console.log(`Usunięto ${snapshot.docs.length} powiązań składników dla zadania ${taskId}`);
+    
+    return {
+      success: true,
+      message: `Usunięto ${snapshot.docs.length} powiązań składników`,
+      deletedCount: snapshot.docs.length
+    };
+  } catch (error) {
+    console.error('Błąd podczas usuwania powiązań składników:', error);
+    throw error;
+  }
+};
+
 
