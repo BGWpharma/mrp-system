@@ -23,6 +23,7 @@ import KioskTaskDetails from '../../components/kiosk/KioskTaskDetails';
 import { baseColors, palettes } from '../../styles/colorConfig';
 import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import BackgroundEffects from '../../components/common/BackgroundEffects';
 
 const KioskPage = () => {
   const { t } = useTranslation();
@@ -84,18 +85,21 @@ const KioskPage = () => {
 
   const colors = baseColors[mode];
 
-  return (
-    <Box 
-      ref={containerRef}
-      sx={{
-        height: isFullscreen ? '100vh' : 'auto',
-        minHeight: '100vh',
-        backgroundColor: colors.background,
-        p: isFullscreen ? 2 : { xs: 1, md: 2 },
-        overflowY: isFullscreen ? 'auto' : 'visible',
-        overflowX: 'hidden'
-      }}
-    >
+    return (
+    <>
+      <BackgroundEffects />
+      <Box
+        ref={containerRef}
+        sx={{
+          height: isFullscreen ? '100vh' : 'auto',
+          minHeight: '100vh',
+          backgroundColor: 'transparent',
+          p: isFullscreen ? 2 : { xs: 1, md: 2 },
+          overflowY: isFullscreen ? 'auto' : 'visible',
+          overflowX: 'hidden',
+          position: 'relative'
+        }}
+      >
       <Container 
         maxWidth={false} 
         sx={{ 
@@ -272,6 +276,7 @@ const KioskPage = () => {
         )}
       </Container>
     </Box>
+    </>
   );
 };
 

@@ -938,4 +938,46 @@ export const subscribeToUnreadCount = (userId, callback) => {
   });
   
   return unsubscribe;
+};
+
+/**
+ * Tworzy powiadomienie o zaznaczeniu checkboxa w planie mieszań kiosku
+ * 
+ * @param {string[]} userIds - Tablica ID użytkowników
+ * @param {string} checkboxText - Treść checkboxa
+ * @param {string} mixingNumber - Numer mieszania
+ * @param {string} moNumber - Numer MO (zadania produkcyjnego)
+ * @param {string} createdBy - ID użytkownika, który zaznaczył checkbox
+ * @returns {Promise<string>} - ID utworzonego powiadomienia
+ */
+export const createRealtimeCheckboxNotification = async (userIds, checkboxText, mixingNumber, moNumber, createdBy = null) => {
+  try {
+    let createdByName = 'System';
+    
+    // Pobierz nazwę użytkownika, który zaznaczył checkbox
+    if (createdBy) {
+      try {
+        const user = await getUserById(createdBy);
+        createdByName = user?.displayName || user?.email || user?.uid || 'Nieznany użytkownik';
+      } catch (error) {
+        console.warn('Nie udało się pobrać danych użytkownika:', error);
+      }
+    }
+    
+    const notification = {
+      userIds: userIds,
+      title: 'Plan mieszań - Krok ukończony',
+      message: `Zaznaczono ${checkboxText}, mieszanie ${mixingNumber} w zadaniu produkcyjnym ${moNumber}`,
+      type: 'success',
+      entityType: 'mixingPlan',
+      entityId: moNumber,
+      createdBy: createdBy,
+      createdByName: createdByName
+    };
+    
+    return await createRealtimeNotification(notification);
+  } catch (error) {
+    console.error('Błąd podczas tworzenia powiadomienia o zaznaczeniu checkboxa:', error);
+    throw error;
+  }
 }; 

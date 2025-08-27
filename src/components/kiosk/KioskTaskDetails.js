@@ -157,6 +157,48 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
         mixingPlanChecklist: updatedChecklist
       }));
 
+      // Jeśli checkbox został zaznaczony, wyślij powiadomienie
+      if (completed) {
+        try {
+          const { createRealtimeCheckboxNotification } = require('../../services/notificationService');
+          
+          // Znajdź zaznaczony item
+          const checkedItem = task.mixingPlanChecklist.find(item => item.id === itemId);
+          
+          if (checkedItem) {
+            // Znajdź numer mieszania na podstawie parentId
+            let mixingNumber = 'Nieznane';
+            if (checkedItem.parentId) {
+              const headerItem = task.mixingPlanChecklist.find(item => item.id === checkedItem.parentId);
+              if (headerItem) {
+                // Wyodrębnij numer mieszania z tekstu nagłówka (np. "Mieszanie nr 1")
+                const match = headerItem.text.match(/nr\s*(\d+)/i);
+                if (match) {
+                  mixingNumber = match[1];
+                }
+              }
+            }
+            
+            // Lista użytkowników, którzy powinni otrzymać powiadomienie
+            // Możesz dostosować to do swoich potrzeb - np. wszyscy administratorzy
+            const userIds = [currentUser.uid]; // Na razie tylko użytkownik wykonujący akcję
+            
+            await createRealtimeCheckboxNotification(
+              userIds,
+              checkedItem.text,
+              mixingNumber,
+              task.moNumber || task.name || task.id.substring(0, 8),
+              currentUser.uid
+            );
+            
+            console.log(`Wysłano powiadomienie o zaznaczeniu checkboxa: ${checkedItem.text}`);
+          }
+        } catch (notificationError) {
+          console.warn('Nie udało się wysłać powiadomienia o zaznaczeniu checkboxa:', notificationError);
+          // Nie przerywamy głównego procesu - powiadomienie jest dodatkowe
+        }
+      }
+
       showSuccess('Zaktualizowano stan zadania');
     } catch (error) {
       console.error('Błąd podczas aktualizacji checklisty:', error);
@@ -671,7 +713,13 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                                 color: palettes.success.main,
                                                 fontWeight: 500
                                               }}>
-                                                Ukończono: {new Date(item.completedAt).toLocaleDateString('pl-PL')}
+                                                Ukończono: {new Date(item.completedAt).toLocaleString('pl-PL', {
+                                                  year: 'numeric',
+                                                  month: '2-digit',
+                                                  day: '2-digit',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit'
+                                                })}
                                               </Typography>
                                             )}
                                           </Box>
