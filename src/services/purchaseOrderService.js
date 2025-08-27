@@ -2687,8 +2687,254 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
   }
 };
 
+/**
+ * Aktualizuje ceny partii z pełnymi szczegółami różnic (do użycia w interfejsie)
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {string} userId - ID użytkownika dokonującego aktualizacji
+ * @returns {Promise<Object>} - Szczegółowy raport z różnicami
+ */
+const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
+  try {
+    console.log(`🔄 [BATCH_DETAILS_UPDATE] Rozpoczynam aktualizację cen partii z raportem dla zamówienia ${purchaseOrderId}`);
+    
+    // Pobierz aktualne dane zamówienia
+    const poData = await getPurchaseOrderById(purchaseOrderId);
+    if (!poData) {
+      throw new Error(`Nie znaleziono zamówienia o ID ${purchaseOrderId}`);
+    }
+    
+    // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
+    const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const firebaseConfig = await import('./firebase/config');
+    const db = firebaseConfig.db;
+    const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
+    
+    // Znajdź partie używając obu modeli danych
+    let batchesToUpdate = [];
+    
+    // 1. Szukaj partii z polem purchaseOrderDetails.id równym ID zamówienia
+    const batchesQuery = query(
+      collection(db, INVENTORY_BATCHES_COLLECTION),
+      where('purchaseOrderDetails.id', '==', purchaseOrderId)
+    );
+    
+    const batchesSnapshot = await getDocs(batchesQuery);
+    batchesSnapshot.forEach(doc => {
+      batchesToUpdate.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // 2. Szukaj partii używając starszego modelu danych
+    if (batchesToUpdate.length === 0) {
+      const oldFormatQuery = query(
+        collection(db, INVENTORY_BATCHES_COLLECTION),
+        where('sourceDetails.orderId', '==', purchaseOrderId)
+      );
+      
+      const oldFormatSnapshot = await getDocs(oldFormatQuery);
+      oldFormatSnapshot.forEach(doc => {
+        batchesToUpdate.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+    }
+    
+    // DEDUPLIKACJA
+    const uniqueBatchesMap = new Map();
+    batchesToUpdate.forEach(batch => {
+      if (!uniqueBatchesMap.has(batch.id)) {
+        uniqueBatchesMap.set(batch.id, batch);
+      }
+    });
+    
+    batchesToUpdate = Array.from(uniqueBatchesMap.values());
+    
+    console.log(`🔄 [BATCH_DETAILS_UPDATE] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    
+    if (batchesToUpdate.length === 0) {
+      return {
+        success: true,
+        updated: 0,
+        total: 0,
+        details: [],
+        additionalCosts: 0,
+        summary: {
+          changed: 0,
+          unchanged: 0,
+          errors: 0
+        },
+        message: 'Nie znaleziono partii powiązanych z zamówieniem'
+      };
+    }
+    
+    const items = poData.items || [];
+    
+    // Oblicz łączne dodatkowe koszty BRUTTO (z VAT)
+    let additionalCostsGrossTotal = 0;
+    
+    if (poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems)) {
+      additionalCostsGrossTotal = poData.additionalCostsItems.reduce((sum, cost) => {
+        const net = parseFloat(cost.value) || 0;
+        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+        const vat = (net * vatRate) / 100;
+        return sum + net + vat;
+      }, 0);
+    } else if (poData.additionalCosts) {
+      additionalCostsGrossTotal = parseFloat(poData.additionalCosts) || 0;
+    }
+    
+    // Oblicz łączną ilość początkową wszystkich partii
+    const totalInitialQuantity = batchesToUpdate.reduce((sum, batch) => {
+      return sum + (parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0);
+    }, 0);
+    
+    console.log(`🔄 [BATCH_DETAILS_UPDATE] Dodatkowe koszty: ${additionalCostsGrossTotal}, łączna ilość partii: ${totalInitialQuantity}`);
+    
+    // Przygotuj szczegółowy raport z różnicami
+    const updateDetails = [];
+    const updatePromises = [];
+    
+    for (const batchData of batchesToUpdate) {
+      let matchingItem = null;
+      
+      // Dopasuj partię do pozycji
+      const batchItemPoId = batchData.purchaseOrderDetails?.itemPoId || batchData.sourceDetails?.itemPoId;
+      
+      if (batchItemPoId) {
+        matchingItem = items.find(item => item.id === batchItemPoId);
+      }
+      
+      if (!matchingItem) {
+        const batchInventoryItemId = batchData.inventoryItemId || batchData.itemId;
+        if (batchInventoryItemId) {
+          matchingItem = items.find(item => 
+            item.inventoryItemId === batchInventoryItemId || item.id === batchInventoryItemId
+          );
+        }
+        
+        if (!matchingItem) {
+          const batchItemName = batchData.itemName || batchData.name;
+          if (batchItemName) {
+            matchingItem = items.find(item => item.name === batchItemName);
+          }
+        }
+      }
+      
+      if (matchingItem && matchingItem.unitPrice !== undefined) {
+        const oldUnitPrice = parseFloat(batchData.unitPrice) || 0;
+        const oldBaseUnitPrice = parseFloat(batchData.baseUnitPrice) || oldUnitPrice;
+        const oldAdditionalCost = parseFloat(batchData.additionalCostPerUnit) || 0;
+        
+        const newBaseUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        let newAdditionalCost = 0;
+        
+        const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
+        if (additionalCostsGrossTotal > 0 && totalInitialQuantity > 0 && batchInitialQuantity > 0) {
+          const batchProportion = batchInitialQuantity / totalInitialQuantity;
+          const batchAdditionalCostTotal = additionalCostsGrossTotal * batchProportion;
+          newAdditionalCost = batchAdditionalCostTotal / batchInitialQuantity;
+        }
+        
+        const newFinalUnitPrice = newBaseUnitPrice + newAdditionalCost;
+        
+        // Sprawdź czy są różnice
+        const baseChanged = Math.abs(oldBaseUnitPrice - newBaseUnitPrice) > 0.0001;
+        const additionalChanged = Math.abs(oldAdditionalCost - newAdditionalCost) > 0.0001;
+        const finalChanged = Math.abs(oldUnitPrice - newFinalUnitPrice) > 0.0001;
+        
+        updateDetails.push({
+          batchId: batchData.id,
+          batchNumber: batchData.batchNumber || batchData.lotNumber || 'Bez numeru',
+          itemName: matchingItem.name,
+          itemPoId: batchItemPoId,
+          quantity: batchInitialQuantity,
+          changes: {
+            baseUnitPrice: {
+              old: oldBaseUnitPrice,
+              new: newBaseUnitPrice,
+              changed: baseChanged,
+              difference: newBaseUnitPrice - oldBaseUnitPrice
+            },
+            additionalCostPerUnit: {
+              old: oldAdditionalCost,
+              new: newAdditionalCost,
+              changed: additionalChanged,
+              difference: newAdditionalCost - oldAdditionalCost
+            },
+            finalUnitPrice: {
+              old: oldUnitPrice,
+              new: newFinalUnitPrice,
+              changed: finalChanged,
+              difference: newFinalUnitPrice - oldUnitPrice
+            }
+          },
+          hasChanges: baseChanged || additionalChanged || finalChanged,
+          updated: true
+        });
+        
+        // Dodaj do kolejki aktualizacji
+        const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
+        updatePromises.push(updateDoc(batchRef, {
+          baseUnitPrice: newBaseUnitPrice,
+          additionalCostPerUnit: newAdditionalCost,
+          unitPrice: newFinalUnitPrice,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        }));
+        
+      } else {
+        updateDetails.push({
+          batchId: batchData.id,
+          batchNumber: batchData.batchNumber || batchData.lotNumber || 'Bez numeru',
+          itemName: batchData.itemName || batchData.name || 'Nieznany',
+          quantity: parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0,
+          changes: null,
+          hasChanges: false,
+          updated: false,
+          error: 'Nie znaleziono dopasowania do pozycji w PO'
+        });
+      }
+    }
+    
+    // Wykonaj aktualizacje
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+      console.log(`✅ [BATCH_DETAILS_UPDATE] Pomyślnie zaktualizowano ${updatePromises.length} partii`);
+    }
+    
+    // Wyczyść cache
+    searchCache.invalidateForOrder(purchaseOrderId);
+    
+    // Zlicz różnice
+    const changedBatches = updateDetails.filter(batch => batch.hasChanges).length;
+    const unchangedBatches = updateDetails.filter(batch => batch.updated && !batch.hasChanges).length;
+    const errorBatches = updateDetails.filter(batch => !batch.updated).length;
+    
+    return { 
+      success: true, 
+      updated: updatePromises.length,
+      total: batchesToUpdate.length,
+      details: updateDetails,
+      additionalCosts: additionalCostsGrossTotal,
+      summary: {
+        changed: changedBatches,
+        unchanged: unchangedBatches,
+        errors: errorBatches
+      },
+      message: `Zaktualizowano ${updatePromises.length} partii (${changedBatches} ze zmianami, ${unchangedBatches} bez zmian, ${errorBatches} błędów)`
+    };
+    
+  } catch (error) {
+    console.error(`❌ [BATCH_DETAILS_UPDATE] Błąd podczas aktualizacji cen partii z raportem dla zamówienia ${purchaseOrderId}:`, error);
+    throw error;
+  }
+};
+
 // Eksportuję funkcję do automatycznej aktualizacji cen partii przy każdym zapisie PO
-export { updateBatchPricesOnAnySave };
+export { updateBatchPricesOnAnySave, updateBatchPricesWithDetails };
 
 // Cache dla ograniczonej listy zamówień
 let limitedPOCache = null;

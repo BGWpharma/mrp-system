@@ -5,9 +5,9 @@ import {
   TableHead, TableRow, Button, TextField, Box, Chip, IconButton, Dialog,
   DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, Select, FormControl, InputLabel, 
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
-  Fade, Skeleton
+  Fade, Skeleton, List, ListItem, ListItemIcon, ListItemText as MuiListItemText, Alert
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon } from '@mui/icons-material';
 import { 
   getAllPurchaseOrders, 
   deletePurchaseOrder, 
@@ -19,7 +19,10 @@ import {
   updatePurchaseOrderInCache,
   addPurchaseOrderToCache,
   removePurchaseOrderFromCache,
-  clearSearchCache, 
+  clearSearchCache,
+  updateBatchPricesOnAnySave,
+  updateBatchPricesWithDetails,
+  getPurchaseOrderById,
   PURCHASE_ORDER_STATUSES, 
   PURCHASE_ORDER_PAYMENT_STATUSES, 
   translateStatus, 
@@ -53,6 +56,11 @@ const PurchaseOrderList = () => {
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  
+  // Stany dla aktualizacji partii
+  const [updatingBatches, setUpdatingBatches] = useState({});
+  const [batchUpdateDialogOpen, setBatchUpdateDialogOpen] = useState(false);
+  const [batchUpdateResults, setBatchUpdateResults] = useState(null);
   
   // Dodajemy stan dla opóźnionego wyszukiwania
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -238,6 +246,40 @@ const PurchaseOrderList = () => {
   const handleDeleteClick = (po) => {
     setPoToDelete(po);
     setDeleteDialogOpen(true);
+  };
+  
+  // Funkcja obsługi aktualizacji partii
+  const handleUpdateBatches = async (po) => {
+    try {
+      setUpdatingBatches(prev => ({ ...prev, [po.id]: true }));
+      
+      console.log(`Rozpoczynam aktualizację partii dla PO ${po.number || po.id}`);
+      
+      // Wywołaj funkcję aktualizacji partii ze szczegółami
+      const result = await updateBatchPricesWithDetails(po.id, currentUser?.uid);
+      
+      console.log('Rezultat aktualizacji partii:', result);
+      
+      // Zapisz rezultaty i otwórz dialog z zabezpieczeniami
+      setBatchUpdateResults({
+        ...result,
+        summary: result.summary || { changed: 0, unchanged: 0, errors: 0 },
+        details: result.details || [],
+        message: result.message || 'Aktualizacja zakończona',
+        poNumber: po.number || po.id,
+        poId: po.id
+      });
+      setBatchUpdateDialogOpen(true);
+      
+      // Pokaż krótkie powiadomienie
+      showSuccess(`Aktualizacja partii zakończona: ${result.message}`);
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji partii:', error);
+      showError(`Nie udało się zaktualizować partii: ${error.message}`);
+    } finally {
+      setUpdatingBatches(prev => ({ ...prev, [po.id]: false }));
+    }
   };
   
   const handleDeleteConfirm = async () => {
@@ -856,6 +898,21 @@ const PurchaseOrderList = () => {
                             </IconButton>
                           </Tooltip>
                           
+                          <Tooltip title="Aktualizuj ceny partii">
+                            <IconButton 
+                              size="small" 
+                              color="primary"
+                              onClick={() => handleUpdateBatches(po)}
+                              disabled={updatingBatches[po.id] || false}
+                            >
+                              {updatingBatches[po.id] ? (
+                                <CircularProgress size={16} />
+                              ) : (
+                                <SyncIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                          
                           <Tooltip title={t('purchaseOrders.actions.delete')}>
                             <IconButton 
                               size="small" 
@@ -1052,6 +1109,182 @@ const PurchaseOrderList = () => {
         <DialogActions>
           <Button onClick={() => setPaymentStatusDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button color="primary" onClick={handlePaymentStatusUpdate}>{t('common.update')}</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog szczegółów aktualizacji partii */}
+      <Dialog
+        open={batchUpdateDialogOpen}
+        onClose={() => setBatchUpdateDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SyncIcon color="primary" />
+            Wyniki aktualizacji cen partii
+            {batchUpdateResults && (
+              <Chip 
+                label={`PO: ${batchUpdateResults.poNumber}`} 
+                variant="outlined" 
+                size="small" 
+              />
+            )}
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {batchUpdateResults && (
+            <>
+              {/* Podsumowanie */}
+              <Alert 
+                severity={batchUpdateResults.summary?.errors > 0 ? 'warning' : 'success'} 
+                sx={{ mb: 2 }}
+              >
+                <Typography variant="body2">
+                  <strong>{batchUpdateResults.message}</strong>
+                </Typography>
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  Łącznie partii: {batchUpdateResults.total} | 
+                  Ze zmianami: {batchUpdateResults.summary?.changed || 0} | 
+                  Bez zmian: {batchUpdateResults.summary?.unchanged || 0} | 
+                  Błędy: {batchUpdateResults.summary?.errors || 0}
+                  {batchUpdateResults.additionalCosts > 0 && (
+                    <> | Dodatkowe koszty: {batchUpdateResults.additionalCosts.toFixed(2)} €</>
+                  )}
+                </Typography>
+              </Alert>
+              
+              {/* Lista szczegółów partii */}
+              <Typography variant="h6" gutterBottom>
+                Szczegóły aktualizacji partii:
+              </Typography>
+              
+              <Paper variant="outlined" sx={{ maxHeight: 400, overflow: 'auto' }}>
+                <List dense>
+                  {batchUpdateResults.details.map((batch, index) => (
+                    <ListItem key={batch.batchId} sx={{ 
+                      borderBottom: index < batchUpdateResults.details.length - 1 ? '1px solid #e0e0e0' : 'none',
+                      flexDirection: 'column',
+                      alignItems: 'stretch'
+                    }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mb: 1 }}>
+                        <Box>
+                          <Typography variant="subtitle2" color="primary">
+                            {batch.batchNumber} - {batch.itemName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            ID: {batch.batchId} | Ilość: {batch.quantity}
+                            {batch.itemPoId && ` | Item PO ID: ${batch.itemPoId}`}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          {batch.updated ? (
+                            batch.hasChanges ? (
+                              <Chip label="Zaktualizowano" color="success" size="small" />
+                            ) : (
+                              <Chip label="Bez zmian" color="default" size="small" />
+                            )
+                          ) : (
+                            <Chip label="Błąd" color="error" size="small" />
+                          )}
+                        </Box>
+                      </Box>
+                      
+                      {batch.error && (
+                        <Alert severity="error" sx={{ mt: 1 }}>
+                          <Typography variant="caption">{batch.error}</Typography>
+                        </Alert>
+                      )}
+                      
+                      {batch.changes && (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mt: 1 }}>
+                          {/* Cena bazowa */}
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Cena bazowa:
+                            </Typography>
+                            <Typography variant="body2">
+                              {batch.changes.baseUnitPrice.old.toFixed(4)} €
+                              {batch.changes.baseUnitPrice.changed && (
+                                <>
+                                  {' → '}
+                                  <strong style={{ color: batch.changes.baseUnitPrice.difference > 0 ? '#4caf50' : '#f44336' }}>
+                                    {batch.changes.baseUnitPrice.new.toFixed(4)} €
+                                  </strong>
+                                  <Typography variant="caption" display="block" 
+                                    style={{ color: batch.changes.baseUnitPrice.difference > 0 ? '#4caf50' : '#f44336' }}
+                                  >
+                                    ({batch.changes.baseUnitPrice.difference > 0 ? '+' : ''}{batch.changes.baseUnitPrice.difference.toFixed(4)} €)
+                                  </Typography>
+                                </>
+                              )}
+                            </Typography>
+                          </Box>
+                          
+                          {/* Dodatkowy koszt */}
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Koszt dodatkowy:
+                            </Typography>
+                            <Typography variant="body2">
+                              {batch.changes.additionalCostPerUnit.old.toFixed(4)} €
+                              {batch.changes.additionalCostPerUnit.changed && (
+                                <>
+                                  {' → '}
+                                  <strong style={{ color: batch.changes.additionalCostPerUnit.difference > 0 ? '#4caf50' : '#f44336' }}>
+                                    {batch.changes.additionalCostPerUnit.new.toFixed(4)} €
+                                  </strong>
+                                  <Typography variant="caption" display="block" 
+                                    style={{ color: batch.changes.additionalCostPerUnit.difference > 0 ? '#4caf50' : '#f44336' }}
+                                  >
+                                    ({batch.changes.additionalCostPerUnit.difference > 0 ? '+' : ''}{batch.changes.additionalCostPerUnit.difference.toFixed(4)} €)
+                                  </Typography>
+                                </>
+                              )}
+                            </Typography>
+                          </Box>
+                          
+                          {/* Cena końcowa */}
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              <strong>Cena końcowa:</strong>
+                            </Typography>
+                            <Typography variant="body2">
+                              <strong>{batch.changes.finalUnitPrice.old.toFixed(4)} €</strong>
+                              {batch.changes.finalUnitPrice.changed && (
+                                <>
+                                  {' → '}
+                                  <strong style={{ 
+                                    color: batch.changes.finalUnitPrice.difference > 0 ? '#4caf50' : '#f44336',
+                                    fontSize: '1.1em'
+                                  }}>
+                                    {batch.changes.finalUnitPrice.new.toFixed(4)} €
+                                  </strong>
+                                  <Typography variant="caption" display="block" 
+                                    style={{ 
+                                      color: batch.changes.finalUnitPrice.difference > 0 ? '#4caf50' : '#f44336',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    ({batch.changes.finalUnitPrice.difference > 0 ? '+' : ''}{batch.changes.finalUnitPrice.difference.toFixed(4)} €)
+                                  </Typography>
+                                </>
+                              )}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBatchUpdateDialogOpen(false)} variant="contained">
+            Zamknij
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>
