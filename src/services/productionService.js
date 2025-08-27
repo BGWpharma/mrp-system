@@ -967,6 +967,26 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
             unit: taskWithMeta.unit
           }, taskWithMeta.orderItemId);
           console.log(`[DEBUG-MO] Pomyślnie dodano zadanie ${docRef.id} do zamówienia ${taskWithMeta.orderId}`);
+          
+          // NOWA FUNKCJONALNOŚĆ: Po powiązaniu zadania z zamówieniem, automatycznie aktualizuj koszty
+          if (taskWithMeta.materials && taskWithMeta.materials.length > 0) {
+            console.log(`[DEBUG-MO] Rozpoczynam automatyczną aktualizację kosztów dla nowo utworzonego zadania ${docRef.id}`);
+            try {
+              // Uruchom aktualizację kosztów w tle po krótkim opóźnieniu (pozwoli na zakończenie procesu tworzenia)
+              setTimeout(async () => {
+                try {
+                  await updateTaskCostsAutomatically(docRef.id, userId, 'Automatyczna aktualizacja kosztów po utworzeniu zadania i powiązaniu z CO');
+                  console.log(`✅ [DEBUG-MO] Zakończono automatyczną aktualizację kosztów dla zadania ${docRef.id}`);
+                } catch (costError) {
+                  console.error(`❌ [DEBUG-MO] Błąd podczas automatycznej aktualizacji kosztów dla zadania ${docRef.id}:`, costError);
+                  // Nie przerywamy procesu tworzenia zadania z powodu błędu aktualizacji kosztów
+                }
+              }, 1000); // 1 sekunda opóźnienie, aby upewnić się że zadanie zostało w pełni utworzone i powiązane
+            } catch (error) {
+              console.warn(`⚠️ [DEBUG-MO] Nie udało się zaplanować aktualizacji kosztów dla zadania ${docRef.id}:`, error);
+              // Nie przerywamy procesu tworzenia zadania
+            }
+          }
         } catch (error) {
           console.error(`[ERROR-MO] Błąd podczas dodawania zadania do zamówienia:`, error);
           // Nie przerywamy głównej operacji, jeśli dodawanie do zamówienia się nie powiedzie
@@ -4702,6 +4722,28 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Koszty skonsumowanych materiałów
       if (task.consumedMaterials && task.consumedMaterials.length > 0) {
         const consumedCostDetails = {};
+        
+        // Pobierz aktualne ceny partii dla skonsumowanych materiałów
+        const consumedBatchPricesCache = {};
+        
+        for (const consumed of task.consumedMaterials) {
+          if (consumed.batchId && !consumedBatchPricesCache[consumed.batchId]) {
+            try {
+              const batchRef = doc(db, 'inventoryBatches', consumed.batchId);
+              const batchDoc = await getDoc(batchRef);
+              if (batchDoc.exists()) {
+                const batchData = batchDoc.data();
+                consumedBatchPricesCache[consumed.batchId] = batchData.unitPrice || 0;
+                console.log(`[AUTO] Pobrana aktualna cena skonsumowanej partii ${consumed.batchId}: ${batchData.unitPrice}€`);
+              } else {
+                consumedBatchPricesCache[consumed.batchId] = 0;
+              }
+            } catch (error) {
+              console.warn(`[AUTO] Błąd podczas pobierania ceny skonsumowanej partii ${consumed.batchId}:`, error);
+              consumedBatchPricesCache[consumed.batchId] = 0;
+            }
+          }
+        }
 
         task.consumedMaterials.forEach((consumed) => {
           const materialId = consumed.materialId;
@@ -4717,9 +4759,13 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             };
           }
 
-          const unitPrice = consumed.unitPrice || material.unitPrice || 0;
+          // Użyj aktualnej ceny z partii jeśli dostępna, w przeciwnym razie fallback
+          const batchPrice = consumed.batchId ? consumedBatchPricesCache[consumed.batchId] : null;
+          const unitPrice = batchPrice || consumed.unitPrice || material.unitPrice || 0;
           const quantity = Number(consumed.quantity) || 0;
           const cost = quantity * unitPrice;
+
+          console.log(`[AUTO] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (z partii: ${batchPrice ? 'tak' : 'nie'}), koszt=${cost.toFixed(2)}€`);
 
           consumedCostDetails[materialId].totalQuantity += quantity;
           consumedCostDetails[materialId].totalCost += cost;
@@ -4728,6 +4774,8 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
             ? consumed.includeInCosts 
             : (task.materialInCosts && task.materialInCosts[material.id] !== false);
+
+          console.log(`[AUTO] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
 
           if (shouldIncludeInCosts) {
             totalMaterialCost += cost;
@@ -4740,6 +4788,32 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
 
       // Koszty zarezerwowanych (ale nieskonsumowanych) materiałów
       if (task.materialBatches) {
+        // Pobierz aktualne ceny z rzeczywistych partii w bazie danych
+        const batchPricesCache = {};
+        
+        for (const [materialId, reservedBatches] of Object.entries(task.materialBatches)) {
+          if (reservedBatches && reservedBatches.length > 0) {
+            for (const batch of reservedBatches) {
+              if (batch.batchId && !batchPricesCache[batch.batchId]) {
+                try {
+                  const batchRef = doc(db, 'inventoryBatches', batch.batchId);
+                  const batchDoc = await getDoc(batchRef);
+                  if (batchDoc.exists()) {
+                    const batchData = batchDoc.data();
+                    batchPricesCache[batch.batchId] = batchData.unitPrice || 0;
+                    console.log(`[AUTO] Pobrana aktualna cena partii ${batch.batchId}: ${batchData.unitPrice}€`);
+                  } else {
+                    batchPricesCache[batch.batchId] = 0;
+                  }
+                } catch (error) {
+                  console.warn(`[AUTO] Błąd podczas pobierania ceny partii ${batch.batchId}:`, error);
+                  batchPricesCache[batch.batchId] = 0;
+                }
+              }
+            }
+          }
+        }
+        
         task.materials.forEach(material => {
           const materialId = material.inventoryItemId || material.id;
           const reservedBatches = task.materialBatches[materialId];
@@ -4754,21 +4828,46 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
             const requiredQuantity = material.quantity || 0;
             const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
             
-            // Jeśli zostało coś do skonsumowania
+            // Jeśli zostało coś do skonsumowania, oblicz koszt na podstawie rzeczywistych partii
             if (remainingQuantity > 0) {
-              const unitPrice = material.unitPrice || 0;
-              const cost = remainingQuantity * unitPrice;
+              let materialCost = 0;
+              let totalBatchQuantity = 0;
+              let weightedPrice = 0;
+              
+              // Oblicz średnią ważoną cenę z zarezerwowanych partii
+              reservedBatches.forEach(batch => {
+                const batchQuantity = Number(batch.quantity) || 0;
+                const batchPrice = batchPricesCache[batch.batchId] || batch.unitPrice || 0;
+                
+                if (batchQuantity > 0 && batchPrice > 0) {
+                  weightedPrice += batchPrice * batchQuantity;
+                  totalBatchQuantity += batchQuantity;
+                  console.log(`[AUTO] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€`);
+                }
+              });
+              
+              // Jeśli mamy dane o partiach, użyj średniej ważonej
+              if (totalBatchQuantity > 0) {
+                const averagePrice = weightedPrice / totalBatchQuantity;
+                materialCost = remainingQuantity * averagePrice;
+                console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, średnia cena=${averagePrice.toFixed(4)}€, koszt=${materialCost.toFixed(2)}€`);
+              } else {
+                // Fallback na cenę z materiału
+                const unitPrice = material.unitPrice || 0;
+                materialCost = remainingQuantity * unitPrice;
+                console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(2)}€`);
+              }
               
               // Sprawdź czy materiał ma być wliczany do kosztów
               const shouldIncludeInCosts = task.materialInCosts ? 
                 task.materialInCosts[material.id] !== false : true;
 
               if (shouldIncludeInCosts) {
-                totalMaterialCost += cost;
+                totalMaterialCost += materialCost;
               }
 
               // Zawsze dodaj do pełnego kosztu produkcji
-              totalFullProductionCost += cost;
+              totalFullProductionCost += materialCost;
             }
           }
         });
@@ -4778,12 +4877,12 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
       const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
 
-      // Sprawdź czy koszty się rzeczywiście zmieniły
+      // Sprawdź czy koszty się rzeczywiście zmieniły (próg 0.01€ jak w UI)
       const costChanged = 
-        Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.001 ||
-        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.001 ||
-        Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.001 ||
-        Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.001;
+        Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
+        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01 ||
+        Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.01 ||
+        Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
 
       if (!costChanged) {
         console.log(`[AUTO] Koszty zadania ${taskId} nie zmieniły się znacząco, pomijam aktualizację`);
@@ -4952,6 +5051,105 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       return { success: false, message: error.message };
     }
   };
+
+/**
+ * Aktualizuje koszty wszystkich zadań produkcyjnych używających podanych partii
+ * @param {Array<string>} batchIds - IDs partii które zostały zaktualizowane
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik aktualizacji
+ */
+export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'system') => {
+  try {
+    console.log(`[BATCH_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań dla ${batchIds.length} zaktualizowanych partii`);
+    
+    // Znajdź wszystkie zadania które używają tych partii
+    const tasksToUpdate = new Set();
+    
+    // Szukaj w materialBatches
+    for (const batchId of batchIds) {
+      const tasksQuery = query(
+        collection(db, PRODUCTION_TASKS_COLLECTION),
+        where('materialBatches', '!=', null)
+      );
+      
+      const tasksSnapshot = await getDocs(tasksQuery);
+      
+      tasksSnapshot.docs.forEach(doc => {
+        const taskData = doc.data();
+        const materialBatches = taskData.materialBatches || {};
+        
+        // Sprawdź czy zadanie używa tej partii
+        for (const materialId of Object.keys(materialBatches)) {
+          const batches = materialBatches[materialId] || [];
+          if (batches.some(batch => batch.batchId === batchId)) {
+            tasksToUpdate.add(doc.id);
+            console.log(`[BATCH_COST_UPDATE] Znaleziono zadanie ${taskData.moNumber || doc.id} używające partię ${batchId}`);
+          }
+        }
+      });
+    }
+    
+    // Szukaj w consumedMaterials
+    for (const batchId of batchIds) {
+      const tasksQuery = query(
+        collection(db, PRODUCTION_TASKS_COLLECTION),
+        where('consumedMaterials', '!=', null)
+      );
+      
+      const tasksSnapshot = await getDocs(tasksQuery);
+      
+      tasksSnapshot.docs.forEach(doc => {
+        const taskData = doc.data();
+        const consumedMaterials = taskData.consumedMaterials || [];
+        
+        if (consumedMaterials.some(material => material.batchId === batchId)) {
+          tasksToUpdate.add(doc.id);
+          console.log(`[BATCH_COST_UPDATE] Znaleziono zadanie ${taskData.moNumber || doc.id} z skonsumowaną partią ${batchId}`);
+        }
+      });
+    }
+    
+    const taskIds = Array.from(tasksToUpdate);
+    console.log(`[BATCH_COST_UPDATE] Znaleziono ${taskIds.length} zadań do aktualizacji kosztów`);
+    
+    if (taskIds.length === 0) {
+      return { success: true, updatedTasks: 0, message: 'Brak zadań do aktualizacji' };
+    }
+    
+    // Aktualizuj koszty wszystkich znalezionych zadań
+    const updatePromises = taskIds.map(taskId => 
+      updateTaskCostsAutomatically(taskId, userId, 'Automatyczna aktualizacja po zmianie cen partii z PO')
+    );
+    
+    const results = await Promise.allSettled(updatePromises);
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value.success) {
+        successCount++;
+      } else {
+        errorCount++;
+        console.error(`[BATCH_COST_UPDATE] Błąd aktualizacji zadania ${taskIds[index]}:`, result.reason || result.value?.message);
+      }
+    });
+    
+    console.log(`[BATCH_COST_UPDATE] Zakończono: ${successCount} zadań zaktualizowanych, ${errorCount} błędów`);
+    
+    return {
+      success: true,
+      updatedTasks: successCount,
+      errorTasks: errorCount,
+      totalTasks: taskIds.length,
+      message: `Zaktualizowano koszty w ${successCount} zadaniach produkcyjnych`
+    };
+    
+  } catch (error) {
+    console.error('[BATCH_COST_UPDATE] Błąd podczas aktualizacji kosztów zadań:', error);
+    throw error;
+  }
+};
 
   // Funkcja do tworzenia pustej partii produktu przy rozpoczynaniu zadania produkcyjnego
   export const createEmptyProductBatch = async (taskId, userId, expiryDate = null) => {

@@ -71,6 +71,8 @@ import { getRecipeById } from '../../services/recipeService';
 import { exportToCSV, formatDateForExport, formatCurrencyForExport } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
 
 const OrdersList = () => {
   const { t } = useTranslation('orders');
@@ -150,6 +152,121 @@ const OrdersList = () => {
       fetchOrders();
     }
   }, [page, rowsPerPage, orderBy, orderDirection, debouncedSearchTerm, isInitialized]);
+
+  // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań produkcyjnych
+  useEffect(() => {
+    let channel;
+    try {
+      // Stwórz BroadcastChannel do nasłuchiwania aktualizacji kosztów
+      channel = new BroadcastChannel('production-costs-update');
+      
+      const handleCostUpdate = async (event) => {
+        if (event.data.type === 'TASK_COSTS_UPDATED') {
+          const { taskId, costs, timestamp } = event.data;
+          console.log(`[ORDERS_LIST_BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${taskId}:`, costs);
+          
+          // Sprawdź czy któreś z aktualnie wyświetlanych zamówień ma to zadanie produkcyjne
+          const hasAffectedOrder = orders.some(order => 
+            (order.items && order.items.some(item => item.productionTaskId === taskId)) ||
+            (order.productionTasks && order.productionTasks.some(task => task.id === taskId))
+          );
+          
+          if (hasAffectedOrder) {
+            console.log(`[ORDERS_LIST_BROADCAST] Znaleziono zamówienie z zadaniem ${taskId}, odświeżam listę po krótkiej przerwie`);
+            
+            // Odśwież listę zamówień po krótkiej przerwie, aby upewnić się, że baza danych została zaktualizowana
+            setTimeout(() => {
+              fetchOrders();
+              console.log('🔄 [ORDERS_LIST_BROADCAST] Odświeżono listę zamówień po otrzymaniu powiadomienia o aktualizacji kosztów');
+            }, 500);
+          } else {
+            console.log(`[ORDERS_LIST_BROADCAST] Zadanie ${taskId} nie dotyczy aktualnie wyświetlanych zamówień`);
+          }
+        }
+      };
+
+      channel.addEventListener('message', handleCostUpdate);
+      console.log(`[ORDERS_LIST_BROADCAST] Nasłuchiwanie powiadomień o kosztach zadań dla listy zamówień`);
+      
+    } catch (error) {
+      console.warn('Nie można utworzyć BroadcastChannel dla listy zamówień:', error);
+    }
+
+    return () => {
+      if (channel) {
+        channel.close();
+        console.log(`[ORDERS_LIST_BROADCAST] Zamknięto nasłuchiwanie powiadomień dla listy zamówień`);
+      }
+    };
+  }, [orders]); // Zależność od orders, aby sprawdzać aktualną listę
+
+  // Real-time listener dla synchronizacji między użytkownikami
+  useEffect(() => {
+    let unsubscribe = null;
+    let updateTimeout = null;
+
+    const setupRealtimeListener = () => {
+      try {
+        console.log('🔥 [FIREBASE_LISTENER] Uruchamiam Firebase listener dla zamówień');
+        
+        // Real-time listener dla wszystkich zamówień
+        const ordersRef = collection(db, 'orders');
+        
+        unsubscribe = onSnapshot(ordersRef, (snapshot) => {
+          const changesCount = snapshot.docChanges().length;
+          console.log(`📡 [FIREBASE_LISTENER] Real-time aktualizacja zamówień: ${changesCount} zmian`);
+          
+          if (changesCount > 0) {
+            let hasRelevantChanges = false;
+            
+            snapshot.docChanges().forEach((change) => {
+              const order = { id: change.doc.id, ...change.doc.data() };
+              
+              if (change.type === 'modified') {
+                console.log(`🔄 [FIREBASE_LISTENER] Zmodyfikowano zamówienie: ${order.number || order.id}`);
+                hasRelevantChanges = true;
+              }
+            });
+            
+            if (hasRelevantChanges) {
+              console.log('🔄 [FIREBASE_LISTENER] Planowanie odświeżenia listy zamówień...');
+              
+              // Debounce aby uniknąć zbyt częstych aktualizacji
+              if (updateTimeout) {
+                clearTimeout(updateTimeout);
+              }
+              
+              updateTimeout = setTimeout(() => {
+                console.log('📋 [FIREBASE_LISTENER] Odświeżanie listy zamówień z filtrami');
+                fetchOrders();
+              }, 1000); // 1s debounce dla aktualizacji między użytkownikami
+            }
+          }
+        }, (error) => {
+          console.error('❌ [FIREBASE_LISTENER] Błąd Firebase listener:', error);
+        });
+        
+      } catch (error) {
+        console.error('❌ [FIREBASE_LISTENER] Błąd podczas konfiguracji Firebase listener:', error);
+      }
+    };
+
+    // Uruchom listener tylko jeśli komponent jest zainicjalizowany
+    if (isInitialized) {
+      setupRealtimeListener();
+    }
+
+    // Cleanup
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+        console.log('🛑 [FIREBASE_LISTENER] Odłączono Firebase listener dla zamówień');
+      }
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+      }
+    };
+  }, [isInitialized]); // Zależność od isInitialized
 
   const fetchOrders = async () => {
     try {

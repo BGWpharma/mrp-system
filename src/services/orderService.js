@@ -1165,11 +1165,58 @@ export const addProductionTaskToOrder = async (orderId, taskData, orderItemId = 
     }
     
     // Zaktualizuj zamówienie
-    console.log(`[DEBUG] Zapisuję listę zadań w zamówieniu. Liczba zadań: ${productionTasks.length}`);
-    await updateDoc(orderRef, {
-      productionTasks,
-      updatedAt: serverTimestamp()
-    });
+    // NOWA FUNKCJONALNOŚĆ: Aktualizuj pozycję zamówienia z productionTaskId jeśli orderItemId jest określone
+    if (orderItemId) {
+      try {
+        console.log(`[DEBUG] Aktualizuję pozycję zamówienia ${orderItemId} z productionTaskId: ${taskData.id}`);
+        
+        const items = order.items || [];
+        const itemIndex = items.findIndex(item => item.id === orderItemId);
+        
+        if (itemIndex !== -1) {
+          // Aktualizuj pozycję z produktionTaskId
+          items[itemIndex] = {
+            ...items[itemIndex],
+            productionTaskId: taskData.id
+          };
+          
+          console.log(`[DEBUG] Zaktualizowano pozycję zamówienia ${orderItemId} z productionTaskId: ${taskData.id}`);
+          
+          // Zapisz zarówno zadania jak i zaktualizowane pozycje
+          await updateDoc(orderRef, {
+            productionTasks,
+            items,
+            updatedAt: serverTimestamp()
+          });
+          
+          console.log(`[DEBUG] Zapisano zadania i pozycje zamówienia. Liczba zadań: ${productionTasks.length}`);
+        } else {
+          console.warn(`[WARNING] Nie znaleziono pozycji zamówienia z ID: ${orderItemId}`);
+          
+          // Jeśli nie znaleziono pozycji, zapisz tylko zadania
+          await updateDoc(orderRef, {
+            productionTasks,
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (itemUpdateError) {
+        console.error(`[ERROR] Błąd podczas aktualizacji pozycji zamówienia:`, itemUpdateError);
+        
+        // W przypadku błędu, zapisz przynajmniej zadania
+        await updateDoc(orderRef, {
+          productionTasks,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } else {
+      // Jeśli brak orderItemId, zapisz tylko zadania
+      console.log(`[DEBUG] Zapisuję listę zadań w zamówieniu. Liczba zadań: ${productionTasks.length}`);
+      await updateDoc(orderRef, {
+        productionTasks,
+        updatedAt: serverTimestamp()
+      });
+    }
+    
     console.log(`[DEBUG] Zakończono pomyślnie addProductionTaskToOrder dla zadania ${taskData.id} w zamówieniu ${orderId}`);
     
     return true;

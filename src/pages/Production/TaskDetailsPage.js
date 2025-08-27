@@ -1015,14 +1015,74 @@ const TaskDetailsPage = () => {
       Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
     
     if (costChanged) {
-              console.log('🔔 Wykryto różnicę kosztów (zarezerwowane + skonsumowane) - uruchamiam automatyczną aktualizację po 3 sekundach');
-      const timer = setTimeout(() => {
-        updateMaterialCostsAutomatically('Automatyczna aktualizacja po wykryciu różnicy kosztów');
-      }, 3000);
+      console.log('🔔 Wykryto różnicę kosztów (zarezerwowane + skonsumowane) - uruchamiam natychmiastową aktualizację');
+      
+      // Użyj globalnej funkcji aktualizacji z productionService (z debouncing 200ms)
+      const timer = setTimeout(async () => {
+        try {
+          const { updateTaskCostsAutomatically, getTaskById } = await import('../../services/productionService');
+          const result = await updateTaskCostsAutomatically(task.id, currentUser?.uid || 'system', 'Automatyczna aktualizacja po zmianie w szczegółach zadania');
+          
+          console.log('✅ Zakończono automatyczną aktualizację kosztów z poziomu szczegółów zadania:', result);
+          
+          // Odśwież dane zadania w UI niezależnie od wyniku (aby zsynchronizować z bazą)
+          try {
+            const updatedTask = await getTaskById(task.id);
+            setTask(updatedTask);
+            console.log('🔄 Odświeżono dane zadania w UI po automatycznej aktualizacji');
+          } catch (refreshError) {
+            console.warn('⚠️ Nie udało się odświeżyć danych zadania:', refreshError);
+          }
+        } catch (error) {
+          console.error('❌ Błąd podczas automatycznej aktualizacji kosztów z poziomu szczegółów:', error);
+        }
+      }, 200); // Zmniejszone opóźnienie z 3000ms na 200ms (jak w updateTask)
       
       return () => clearTimeout(timer);
     }
   }, [task?.totalMaterialCost, task?.unitMaterialCost, task?.totalFullProductionCost, task?.unitFullProductionCost, task?.consumedMaterials, task?.materialBatches, materialQuantities, includeInCosts, materials, consumedBatchPrices]);
+
+  // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań z innych miejsc (np. z PO)
+  useEffect(() => {
+    if (!task?.id) return;
+
+    let channel;
+    try {
+      // Stwórz BroadcastChannel do nasłuchiwania aktualizacji kosztów
+      channel = new BroadcastChannel('production-costs-update');
+      
+      const handleCostUpdate = async (event) => {
+        if (event.data.type === 'TASK_COSTS_UPDATED' && event.data.taskId === task.id) {
+          console.log(`[BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${task.id}:`, event.data.costs);
+          
+          // Odśwież dane zadania po krótkiej przerwie, aby upewnić się, że baza danych została zaktualizowana
+          setTimeout(async () => {
+            try {
+              const { getTaskById } = await import('../../services/productionService');
+              const updatedTask = await getTaskById(task.id);
+              setTask(updatedTask);
+              console.log('🔄 Odświeżono dane zadania po otrzymaniu powiadomienia o aktualizacji kosztów');
+            } catch (error) {
+              console.warn('⚠️ Nie udało się odświeżyć danych zadania po powiadomieniu:', error);
+            }
+          }, 500);
+        }
+      };
+
+      channel.addEventListener('message', handleCostUpdate);
+      console.log(`[BROADCAST] Nasłuchiwanie powiadomień o kosztach dla zadania ${task.id}`);
+      
+    } catch (error) {
+      console.warn('Nie można utworzyć BroadcastChannel dla kosztów zadań:', error);
+    }
+
+    return () => {
+      if (channel) {
+        channel.close();
+        console.log(`[BROADCAST] Zamknięto nasłuchiwanie powiadomień o kosztach dla zadania ${task.id}`);
+      }
+    };
+  }, [task?.id]);
 
   // Funkcja do pobierania magazynów
   const fetchWarehouses = async () => {
@@ -3879,64 +3939,25 @@ const TaskDetailsPage = () => {
     if (!task || !materials.length) return;
     
     try {
-      // Oblicz wszystkie koszty jedną funkcją
-      const {
-        totalMaterialCost,
-        unitMaterialCost,
-        totalFullProductionCost,
-        unitFullProductionCost
-      } = calculateAllCosts();
+      console.log('Ręczna aktualizacja kosztów materiałów z poziomu szczegółów zadania');
       
-      // Sprawdź czy koszty się rzeczywiście zmieniły
-      if (
-        Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) <= 0.01 &&
-        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) <= 0.01 &&
-        Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) <= 0.01 &&
-        Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) <= 0.01
-      ) {
-        showInfo('Koszty materiałów nie zmieniły się znacząco, pomijam aktualizację w bazie danych');
-        return;
-      }
+      // Użyj globalnej funkcji aktualizacji z productionService
+      const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+      const result = await updateTaskCostsAutomatically(task.id, currentUser?.uid || 'system', 'Ręczna aktualizacja z poziomu szczegółów zadania');
       
-      // Wykonaj aktualizację w bazie danych
-      const taskRef = doc(db, 'productionTasks', id);
-      await updateDoc(taskRef, {
-        totalMaterialCost,
-        unitMaterialCost,
-        totalFullProductionCost,
-        unitFullProductionCost,
-        costLastUpdatedAt: serverTimestamp(),
-        costLastUpdatedBy: currentUser.uid,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid,
-        // Dodaj wpis do historii kosztów
-        costHistory: arrayUnion({
-          timestamp: new Date().toISOString(),
-          userId: currentUser.uid,
-          userName: currentUser.displayName || currentUser.email || 'System',
-          previousTotalCost: task.totalMaterialCost || 0,
-          newTotalCost: totalMaterialCost,
-          previousUnitCost: task.unitMaterialCost || 0,
-          newUnitCost: unitMaterialCost,
-          previousFullProductionCost: task.totalFullProductionCost || 0,
-          newFullProductionCost: totalFullProductionCost,
-          previousUnitFullProductionCost: task.unitFullProductionCost || 0,
-          newUnitFullProductionCost: unitFullProductionCost,
-          reason: 'Ręczna aktualizacja kosztów materiałów (uwzględnia skonsumowane materiały)'
-        })
-      });
-      
-      console.log(`Zaktualizowano koszty materiałów w zadaniu: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
-      showSuccess('Koszty materiałów zostały zaktualizowane w bazie danych');
-      
-      // Aktualizuj związane zamówienia klientów
-      await updateRelatedCustomerOrders(task, totalMaterialCost, totalFullProductionCost, unitMaterialCost, unitFullProductionCost);
-      
+      if (result.success) {
       // Odśwież dane zadania, aby wyświetlić zaktualizowane koszty
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);
+        showSuccess('Koszty materiałów i powiązanych zamówień zostały zaktualizowane');
+        console.log('✅ Ręczna aktualizacja kosztów zakończona pomyślnie:', result);
+      } else {
+        console.warn('⚠️ Aktualizacja kosztów nie była potrzebna:', result.message);
+        showInfo('Koszty materiałów są już aktualne');
+      }
+
     } catch (error) {
-      console.error('Błąd podczas aktualizacji kosztów materiałów:', error);
+      console.error('Błąd podczas ręcznej aktualizacji kosztów materiałów:', error);
       showError('Nie udało się zaktualizować kosztów materiałów: ' + error.message);
     }
   };

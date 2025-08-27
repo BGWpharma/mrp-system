@@ -2680,6 +2680,35 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(purchaseOrderId);
     
+    // NOWA FUNKCJONALNOŚĆ: Automatycznie aktualizuj koszty wszystkich zadań produkcyjnych używających zaktualizowanych partii
+    if (updatePromises.length > 0) {
+      try {
+        console.log(`🔄 [TASK_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań po zmianie cen partii...`);
+        
+        // Pobierz wszystkie zadania które używają zaktualizowanych partii
+        const { updateTaskCostsForUpdatedBatches } = await import('./productionService');
+        const batchIds = batchesToUpdate.map(batch => batch.id);
+        
+        const taskUpdateResult = await updateTaskCostsForUpdatedBatches(batchIds, userId || 'system');
+        console.log(`✅ [TASK_COST_UPDATE] Zakończono aktualizację kosztów zadań:`, taskUpdateResult);
+        
+        return { 
+          success: true, 
+          updated: updatePromises.length,
+          taskCostUpdate: taskUpdateResult
+        };
+        
+      } catch (error) {
+        console.error('❌ [TASK_COST_UPDATE] Błąd podczas aktualizacji kosztów zadań:', error);
+        // Nie przerywamy procesu - błąd aktualizacji kosztów nie powinien blokować aktualizacji PO
+        return { 
+          success: true, 
+          updated: updatePromises.length,
+          taskCostUpdateError: error.message
+        };
+      }
+    }
+    
     return { success: true, updated: updatePromises.length };
   } catch (error) {
     console.error(`❌ [BATCH_AUTO_UPDATE] Błąd podczas automatycznej aktualizacji cen partii dla zamówienia ${purchaseOrderId}:`, error);
