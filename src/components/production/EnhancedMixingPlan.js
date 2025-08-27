@@ -55,6 +55,8 @@ import {
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../contexts/ThemeContext';
+import { baseColors, palettes } from '../../styles/colorConfig';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import {
@@ -73,6 +75,11 @@ const EnhancedMixingPlan = ({
   const { t } = useTranslation('taskDetails');
   const { showSuccess, showError, showInfo } = useNotification();
   const { currentUser } = useAuth();
+  const { mode } = useTheme();
+  
+  // Kolory odpowiednie dla aktualnego motywu
+  const colors = baseColors[mode];
+  const borderColor = colors.divider;
 
   // Stan komponentu
   const [standardReservations, setStandardReservations] = useState([]);
@@ -457,7 +464,7 @@ const EnhancedMixingPlan = ({
             {renderReservationChip({ ...reservationFromSnapshot, type: link.reservationType })}
             
             {/* Podstawowe informacje o powiązaniu */}
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography variant="caption" sx={{ color: colors.text.secondary, mt: 0.5 }}>
               Powiązano: {link.linkedQuantity || link.quantity} {reservationFromSnapshot.unit}
             </Typography>
             
@@ -476,7 +483,7 @@ const EnhancedMixingPlan = ({
                     <Box sx={{ 
                       width: '60px', 
                       height: '4px', 
-                      bgcolor: 'grey.200', 
+                      bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'grey.200', 
                       borderRadius: 2,
                       overflow: 'hidden'
                     }}>
@@ -487,7 +494,7 @@ const EnhancedMixingPlan = ({
                         transition: 'width 0.3s ease'
                       }} />
                     </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                    <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.7rem' }}>
                       {link.consumptionPercentage}%
                     </Typography>
                   </Box>
@@ -537,8 +544,8 @@ const EnhancedMixingPlan = ({
     
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <LinkIcon fontSize="small" color="action" />
-        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+        <LinkIcon fontSize="small" sx={{ color: colors.text.disabled }} />
+        <Typography variant="caption" sx={{ color: colors.text.secondary, fontStyle: 'italic' }}>
           Kliknij wiersz aby powiązać
         </Typography>
       </Box>
@@ -632,23 +639,23 @@ const EnhancedMixingPlan = ({
           <Box key={headerItem.id} sx={{ 
             mb: 2, 
             border: '1px solid', 
-            borderColor: 'grey.300', 
+            borderColor: borderColor, 
             borderRadius: 3, 
             overflow: 'hidden',
-            bgcolor: 'background.paper'
+            bgcolor: colors.paper
           }}>
             {/* Nagłówek mieszania z tłem */}
             <Box sx={{ 
               p: 2, 
-              bgcolor: 'grey.50',
+              bgcolor: colors.background,
               borderBottom: '1px solid',
-              borderColor: 'grey.300'
+              borderColor: borderColor
             }}>
               <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5 }}>
                 {headerItem.text}
               </Typography>
               {headerItem.details && (
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ color: colors.text.secondary }}>
                   {headerItem.details}
                 </Typography>
               )}
@@ -659,7 +666,7 @@ const EnhancedMixingPlan = ({
             <Grid container spacing={1.5}>
               {/* Składniki z możliwością powiązania rezerwacji */}
               <Grid item xs={12} md={8}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'text.primary' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: colors.text.primary }}>
                   Składniki i rezerwacje
                 </Typography>
                 
@@ -670,7 +677,7 @@ const EnhancedMixingPlan = ({
                 ) : (
                   <Box sx={{ 
                     border: '1px solid',
-                    borderColor: 'grey.300',
+                    borderColor: borderColor,
                     borderRadius: 2,
                     overflow: 'hidden'
                   }}>
@@ -679,21 +686,21 @@ const EnhancedMixingPlan = ({
                       display: 'grid', 
                       gridTemplateColumns: '2fr 1fr 2fr 60px',
                       gap: 2,
-                      bgcolor: 'grey.50',
+                      bgcolor: colors.background,
                       p: 1.5,
                       borderBottom: '1px solid',
-                      borderColor: 'grey.300'
+                      borderColor: borderColor
                     }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
                         Składnik
                       </Typography>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
                         Ilość
                       </Typography>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
                         Rezerwacja
                       </Typography>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
                         Akcje
                       </Typography>
                     </Box>
@@ -712,23 +719,23 @@ const EnhancedMixingPlan = ({
                           gap: 2,
                           p: 1.5,
                           borderBottom: index < ingredients.length - 1 ? '1px solid' : 'none',
-                          borderColor: 'grey.300',
+                          borderColor: borderColor,
                           cursor: !isLinked ? 'pointer' : 'default',
                           '&:hover': {
-                            bgcolor: !isLinked ? 'primary.light' : 'grey.50',
+                            bgcolor: !isLinked ? (mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'primary.light') : colors.background,
                             opacity: !isLinked ? 0.8 : 1
                           }
                         }}
                         onClick={() => !isLinked && handleLinkIngredient(ingredient)}
                       >
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: colors.text.primary }}>
                             {ingredient.text}
                           </Typography>
                         </Box>
                         
                         <Box>
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
                             {ingredient.details}
                           </Typography>
                         </Box>
@@ -757,14 +764,14 @@ const EnhancedMixingPlan = ({
               
               {/* Status wykonania - checkboxy */}
               <Grid item xs={12} md={4}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'text.primary' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: colors.text.primary }}>
                   Status wykonania
                 </Typography>
                 <Box sx={{ 
                   border: '1px solid',
-                  borderColor: 'grey.300',
+                  borderColor: borderColor,
                   borderRadius: 2,
-                  bgcolor: 'background.paper'
+                  bgcolor: colors.paper
                 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                   {checkItems.map((item, index) => (
@@ -774,9 +781,9 @@ const EnhancedMixingPlan = ({
                       justifyContent: 'space-between',
                       p: 1.5,
                       borderBottom: index < checkItems.length - 1 ? '1px solid' : 'none',
-                      borderColor: 'grey.300',
+                      borderColor: borderColor,
                       '&:hover': {
-                        bgcolor: 'grey.50'
+                        bgcolor: colors.background
                       }
                     }}>
                       <FormControlLabel 
