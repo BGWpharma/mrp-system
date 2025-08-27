@@ -4277,6 +4277,109 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     }
   };
 
+  // Aktualizuje ilość składnika w planie mieszań
+  export const updateIngredientQuantityInMixingPlan = async (taskId, ingredientId, newQuantity, userId) => {
+    try {
+      if (!taskId || !ingredientId || newQuantity === undefined || newQuantity === null) {
+        throw new Error('Brak wymaganych parametrów');
+      }
+
+      const parsedQuantity = parseFloat(newQuantity);
+      if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+        throw new Error('Nieprawidłowa ilość - musi być liczbą dodatnią');
+      }
+
+      // Pobierz zadanie produkcyjne
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Nie znaleziono zadania produkcyjnego');
+      }
+
+      const task = taskDoc.data();
+      const mixingPlanChecklist = task.mixingPlanChecklist || [];
+
+      // Znajdź składnik do aktualizacji
+      const ingredientIndex = mixingPlanChecklist.findIndex(item => item.id === ingredientId);
+      if (ingredientIndex === -1) {
+        throw new Error('Nie znaleziono składnika o podanym ID');
+      }
+
+      const ingredient = mixingPlanChecklist[ingredientIndex];
+      if (ingredient.type !== 'ingredient') {
+        throw new Error('Wybrany element nie jest składnikiem');
+      }
+
+      // Wyodrębnij jednostkę z obecnych details
+      const detailsMatch = ingredient.details.match(/Ilość:\s*[\d,\.]+\s*(\w+)/);
+      const unit = detailsMatch ? detailsMatch[1] : 'kg';
+
+      // Zaktualizuj składnik
+      const updatedIngredient = {
+        ...ingredient,
+        details: `Ilość: ${parsedQuantity.toFixed(4)} ${unit}`,
+        quantityValue: parsedQuantity, // Dodaj wartość liczbową dla łatwiejszej manipulacji
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId
+      };
+
+      // Zaktualizuj checklistę
+      const updatedChecklist = [...mixingPlanChecklist];
+      updatedChecklist[ingredientIndex] = updatedIngredient;
+
+      // Jeśli to składnik kg, zaktualizuj również sumę w nagłówku mieszania
+      if (unit === 'kg' && ingredient.parentId) {
+        const headerIndex = updatedChecklist.findIndex(item => item.id === ingredient.parentId);
+        if (headerIndex !== -1) {
+          // Oblicz nową sumę składników dla tego mieszania
+          const ingredientsInMixing = updatedChecklist.filter(item => 
+            item.parentId === ingredient.parentId && 
+            item.type === 'ingredient' &&
+            item.details.includes('kg')
+          );
+
+          const totalWeight = ingredientsInMixing.reduce((sum, ing) => {
+            const quantityMatch = ing.details.match(/Ilość:\s*([\d,\.]+)/);
+            if (quantityMatch) {
+              return sum + parseFloat(quantityMatch[1]);
+            }
+            return sum;
+          }, 0);
+
+          // Zachowaj pozostałe informacje z nagłówka i zaktualizuj tylko sumę
+          const header = updatedChecklist[headerIndex];
+          const detailsParts = header.details.split(', ');
+          detailsParts[0] = `Suma składników: ${totalWeight.toFixed(4)} kg`;
+          
+          updatedChecklist[headerIndex] = {
+            ...header,
+            details: detailsParts.join(', '),
+            updatedAt: new Date().toISOString(),
+            updatedBy: userId
+          };
+        }
+      }
+
+      // Zapisz zaktualizowaną checklistę
+      await updateDoc(taskRef, {
+        mixingPlanChecklist: updatedChecklist,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+
+      return {
+        success: true,
+        message: `Zaktualizowano ilość składnika ${ingredient.text} na ${parsedQuantity.toFixed(4)} ${unit}`,
+        updatedIngredient: updatedIngredient
+      };
+
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji ilości składnika:', error);
+      throw error;
+    }
+  };
+
   // Aktualizuje koszty zadania produkcyjnego
   export const updateTaskCosts = async (taskId, costsData, userId) => {
     try {

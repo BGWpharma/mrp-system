@@ -48,7 +48,8 @@ import {
   Assignment as AssignmentIcon,
   Refresh as RefreshIcon,
   LocationOn as LocationIcon,
-  Schedule as ExpiryIcon
+  Schedule as ExpiryIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 
 import { useTranslation } from '../../hooks/useTranslation';
@@ -88,8 +89,14 @@ const EnhancedMixingPlan = ({
   const [realtimeTask, setRealtimeTask] = useState(null);
   const [isTaskUpdating, setIsTaskUpdating] = useState(false);
   const [isLinksUpdating, setIsLinksUpdating] = useState(false);
+  
+  // Stany dla edycji ilości składników
+  const [editQuantityDialogOpen, setEditQuantityDialogOpen] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState(null);
+  const [editQuantityValue, setEditQuantityValue] = useState('');
+  const [editQuantityLoading, setEditQuantityLoading] = useState(false);
 
-  // Oblicz statystyki powiązań
+  // Oblicz statystyki powiązań i postępu
   const totalIngredients = task?.mixingPlanChecklist
     ? task.mixingPlanChecklist.filter(item => item.type === 'ingredient').length
     : 0;
@@ -97,6 +104,8 @@ const EnhancedMixingPlan = ({
   const linkagePercentage = totalIngredients > 0 
     ? Math.round((linkedIngredients / totalIngredients) * 100)
     : 0;
+
+
 
   // Real-time listener dla zadania (dla synchronizacji zmian checklisty z kiosku)
   useEffect(() => {
@@ -334,6 +343,65 @@ const EnhancedMixingPlan = ({
     }
   };
 
+  // Funkcje dla edycji ilości składników
+  const handleEditQuantity = (ingredient) => {
+    // Wyodrębnij aktualną ilość z details
+    const quantityMatch = ingredient.details.match(/Ilość:\s*([\d,\.]+)/);
+    const currentQuantity = quantityMatch ? quantityMatch[1] : '';
+    
+    setEditingIngredient(ingredient);
+    setEditQuantityValue(currentQuantity);
+    setEditQuantityDialogOpen(true);
+  };
+
+  const handleSaveQuantity = async () => {
+    if (!editingIngredient || !editQuantityValue) return;
+
+    const newQuantity = parseFloat(editQuantityValue.replace(',', '.'));
+    
+    if (isNaN(newQuantity) || newQuantity < 0) {
+      showError('Podaj prawidłową ilość (liczba dodatnia)');
+      return;
+    }
+
+    try {
+      setEditQuantityLoading(true);
+      
+      // Importuj funkcję dynamicznie
+      const { updateIngredientQuantityInMixingPlan } = await import('../../services/productionService');
+      
+      const result = await updateIngredientQuantityInMixingPlan(
+        task.id,
+        editingIngredient.id,
+        newQuantity,
+        currentUser.uid
+      );
+      
+      if (result.success) {
+        showSuccess(result.message);
+        setEditQuantityDialogOpen(false);
+        setEditingIngredient(null);
+        setEditQuantityValue('');
+        
+        // Wywołaj callback dla odświeżenia danych
+        if (onPlanUpdate) {
+          onPlanUpdate();
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji ilości:', error);
+      showError('Błąd podczas aktualizacji ilości: ' + error.message);
+    } finally {
+      setEditQuantityLoading(false);
+    }
+  };
+
+  const handleCancelEditQuantity = () => {
+    setEditQuantityDialogOpen(false);
+    setEditingIngredient(null);
+    setEditQuantityValue('');
+  };
+
   // Usuń powiązanie składnika z rezerwacją
   const handleUnlinkIngredient = async (ingredientId) => {
     try {
@@ -468,15 +536,12 @@ const EnhancedMixingPlan = ({
     }
     
     return (
-      <Button
-        size="small"
-        startIcon={<LinkIcon />}
-        onClick={() => handleLinkIngredient(ingredient)}
-        variant="outlined"
-        color="primary"
-      >
-        Powiąż
-      </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <LinkIcon fontSize="small" color="action" />
+        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+          Kliknij wiersz aby powiązać
+        </Typography>
+      </Box>
     );
   };
 
@@ -498,15 +563,19 @@ const EnhancedMixingPlan = ({
   }
 
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
+    <Paper sx={{ p: 1.5, mb: 1.5 }}>
       {/* Nagłówek z przyciskami */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box>
-          <Typography variant="h6">{t('mixingPlan.title')}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>{t('mixingPlan.title')}</Typography>
           {totalIngredients > 0 && (
-            <Typography variant="caption" color="text.secondary">
-              Powiązano {linkedIngredients} z {totalIngredients} składników ({linkagePercentage}%)
-            </Typography>
+            <Chip
+              label={`${linkedIngredients}/${totalIngredients} (${linkagePercentage}%)`}
+              size="small"
+              color={linkagePercentage === 100 ? 'success' : linkagePercentage > 50 ? 'warning' : 'default'}
+              variant="outlined"
+              sx={{ height: 20, fontSize: '0.7rem' }}
+            />
           )}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -538,11 +607,14 @@ const EnhancedMixingPlan = ({
             onClick={refreshData}
             disabled={refreshing}
             size="small"
+            sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
           >
             Odśwież
           </Button>
         </Box>
       </Box>
+
+
 
       {/* Lista mieszań - użyj danych real-time jeśli dostępne */}
       {(realtimeTask || task).mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
@@ -554,23 +626,41 @@ const EnhancedMixingPlan = ({
           item => item.parentId === headerItem.id && item.type === 'check'
         );
         
+
+        
         return (
-          <Box key={headerItem.id} sx={{ mb: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
-            {/* Nagłówek mieszania */}
-            <Box sx={{ mb: 1.5 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          <Box key={headerItem.id} sx={{ 
+            mb: 2, 
+            border: '1px solid', 
+            borderColor: 'grey.300', 
+            borderRadius: 3, 
+            overflow: 'hidden',
+            bgcolor: 'background.paper'
+          }}>
+            {/* Nagłówek mieszania z tłem */}
+            <Box sx={{ 
+              p: 2, 
+              bgcolor: 'grey.50',
+              borderBottom: '1px solid',
+              borderColor: 'grey.300'
+            }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5 }}>
                 {headerItem.text}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {headerItem.details}
-              </Typography>
+              {headerItem.details && (
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {headerItem.details}
+                </Typography>
+              )}
             </Box>
             
-            <Grid container spacing={2}>
+            <Box sx={{ p: 2 }}>
+            
+            <Grid container spacing={1.5}>
               {/* Składniki z możliwością powiązania rezerwacji */}
               <Grid item xs={12} md={8}>
-                <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                  Składniki i powiązane rezerwacje:
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'text.primary' }}>
+                  Składniki i rezerwacje
                 </Typography>
                 
                 {ingredients.length === 0 ? (
@@ -578,47 +668,117 @@ const EnhancedMixingPlan = ({
                     Brak składników w tym mieszaniu
                   </Alert>
                 ) : (
-                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Składnik</TableCell>
-                          <TableCell>Ilość</TableCell>
-                          <TableCell>Powiązana rezerwacja</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {ingredients.map((ingredient) => (
-                          <TableRow key={ingredient.id}>
-                            <TableCell>
-                              <Typography variant="body2">
-                                {ingredient.text}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="caption" color="text.secondary">
-                                {ingredient.details}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              {renderIngredientLinkStatus(ingredient)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <Box sx={{ 
+                    border: '1px solid',
+                    borderColor: 'grey.300',
+                    borderRadius: 2,
+                    overflow: 'hidden'
+                  }}>
+                    {/* Nagłówek grid */}
+                    <Box sx={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: '2fr 1fr 2fr 60px',
+                      gap: 2,
+                      bgcolor: 'grey.50',
+                      p: 1.5,
+                      borderBottom: '1px solid',
+                      borderColor: 'grey.300'
+                    }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                        Składnik
+                      </Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                        Ilość
+                      </Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                        Rezerwacja
+                      </Typography>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                        Akcje
+                      </Typography>
+                    </Box>
+                    
+                    {/* Wiersze składników */}
+                    {ingredients.map((ingredient, index) => {
+                      const link = ingredientLinks[ingredient.id];
+                      const isLinked = !!link;
+                      
+                      return (
+                      <Box 
+                        key={ingredient.id} 
+                        sx={{ 
+                          display: 'grid', 
+                          gridTemplateColumns: '2fr 1fr 2fr 60px',
+                          gap: 2,
+                          p: 1.5,
+                          borderBottom: index < ingredients.length - 1 ? '1px solid' : 'none',
+                          borderColor: 'grey.300',
+                          cursor: !isLinked ? 'pointer' : 'default',
+                          '&:hover': {
+                            bgcolor: !isLinked ? 'primary.light' : 'grey.50',
+                            opacity: !isLinked ? 0.8 : 1
+                          }
+                        }}
+                        onClick={() => !isLinked && handleLinkIngredient(ingredient)}
+                      >
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                            {ingredient.text}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {ingredient.details}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          {renderIngredientLinkStatus(ingredient)}
+                        </Box>
+                        
+                        <Box>
+                          <Tooltip title="Edytuj ilość">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleEditQuantity(ingredient)}
+                              sx={{ color: 'primary.main' }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Box>
+                      );
+                    })}
+                  </Box>
                 )}
               </Grid>
               
               {/* Status wykonania - checkboxy */}
               <Grid item xs={12} md={4}>
-                <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
-                  Status wykonania:
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'text.primary' }}>
+                  Status wykonania
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  {checkItems.map((item) => (
-                    <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ 
+                  border: '1px solid',
+                  borderColor: 'grey.300',
+                  borderRadius: 2,
+                  bgcolor: 'background.paper'
+                }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  {checkItems.map((item, index) => (
+                    <Box key={item.id} sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between',
+                      p: 1.5,
+                      borderBottom: index < checkItems.length - 1 ? '1px solid' : 'none',
+                      borderColor: 'grey.300',
+                      '&:hover': {
+                        bgcolor: 'grey.50'
+                      }
+                    }}>
                       <FormControlLabel 
                         control={
                           <Checkbox 
@@ -632,7 +792,7 @@ const EnhancedMixingPlan = ({
                             {item.text}
                           </Typography>
                         }
-                        sx={{ margin: 0, '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
+                        sx={{ margin: 0 }}
                       />
                       {item.completed && (
                         <Chip 
@@ -646,8 +806,10 @@ const EnhancedMixingPlan = ({
                     </Box>
                   ))}
                 </Box>
+                </Box>
               </Grid>
             </Grid>
+            </Box>
           </Box>
         );
       })}
@@ -831,6 +993,64 @@ const EnhancedMixingPlan = ({
             disabled={!selectedReservation || !linkQuantity || parseFloat(linkQuantity) <= 0 || parseFloat(linkQuantity) > maxAvailableQuantity}
           >
             Powiąż
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog edycji ilości składnika */}
+      <Dialog open={editQuantityDialogOpen} onClose={handleCancelEditQuantity} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Edytuj ilość składnika
+          {editingIngredient && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {editingIngredient.text}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Nowa ilość"
+            type="number"
+            fullWidth
+            variant="outlined"
+            value={editQuantityValue}
+            onChange={(e) => setEditQuantityValue(e.target.value)}
+            helperText={editingIngredient ? `Aktualna ilość: ${editingIngredient.details}` : ''}
+            InputProps={{
+              inputProps: { 
+                min: 0, 
+                step: 0.001,
+                style: { textAlign: 'right' }
+              },
+              endAdornment: editingIngredient && (
+                <InputAdornment position="end">
+                  {(() => {
+                    const unitMatch = editingIngredient.details.match(/\s(\w+)$/);
+                    return unitMatch ? unitMatch[1] : 'kg';
+                  })()}
+                </InputAdornment>
+              )
+            }}
+            sx={{ mt: 2 }}
+          />
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <AlertTitle>Informacja</AlertTitle>
+            Zmiana ilości składnika zaktualizuje plan mieszań i automatycznie przeliczy sumę dla całego mieszania.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelEditQuantity}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleSaveQuantity}
+            variant="contained"
+            disabled={editQuantityLoading || !editQuantityValue || parseFloat(editQuantityValue.replace(',', '.')) < 0}
+            startIcon={editQuantityLoading ? <CircularProgress size={16} /> : null}
+          >
+            {editQuantityLoading ? 'Zapisuję...' : 'Zapisz'}
           </Button>
         </DialogActions>
       </Dialog>
