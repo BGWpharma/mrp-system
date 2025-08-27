@@ -138,12 +138,16 @@ export const getStandardReservationsForTask = async (taskId) => {
     const ingredientLinks = await getIngredientReservationLinks(taskId);
     console.log('Powiązania składników:', ingredientLinks);
     
-    // Oblicz łączną powiązaną ilość dla każdej rezerwacji (używaj linkedQuantity lub quantity dla kompatybilności)
+    // Oblicz łączną powiązaną ilość dla każdej rezerwacji (nowa struktura z tablicami)
     const linkedQuantities = {};
-    Object.values(ingredientLinks).forEach(link => {
-      if (link.reservationId && (link.linkedQuantity || link.quantity)) {
-        const quantity = link.linkedQuantity || link.quantity;
-        linkedQuantities[link.reservationId] = (linkedQuantities[link.reservationId] || 0) + parseFloat(quantity);
+    Object.values(ingredientLinks).forEach(linksArray => {
+      if (Array.isArray(linksArray)) {
+        linksArray.forEach(link => {
+          if (link.reservationId && (link.linkedQuantity || link.quantity)) {
+            const quantity = link.linkedQuantity || link.quantity;
+            linkedQuantities[link.reservationId] = (linkedQuantities[link.reservationId] || 0) + parseFloat(quantity);
+          }
+        });
       }
     });
     
@@ -176,6 +180,14 @@ export const getStandardReservationsForTask = async (taskId) => {
             const linkedQuantity = linkedQuantities[reservationId] || 0;
             const baseAvailableQuantity = batch.quantity - (batch.consumedQuantity || 0);
             const finalAvailableQuantity = baseAvailableQuantity - linkedQuantity;
+            
+            console.log(`[DEBUG] Kalkulacja dla ${reservationId}:`, {
+              batchQuantity: batch.quantity,
+              consumedQuantity: batch.consumedQuantity || 0,
+              baseAvailableQuantity,
+              linkedQuantity,
+              finalAvailableQuantity
+            });
             
             // Pobierz szczegółowe informacje o partii z bazy danych
             let batchDetails = null;
@@ -294,7 +306,7 @@ export const getVirtualReservationsFromSnapshots = async (taskId) => {
 /**
  * Pobiera powiązania składników z rezerwacjami dla zadania
  * @param {string} taskId - ID zadania produkcyjnego
- * @returns {Promise<Object>} - Obiekt mapujący ID składnika na powiązanie
+ * @returns {Promise<Object>} - Obiekt mapujący ID składnika na tablicę powiązań
  */
 export const getIngredientReservationLinks = async (taskId) => {
   try {
@@ -314,7 +326,7 @@ export const getIngredientReservationLinks = async (taskId) => {
         ? Math.round((data.consumedQuantity / data.linkedQuantity) * 100)
         : 0;
       
-      links[data.ingredientId] = {
+      const linkItem = {
         id: doc.id,
         ...data,
         consumptionPercentage: consumptionPercentage,
@@ -327,6 +339,12 @@ export const getIngredientReservationLinks = async (taskId) => {
         quantity: data.linkedQuantity, // Dla komponentów używających starego pola
         reservationType: data.reservationType
       };
+      
+      // Grupuj powiązania po ingredientId
+      if (!links[data.ingredientId]) {
+        links[data.ingredientId] = [];
+      }
+      links[data.ingredientId].push(linkItem);
     });
     
     return links;
@@ -337,7 +355,7 @@ export const getIngredientReservationLinks = async (taskId) => {
 };
 
 /**
- * Powiązuje składnik z rezerwacją
+ * Powiązuje składnik z rezerwacją (obsługuje wielokrotne powiązania)
  * @param {string} taskId - ID zadania produkcyjnego
  * @param {string} ingredientId - ID składnika z planu mieszań
  * @param {string} reservationId - ID rezerwacji
@@ -358,11 +376,12 @@ export const linkIngredientToReservation = async (
     // Pobierz snapshot rezerwacji
     const reservationSnapshot = await getReservationSnapshot(taskId, reservationId);
     
-    // Sprawdź czy składnik nie jest już powiązany
+    // Sprawdź czy to specyficzne powiązanie już istnieje (składnik + rezerwacja)
     const existingQuery = query(
       collection(db, INGREDIENT_LINKS_COLLECTION),
       where('taskId', '==', taskId),
-      where('ingredientId', '==', ingredientId)
+      where('ingredientId', '==', ingredientId),
+      where('reservationId', '==', reservationId)
     );
     
     const existingSnapshot = await getDocs(existingQuery);
@@ -383,7 +402,7 @@ export const linkIngredientToReservation = async (
     };
     
     if (!existingSnapshot.empty) {
-      // Aktualizuj istniejące powiązanie - zachowaj historię konsumpcji
+      // Aktualizuj istniejące powiązanie dla tej konkretnej rezerwacji
       const existingDoc = existingSnapshot.docs[0];
       const existingData = existingDoc.data();
       
@@ -394,13 +413,15 @@ export const linkIngredientToReservation = async (
       linkData.isFullyConsumed = linkData.remainingQuantity <= 0;
       
       await updateDoc(doc(db, INGREDIENT_LINKS_COLLECTION, existingDoc.id), linkData);
+      console.log('✅ [LINK DEBUG] Zaktualizowano istniejące powiązanie:', existingDoc.id);
     } else {
-      // Utwórz nowe powiązanie
-      await addDoc(collection(db, INGREDIENT_LINKS_COLLECTION), {
+      // Utwórz nowe powiązanie dla tej rezerwacji
+      const newDocRef = await addDoc(collection(db, INGREDIENT_LINKS_COLLECTION), {
         ...linkData,
         createdAt: serverTimestamp(),
         createdBy: userId
       });
+      console.log('✅ [LINK DEBUG] Utworzono nowe powiązanie:', newDocRef.id, 'dla rezerwacji:', reservationId);
     }
     
     return {
@@ -476,7 +497,36 @@ export const updateIngredientConsumption = async (taskId, ingredientId, consumed
 };
 
 /**
- * Usuwa powiązanie składnika z rezerwacją
+ * Usuwa konkretne powiązanie składnik-rezerwacja (nowa funkcja dla obsługi wielu powiązań)
+ * @param {string} linkId - ID konkretnego powiązania do usunięcia
+ * @param {string} userId - ID użytkownika wykonującego operację
+ * @returns {Promise<Object>} - Wynik operacji
+ */
+export const unlinkSpecificReservation = async (linkId, userId) => {
+  try {
+    const linkRef = doc(db, INGREDIENT_LINKS_COLLECTION, linkId);
+    
+    // Sprawdź czy powiązanie istnieje
+    const linkDoc = await getDoc(linkRef);
+    if (!linkDoc.exists()) {
+      throw new Error('Nie znaleziono powiązania do usunięcia');
+    }
+    
+    // Usuń konkretne powiązanie
+    await deleteDoc(linkRef);
+    
+    return {
+      success: true,
+      message: 'Powiązanie zostało usunięte'
+    };
+  } catch (error) {
+    console.error('Błąd podczas usuwania konkretnego powiązania:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa wszystkie powiązania składnika z rezerwacjami (zachowana dla kompatybilności wstecznej)
  * @param {string} taskId - ID zadania produkcyjnego
  * @param {string} ingredientId - ID składnika z planu mieszań
  * @param {string} userId - ID użytkownika wykonującego operację
@@ -496,13 +546,13 @@ export const unlinkIngredientFromReservation = async (taskId, ingredientId, user
       throw new Error('Nie znaleziono powiązania do usunięcia');
     }
     
-    // Fizycznie usuń powiązania
+    // Fizycznie usuń wszystkie powiązania składnika
     const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
     
     return {
       success: true,
-      message: 'Powiązanie zostało usunięte'
+      message: `Usunięto ${snapshot.docs.length} powiązań składnika`
     };
   } catch (error) {
     console.error('Błąd podczas usuwania powiązania składnika:', error);
@@ -582,28 +632,67 @@ export const getDetailedIngredientLinksReport = async (taskId) => {
     
     const allReservations = standardReservations.map(res => ({ ...res, type: 'standard' }));
     
-    // Przygotuj szczegółowy raport
+    // Przygotuj szczegółowy raport (nowa struktura z tablicami powiązań)
     const report = ingredients.map(ingredient => {
-      const link = links[ingredient.id];
-      let reservationInfo = null;
+      const ingredientLinks = links[ingredient.id] || [];
+      const reservationInfos = [];
       
-      if (link) {
-        reservationInfo = allReservations.find(res => res.id === link.reservationId);
+      if (ingredientLinks.length > 0) {
+        ingredientLinks.forEach(link => {
+          const reservationInfo = allReservations.find(res => res.id === link.reservationId);
+          if (reservationInfo) {
+            reservationInfos.push({
+              reservationInfo: reservationInfo,
+              linkInfo: link
+            });
+          }
+        });
       }
       
       return {
         ingredientId: ingredient.id,
         ingredientName: ingredient.text,
         ingredientDetails: ingredient.details,
-        isLinked: !!link,
-        reservationInfo: reservationInfo,
-        linkInfo: link
+        isLinked: ingredientLinks.length > 0,
+        linksCount: ingredientLinks.length,
+        totalLinkedQuantity: ingredientLinks.reduce((sum, link) => sum + (link.linkedQuantity || 0), 0),
+        reservationInfos: reservationInfos,
+        linkInfos: ingredientLinks // Zachowana dla kompatybilności
       };
     });
     
     return report;
   } catch (error) {
     console.error('Błąd podczas generowania raportu powiązań:', error);
+    return [];
+  }
+};
+
+/**
+ * Pobiera identyfikatory już powiązanych rezerwacji dla składnika
+ * @param {string} taskId - ID zadania produkcyjnego
+ * @param {string} ingredientId - ID składnika
+ * @returns {Promise<Array>} - Lista ID już powiązanych rezerwacji
+ */
+export const getLinkedReservationIds = async (taskId, ingredientId) => {
+  try {
+    const q = query(
+      collection(db, INGREDIENT_LINKS_COLLECTION),
+      where('taskId', '==', taskId),
+      where('ingredientId', '==', ingredientId)
+    );
+    
+    const snapshot = await getDocs(q);
+    const linkedReservationIds = [];
+    
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      linkedReservationIds.push(data.reservationId);
+    });
+    
+    return linkedReservationIds;
+  } catch (error) {
+    console.error('Błąd podczas pobierania powiązanych rezerwacji:', error);
     return [];
   }
 };

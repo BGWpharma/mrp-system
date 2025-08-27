@@ -235,11 +235,19 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
   const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
   const progress = task.quantity > 0 ? Math.min((totalCompletedQuantity / task.quantity) * 100, 100) : 0;
 
-  // Przygotowanie danych planu mieszań
+  // Przygotowanie danych planu mieszań - liczy tylko elementy typu 'check' (zadania do wykonania)
   const mixingPlanItems = task.mixingPlanChecklist || [];
-  const completedItems = mixingPlanItems.filter(item => item.completed).length;
-  const totalItems = mixingPlanItems.length;
+  const checkItems = mixingPlanItems.filter(item => item.type === 'check');
+  const completedItems = checkItems.filter(item => item.completed).length;
+  const totalItems = checkItems.length;
   const mixingProgress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+  
+  console.log('[KIOSK DEBUG] Postęp ogólny:', {
+    allItems: mixingPlanItems.length,
+    checkItems: totalItems,
+    completedItems,
+    progress: mixingProgress
+  });
 
   return (
     <Box>
@@ -565,7 +573,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                 }}>
                                   <Box sx={{ 
                                     display: 'grid', 
-                                    gridTemplateColumns: '2fr 1fr 2fr',
+                                    gridTemplateColumns: '1.5fr 1fr 3fr',
                                     gap: 0,
                                     bgcolor: colors.background,
                                     p: 1,
@@ -578,17 +586,19 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                       Ilość
                                     </Typography>
                                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: colors.text.primary }}>
-                                      Rezerwacja
+                                      Rezerwacje
                                     </Typography>
                                   </Box>
                                   
                                   {ingredients.map((ingredient, index) => {
-                                    const link = ingredientLinks[ingredient.id];
+                                    const links = ingredientLinks[ingredient.id] || [];
+                                    const totalLinkedQuantity = links.reduce((sum, link) => sum + (link.linkedQuantity || 0), 0);
+                                    const totalConsumedQuantity = links.reduce((sum, link) => sum + (link.consumedQuantity || 0), 0);
                                     
                                     return (
                                       <Box key={ingredient.id} sx={{ 
                                         display: 'grid', 
-                                        gridTemplateColumns: '2fr 1fr 2fr',
+                                        gridTemplateColumns: '1.5fr 1fr 3fr',
                                         gap: 2,
                                         p: 1,
                                         borderBottom: index < ingredients.length - 1 ? `1px solid ${borderColor}` : 'none',
@@ -609,34 +619,128 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                         </Box>
                                         
                                         <Box>
-                                          {link ? (
-                                            <Box>
-                                              <Chip
-                                                size="small"
-                                                label={`LOT: ${link.batchSnapshot?.batchNumber || 'Brak numeru'}`}
-                                                sx={{
-                                                  bgcolor: `${palettes.secondary.main}20`,
-                                                  color: palettes.secondary.main,
-                                                  fontWeight: 600,
-                                                  mb: 0.5
-                                                }}
-                                              />
-                                              <Typography variant="caption" display="block" sx={{ color: colors.text.secondary, mb: 0.5 }}>
-                                                Powiązano: {link.linkedQuantity || link.quantity} {link.batchSnapshot?.unit || 'szt.'}
-                                              </Typography>
-                                              {link.consumedQuantity > 0 && (
-                                                <Typography variant="caption" display="block" sx={{ 
-                                                  color: link.isFullyConsumed ? 'success.main' : 'warning.main',
-                                                  fontWeight: 500,
-                                                  mb: 0.5
-                                                }}>
-                                                  Użyto: {link.consumedQuantity} / Pozostało: {link.remainingQuantity}
-                                                </Typography>
+                                          {links.length > 0 ? (
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: '100%' }}>
+                                              {/* Nagłówek z sumarycznymi informacjami */}
+                                              {links.length > 1 && (
+                                                <Box sx={{ mb: 0.5 }}>
+                                                  <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+                                                    {links.length} rezerwacji → Razem: {totalLinkedQuantity} {links[0]?.batchSnapshot?.unit || 'szt.'}
+                                                  </Typography>
+                                                </Box>
                                               )}
-                                              {link.batchSnapshot?.warehouseName && (
-                                                <Typography variant="caption" display="block" sx={{ color: colors.text.disabled }}>
-                                                  {link.batchSnapshot.warehouseName}
-                                                </Typography>
+                                              
+                                              {/* Lista wszystkich powiązań */}
+                                              {links.map((link, linkIndex) => {
+                                                const reservationFromSnapshot = {
+                                                  id: link.reservationId,
+                                                  batchNumber: link.batchSnapshot?.batchNumber || 'Brak numeru',
+                                                  unit: link.batchSnapshot?.unit || 'szt.',
+                                                  materialName: link.batchSnapshot?.materialName || 'Nieznany materiał',
+                                                  warehouseName: link.batchSnapshot?.warehouseName,
+                                                  warehouseAddress: link.batchSnapshot?.warehouseAddress,
+                                                  expiryDateString: link.batchSnapshot?.expiryDateString
+                                                };
+                                                
+                                                return (
+                                                  <Box 
+                                                    key={link.id} 
+                                                    sx={{ 
+                                                      display: 'flex', 
+                                                      alignItems: 'flex-start', 
+                                                      gap: 1,
+                                                      p: 0.5,
+                                                      border: '1px solid',
+                                                      borderColor: borderColor,
+                                                      borderRadius: 1,
+                                                      bgcolor: colors.background,
+                                                      minHeight: 'auto'
+                                                    }}
+                                                  >
+                                                    <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, gap: 0.25 }}>
+                                                      {/* Linia 1: LOT + ilość powiązana */}
+                                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                        <Chip
+                                                          size="small"
+                                                          label={`LOT: ${reservationFromSnapshot.batchNumber}`}
+                                                          sx={{
+                                                            bgcolor: `${palettes.secondary.main}20`,
+                                                            color: palettes.secondary.main,
+                                                            fontWeight: 600,
+                                                            fontSize: '0.65rem',
+                                                            height: 20
+                                                          }}
+                                                        />
+                                                        <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.7rem' }}>
+                                                          {link.linkedQuantity || link.quantity} {reservationFromSnapshot.unit}
+                                                        </Typography>
+                                                      </Box>
+                                                      
+                                                      {/* Linia 2: Lokalizacja + data ważności (w jednej linii) */}
+                                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                                                        {reservationFromSnapshot.warehouseName && (
+                                                          <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                                                            📍 {reservationFromSnapshot.warehouseName}
+                                                          </Typography>
+                                                        )}
+                                                        {reservationFromSnapshot.expiryDateString && (
+                                                          <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                                                            📅 {reservationFromSnapshot.expiryDateString}
+                                                          </Typography>
+                                                        )}
+                                                      </Box>
+                                                      
+                                                      {/* Linia 3: Informacje o konsumpcji (tylko jeśli istnieją) */}
+                                                      {link.consumedQuantity > 0 && (
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.25 }}>
+                                                          <Typography variant="caption" sx={{ 
+                                                            color: link.isFullyConsumed ? 'success.main' : 'warning.main',
+                                                            fontSize: '0.65rem'
+                                                          }}>
+                                                            Użyto: {link.consumedQuantity} / Pozostało: {link.remainingQuantity}
+                                                          </Typography>
+                                                          {link.consumptionPercentage !== undefined && (
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                              <Box sx={{ 
+                                                                width: '25px', 
+                                                                height: '2px', 
+                                                                bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'grey.200', 
+                                                                borderRadius: 2,
+                                                                overflow: 'hidden'
+                                                              }}>
+                                                                <Box sx={{
+                                                                  width: `${link.consumptionPercentage}%`,
+                                                                  height: '100%',
+                                                                  bgcolor: link.consumptionPercentage === 100 ? 'success.main' : 'primary.main',
+                                                                  transition: 'width 0.3s ease'
+                                                                }} />
+                                                              </Box>
+                                                              <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.6rem' }}>
+                                                                {link.consumptionPercentage}%
+                                                              </Typography>
+                                                            </Box>
+                                                          )}
+                                                        </Box>
+                                                      )}
+                                                    </Box>
+                                                  </Box>
+                                                );
+                                              })}
+                                              
+                                              {/* Sumaryczne informacje o konsumpcji */}
+                                              {totalConsumedQuantity > 0 && links.length > 1 && (
+                                                <Box sx={{ 
+                                                  mt: 0.5, 
+                                                  p: 0.5, 
+                                                  bgcolor: `${palettes.primary.main}0a`, 
+                                                  borderRadius: 1,
+                                                  border: '1px solid',
+                                                  borderColor: `${palettes.primary.main}20`
+                                                }}>
+                                                  <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.65rem' }}>
+                                                    📊 Łącznie użyto: {totalConsumedQuantity} / Pozostało: {totalLinkedQuantity - totalConsumedQuantity}
+                                                  </Typography>
+                                                </Box>
                                               )}
                                             </Box>
                                           ) : (
