@@ -1137,12 +1137,25 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       newItemsCount: newPoData?.items?.length || 0
     });
     
-    // Jeśli zaktualizowano pozycje, sprawdź zmiany cen jednostkowych
-    if (hasItemsUpdate) {
-      console.log('🔍 [PO_UPDATE_DEBUG] Wykryto aktualizację pozycji, sprawdzam zmiany cen jednostkowych');
-      await updateBatchBasePricesOnUnitPriceChange(purchaseOrderId, oldPoData, newPoData, userId || 'system');
-    } else {
-      console.log('🔍 [PO_UPDATE_DEBUG] Brak aktualizacji pozycji - pomijam sprawdzanie zmian cen');
+    // NOWA LOGIKA: Zawsze aktualizuj ceny partii przy każdym zapisie PO
+    console.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam automatyczną aktualizację cen partii przy zapisie PO');
+    try {
+      await updateBatchPricesOnAnySave(purchaseOrderId, newPoData, userId || 'system');
+      console.log('✅ [PO_UPDATE_DEBUG] Pomyślnie zaktualizowano ceny partii przy zapisie PO');
+    } catch (error) {
+      console.error('❌ [PO_UPDATE_DEBUG] Błąd podczas aktualizacji cen partii przy zapisie:', error);
+      // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji partii
+    }
+    
+    // WYŁĄCZONA STARA LOGIKA: Nowa funkcja updateBatchPricesOnAnySave już obsługuje wszystkie przypadki
+    // Stara funkcja updateBatchBasePricesOnUnitPriceChange powodowała konflikty przy dopasowywaniu partii
+    if (false && hasItemsUpdate) {
+      console.log('🔍 [PO_UPDATE_DEBUG] WYŁĄCZONE: Stara logika weryfikacji zmian cen (zastąpiona przez updateBatchPricesOnAnySave)');
+      try {
+        await updateBatchBasePricesOnUnitPriceChange(purchaseOrderId, oldPoData, newPoData, userId || 'system');
+      } catch (error) {
+        console.warn('⚠️ [PO_UPDATE_DEBUG] Błąd podczas dodatkowej weryfikacji zmian cen:', error);
+      }
     }
     
     // Jeśli zaktualizowano dodatkowe koszty, zaktualizuj również powiązane partie
@@ -2472,6 +2485,210 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
     throw error;
   }
 };
+
+/**
+ * Aktualizuje ceny partii przy każdym zapisie PO, niezależnie od wykrytych zmian
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {Object} poData - Dane zamówienia zakupowego
+ * @param {string} userId - ID użytkownika dokonującego aktualizacji
+ */
+const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
+  try {
+    console.log(`🔄 [BATCH_AUTO_UPDATE] Rozpoczynam automatyczną aktualizację cen partii dla zamówienia ${purchaseOrderId}`);
+    
+    // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
+    const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const firebaseConfig = await import('./firebase/config');
+    const db = firebaseConfig.db;
+    const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
+    
+    // Znajdź partie używając obu modeli danych
+    let batchesToUpdate = [];
+    
+    // 1. Szukaj partii z polem purchaseOrderDetails.id równym ID zamówienia
+    const batchesQuery = query(
+      collection(db, INVENTORY_BATCHES_COLLECTION),
+      where('purchaseOrderDetails.id', '==', purchaseOrderId)
+    );
+    
+    const batchesSnapshot = await getDocs(batchesQuery);
+    batchesSnapshot.forEach(doc => {
+      batchesToUpdate.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // 2. Szukaj partii używając starszego modelu danych
+    if (batchesToUpdate.length === 0) {
+      const oldFormatQuery = query(
+        collection(db, INVENTORY_BATCHES_COLLECTION),
+        where('sourceDetails.orderId', '==', purchaseOrderId)
+      );
+      
+      const oldFormatSnapshot = await getDocs(oldFormatQuery);
+      oldFormatSnapshot.forEach(doc => {
+        batchesToUpdate.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+    }
+    
+    // DEDUPLIKACJA
+    const uniqueBatchesMap = new Map();
+    batchesToUpdate.forEach(batch => {
+      if (!uniqueBatchesMap.has(batch.id)) {
+        uniqueBatchesMap.set(batch.id, batch);
+      }
+    });
+    
+    batchesToUpdate = Array.from(uniqueBatchesMap.values());
+    
+    console.log(`🔄 [BATCH_AUTO_UPDATE] Znaleziono ${batchesToUpdate.length} partii powiązanych z zamówieniem ${purchaseOrderId}`);
+    
+    if (batchesToUpdate.length === 0) {
+      console.log(`ℹ️ [BATCH_AUTO_UPDATE] Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
+      return { success: true, updated: 0 };
+    }
+    
+    // Aktualizuj partie - dopasuj do pozycji z zamówienia
+    const updatePromises = [];
+    const items = poData.items || [];
+    
+    // Oblicz łączne dodatkowe koszty BRUTTO (z VAT)
+    let additionalCostsGrossTotal = 0;
+    
+    // Z nowego formatu additionalCostsItems
+    if (poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems)) {
+      additionalCostsGrossTotal = poData.additionalCostsItems.reduce((sum, cost) => {
+        const net = parseFloat(cost.value) || 0;
+        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+        const vat = (net * vatRate) / 100;
+        return sum + net + vat;
+      }, 0);
+    } 
+    // Ze starego pola additionalCosts (dla kompatybilności, traktujemy jako brutto)
+    else if (poData.additionalCosts) {
+      additionalCostsGrossTotal = parseFloat(poData.additionalCosts) || 0;
+    }
+    
+    // Oblicz łączną ilość początkową wszystkich partii dla proporcjonalnego rozdziału kosztów
+    const totalInitialQuantity = batchesToUpdate.reduce((sum, batch) => {
+      return sum + (parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0);
+    }, 0);
+    
+    console.log(`🔄 [BATCH_AUTO_UPDATE] Dodatkowe koszty: ${additionalCostsGrossTotal}, łączna ilość partii: ${totalInitialQuantity}`);
+    
+    for (const batchData of batchesToUpdate) {
+      // Dopasuj partię do pozycji w zamówieniu
+      let matchingItem = null;
+      
+      // 1. Sprawdź czy partia ma zapisane itemPoId (ID konkretnej pozycji w zamówieniu)
+      const batchItemPoId = batchData.purchaseOrderDetails?.itemPoId || batchData.sourceDetails?.itemPoId;
+      
+      if (batchItemPoId) {
+        // Znajdź pozycję o dokładnie tym ID
+        matchingItem = items.find(item => item.id === batchItemPoId);
+        
+        if (matchingItem) {
+          console.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} (ID: ${matchingItem.id}) na podstawie itemPoId`);
+        }
+      }
+      
+      // 2. Jeśli nie znaleziono dopasowania po itemPoId, spróbuj starszej metody (fallback)
+      if (!matchingItem) {
+        // Spróbuj dopasować po inventoryItemId
+        const batchInventoryItemId = batchData.inventoryItemId || batchData.itemId;
+        if (batchInventoryItemId) {
+          matchingItem = items.find(item => 
+            item.inventoryItemId === batchInventoryItemId || item.id === batchInventoryItemId
+          );
+          
+          if (matchingItem) {
+            console.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} na podstawie inventoryItemId`);
+          }
+        }
+        
+        // Jeśli nadal nie znaleziono, spróbuj po nazwie (ostatnia deska ratunku)
+        if (!matchingItem) {
+          const batchItemName = batchData.itemName || batchData.name;
+          if (batchItemName) {
+            matchingItem = items.find(item => item.name === batchItemName);
+            
+            if (matchingItem) {
+              console.log(`🔄 [BATCH_AUTO_UPDATE] Dopasowano partię ${batchData.id} do pozycji ${matchingItem.name} na podstawie nazwy (fallback)`);
+            }
+          }
+        }
+      }
+      
+      if (matchingItem && matchingItem.unitPrice !== undefined) {
+        const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
+        
+        // Pobierz ilość początkową partii
+        const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
+        
+        // Ustaw cenę bazową na aktualną cenę jednostkową z pozycji
+        const newBaseUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        
+        // Oblicz dodatkowy koszt na jednostkę dla tej partii
+        let additionalCostPerUnit = 0;
+        if (additionalCostsGrossTotal > 0 && totalInitialQuantity > 0 && batchInitialQuantity > 0) {
+          // Oblicz proporcjonalny udział dodatkowych kosztów dla tej partii
+          const batchProportion = batchInitialQuantity / totalInitialQuantity;
+          const batchAdditionalCostTotal = additionalCostsGrossTotal * batchProportion;
+          additionalCostPerUnit = batchAdditionalCostTotal / batchInitialQuantity;
+        }
+        
+        // Oblicz nową cenę końcową: cena bazowa + dodatkowy koszt
+        const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
+        
+        console.log(`🔄 [BATCH_AUTO_UPDATE] Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}:`, {
+          basePrice: newBaseUnitPrice,
+          additionalCost: additionalCostPerUnit,
+          finalPrice: newFinalUnitPrice,
+          quantity: batchInitialQuantity
+        });
+        
+        // Aktualizuj dokument partii
+        updatePromises.push(updateDoc(batchRef, {
+          baseUnitPrice: newBaseUnitPrice,
+          additionalCostPerUnit: additionalCostPerUnit,
+          unitPrice: newFinalUnitPrice,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        }));
+      } else if (!matchingItem) {
+        console.warn(`⚠️ [BATCH_AUTO_UPDATE] Nie znaleziono dopasowania dla partii ${batchData.id}:`, {
+          itemPoId: batchItemPoId,
+          inventoryItemId: batchData.inventoryItemId,
+          itemId: batchData.itemId,
+          itemName: batchData.itemName,
+          name: batchData.name
+        });
+      }
+    }
+    
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+      console.log(`✅ [BATCH_AUTO_UPDATE] Pomyślnie zaktualizowano ${updatePromises.length} partii przy zapisie PO`);
+    } else {
+      console.log(`ℹ️ [BATCH_AUTO_UPDATE] Brak partii do aktualizacji`);
+    }
+    
+    // Wyczyść cache dotyczące tego zamówienia
+    searchCache.invalidateForOrder(purchaseOrderId);
+    
+    return { success: true, updated: updatePromises.length };
+  } catch (error) {
+    console.error(`❌ [BATCH_AUTO_UPDATE] Błąd podczas automatycznej aktualizacji cen partii dla zamówienia ${purchaseOrderId}:`, error);
+    throw error;
+  }
+};
+
+// Eksportuję funkcję do automatycznej aktualizacji cen partii przy każdym zapisie PO
+export { updateBatchPricesOnAnySave };
 
 // Cache dla ograniczonej listy zamówień
 let limitedPOCache = null;
