@@ -22,7 +22,7 @@ import {
   import { db } from './firebase/config';
   import { format } from 'date-fns';
   import { generateMONumber, generateLOTNumber } from '../utils/numberGenerators';
-  import { preciseMultiply } from '../utils/mathUtils';
+  import { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } from '../utils/mathUtils';
   import { 
     getInventoryItemByName, 
     getInventoryItemById,
@@ -4703,282 +4703,372 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     }
   };
 
-  // Funkcja do automatycznej aktualizacji kosztów zadania i powiązanych zamówień
-  export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Automatyczna aktualizacja kosztów') => {
-    try {
-      console.log(`[AUTO] Rozpoczynam automatyczną aktualizację kosztów dla zadania ${taskId}`);
+
+
+
+
+// Tolerancja dla porównywania kosztów (0.005€ = 0.5 centa)
+const COST_TOLERANCE = 0.005;
+
+/**
+ * Zunifikowana funkcja do automatycznej aktualizacji kosztów zadania i powiązanych zamówień
+ * Używa precyzyjnych obliczeń matematycznych i cache'owania cen partii
+ */
+export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Automatyczna aktualizacja kosztów') => {
+  try {
+    console.log(`[AUTO] Rozpoczynam zunifikowaną aktualizację kosztów dla zadania ${taskId} - ${reason}`);
+    
+    // Pobierz aktualne dane zadania
+    const task = await getTaskById(taskId);
+    if (!task || !task.materials || task.materials.length === 0) {
+      console.log(`[AUTO] Zadanie ${taskId} nie ma materiałów, pomijam aktualizację kosztów`);
+      return { success: false, message: 'Brak materiałów w zadaniu' };
+    }
+
+    // Oblicz koszty materiałów z użyciem precyzyjnych funkcji matematycznych
+    let totalMaterialCost = 0;
+    let totalFullProductionCost = 0;
+
+    // 1. KOSZTY SKONSUMOWANYCH MATERIAŁÓW (z precyzyjnymi obliczeniami)
+    if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+      const consumedCostDetails = {};
       
-      // Pobierz aktualne dane zadania
-      const task = await getTaskById(taskId);
-      if (!task || !task.materials || task.materials.length === 0) {
-        console.log(`[AUTO] Zadanie ${taskId} nie ma materiałów, pomijam aktualizację kosztów`);
-        return { success: false, message: 'Brak materiałów w zadaniu' };
-      }
-
-      // Oblicz koszty materiałów
-      let totalMaterialCost = 0;
-      let totalFullProductionCost = 0;
-
-      // Koszty skonsumowanych materiałów
-      if (task.consumedMaterials && task.consumedMaterials.length > 0) {
-        const consumedCostDetails = {};
-        
-        // Pobierz aktualne ceny partii dla skonsumowanych materiałów
-        const consumedBatchPricesCache = {};
-        
-        for (const consumed of task.consumedMaterials) {
-          if (consumed.batchId && !consumedBatchPricesCache[consumed.batchId]) {
-            try {
-              const batchRef = doc(db, 'inventoryBatches', consumed.batchId);
-              const batchDoc = await getDoc(batchRef);
-              if (batchDoc.exists()) {
-                const batchData = batchDoc.data();
-                consumedBatchPricesCache[consumed.batchId] = batchData.unitPrice || 0;
-                console.log(`[AUTO] Pobrana aktualna cena skonsumowanej partii ${consumed.batchId}: ${batchData.unitPrice}€`);
-              } else {
-                consumedBatchPricesCache[consumed.batchId] = 0;
-              }
-            } catch (error) {
-              console.warn(`[AUTO] Błąd podczas pobierania ceny skonsumowanej partii ${consumed.batchId}:`, error);
-              consumedBatchPricesCache[consumed.batchId] = 0;
-            }
+      // Pobierz aktualne ceny partii dla skonsumowanych materiałów (batch processing)
+      const uniqueBatchIds = [...new Set(
+        task.consumedMaterials
+          .filter(consumed => consumed.batchId)
+          .map(consumed => consumed.batchId)
+      )];
+      
+      const consumedBatchPricesCache = {};
+      const batchPromises = uniqueBatchIds.map(async (batchId) => {
+        try {
+          const batchRef = doc(db, 'inventoryBatches', batchId);
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            const batchData = batchDoc.data();
+            const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
+            consumedBatchPricesCache[batchId] = price;
+            console.log(`[AUTO] Pobrana aktualna cena skonsumowanej partii ${batchId}: ${price}€`);
+          } else {
+            consumedBatchPricesCache[batchId] = 0;
           }
+        } catch (error) {
+          console.warn(`[AUTO] Błąd podczas pobierania ceny skonsumowanej partii ${batchId}:`, error);
+          consumedBatchPricesCache[batchId] = 0;
+        }
+      });
+      
+      await Promise.all(batchPromises);
+
+      task.consumedMaterials.forEach((consumed) => {
+        const materialId = consumed.materialId;
+        const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
+        
+        if (!material) return;
+
+        if (!consumedCostDetails[materialId]) {
+          consumedCostDetails[materialId] = {
+            material,
+            totalQuantity: 0,
+            totalCost: 0
+          };
         }
 
-        task.consumedMaterials.forEach((consumed) => {
-          const materialId = consumed.materialId;
-          const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
-          
-          if (!material) return;
+        // Określ cenę jednostkową z hierarchii fallback
+        let unitPrice = 0;
+        let priceSource = 'fallback';
 
-          if (!consumedCostDetails[materialId]) {
-            consumedCostDetails[materialId] = {
-              material,
-              totalQuantity: 0,
-              totalCost: 0
-            };
+        if (consumed.unitPrice !== undefined && consumed.unitPrice > 0) {
+          unitPrice = fixFloatingPointPrecision(parseFloat(consumed.unitPrice));
+          priceSource = 'consumed-record';
+        } else if (consumed.batchId && consumedBatchPricesCache[consumed.batchId] > 0) {
+          unitPrice = consumedBatchPricesCache[consumed.batchId];
+          priceSource = 'batch-current';
+        } else if (material.unitPrice > 0) {
+          unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice));
+          priceSource = 'material-default';
+        }
+
+        const quantity = fixFloatingPointPrecision(parseFloat(consumed.quantity) || 0);
+        const cost = preciseMultiply(quantity, unitPrice);
+
+        console.log(`[AUTO] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (${priceSource}), koszt=${cost.toFixed(4)}€`);
+
+        // Aktualizuj szczegóły z precyzyjnymi obliczeniami
+        consumedCostDetails[materialId].totalQuantity = preciseAdd(
+          consumedCostDetails[materialId].totalQuantity, 
+          quantity
+        );
+        consumedCostDetails[materialId].totalCost = preciseAdd(
+          consumedCostDetails[materialId].totalCost, 
+          cost
+        );
+
+        // Sprawdź czy ta konsumpcja ma być wliczona do kosztów
+        const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
+          ? consumed.includeInCosts 
+          : (task.materialInCosts && task.materialInCosts[material.id] !== false);
+
+        console.log(`[AUTO] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
+
+        if (shouldIncludeInCosts) {
+          totalMaterialCost = preciseAdd(totalMaterialCost, cost);
+        }
+
+        // Zawsze dodaj do pełnego kosztu produkcji
+        totalFullProductionCost = preciseAdd(totalFullProductionCost, cost);
+      });
+    }
+
+    // 2. KOSZTY ZAREZERWOWANYCH (NIESKONSUMOWANYCH) MATERIAŁÓW (z precyzyjnymi obliczeniami)
+    if (task.materialBatches) {
+      // Pobierz wszystkie unikalne ID partii z zarezerwowanych materiałów
+      const allReservedBatchIds = [];
+      Object.values(task.materialBatches).forEach(batches => {
+        if (Array.isArray(batches)) {
+          batches.forEach(batch => {
+            if (batch.batchId) allReservedBatchIds.push(batch.batchId);
+          });
+        }
+      });
+      
+      const uniqueReservedBatchIds = [...new Set(allReservedBatchIds)];
+      const batchPricesCache = {};
+      
+      // Pobierz wszystkie ceny partii równolegle
+      const reservedBatchPromises = uniqueReservedBatchIds.map(async (batchId) => {
+        try {
+          const batchRef = doc(db, 'inventoryBatches', batchId);
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            const batchData = batchDoc.data();
+            const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
+            batchPricesCache[batchId] = price;
+            console.log(`[AUTO] Pobrana aktualna cena partii ${batchId}: ${price}€`);
+          } else {
+            batchPricesCache[batchId] = 0;
           }
+        } catch (error) {
+          console.warn(`[AUTO] Błąd podczas pobierania ceny partii ${batchId}:`, error);
+          batchPricesCache[batchId] = 0;
+        }
+      });
+      
+      await Promise.all(reservedBatchPromises);
+      
+      task.materials.forEach(material => {
+        const materialId = material.inventoryItemId || material.id;
+        const reservedBatches = task.materialBatches[materialId];
+        
+        if (!reservedBatches || !reservedBatches.length) return;
 
-          // Użyj aktualnej ceny z partii jeśli dostępna, w przeciwnym razie fallback
-          const batchPrice = consumed.batchId ? consumedBatchPricesCache[consumed.batchId] : null;
-          const unitPrice = batchPrice || consumed.unitPrice || material.unitPrice || 0;
-          const quantity = Number(consumed.quantity) || 0;
-          const cost = quantity * unitPrice;
-
-          console.log(`[AUTO] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (z partii: ${batchPrice ? 'tak' : 'nie'}), koszt=${cost.toFixed(2)}€`);
-
-          consumedCostDetails[materialId].totalQuantity += quantity;
-          consumedCostDetails[materialId].totalCost += cost;
-
-          // Sprawdź czy ta konsumpcja ma być wliczona do kosztów
-          const shouldIncludeInCosts = consumed.includeInCosts !== undefined 
-            ? consumed.includeInCosts 
-            : (task.materialInCosts && task.materialInCosts[material.id] !== false);
-
-          console.log(`[AUTO] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
+        // Oblicz ile zostało do skonsumowania z precyzyjnymi obliczeniami
+        const consumedQuantity = task.consumedMaterials ? 
+          task.consumedMaterials
+            .filter(consumed => consumed.materialId === materialId)
+            .reduce((sum, consumed) => {
+              const qty = fixFloatingPointPrecision(parseFloat(consumed.quantity) || 0);
+              return preciseAdd(sum, qty);
+            }, 0) : 0;
+        
+        const requiredQuantity = fixFloatingPointPrecision(parseFloat(material.quantity) || 0);
+        const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
+        
+        // Jeśli zostało coś do skonsumowania, oblicz koszt na podstawie rzeczywistych partii
+        if (remainingQuantity > 0) {
+          let weightedPriceSum = 0;
+          let totalBatchQuantity = 0;
+          
+          // Oblicz średnią ważoną cenę z zarezerwowanych partii
+          reservedBatches.forEach(batch => {
+            const batchQuantity = fixFloatingPointPrecision(parseFloat(batch.quantity) || 0);
+            let batchPrice = 0;
+            
+            // Hierarchia cen: aktualna z bazy → zapisana w partii → fallback z materiału
+            if (batch.batchId && batchPricesCache[batch.batchId] > 0) {
+              batchPrice = batchPricesCache[batch.batchId];
+            } else if (batch.unitPrice > 0) {
+              batchPrice = fixFloatingPointPrecision(parseFloat(batch.unitPrice));
+            } else if (material.unitPrice > 0) {
+              batchPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice));
+            }
+            
+            if (batchQuantity > 0 && batchPrice > 0) {
+              const weightedPrice = preciseMultiply(batchPrice, batchQuantity);
+              weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
+              totalBatchQuantity = preciseAdd(totalBatchQuantity, batchQuantity);
+              console.log(`[AUTO] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€`);
+            }
+          });
+          
+          // Oblicz koszt materiału
+          let materialCost = 0;
+          if (totalBatchQuantity > 0) {
+            const averagePrice = preciseDivide(weightedPriceSum, totalBatchQuantity);
+            materialCost = preciseMultiply(remainingQuantity, averagePrice);
+            console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, średnia cena=${averagePrice.toFixed(4)}€, koszt=${materialCost.toFixed(4)}€`);
+          } else {
+            // Fallback na cenę z materiału
+            const unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice) || 0);
+            materialCost = preciseMultiply(remainingQuantity, unitPrice);
+            console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
+          }
+          
+          // Sprawdź czy materiał ma być wliczany do kosztów
+          const shouldIncludeInCosts = task.materialInCosts ? 
+            task.materialInCosts[material.id] !== false : true;
 
           if (shouldIncludeInCosts) {
-            totalMaterialCost += cost;
+            totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
           }
 
           // Zawsze dodaj do pełnego kosztu produkcji
-          totalFullProductionCost += cost;
-        });
-      }
-
-      // Koszty zarezerwowanych (ale nieskonsumowanych) materiałów
-      if (task.materialBatches) {
-        // Pobierz aktualne ceny z rzeczywistych partii w bazie danych
-        const batchPricesCache = {};
-        
-        for (const [materialId, reservedBatches] of Object.entries(task.materialBatches)) {
-          if (reservedBatches && reservedBatches.length > 0) {
-            for (const batch of reservedBatches) {
-              if (batch.batchId && !batchPricesCache[batch.batchId]) {
-                try {
-                  const batchRef = doc(db, 'inventoryBatches', batch.batchId);
-                  const batchDoc = await getDoc(batchRef);
-                  if (batchDoc.exists()) {
-                    const batchData = batchDoc.data();
-                    batchPricesCache[batch.batchId] = batchData.unitPrice || 0;
-                    console.log(`[AUTO] Pobrana aktualna cena partii ${batch.batchId}: ${batchData.unitPrice}€`);
-                  } else {
-                    batchPricesCache[batch.batchId] = 0;
-                  }
-                } catch (error) {
-                  console.warn(`[AUTO] Błąd podczas pobierania ceny partii ${batch.batchId}:`, error);
-                  batchPricesCache[batch.batchId] = 0;
-                }
-              }
-            }
-          }
+          totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
         }
-        
-        task.materials.forEach(material => {
-          const materialId = material.inventoryItemId || material.id;
-          const reservedBatches = task.materialBatches[materialId];
-          
-          if (reservedBatches && reservedBatches.length > 0) {
-            // Oblicz ile zostało do skonsumowania
-            const consumedQuantity = task.consumedMaterials ? 
-              task.consumedMaterials
-                .filter(consumed => consumed.materialId === materialId)
-                .reduce((sum, consumed) => sum + (Number(consumed.quantity) || 0), 0) : 0;
-            
-            const requiredQuantity = material.quantity || 0;
-            const remainingQuantity = Math.max(0, requiredQuantity - consumedQuantity);
-            
-            // Jeśli zostało coś do skonsumowania, oblicz koszt na podstawie rzeczywistych partii
-            if (remainingQuantity > 0) {
-              let materialCost = 0;
-              let totalBatchQuantity = 0;
-              let weightedPrice = 0;
-              
-              // Oblicz średnią ważoną cenę z zarezerwowanych partii
-              reservedBatches.forEach(batch => {
-                const batchQuantity = Number(batch.quantity) || 0;
-                const batchPrice = batchPricesCache[batch.batchId] || batch.unitPrice || 0;
-                
-                if (batchQuantity > 0 && batchPrice > 0) {
-                  weightedPrice += batchPrice * batchQuantity;
-                  totalBatchQuantity += batchQuantity;
-                  console.log(`[AUTO] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€`);
-                }
-              });
-              
-              // Jeśli mamy dane o partiach, użyj średniej ważonej
-              if (totalBatchQuantity > 0) {
-                const averagePrice = weightedPrice / totalBatchQuantity;
-                materialCost = remainingQuantity * averagePrice;
-                console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, średnia cena=${averagePrice.toFixed(4)}€, koszt=${materialCost.toFixed(2)}€`);
-              } else {
-                // Fallback na cenę z materiału
-                const unitPrice = material.unitPrice || 0;
-                materialCost = remainingQuantity * unitPrice;
-                console.log(`[AUTO] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(2)}€`);
-              }
-              
-              // Sprawdź czy materiał ma być wliczany do kosztów
-              const shouldIncludeInCosts = task.materialInCosts ? 
-                task.materialInCosts[material.id] !== false : true;
-
-              if (shouldIncludeInCosts) {
-                totalMaterialCost += materialCost;
-              }
-
-              // Zawsze dodaj do pełnego kosztu produkcji
-              totalFullProductionCost += materialCost;
-            }
-          }
-        });
-      }
-
-      // Oblicz koszty na jednostkę
-      const unitMaterialCost = task.quantity ? (totalMaterialCost / task.quantity) : 0;
-      const unitFullProductionCost = task.quantity ? (totalFullProductionCost / task.quantity) : 0;
-
-      // Sprawdź czy koszty się rzeczywiście zmieniły (próg 0.01€ jak w UI)
-      const costChanged = 
-        Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
-        Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01 ||
-        Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.01 ||
-        Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
-
-      if (!costChanged) {
-        console.log(`[AUTO] Koszty zadania ${taskId} nie zmieniły się znacząco, pomijam aktualizację`);
-        return { success: false, message: 'Koszty nie uległy zmianie' };
-      }
-
-      // Wykonaj aktualizację w bazie danych
-      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-      await updateDoc(taskRef, {
-        totalMaterialCost,
-        unitMaterialCost,
-        totalFullProductionCost,
-        unitFullProductionCost,
-        costLastUpdatedAt: serverTimestamp(),
-        costLastUpdatedBy: userId,
-        updatedAt: serverTimestamp(),
-        updatedBy: userId,
-        // Dodaj wpis do historii kosztów
-        costHistory: arrayUnion({
-          timestamp: new Date().toISOString(),
-          userId: userId,
-          userName: 'System',
-          previousTotalCost: task.totalMaterialCost || 0,
-          newTotalCost: totalMaterialCost,
-          previousUnitCost: task.unitMaterialCost || 0,
-          newUnitCost: unitMaterialCost,
-          previousFullProductionCost: task.totalFullProductionCost || 0,
-          newFullProductionCost: totalFullProductionCost,
-          previousUnitFullProductionCost: task.unitFullProductionCost || 0,
-          newUnitFullProductionCost: unitFullProductionCost,
-          reason: reason
-        })
       });
+    }
 
-      console.log(`[AUTO] Zaktualizowano koszty zadania ${taskId}: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit}) | Pełny koszt: ${totalFullProductionCost.toFixed(2)} € (${unitFullProductionCost.toFixed(2)} €/${task.unit})`);
+    // 3. OBLICZ KOSZTY NA JEDNOSTKĘ (z precyzyjnymi obliczeniami)
+    const taskQuantity = fixFloatingPointPrecision(parseFloat(task.quantity) || 1);
+    const unitMaterialCost = taskQuantity > 0 ? preciseDivide(totalMaterialCost, taskQuantity) : 0;
+    const unitFullProductionCost = taskQuantity > 0 ? preciseDivide(totalFullProductionCost, taskQuantity) : 0;
 
-      // Wyślij powiadomienie o zmianie kosztów zadania (do odświeżenia UI)
-      try {
-        // Użyj BroadcastChannel do powiadomienia wszystkich otwartych okien/zakładek
-        if (typeof BroadcastChannel !== 'undefined') {
-          const channel = new BroadcastChannel('production-costs-update');
-          channel.postMessage({
-            type: 'TASK_COSTS_UPDATED',
-            taskId: taskId,
-            costs: {
-              totalMaterialCost,
-              unitMaterialCost,
-              totalFullProductionCost,
-              unitFullProductionCost
-            },
-            timestamp: new Date().toISOString()
-          });
-          channel.close();
-          console.log(`[AUTO] Wysłano powiadomienie BroadcastChannel o aktualizacji kosztów zadania ${taskId}`);
-        }
-      } catch (broadcastError) {
-        console.warn('[AUTO] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
+    // Aplikuj korektę precyzji na finalne wyniki
+    const finalTotalMaterialCost = fixFloatingPointPrecision(totalMaterialCost);
+    const finalUnitMaterialCost = fixFloatingPointPrecision(unitMaterialCost);
+    const finalTotalFullProductionCost = fixFloatingPointPrecision(totalFullProductionCost);
+    const finalUnitFullProductionCost = fixFloatingPointPrecision(unitFullProductionCost);
+
+    // 4. SPRAWDŹ CZY KOSZTY SIĘ RZECZYWIŚCIE ZMIENIŁY (zwiększona tolerancja)
+    const oldCosts = {
+      totalMaterialCost: fixFloatingPointPrecision(parseFloat(task.totalMaterialCost) || 0),
+      unitMaterialCost: fixFloatingPointPrecision(parseFloat(task.unitMaterialCost) || 0),
+      totalFullProductionCost: fixFloatingPointPrecision(parseFloat(task.totalFullProductionCost) || 0),
+      unitFullProductionCost: fixFloatingPointPrecision(parseFloat(task.unitFullProductionCost) || 0)
+    };
+
+    const costChanges = [
+      Math.abs(oldCosts.totalMaterialCost - finalTotalMaterialCost),
+      Math.abs(oldCosts.unitMaterialCost - finalUnitMaterialCost),
+      Math.abs(oldCosts.totalFullProductionCost - finalTotalFullProductionCost),
+      Math.abs(oldCosts.unitFullProductionCost - finalUnitFullProductionCost)
+    ];
+
+    const costChanged = costChanges.some(change => change > COST_TOLERANCE);
+
+    if (!costChanged) {
+      const maxChange = Math.max(...costChanges);
+      console.log(`[AUTO] Koszty zadania ${taskId} nie zmieniły się znacząco (max zmiana: ${maxChange.toFixed(4)}€ ≤ ${COST_TOLERANCE}€), pomijam aktualizację`);
+      return { success: false, message: `Koszty nie uległy zmianie (tolerancja: ${COST_TOLERANCE}€)` };
+    }
+
+    console.log(`[AUTO] Wykryto znaczące zmiany kosztów zadania ${taskId}:`);
+    console.log(`[AUTO] - Koszt materiałów: ${oldCosts.totalMaterialCost.toFixed(4)}€ → ${finalTotalMaterialCost.toFixed(4)}€ (Δ${costChanges[0].toFixed(4)}€)`);
+    console.log(`[AUTO] - Koszt/jednostka: ${oldCosts.unitMaterialCost.toFixed(4)}€ → ${finalUnitMaterialCost.toFixed(4)}€ (Δ${costChanges[1].toFixed(4)}€)`);
+    console.log(`[AUTO] - Pełny koszt: ${oldCosts.totalFullProductionCost.toFixed(4)}€ → ${finalTotalFullProductionCost.toFixed(4)}€ (Δ${costChanges[2].toFixed(4)}€)`);
+    console.log(`[AUTO] - Pełny koszt/jednostka: ${oldCosts.unitFullProductionCost.toFixed(4)}€ → ${finalUnitFullProductionCost.toFixed(4)}€ (Δ${costChanges[3].toFixed(4)}€)`);
+    console.log(`[AUTO] - Tolerancja: ${COST_TOLERANCE}€`);
+
+    // Kontynuuj z aktualizacją...
+
+    // 5. WYKONAJ AKTUALIZACJĘ W BAZIE DANYCH
+    const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+    await updateDoc(taskRef, {
+      totalMaterialCost: finalTotalMaterialCost,
+      unitMaterialCost: finalUnitMaterialCost,
+      totalFullProductionCost: finalTotalFullProductionCost,
+      unitFullProductionCost: finalUnitFullProductionCost,
+      costLastUpdatedAt: serverTimestamp(),
+      costLastUpdatedBy: userId,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+      // Dodaj wpis do historii kosztów
+      costHistory: arrayUnion({
+        timestamp: new Date().toISOString(),
+        userId: userId,
+        userName: 'System',
+        previousTotalCost: oldCosts.totalMaterialCost,
+        newTotalCost: finalTotalMaterialCost,
+        previousUnitCost: oldCosts.unitMaterialCost,
+        newUnitCost: finalUnitMaterialCost,
+        previousFullProductionCost: oldCosts.totalFullProductionCost,
+        newFullProductionCost: finalTotalFullProductionCost,
+        previousUnitFullProductionCost: oldCosts.unitFullProductionCost,
+        newUnitFullProductionCost: finalUnitFullProductionCost,
+        reason: reason,
+        source: 'unified-precision-calculator',
+        tolerance: COST_TOLERANCE,
+        maxChange: Math.max(...costChanges)
+      })
+    });
+
+    console.log(`[AUTO] Zunifikowana aktualizacja kosztów zadania ${taskId} zakończona pomyślnie:`);
+    console.log(`[AUTO] - Nowy koszt materiałów: ${finalTotalMaterialCost.toFixed(4)}€ (${finalUnitMaterialCost.toFixed(4)}€/${task.unit || 'szt'})`);
+    console.log(`[AUTO] - Nowy pełny koszt: ${finalTotalFullProductionCost.toFixed(4)}€ (${finalUnitFullProductionCost.toFixed(4)}€/${task.unit || 'szt'})`);
+
+    // 6. WYŚLIJ POWIADOMIENIE O ZMIANIE KOSZTÓW (do odświeżenia UI)
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('production-costs-update');
+        channel.postMessage({
+          type: 'TASK_COSTS_UPDATED',
+          taskId: taskId,
+          costs: {
+            totalMaterialCost: finalTotalMaterialCost,
+            unitMaterialCost: finalUnitMaterialCost,
+            totalFullProductionCost: finalTotalFullProductionCost,
+            unitFullProductionCost: finalUnitFullProductionCost
+          },
+          timestamp: new Date().toISOString(),
+          source: 'unified-precision-calculator',
+          tolerance: COST_TOLERANCE,
+          maxChange: Math.max(...costChanges)
+        });
+        channel.close();
+        console.log(`[AUTO] Wysłano powiadomienie BroadcastChannel o zunifikowanej aktualizacji kosztów zadania ${taskId}`);
       }
+    } catch (broadcastError) {
+      console.warn('[AUTO] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
+    }
 
-      // Automatycznie aktualizuj związane zamówienia klientów
-      let relatedOrders = [];
-      try {
-        const { getOrdersByProductionTaskId, updateOrder } = await import('./orderService');
-        const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../utils/costCalculator');
+    // 7. AUTOMATYCZNIE AKTUALIZUJ ZWIĄZANE ZAMÓWIENIA KLIENTÓW
+    let relatedOrders = [];
+    try {
+      const { getOrdersByProductionTaskId, updateOrder } = await import('./orderService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../utils/costCalculator');
+      
+      // Pobierz tylko zamówienia powiązane z tym zadaniem (optymalizacja)
+      relatedOrders = await getOrdersByProductionTaskId(taskId);
+
+      if (relatedOrders.length > 0) {
+        console.log(`[AUTO] Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
         
-        // Pobierz tylko zamówienia powiązane z tym zadaniem (optymalizacja)
-        relatedOrders = await getOrdersByProductionTaskId(taskId);
-
-        if (relatedOrders.length > 0) {
-          console.log(`[AUTO] Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
+        // Przygotuj wszystkie aktualizacje równolegle
+        const updatePromises = relatedOrders.map(async (order) => {
+          let orderUpdated = false;
+          const updatedItems = [...order.items];
           
-          // Przygotuj wszystkie aktualizacje równolegle
-          const updatePromises = relatedOrders.map(async (order) => {
-            let orderUpdated = false;
-            const updatedItems = [...order.items];
+          for (let i = 0; i < updatedItems.length; i++) {
+            const item = updatedItems[i];
             
-            for (let i = 0; i < updatedItems.length; i++) {
-              const item = updatedItems[i];
+            if (item.productionTaskId === taskId) {
+              // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, finalTotalFullProductionCost);
+              const calculatedProductionUnitCost = calculateProductionUnitCost(item, finalTotalMaterialCost);
               
-              if (item.productionTaskId === taskId) {
-                // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
-                const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, totalFullProductionCost);
-                const calculatedProductionUnitCost = calculateProductionUnitCost(item, totalMaterialCost);
-                
-                updatedItems[i] = {
-                  ...item,
-                  productionCost: totalMaterialCost,
-                  fullProductionCost: totalFullProductionCost,
-                  productionUnitCost: calculatedProductionUnitCost,
-                  fullProductionUnitCost: calculatedFullProductionUnitCost
-                };
-                orderUpdated = true;
-                
-                console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt=${totalMaterialCost}€, pełny koszt=${totalFullProductionCost}€`);
-              }
+              updatedItems[i] = {
+                ...item,
+                productionCost: finalTotalMaterialCost,
+                fullProductionCost: finalTotalFullProductionCost,
+                productionUnitCost: calculatedProductionUnitCost,
+                fullProductionUnitCost: calculatedFullProductionUnitCost
+              };
+              orderUpdated = true;
+              
+              console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt=${finalTotalMaterialCost.toFixed(4)}€, pełny koszt=${finalTotalFullProductionCost.toFixed(4)}€`);
             }
+          }
             
             if (orderUpdated) {
               // Przelicz nową wartość zamówienia
@@ -5038,14 +5128,28 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         console.error('[AUTO] Błąd podczas aktualizacji powiązanych zamówień:', error);
       }
 
-      return { 
-        success: true, 
-        message: `Automatycznie zaktualizowano koszty zadania i ${relatedOrders?.length || 0} powiązanych zamówień`,
-        totalMaterialCost,
-        totalFullProductionCost,
-        unitMaterialCost,
-        unitFullProductionCost
-      };
+    return { 
+      success: true, 
+      message: `Zunifikowana aktualizacja kosztów zadania i ${relatedOrders?.length || 0} powiązanych zamówień zakończona`,
+      taskId,
+      oldCosts,
+      newCosts: {
+        totalMaterialCost: finalTotalMaterialCost,
+        unitMaterialCost: finalUnitMaterialCost,
+        totalFullProductionCost: finalTotalFullProductionCost,
+        unitFullProductionCost: finalUnitFullProductionCost
+      },
+      changes: {
+        totalMaterialCost: costChanges[0],
+        unitMaterialCost: costChanges[1],
+        totalFullProductionCost: costChanges[2],
+        unitFullProductionCost: costChanges[3],
+        maxChange: Math.max(...costChanges)
+      },
+      relatedOrdersUpdated: relatedOrders?.length || 0,
+      source: 'unified-precision-calculator',
+      tolerance: COST_TOLERANCE
+    };
     } catch (error) {
       console.error('[AUTO] Błąd podczas automatycznej aktualizacji kosztów:', error);
       return { success: false, message: error.message };
