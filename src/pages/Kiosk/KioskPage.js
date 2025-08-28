@@ -87,7 +87,7 @@ const KioskPage = () => {
 
     return (
     <>
-      <BackgroundEffects />
+      {!isFullscreen && <BackgroundEffects />}
       <Box
         ref={containerRef}
         sx={{
@@ -97,7 +97,29 @@ const KioskPage = () => {
           p: isFullscreen ? 2 : { xs: 1, md: 2 },
           overflowY: isFullscreen ? 'auto' : 'visible',
           overflowX: 'hidden',
-          position: 'relative'
+          position: 'relative',
+          // Dodaj tło bezpośrednio w trybie fullscreen
+          ...(isFullscreen && {
+            background: mode === 'dark' 
+              ? 'linear-gradient(to bottom right, #111827, #1f2937, #1e3a8a)'
+              : 'linear-gradient(to bottom right, #f8fafc, #e2e8f0, #e0e7ff)',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+              zIndex: -1,
+              background: mode === 'dark' 
+                ? 'radial-gradient(circle at 16.67% 16.67%, #3b82f6 0px, transparent 384px), radial-gradient(circle at 66.67% 75%, #a855f7 0px, transparent 384px), radial-gradient(circle at 83.33% 25%, #06b6d4 0px, transparent 320px)'
+                : 'radial-gradient(circle at 16.67% 16.67%, rgba(59, 130, 246, 0.02) 0px, transparent 384px), radial-gradient(circle at 66.67% 75%, rgba(139, 92, 246, 0.015) 0px, transparent 384px), radial-gradient(circle at 83.33% 25%, rgba(6, 182, 212, 0.01) 0px, transparent 320px)',
+              filter: 'blur(40px)',
+              opacity: mode === 'dark' ? 0.05 : 0.8
+            }
+          })
         }}
       >
       <Container 

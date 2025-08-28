@@ -1,5 +1,5 @@
-// src/components/kiosk/KioskTaskList.js
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// src/components/kiosk/KioskTaskList.js - OPTIMIZED FOR MOBILE/TABLET PERFORMANCE
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Paper,
   Table,
@@ -42,8 +42,283 @@ import { baseColors, palettes, getStatusColor } from '../../styles/colorConfig';
 import { useTheme as useThemeContext } from '../../contexts/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { formatDateTime } from '../../utils/formatters';
 import { getUsersDisplayNames } from '../../services/userService';
+import { formatDateTime } from '../../utils/formatters';
+
+// OPTYMALIZACJA: Memoizowany komponent karty zadania
+const TaskCard = React.memo(({ 
+  task, 
+  isFullscreen, 
+  isMobile, 
+  mode, 
+  colors, 
+  onTaskClick,
+  getStatusInfo,
+  calculateProgress,
+  getStatusColor 
+}) => {
+  const statusInfo = getStatusInfo(task.status);
+  const statusColors = getStatusColor(task.status);
+  const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+  const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+  
+  return (
+    <Grid item xs={12} sm={6} md={isFullscreen ? 4 : 6} lg={isFullscreen ? 4 : 4} xl={isFullscreen ? 3 : 4}>
+      <Card 
+        elevation={0}
+        sx={{ 
+          height: '100%',
+          minHeight: { xs: 280, md: 320 },
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 4,
+          border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+          bgcolor: colors.paper,
+          cursor: 'pointer',
+          overflow: 'hidden',
+          position: 'relative',
+          // OPTYMALIZACJA: Uproszczone animacje dla mobile
+          '&:hover': !isMobile ? {
+            transform: 'translateY(-2px)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: `0 12px 40px ${statusColors.main}20`,
+            borderColor: statusColors.main,
+            '&::before': {
+              opacity: 1
+            }
+          } : {},
+          '&::before': !isMobile ? {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: `linear-gradient(135deg, ${statusColors.main}05 0%, transparent 50%)`,
+            opacity: 0,
+            transition: 'opacity 0.3s ease-in-out',
+            pointerEvents: 'none',
+            zIndex: 0
+          } : {}
+        }}
+        onClick={() => onTaskClick && onTaskClick(task)}
+      >
+        {/* Status header bar */}
+        <Box sx={{ 
+          height: 6, 
+          background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+          width: '100%',
+          position: 'relative',
+          zIndex: 1
+        }} />
+        
+        <CardContent sx={{ p: { xs: 2.5, md: 3 }, flexGrow: 1, position: 'relative', zIndex: 1 }}>
+          {/* Header z nazwą i statusem */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
+            <Typography variant="h6" sx={{ 
+              color: colors.text.primary,
+              fontWeight: 700,
+              fontSize: { xs: '1.1rem', md: '1.2rem' },
+              lineHeight: 1.3,
+              flex: 1,
+              pr: 1
+            }}>
+              {task.name}
+            </Typography>
+            <Chip 
+              label={statusInfo.label} 
+              size="small"
+              sx={{ 
+                background: `linear-gradient(135deg, ${statusColors.main} 0%, ${statusColors.dark || statusColors.main} 100%)`,
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                height: 28,
+                borderRadius: 2,
+                boxShadow: `0 2px 8px ${statusColors.main}40`,
+                ml: 1,
+                minWidth: 'auto'
+              }}
+            />
+          </Box>
+          
+          {/* Produkt */}
+          <Typography variant="body1" sx={{ 
+            color: colors.text.primary,
+            fontWeight: 600,
+            mb: 2,
+            fontSize: { xs: '0.95rem', md: '1rem' },
+            lineHeight: 1.4
+          }}>
+            {task.productName}
+          </Typography>
+          
+          {/* MO Number i Client w jednej linii */}
+          <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap' }}>
+            {task.moNumber && (
+              <Box sx={{ 
+                px: 2, 
+                py: 0.75, 
+                borderRadius: 2, 
+                background: `linear-gradient(135deg, ${colors.background} 0%, rgba(33, 150, 243, 0.03) 100%)`,
+                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+                boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
+              }}>
+                <Typography variant="caption" sx={{ 
+                  color: colors.text.secondary,
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px'
+                }}>
+                  MO: {task.moNumber}
+                </Typography>
+              </Box>
+            )}
+            
+            {task.clientName && (
+              <Box sx={{ 
+                px: 2, 
+                py: 0.75, 
+                borderRadius: 2, 
+                background: `linear-gradient(135deg, ${colors.background} 0%, rgba(76, 175, 80, 0.03) 100%)`,
+                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+                boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
+              }}>
+                <Typography variant="caption" sx={{ 
+                  color: colors.text.secondary,
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  {task.clientName}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          
+          {/* Postęp produkcji */}
+          <Box sx={{ 
+            p: 2, 
+            borderRadius: 3, 
+            background: `linear-gradient(135deg, ${statusColors.main}05 0%, ${statusColors.main}02 100%)`,
+            border: `1px solid ${statusColors.main}15`,
+            mb: 2,
+            position: 'relative',
+            overflow: 'hidden',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 2,
+              background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+              opacity: 0.6
+            }
+          }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
+              <Typography variant="body2" sx={{ 
+                color: colors.text.primary,
+                fontWeight: 600,
+                fontSize: '0.9rem'
+              }}>
+                Postęp
+              </Typography>
+              <Typography variant="body2" sx={{ 
+                color: statusColors.main,
+                fontWeight: 700,
+                fontSize: '0.9rem'
+              }}>
+                {totalCompletedQuantity} / {task.quantity} {task.unit}
+              </Typography>
+            </Box>
+            
+            <LinearProgress 
+              variant="determinate" 
+              value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
+              sx={{
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: `${statusColors.main}15`,
+                position: 'relative',
+                overflow: 'hidden',
+                '& .MuiLinearProgress-bar': {
+                  background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+                  borderRadius: 4,
+                  position: 'relative',
+                  // OPTYMALIZACJA: Wyłącz animację shimmer na mobile
+                  ...(!isMobile && {
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
+                      animation: 'shimmer 2s infinite linear'
+                    }
+                  })
+                },
+                ...(!isMobile && {
+                  '@keyframes shimmer': {
+                    '0%': { transform: 'translateX(-100%)' },
+                    '100%': { transform: 'translateX(100%)' }
+                  }
+                })
+              }}
+            />
+            
+            {remainingQuantity > 0 && (
+              <Typography variant="caption" sx={{ 
+                color: 'warning.main',
+                fontWeight: 600,
+                display: 'block',
+                mt: 1,
+                fontSize: '0.8rem'
+              }}>
+                Pozostało: {remainingQuantity} {task.unit}
+              </Typography>
+            )}
+          </Box>
+          
+          {/* Data rozpoczęcia */}
+          <Box sx={{ 
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            p: 1.5,
+            borderRadius: 2,
+            background: `linear-gradient(135deg, ${colors.background} 0%, rgba(158, 158, 158, 0.02) 100%)`,
+            border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'}`
+          }}>
+            <ScheduleIcon sx={{ 
+              fontSize: 16, 
+              color: colors.text.secondary 
+            }} />
+            <Typography variant="body2" sx={{ 
+              color: colors.text.secondary,
+              fontSize: '0.85rem',
+              fontWeight: 500
+            }}>
+              {formatDateTime(task.scheduledDate)}
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
+    </Grid>
+  );
+}, (prevProps, nextProps) => {
+  // OPTYMALIZACJA: Custom comparison - re-render tylko gdy istotne właściwości się zmienią
+  return (
+    prevProps.task.id === nextProps.task.id &&
+    prevProps.task.status === nextProps.task.status &&
+    prevProps.task.completedQuantity === nextProps.task.completedQuantity &&
+    prevProps.task.totalCompletedQuantity === nextProps.task.totalCompletedQuantity &&
+    prevProps.isFullscreen === nextProps.isFullscreen &&
+    prevProps.mode === nextProps.mode
+  );
+});
 
 const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
   const { mode } = useThemeContext();
@@ -64,6 +339,7 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
   const [statusFilter, setStatusFilter] = useState('');
 
   const searchTermTimerRef = useRef(null);
+  const usersCache = useRef(new Map()); // Cache dla nazw użytkowników
   const colors = baseColors[mode];
 
 
@@ -92,6 +368,20 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
     return filtered;
   }, []);
 
+  // OPTYMALIZACJA: Cache dla nazw użytkowników
+  const getUserNamesOptimized = useCallback(async (userIds) => {
+    const newIds = userIds.filter(id => !usersCache.current.has(id));
+    
+    if (newIds.length > 0) {
+      const newUsers = await getUsersDisplayNames(newIds);
+      newIds.forEach(id => usersCache.current.set(id, newUsers[id]));
+    }
+    
+    return Object.fromEntries(
+      userIds.map(id => [id, usersCache.current.get(id)])
+    );
+  }, []);
+
   // Obsługa zmiany pola wyszukiwania
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -108,9 +398,11 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
       clearTimeout(searchTermTimerRef.current);
     }
     
+    // OPTYMALIZACJA: Dłuższy debounce dla tabletów (mniej zapytań)
+    const debounceDelay = isMobile ? 500 : 300;
     searchTermTimerRef.current = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
-    }, 300); // Krótszy timeout dla kiosku
+    }, debounceDelay);
 
     return () => {
       if (searchTermTimerRef.current) {
@@ -119,11 +411,15 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
     };
   }, [searchTerm]);
 
-  // Filtrowanie zadań gdy zmieni się search term, status filter lub lista zadań
-  useEffect(() => {
-    const filtered = filterTasks(tasks, debouncedSearchTerm, statusFilter);
-    setFilteredTasks(filtered);
+  // OPTYMALIZACJA: Memoizacja filtrowania zadań
+  const filteredTasksMemo = useMemo(() => {
+    return filterTasks(tasks, debouncedSearchTerm, statusFilter);
   }, [tasks, debouncedSearchTerm, statusFilter, filterTasks]);
+
+  // Aktualizuj stan tylko gdy się zmieni
+  useEffect(() => {
+    setFilteredTasks(filteredTasksMemo);
+  }, [filteredTasksMemo]);
 
   // Real-time synchronizacja zadań produkcyjnych
   useEffect(() => {
@@ -181,10 +477,10 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
             setTasks(sortedTasks);
             setLastUpdate(new Date());
 
-            // Pobierz nazwy użytkowników
+            // OPTYMALIZACJA: Pobierz nazwy użytkowników z cache
             const userIds = [...new Set(sortedTasks.map(task => task.assignedTo).filter(Boolean))];
             if (userIds.length > 0) {
-              const users = await getUsersDisplayNames(userIds);
+              const users = await getUserNamesOptimized(userIds);
               setUserNames(users);
             }
 
@@ -254,58 +550,7 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
     return Math.min((completed / task.targetQuantity) * 100, 100);
   };
 
-  if (loading) {
-    return (
-      <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
-        <CircularProgress size={60} sx={{ color: palettes.primary.main }} />
-        <Typography variant="h6" sx={{ mt: 2, color: colors.text.secondary }}>
-          Ładowanie zadań...
-        </Typography>
-      </Paper>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-      </Alert>
-    );
-  }
-
-  if (tasks.length === 0) {
-    return (
-      <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
-        <ProductionIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
-        <Typography variant="h6" sx={{ color: colors.text.secondary }}>
-          Brak aktywnych zadań
-        </Typography>
-        <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
-          Wszystkie zadania zostały zakończone
-        </Typography>
-      </Paper>
-    );
-  }
-
-  if (filteredTasks.length === 0 && tasks.length > 0) {
-    return (
-      <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
-        <SearchIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
-        <Typography variant="h6" sx={{ color: colors.text.secondary }}>
-          {searchTerm && statusFilter ? 'Brak wyników dla podanych kryteriów' : 
-           searchTerm ? 'Brak wyników wyszukiwania' : 
-           statusFilter ? 'Brak zadań z wybranym statusem' : 'Brak wyników'}
-        </Typography>
-        <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
-          {searchTerm && statusFilter ? 'Sprawdź wpisane frazy i wybrany status' :
-           searchTerm ? 'Sprawdź wpisane frazy lub wyczyść wyszukiwanie' :
-           statusFilter ? 'Wybierz inny status lub wyczyść filtr' : 'Sprawdź filtry'}
-        </Typography>
-      </Paper>
-    );
-  }
-
-  // Renderowanie w trybie kart dla wszystkich urządzeń (mobile i desktop)
+  // Renderowanie głównego kontenera z polami wyszukiwania zawsze widocznymi
   return (
       <Box>
         {/* Pole wyszukiwania */}
@@ -537,256 +782,61 @@ const KioskTaskList = ({ refreshTrigger, isFullscreen, onTaskClick }) => {
           </Box>
         </Box>
 
-        <Grid container spacing={isFullscreen ? 3 : 2.5}>
-        {filteredTasks.map((task) => {
-          const statusInfo = getStatusInfo(task.status);
-          const progress = calculateProgress(task);
-          const statusColors = getStatusColor(task.status);
-          const totalCompletedQuantity = task.totalCompletedQuantity || 0;
-          const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
-          
-          return (
-            <Grid item xs={12} sm={6} md={isFullscreen ? 4 : 6} lg={isFullscreen ? 4 : 4} xl={isFullscreen ? 3 : 4} key={task.id}>
-              <Card 
-                elevation={0}
-                sx={{ 
-                  height: '100%',
-                  minHeight: { xs: 280, md: 320 },
-                  display: 'flex',
-                  flexDirection: 'column',
-                  borderRadius: 4,
-                  border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-                  bgcolor: colors.paper,
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: `0 12px 40px ${statusColors.main}20`,
-                    borderColor: statusColors.main,
-                    '&::before': {
-                      opacity: 1
-                    }
-                  },
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: `linear-gradient(135deg, ${statusColors.main}05 0%, transparent 50%)`,
-                    opacity: 0,
-                    transition: 'opacity 0.3s ease-in-out',
-                    pointerEvents: 'none',
-                    zIndex: 0
-                  }
-                }}
-                onClick={() => onTaskClick && onTaskClick(task)}
-              >
-                {/* Status header bar */}
-                <Box sx={{ 
-                  height: 6, 
-                  background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
-                  width: '100%',
-                  position: 'relative',
-                  zIndex: 1
-                }} />
-                
-                <CardContent sx={{ p: { xs: 2.5, md: 3 }, flexGrow: 1, position: 'relative', zIndex: 1 }}>
-                  {/* Header z nazwą i statusem */}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-                    <Typography variant="h6" sx={{ 
-                      color: colors.text.primary,
-                      fontWeight: 700,
-                      fontSize: { xs: '1.1rem', md: '1.2rem' },
-                      lineHeight: 1.3,
-                      flex: 1,
-                      pr: 1
-                    }}>
-                      {task.name}
-                    </Typography>
-                    <Chip 
-                      label={statusInfo.label} 
-                      size="small"
-                      sx={{ 
-                        background: `linear-gradient(135deg, ${statusColors.main} 0%, ${statusColors.dark || statusColors.main} 100%)`,
-                        color: 'white',
-                        fontWeight: 600,
-                        fontSize: '0.75rem',
-                        height: 28,
-                        borderRadius: 2,
-                        boxShadow: `0 2px 8px ${statusColors.main}40`,
-                        ml: 1,
-                        minWidth: 'auto'
-                      }}
-                    />
-                  </Box>
-                  
-                  {/* Produkt */}
-                  <Typography variant="body1" sx={{ 
-                    color: colors.text.primary,
-                    fontWeight: 600,
-                    mb: 2,
-                    fontSize: { xs: '0.95rem', md: '1rem' },
-                    lineHeight: 1.4
-                  }}>
-                    {task.productName}
-                  </Typography>
-                  
-                  {/* MO Number i Client w jednej linii */}
-                  <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap' }}>
-                    {task.moNumber && (
-                      <Box sx={{ 
-                        px: 2, 
-                        py: 0.75, 
-                        borderRadius: 2, 
-                        background: `linear-gradient(135deg, ${colors.background} 0%, rgba(33, 150, 243, 0.03) 100%)`,
-                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-                        boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
-                      }}>
-                        <Typography variant="caption" sx={{ 
-                          color: colors.text.secondary,
-                          fontSize: '0.75rem',
-                          textTransform: 'uppercase',
-                          fontWeight: 600,
-                          letterSpacing: '0.5px'
-                        }}>
-                          MO: {task.moNumber}
-                        </Typography>
-                      </Box>
-                    )}
-                    
-                    {task.clientName && (
-                      <Box sx={{ 
-                        px: 2, 
-                        py: 0.75, 
-                        borderRadius: 2, 
-                        background: `linear-gradient(135deg, ${colors.background} 0%, rgba(76, 175, 80, 0.03) 100%)`,
-                        border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-                        boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
-                      }}>
-                        <Typography variant="caption" sx={{ 
-                          color: colors.text.secondary,
-                          fontSize: '0.75rem',
-                          fontWeight: 600
-                        }}>
-                          {task.clientName}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                  
-                  {/* Postęp produkcji */}
-                  <Box sx={{ 
-                    p: 2, 
-                    borderRadius: 3, 
-                    background: `linear-gradient(135deg, ${statusColors.main}05 0%, ${statusColors.main}02 100%)`,
-                    border: `1px solid ${statusColors.main}15`,
-                    mb: 2,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: 2,
-                      background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
-                      opacity: 0.6
-                    }
-                  }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-                      <Typography variant="body2" sx={{ 
-                        color: colors.text.primary,
-                        fontWeight: 600,
-                        fontSize: '0.9rem'
-                      }}>
-                        Postęp
-                      </Typography>
-                      <Typography variant="body2" sx={{ 
-                        color: statusColors.main,
-                        fontWeight: 700,
-                        fontSize: '0.9rem'
-                      }}>
-                        {totalCompletedQuantity} / {task.quantity} {task.unit}
-                      </Typography>
-                    </Box>
-                    
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
-                      sx={{
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: `${statusColors.main}15`,
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '& .MuiLinearProgress-bar': {
-                          background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
-                          borderRadius: 4,
-                          position: 'relative',
-                          '&::after': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
-                            animation: 'shimmer 2s infinite linear'
-                          }
-                        },
-                        '@keyframes shimmer': {
-                          '0%': { transform: 'translateX(-100%)' },
-                          '100%': { transform: 'translateX(100%)' }
-                        }
-                      }}
-                    />
-                    
-                    {remainingQuantity > 0 && (
-                      <Typography variant="caption" sx={{ 
-                        color: 'warning.main',
-                        fontWeight: 600,
-                        display: 'block',
-                        mt: 1,
-                        fontSize: '0.8rem'
-                      }}>
-                        Pozostało: {remainingQuantity} {task.unit}
-                      </Typography>
-                    )}
-                  </Box>
-                  
-                  {/* Data rozpoczęcia */}
-                  <Box sx={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    p: 1.5,
-                    borderRadius: 2,
-                    background: `linear-gradient(135deg, ${colors.background} 0%, rgba(158, 158, 158, 0.02) 100%)`,
-                    border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'}`
-                  }}>
-                    <ScheduleIcon sx={{ 
-                      fontSize: 16, 
-                      color: colors.text.secondary 
-                    }} />
-                    <Typography variant="body2" sx={{ 
-                      color: colors.text.secondary,
-                      fontSize: '0.85rem',
-                      fontWeight: 500
-                    }}>
-                      {formatDateTime(task.scheduledDate)}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          );
-        })}
-        </Grid>
+        {/* Warunkowe renderowanie zawartości */}
+        {loading ? (
+          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
+            <CircularProgress size={60} sx={{ color: palettes.primary.main }} />
+            <Typography variant="h6" sx={{ mt: 2, color: colors.text.secondary }}>
+              Ładowanie zadań...
+            </Typography>
+          </Paper>
+        ) : error ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        ) : tasks.length === 0 ? (
+          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
+            <ProductionIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
+            <Typography variant="h6" sx={{ color: colors.text.secondary }}>
+              Brak aktywnych zadań
+            </Typography>
+            <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
+              Wszystkie zadania zostały zakończone
+            </Typography>
+          </Paper>
+        ) : filteredTasks.length === 0 ? (
+          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
+            <SearchIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
+            <Typography variant="h6" sx={{ color: colors.text.secondary }}>
+              {searchTerm && statusFilter ? 'Brak wyników dla podanych kryteriów' : 
+               searchTerm ? 'Brak wyników wyszukiwania' : 
+               statusFilter ? 'Brak zadań z wybranym statusem' : 'Brak wyników'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
+              {searchTerm && statusFilter ? 'Sprawdź wpisane frazy i wybrany status' :
+               searchTerm ? 'Sprawdź wpisane frazy lub wyczyść wyszukiwanie' :
+               statusFilter ? 'Wybierz inny status lub wyczyść filtr' : 'Sprawdź filtry'}
+            </Typography>
+          </Paper>
+        ) : (
+          // OPTYMALIZACJA: Użyj memoizowanego komponentu TaskCard
+          <Grid container spacing={isFullscreen ? 3 : 2.5}>
+            {filteredTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                isFullscreen={isFullscreen}
+                isMobile={isMobile}
+                mode={mode}
+                colors={colors}
+                onTaskClick={onTaskClick}
+                getStatusInfo={getStatusInfo}
+                calculateProgress={calculateProgress}
+                getStatusColor={getStatusColor}
+              />
+            ))}
+          </Grid>
+        )}
       </Box>
     );
   
