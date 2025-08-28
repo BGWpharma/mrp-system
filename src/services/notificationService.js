@@ -947,10 +947,11 @@ export const subscribeToUnreadCount = (userId, callback) => {
  * @param {string} checkboxText - Treść checkboxa
  * @param {string} mixingNumber - Numer mieszania
  * @param {string} moNumber - Numer MO (zadania produkcyjnego)
+ * @param {string} taskId - ID zadania produkcyjnego (dla przekierowania)
  * @param {string} createdBy - ID użytkownika, który zaznaczył checkbox
  * @returns {Promise<string>} - ID utworzonego powiadomienia
  */
-export const createRealtimeCheckboxNotification = async (userIds, checkboxText, mixingNumber, moNumber, createdBy = null) => {
+export const createRealtimeCheckboxNotification = async (userIds, checkboxText, mixingNumber, moNumber, taskId, createdBy = null) => {
   try {
     let createdByName = 'System';
     
@@ -969,8 +970,8 @@ export const createRealtimeCheckboxNotification = async (userIds, checkboxText, 
       title: 'Plan mieszań - Krok ukończony',
       message: `Zaznaczono ${checkboxText}, mieszanie ${mixingNumber} w zadaniu produkcyjnym ${moNumber}`,
       type: 'success',
-      entityType: 'mixingPlan',
-      entityId: moNumber,
+      entityType: 'productionTask',
+      entityId: taskId,
       createdBy: createdBy,
       createdByName: createdByName
     };

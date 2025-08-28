@@ -194,6 +194,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
               checkedItem.text,
               mixingNumber,
               task.moNumber || task.name || task.id.substring(0, 8),
+              taskId, // ID zadania dla przekierowania
               currentUser.uid
             );
             
