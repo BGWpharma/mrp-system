@@ -5256,6 +5256,28 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
     results.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value.success) {
         successCount++;
+        
+        // Zaktualizuj konkretne zadanie w cache zamiast czyścić cały cache
+        const taskId = taskIds[index];
+        const resultData = result.value;
+        
+        if (resultData.newCosts) {
+          const updatedTaskData = {
+            totalMaterialCost: resultData.newCosts.totalMaterialCost,
+            unitMaterialCost: resultData.newCosts.unitMaterialCost,
+            totalFullProductionCost: resultData.newCosts.totalFullProductionCost,
+            unitFullProductionCost: resultData.newCosts.unitFullProductionCost,
+            costLastUpdatedAt: new Date(),
+            costLastUpdatedBy: userId
+          };
+          
+          const updated = updateTaskInCache(taskId, updatedTaskData);
+          if (updated) {
+            console.log(`🔄 [BATCH_COST_UPDATE] Zaktualizowano zadanie ${taskId} w cache z nowymi kosztami`);
+          } else {
+            console.log(`⚠️ [BATCH_COST_UPDATE] Nie udało się zaktualizować zadania ${taskId} w cache - cache może być pusty`);
+          }
+        }
       } else {
         errorCount++;
         console.error(`[BATCH_COST_UPDATE] Błąd aktualizacji zadania ${taskIds[index]}:`, result.reason || result.value?.message);
@@ -5263,6 +5285,34 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
     });
     
     console.log(`[BATCH_COST_UPDATE] Zakończono: ${successCount} zadań zaktualizowanych, ${errorCount} błędów`);
+    
+    // Wyślij powiadomienie BroadcastChannel o aktualizacji kosztów po zmianie PO
+    if (successCount > 0) {
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const channel = new BroadcastChannel('production-costs-update');
+          channel.postMessage({
+            type: 'BATCH_COSTS_UPDATED',
+            updatedTasksCount: successCount,
+            totalTasksCount: taskIds.length,
+            batchIds: batchIds,
+            timestamp: new Date().toISOString(),
+            source: 'po-batch-price-update',
+            reason: 'Automatyczna aktualizacja po zmianie cen partii z PO'
+          });
+          channel.close();
+          console.log(`🔄 [BATCH_COST_UPDATE] Wysłano BroadcastChannel powiadomienie o aktualizacji ${successCount} zadań`);
+        }
+      } catch (broadcastError) {
+        console.warn('[BATCH_COST_UPDATE] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
+      }
+    }
+    
+    // Jako fallback, jeśli cache nie istnieje, wymuś jego odświeżenie
+    if (successCount > 0 && !productionTasksCache) {
+      console.log('🔄 [BATCH_COST_UPDATE] Cache nie istnieje - wymuszam odświeżenie przy następnym pobieraniu');
+      forceRefreshProductionTasksCache();
+    }
     
     return {
       success: true,

@@ -255,8 +255,27 @@ const TaskList = () => {
     
     window.addEventListener('tasks-updated', handleTasksUpdate);
     
+    // BroadcastChannel listener dla aktualizacji kosztów
+    let broadcastChannel = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      broadcastChannel = new BroadcastChannel('production-costs-update');
+      broadcastChannel.onmessage = (event) => {
+        const { type, updatedTasksCount, source } = event.data;
+        console.log(`📡 [TaskList] BroadcastChannel: ${type} z ${source}`, event.data);
+        
+        if (type === 'BATCH_COSTS_UPDATED' || type === 'TASK_COSTS_UPDATED') {
+          console.log(`🔄 [TaskList] Odświeżam listę zadań po aktualizacji kosztów (${updatedTasksCount || 1} zadań)`);
+          // Wymuś pobranie świeżych danych
+          fetchTasksOptimized(null, null, true);
+        }
+      };
+    }
+    
     return () => {
       window.removeEventListener('tasks-updated', handleTasksUpdate);
+      if (broadcastChannel) {
+        broadcastChannel.close();
+      }
     };
   }, []);
 
