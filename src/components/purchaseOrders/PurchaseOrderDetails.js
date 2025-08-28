@@ -1355,6 +1355,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell>{t('purchaseOrders.details.table.unit')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.unitPrice')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.discount')}</TableCell>
+                      <TableCell align="right">{t('purchaseOrders.details.table.unitPriceAfterDiscount')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.netValue')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.originalAmount')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.plannedDeliveryDate')}</TableCell>
@@ -1370,6 +1371,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       const received = parseFloat(item.received || 0);
                       const quantity = parseFloat(item.quantity || 0);
                       const fulfilledPercentage = quantity > 0 ? (received / quantity) * 100 : 0;
+                      
+                      // Oblicz cenę jednostkową po rabacie
+                      const unitPrice = parseFloat(item.unitPrice) || 0;
+                      const discount = parseFloat(item.discount) || 0;
+                      const discountMultiplier = (100 - discount) / 100;
+                      const unitPriceAfterDiscount = unitPrice * discountMultiplier;
                       
                       // Określ kolor tła dla wiersza
                       let rowColor = 'inherit'; // Domyślny kolor
@@ -1404,6 +1411,19 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             <TableCell align="right">{formatCurrency(item.unitPrice, purchaseOrder.currency, 6)}</TableCell>
                             <TableCell align="right">
                               {item.discount ? `${item.discount}%` : '-'}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box sx={{ 
+                                color: discount > 0 ? 'success.main' : 'inherit',
+                                fontWeight: discount > 0 ? 'bold' : 'normal'
+                              }}>
+                                {formatCurrency(unitPriceAfterDiscount, purchaseOrder.currency, 6)}
+                                {discount > 0 && (
+                                  <Typography variant="caption" sx={{ display: 'block', color: 'success.main' }}>
+                                    (oszczędność: {formatCurrency(unitPrice - unitPriceAfterDiscount, purchaseOrder.currency, 6)})
+                                  </Typography>
+                                )}
+                              </Box>
                             </TableCell>
                             <TableCell align="right">{formatCurrency(item.totalPrice, purchaseOrder.currency)}</TableCell>
                             <TableCell align="right">

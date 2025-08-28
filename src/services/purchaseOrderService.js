@@ -2275,18 +2275,23 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
       if (matchingItem) {
         const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
         
-        // Aktualizuj cenę bazową partii na nową cenę jednostkową z pozycji
-        const newBaseUnitPrice = matchingItem.newUnitPrice;
+        // Oblicz cenę bazową z uwzględnieniem rabatu pozycji
+        const originalUnitPrice = matchingItem.newUnitPrice;
+        const discount = parseFloat(matchingItem.discount) || 0;
+        const discountMultiplier = (100 - discount) / 100;
+        const newBaseUnitPrice = originalUnitPrice * discountMultiplier;
         const currentBaseUnitPrice = batchData.baseUnitPrice || batchData.unitPrice || 0;
         
         // Zachowaj dodatkowy koszt na jednostkę jeśli istnieje
         const additionalCostPerUnit = parseFloat(batchData.additionalCostPerUnit) || 0;
         
-        // Oblicz nową cenę końcową: nowa cena bazowa + dodatkowy koszt
+        // Oblicz nową cenę końcową: nowa cena bazowa (z rabatem) + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
         console.log(`🎯 [BATCH_PRICE_DEBUG] AKTUALIZACJA PARTII ${batchData.id}:`);
         console.log(`🎯 [BATCH_PRICE_DEBUG] - Pozycja: ${matchingItem.name} (ID: ${matchingItem.id})`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Oryginalna cena: ${originalUnitPrice}`);
+        console.log(`🎯 [BATCH_PRICE_DEBUG] - Rabat: ${discount}%`);
         console.log(`🎯 [BATCH_PRICE_DEBUG] - Stara cena bazowa: ${currentBaseUnitPrice}`);
         console.log(`🎯 [BATCH_PRICE_DEBUG] - Nowa cena bazowa: ${newBaseUnitPrice}`);
         console.log(`🎯 [BATCH_PRICE_DEBUG] - Dodatkowy koszt/jednostka: ${additionalCostPerUnit}`);
@@ -2296,6 +2301,8 @@ const updateBatchBasePricesOnUnitPriceChange = async (purchaseOrderId, oldPoData
         
         const updateData = {
           baseUnitPrice: newBaseUnitPrice,
+          originalUnitPrice: originalUnitPrice,
+          discount: discount,
           unitPrice: newFinalUnitPrice,
           updatedAt: serverTimestamp(),
           updatedBy: userId
@@ -2448,20 +2455,25 @@ export const updateBatchBasePricesForPurchaseOrder = async (purchaseOrderId, use
       if (matchingItem && matchingItem.unitPrice !== undefined) {
         const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
         
-        // Ustaw cenę bazową na aktualną cenę jednostkową z pozycji
-        const newBaseUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        // Oblicz cenę bazową z uwzględnieniem rabatu pozycji
+        const originalUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        const discount = parseFloat(matchingItem.discount) || 0;
+        const discountMultiplier = (100 - discount) / 100;
+        const newBaseUnitPrice = originalUnitPrice * discountMultiplier;
         
         // Zachowaj dodatkowy koszt na jednostkę jeśli istnieje
         const additionalCostPerUnit = parseFloat(batchData.additionalCostPerUnit) || 0;
         
-        // Oblicz nową cenę końcową: cena bazowa + dodatkowy koszt
+        // Oblicz nową cenę końcową: cena bazowa (z rabatem) + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
-        console.log(`Ręczna aktualizacja: Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}: basePrice -> ${newBaseUnitPrice}, finalPrice -> ${newFinalUnitPrice}`);
+        console.log(`Ręczna aktualizacja: Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}: originalPrice -> ${originalUnitPrice}, discount -> ${discount}%, basePrice -> ${newBaseUnitPrice}, finalPrice -> ${newFinalUnitPrice}`);
         
         // Aktualizuj dokument partii
         updatePromises.push(updateDoc(batchRef, {
           baseUnitPrice: newBaseUnitPrice,
+          originalUnitPrice: originalUnitPrice,
+          discount: discount,
           unitPrice: newFinalUnitPrice,
           updatedAt: serverTimestamp(),
           updatedBy: userId
@@ -2629,8 +2641,11 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
         // Pobierz ilość początkową partii
         const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
         
-        // Ustaw cenę bazową na aktualną cenę jednostkową z pozycji
-        const newBaseUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        // Oblicz cenę bazową z uwzględnieniem rabatu pozycji
+        const originalUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        const discount = parseFloat(matchingItem.discount) || 0;
+        const discountMultiplier = (100 - discount) / 100;
+        const newBaseUnitPrice = originalUnitPrice * discountMultiplier;
         
         // Oblicz dodatkowy koszt na jednostkę dla tej partii
         let additionalCostPerUnit = 0;
@@ -2641,10 +2656,12 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
           additionalCostPerUnit = batchAdditionalCostTotal / batchInitialQuantity;
         }
         
-        // Oblicz nową cenę końcową: cena bazowa + dodatkowy koszt
+        // Oblicz nową cenę końcową: cena bazowa (z rabatem) + dodatkowy koszt
         const newFinalUnitPrice = newBaseUnitPrice + additionalCostPerUnit;
         
         console.log(`🔄 [BATCH_AUTO_UPDATE] Aktualizuję partię ${batchData.id} dla pozycji ${matchingItem.name}:`, {
+          originalPrice: originalUnitPrice,
+          discount: discount,
           basePrice: newBaseUnitPrice,
           additionalCost: additionalCostPerUnit,
           finalPrice: newFinalUnitPrice,
@@ -2654,6 +2671,8 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
         // Aktualizuj dokument partii
         updatePromises.push(updateDoc(batchRef, {
           baseUnitPrice: newBaseUnitPrice,
+          originalUnitPrice: originalUnitPrice, // Zachowaj oryginalną cenę przed rabatem
+          discount: discount, // Zachowaj informację o rabacie
           additionalCostPerUnit: additionalCostPerUnit,
           unitPrice: newFinalUnitPrice,
           updatedAt: serverTimestamp(),
@@ -2857,7 +2876,11 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
         const oldBaseUnitPrice = parseFloat(batchData.baseUnitPrice) || oldUnitPrice;
         const oldAdditionalCost = parseFloat(batchData.additionalCostPerUnit) || 0;
         
-        const newBaseUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        // Oblicz cenę bazową z uwzględnieniem rabatu pozycji
+        const originalUnitPrice = parseFloat(matchingItem.unitPrice) || 0;
+        const discount = parseFloat(matchingItem.discount) || 0;
+        const discountMultiplier = (100 - discount) / 100;
+        const newBaseUnitPrice = originalUnitPrice * discountMultiplier;
         let newAdditionalCost = 0;
         
         const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
@@ -2908,6 +2931,8 @@ const updateBatchPricesWithDetails = async (purchaseOrderId, userId) => {
         const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
         updatePromises.push(updateDoc(batchRef, {
           baseUnitPrice: newBaseUnitPrice,
+          originalUnitPrice: originalUnitPrice,
+          discount: discount,
           additionalCostPerUnit: newAdditionalCost,
           unitPrice: newFinalUnitPrice,
           updatedAt: serverTimestamp(),

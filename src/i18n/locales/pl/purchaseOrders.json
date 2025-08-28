@@ -202,6 +202,7 @@
       "unit": "Jednostka",
       "unitPrice": "Cena jedn.",
       "discount": "Rabat",
+      "unitPriceAfterDiscount": "Cena po rabacie",
       "netValue": "Wartość netto",
       "originalAmount": "Kwota oryg.",
       "plannedDeliveryDate": "Plan. data dost.",

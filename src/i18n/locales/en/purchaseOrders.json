@@ -202,6 +202,7 @@
       "unit": "Unit",
       "unitPrice": "Unit price",
       "discount": "Discount",
+      "unitPriceAfterDiscount": "Price after discount",
       "netValue": "Net value",
       "originalAmount": "Original amount",
       "plannedDeliveryDate": "Planned delivery date",
