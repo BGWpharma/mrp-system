@@ -4718,12 +4718,27 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
   try {
     console.log(`[AUTO] Rozpoczynam zunifikowaną aktualizację kosztów dla zadania ${taskId} - ${reason}`);
     
+    // Import funkcji matematycznych dla precyzyjnych obliczeń
+    const { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } = await import('../utils/mathUtils');
+    
     // Pobierz aktualne dane zadania
     const task = await getTaskById(taskId);
     if (!task || !task.materials || task.materials.length === 0) {
       console.log(`[AUTO] Zadanie ${taskId} nie ma materiałów, pomijam aktualizację kosztów`);
       return { success: false, message: 'Brak materiałów w zadaniu' };
     }
+
+    console.log(`[AUTO-DEBUG] Stan zadania przed kalkulacją:`, {
+      moNumber: task.moNumber,
+      materialsCount: task.materials?.length || 0,
+      consumedMaterialsCount: task.consumedMaterials?.length || 0,
+      materialBatchesKeys: Object.keys(task.materialBatches || {}),
+      currentTotalMaterialCost: task.totalMaterialCost,
+      currentUnitMaterialCost: task.unitMaterialCost,
+      currentTotalFullProductionCost: task.totalFullProductionCost,
+      currentUnitFullProductionCost: task.unitFullProductionCost,
+      quantity: task.quantity
+    });
 
     // Oblicz koszty materiałów z użyciem precyzyjnych funkcji matematycznych
     let totalMaterialCost = 0;
@@ -4872,8 +4887,16 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
               return preciseAdd(sum, qty);
             }, 0) : 0;
         
-        const requiredQuantity = fixFloatingPointPrecision(parseFloat(material.quantity) || 0);
+        // Użyj rzeczywistej ilości jeśli dostępna, w przeciwnym razie planową (jak w UI)
+        const actualUsage = task.actualMaterialUsage || {};
+        const baseQuantity = (actualUsage[material.inventoryItemId] !== undefined) 
+          ? parseFloat(actualUsage[material.inventoryItemId]) || 0
+          : parseFloat(material.quantity) || 0;
+        const requiredQuantity = fixFloatingPointPrecision(baseQuantity);
+        
+        console.log(`[AUTO-DEBUG] Materiał ${material.name}: baseQuantity=${baseQuantity}, requiredQuantity=${requiredQuantity}, hasActualUsage=${actualUsage[material.inventoryItemId] !== undefined}`);
         const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
+        console.log(`[AUTO-DEBUG] Materiał ${material.name}: consumedQuantity=${consumedQuantity}, remainingQuantity=${remainingQuantity}`);
         
         // Jeśli zostało coś do skonsumowania, oblicz koszt na podstawie rzeczywistych partii
         if (remainingQuantity > 0) {

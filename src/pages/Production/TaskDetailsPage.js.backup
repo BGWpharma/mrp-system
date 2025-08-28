@@ -4402,23 +4402,16 @@ const TaskDetailsPage = () => {
   };
 
   // Funkcja do porównywania kosztów między UI a bazą danych
-  // NAPRAWIONA funkcja porównania kosztów - przyjmuje uiCosts jako parametr aby uniknąć pętli
-  const compareCostsWithDatabase = async (providedUiCosts = null) => {
+  const compareCostsWithDatabase = async () => {
     try {
       console.log('🔍 [COST-COMPARE] Porównuję koszty UI vs baza danych');
       
-      // Jeśli nie podano kosztów UI, oblicz je (ale tylko raz!)
-      const uiCosts = providedUiCosts || await calculateAllCosts();
-      
-      // Pobierz świeże dane z bazy danych
-      const { getTaskById } = await import('../../services/productionService');
-      const freshTask = await getTaskById(task.id);
-      
+      const uiCosts = await calculateAllCosts();
       const dbCosts = {
-        totalMaterialCost: freshTask?.totalMaterialCost || 0,
-        unitMaterialCost: freshTask?.unitMaterialCost || 0,
-        totalFullProductionCost: freshTask?.totalFullProductionCost || 0,
-        unitFullProductionCost: freshTask?.unitFullProductionCost || 0
+        totalMaterialCost: task?.totalMaterialCost || 0,
+        unitMaterialCost: task?.unitMaterialCost || 0,
+        totalFullProductionCost: task?.totalFullProductionCost || 0,
+        unitFullProductionCost: task?.unitFullProductionCost || 0
       };
       
       const differences = {
@@ -4428,15 +4421,9 @@ const TaskDetailsPage = () => {
         unitFullProductionCost: Math.abs(uiCosts.unitFullProductionCost - dbCosts.unitFullProductionCost)
       };
       
-      console.log('📊 [COST-COMPARE] Porównanie kosztów (UI vs świeże dane z bazy):', {
+      console.log('📊 [COST-COMPARE] Porównanie kosztów:', {
         ui: uiCosts,
-        freshDatabase: dbCosts,
-        currentTaskObject: {
-          totalMaterialCost: task?.totalMaterialCost || 0,
-          unitMaterialCost: task?.unitMaterialCost || 0,
-          totalFullProductionCost: task?.totalFullProductionCost || 0,
-          unitFullProductionCost: task?.unitFullProductionCost || 0
-        },
+        database: dbCosts,
         differences,
         maxDifference: Math.max(...Object.values(differences))
       });
@@ -4445,50 +4432,6 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('❌ [COST-COMPARE] Błąd podczas porównywania kosztów:', error);
       return null;
-    }
-  };
-
-  // JEDNORAZOWA funkcja synchronizacji kosztów (bez pętli)
-  const syncCostsOnce = async () => {
-    try {
-      console.log('🔄 [SYNC-ONCE] Rozpoczynam jednorazową synchronizację kosztów');
-      
-      // 1. Oblicz koszty UI
-      const uiCosts = await calculateAllCosts();
-      
-      // 2. Porównaj z bazą danych (przekaż uiCosts aby uniknąć ponownego obliczania)
-      const comparison = await compareCostsWithDatabase(uiCosts);
-      if (!comparison) return;
-      
-      const { dbCosts, differences } = comparison;
-      const maxDifference = Math.max(...Object.values(differences));
-      const COST_TOLERANCE = 0.005;
-      
-      if (maxDifference > COST_TOLERANCE) {
-        console.log(`🚨 [SYNC-ONCE] Wykryto różnicę ${maxDifference.toFixed(4)}€ > ${COST_TOLERANCE}€ - synchronizuję`);
-        
-        // 3. Synchronizuj z bazą danych
-        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
-        const result = await updateTaskCostsAutomatically(
-          task.id, 
-          currentUser?.uid || 'system', 
-          'Jednorazowa synchronizacja kosztów'
-        );
-        
-        if (result.success) {
-          // 4. Odśwież dane zadania
-          const { getTaskById } = await import('../../services/productionService');
-          const updatedTask = await getTaskById(task.id);
-          setTask(updatedTask);
-          console.log('✅ [SYNC-ONCE] Synchronizacja zakończona pomyślnie');
-        } else {
-          console.warn('⚠️ [SYNC-ONCE] Synchronizacja nie powiodła się:', result);
-        }
-      } else {
-        console.log(`✅ [SYNC-ONCE] Koszty zsynchronizowane (różnica: ${maxDifference.toFixed(4)}€ ≤ ${COST_TOLERANCE}€)`);
-      }
-    } catch (error) {
-      console.error('❌ [SYNC-ONCE] Błąd podczas synchronizacji:', error);
     }
   };
 
