@@ -22,7 +22,7 @@
  * - Lepsze UX i mniejsze obciążenie bazy danych
  */
 
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Typography,
@@ -135,7 +135,7 @@ import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants'
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { getUsersDisplayNames } from '../../services/userService';
@@ -153,6 +153,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
+import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
@@ -314,6 +315,9 @@ const TaskDetailsPage = () => {
   
   // Stan dla załączników z partii składników
   const [ingredientBatchAttachments, setIngredientBatchAttachments] = useState({});
+  
+  // Stan dla powiązań składników z rezerwacjami w planie mieszań
+  const [ingredientReservationLinks, setIngredientReservationLinks] = useState({});
   
   // Stan dla załączników badań klinicznych
   const [clinicalAttachments, setClinicalAttachments] = useState([]);
@@ -902,6 +906,51 @@ const TaskDetailsPage = () => {
     };
   };
 
+  // Funkcja do pobierania powiązań składników z rezerwacjami
+  const fetchIngredientReservationLinks = async () => {
+    if (!task?.id) return;
+    
+    try {
+      const links = await getIngredientReservationLinks(task.id);
+      setIngredientReservationLinks(links);
+    } catch (error) {
+      console.error('Błąd podczas pobierania powiązań składników:', error);
+    }
+  };
+
+  // Memoizowana mapa ilości wydanych dla wszystkich materiałów
+  const issuedQuantitiesMap = useMemo(() => {
+    if (!ingredientReservationLinks || Object.keys(ingredientReservationLinks).length === 0) {
+      return {};
+    }
+
+    const quantitiesMap = {};
+
+    // Przejdź przez wszystkie powiązania składników
+    Object.entries(ingredientReservationLinks).forEach(([ingredientId, linksArray]) => {
+      if (Array.isArray(linksArray)) {
+        linksArray.forEach(link => {
+          const batchMaterialName = link.batchSnapshot?.materialName;
+          if (batchMaterialName) {
+            // Zainicjalizuj sumę dla materiału jeśli nie istnieje
+            if (!quantitiesMap[batchMaterialName]) {
+              quantitiesMap[batchMaterialName] = 0;
+            }
+            // Dodaj powiązaną ilość do sumy
+            quantitiesMap[batchMaterialName] += parseFloat(link.linkedQuantity || 0);
+          }
+        });
+      }
+    });
+
+    return quantitiesMap;
+  }, [ingredientReservationLinks]);
+
+  // Funkcja do obliczania ilości wydanej dla materiału na podstawie powiązań w planie mieszań
+  const calculateIssuedQuantityForMaterial = useCallback((materialName) => {
+    return issuedQuantitiesMap[materialName] || 0;
+  }, [issuedQuantitiesMap]);
+
   // Funkcja do odświeżania tylko podstawowych danych zadania (dla POReservationManager)
   const fetchTaskBasicData = async () => {
     try {
@@ -963,6 +1012,67 @@ const TaskDetailsPage = () => {
       fetchIngredientBatchAttachments();
     }
   }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
+
+  // Efekt z listenerem w czasie rzeczywistym dla powiązań składników z rezerwacjami
+  useEffect(() => {
+    if (!task?.id) return;
+
+    console.log('🔄 [INGREDIENT LINKS] Ustawianie listenera dla zadania:', task.id);
+    
+    const ingredientLinksQuery = query(
+      collection(db, 'ingredientReservationLinks'),
+      where('taskId', '==', task.id)
+    );
+
+    const unsubscribeIngredientLinks = onSnapshot(
+      ingredientLinksQuery,
+      (snapshot) => {
+        console.log('📡 [INGREDIENT LINKS] Otrzymano aktualizację powiązań składników');
+        
+        const links = {};
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          
+          // Oblicz procent konsumpcji
+          const consumptionPercentage = data.linkedQuantity > 0 
+            ? Math.round((data.consumedQuantity / data.linkedQuantity) * 100)
+            : 0;
+          
+          const linkItem = {
+            id: doc.id,
+            ...data,
+            consumptionPercentage: consumptionPercentage,
+            // Używaj danych ze snapshotu zamiast pobierania na bieżąco
+            warehouseName: data.batchSnapshot?.warehouseName,
+            warehouseAddress: data.batchSnapshot?.warehouseAddress,
+            expiryDateString: data.batchSnapshot?.expiryDateString,
+            batchNumber: data.batchSnapshot?.batchNumber,
+            // Zachowaj kompatybilność wsteczną
+            quantity: data.linkedQuantity, // Dla komponentów używających starego pola
+            reservationType: data.reservationType
+          };
+          
+          // Grupuj powiązania po ingredientId
+          if (!links[data.ingredientId]) {
+            links[data.ingredientId] = [];
+          }
+          links[data.ingredientId].push(linkItem);
+        });
+        
+        setIngredientReservationLinks(links);
+        console.log('✅ [INGREDIENT LINKS] Zaktualizowano powiązania składników:', Object.keys(links).length, 'składników');
+      },
+      (error) => {
+        console.error('❌ [INGREDIENT LINKS] Błąd listenera powiązań składników:', error);
+      }
+    );
+
+    // Cleanup funkcja
+    return () => {
+      console.log('🧹 [INGREDIENT LINKS] Czyszczenie listenera dla zadania:', task.id);
+      unsubscribeIngredientLinks();
+    };
+  }, [task?.id]);
 
   // Pobieranie załączników badań klinicznych
   useEffect(() => {
@@ -7039,7 +7149,7 @@ const TaskDetailsPage = () => {
                   </Box>
                   <TableContainer>
                     <Table>
-                      <TableHead><TableRow><TableCell>{t('materials.table.name')}</TableCell><TableCell>{t('materials.table.quantity')}</TableCell><TableCell>{t('materials.table.unit')}</TableCell><TableCell>{t('materials.table.actualQuantity')}</TableCell><TableCell>{t('materials.table.consumedQuantity')}</TableCell><TableCell>{t('materials.table.unitPrice')}</TableCell><TableCell>{t('materials.table.cost')}</TableCell><TableCell>{t('materials.table.reservedBatches')}</TableCell><TableCell>{t('materials.table.include')}</TableCell><TableCell>{t('materials.table.actions')}</TableCell></TableRow></TableHead>
+                      <TableHead><TableRow><TableCell>{t('materials.table.name')}</TableCell><TableCell>{t('materials.table.quantity')}</TableCell><TableCell>{t('materials.table.unit')}</TableCell><TableCell>{t('materials.table.actualQuantity')}</TableCell><TableCell>{t('materials.table.issuedQuantity')}</TableCell><TableCell>{t('materials.table.consumedQuantity')}</TableCell><TableCell>{t('materials.table.unitPrice')}</TableCell><TableCell>{t('materials.table.cost')}</TableCell><TableCell>{t('materials.table.reservedBatches')}</TableCell><TableCell>{t('materials.table.include')}</TableCell><TableCell>{t('materials.table.actions')}</TableCell></TableRow></TableHead>
                       <TableBody>
                         {materials.map((material) => {
                           const materialId = material.inventoryItemId || material.id;
@@ -7066,6 +7176,7 @@ const TaskDetailsPage = () => {
                             >
                               <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
                               <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
+                              <TableCell>{(() => { const issuedQuantity = calculateIssuedQuantityForMaterial(material.name); return issuedQuantity > 0 ? `${issuedQuantity} ${material.unit}` : '—'; })()}</TableCell>
                               <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
                               <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
                               <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>

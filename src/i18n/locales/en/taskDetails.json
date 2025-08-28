@@ -29,9 +29,10 @@
         "consumeMaterials": "Consume Materials",
         "table": {
             "name": "Name",
-            "quantity": "Quantity",
+            "quantity": "Generated Quantity",
             "unit": "Unit",
             "actualQuantity": "Planned Quantity",
+            "issuedQuantity": "Issued Quantity",
             "consumedQuantity": "Consumed Quantity",
             "unitPrice": "Unit Price",
             "cost": "Cost",
