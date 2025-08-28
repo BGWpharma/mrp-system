@@ -161,6 +161,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
       if (completed) {
         try {
           const { createRealtimeCheckboxNotification } = require('../../services/notificationService');
+          const { getAllActiveUsers } = require('../../services/userService');
           
           // Znajdź zaznaczony item
           const checkedItem = task.mixingPlanChecklist.find(item => item.id === itemId);
@@ -179,9 +180,14 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
               }
             }
             
-            // Lista użytkowników, którzy powinni otrzymać powiadomienie
-            // Możesz dostosować to do swoich potrzeb - np. wszyscy administratorzy
-            const userIds = [currentUser.uid]; // Na razie tylko użytkownik wykonujący akcję
+            // Pobierz wszystkich aktywnych użytkowników do powiadomienia
+            const allUsers = await getAllActiveUsers();
+            const userIds = allUsers.map(user => user.id);
+            
+            // Fallback na wypadek braku użytkowników
+            if (userIds.length === 0) {
+              userIds.push(currentUser.uid);
+            }
             
             await createRealtimeCheckboxNotification(
               userIds,
@@ -191,7 +197,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
               currentUser.uid
             );
             
-            console.log(`Wysłano powiadomienie o zaznaczeniu checkboxa: ${checkedItem.text}`);
+            console.log(`Wysłano powiadomienie o zaznaczeniu checkboxa do ${userIds.length} użytkowników: ${checkedItem.text}`);
           }
         } catch (notificationError) {
           console.warn('Nie udało się wysłać powiadomienia o zaznaczeniu checkboxa:', notificationError);
