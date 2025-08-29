@@ -3644,3 +3644,133 @@ export const removePurchaseOrderFromCache = (orderId) => {
 
   return false;
 };
+
+/**
+ * Szybkie wyszukiwanie zamówień zakupowych dla formularzy
+ * Zoptymalizowane dla autouzupełniania i szybkiego wyszukiwania
+ * 
+ * @param {string} searchTerm - Fraza do wyszukania
+ * @param {number} maxResults - Maksymalna liczba wyników (domyślnie 20)
+ * @returns {Promise<Array>} - Tablica zamówień zakupowych
+ */
+export const searchPurchaseOrdersQuick = async (searchTerm, maxResults = 20) => {
+  try {
+    if (!searchTerm || searchTerm.trim().length < 1) {
+      // Dla pustego wyszukiwania zwróć najnowsze zamówienia
+      const q = query(
+        collection(db, PURCHASE_ORDERS_COLLECTION),
+        orderBy('createdAt', 'desc'),
+        firebaseLimit(maxResults)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    }
+
+    // Pobierz wszystkie zamówienia do przeszukania po stronie klienta
+    // (Firebase nie obsługuje fuzzy search, więc robimy to lokalnie)
+    const allOrdersQuery = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(allOrdersQuery);
+    const allOrders = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    // Filtruj i punktuj wyniki według trafności
+    const scoredResults = allOrders
+      .map(order => {
+        let score = 0;
+        const searchableFields = {
+          number: order.number || '',
+          supplierName: order.supplier?.name || '',
+          supplierCompany: order.supplier?.company || '',
+          notes: order.notes || '',
+          deliveryAddress: order.deliveryAddress || ''
+        };
+
+        // Punktacja za dokładne dopasowania
+        if (searchableFields.number.toLowerCase() === searchLower) score += 100;
+        if (searchableFields.supplierName.toLowerCase() === searchLower) score += 80;
+        
+        // Punktacja za częściowe dopasowania
+        Object.entries(searchableFields).forEach(([field, value]) => {
+          if (value.toLowerCase().includes(searchLower)) {
+            switch (field) {
+              case 'number': score += 50; break;
+              case 'supplierName': score += 30; break;
+              case 'supplierCompany': score += 25; break;
+              case 'notes': score += 10; break;
+              case 'deliveryAddress': score += 5; break;
+            }
+          }
+        });
+
+        // Dodatkowa punktacja za wyszukiwanie w pozycjach zamówienia
+        if (order.items && Array.isArray(order.items)) {
+          order.items.forEach(item => {
+            const itemName = (item.name || '').toLowerCase();
+            const itemDescription = (item.description || '').toLowerCase();
+            const itemProductName = (item.productName || '').toLowerCase();
+            
+            if (itemName.includes(searchLower) || 
+                itemDescription.includes(searchLower) || 
+                itemProductName.includes(searchLower)) {
+              score += 15;
+            }
+          });
+        }
+
+        return { ...order, searchScore: score };
+      })
+      .filter(order => order.searchScore > 0)
+      .sort((a, b) => {
+        // Sortuj najpierw po wyniku, potem po dacie
+        if (b.searchScore !== a.searchScore) {
+          return b.searchScore - a.searchScore;
+        }
+        return new Date(b.createdAt?.toDate?.() || b.createdAt) - 
+               new Date(a.createdAt?.toDate?.() || a.createdAt);
+      })
+      .slice(0, maxResults);
+
+    console.log(`🔍 Wyszukano ${scoredResults.length} wyników dla "${searchTerm}"`);
+    return scoredResults;
+
+  } catch (error) {
+    console.error('Błąd podczas szybkiego wyszukiwania PO:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobierz najnowsze zamówienia zakupowe (dla domyślnej listy)
+ * @param {number} limit - Maksymalna liczba wyników
+ * @returns {Promise<Array>} - Tablica zamówień zakupowych
+ */
+export const getRecentPurchaseOrders = async (limit = 20) => {
+  try {
+    const q = query(
+      collection(db, PURCHASE_ORDERS_COLLECTION),
+      orderBy('createdAt', 'desc'),
+      firebaseLimit(limit)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Błąd podczas pobierania najnowszych PO:', error);
+    throw error;
+  }
+};

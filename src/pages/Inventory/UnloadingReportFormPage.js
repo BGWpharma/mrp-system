@@ -37,7 +37,8 @@ import { Save as SaveIcon, ArrowBack as ArrowBackIcon, CloudUpload as CloudUploa
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
-import { getAllPurchaseOrders, getPurchaseOrderById } from '../../services/purchaseOrderService';
+import { getAllPurchaseOrders, getPurchaseOrderById, searchPurchaseOrdersQuick, getRecentPurchaseOrders } from '../../services/purchaseOrderService';
+import { useDebounce } from '../../hooks/useDebounce';
 import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -57,11 +58,13 @@ const UnloadingReportFormPage = () => {
   const { options: positionOptions, loading: positionLoading } = useInventoryPositionOptions();
   
   // Stany dla wyszukiwarki PO
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [filteredPurchaseOrders, setFilteredPurchaseOrders] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [poSearchQuery, setPoSearchQuery] = useState('');
   const [poLoading, setPoLoading] = useState(false);
   const [autoFillNotification, setAutoFillNotification] = useState(false);
+  
+  // Debounce dla wyszukiwania PO
+  const debouncedSearchQuery = useDebounce(poSearchQuery, 500);
   
   // Stany dla pozycji PO
   const [poItems, setPoItems] = useState([]);
@@ -107,47 +110,49 @@ const UnloadingReportFormPage = () => {
   const [errors, setErrors] = useState({});
   const [editId, setEditId] = useState(null);
 
-  // Pobieranie zamówień zakupowych przy inicjalizacji
+  // Wyszukiwanie PO na podstawie zapytania z debounce
   useEffect(() => {
-    const fetchPurchaseOrders = async () => {
+    const searchPOs = async () => {
+      if (!debouncedSearchQuery || debouncedSearchQuery.trim().length < 2) {
+        // Dla pustego wyszukiwania pokaż najnowsze zamówienia
+        try {
+          setPoLoading(true);
+          const recentOrders = await getRecentPurchaseOrders(15);
+          setSearchResults(recentOrders);
+          console.log(`✅ Załadowano ${recentOrders.length} najnowszych PO`);
+        } catch (error) {
+          console.error('Błąd podczas pobierania najnowszych PO:', error);
+          setSearchResults([]);
+        } finally {
+          setPoLoading(false);
+        }
+        return;
+      }
+
       try {
         setPoLoading(true);
-        const orders = await getAllPurchaseOrders();
-        setPurchaseOrders(orders);
+        console.log(`🔍 Wyszukuję PO dla: "${debouncedSearchQuery}"`);
+        const results = await searchPurchaseOrdersQuick(debouncedSearchQuery, 15);
+        setSearchResults(results);
+        console.log(`✅ Znaleziono ${results.length} PO`);
       } catch (error) {
-        console.error('Błąd podczas pobierania zamówień zakupowych:', error);
+        console.error('Błąd podczas wyszukiwania PO:', error);
+        setSearchResults([]);
       } finally {
         setPoLoading(false);
       }
     };
 
-    fetchPurchaseOrders();
-  }, []);
-
-  // Filtrowanie zamówień zakupowych na podstawie wyszukiwania
-  useEffect(() => {
-    if (!poSearchQuery.trim()) {
-      setFilteredPurchaseOrders(purchaseOrders.slice(0, 10)); // Pokaż pierwsze 10 opcji gdy brak wyszukiwania
-      return;
-    }
-
-    const searchLower = poSearchQuery.toLowerCase();
-    const filtered = purchaseOrders.filter(po => 
-      po.number?.toLowerCase().includes(searchLower) ||
-      po.supplier?.name?.toLowerCase().includes(searchLower) ||
-      po.id?.toLowerCase().includes(searchLower)
-    ).slice(0, 20); // Maksymalnie 20 wyników
-
-    setFilteredPurchaseOrders(filtered);
-  }, [poSearchQuery, purchaseOrders]);
+    searchPOs();
+  }, [debouncedSearchQuery]);
 
   // Automatyczne ładowanie pozycji PO po wpisaniu dokładnego numeru
   useEffect(() => {
     const loadPoItemsByNumber = async () => {
       if (!poSearchQuery.trim() || poItems.length > 0) return;
       
-      // Szukaj dokładnego dopasowania numeru PO (po number lub id)
-      const exactMatch = purchaseOrders.find(po => 
+      // Szukaj dokładnego dopasowania numeru PO w wynikach wyszukiwania
+      const exactMatch = searchResults.find(po => 
         po.number?.toLowerCase() === poSearchQuery.toLowerCase() ||
         po.id?.toLowerCase() === poSearchQuery.toLowerCase()
       );
@@ -161,21 +166,38 @@ const UnloadingReportFormPage = () => {
     // Dodaj opóźnienie żeby nie wywoływać za często
     const timeoutId = setTimeout(loadPoItemsByNumber, 500);
     return () => clearTimeout(timeoutId);
-  }, [poSearchQuery, purchaseOrders, poItems.length]);
+  }, [poSearchQuery, searchResults, poItems.length]);
 
   // Ładowanie pozycji PO w trybie edycji
   useEffect(() => {
-    if (isEditMode && formData.poNumber && purchaseOrders.length > 0 && poItems.length === 0) {
-      const matchingPo = purchaseOrders.find(po => 
-        po.number?.toLowerCase() === formData.poNumber.toLowerCase() ||
-        po.id?.toLowerCase() === formData.poNumber.toLowerCase()
-      );
-      if (matchingPo) {
-        console.log('Ładowanie pozycji PO w trybie edycji:', matchingPo.number);
-        handlePoSelectionWithDetails(matchingPo, true);
-      }
+    if (isEditMode && formData.poNumber && poItems.length === 0) {
+      const loadPoForEdit = async () => {
+        try {
+          console.log('📝 Ładowanie PO w trybie edycji:', formData.poNumber);
+          
+          // Wyszukaj PO po numerze
+          const searchResults = await searchPurchaseOrdersQuick(formData.poNumber, 5);
+          const matchingPo = searchResults.find(po => 
+            po.number?.toLowerCase() === formData.poNumber.toLowerCase() ||
+            po.id?.toLowerCase() === formData.poNumber.toLowerCase()
+          );
+          
+          if (matchingPo) {
+            console.log('✅ Znaleziono PO w trybie edycji:', matchingPo.number);
+            await handlePoSelectionWithDetails(matchingPo, true);
+          } else {
+            console.log('⚠️ Nie znaleziono PO w trybie edycji dla:', formData.poNumber);
+          }
+        } catch (error) {
+          console.error('Błąd podczas ładowania PO w trybie edycji:', error);
+        }
+      };
+      
+      loadPoForEdit();
     }
-  }, [isEditMode, formData.poNumber, purchaseOrders, poItems.length]);
+  }, [isEditMode, formData.poNumber, poItems.length]);
+
+
 
   // Sprawdź czy istnieją dane do edycji w sessionStorage
   useEffect(() => {
@@ -300,6 +322,7 @@ const UnloadingReportFormPage = () => {
       // Przygotuj pozycje PO do wyboru
       const items = fullPoData.items?.map((item, index) => ({
         id: `${fullPoData.id}_${index}`,
+        poItemId: item.id, // ⭐ ID oryginalnej pozycji z PO dla precyzyjnego dopasowania
         productName: item.productName || item.name || '',
         quantity: item.quantity || '',
         unit: item.unit || 'szt.',
@@ -382,6 +405,7 @@ const UnloadingReportFormPage = () => {
       // Dodaj pozycję z domyślnymi wartościami
       const newItem = {
         ...item,
+        poItemId: item.poItemId || item.originalItem?.id, // ⭐ Zachowaj oryginalne ID pozycji PO
         unloadedQuantity: '',
         expiryDate: null,
         noExpiryDate: false
@@ -467,7 +491,6 @@ const UnloadingReportFormPage = () => {
   const handleRefreshPoItems = async () => {
     console.log('🔄 Odświeżanie pozycji PO...');
     console.log('📋 Numer PO do wyszukania:', formData.poNumber);
-    console.log('📦 Dostępne PO w systemie:', purchaseOrders.length);
     
     if (!formData.poNumber.trim()) {
       console.log('❌ Brak numeru PO');
@@ -488,21 +511,28 @@ const UnloadingReportFormPage = () => {
       }));
     }
     
-         const matchingPo = purchaseOrders.find(po => {
-       const matchByNumber = po.number?.toLowerCase() === formData.poNumber.toLowerCase();
-       const matchById = po.id?.toLowerCase() === formData.poNumber.toLowerCase();
-       const match = matchByNumber || matchById;
-       console.log(`🔍 Sprawdzam PO: number="${po.number}" id="${po.id}" vs "${formData.poNumber}"`);
-       console.log(`   ↳ matchByNumber=${matchByNumber}, matchById=${matchById}, finalMatch=${match}`);
-       return match;
-     });
-    
-    if (matchingPo) {
-      console.log('✅ Znaleziono PO:', matchingPo);
-      await handlePoSelectionWithDetails(matchingPo, isEditMode);
-    } else {
-      console.log('❌ Nie znaleziono PO o numerze:', formData.poNumber);
-      console.log('📋 Wszystkie dostępne numery PO:', purchaseOrders.map(po => po.number));
+    try {
+      // Wyszukaj PO po numerze
+      console.log('🔍 Wyszukiwanie PO...');
+      const searchResults = await searchPurchaseOrdersQuick(formData.poNumber, 5);
+      const matchingPo = searchResults.find(po => {
+        const matchByNumber = po.number?.toLowerCase() === formData.poNumber.toLowerCase();
+        const matchById = po.id?.toLowerCase() === formData.poNumber.toLowerCase();
+        const match = matchByNumber || matchById;
+        console.log(`🔍 Sprawdzam PO: number="${po.number}" id="${po.id}" vs "${formData.poNumber}"`);
+        console.log(`   ↳ matchByNumber=${matchByNumber}, matchById=${matchById}, finalMatch=${match}`);
+        return match;
+      });
+      
+      if (matchingPo) {
+        console.log('✅ Znaleziono PO:', matchingPo);
+        await handlePoSelectionWithDetails(matchingPo, isEditMode);
+      } else {
+        console.log('❌ Nie znaleziono PO o numerze:', formData.poNumber);
+        console.log('📋 Wyniki wyszukiwania:', searchResults.map(po => po.number));
+      }
+    } catch (error) {
+      console.error('Błąd podczas odświeżania pozycji PO:', error);
     }
   };
 
@@ -853,79 +883,88 @@ const UnloadingReportFormPage = () => {
             </Grid>
 
             <Grid item xs={12} sm={6}>
-                              <Autocomplete
-                freeSolo
-                options={filteredPurchaseOrders}
-                getOptionLabel={(option) => {
-                  if (typeof option === 'string') return option;
-                  return `${option.number || ''} - ${option.supplier?.name || 'Brak dostawcy'}`;
-                }}
-                inputValue={poSearchQuery}
-                onInputChange={(event, newInputValue) => {
-                  console.log('📝 Input zmieniony na:', newInputValue);
-                  setPoSearchQuery(newInputValue);
-                  setFormData(prev => ({
-                    ...prev,
-                    poNumber: newInputValue
-                  }));
-                  // Wyczyść pozycje jeśli tekst się zmienił
-                  if (newInputValue !== formData.poNumber) {
-                    setPoItems([]);
-                    setSelectedPoItems([]);
-                  }
-                }}
-                onChange={(event, newValue) => {
-                  console.log('🎯 Wybór z listy:', newValue);
-                  if (newValue && typeof newValue === 'object') {
-                    // Użytkownik wybrał opcję z listy
-                    console.log('✅ Wybrano PO:', newValue.number);
-                    setPoSearchQuery(newValue.number);
-                    setFormData(prev => ({
-                      ...prev,
-                      poNumber: newValue.number
-                    }));
-                    handlePoSelectionWithDetails(newValue, false);
-                  }
-                }}
-                loading={poLoading}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Numer zamówienia (PO) *"
-                    required
-                    error={!!errors.poNumber}
-                    helperText={errors.poNumber || "Wpisz lub wybierz numer PO"}
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <>
-                          {poLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props}>
-                    <Box>
-                      <Typography variant="body2" fontWeight="bold">
-                        {option.number}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.supplier?.name || 'Brak dostawcy'} • {option.status || 'Brak statusu'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
-                noOptionsText="Brak wyników"
-                loadingText="Ładowanie..."
-              />
+                                              <Autocomplete
+                 freeSolo
+                 options={searchResults}
+                 getOptionLabel={(option) => {
+                   if (typeof option === 'string') return option;
+                   return `${option.number || ''} - ${option.supplier?.name || 'Brak dostawcy'}`;
+                 }}
+                 groupBy={(option) => {
+                   if (typeof option === 'string') return 'Historia wyszukiwania';
+                   if (option.searchScore && option.searchScore >= 50) return 'Dokładne dopasowania';
+                   return 'Inne wyniki';
+                 }}
+                 inputValue={poSearchQuery}
+                 onInputChange={(event, newInputValue) => {
+                   console.log('📝 Input zmieniony na:', newInputValue);
+                   setPoSearchQuery(newInputValue);
+                   setFormData(prev => ({
+                     ...prev,
+                     poNumber: newInputValue
+                   }));
+                   // Wyczyść pozycje jeśli tekst się zmienił
+                   if (newInputValue !== formData.poNumber) {
+                     setPoItems([]);
+                     setSelectedPoItems([]);
+                   }
+                 }}
+                 onChange={(event, newValue) => {
+                   console.log('🎯 Wybór z listy:', newValue);
+                   if (newValue && typeof newValue === 'object') {
+                     // Użytkownik wybrał opcję z listy
+                     console.log('✅ Wybrano PO:', newValue.number);
+                     setPoSearchQuery(newValue.number);
+                     setFormData(prev => ({
+                       ...prev,
+                       poNumber: newValue.number
+                     }));
+                     handlePoSelectionWithDetails(newValue, false);
+                   }
+                 }}
+                 loading={poLoading}
+                 renderInput={(params) => (
+                   <TextField
+                     {...params}
+                     label="Numer zamówienia (PO) *"
+                     required
+                     error={!!errors.poNumber}
+                     helperText={errors.poNumber || "Wpisz min. 2 znaki aby wyszukać PO (numer lub dostawca)"}
+                     InputProps={{
+                       ...params.InputProps,
+                       startAdornment: (
+                         <InputAdornment position="start">
+                           <SearchIcon />
+                         </InputAdornment>
+                       ),
+                       endAdornment: (
+                         <>
+                           {poLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                           {params.InputProps.endAdornment}
+                         </>
+                       ),
+                     }}
+                   />
+                 )}
+                 renderOption={(props, option) => (
+                   <Box component="li" {...props}>
+                     <Box>
+                       <Typography variant="body2" fontWeight="bold">
+                         {option.number}
+                       </Typography>
+                       <Typography variant="caption" color="text.secondary">
+                         {option.supplier?.name || 'Brak dostawcy'} • {option.status || 'Brak statusu'}
+                       </Typography>
+                     </Box>
+                   </Box>
+                 )}
+                 noOptionsText={
+                   poSearchQuery && poSearchQuery.length >= 2 
+                     ? `Nie znaleziono PO dla "${poSearchQuery}"` 
+                     : "Wpisz min. 2 znaki aby wyszukać"
+                 }
+                 loadingText="Wyszukiwanie PO..."
+               />
             </Grid>
 
             {/* Sekcja 2: Informacje o rozładunku */}

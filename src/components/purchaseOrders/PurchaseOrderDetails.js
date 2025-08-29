@@ -403,6 +403,66 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
   };
   
+  // Funkcja diagnostyczna do analizy dopasowania pozycji
+  const getItemMatchingDiagnostics = (item) => {
+    if (!unloadingFormResponses || unloadingFormResponses.length === 0) {
+      return { matchType: 'none', details: 'Brak formularzy rozładunku' };
+    }
+    
+    let matchByItemId = false;
+    let matchByName = false;
+    let conflictingItems = [];
+    
+    for (const response of unloadingFormResponses) {
+      if (response.selectedItems && response.selectedItems.length > 0) {
+        // Sprawdź dopasowanie po ID
+        const foundByItemId = response.selectedItems.find(selectedItem => {
+          return selectedItem.poItemId && item.id && selectedItem.poItemId === item.id;
+        });
+        
+        if (foundByItemId) {
+          matchByItemId = true;
+        }
+        
+        // Sprawdź dopasowanie po nazwie
+        const foundByName = response.selectedItems.filter(selectedItem => {
+          const itemName = (item.name || '').toLowerCase().trim();
+          const selectedItemName = (selectedItem.productName || '').toLowerCase().trim();
+          return itemName && selectedItemName && itemName === selectedItemName;
+        });
+        
+        if (foundByName.length > 0) {
+          matchByName = true;
+          conflictingItems.push(...foundByName);
+        }
+      }
+    }
+    
+    if (matchByItemId && matchByName) {
+      return { 
+        matchType: 'both', 
+        details: `Pozycja dopasowana zarówno po ID jak i nazwie`,
+        conflictCount: conflictingItems.length
+      };
+    } else if (matchByItemId) {
+      return { 
+        matchType: 'id', 
+        details: `Pozycja dopasowana dokładnie po ID: ${item.id}` 
+      };
+    } else if (matchByName) {
+      return { 
+        matchType: 'name_only', 
+        details: `Pozycja dopasowana tylko po nazwie. Znaleziono ${conflictingItems.length} pozycji o tej nazwie`,
+        conflictCount: conflictingItems.length
+      };
+    } else {
+      return { 
+        matchType: 'none', 
+        details: `Pozycja nie znaleziona w formularzach rozładunku` 
+      };
+    }
+  };
+
   // Funkcja sprawdzająca czy pozycja PO znajduje się w odpowiedziach formularzy rozładunku
   const isItemInUnloadingForms = (item) => {
     if (!unloadingFormResponses || unloadingFormResponses.length === 0) {
@@ -412,21 +472,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
     // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku
     for (const response of unloadingFormResponses) {
       if (response.selectedItems && response.selectedItems.length > 0) {
-        // Sprawdzamy czy nazwa produktu z PO znajduje się w pozycjach dostarczonej w formularzu
-        const foundItem = response.selectedItems.find(selectedItem => {
-          // Porównujemy nazwy produktów (ignorując wielkość liter i białe znaki)
-          const itemName = (item.name || '').toLowerCase().trim();
-          const selectedItemName = (selectedItem.productName || '').toLowerCase().trim();
-          
-          return itemName && selectedItemName && itemName === selectedItemName;
+        // PIERWSZEŃSTWO: Sprawdź dokładne dopasowanie po ID pozycji PO
+        const foundByItemId = response.selectedItems.find(selectedItem => {
+          return selectedItem.poItemId && item.id && selectedItem.poItemId === item.id;
         });
         
-        if (foundItem) {
+        if (foundByItemId) {
+          console.log(`✅ Znaleziono pozycję po dokładnym ID: ${item.id} - ${item.name}`);
           return true;
         }
+        
+        // USUNIĘTO FALLBACK - TYLKO DOKŁADNE DOPASOWANIE PO ID
       }
     }
     
+    console.log(`❌ Pozycja "${item.name}" (ID: ${item.id}) nie została znaleziona w żadnym formularzu rozładunku`);
     return false;
   };
   
@@ -439,20 +499,16 @@ const PurchaseOrderDetails = ({ orderId }) => {
     // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku od najnowszych
     for (const response of unloadingFormResponses) {
       if (response.selectedItems && response.selectedItems.length > 0) {
-        // Sprawdzamy czy nazwa produktu z PO znajduje się w pozycjach dostarczonej w formularzu
+        // TYLKO DOKŁADNE DOPASOWANIE PO ID POZYCJI PO
         const foundItem = response.selectedItems.find(selectedItem => {
-          // Porównujemy nazwy produktów (ignorując wielkość liter i białe znaki)
-          const itemName = (item.name || '').toLowerCase().trim();
-          const selectedItemName = (selectedItem.productName || '').toLowerCase().trim();
-          
-          return itemName && selectedItemName && itemName === selectedItemName;
+          return selectedItem.poItemId && item.id && selectedItem.poItemId === item.id;
         });
         
-        // Jeśli znaleziono pozycję
+        // Jeśli znaleziono pozycję po dokładnym ID
         if (foundItem) {
           // Sprawdź czy zaznaczono "nie dotyczy"
           if (foundItem.noExpiryDate === true) {
-            console.log(`🚫 Pozycja "${item.name}" ma zaznaczone "nie dotyczy" dla daty ważności`);
+            console.log(`🚫 Pozycja "${item.name}" (ID: ${item.id}) ma zaznaczone "nie dotyczy" dla daty ważności`);
             return { expiryDate: null, noExpiryDate: true };
           }
           
@@ -479,16 +535,20 @@ const PurchaseOrderDetails = ({ orderId }) => {
             }
             
             if (validDate) {
-              console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}":`, validDate);
+              console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}" (ID: ${item.id}):`, validDate);
               return { expiryDate: validDate, noExpiryDate: false };
             } else {
-              console.warn(`⚠️ Nieprawidłowa data ważności dla pozycji "${item.name}":`, foundItem.expiryDate);
+              console.warn(`⚠️ Nieprawidłowa data ważności dla pozycji "${item.name}" (ID: ${item.id}):`, foundItem.expiryDate);
             }
           }
+          
+          // Jeśli znaleziono pozycję ale bez daty ważności
+          return { expiryDate: null, noExpiryDate: false };
         }
       }
     }
     
+    // Nie znaleziono pozycji w żadnym formularzu rozładunku
     return { expiryDate: null, noExpiryDate: false };
   };
 
@@ -582,7 +642,22 @@ const PurchaseOrderDetails = ({ orderId }) => {
     
     // Walidacja: sprawdź czy pozycja znajduje się w odpowiedziach formularzy rozładunku
     if (!isItemInUnloadingForms(itemToReceive)) {
-      showError(`Nie można przyjąć towaru dla pozycji "${itemToReceive.name}". Pozycja nie została zgłoszona w żadnym raporcie rozładunku dla tego zamówienia.`);
+      const diagnostics = getItemMatchingDiagnostics(itemToReceive);
+      
+      let errorMessage = `Nie można przyjąć towaru dla pozycji "${itemToReceive.name}" (ID: ${itemToReceive.id}).`;
+      
+      switch (diagnostics.matchType) {
+        case 'none':
+          errorMessage += ` Pozycja nie została zgłoszona w żadnym raporcie rozładunku dla tego zamówienia.`;
+          break;
+        case 'name_only':
+          errorMessage += ` System wymaga teraz dokładnego dopasowania pozycji. Ta pozycja nie została zaznaczona w formularzu rozładunku (znaleziono tylko pozycje o tej nazwie ale z innymi ID). Zaznacz tę konkretną pozycję w formularzu rozładunku.`;
+          break;
+        default:
+          errorMessage += ` Pozycja nie została poprawnie zgłoszona w raportach rozładunku lub brakuje jej unikatowego ID.`;
+      }
+      
+      showError(errorMessage);
       setReceiveDialogOpen(false);
       return;
     }
