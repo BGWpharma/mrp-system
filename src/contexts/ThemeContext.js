@@ -280,11 +280,23 @@ const createDarkTheme = () => {
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.2)',
+          boxShadow: 'none',
           backgroundImage: 'none',
           backgroundColor: 'rgba(31, 41, 55, 0.9)',
           backdropFilter: 'blur(8px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+          borderBottom: '1px solid rgba(55, 65, 81, 0.5)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'linear-gradient(to right, rgba(31, 41, 55, 0.5), rgba(55, 65, 81, 0.3))',
+            pointerEvents: 'none',
+            zIndex: -1,
+          },
         },
       },
     },
@@ -306,11 +318,58 @@ const createDarkTheme = () => {
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
           boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.15)',
-          transition: 'all 0.3s ease',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.25)',
-            borderColor: 'rgba(59, 130, 246, 0.3)',
+            transform: 'translateY(-2px) scale(1.01)',
+            boxShadow: '0px 25px 50px rgba(0, 0, 0, 0.3)',
+            borderColor: 'rgba(59, 130, 246, 0.4)',
+          },
+        },
+      },
+    },
+    // Customer-portal style button enhancements
+    MuiButton: {
+      ...getCommonComponents(theme).MuiButton,
+      styleOverrides: {
+        ...getCommonComponents(theme).MuiButton.styleOverrides,
+        root: {
+          ...getCommonComponents(theme).MuiButton.styleOverrides.root,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            transform: 'scale(1.02)',
+          },
+        },
+        contained: {
+          ...getCommonComponents(theme).MuiButton.styleOverrides.contained,
+          background: 'linear-gradient(to right, #3b82f6, #8b5cf6)', // blue to purple gradient
+          '&:hover': {
+            background: 'linear-gradient(to right, #2563eb, #7c3aed)',
+            boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      ...getCommonComponents(theme).MuiIconButton,
+      styleOverrides: {
+        ...getCommonComponents(theme).MuiIconButton.styleOverrides,
+        root: {
+          ...getCommonComponents(theme).MuiIconButton.styleOverrides.root,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            transform: 'scale(1.05)',
+            background: 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))',
+          },
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            background: 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))',
+            transform: 'translateX(4px)',
           },
         },
       },
@@ -548,12 +607,59 @@ const createLightTheme = () => {
           backgroundColor: 'rgba(255, 255, 255, 0.8)',
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(0, 0, 0, 0.05)',
-          boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.08)',
-          transition: 'all 0.3s ease',
+          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.05)',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.15)',
-            borderColor: 'rgba(25, 118, 210, 0.3)',
+            transform: 'translateY(-2px) scale(1.01)',
+            boxShadow: '0px 20px 40px rgba(0, 0, 0, 0.1)',
+            borderColor: 'rgba(29, 78, 216, 0.3)',
+          },
+        },
+      },
+    },
+    // Customer-portal style button enhancements for light theme
+    MuiButton: {
+      ...getCommonComponents(theme).MuiButton,
+      styleOverrides: {
+        ...getCommonComponents(theme).MuiButton.styleOverrides,
+        root: {
+          ...getCommonComponents(theme).MuiButton.styleOverrides.root,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            transform: 'scale(1.02)',
+          },
+        },
+        contained: {
+          ...getCommonComponents(theme).MuiButton.styleOverrides.contained,
+          background: 'linear-gradient(to right, #1d4ed8, #7c3aed)',
+          '&:hover': {
+            background: 'linear-gradient(to right, #1e40af, #6d28d9)',
+            boxShadow: '0 0 20px rgba(29, 78, 216, 0.4)',
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      ...getCommonComponents(theme).MuiIconButton,
+      styleOverrides: {
+        ...getCommonComponents(theme).MuiIconButton.styleOverrides,
+        root: {
+          ...getCommonComponents(theme).MuiIconButton.styleOverrides.root,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            transform: 'scale(1.05)',
+            background: 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+          },
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            background: 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+            transform: 'translateX(4px)',
           },
         },
       },

@@ -57,41 +57,71 @@ import { useSidebar } from '../../contexts/SidebarContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs } from '../../services/userService';
 
-// Styled components
+// Styled components - customer-portal style
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
-  borderRadius: theme.shape.borderRadius,
-  margin: '2px 4px',
-  padding: '6px 8px',
+  borderRadius: '12px',
+  margin: '2px 8px',
+  padding: '8px 12px',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   '&.Mui-selected': {
-    backgroundColor: alpha(theme.palette.primary.main, 0.15),
+    background: theme.palette.mode === 'dark'
+      ? 'linear-gradient(to right, #3b82f6, #8b5cf6)' // blue-500 to purple-500 dla dark
+      : 'linear-gradient(to right, #1d4ed8, #6d28d9)', // blue-700 to purple-700 dla light - lepszy kontrast
+    color: '#ffffff',
+    fontWeight: 'bold',
+    boxShadow: theme.palette.mode === 'dark'
+      ? '0 4px 12px rgba(59, 130, 246, 0.3)'
+      : '0 4px 12px rgba(29, 78, 216, 0.4)',
     '&:hover': {
-      backgroundColor: alpha(theme.palette.primary.main, 0.25),
+      background: theme.palette.mode === 'dark'
+        ? 'linear-gradient(to right, #2563eb, #7c3aed)' // blue-600 to purple-600 dla dark
+        : 'linear-gradient(to right, #1e3a8a, #581c87)', // blue-800 to purple-800 dla light
+      transform: 'translateY(-1px)',
+      boxShadow: theme.palette.mode === 'dark'
+        ? '0 6px 16px rgba(59, 130, 246, 0.4)'
+        : '0 6px 16px rgba(29, 78, 216, 0.5)',
     },
   },
   '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.05),
+    backgroundColor: theme.palette.mode === 'dark' 
+      ? 'rgba(55, 65, 81, 0.8)'
+      : 'rgba(241, 245, 249, 0.8)',
+    color: theme.palette.mode === 'dark' 
+      ? 'inherit' 
+      : '#1e293b', // slate-800 dla lepszego kontrastu hover w jasnym motywie
+    transform: 'translateX(4px)',
+    backdropFilter: 'blur(4px)',
   },
-  transition: theme.transitions.create(['background-color', 'box-shadow'], {
-    duration: 200,
-  }),
 }));
 
 const StyledListItem = styled(ListItem)(({ theme }) => ({
-  borderRadius: theme.shape.borderRadius,
-  margin: '2px 4px',
-  padding: '6px 8px',
+  borderRadius: '8px',
+  margin: '1px 12px',
+  padding: '4px 8px',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   '&.Mui-selected': {
-    backgroundColor: alpha(theme.palette.primary.main, 0.15),
+    backgroundColor: theme.palette.mode === 'dark'
+      ? 'rgba(59, 130, 246, 0.2)'
+      : 'rgba(29, 78, 216, 0.15)', // ciemniejszy blue-700 dla lepszego kontrastu
+    borderLeft: theme.palette.mode === 'dark' 
+      ? '3px solid #3b82f6' 
+      : '3px solid #1d4ed8', // blue-700 dla light mode
+    color: theme.palette.mode === 'dark' 
+      ? 'inherit' 
+      : '#1e293b', // slate-800 dla lepszego kontrastu w jasnym motywie
     '&:hover': {
-      backgroundColor: alpha(theme.palette.primary.main, 0.25),
+      backgroundColor: theme.palette.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.3)'
+        : 'rgba(29, 78, 216, 0.2)', // ciemniejszy dla lepszego kontrastu
+      transform: 'translateX(2px)',
     },
   },
   '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.05),
+    backgroundColor: theme.palette.mode === 'dark' 
+      ? 'rgba(55, 65, 81, 0.6)'
+      : 'rgba(241, 245, 249, 0.6)',
+    transform: 'translateX(2px)',
   },
-  transition: theme.transitions.create(['background-color', 'box-shadow'], {
-    duration: 200,
-  }),
 }));
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
@@ -393,19 +423,45 @@ const Sidebar = ({ onToggle }) => {
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          transition: 'width 225ms cubic-bezier(0.4, 0, 0.6, 1) 0ms',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           overflowX: 'hidden',
-          backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+          background: mode === 'dark' 
+            ? 'rgba(31, 41, 55, 0.9)' // bg-gray-800/90 jak w customer-portal
+            : 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)',
+          backgroundImage: 'none',
           borderRight: '1px solid',
-          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
-          height: '100%', 
+          borderColor: mode === 'dark' 
+            ? 'rgba(55, 65, 81, 0.5)' // border-gray-700/50
+            : 'rgba(148, 163, 184, 0.3)', // border-slate-400/30
+          boxShadow: mode === 'dark'
+            ? '0 10px 25px rgba(0, 0, 0, 0.25)'
+            : '0 4px 12px rgba(0, 0, 0, 0.1)',
+          height: '100vh',
+          top: 0,
+          left: 0, 
           display: 'flex',
           flexDirection: 'column',
           zIndex: (theme) => theme.zIndex.drawer + 1,
+          // Gradient overlay podobny do Navbar
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: mode === 'dark'
+              ? 'linear-gradient(to bottom, rgba(31, 41, 55, 0.3), rgba(55, 65, 81, 0.1))'
+              : 'linear-gradient(to bottom, rgba(248, 250, 252, 0.3), rgba(226, 232, 240, 0.1))',
+            pointerEvents: 'none',
+            zIndex: -1,
+          },
         },
         ...(isMobile && {
           '& .MuiBackdrop-root': {
             zIndex: (theme) => theme.zIndex.drawer,
+            backdropFilter: 'blur(4px)',
           },
           zIndex: (theme) => theme.zIndex.drawer + 2,
           position: 'relative'
@@ -442,7 +498,19 @@ const Sidebar = ({ onToggle }) => {
         )}
         <IconButton 
           onClick={toggleDrawer}
-          sx={{ p: 0.5, color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}
+          sx={{ 
+            p: 0.5, 
+            color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            borderRadius: '8px',
+            '&:hover': {
+              transform: 'scale(1.1)',
+              background: mode === 'dark'
+                ? 'rgba(55, 65, 81, 0.8)'
+                : 'rgba(241, 245, 249, 0.8)',
+              color: mode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.8)',
+            }
+          }}
         >
           {isDrawerOpen ? <ChevronLeftIcon /> : <MenuIcon />}
         </IconButton>
@@ -607,16 +675,25 @@ const Sidebar = ({ onToggle }) => {
       <Box sx={{ 
         flexShrink: 0,
         borderTop: '1px solid', 
-        borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
-        backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
-        p: 1.5
+        borderColor: mode === 'dark' ? 'rgba(55, 65, 81, 0.5)' : 'rgba(148, 163, 184, 0.3)',
+        background: mode === 'dark' 
+          ? 'rgba(31, 41, 55, 0.9)' 
+          : 'rgba(255, 255, 255, 0.9)',
+        backdropFilter: 'blur(8px)',
+        p: 1.5,
+        position: 'relative',
+        zIndex: 10
       }}>
         <StyledListItem 
           component="div"
           sx={{
             color: 'error.main',
+            borderRadius: '8px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
-              backgroundColor: alpha('#f44336', 0.08),
+              background: 'linear-gradient(to right, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1))',
+              transform: 'translateX(4px)',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)',
             },
             cursor: 'pointer'
           }}

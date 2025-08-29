@@ -87,6 +87,7 @@ const SearchIconWrapper = styled('div')(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  zIndex: 10, // Upewniamy się, że ikona jest na wierzchu
 }));
 
 const StyledInputBase = styled(InputBase)(({ theme }) => ({
@@ -94,7 +95,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   '& .MuiInputBase-input': {
     padding: theme.spacing(1, 1, 1, 0),
     paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create('width'),
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     width: '100%',
     [theme.breakpoints.up('sm')]: {
       width: '28ch',
@@ -103,11 +104,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
       },
     },
   },
-  backgroundColor: alpha(theme.palette.common.white, 0.08),
-  borderRadius: theme.shape.borderRadius,
-  '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.12),
-  },
+  // Usuwamy style tła, border i inne efekty, ponieważ są nadpisywane przez sx
   marginRight: theme.spacing(2),
   marginLeft: theme.spacing(2),
   width: 'auto',
@@ -416,13 +413,32 @@ const Navbar = () => {
         position="static" 
         elevation={0}
         sx={{ 
-          backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+          background: mode === 'dark' 
+            ? 'rgba(31, 41, 55, 0.9)' // bg-gray-800/90 jak w customer-portal
+            : 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(8px)', // backdrop-blur-sm
           borderBottom: '1px solid',
-          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-          color: mode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)'
+          borderColor: mode === 'dark' 
+            ? 'rgba(55, 65, 81, 0.5)' // border-gray-700/50
+            : 'rgba(148, 163, 184, 0.3)', // border-slate-400/30
+          color: mode === 'dark' ? '#ffffff' : 'rgba(15, 23, 42, 0.9)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: mode === 'dark'
+              ? 'linear-gradient(to right, rgba(31, 41, 55, 0.5), rgba(55, 65, 81, 0.3))'
+              : 'linear-gradient(to right, rgba(248, 250, 252, 0.5), rgba(226, 232, 240, 0.3))',
+            pointerEvents: 'none',
+            zIndex: -1,
+          },
         }}
       >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Toolbar sx={{ justifyContent: 'space-between', position: 'relative', zIndex: 10 }}>
           {/* Lewa strona paska */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             {/* Przycisk hamburger dla urządzeń mobilnych */}
@@ -435,7 +451,14 @@ const Navbar = () => {
                 sx={{ 
                   mr: 1,
                   zIndex: 1201,
-                  display: isOpen ? 'none' : 'flex'
+                  display: isOpen ? 'none' : 'flex',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    background: mode === 'dark'
+                      ? 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))'
+                      : 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+                  }
                 }}
               >
                 <MenuIcon />
@@ -462,7 +485,12 @@ const Navbar = () => {
                       maxWidth: '160px',
                       padding: '3px 0',
                       objectFit: 'contain',
-                      ml: 2
+                      ml: 2,
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'scale(1.05)',
+                        filter: 'brightness(1.1)',
+                      }
                     }}
                   />
                 </Link>
@@ -480,7 +508,14 @@ const Navbar = () => {
             mr: isMobile ? 1 : 2
           }} ref={searchResultsRef}>
             <SearchIconWrapper>
-              <SearchIcon />
+              <SearchIcon sx={{ 
+                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(51, 65, 85, 0.8)', // slate-700/80 - ciemniejszy dla lepszego kontrastu
+                transition: 'color 0.3s ease',
+                fontSize: '1.25rem', // upewniamy się, że ikona ma odpowiedni rozmiar
+                '&:hover': {
+                  color: mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 1)', // slate-800 dla lepszego kontrastu on hover
+                }
+              }} />
             </SearchIconWrapper>
             <StyledInputBase
               placeholder={isMobile ? t('common.navbar.searchPlaceholderMobile') : t('common.navbar.searchPlaceholder')}
@@ -491,9 +526,41 @@ const Navbar = () => {
               onKeyPress={handleSearchKeyPress}
               sx={{
                 width: '100%',
+                background: mode === 'dark'
+                  ? 'rgba(55, 65, 81, 0.3)' // gray-700/30
+                  : 'rgba(241, 245, 249, 0.8)', // slate-100/80
+                backdropFilter: 'blur(4px)',
+                borderRadius: '12px',
+                border: '1px solid',
+                borderColor: mode === 'dark'
+                  ? 'rgba(75, 85, 99, 0.4)' // gray-600/40
+                  : 'rgba(203, 213, 225, 0.6)', // slate-300/60
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  borderColor: mode === 'dark'
+                    ? 'rgba(59, 130, 246, 0.4)' // blue-500/40
+                    : 'rgba(29, 78, 216, 0.4)', // blue-700/40
+                  background: mode === 'dark'
+                    ? 'rgba(55, 65, 81, 0.5)'
+                    : 'rgba(255, 255, 255, 0.9)',
+                  transform: 'scale(1.01)',
+                },
+                '&:focus-within': {
+                  borderColor: mode === 'dark'
+                    ? 'rgba(59, 130, 246, 0.6)'
+                    : 'rgba(29, 78, 216, 0.6)',
+                  background: mode === 'dark'
+                    ? 'rgba(55, 65, 81, 0.6)'
+                    : 'rgba(255, 255, 255, 0.95)',
+                  transform: 'scale(1.02)',
+                  boxShadow: mode === 'dark'
+                    ? '0 0 20px rgba(59, 130, 246, 0.2)'
+                    : '0 0 20px rgba(29, 78, 216, 0.15)',
+                },
                 '& .MuiInputBase-input': {
                   paddingRight: (searchQuery.length > 0 || isSearching) ? '42px' : '8px',
                   fontSize: isMobile ? '0.85rem' : '1rem',
+                  color: 'inherit',
                 }
               }}
             />
@@ -627,7 +694,16 @@ const Navbar = () => {
             <Tooltip title={t('common.navbar.themeToggleTooltip')}>
               <IconButton 
                 color="inherit" 
-                sx={{ ml: isMobile ? 0.5 : 1 }}
+                sx={{ 
+                  ml: isMobile ? 0.5 : 1,
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    background: mode === 'dark'
+                      ? 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))'
+                      : 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+                  }
+                }}
                 onClick={toggleTheme}
                 aria-label={t('common.navbar.themeToggleTooltip')}
               >
@@ -651,8 +727,24 @@ const Navbar = () => {
                 color="inherit" 
                 sx={{ 
                   border: '2px solid',
-                  borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                  padding: isMobile ? '2px' : '4px'
+                  borderColor: mode === 'dark' 
+                    ? 'rgba(59, 130, 246, 0.3)' // blue-500/30
+                    : 'rgba(29, 78, 216, 0.3)', // blue-700/30
+                  padding: isMobile ? '2px' : '4px',
+                  background: mode === 'dark'
+                    ? 'rgba(55, 65, 81, 0.3)' // gray-700/30
+                    : 'rgba(241, 245, 249, 0.8)', // slate-100/80
+                  backdropFilter: 'blur(4px)',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'scale(1.05)',
+                    borderColor: mode === 'dark'
+                      ? 'rgba(59, 130, 246, 0.6)'
+                      : 'rgba(29, 78, 216, 0.6)',
+                    boxShadow: mode === 'dark'
+                      ? '0 0 20px rgba(59, 130, 246, 0.3)'
+                      : '0 0 20px rgba(29, 78, 216, 0.2)',
+                  }
                 }}
               >
                 <Avatar 
@@ -671,15 +763,16 @@ const Navbar = () => {
                       position: 'absolute',
                       bottom: -4,
                       right: -4,
-                      backgroundColor: mode === 'dark' ? '#304FFE' : '#1565C0',
+                      background: 'linear-gradient(to right, #3b82f6, #8b5cf6)', // blue to purple gradient
                       borderRadius: '50%',
                       width: 16,
                       height: 16,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      border: '1px solid',
-                      borderColor: mode === 'dark' ? '#1A1A2E' : '#fff',
+                      border: '2px solid',
+                      borderColor: mode === 'dark' ? '#1f2937' : '#fff',
+                      boxShadow: '0 0 10px rgba(59, 130, 246, 0.4)',
                     }}
                   >
                     <AdminIcon fontSize="inherit" sx={{ fontSize: 10, color: '#fff' }} />
@@ -694,14 +787,34 @@ const Navbar = () => {
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
                 PaperProps={{
-                  elevation: 3,
+                  elevation: 0,
                   sx: {
                     mt: 1.5,
-                    backgroundColor: mode === 'dark' ? '#182136' : '#ffffff',
+                    background: mode === 'dark'
+                      ? 'rgba(31, 41, 55, 0.95)' // gray-800/95
+                      : 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(8px)',
                     backgroundImage: 'none',
                     border: '1px solid',
-                    borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-                    minWidth: 200
+                    borderColor: mode === 'dark'
+                      ? 'rgba(55, 65, 81, 0.5)'
+                      : 'rgba(148, 163, 184, 0.3)',
+                    borderRadius: '12px',
+                    boxShadow: mode === 'dark'
+                      ? '0 25px 50px rgba(0, 0, 0, 0.25)'
+                      : '0 10px 25px rgba(0, 0, 0, 0.1)',
+                    minWidth: 200,
+                    '& .MuiMenuItem-root': {
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      borderRadius: '8px',
+                      margin: '4px 8px',
+                      '&:hover': {
+                        background: mode === 'dark'
+                          ? 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))'
+                          : 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+                        transform: 'translateX(4px)',
+                      }
+                    }
                   }
                 }}
               >

@@ -103,19 +103,88 @@ code {
   background-color: rgba(25, 118, 210, 0.2);
 }
 
-/* Efekty przejścia dla komponentów */
+/* Efekty przejścia dla komponentów - customer-portal style */
 button, a, input, select {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Ustawienia globalne dla kontenerów i elementów interfejsu */
+button:hover, a:hover {
+  transform: scale(1.02);
+}
+
+/* Card hover effects jak w customer-portal */
 .card-hover {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
 }
 
 .card-hover:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px) scale(1.01);
   box-shadow: var(--box-shadow);
+}
+
+/* Gradient button effects */
+.gradient-button {
+  background: linear-gradient(to right, #3b82f6, #8b5cf6);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gradient-button:hover {
+  background: linear-gradient(to right, #2563eb, #7c3aed);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  transform: scale(1.02);
+}
+
+/* Backdrop blur effects */
+.backdrop-blur {
+  backdrop-filter: blur(8px);
+}
+
+/* Glass morphism effects */
+.glass-morphism {
+  background: var(--bg-paper);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--divider);
+  border-radius: var(--border-radius);
+}
+
+/* Responsive utility classes jak w customer-portal */
+.space-y-responsive > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  .space-y-responsive > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.5rem;
+  }
+}
+
+/* Touch-friendly buttons */
+.btn-touch {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Responsive containers */
+.container-responsive {
+  padding-left: 1rem;
+  padding-right: 1rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 640px) {
+  .container-responsive {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-responsive {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
 }
 
 /* Pomocnicze klasy flexbox */
@@ -184,10 +253,32 @@ button, a, input, select {
   }
 }
 
-/* Animacje */
+/* Animacje jak w customer-portal */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -30px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @keyframes slideInUp {
@@ -201,6 +292,44 @@ button, a, input, select {
   }
 }
 
+@keyframes pulse {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 0.05;
+  }
+  50% { 
+    transform: scale(1.1);
+    opacity: 0.08;
+  }
+}
+
+@keyframes glow {
+  0%, 100% { 
+    text-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% { 
+    text-shadow: 0 0 30px rgba(59, 130, 246, 0.6), 0 0 40px rgba(139, 92, 246, 0.3);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Animation classes */
+.animate-fadeIn { 
+  animation: fadeIn 0.6s ease-out both; 
+}
+
+.animate-fadeInDown { 
+  animation: fadeInDown 0.6s ease-out both; 
+}
+
+.animate-fadeInUp { 
+  animation: fadeInUp 0.6s ease-out both; 
+}
+
 .fade-in {
   animation: fadeIn 0.3s ease forwards;
 }
@@ -208,6 +337,23 @@ button, a, input, select {
 .slide-in-up {
   animation: slideInUp 0.4s ease forwards;
 }
+
+.animate-glow { 
+  animation: glow 2s ease-in-out infinite; 
+}
+
+.animate-float { 
+  animation: float 3s ease-in-out infinite; 
+}
+
+/* Animation delays */
+.animation-delay-300 { animation-delay: 0.3s; }
+.animation-delay-500 { animation-delay: 0.5s; }
+.animation-delay-700 { animation-delay: 0.7s; }
+.animation-delay-1000 { animation-delay: 1s; }
+.animation-delay-1500 { animation-delay: 1.5s; }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
 
 /* Drukowanie */
 @media print {
