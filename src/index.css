@@ -355,27 +355,32 @@ button:hover, a:hover {
 .animation-delay-2000 { animation-delay: 2s; }
 .animation-delay-4000 { animation-delay: 4s; }
 
-/* Enhanced table animations - customer-portal style */
-@keyframes tableRowSlideIn {
+/* Enhanced Table Animations - Customer Portal Style */
+.table-fade-in {
+  animation: tableSlideIn 0.6s ease-out;
+}
+
+@keyframes tableSlideIn {
   from {
     opacity: 0;
-    transform: translateX(-20px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
-@keyframes tableDataPulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
+.table-row-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.table-row-hover:hover {
+  transform: scale(1.001);
+  z-index: 1;
+}
+
+/* Loading animation dla tabel */
 @keyframes tableShimmer {
   0% {
     background-position: -200px 0;
@@ -385,75 +390,100 @@ button:hover, a:hover {
   }
 }
 
-@keyframes tableRowHighlight {
+.table-loading {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background-size: 200px 100%;
+  animation: tableShimmer 1.5s infinite;
+}
+
+/* Table cell animation effects */
+.table-cell-highlight {
+  animation: cellHighlight 0.8s ease-out;
+}
+
+@keyframes cellHighlight {
   0% {
-    background-color: transparent;
-  }
-  50% {
-    background-color: rgba(59, 130, 246, 0.1);
+    background-color: rgba(59, 130, 246, 0.3);
   }
   100% {
     background-color: transparent;
   }
 }
 
-/* Table animation classes */
-.table-row-enter {
-  animation: tableRowSlideIn 0.3s ease-out forwards;
+/* Table sorting animation */
+.table-sort-animation {
+  animation: tableSortPulse 0.4s ease-in-out;
 }
 
-.table-data-loading {
-  animation: tableDataPulse 1.5s ease-in-out infinite;
+@keyframes tableSortPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
-.table-shimmer {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.1),
-    transparent
-  );
-  background-size: 200px 100%;
-  animation: tableShimmer 1.5s infinite;
+/* Table expand/collapse animation */
+.table-expand {
+  animation: tableExpand 0.5s ease-out;
 }
 
-.table-row-highlight {
-  animation: tableRowHighlight 2s ease-in-out;
+@keyframes tableExpand {
+  0% {
+    max-height: 0;
+    opacity: 0;
+  }
+  100% {
+    max-height: 500px;
+    opacity: 1;
+  }
 }
 
-/* Enhanced table utilities */
-.table-hover-scale {
-  transition: transform 0.2s ease;
-}
-
-.table-hover-scale:hover {
-  transform: scale(1.02);
-}
-
-.table-cell-gradient {
-  background: linear-gradient(135deg, transparent, rgba(59, 130, 246, 0.05));
-  transition: background 0.3s ease;
-}
-
-.table-header-glass {
-  backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Table loading states */
+/* Loading skeleton dla tabel */
 .table-skeleton {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.1) 25%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.1) 75%
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
   );
-  background-size: 200% 100%;
-  animation: tableShimmer 1.5s infinite;
-  border-radius: 4px;
-  height: 1rem;
-  margin: 0.25rem 0;
+  background-size: 200px 100%;
+  animation: skeletonLoading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeletonLoading {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+/* Responsive table scroll indicator */
+.table-scroll-indicator {
+  position: relative;
+}
+
+.table-scroll-indicator::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.table-scroll-indicator.scrollable::after {
+  opacity: 1;
 }
 
 /* Drukowanie */
@@ -465,5 +495,14 @@ button:hover, a:hover {
   
   button, .no-print {
     display: none !important;
+  }
+  
+  /* Disable table animations during print */
+  .table-fade-in,
+  .table-row-hover,
+  .table-sort-animation {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
   }
 }

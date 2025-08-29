@@ -1,8 +1,51 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const BackgroundEffects = () => {
   const { mode } = useTheme();
+  
+  const animationStyles = useMemo(() => ({
+    lightPulse: {
+      animationName: 'lightPulse',
+      animationDuration: '3s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite'
+    },
+    lightPulseDelay1: {
+      animationName: 'lightPulse',
+      animationDuration: '4s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+      animationDelay: '1s'
+    },
+    lightPulseDelay2: {
+      animationName: 'lightPulse',
+      animationDuration: '3s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+      animationDelay: '2s'
+    },
+    darkPulse: {
+      animationName: 'darkPulse',
+      animationDuration: '2s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite'
+    },
+    darkPulseDelay1: {
+      animationName: 'darkPulse',
+      animationDuration: '3s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+      animationDelay: '1s'
+    },
+    darkPulseDelay2: {
+      animationName: 'darkPulse',
+      animationDuration: '2s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+      animationDelay: '2s'
+    }
+  }), []);
 
   if (mode === 'light') {
     return (
@@ -41,7 +84,10 @@ const BackgroundEffects = () => {
             mixBlendMode: 'normal',
             filter: 'blur(40px)',
             opacity: 0.02,
-            animation: 'lightPulse 3s ease-in-out infinite'
+            animationName: 'lightPulse',
+            animationDuration: '3s',
+            animationTimingFunction: 'ease-in-out',
+            animationIterationCount: 'infinite'
           }} />
           
           <div style={{
@@ -55,7 +101,10 @@ const BackgroundEffects = () => {
             mixBlendMode: 'normal',
             filter: 'blur(40px)',
             opacity: 0.015,
-            animation: 'lightPulse 3s ease-in-out infinite',
+            animationName: 'lightPulse',
+            animationDuration: '3s',
+            animationTimingFunction: 'ease-in-out',
+            animationIterationCount: 'infinite',
             animationDelay: '2s'
           }} />
           
@@ -70,7 +119,10 @@ const BackgroundEffects = () => {
             mixBlendMode: 'normal',
             filter: 'blur(40px)',
             opacity: 0.01,
-            animation: 'lightPulse 4s ease-in-out infinite',
+            animationName: 'lightPulse',
+            animationDuration: '4s',
+            animationTimingFunction: 'ease-in-out',
+            animationIterationCount: 'infinite',
             animationDelay: '1s'
           }} />
         </div>
@@ -126,7 +178,10 @@ const BackgroundEffects = () => {
           mixBlendMode: 'multiply',
           filter: 'blur(40px)',
           opacity: 0.05,
-          animation: 'darkPulse 2s ease-in-out infinite'
+          animationName: 'darkPulse',
+          animationDuration: '2s',
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite'
         }} />
         
         <div style={{
@@ -140,7 +195,10 @@ const BackgroundEffects = () => {
           mixBlendMode: 'multiply',
           filter: 'blur(40px)',
           opacity: 0.05,
-          animation: 'darkPulse 2s ease-in-out infinite',
+          animationName: 'darkPulse',
+          animationDuration: '2s',
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite',
           animationDelay: '2s'
         }} />
         
@@ -155,7 +213,10 @@ const BackgroundEffects = () => {
           mixBlendMode: 'multiply',
           filter: 'blur(40px)',
           opacity: 0.03,
-          animation: 'darkPulse 3s ease-in-out infinite',
+          animationName: 'darkPulse',
+          animationDuration: '3s',
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite',
           animationDelay: '1s'
         }} />
       </div>

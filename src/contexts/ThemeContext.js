@@ -280,23 +280,11 @@ const createDarkTheme = () => {
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: 'none',
+          boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.2)',
           backgroundImage: 'none',
           backgroundColor: 'rgba(31, 41, 55, 0.9)',
           backdropFilter: 'blur(8px)',
-          borderBottom: '1px solid rgba(55, 65, 81, 0.5)',
-          position: 'relative',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'linear-gradient(to right, rgba(31, 41, 55, 0.5), rgba(55, 65, 81, 0.3))',
-            pointerEvents: 'none',
-            zIndex: -1,
-          },
+          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
         },
       },
     },
@@ -318,58 +306,11 @@ const createDarkTheme = () => {
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
           boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.15)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'all 0.3s ease',
           '&:hover': {
-            transform: 'translateY(-2px) scale(1.01)',
-            boxShadow: '0px 25px 50px rgba(0, 0, 0, 0.3)',
-            borderColor: 'rgba(59, 130, 246, 0.4)',
-          },
-        },
-      },
-    },
-    // Customer-portal style button enhancements
-    MuiButton: {
-      ...getCommonComponents(theme).MuiButton,
-      styleOverrides: {
-        ...getCommonComponents(theme).MuiButton.styleOverrides,
-        root: {
-          ...getCommonComponents(theme).MuiButton.styleOverrides.root,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            transform: 'scale(1.02)',
-          },
-        },
-        contained: {
-          ...getCommonComponents(theme).MuiButton.styleOverrides.contained,
-          background: 'linear-gradient(to right, #3b82f6, #8b5cf6)', // blue to purple gradient
-          '&:hover': {
-            background: 'linear-gradient(to right, #2563eb, #7c3aed)',
-            boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)',
-          },
-        },
-      },
-    },
-    MuiIconButton: {
-      ...getCommonComponents(theme).MuiIconButton,
-      styleOverrides: {
-        ...getCommonComponents(theme).MuiIconButton.styleOverrides,
-        root: {
-          ...getCommonComponents(theme).MuiIconButton.styleOverrides.root,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            transform: 'scale(1.05)',
-            background: 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))',
-          },
-        },
-      },
-    },
-    MuiMenuItem: {
-      styleOverrides: {
-        root: {
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            background: 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))',
-            transform: 'translateX(4px)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.25)',
+            borderColor: 'rgba(59, 130, 246, 0.3)',
           },
         },
       },
@@ -416,93 +357,12 @@ const createDarkTheme = () => {
         },
       },
     },
-    // Enhanced Table Styling - customer-portal style
     MuiTableContainer: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(31, 41, 55, 0.8)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(55, 65, 81, 0.5)',
-          borderRadius: '12px',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.25)',
-          overflow: 'hidden',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-            borderColor: 'rgba(59, 130, 246, 0.3)',
-          },
-        },
-      },
-    },
-    MuiTable: {
-      styleOverrides: {
-        root: {
-          borderCollapse: 'separate',
-          borderSpacing: 0,
-        },
-      },
-    },
-    MuiTableHead: {
-      styleOverrides: {
-        root: {
-          background: 'linear-gradient(to right, rgba(31, 41, 55, 0.9), rgba(55, 65, 81, 0.9))',
-          '& .MuiTableCell-root': {
-            borderBottom: '2px solid rgba(59, 130, 246, 0.3)',
-          },
-        },
-      },
-    },
-    MuiTableBody: {
-      styleOverrides: {
-        root: {
-          '& .MuiTableRow-root': {
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              backgroundColor: 'rgba(55, 65, 81, 0.8)',
-              transform: 'scale(1.01)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              '& .MuiTableCell-root': {
-                color: '#ffffff',
-              },
-            },
-            '&:nth-of-type(even)': {
-              backgroundColor: 'rgba(55, 65, 81, 0.3)',
-            },
-          },
-        },
-      },
-    },
-    MuiTableRow: {
-      styleOverrides: {
-        root: {
-          '&.Mui-selected': {
-            backgroundColor: 'rgba(59, 130, 246, 0.2) !important',
-            '&:hover': {
-              backgroundColor: 'rgba(59, 130, 246, 0.3) !important',
-            },
-          },
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderBottom: '1px solid rgba(55, 65, 81, 0.5)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          padding: '12px 16px',
-        },
-        head: {
-          fontWeight: 'bold',
-          color: '#ffffff',
-          fontSize: '0.875rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          background: 'transparent',
-        },
-        body: {
-          color: 'rgba(255, 255, 255, 0.9)',
-          fontSize: '0.875rem',
+          backgroundColor: 'rgba(30, 41, 59, 0.8)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
         },
       },
     },
@@ -688,59 +548,12 @@ const createLightTheme = () => {
           backgroundColor: 'rgba(255, 255, 255, 0.8)',
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(0, 0, 0, 0.05)',
-          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.05)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.08)',
+          transition: 'all 0.3s ease',
           '&:hover': {
-            transform: 'translateY(-2px) scale(1.01)',
-            boxShadow: '0px 20px 40px rgba(0, 0, 0, 0.1)',
-            borderColor: 'rgba(29, 78, 216, 0.3)',
-          },
-        },
-      },
-    },
-    // Customer-portal style button enhancements for light theme
-    MuiButton: {
-      ...getCommonComponents(theme).MuiButton,
-      styleOverrides: {
-        ...getCommonComponents(theme).MuiButton.styleOverrides,
-        root: {
-          ...getCommonComponents(theme).MuiButton.styleOverrides.root,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            transform: 'scale(1.02)',
-          },
-        },
-        contained: {
-          ...getCommonComponents(theme).MuiButton.styleOverrides.contained,
-          background: 'linear-gradient(to right, #1d4ed8, #7c3aed)',
-          '&:hover': {
-            background: 'linear-gradient(to right, #1e40af, #6d28d9)',
-            boxShadow: '0 0 20px rgba(29, 78, 216, 0.4)',
-          },
-        },
-      },
-    },
-    MuiIconButton: {
-      ...getCommonComponents(theme).MuiIconButton,
-      styleOverrides: {
-        ...getCommonComponents(theme).MuiIconButton.styleOverrides,
-        root: {
-          ...getCommonComponents(theme).MuiIconButton.styleOverrides.root,
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            transform: 'scale(1.05)',
-            background: 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
-          },
-        },
-      },
-    },
-    MuiMenuItem: {
-      styleOverrides: {
-        root: {
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            background: 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
-            transform: 'translateX(4px)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.15)',
+            borderColor: 'rgba(25, 118, 210, 0.3)',
           },
         },
       },
@@ -868,96 +681,6 @@ const createLightTheme = () => {
           fontWeight: 500,
           '&.Mui-selected': {
             color: theme.palette.primary.main,
-        },
-      },
-    },
-    // Enhanced Table Styling - customer-portal style for light theme
-    MuiTableContainer: {
-      styleOverrides: {
-        root: {
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(148, 163, 184, 0.3)',
-          borderRadius: '12px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-          overflow: 'hidden',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-            borderColor: 'rgba(29, 78, 216, 0.3)',
-          },
-        },
-      },
-    },
-    MuiTable: {
-      styleOverrides: {
-        root: {
-          borderCollapse: 'separate',
-          borderSpacing: 0,
-        },
-      },
-    },
-    MuiTableHead: {
-      styleOverrides: {
-        root: {
-          background: 'linear-gradient(to right, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.9))',
-          '& .MuiTableCell-root': {
-            borderBottom: '2px solid rgba(29, 78, 216, 0.2)',
-          },
-        },
-      },
-    },
-    MuiTableBody: {
-      styleOverrides: {
-        root: {
-          '& .MuiTableRow-root': {
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              backgroundColor: 'rgba(241, 245, 249, 0.8)',
-              transform: 'scale(1.01)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-              '& .MuiTableCell-root': {
-                color: 'rgba(15, 23, 42, 0.9)',
-              },
-            },
-            '&:nth-of-type(even)': {
-              backgroundColor: 'rgba(248, 250, 252, 0.5)',
-            },
-          },
-        },
-      },
-    },
-    MuiTableRow: {
-      styleOverrides: {
-        root: {
-          '&.Mui-selected': {
-            backgroundColor: 'rgba(29, 78, 216, 0.1) !important',
-            '&:hover': {
-              backgroundColor: 'rgba(29, 78, 216, 0.15) !important',
-            },
-          },
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderBottom: '1px solid rgba(148, 163, 184, 0.3)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          padding: '12px 16px',
-        },
-        head: {
-          fontWeight: 'bold',
-          color: 'rgba(15, 23, 42, 0.9)',
-          fontSize: '0.875rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          background: 'transparent',
-        },
-        body: {
-          color: 'rgba(51, 65, 85, 0.8)',
-          fontSize: '0.875rem',
         },
       },
     },

@@ -233,11 +233,11 @@ const Sidebar = ({ onToggle }) => {
     }
     
     // Ustawia początkowy stan submenu na podstawie aktualnej ścieżki
-    if (location.pathname.startsWith('/production')) {
+    if (location.pathname.startsWith('/production') || location.pathname.startsWith('/recipes')) {
       setOpenSubmenu(t('production'));
-    } else if (location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers')) {
+    } else if (location.pathname.startsWith('/orders') || location.pathname.startsWith('/customers') || location.pathname.startsWith('/invoices') || location.pathname.startsWith('/sales/')) {
       setOpenSubmenu(t('sales'));
-    } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders')) {
+    } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders') || location.pathname.startsWith('/suppliers')) {
       setOpenSubmenu(t('inventory'));
     } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
       setOpenSubmenu(t('dashboard'));
@@ -294,27 +294,28 @@ const Sidebar = ({ onToggle }) => {
     return location.pathname.startsWith(path);
   };
   
-  const isMenuActive = (menuPath, children = null) => {
+  const isMenuActive = (menuPath) => {
+    // Specjalne przypadki dla głównych sekcji
     if (menuPath === '/') {
       return location.pathname === '/' || location.pathname.startsWith('/analytics');
+    } else if (menuPath === '/sales') {
+      // Sales obejmuje wszystkie ścieżki związane ze sprzedażą
+      return location.pathname.startsWith('/customers') || 
+             location.pathname.startsWith('/orders') || 
+             location.pathname.startsWith('/invoices') ||
+             location.pathname.startsWith('/sales/');
+    } else if (menuPath === '/production') {
+      // Production obejmuje wszystkie ścieżki związane z produkcją
+      return location.pathname.startsWith('/production') || 
+             location.pathname.startsWith('/recipes');
+    } else if (menuPath === '/inventory') {
+      // Inventory obejmuje wszystkie ścieżki związane z magazynem
+      return location.pathname.startsWith('/inventory') || 
+             location.pathname.startsWith('/purchase-orders') ||
+             location.pathname.startsWith('/suppliers');
+    } else {
+      return location.pathname.startsWith(menuPath);
     }
-    
-    // Sprawdź czy aktualny path zaczyna się od menuPath
-    if (location.pathname.startsWith(menuPath)) {
-      return true;
-    }
-    
-    // Sprawdź czy aktualny path pasuje do któregoś z children
-    if (children && Array.isArray(children)) {
-      return children.some(child => {
-        if (child.path === '/') {
-          return location.pathname === '/';
-        }
-        return location.pathname.startsWith(child.path);
-      });
-    }
-    
-    return false;
   };
   
   const handleSubmenuClick = (menuTitle) => {
@@ -371,7 +372,7 @@ const Sidebar = ({ onToggle }) => {
       id: 'sales',
       text: t('sales'),
       icon: <CustomersIcon />,
-      path: '/customers',
+      path: '/sales', // zmiana na bardziej ogólną ścieżkę
       hasSubmenu: true,
       children: [
         { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
@@ -559,19 +560,17 @@ const Sidebar = ({ onToggle }) => {
             <React.Fragment key={item.text}>
               <StyledListItemButton 
                 onClick={() => handleSubmenuClick(item.text)} 
-                selected={isMenuActive(item.path, item.children)}
+                selected={isMenuActive(item.path)}
                 role="menuitem"
                 aria-haspopup="true"
                 aria-expanded={openSubmenu === item.text}
-                sx={{
-                  backgroundColor: isMenuActive(item.path, item.children) ? alpha('#3f51b5', 0.15) : 'transparent',
-                  color: isMenuActive(item.path, item.children) ? 'primary.main' : 'inherit'
-                }}
               >
                 <Tooltip title={item.text} placement="right" arrow>
                   <ListItemIcon sx={{ 
                     minWidth: 36, 
-                    color: isMenuActive(item.path, item.children) ? 'primary.main' : 'inherit' 
+                    color: isMenuActive(item.path) 
+                      ? '#ffffff' // białe ikony dla aktywnych sekcji w obu motywach
+                      : 'inherit' 
                   }}>
                     {item.badge ? (
                       <StyledBadge badgeContent={item.badge} color="primary">
@@ -588,8 +587,10 @@ const Sidebar = ({ onToggle }) => {
                       primary={item.text} 
                       primaryTypographyProps={{ 
                         fontSize: '0.875rem',
-                        fontWeight: isMenuActive(item.path, item.children) ? 'medium' : 'normal',
-                        color: isMenuActive(item.path, item.children) ? 'primary.main' : 'inherit'
+                        fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
+                        color: isMenuActive(item.path) 
+                          ? (mode === 'dark' ? '#ffffff' : '#ffffff') // zawsze biały dla selected w obu motywach
+                          : 'inherit'
                       }} 
                     />
                     {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
@@ -643,7 +644,10 @@ const Sidebar = ({ onToggle }) => {
                           primary={subItem.text} 
                           primaryTypographyProps={{ 
                             fontSize: '0.875rem',
-                            fontWeight: subItem.path && location.pathname === subItem.path ? 'medium' : 'normal'
+                            fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
+                            color: subItem.path && location.pathname === subItem.path
+                              ? (mode === 'dark' ? '#ffffff' : '#ffffff') // biały tekst dla selected sub-items
+                              : 'inherit'
                           }} 
                         />
                       )}
@@ -677,8 +681,11 @@ const Sidebar = ({ onToggle }) => {
                   primaryTypographyProps={{ 
                     fontSize: '0.875rem',
                     fontWeight: item.path === '/' 
-                      ? location.pathname === '/' ? 'medium' : 'normal'
-                      : isActive(item.path) ? 'medium' : 'normal'
+                      ? location.pathname === '/' ? 'bold' : 'normal'
+                      : isActive(item.path) ? 'bold' : 'normal',
+                    color: (item.path === '/' ? location.pathname === '/' : isActive(item.path))
+                      ? (mode === 'dark' ? '#ffffff' : '#ffffff') // biały tekst dla selected items
+                      : 'inherit'
                   }} 
                 />
               )}
