@@ -404,7 +404,7 @@ const TaskDetailsPage = () => {
     if (loadedTabs.productionPlan || !task?.id) return;
     
     try {
-      console.log('🔄 Loading Production Plan data...');
+      // Ładowanie danych planu produkcji
       
       // Historia produkcji
       const history = await getProductionHistory(task.id);
@@ -416,9 +416,9 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
-      console.log('✅ Production Plan data loaded');
+      // Plan produkcji załadowany
     } catch (error) {
-      console.error('❌ Error loading Production Plan data:', error);
+      console.error('Błąd ładowania planu produkcji:', error.message);
     }
   }, [loadedTabs.productionPlan, task?.id, availableMachines.length]);
 
@@ -426,13 +426,13 @@ const TaskDetailsPage = () => {
     if (loadedTabs.forms || !task?.moNumber) return;
     
     try {
-      console.log('🔄 Loading Forms data...');
+      // Ładowanie danych formularzy
       
       const responses = await fetchFormResponsesOptimized(task.moNumber);
       setFormResponses(responses);
       
       setLoadedTabs(prev => ({ ...prev, forms: true }));
-      console.log('✅ Forms data loaded');
+      // Formularze załadowane
     } catch (error) {
       console.error('❌ Error loading Forms data:', error);
       setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
@@ -443,7 +443,7 @@ const TaskDetailsPage = () => {
     if (loadedTabs.changeHistory || !task?.statusHistory?.length) return;
     
     try {
-      console.log('🔄 Loading Change History data...');
+      // Ładowanie historii zmian
       
       // Pobierz nazwy użytkowników dla historii zmian (jeśli nie zostały załadowane)
       const userIds = task.statusHistory.map(change => change.changedBy).filter(id => id);
@@ -455,7 +455,7 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, changeHistory: true }));
-      console.log('✅ Change History data loaded');
+      // Historia zmian załadowana
     } catch (error) {
       console.error('❌ Error loading Change History data:', error);
     }
@@ -465,7 +465,7 @@ const TaskDetailsPage = () => {
     if (loadedTabs.endProductReport) return;
     
     try {
-      console.log('🔄 Loading End Product Report data...');
+      // Ładowanie raportu produktu końcowego
       
       // Dane firmy (jeśli nie zostały załadowane)
       if (!companyData) {
@@ -480,7 +480,7 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, endProductReport: true }));
-      console.log('✅ End Product Report data loaded');
+      // Raport produktu końcowego załadowany
     } catch (error) {
       console.error('❌ Error loading End Product Report data:', error);
     }
@@ -2796,29 +2796,9 @@ const TaskDetailsPage = () => {
     if (userId.length > 10) {
       // Pobierz dane użytkownika asynchronicznie tylko raz
       if (!userNames[userId] && !userNames[`loading_${userId}`]) {
-        // Oznacz jako ładujący, aby uniknąć wielokrotnych wywołań
-        setUserNames(prev => ({
-          ...prev,
-          [`loading_${userId}`]: true
-        }));
-        
-        getUsersDisplayNames([userId]).then(names => {
-          if (names && names[userId]) {
-            setUserNames(prev => {
-              const newState = { ...prev };
-              delete newState[`loading_${userId}`]; // Usuń flagę ładowania
-              newState[userId] = names[userId];
-              return newState;
-            });
-          }
-        }).catch(error => {
-          console.error('Błąd podczas pobierania nazwy użytkownika:', error);
-          setUserNames(prev => {
-            const newState = { ...prev };
-            delete newState[`loading_${userId}`]; // Usuń flagę ładowania
-            return newState;
-          });
-        });
+        // Nie wywołuj setState w render - zostanie załadowane przez useEffect
+        // setUserNames jest przeniesione do useEffect
+        // Ładowanie nazw przeniesione do useEffect
       }
       
       // Tymczasowo zwróć skróconą wersję ID
@@ -3798,7 +3778,7 @@ const TaskDetailsPage = () => {
                 totalCost += batchQuantity * batchUnitPrice;
                 totalQuantity += batchQuantity;
                 
-                console.log(`Batch ${batchData.batchNumber}: quantity=${batchQuantity}, unitPrice=${batchUnitPrice}`);
+                // Batch ${batchData.batchNumber}: ${batchQuantity} × ${batchUnitPrice}€
               }
             } catch (error) {
               console.error(`Błąd podczas pobierania danych partii ${batchReservation.batchId}:`, error);
@@ -4207,7 +4187,7 @@ const TaskDetailsPage = () => {
   // ZUNIFIKOWANA FUNKCJA do obliczania wszystkich kosztów (kompatybilna z productionService)
   const calculateAllCosts = async (customConsumedMaterials = null, customMaterialBatches = null) => {
     try {
-      console.log('🔍 [UI-COSTS] Rozpoczynam zunifikowane obliczanie kosztów w UI');
+      // Obliczanie kosztów w UI
       
       // Import funkcji matematycznych dla precyzyjnych obliczeń
       const { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } = await import('../../utils/mathUtils');
@@ -4226,7 +4206,7 @@ const TaskDetailsPage = () => {
       const consumedCostDetails = {};
       
       if (currentConsumedMaterials.length > 0) {
-        console.log(`🔍 [UI-COSTS] Przetwarzam ${currentConsumedMaterials.length} skonsumowanych materiałów`);
+        // Przetwarzanie skonsumowanych materiałów
         
         // Pobierz aktualne ceny partii dla skonsumowanych materiałów
         const uniqueBatchIds = [...new Set(
@@ -4235,7 +4215,7 @@ const TaskDetailsPage = () => {
             .map(consumed => consumed.batchId)
         )];
         
-        console.log(`🔍 [UI-COSTS] Pobieranie aktualnych cen dla ${uniqueBatchIds.length} skonsumowanych partii`);
+        // Pobieranie cen partii
         
         const consumedBatchPricesCache = {};
         const batchPromises = uniqueBatchIds.map(async (batchId) => {
@@ -4246,7 +4226,7 @@ const TaskDetailsPage = () => {
               const batchData = batchDoc.data();
               const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
               consumedBatchPricesCache[batchId] = price;
-              console.log(`🔍 [UI-COSTS] Pobrana aktualna cena skonsumowanej partii ${batchId}: ${price}€`);
+              // Pobrana cena partii ${batchId}
             } else {
               consumedBatchPricesCache[batchId] = 0;
               console.warn(`⚠️ [UI-COSTS] Nie znaleziono partii ${batchId}`);
@@ -4292,7 +4272,7 @@ const TaskDetailsPage = () => {
           const quantity = fixFloatingPointPrecision(parseFloat(consumed.quantity) || 0);
           const cost = preciseMultiply(quantity, unitPrice);
 
-          console.log(`🔍 [UI-COSTS] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (${priceSource}), koszt=${cost.toFixed(4)}€`);
+          // Obliczono koszt dla ${material.name}
 
           consumedCostDetails[materialId].totalQuantity = preciseAdd(
             consumedCostDetails[materialId].totalQuantity, 
@@ -4330,7 +4310,7 @@ const TaskDetailsPage = () => {
       const reservedCostDetails = {};
 
       if (materials.length > 0) {
-        console.log(`🔍 [UI-COSTS] Przetwarzam ${materials.length} materiałów pod kątem zarezerwowanych partii`);
+        // Przetwarzanie zarezerwowanych partii
         
         // Pobierz wszystkie unikalne ID partii z zarezerwowanych materiałów
         const allReservedBatchIds = [];
@@ -4343,7 +4323,7 @@ const TaskDetailsPage = () => {
         });
         
         const uniqueReservedBatchIds = [...new Set(allReservedBatchIds)];
-        console.log(`🔍 [UI-COSTS] Pobieranie aktualnych cen dla ${uniqueReservedBatchIds.length} zarezerwowanych partii`);
+        // Pobieranie cen zarezerwowanych partii
         
         const batchPricesCache = {};
         
@@ -4356,7 +4336,7 @@ const TaskDetailsPage = () => {
               const batchData = batchDoc.data();
               const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
               batchPricesCache[batchId] = price;
-              console.log(`🔍 [UI-COSTS] Pobrana aktualna cena zarezerwowanej partii ${batchId}: ${price}€`);
+              // Pobrana cena zarezerwowanej partii
             } else {
               batchPricesCache[batchId] = 0;
               console.warn(`⚠️ [UI-COSTS] Nie znaleziono zarezerwowanej partii ${batchId}`);
@@ -4389,7 +4369,7 @@ const TaskDetailsPage = () => {
           const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
           
           if (remainingQuantity > 0) {
-            console.log(`🔍 [UI-COSTS] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, liczba partii=${reservedBatches.length}`);
+            // ${material.name}: ${remainingQuantity} pozostałe
             
             // ✅ NOWA LOGIKA: Oblicz średnią ważoną cenę z zarezerwowanych partii (jak w productionService)
             let weightedPriceSum = 0;
@@ -4416,7 +4396,7 @@ const TaskDetailsPage = () => {
                 const weightedPrice = preciseMultiply(batchPrice, batchQuantity);
                 weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
                 totalBatchQuantity = preciseAdd(totalBatchQuantity, batchQuantity);
-                console.log(`🔍 [UI-COSTS] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€ (${priceSource})`);
+                // Partia ${batch.batchId}: ${batchQuantity} × ${batchPrice}€
               }
             });
             
@@ -4429,13 +4409,13 @@ const TaskDetailsPage = () => {
               unitPrice = preciseDivide(weightedPriceSum, totalBatchQuantity);
               materialCost = preciseMultiply(remainingQuantity, unitPrice);
               priceCalculationMethod = 'weighted-average';
-              console.log(`🔍 [UI-COSTS] Materiał ${material.name}: średnia ważona cena=${unitPrice.toFixed(4)}€, koszt=${materialCost.toFixed(4)}€`);
+              // Średnia cena dla ${material.name}: ${unitPrice.toFixed(2)}€
             } else {
               // Fallback na cenę z materiału
               unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice) || 0);
               materialCost = preciseMultiply(remainingQuantity, unitPrice);
               priceCalculationMethod = 'material-fallback';
-              console.log(`🔍 [UI-COSTS] Materiał ${material.name}: cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
+              // Fallback cena dla ${material.name}: ${unitPrice}€
             }
             
             reservedCostDetails[materialId] = {
@@ -4449,7 +4429,7 @@ const TaskDetailsPage = () => {
             
             // Sprawdź czy materiał ma być wliczony do kosztów
             const shouldIncludeInCosts = includeInCosts[material.id] !== false;
-            console.log(`🔍 [UI-COSTS] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
+            // ${material.name} w kosztach: ${shouldIncludeInCosts}
             
             if (shouldIncludeInCosts) {
               totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);

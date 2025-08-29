@@ -369,7 +369,7 @@ const ProductionPlanTab = ({
             onChecklistItemUpdate={onChecklistItemUpdate}
             onPlanUpdate={() => {
               // Opcjonalnie: odśwież dane zadania po aktualizacji planu
-              console.log('Plan mieszań został zaktualizowany');
+              // Plan mieszań został zaktualizowany
             }}
           />
         </Grid>

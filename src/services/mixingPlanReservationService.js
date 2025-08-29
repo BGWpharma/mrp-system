@@ -18,7 +18,14 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { getAllWarehouses } from './inventoryService';
+import { preciseSubtract, fixFloatingPointPrecision } from '../utils/mathUtils';
 const INGREDIENT_LINKS_COLLECTION = 'ingredientReservationLinks';
+
+// Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
+const formatQuantityPrecision = (value, precision = 3) => {
+  if (typeof value !== 'number' || isNaN(value)) return 0;
+  return Math.round(value * Math.pow(10, precision)) / Math.pow(10, precision);
+};
 
 /**
  * Pobiera snapshot informacji o rezerwacji do zapisania w powiązaniu
@@ -117,8 +124,8 @@ const getReservationSnapshot = async (taskId, reservationId) => {
  */
 export const getStandardReservationsForTask = async (taskId) => {
   try {
-    console.log('=== getStandardReservationsForTask ===');
-    console.log('TaskId:', taskId);
+    const functionStartTime = performance.now();
+    // getStandardReservationsForTask dla ${taskId}
     
     // Pobierz zadanie produkcyjne
     const taskRef = doc(db, 'productionTasks', taskId);
@@ -130,15 +137,11 @@ export const getStandardReservationsForTask = async (taskId) => {
     }
     
     const task = taskDoc.data();
-    console.log('Dane zadania:', task);
-    console.log('MaterialBatches:', task.materialBatches);
-    console.log('Materials:', task.materials);
+    // Dane zadania pobrane
     
     // Pobierz wszystkie powiązania składników z rezerwacjami dla tego zadania
     const ingredientLinks = await getIngredientReservationLinks(taskId);
-    console.log('Powiązania składników:', ingredientLinks);
-    
-    // Oblicz łączną powiązaną ilość dla każdej rezerwacji (nowa struktura z tablicami)
+    // Oblicz łączną powiązaną ilość dla każdej rezerwacji
     const linkedQuantities = {};
     Object.values(ingredientLinks).forEach(linksArray => {
       if (Array.isArray(linksArray)) {
@@ -150,8 +153,7 @@ export const getStandardReservationsForTask = async (taskId) => {
         });
       }
     });
-    
-    console.log('Powiązane ilości na rezerwację:', linkedQuantities);
+    // Powiązane ilości obliczone
     
     // Pobierz informacje o magazynach
     const warehouses = await getAllWarehouses();
@@ -160,46 +162,73 @@ export const getStandardReservationsForTask = async (taskId) => {
       return map;
     }, {});
     
-    const reservations = [];
+    // 🚀 OPTYMALIZACJA A: Zbierz wszystkie unikalne batchId do jednego zapytania równoległego
+    const allBatchIds = new Set();
+    const batchToMaterialMapping = new Map();
     
-    // Pobierz informacje o zarezerwowanych partiach z zadania
     if (task.materialBatches) {
       for (const [materialId, batches] of Object.entries(task.materialBatches)) {
-        console.log(`Przetwarzam materiał ${materialId}, partie:`, batches);
-        
+        if (batches) {
+          batches.forEach(batch => {
+            allBatchIds.add(batch.batchId);
+            batchToMaterialMapping.set(batch.batchId, { materialId, batch });
+          });
+        }
+      }
+    }
+    
+    // Pobierz wszystkie szczegóły partii równolegle w jednym czasie
+    // Pobieranie ${allBatchIds.size} partii równolegle
+    const startTime = performance.now();
+    const batchDetailsMap = new Map();
+    
+    if (allBatchIds.size > 0) {
+      const batchPromises = Array.from(allBatchIds).map(async (batchId) => {
+        try {
+          const batchRef = doc(db, 'inventoryBatches', batchId);
+          const batchDoc = await getDoc(batchRef);
+          if (batchDoc.exists()) {
+            batchDetailsMap.set(batchId, batchDoc.data());
+          }
+        } catch (batchError) {
+          console.warn(`Nie udało się pobrać szczegółów partii ${batchId}:`, batchError);
+        }
+      });
+      
+      await Promise.all(batchPromises);
+      const endTime = performance.now();
+      // Pobrano ${batchDetailsMap.size} partii w ${Math.round(endTime - startTime)}ms
+    }
+    
+    const reservations = [];
+    
+    // Teraz przetwórz dane używając już pobranych szczegółów
+    if (task.materialBatches) {
+      for (const [materialId, batches] of Object.entries(task.materialBatches)) {
         // Znajdź informacje o materiale
         const material = task.materials?.find(m => 
           (m.id === materialId || m.inventoryItemId === materialId)
         );
         
-        console.log(`Znaleziony materiał dla ${materialId}:`, material);
-        
         if (material && batches) {
           for (const batch of batches) {
             const reservationId = `${taskId}_${materialId}_${batch.batchId}`;
             const linkedQuantity = linkedQuantities[reservationId] || 0;
-            const baseAvailableQuantity = batch.quantity - (batch.consumedQuantity || 0);
-            const finalAvailableQuantity = baseAvailableQuantity - linkedQuantity;
             
-            console.log(`[DEBUG] Kalkulacja dla ${reservationId}:`, {
-              batchQuantity: batch.quantity,
-              consumedQuantity: batch.consumedQuantity || 0,
-              baseAvailableQuantity,
-              linkedQuantity,
-              finalAvailableQuantity
-            });
+            // Użyj precyzyjnych obliczeń aby uniknąć błędów zmiennoprzecinkowych
+            const baseAvailableQuantity = preciseSubtract(
+              fixFloatingPointPrecision(batch.quantity || 0), 
+              fixFloatingPointPrecision(batch.consumedQuantity || 0)
+            );
+            const finalAvailableQuantity = preciseSubtract(
+              baseAvailableQuantity, 
+              fixFloatingPointPrecision(linkedQuantity)
+            );
             
-            // Pobierz szczegółowe informacje o partii z bazy danych
-            let batchDetails = null;
-            try {
-              const batchRef = doc(db, 'inventoryBatches', batch.batchId);
-              const batchDoc = await getDoc(batchRef);
-              if (batchDoc.exists()) {
-                batchDetails = batchDoc.data();
-              }
-            } catch (batchError) {
-              console.warn(`Nie udało się pobrać szczegółów partii ${batch.batchId}:`, batchError);
-            }
+            // Kalkulacja dla ${reservationId}: ${finalAvailableQuantity} dostępne
+            
+            // Użyj już pobranych szczegółów partii (brak zapytania w pętli!)
+            const batchDetails = batchDetailsMap.get(batch.batchId);
             
             // Przygotuj informacje o magazynie
             const warehouseInfo = batchDetails?.warehouseId ? warehousesMap[batchDetails.warehouseId] : null;
@@ -229,7 +258,7 @@ export const getStandardReservationsForTask = async (taskId) => {
               batchId: batch.batchId,
               batchNumber: batch.batchNumber || batch.lotNumber || 'Brak numeru',
               reservedQuantity: batch.quantity,
-              availableQuantity: Math.max(0, finalAvailableQuantity), // Nie może być ujemna
+              availableQuantity: formatQuantityPrecision(Math.max(0, finalAvailableQuantity), 3), // Nie może być ujemna, z precyzją
               linkedQuantity: linkedQuantity, // Dodaj info o powiązanej ilości
               unit: material.unit || 'szt.',
               type: 'standard',
@@ -241,21 +270,21 @@ export const getStandardReservationsForTask = async (taskId) => {
               expiryDateString: expiryDate ? expiryDate.toLocaleDateString('pl-PL') : null
             };
             
-            console.log(`Rezerwacja ${reservationId}: bazowa dostępna=${baseAvailableQuantity}, powiązana=${linkedQuantity}, finalna dostępna=${finalAvailableQuantity}`);
+            // Rezerwacja ${reservationId}: ${finalAvailableQuantity} finalna
             reservations.push(reservation);
           }
         }
       }
-    } else {
-      console.log('Brak materialBatches w zadaniu');
-    }
+          }
     
-    console.log('Finalne rezerwacje standardowe:', reservations);
-    console.log('=====================================');
+    const functionEndTime = performance.now();
+    const totalTime = Math.round(functionEndTime - functionStartTime);
+    console.log(`⚡ [PERFORMANCE] getStandardReservationsForTask ukończone w ${totalTime}ms`);
+    // Finalne rezerwacje standardowe: ${reservations.length}
     
     return reservations;
   } catch (error) {
-    console.error('Błąd podczas pobierania standardowych rezerwacji:', error);
+    console.error('Błąd pobierania rezerwacji:', error.message);
     return [];
   }
 };

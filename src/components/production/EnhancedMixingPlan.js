@@ -8,7 +8,7 @@
  * - Zarządzanie mapowaniem składników na rezerwacje
  */
 
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, memo, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -68,6 +68,7 @@ import {
   getVirtualReservationsFromSnapshots,
   getLinkedReservationIds
 } from '../../services/mixingPlanReservationService';
+import { debounce } from 'lodash';
 
 const EnhancedMixingPlan = ({ 
   task, 
@@ -146,7 +147,7 @@ const EnhancedMixingPlan = ({
               // Animacja aktualizacji
               setTimeout(() => setIsTaskUpdating(false), 500);
               
-              console.log('🔄 Plan mieszań zaktualizowany w czasie rzeczywistym z kiosku');
+              // Plan mieszań zaktualizowany z kiosku
               showInfo('Plan mieszań został zaktualizowany automatycznie');
             }
           }
@@ -178,7 +179,7 @@ const EnhancedMixingPlan = ({
             // Animacja aktualizacji
             setTimeout(() => setIsLinksUpdating(false), 800);
             
-            console.log('🔄 Powiązania i dostępne ilości zaktualizowane w czasie rzeczywistym');
+            // Powiązania zaktualizowane
             showInfo('Powiązania i dostępne ilości zostały zaktualizowane automatycznie');
           } catch (error) {
             console.error('Błąd podczas aktualizacji powiązań:', error);
@@ -200,12 +201,14 @@ const EnhancedMixingPlan = ({
     return () => {
       if (unsubscribeTask) {
         unsubscribeTask();
-        console.log('🛑 Odłączono listener zadania w planie mieszań');
+        // Odłączono listener zadania
       }
       if (unsubscribeLinks) {
         unsubscribeLinks();
-        console.log('🛑 Odłączono listener powiązań w planie mieszań');
+        // Odłączono listener powiązań
       }
+      // Wyczyść debounced funkcję
+      handleLinkIngredient.cancel();
     };
   }, [task?.id, showInfo]);
 
@@ -213,8 +216,7 @@ const EnhancedMixingPlan = ({
     try {
       setLoading(true);
       
-      console.log('=== ŁADOWANIE DANYCH PLANU MIESZAŃ ===');
-      console.log('ID zadania:', task.id);
+      // Ładowanie danych planu mieszań dla ${task.id}
       
       const [standardRes, virtualRes, links] = await Promise.all([
         getStandardReservationsForTask(task.id), // Dla nowych powiązań
@@ -222,14 +224,9 @@ const EnhancedMixingPlan = ({
         getIngredientReservationLinks(task.id)
       ]);
 
-      console.log('Pobrane rezerwacje standardowe (nowe):', standardRes);
-      console.log('Pobrane wirtualne rezerwacje (snapshoty):', virtualRes);
-      console.log('Pobrane powiązania:', links);
-      
       // Połącz rzeczywiste rezerwacje z wirtualnymi ze snapshotów
       const allReservations = [...standardRes, ...virtualRes];
-      console.log('Wszystkie dostępne rezerwacje:', allReservations);
-      console.log('=====================================');
+      // Dostępne rezerwacje: ${allReservations.length}
 
       setStandardReservations(allReservations);
       setIngredientLinks(links);
@@ -262,8 +259,8 @@ const EnhancedMixingPlan = ({
 
 
 
-  // Otwórz dialog powiązania składnika z rezerwacją
-  const handleLinkIngredient = async (ingredient) => {
+  // 🚀 OPTYMALIZACJA C: Debounced funkcja otwierania dialogu powiązań
+  const handleLinkIngredientImmediate = async (ingredient) => {
     setSelectedIngredient(ingredient);
     
     // Parsuj wymaganą ilość ze składnika
@@ -277,22 +274,16 @@ const EnhancedMixingPlan = ({
     // Oblicz ile jeszcze potrzeba powiązać
     const remainingToLink = Math.max(0, required - alreadyLinkedQuantity);
     
-    console.log('=== KALKULACJA WYMAGANEJ ILOŚCI ===');
-    console.log('Wymagana łącznie:', required);
-    console.log('Już powiązano:', alreadyLinkedQuantity);
-    console.log('Pozostało do powiązania:', remainingToLink);
+    // Kalkulacja: wymagane ${required}, powiązane ${alreadyLinkedQuantity}, pozostałe ${remainingToLink}
     
     // Ustaw domyślną ilość jako pozostałą do powiązania
     setLinkQuantity(remainingToLink > 0 ? remainingToLink.toString() : '0');
     
-    console.log('=== DEBUG POWIĄZANIA ===');
-    console.log('Składnik:', ingredient);
-    console.log('Nazwa składnika:', ingredient.text);
-    console.log('Wszystkie rezerwacje standardowe:', standardReservations);
+    // Debug powiązania dla składnika: ${ingredient.text}
     
     // Pobierz listę już powiązanych rezerwacji dla tego składnika
     const linkedReservationIds = await getLinkedReservationIds(task.id, ingredient.id);
-    console.log('Już powiązane rezerwacje:', linkedReservationIds);
+    // Powiązane rezerwacje: ${linkedReservationIds.length}
     
     // Przygotuj listę dostępnych rezerwacji dla tego składnika
     const ingredientName = ingredient.text;
@@ -314,12 +305,17 @@ const EnhancedMixingPlan = ({
       return matchesIngredient && hasAvailableQuantity && isRealReservation && notAlreadyLinked;
     }).map(res => ({ ...res, type: 'standard' }));
     
-    console.log('Dostępne rezerwacje po filtrowaniu:', available);
-    console.log('========================');
+    // Dostępne po filtrowaniu: ${available.length}
     
     setAvailableReservations(available);
     setLinkDialogOpen(true);
   };
+
+  // Debounced wersja funkcji - zapobiega wielokrotnemu szybkiemu klikaniu
+  const handleLinkIngredient = useMemo(
+    () => debounce(handleLinkIngredientImmediate, 300),
+    [standardReservations, ingredientLinks, task.id]
+  );
 
   // Aktualizuj maksymalną dostępną ilość gdy wybrana zostanie rezerwacja
   useEffect(() => {
@@ -1126,13 +1122,18 @@ const EnhancedMixingPlan = ({
                                 </Typography>
                               )}
                               {(alreadyLinkedQuantity + parseFloat(linkQuantity)) > requiredQuantity && (
-                                <Typography variant="caption" color="warning.main" display="block">
-                                  Łączna ilość będzie większa niż wymagana do mieszania
+                                <Typography variant="caption" color="info.main" display="block">
+                                  Łączna ilość będzie większa niż wymagana do mieszania (nadwyżka: {((alreadyLinkedQuantity + parseFloat(linkQuantity)) - requiredQuantity).toFixed(2)} {selectedReservation.unit || 'szt.'})
                                 </Typography>
                               )}
-                              {remainingToLink <= 0 && (
+                              {remainingToLink <= 0 && alreadyLinkedQuantity === requiredQuantity && (
                                 <Typography variant="caption" color="success.main" display="block">
-                                  Składnik jest już w pełni powiązany
+                                  Składnik jest powiązany w dokładnej wymaganej ilości
+                                </Typography>
+                              )}
+                              {remainingToLink < 0 && (
+                                <Typography variant="caption" color="info.main" display="block">
+                                  Składnik ma nadwyżkę: {Math.abs(remainingToLink).toFixed(2)} {selectedReservation.unit || 'szt.'}
                                 </Typography>
                               )}
                             </>
@@ -1158,14 +1159,9 @@ const EnhancedMixingPlan = ({
                 return true;
               }
               
-              // Sprawdź czy składnik nie jest już w pełni powiązany
-              const existingLinks = ingredientLinks[selectedIngredient?.id] || [];
-              const alreadyLinkedQuantity = existingLinks.reduce((sum, link) => sum + (link.linkedQuantity || 0), 0);
-              const proposedTotal = alreadyLinkedQuantity + parseFloat(linkQuantity);
-              
-              // Zablokuj jeśli łączna ilość znacznie przekraczałaby wymaganą (ponad 10% różnicy)
-              const tolerance = requiredQuantity * 0.1; // 10% tolerancji
-              return proposedTotal > (requiredQuantity + tolerance);
+              // Umożliwienie powiązania większej ilości niż zaplanowano
+              // Walidacja została usunięta - można teraz powiązać dowolną ilość dostępną w rezerwacji
+              return false;
             })()}
           >
             Powiąż
