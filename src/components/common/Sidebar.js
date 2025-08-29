@@ -294,12 +294,27 @@ const Sidebar = ({ onToggle }) => {
     return location.pathname.startsWith(path);
   };
   
-  const isMenuActive = (menuPath) => {
+  const isMenuActive = (menuPath, children = null) => {
     if (menuPath === '/') {
       return location.pathname === '/' || location.pathname.startsWith('/analytics');
-    } else {
-      return location.pathname.startsWith(menuPath);
     }
+    
+    // Sprawdź czy aktualny path zaczyna się od menuPath
+    if (location.pathname.startsWith(menuPath)) {
+      return true;
+    }
+    
+    // Sprawdź czy aktualny path pasuje do któregoś z children
+    if (children && Array.isArray(children)) {
+      return children.some(child => {
+        if (child.path === '/') {
+          return location.pathname === '/';
+        }
+        return location.pathname.startsWith(child.path);
+      });
+    }
+    
+    return false;
   };
   
   const handleSubmenuClick = (menuTitle) => {
@@ -544,19 +559,19 @@ const Sidebar = ({ onToggle }) => {
             <React.Fragment key={item.text}>
               <StyledListItemButton 
                 onClick={() => handleSubmenuClick(item.text)} 
-                selected={isMenuActive(item.path)}
+                selected={isMenuActive(item.path, item.children)}
                 role="menuitem"
                 aria-haspopup="true"
                 aria-expanded={openSubmenu === item.text}
                 sx={{
-                  backgroundColor: isMenuActive(item.path) ? alpha('#3f51b5', 0.15) : 'transparent',
-                  color: isMenuActive(item.path) ? 'primary.main' : 'inherit'
+                  backgroundColor: isMenuActive(item.path, item.children) ? alpha('#3f51b5', 0.15) : 'transparent',
+                  color: isMenuActive(item.path, item.children) ? 'primary.main' : 'inherit'
                 }}
               >
                 <Tooltip title={item.text} placement="right" arrow>
                   <ListItemIcon sx={{ 
                     minWidth: 36, 
-                    color: isMenuActive(item.path) ? 'primary.main' : 'inherit' 
+                    color: isMenuActive(item.path, item.children) ? 'primary.main' : 'inherit' 
                   }}>
                     {item.badge ? (
                       <StyledBadge badgeContent={item.badge} color="primary">
@@ -573,8 +588,8 @@ const Sidebar = ({ onToggle }) => {
                       primary={item.text} 
                       primaryTypographyProps={{ 
                         fontSize: '0.875rem',
-                        fontWeight: isMenuActive(item.path) ? 'medium' : 'normal',
-                        color: isMenuActive(item.path) ? 'primary.main' : 'inherit'
+                        fontWeight: isMenuActive(item.path, item.children) ? 'medium' : 'normal',
+                        color: isMenuActive(item.path, item.children) ? 'primary.main' : 'inherit'
                       }} 
                     />
                     {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
