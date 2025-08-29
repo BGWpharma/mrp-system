@@ -829,6 +829,105 @@ const TaskDetailsPage = () => {
     );
   };
 
+  // Funkcja helper do obliczania średniej ważonej ceny jednostkowej uwzględniającej rezerwacje PO
+  const calculateWeightedUnitPrice = (material, materialId) => {
+    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+    const allPOReservations = getPOReservationsForMaterial(materialId);
+    
+    // Filtruj aktywne rezerwacje PO (pending lub delivered ale nie w pełni przekształcone)
+    const activePOReservations = allPOReservations.filter(reservation => {
+      if (reservation.status === 'pending') return true;
+      if (reservation.status === 'delivered') {
+        const convertedQuantity = reservation.convertedQuantity || 0;
+        const reservedQuantity = reservation.reservedQuantity || 0;
+        return convertedQuantity < reservedQuantity;
+      }
+      return false;
+    });
+
+    let totalQuantity = 0;
+    let totalValue = 0;
+
+    // Dodaj wartość z standardowych rezerwacji magazynowych
+    if (reservedBatches && reservedBatches.length > 0) {
+      reservedBatches.forEach(batch => {
+        const batchQuantity = parseFloat(batch.quantity || 0);
+        const batchPrice = parseFloat(batch.unitPrice || material.unitPrice || 0);
+        totalQuantity += batchQuantity;
+        totalValue += batchQuantity * batchPrice;
+      });
+    }
+
+    // Dodaj wartość z aktywnych rezerwacji PO
+    if (activePOReservations.length > 0) {
+      activePOReservations.forEach(reservation => {
+        const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
+        const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
+        const availableQuantity = reservedQuantity - convertedQuantity;
+        const unitPrice = parseFloat(reservation.unitPrice || 0);
+        
+        if (availableQuantity > 0 && unitPrice > 0) {
+          totalQuantity += availableQuantity;
+          totalValue += availableQuantity * unitPrice;
+        }
+      });
+    }
+
+    // Jeśli mamy jakiekolwiek rezerwacje z cenami, zwróć średnią ważoną
+    if (totalQuantity > 0 && totalValue > 0) {
+      return totalValue / totalQuantity;
+    }
+
+    // Fallback na cenę materiału
+    return parseFloat(material.unitPrice || 0);
+  };
+
+  // Funkcja helper do generowania tooltip z informacją o składzie ceny
+  const getPriceBreakdownTooltip = (material, materialId) => {
+    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+    const allPOReservations = getPOReservationsForMaterial(materialId);
+    const activePOReservations = allPOReservations.filter(reservation => {
+      if (reservation.status === 'pending') return true;
+      if (reservation.status === 'delivered') {
+        const convertedQuantity = reservation.convertedQuantity || 0;
+        const reservedQuantity = reservation.reservedQuantity || 0;
+        return convertedQuantity < reservedQuantity;
+      }
+      return false;
+    });
+
+    const breakdown = [];
+    
+    // Standardowe rezerwacje
+    if (reservedBatches && reservedBatches.length > 0) {
+      const batchTotal = reservedBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
+      breakdown.push(`Rezerwacje magazynowe: ${batchTotal} ${material.unit}`);
+    }
+
+    // Rezerwacje PO
+    if (activePOReservations.length > 0) {
+      const poTotal = activePOReservations.reduce((sum, reservation) => {
+        const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
+        const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
+        return sum + (reservedQuantity - convertedQuantity);
+      }, 0);
+      breakdown.push(`Rezerwacje z PO: ${poTotal} ${material.unit}`);
+      
+      // Detale PO
+      activePOReservations.forEach(reservation => {
+        const availableQuantity = parseFloat(reservation.reservedQuantity || 0) - parseFloat(reservation.convertedQuantity || 0);
+        const unitPrice = parseFloat(reservation.unitPrice || 0);
+        breakdown.push(`  • PO ${reservation.poNumber}: ${availableQuantity} ${material.unit} @ ${unitPrice.toFixed(4)}€`);
+      });
+    }
+
+    if (breakdown.length === 0) {
+      return `Brak rezerwacji - używana cena z katalogu: ${parseFloat(material.unitPrice || 0).toFixed(4)}€`;
+    }
+
+    return breakdown.join('\n');
+  };
+
   // Funkcja do obliczania czy materiał ma wystarczające pokrycie rezerwacji
   const calculateMaterialReservationCoverage = (material, materialId) => {
     // 1. Wymagana ilość - użyj rzeczywistej ilości jeśli dostępna, w przeciwnym razie planowaną
@@ -2935,7 +3034,11 @@ const TaskDetailsPage = () => {
                     <td class="${nameClass}">${material.name}</td>
                     <td>${material.quantity}</td>
                     <td>${material.unit || 'szt.'}</td>
-                    <td>${material.unitPrice ? `${material.unitPrice.toFixed(4)} €` : '—'}</td>
+                    <td>${(() => {
+                      const materialId = material.inventoryItemId || material.id;
+                      const unitPrice = calculateWeightedUnitPrice(material, materialId);
+                      return unitPrice > 0 ? `${unitPrice.toFixed(4)} €` : '—';
+                    })()}</td>
                     <td>${material.cost ? `${material.cost.toFixed(2)} €` : '—'}</td>
                     <td>${material.available ? 'Dostępny' : 'Brak'}</td>
                     <td>${isIncludedInCosts ? 'Tak' : 'Nie'}</td>
@@ -3813,7 +3916,8 @@ const TaskDetailsPage = () => {
             // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest wliczany do kosztów
             if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
               const quantity = materialQuantities[material.id] || material.quantity || 0;
-              const unitPrice = material.unitPrice || 0;
+              const materialId = material.inventoryItemId || material.id;
+              const unitPrice = calculateWeightedUnitPrice(material, materialId);
               return sum + (quantity * unitPrice);
             }
             return sum;
@@ -3828,7 +3932,7 @@ const TaskDetailsPage = () => {
             // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
             if (reservedBatches && reservedBatches.length > 0) {
               const quantity = materialQuantities[material.id] || material.quantity || 0;
-              const unitPrice = material.unitPrice || 0;
+              const unitPrice = calculateWeightedUnitPrice(material, materialId);
               return sum + (quantity * unitPrice);
             }
             return sum;
@@ -7135,7 +7239,8 @@ const TaskDetailsPage = () => {
                           const materialId = material.inventoryItemId || material.id;
                           const reservedBatches = task.materialBatches && task.materialBatches[materialId];
                           const quantity = materialQuantities[material.id] || material.quantity || 0;
-                          const unitPrice = material.unitPrice || 0;
+                          // Użyj średniej ważonej ceny uwzględniającej rezerwacje PO
+                          const unitPrice = calculateWeightedUnitPrice(material, materialId);
                           const cost = quantity * unitPrice;
                           
                           // Oblicz pokrycie rezerwacji dla kolorowania wiersza
@@ -7158,8 +7263,45 @@ const TaskDetailsPage = () => {
                               <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
                               <TableCell>{(() => { const issuedQuantity = calculateIssuedQuantityForMaterial(material.name); return issuedQuantity > 0 ? `${issuedQuantity} ${material.unit}` : '—'; })()}</TableCell>
                               <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
+                              <TableCell 
+                                title={getPriceBreakdownTooltip(material, materialId)}
+                                sx={{ cursor: 'help' }}
+                              >
+                                {(() => {
+                                  const activePOReservations = getPOReservationsForMaterial(materialId).filter(reservation => {
+                                    if (reservation.status === 'pending') return true;
+                                    if (reservation.status === 'delivered') {
+                                      const convertedQuantity = reservation.convertedQuantity || 0;
+                                      const reservedQuantity = reservation.reservedQuantity || 0;
+                                      return convertedQuantity < reservedQuantity;
+                                    }
+                                    return false;
+                                  });
+                                  
+                                  // Pokaż cenę jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
+                                  const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
+                                  
+                                  return hasAnyReservations ? `${unitPrice.toFixed(4)} €` : '—';
+                                })()}
+                              </TableCell>
+                              <TableCell>
+                                {(() => {
+                                  const activePOReservations = getPOReservationsForMaterial(materialId).filter(reservation => {
+                                    if (reservation.status === 'pending') return true;
+                                    if (reservation.status === 'delivered') {
+                                      const convertedQuantity = reservation.convertedQuantity || 0;
+                                      const reservedQuantity = reservation.reservedQuantity || 0;
+                                      return convertedQuantity < reservedQuantity;
+                                    }
+                                    return false;
+                                  });
+                                  
+                                  // Pokaż koszt jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
+                                  const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
+                                  
+                                  return hasAnyReservations ? `${cost.toFixed(2)} €` : '—';
+                                })()}
+                              </TableCell>
                               <TableCell>
                                 {(() => {
                                   // Standardowe rezerwacje magazynowe
