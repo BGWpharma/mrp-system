@@ -39,6 +39,11 @@
             "reservedBatches": "Zarezerwowane partie (LOT)",
             "include": "Wliczaj",
             "actions": "Akcje"
+        },
+        "warnings": {
+            "consumptionExceedsIssued": "Przekroczenie konsumpcji względem planu mieszań",
+            "consumptionExcessTooltip": "Przekroczenie o {percentage}% względem ilości wydanej z planu mieszań",
+            "generalConsumptionWarning": "Uwaga! Wykryto przekroczenie konsumpcji surowców względem planu mieszań"
         }
     },
     "production": {

@@ -39,6 +39,11 @@
             "reservedBatches": "Reserved Batches (LOT)",
             "include": "Include",
             "actions": "Actions"
+        },
+        "warnings": {
+            "consumptionExceedsIssued": "Consumption exceeds mixing plan",
+            "consumptionExcessTooltip": "Excess of {percentage}% compared to the quantity issued from the mixing plan",
+            "generalConsumptionWarning": "Warning! Detected consumption excess relative to the mixing plan"
         }
     },
     "production": {

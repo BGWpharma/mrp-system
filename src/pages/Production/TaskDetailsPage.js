@@ -151,7 +151,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
-import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial } from '../../utils/productionUtils';
+import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
 import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 
@@ -7223,7 +7223,37 @@ const TaskDetailsPage = () => {
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" component="h2">{t('materials.title')}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Typography variant="h6" component="h2">{t('materials.title')}</Typography>
+                      {(() => {
+                        // Sprawdź czy którykolwiek materiał przekracza plan mieszań
+                        const hasConsumptionExcess = materials.some(material => {
+                          const materialId = material.inventoryItemId || material.id;
+                          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                          const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                          return isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
+                        });
+
+                        if (hasConsumptionExcess) {
+                          return (
+                            <Tooltip title={t('materials.warnings.generalConsumptionWarning')}>
+                              <Alert 
+                                severity="warning" 
+                                sx={{ 
+                                  py: 0, 
+                                  px: 1, 
+                                  '& .MuiAlert-message': { fontSize: '0.875rem' }
+                                }}
+                                icon={<WarningIcon fontSize="small" />}
+                              >
+                                {t('materials.warnings.consumptionExceedsIssued')}
+                              </Alert>
+                            </Tooltip>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </Box>
                     <Box>
                       <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.addPackaging')}</Button>
                       <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.addRawMaterials')}</Button>
@@ -7245,7 +7275,19 @@ const TaskDetailsPage = () => {
                           
                           // Oblicz pokrycie rezerwacji dla kolorowania wiersza
                           const reservationCoverage = calculateMaterialReservationCoverage(material, materialId);
-                          const rowBackgroundColor = reservationCoverage.hasFullCoverage ? 'rgba(76, 175, 80, 0.08)' : 'transparent';
+                          
+                          // Sprawdź czy konsumpcja przekracza plan mieszań
+                          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                          const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                          const hasConsumptionExcess = isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
+                          
+                          // Ustaw kolor tła: ostrzeżenie ma priorytet nad zarezerwowaniem
+                          let rowBackgroundColor = 'transparent';
+                          if (hasConsumptionExcess) {
+                            rowBackgroundColor = 'rgba(255, 152, 0, 0.08)'; // Pomarańczowy dla przekroczenia
+                          } else if (reservationCoverage.hasFullCoverage) {
+                            rowBackgroundColor = 'rgba(76, 175, 80, 0.08)'; // Zielony dla pełnej rezerwacji
+                          }
                           
                           return (
                             <TableRow 
@@ -7253,16 +7295,48 @@ const TaskDetailsPage = () => {
                               sx={{ 
                                 backgroundColor: rowBackgroundColor,
                                 '&:hover': { 
-                                  backgroundColor: reservationCoverage.hasFullCoverage 
-                                    ? 'rgba(76, 175, 80, 0.12)' 
-                                    : 'rgba(0, 0, 0, 0.04)' 
+                                  backgroundColor: hasConsumptionExcess 
+                                    ? 'rgba(255, 152, 0, 0.12)' // Pomarańczowy hover dla przekroczenia
+                                    : reservationCoverage.hasFullCoverage 
+                                      ? 'rgba(76, 175, 80, 0.12)' // Zielony hover dla rezerwacji
+                                      : 'rgba(0, 0, 0, 0.04)' // Standardowy hover
                                 }
                               }}
                             >
                               <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
                               <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
                               <TableCell>{(() => { const issuedQuantity = calculateIssuedQuantityForMaterial(material.name); return issuedQuantity > 0 ? `${issuedQuantity} ${material.unit}` : '—'; })()}</TableCell>
-                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
+                              <TableCell>
+                                {(() => { 
+                                  const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                                  const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                                  const isExceeding = isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
+                                  const excessPercentage = calculateConsumptionExcess(consumedQuantity, issuedQuantity);
+                                  
+                                  if (consumedQuantity <= 0) {
+                                    return '—';
+                                  }
+                                  
+                                  return (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <span>{consumedQuantity} {material.unit}</span>
+                                      {isExceeding && (
+                                        <Tooltip title={t('materials.warnings.consumptionExcessTooltip', { percentage: excessPercentage.toFixed(1) })}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                            <WarningIcon sx={{ color: '#ff9800', fontSize: '16px' }} />
+                                            <Chip 
+                                              label={`+${excessPercentage.toFixed(1)}%`}
+                                              size="small"
+                                              color="warning"
+                                              sx={{ fontSize: '10px', height: '20px' }}
+                                            />
+                                          </Box>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  );
+                                })()}
+                              </TableCell>
                               <TableCell 
                                 title={getPriceBreakdownTooltip(material, materialId)}
                                 sx={{ cursor: 'help' }}

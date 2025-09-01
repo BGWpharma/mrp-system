@@ -125,6 +125,36 @@ export const calculateMaterialReservationStatus = (task) => {
 };
 
 /**
+ * Sprawdza czy konsumpcja materiału przekracza ilość wydaną
+ * @param {number} consumedQuantity - Ilość skonsumowana
+ * @param {number} issuedQuantity - Ilość wydana z planu mieszań
+ * @returns {boolean} True jeśli konsumpcja przekracza ilość wydaną
+ */
+export const isConsumptionExceedingIssued = (consumedQuantity, issuedQuantity) => {
+  if (!consumedQuantity || !issuedQuantity) {
+    return false;
+  }
+  
+  // Uwzględnij tolerancję dla błędów zaokrąglenia (0.1%)
+  const tolerance = issuedQuantity * 0.001;
+  return consumedQuantity > (issuedQuantity + tolerance);
+};
+
+/**
+ * Oblicza procentowe przekroczenie konsumpcji względem ilości wydanej
+ * @param {number} consumedQuantity - Ilość skonsumowana
+ * @param {number} issuedQuantity - Ilość wydana z planu mieszań
+ * @returns {number} Procent przekroczenia (0 jeśli brak przekroczenia)
+ */
+export const calculateConsumptionExcess = (consumedQuantity, issuedQuantity) => {
+  if (!consumedQuantity || !issuedQuantity || consumedQuantity <= issuedQuantity) {
+    return 0;
+  }
+  
+  return ((consumedQuantity - issuedQuantity) / issuedQuantity) * 100;
+};
+
+/**
  * Zwraca kolory dla statusów rezerwacji materiałów
  * Kolory są dostosowane aby nie kolidować z kolorami timeline
  * @param {string} status - Status rezerwacji
