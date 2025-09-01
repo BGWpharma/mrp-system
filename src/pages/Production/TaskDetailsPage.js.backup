@@ -22,7 +22,7 @@
  * - Lepsze UX i mniejsze obciążenie bazy danych
  */
 
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Typography,
@@ -135,7 +135,7 @@ import { PRODUCTION_TASK_STATUSES, TIME_INTERVALS } from '../../utils/constants'
 import { format, parseISO } from 'date-fns';
 import TaskDetails from '../../components/production/TaskDetails';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp, arrayUnion, collection, query, where, getDocs, limit, orderBy, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../services/firebase/config';
 import { getUsersDisplayNames } from '../../services/userService';
@@ -151,14 +151,16 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
-import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial } from '../../utils/productionUtils';
+import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
+import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
 const ChangeHistoryTab = lazy(() => import('../../components/production/ChangeHistoryTab'));
 const FormsTab = lazy(() => import('../../components/production/FormsTab'));
 const ProductionPlanTab = lazy(() => import('../../components/production/ProductionPlanTab'));
+const MaterialsAndCostsTab = lazy(() => import('../../components/production/MaterialsAndCostsTab'));
 
 const TaskDetailsPage = () => {
   const { t } = useTranslation('taskDetails');
@@ -315,6 +317,9 @@ const TaskDetailsPage = () => {
   // Stan dla załączników z partii składników
   const [ingredientBatchAttachments, setIngredientBatchAttachments] = useState({});
   
+  // Stan dla powiązań składników z rezerwacjami w planie mieszań
+  const [ingredientReservationLinks, setIngredientReservationLinks] = useState({});
+  
   // Stan dla załączników badań klinicznych
   const [clinicalAttachments, setClinicalAttachments] = useState([]);
   const [uploadingClinical, setUploadingClinical] = useState(false);
@@ -400,7 +405,7 @@ const TaskDetailsPage = () => {
     if (loadedTabs.productionPlan || !task?.id) return;
     
     try {
-      console.log('🔄 Loading Production Plan data...');
+      // Ładowanie danych planu produkcji
       
       // Historia produkcji
       const history = await getProductionHistory(task.id);
@@ -412,9 +417,9 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
-      console.log('✅ Production Plan data loaded');
+      // Plan produkcji załadowany
     } catch (error) {
-      console.error('❌ Error loading Production Plan data:', error);
+      console.error('Błąd ładowania planu produkcji:', error.message);
     }
   }, [loadedTabs.productionPlan, task?.id, availableMachines.length]);
 
@@ -422,13 +427,13 @@ const TaskDetailsPage = () => {
     if (loadedTabs.forms || !task?.moNumber) return;
     
     try {
-      console.log('🔄 Loading Forms data...');
+      // Ładowanie danych formularzy
       
       const responses = await fetchFormResponsesOptimized(task.moNumber);
       setFormResponses(responses);
       
       setLoadedTabs(prev => ({ ...prev, forms: true }));
-      console.log('✅ Forms data loaded');
+      // Formularze załadowane
     } catch (error) {
       console.error('❌ Error loading Forms data:', error);
       setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
@@ -439,7 +444,7 @@ const TaskDetailsPage = () => {
     if (loadedTabs.changeHistory || !task?.statusHistory?.length) return;
     
     try {
-      console.log('🔄 Loading Change History data...');
+      // Ładowanie historii zmian
       
       // Pobierz nazwy użytkowników dla historii zmian (jeśli nie zostały załadowane)
       const userIds = task.statusHistory.map(change => change.changedBy).filter(id => id);
@@ -451,7 +456,7 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, changeHistory: true }));
-      console.log('✅ Change History data loaded');
+      // Historia zmian załadowana
     } catch (error) {
       console.error('❌ Error loading Change History data:', error);
     }
@@ -461,7 +466,7 @@ const TaskDetailsPage = () => {
     if (loadedTabs.endProductReport) return;
     
     try {
-      console.log('🔄 Loading End Product Report data...');
+      // Ładowanie raportu produktu końcowego
       
       // Dane firmy (jeśli nie zostały załadowane)
       if (!companyData) {
@@ -476,7 +481,7 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, endProductReport: true }));
-      console.log('✅ End Product Report data loaded');
+      // Raport produktu końcowego załadowany
     } catch (error) {
       console.error('❌ Error loading End Product Report data:', error);
     }
@@ -825,6 +830,105 @@ const TaskDetailsPage = () => {
     );
   };
 
+  // Funkcja helper do obliczania średniej ważonej ceny jednostkowej uwzględniającej rezerwacje PO
+  const calculateWeightedUnitPrice = (material, materialId) => {
+    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+    const allPOReservations = getPOReservationsForMaterial(materialId);
+    
+    // Filtruj aktywne rezerwacje PO (pending lub delivered ale nie w pełni przekształcone)
+    const activePOReservations = allPOReservations.filter(reservation => {
+      if (reservation.status === 'pending') return true;
+      if (reservation.status === 'delivered') {
+        const convertedQuantity = reservation.convertedQuantity || 0;
+        const reservedQuantity = reservation.reservedQuantity || 0;
+        return convertedQuantity < reservedQuantity;
+      }
+      return false;
+    });
+
+    let totalQuantity = 0;
+    let totalValue = 0;
+
+    // Dodaj wartość z standardowych rezerwacji magazynowych
+    if (reservedBatches && reservedBatches.length > 0) {
+      reservedBatches.forEach(batch => {
+        const batchQuantity = parseFloat(batch.quantity || 0);
+        const batchPrice = parseFloat(batch.unitPrice || material.unitPrice || 0);
+        totalQuantity += batchQuantity;
+        totalValue += batchQuantity * batchPrice;
+      });
+    }
+
+    // Dodaj wartość z aktywnych rezerwacji PO
+    if (activePOReservations.length > 0) {
+      activePOReservations.forEach(reservation => {
+        const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
+        const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
+        const availableQuantity = reservedQuantity - convertedQuantity;
+        const unitPrice = parseFloat(reservation.unitPrice || 0);
+        
+        if (availableQuantity > 0 && unitPrice > 0) {
+          totalQuantity += availableQuantity;
+          totalValue += availableQuantity * unitPrice;
+        }
+      });
+    }
+
+    // Jeśli mamy jakiekolwiek rezerwacje z cenami, zwróć średnią ważoną
+    if (totalQuantity > 0 && totalValue > 0) {
+      return totalValue / totalQuantity;
+    }
+
+    // Fallback na cenę materiału
+    return parseFloat(material.unitPrice || 0);
+  };
+
+  // Funkcja helper do generowania tooltip z informacją o składzie ceny
+  const getPriceBreakdownTooltip = (material, materialId) => {
+    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+    const allPOReservations = getPOReservationsForMaterial(materialId);
+    const activePOReservations = allPOReservations.filter(reservation => {
+      if (reservation.status === 'pending') return true;
+      if (reservation.status === 'delivered') {
+        const convertedQuantity = reservation.convertedQuantity || 0;
+        const reservedQuantity = reservation.reservedQuantity || 0;
+        return convertedQuantity < reservedQuantity;
+      }
+      return false;
+    });
+
+    const breakdown = [];
+    
+    // Standardowe rezerwacje
+    if (reservedBatches && reservedBatches.length > 0) {
+      const batchTotal = reservedBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0);
+      breakdown.push(`Rezerwacje magazynowe: ${batchTotal} ${material.unit}`);
+    }
+
+    // Rezerwacje PO
+    if (activePOReservations.length > 0) {
+      const poTotal = activePOReservations.reduce((sum, reservation) => {
+        const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
+        const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
+        return sum + (reservedQuantity - convertedQuantity);
+      }, 0);
+      breakdown.push(`Rezerwacje z PO: ${poTotal} ${material.unit}`);
+      
+      // Detale PO
+      activePOReservations.forEach(reservation => {
+        const availableQuantity = parseFloat(reservation.reservedQuantity || 0) - parseFloat(reservation.convertedQuantity || 0);
+        const unitPrice = parseFloat(reservation.unitPrice || 0);
+        breakdown.push(`  • PO ${reservation.poNumber}: ${availableQuantity} ${material.unit} @ ${unitPrice.toFixed(4)}€`);
+      });
+    }
+
+    if (breakdown.length === 0) {
+      return `Brak rezerwacji - używana cena z katalogu: ${parseFloat(material.unitPrice || 0).toFixed(4)}€`;
+    }
+
+    return breakdown.join('\n');
+  };
+
   // Funkcja do obliczania czy materiał ma wystarczające pokrycie rezerwacji
   const calculateMaterialReservationCoverage = (material, materialId) => {
     // 1. Wymagana ilość - użyj rzeczywistej ilości jeśli dostępna, w przeciwnym razie planowaną
@@ -902,6 +1006,51 @@ const TaskDetailsPage = () => {
     };
   };
 
+  // Funkcja do pobierania powiązań składników z rezerwacjami
+  const fetchIngredientReservationLinks = async () => {
+    if (!task?.id) return;
+    
+    try {
+      const links = await getIngredientReservationLinks(task.id);
+      setIngredientReservationLinks(links);
+    } catch (error) {
+      console.error('Błąd podczas pobierania powiązań składników:', error);
+    }
+  };
+
+  // Memoizowana mapa ilości wydanych dla wszystkich materiałów
+  const issuedQuantitiesMap = useMemo(() => {
+    if (!ingredientReservationLinks || Object.keys(ingredientReservationLinks).length === 0) {
+      return {};
+    }
+
+    const quantitiesMap = {};
+
+    // Przejdź przez wszystkie powiązania składników
+    Object.entries(ingredientReservationLinks).forEach(([ingredientId, linksArray]) => {
+      if (Array.isArray(linksArray)) {
+        linksArray.forEach(link => {
+          const batchMaterialName = link.batchSnapshot?.materialName;
+          if (batchMaterialName) {
+            // Zainicjalizuj sumę dla materiału jeśli nie istnieje
+            if (!quantitiesMap[batchMaterialName]) {
+              quantitiesMap[batchMaterialName] = 0;
+            }
+            // Dodaj powiązaną ilość do sumy
+            quantitiesMap[batchMaterialName] += parseFloat(link.linkedQuantity || 0);
+          }
+        });
+      }
+    });
+
+    return quantitiesMap;
+  }, [ingredientReservationLinks]);
+
+  // Funkcja do obliczania ilości wydanej dla materiału na podstawie powiązań w planie mieszań
+  const calculateIssuedQuantityForMaterial = useCallback((materialName) => {
+    return issuedQuantitiesMap[materialName] || 0;
+  }, [issuedQuantitiesMap]);
+
   // Funkcja do odświeżania tylko podstawowych danych zadania (dla POReservationManager)
   const fetchTaskBasicData = async () => {
     try {
@@ -963,6 +1112,67 @@ const TaskDetailsPage = () => {
       fetchIngredientBatchAttachments();
     }
   }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
+
+  // Efekt z listenerem w czasie rzeczywistym dla powiązań składników z rezerwacjami
+  useEffect(() => {
+    if (!task?.id) return;
+
+    console.log('🔄 [INGREDIENT LINKS] Ustawianie listenera dla zadania:', task.id);
+    
+    const ingredientLinksQuery = query(
+      collection(db, 'ingredientReservationLinks'),
+      where('taskId', '==', task.id)
+    );
+
+    const unsubscribeIngredientLinks = onSnapshot(
+      ingredientLinksQuery,
+      (snapshot) => {
+        console.log('📡 [INGREDIENT LINKS] Otrzymano aktualizację powiązań składników');
+        
+        const links = {};
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          
+          // Oblicz procent konsumpcji
+          const consumptionPercentage = data.linkedQuantity > 0 
+            ? Math.round((data.consumedQuantity / data.linkedQuantity) * 100)
+            : 0;
+          
+          const linkItem = {
+            id: doc.id,
+            ...data,
+            consumptionPercentage: consumptionPercentage,
+            // Używaj danych ze snapshotu zamiast pobierania na bieżąco
+            warehouseName: data.batchSnapshot?.warehouseName,
+            warehouseAddress: data.batchSnapshot?.warehouseAddress,
+            expiryDateString: data.batchSnapshot?.expiryDateString,
+            batchNumber: data.batchSnapshot?.batchNumber,
+            // Zachowaj kompatybilność wsteczną
+            quantity: data.linkedQuantity, // Dla komponentów używających starego pola
+            reservationType: data.reservationType
+          };
+          
+          // Grupuj powiązania po ingredientId
+          if (!links[data.ingredientId]) {
+            links[data.ingredientId] = [];
+          }
+          links[data.ingredientId].push(linkItem);
+        });
+        
+        setIngredientReservationLinks(links);
+        console.log('✅ [INGREDIENT LINKS] Zaktualizowano powiązania składników:', Object.keys(links).length, 'składników');
+      },
+      (error) => {
+        console.error('❌ [INGREDIENT LINKS] Błąd listenera powiązań składników:', error);
+      }
+    );
+
+    // Cleanup funkcja
+    return () => {
+      console.log('🧹 [INGREDIENT LINKS] Czyszczenie listenera dla zadania:', task.id);
+      unsubscribeIngredientLinks();
+    };
+  }, [task?.id]);
 
   // Pobieranie załączników badań klinicznych
   useEffect(() => {
@@ -2686,29 +2896,9 @@ const TaskDetailsPage = () => {
     if (userId.length > 10) {
       // Pobierz dane użytkownika asynchronicznie tylko raz
       if (!userNames[userId] && !userNames[`loading_${userId}`]) {
-        // Oznacz jako ładujący, aby uniknąć wielokrotnych wywołań
-        setUserNames(prev => ({
-          ...prev,
-          [`loading_${userId}`]: true
-        }));
-        
-        getUsersDisplayNames([userId]).then(names => {
-          if (names && names[userId]) {
-            setUserNames(prev => {
-              const newState = { ...prev };
-              delete newState[`loading_${userId}`]; // Usuń flagę ładowania
-              newState[userId] = names[userId];
-              return newState;
-            });
-          }
-        }).catch(error => {
-          console.error('Błąd podczas pobierania nazwy użytkownika:', error);
-          setUserNames(prev => {
-            const newState = { ...prev };
-            delete newState[`loading_${userId}`]; // Usuń flagę ładowania
-            return newState;
-          });
-        });
+        // Nie wywołuj setState w render - zostanie załadowane przez useEffect
+        // setUserNames jest przeniesione do useEffect
+        // Ładowanie nazw przeniesione do useEffect
       }
       
       // Tymczasowo zwróć skróconą wersję ID
@@ -2845,7 +3035,11 @@ const TaskDetailsPage = () => {
                     <td class="${nameClass}">${material.name}</td>
                     <td>${material.quantity}</td>
                     <td>${material.unit || 'szt.'}</td>
-                    <td>${material.unitPrice ? `${material.unitPrice.toFixed(4)} €` : '—'}</td>
+                    <td>${(() => {
+                      const materialId = material.inventoryItemId || material.id;
+                      const unitPrice = calculateWeightedUnitPrice(material, materialId);
+                      return unitPrice > 0 ? `${unitPrice.toFixed(4)} €` : '—';
+                    })()}</td>
                     <td>${material.cost ? `${material.cost.toFixed(2)} €` : '—'}</td>
                     <td>${material.available ? 'Dostępny' : 'Brak'}</td>
                     <td>${isIncludedInCosts ? 'Tak' : 'Nie'}</td>
@@ -3688,7 +3882,7 @@ const TaskDetailsPage = () => {
                 totalCost += batchQuantity * batchUnitPrice;
                 totalQuantity += batchQuantity;
                 
-                console.log(`Batch ${batchData.batchNumber}: quantity=${batchQuantity}, unitPrice=${batchUnitPrice}`);
+                // Batch ${batchData.batchNumber}: ${batchQuantity} × ${batchUnitPrice}€
               }
             } catch (error) {
               console.error(`Błąd podczas pobierania danych partii ${batchReservation.batchId}:`, error);
@@ -3723,7 +3917,8 @@ const TaskDetailsPage = () => {
             // Uwzględnij koszt tylko jeśli materiał ma zarezerwowane partie i jest wliczany do kosztów
             if (reservedBatches && reservedBatches.length > 0 && includeInCosts[material.id]) {
               const quantity = materialQuantities[material.id] || material.quantity || 0;
-              const unitPrice = material.unitPrice || 0;
+              const materialId = material.inventoryItemId || material.id;
+              const unitPrice = calculateWeightedUnitPrice(material, materialId);
               return sum + (quantity * unitPrice);
             }
             return sum;
@@ -3738,7 +3933,7 @@ const TaskDetailsPage = () => {
             // Uwzględnij koszt wszystkich materiałów z zarezerwowanymi partiami
             if (reservedBatches && reservedBatches.length > 0) {
               const quantity = materialQuantities[material.id] || material.quantity || 0;
-              const unitPrice = material.unitPrice || 0;
+              const unitPrice = calculateWeightedUnitPrice(material, materialId);
               return sum + (quantity * unitPrice);
             }
             return sum;
@@ -4097,7 +4292,7 @@ const TaskDetailsPage = () => {
   // ZUNIFIKOWANA FUNKCJA do obliczania wszystkich kosztów (kompatybilna z productionService)
   const calculateAllCosts = async (customConsumedMaterials = null, customMaterialBatches = null) => {
     try {
-      console.log('🔍 [UI-COSTS] Rozpoczynam zunifikowane obliczanie kosztów w UI');
+      // Obliczanie kosztów w UI
       
       // Import funkcji matematycznych dla precyzyjnych obliczeń
       const { fixFloatingPointPrecision, preciseMultiply, preciseAdd, preciseSubtract, preciseDivide } = await import('../../utils/mathUtils');
@@ -4116,7 +4311,7 @@ const TaskDetailsPage = () => {
       const consumedCostDetails = {};
       
       if (currentConsumedMaterials.length > 0) {
-        console.log(`🔍 [UI-COSTS] Przetwarzam ${currentConsumedMaterials.length} skonsumowanych materiałów`);
+        // Przetwarzanie skonsumowanych materiałów
         
         // Pobierz aktualne ceny partii dla skonsumowanych materiałów
         const uniqueBatchIds = [...new Set(
@@ -4125,7 +4320,7 @@ const TaskDetailsPage = () => {
             .map(consumed => consumed.batchId)
         )];
         
-        console.log(`🔍 [UI-COSTS] Pobieranie aktualnych cen dla ${uniqueBatchIds.length} skonsumowanych partii`);
+        // Pobieranie cen partii
         
         const consumedBatchPricesCache = {};
         const batchPromises = uniqueBatchIds.map(async (batchId) => {
@@ -4136,7 +4331,7 @@ const TaskDetailsPage = () => {
               const batchData = batchDoc.data();
               const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
               consumedBatchPricesCache[batchId] = price;
-              console.log(`🔍 [UI-COSTS] Pobrana aktualna cena skonsumowanej partii ${batchId}: ${price}€`);
+              // Pobrana cena partii ${batchId}
             } else {
               consumedBatchPricesCache[batchId] = 0;
               console.warn(`⚠️ [UI-COSTS] Nie znaleziono partii ${batchId}`);
@@ -4182,7 +4377,7 @@ const TaskDetailsPage = () => {
           const quantity = fixFloatingPointPrecision(parseFloat(consumed.quantity) || 0);
           const cost = preciseMultiply(quantity, unitPrice);
 
-          console.log(`🔍 [UI-COSTS] Skonsumowany materiał ${material.name}: ilość=${quantity}, cena=${unitPrice}€ (${priceSource}), koszt=${cost.toFixed(4)}€`);
+          // Obliczono koszt dla ${material.name}
 
           consumedCostDetails[materialId].totalQuantity = preciseAdd(
             consumedCostDetails[materialId].totalQuantity, 
@@ -4220,7 +4415,7 @@ const TaskDetailsPage = () => {
       const reservedCostDetails = {};
 
       if (materials.length > 0) {
-        console.log(`🔍 [UI-COSTS] Przetwarzam ${materials.length} materiałów pod kątem zarezerwowanych partii`);
+        // Przetwarzanie zarezerwowanych partii
         
         // Pobierz wszystkie unikalne ID partii z zarezerwowanych materiałów
         const allReservedBatchIds = [];
@@ -4233,7 +4428,7 @@ const TaskDetailsPage = () => {
         });
         
         const uniqueReservedBatchIds = [...new Set(allReservedBatchIds)];
-        console.log(`🔍 [UI-COSTS] Pobieranie aktualnych cen dla ${uniqueReservedBatchIds.length} zarezerwowanych partii`);
+        // Pobieranie cen zarezerwowanych partii
         
         const batchPricesCache = {};
         
@@ -4246,7 +4441,7 @@ const TaskDetailsPage = () => {
               const batchData = batchDoc.data();
               const price = fixFloatingPointPrecision(parseFloat(batchData.unitPrice) || 0);
               batchPricesCache[batchId] = price;
-              console.log(`🔍 [UI-COSTS] Pobrana aktualna cena zarezerwowanej partii ${batchId}: ${price}€`);
+              // Pobrana cena zarezerwowanej partii
             } else {
               batchPricesCache[batchId] = 0;
               console.warn(`⚠️ [UI-COSTS] Nie znaleziono zarezerwowanej partii ${batchId}`);
@@ -4279,7 +4474,7 @@ const TaskDetailsPage = () => {
           const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
           
           if (remainingQuantity > 0) {
-            console.log(`🔍 [UI-COSTS] Materiał ${material.name}: pozostała ilość=${remainingQuantity}, liczba partii=${reservedBatches.length}`);
+            // ${material.name}: ${remainingQuantity} pozostałe
             
             // ✅ NOWA LOGIKA: Oblicz średnią ważoną cenę z zarezerwowanych partii (jak w productionService)
             let weightedPriceSum = 0;
@@ -4306,7 +4501,7 @@ const TaskDetailsPage = () => {
                 const weightedPrice = preciseMultiply(batchPrice, batchQuantity);
                 weightedPriceSum = preciseAdd(weightedPriceSum, weightedPrice);
                 totalBatchQuantity = preciseAdd(totalBatchQuantity, batchQuantity);
-                console.log(`🔍 [UI-COSTS] Partia ${batch.batchId}: ilość=${batchQuantity}, cena=${batchPrice}€ (${priceSource})`);
+                // Partia ${batch.batchId}: ${batchQuantity} × ${batchPrice}€
               }
             });
             
@@ -4319,13 +4514,13 @@ const TaskDetailsPage = () => {
               unitPrice = preciseDivide(weightedPriceSum, totalBatchQuantity);
               materialCost = preciseMultiply(remainingQuantity, unitPrice);
               priceCalculationMethod = 'weighted-average';
-              console.log(`🔍 [UI-COSTS] Materiał ${material.name}: średnia ważona cena=${unitPrice.toFixed(4)}€, koszt=${materialCost.toFixed(4)}€`);
+              // Średnia cena dla ${material.name}: ${unitPrice.toFixed(2)}€
             } else {
               // Fallback na cenę z materiału
               unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice) || 0);
               materialCost = preciseMultiply(remainingQuantity, unitPrice);
               priceCalculationMethod = 'material-fallback';
-              console.log(`🔍 [UI-COSTS] Materiał ${material.name}: cena fallback=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
+              // Fallback cena dla ${material.name}: ${unitPrice}€
             }
             
             reservedCostDetails[materialId] = {
@@ -4339,7 +4534,7 @@ const TaskDetailsPage = () => {
             
             // Sprawdź czy materiał ma być wliczony do kosztów
             const shouldIncludeInCosts = includeInCosts[material.id] !== false;
-            console.log(`🔍 [UI-COSTS] Materiał ${material.name} - includeInCosts: ${shouldIncludeInCosts}`);
+            // ${material.name} w kosztach: ${shouldIncludeInCosts}
             
             if (shouldIncludeInCosts) {
               totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
@@ -4402,16 +4597,23 @@ const TaskDetailsPage = () => {
   };
 
   // Funkcja do porównywania kosztów między UI a bazą danych
-  const compareCostsWithDatabase = async () => {
+  // NAPRAWIONA funkcja porównania kosztów - przyjmuje uiCosts jako parametr aby uniknąć pętli
+  const compareCostsWithDatabase = async (providedUiCosts = null) => {
     try {
       console.log('🔍 [COST-COMPARE] Porównuję koszty UI vs baza danych');
       
-      const uiCosts = await calculateAllCosts();
+      // Jeśli nie podano kosztów UI, oblicz je (ale tylko raz!)
+      const uiCosts = providedUiCosts || await calculateAllCosts();
+      
+      // Pobierz świeże dane z bazy danych
+      const { getTaskById } = await import('../../services/productionService');
+      const freshTask = await getTaskById(task.id);
+      
       const dbCosts = {
-        totalMaterialCost: task?.totalMaterialCost || 0,
-        unitMaterialCost: task?.unitMaterialCost || 0,
-        totalFullProductionCost: task?.totalFullProductionCost || 0,
-        unitFullProductionCost: task?.unitFullProductionCost || 0
+        totalMaterialCost: freshTask?.totalMaterialCost || 0,
+        unitMaterialCost: freshTask?.unitMaterialCost || 0,
+        totalFullProductionCost: freshTask?.totalFullProductionCost || 0,
+        unitFullProductionCost: freshTask?.unitFullProductionCost || 0
       };
       
       const differences = {
@@ -4421,9 +4623,15 @@ const TaskDetailsPage = () => {
         unitFullProductionCost: Math.abs(uiCosts.unitFullProductionCost - dbCosts.unitFullProductionCost)
       };
       
-      console.log('📊 [COST-COMPARE] Porównanie kosztów:', {
+      console.log('📊 [COST-COMPARE] Porównanie kosztów (UI vs świeże dane z bazy):', {
         ui: uiCosts,
-        database: dbCosts,
+        freshDatabase: dbCosts,
+        currentTaskObject: {
+          totalMaterialCost: task?.totalMaterialCost || 0,
+          unitMaterialCost: task?.unitMaterialCost || 0,
+          totalFullProductionCost: task?.totalFullProductionCost || 0,
+          unitFullProductionCost: task?.unitFullProductionCost || 0
+        },
         differences,
         maxDifference: Math.max(...Object.values(differences))
       });
@@ -4432,6 +4640,50 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('❌ [COST-COMPARE] Błąd podczas porównywania kosztów:', error);
       return null;
+    }
+  };
+
+  // JEDNORAZOWA funkcja synchronizacji kosztów (bez pętli)
+  const syncCostsOnce = async () => {
+    try {
+      console.log('🔄 [SYNC-ONCE] Rozpoczynam jednorazową synchronizację kosztów');
+      
+      // 1. Oblicz koszty UI
+      const uiCosts = await calculateAllCosts();
+      
+      // 2. Porównaj z bazą danych (przekaż uiCosts aby uniknąć ponownego obliczania)
+      const comparison = await compareCostsWithDatabase(uiCosts);
+      if (!comparison) return;
+      
+      const { dbCosts, differences } = comparison;
+      const maxDifference = Math.max(...Object.values(differences));
+      const COST_TOLERANCE = 0.005;
+      
+      if (maxDifference > COST_TOLERANCE) {
+        console.log(`🚨 [SYNC-ONCE] Wykryto różnicę ${maxDifference.toFixed(4)}€ > ${COST_TOLERANCE}€ - synchronizuję`);
+        
+        // 3. Synchronizuj z bazą danych
+        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+        const result = await updateTaskCostsAutomatically(
+          task.id, 
+          currentUser?.uid || 'system', 
+          'Jednorazowa synchronizacja kosztów'
+        );
+        
+        if (result.success) {
+          // 4. Odśwież dane zadania
+          const { getTaskById } = await import('../../services/productionService');
+          const updatedTask = await getTaskById(task.id);
+          setTask(updatedTask);
+          console.log('✅ [SYNC-ONCE] Synchronizacja zakończona pomyślnie');
+        } else {
+          console.warn('⚠️ [SYNC-ONCE] Synchronizacja nie powiodła się:', result);
+        }
+      } else {
+        console.log(`✅ [SYNC-ONCE] Koszty zsynchronizowane (różnica: ${maxDifference.toFixed(4)}€ ≤ ${COST_TOLERANCE}€)`);
+      }
+    } catch (error) {
+      console.error('❌ [SYNC-ONCE] Błąd podczas synchronizacji:', error);
     }
   };
 
@@ -6972,7 +7224,37 @@ const TaskDetailsPage = () => {
               <Grid item xs={12}>
                 <Paper sx={{ p: 3 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" component="h2">{t('materials.title')}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Typography variant="h6" component="h2">{t('materials.title')}</Typography>
+                      {(() => {
+                        // Sprawdź czy którykolwiek materiał przekracza plan mieszań
+                        const hasConsumptionExcess = materials.some(material => {
+                          const materialId = material.inventoryItemId || material.id;
+                          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                          const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                          return isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
+                        });
+
+                        if (hasConsumptionExcess) {
+                          return (
+                            <Tooltip title={t('materials.warnings.generalConsumptionWarning')}>
+                              <Alert 
+                                severity="warning" 
+                                sx={{ 
+                                  py: 0, 
+                                  px: 1, 
+                                  '& .MuiAlert-message': { fontSize: '0.875rem' }
+                                }}
+                                icon={<WarningIcon fontSize="small" />}
+                              >
+                                {t('materials.warnings.consumptionExceedsIssued')}
+                              </Alert>
+                            </Tooltip>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </Box>
                     <Box>
                       <Button variant="outlined" color="primary" startIcon={<PackagingIcon />} onClick={handleOpenPackagingDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.addPackaging')}</Button>
                       <Button variant="outlined" color="secondary" startIcon={<RawMaterialsIcon />} onClick={handleOpenRawMaterialsDialog} sx={{ mt: 2, mb: 2, mr: 2 }}>{t('materials.addRawMaterials')}</Button>
@@ -6982,18 +7264,31 @@ const TaskDetailsPage = () => {
                   </Box>
                   <TableContainer>
                     <Table>
-                      <TableHead><TableRow><TableCell>{t('materials.table.name')}</TableCell><TableCell>{t('materials.table.quantity')}</TableCell><TableCell>{t('materials.table.unit')}</TableCell><TableCell>{t('materials.table.actualQuantity')}</TableCell><TableCell>{t('materials.table.consumedQuantity')}</TableCell><TableCell>{t('materials.table.unitPrice')}</TableCell><TableCell>{t('materials.table.cost')}</TableCell><TableCell>{t('materials.table.reservedBatches')}</TableCell><TableCell>{t('materials.table.include')}</TableCell><TableCell>{t('materials.table.actions')}</TableCell></TableRow></TableHead>
+                      <TableHead><TableRow><TableCell>{t('materials.table.name')}</TableCell><TableCell>{t('materials.table.quantity')}</TableCell><TableCell>{t('materials.table.unit')}</TableCell><TableCell>{t('materials.table.actualQuantity')}</TableCell><TableCell>{t('materials.table.issuedQuantity')}</TableCell><TableCell>{t('materials.table.consumedQuantity')}</TableCell><TableCell>{t('materials.table.unitPrice')}</TableCell><TableCell>{t('materials.table.cost')}</TableCell><TableCell>{t('materials.table.reservedBatches')}</TableCell><TableCell>{t('materials.table.include')}</TableCell><TableCell>{t('materials.table.actions')}</TableCell></TableRow></TableHead>
                       <TableBody>
                         {materials.map((material) => {
                           const materialId = material.inventoryItemId || material.id;
                           const reservedBatches = task.materialBatches && task.materialBatches[materialId];
                           const quantity = materialQuantities[material.id] || material.quantity || 0;
-                          const unitPrice = material.unitPrice || 0;
+                          // Użyj średniej ważonej ceny uwzględniającej rezerwacje PO
+                          const unitPrice = calculateWeightedUnitPrice(material, materialId);
                           const cost = quantity * unitPrice;
                           
                           // Oblicz pokrycie rezerwacji dla kolorowania wiersza
                           const reservationCoverage = calculateMaterialReservationCoverage(material, materialId);
-                          const rowBackgroundColor = reservationCoverage.hasFullCoverage ? 'rgba(76, 175, 80, 0.08)' : 'transparent';
+                          
+                          // Sprawdź czy konsumpcja przekracza plan mieszań
+                          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                          const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                          const hasConsumptionExcess = isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
+                          
+                          // Ustaw kolor tła: ostrzeżenie ma priorytet nad zarezerwowaniem
+                          let rowBackgroundColor = 'transparent';
+                          if (hasConsumptionExcess) {
+                            rowBackgroundColor = 'rgba(255, 152, 0, 0.08)'; // Pomarańczowy dla przekroczenia
+                          } else if (reservationCoverage.hasFullCoverage) {
+                            rowBackgroundColor = 'rgba(76, 175, 80, 0.08)'; // Zielony dla pełnej rezerwacji
+                          }
                           
                           return (
                             <TableRow 
@@ -7001,17 +7296,87 @@ const TaskDetailsPage = () => {
                               sx={{ 
                                 backgroundColor: rowBackgroundColor,
                                 '&:hover': { 
-                                  backgroundColor: reservationCoverage.hasFullCoverage 
-                                    ? 'rgba(76, 175, 80, 0.12)' 
-                                    : 'rgba(0, 0, 0, 0.04)' 
+                                  backgroundColor: hasConsumptionExcess 
+                                    ? 'rgba(255, 152, 0, 0.12)' // Pomarańczowy hover dla przekroczenia
+                                    : reservationCoverage.hasFullCoverage 
+                                      ? 'rgba(76, 175, 80, 0.12)' // Zielony hover dla rezerwacji
+                                      : 'rgba(0, 0, 0, 0.04)' // Standardowy hover
                                 }
                               }}
                             >
                               <TableCell>{material.name}</TableCell><TableCell>{material.quantity}</TableCell><TableCell>{material.unit}</TableCell>
                               <TableCell>{editMode ? (<TextField type="number" value={materialQuantities[material.id] || 0} onChange={(e) => handleQuantityChange(material.id, e.target.value)} onWheel={(e) => e.target.blur()} error={Boolean(errors[material.id])} helperText={errors[material.id]} inputProps={{ min: 0, step: 'any' }} size="small" sx={{ width: '130px' }} />) : (materialQuantities[material.id] || 0)}</TableCell>
-                              <TableCell>{(() => { const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId); return consumedQuantity > 0 ? `${consumedQuantity} ${material.unit}` : '—'; })()}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (unitPrice.toFixed(4) + ' €') : ('—')}</TableCell>
-                              <TableCell>{reservedBatches && reservedBatches.length > 0 ? (cost.toFixed(2) + ' €') : ('—')}</TableCell>
+                              <TableCell>{(() => { const issuedQuantity = calculateIssuedQuantityForMaterial(material.name); return issuedQuantity > 0 ? `${issuedQuantity} ${material.unit}` : '—'; })()}</TableCell>
+                              <TableCell>
+                                {(() => { 
+                                  const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                                  const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                                  const isExceeding = isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
+                                  const excessPercentage = calculateConsumptionExcess(consumedQuantity, issuedQuantity);
+                                  
+                                  if (consumedQuantity <= 0) {
+                                    return '—';
+                                  }
+                                  
+                                  return (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <span>{consumedQuantity} {material.unit}</span>
+                                      {isExceeding && (
+                                        <Tooltip title={t('materials.warnings.consumptionExcessTooltip', { percentage: excessPercentage.toFixed(1) })}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                            <WarningIcon sx={{ color: '#ff9800', fontSize: '16px' }} />
+                                            <Chip 
+                                              label={`+${excessPercentage.toFixed(1)}%`}
+                                              size="small"
+                                              color="warning"
+                                              sx={{ fontSize: '10px', height: '20px' }}
+                                            />
+                                          </Box>
+                                        </Tooltip>
+                                      )}
+                                    </Box>
+                                  );
+                                })()}
+                              </TableCell>
+                              <TableCell 
+                                title={getPriceBreakdownTooltip(material, materialId)}
+                                sx={{ cursor: 'help' }}
+                              >
+                                {(() => {
+                                  const activePOReservations = getPOReservationsForMaterial(materialId).filter(reservation => {
+                                    if (reservation.status === 'pending') return true;
+                                    if (reservation.status === 'delivered') {
+                                      const convertedQuantity = reservation.convertedQuantity || 0;
+                                      const reservedQuantity = reservation.reservedQuantity || 0;
+                                      return convertedQuantity < reservedQuantity;
+                                    }
+                                    return false;
+                                  });
+                                  
+                                  // Pokaż cenę jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
+                                  const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
+                                  
+                                  return hasAnyReservations ? `${unitPrice.toFixed(4)} €` : '—';
+                                })()}
+                              </TableCell>
+                              <TableCell>
+                                {(() => {
+                                  const activePOReservations = getPOReservationsForMaterial(materialId).filter(reservation => {
+                                    if (reservation.status === 'pending') return true;
+                                    if (reservation.status === 'delivered') {
+                                      const convertedQuantity = reservation.convertedQuantity || 0;
+                                      const reservedQuantity = reservation.reservedQuantity || 0;
+                                      return convertedQuantity < reservedQuantity;
+                                    }
+                                    return false;
+                                  });
+                                  
+                                  // Pokaż koszt jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
+                                  const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
+                                  
+                                  return hasAnyReservations ? `${cost.toFixed(2)} €` : '—';
+                                })()}
+                              </TableCell>
                               <TableCell>
                                 {(() => {
                                   // Standardowe rezerwacje magazynowe
