@@ -1265,7 +1265,7 @@ const OrdersList = () => {
       showInfo(t('orders.notifications.refreshingCMR'));
       
       // Import funkcji do debugowania i odświeżania danych CMR
-      const { debugOrderCMRConnections, refreshShippedQuantitiesFromCMR } = await import('../../services/orderService');
+      const { debugOrderCMRConnections, refreshShippedQuantitiesFromCMR, cleanupObsoleteCMRConnections } = await import('../../services/orderService');
       
       // Najpierw uruchom debugowanie aby zobaczyć stan przed odświeżaniem
       console.log('=== ROZPOCZĘCIE DEBUGOWANIA CMR ===');
@@ -1274,6 +1274,22 @@ const OrdersList = () => {
       
       // Odśwież dane wysłanych ilości na podstawie CMR
       const result = await refreshShippedQuantitiesFromCMR(order.id, currentUser?.uid || 'system');
+      
+      // Jeśli znaleziono nieaktualne powiązania, automatycznie je oczyść
+      if (result.stats.obsoleteConnections > 0) {
+        console.log(`🧹 Znaleziono ${result.stats.obsoleteConnections} nieaktualnych powiązań - rozpoczynanie oczyszczania...`);
+        try {
+          const cleanupResult = await cleanupObsoleteCMRConnections(result.stats.obsoleteItems, currentUser?.uid || 'system');
+          console.log(`✅ Oczyszczono ${cleanupResult.cleanedItems} nieaktualnych powiązań`);
+          
+          // Uruchom ponowne odświeżanie po oczyszczeniu
+          const secondResult = await refreshShippedQuantitiesFromCMR(order.id, currentUser?.uid || 'system');
+          result.stats = { ...result.stats, ...secondResult.stats, cleanedItems: cleanupResult.cleanedItems };
+        } catch (cleanupError) {
+          console.error('Błąd podczas oczyszczania nieaktualnych powiązań:', cleanupError);
+          showError(`Błąd podczas oczyszczania: ${cleanupError.message}`);
+        }
+      }
       
       // Zaktualizuj lokalny stan zamówienia
       setOrders(prevOrders => prevOrders.map(o => {
@@ -1288,11 +1304,20 @@ const OrdersList = () => {
       
       // Pokaż statystyki odświeżania
       const { stats } = result;
-      showSuccess(t('orders.notifications.cmrRefreshed', {
+      let message = t('orders.notifications.cmrRefreshed', {
         cmrs: stats.processedCMRs,
         items: stats.shippedItems,
         references: stats.cmrReferences
-      }));
+      });
+      
+      // Dodaj informacje o oczyszczonych powiązaniach jeśli były
+      if (stats.cleanedItems > 0) {
+        message += ` Oczyszczono ${stats.cleanedItems} nieaktualnych powiązań.`;
+      } else if (stats.obsoleteConnections > 0) {
+        message += ` Wykryto ${stats.obsoleteConnections} nieaktualnych powiązań (nie udało się oczyścić).`;
+      }
+      
+      showSuccess(message);
     } catch (error) {
       console.error('Błąd podczas odświeżania danych CMR:', error);
       showError(t('orders.notifications.cmrRefreshError', { error: error.message }));
