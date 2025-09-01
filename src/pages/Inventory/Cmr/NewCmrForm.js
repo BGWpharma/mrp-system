@@ -332,6 +332,8 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
       weight: orderItem.weight || '',
       volume: orderItem.volume || '',
       linkedBatches: [],
+      orderItemId: orderItem.id,
+      orderId: orderItem.orderId,
       // Dodaj informacje o potencjalnej recepturze
       originalOrderItem: orderItem
     };

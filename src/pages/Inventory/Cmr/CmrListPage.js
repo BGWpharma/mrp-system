@@ -60,6 +60,7 @@ import { getAllCustomers } from '../../../services/customerService';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useTheme as useThemeContext } from '../../../contexts/ThemeContext';
 
+
 // Ikony
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -71,6 +72,7 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
+
 
 // Słownik tłumaczeń dla raportów
 const translations = {
@@ -195,6 +197,9 @@ const CmrListPage = () => {
   });
   const [reportData, setReportData] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  
+  // Stan dla dialogu migracji CMR
+
   const [customers, setCustomers] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   
@@ -367,6 +372,8 @@ const CmrListPage = () => {
       showError('Nie udało się usunąć dokumentu CMR');
     }
   };
+
+
   
   const formatDate = (date) => {
     if (!date) return '-';
@@ -728,6 +735,7 @@ const CmrListPage = () => {
             width: isMobile ? '100%' : 'auto',
             order: isMobile ? 2 : 2
           }}>
+
             <Button
               variant="outlined"
               color="primary"
@@ -1301,6 +1309,8 @@ const CmrListPage = () => {
           <Button color="primary" onClick={handlePaymentStatusUpdate}>{translate('cmr.dialogs.update')}</Button>
         </DialogActions>
       </Dialog>
+
+
     </Container>
   );
 };

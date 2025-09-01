@@ -1829,10 +1829,21 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
               continue;
             }
             
-            // Ulepszone dopasowanie pozycji w zamówieniu
+            // Ulepszone dopasowanie pozycji w zamówieniu z priorytetem dla orderItemId
             let orderItemIndex = -1;
             
-            // Funkcja pomocnicza do normalizacji nazw produktów
+            // 1. NOWY: Najpierw próbuj dopasować po orderItemId (najdokładniejsze)
+            if (cmrItem.orderItemId) {
+              orderItemIndex = updatedItems.findIndex(orderItem => orderItem.id === cmrItem.orderItemId);
+              if (orderItemIndex !== -1) {
+                console.log(`✅ Dopasowano przez orderItemId: ${cmrItem.orderItemId} dla pozycji "${cmrItem.description}"`);
+              } else {
+                console.warn(`⚠️ Nie znaleziono pozycji z orderItemId: ${cmrItem.orderItemId} dla "${cmrItem.description}"`);
+              }
+            }
+            
+            // 2. Jeśli nie ma orderItemId lub nie znaleziono, użyj obecnej logiki nazw
+            // Funkcja pomocnicza do normalizacji nazw produktów (używana też w debugowaniu)
             const normalizeProductName = (name) => {
               if (!name) return '';
               return name
@@ -1846,46 +1857,49 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
             
             const normalizedCmrName = normalizeProductName(cmrItem.description);
             
-            // 1. Dokładne dopasowanie nazwy
-            orderItemIndex = updatedItems.findIndex(orderItem => 
-              orderItem.name && cmrItem.description && 
-              orderItem.name.trim().toLowerCase() === cmrItem.description.trim().toLowerCase()
-            );
-            
-            // 2. Jeśli nie znaleziono, spróbuj dopasowania przez ID
-            if (orderItemIndex === -1 && cmrItem.itemId) {
-              orderItemIndex = updatedItems.findIndex(orderItem => orderItem.id === cmrItem.itemId);
-            }
-            
-            // 3. Dopasowanie przez znormalizowane nazwy
-            if (orderItemIndex === -1 && normalizedCmrName) {
-              orderItemIndex = updatedItems.findIndex(orderItem => {
-                const normalizedOrderName = normalizeProductName(orderItem.name);
-                return normalizedOrderName === normalizedCmrName;
-              });
-            }
-            
-            // 4. Częściowe dopasowanie nazwy
             if (orderItemIndex === -1) {
-              orderItemIndex = updatedItems.findIndex(orderItem => {
-                if (!orderItem.name || !cmrItem.description) return false;
-                const orderName = orderItem.name.trim().toLowerCase();
-                const cmrDesc = cmrItem.description.trim().toLowerCase();
-                return orderName.includes(cmrDesc) || cmrDesc.includes(orderName);
-              });
-            }
-            
-            // 5. Specjalne dopasowanie dla produktów OMEGA
-            if (orderItemIndex === -1 && cmrItem.description && cmrItem.description.toLowerCase().includes('omega')) {
+              
+              // 2.1. Dokładne dopasowanie nazwy
               orderItemIndex = updatedItems.findIndex(orderItem => 
-                orderItem.name && orderItem.name.toLowerCase().includes('omega')
+                orderItem.name && cmrItem.description && 
+                orderItem.name.trim().toLowerCase() === cmrItem.description.trim().toLowerCase()
               );
-            }
             
-            // 6. Ostatnia próba - dopasowanie według indeksu (tylko jeśli liczba pozycji się zgadza)
-            if (orderItemIndex === -1 && updatedItems.length === cmr.items.length && i < updatedItems.length) {
-              console.log(`Próba dopasowania według indeksu ${i}`);
-              orderItemIndex = i;
+              // 2.2. Jeśli nie znaleziono, spróbuj dopasowania przez ID
+              if (orderItemIndex === -1 && cmrItem.itemId) {
+                orderItemIndex = updatedItems.findIndex(orderItem => orderItem.id === cmrItem.itemId);
+              }
+              
+              // 2.3. Dopasowanie przez znormalizowane nazwy
+              if (orderItemIndex === -1 && normalizedCmrName) {
+                orderItemIndex = updatedItems.findIndex(orderItem => {
+                  const normalizedOrderName = normalizeProductName(orderItem.name);
+                  return normalizedOrderName === normalizedCmrName;
+                });
+              }
+              
+              // 2.4. Częściowe dopasowanie nazwy
+              if (orderItemIndex === -1) {
+                orderItemIndex = updatedItems.findIndex(orderItem => {
+                  if (!orderItem.name || !cmrItem.description) return false;
+                  const orderName = orderItem.name.trim().toLowerCase();
+                  const cmrDesc = cmrItem.description.trim().toLowerCase();
+                  return orderName.includes(cmrDesc) || cmrDesc.includes(orderName);
+                });
+              }
+              
+              // 2.5. Specjalne dopasowanie dla produktów OMEGA
+              if (orderItemIndex === -1 && cmrItem.description && cmrItem.description.toLowerCase().includes('omega')) {
+                orderItemIndex = updatedItems.findIndex(orderItem => 
+                  orderItem.name && orderItem.name.toLowerCase().includes('omega')
+                );
+              }
+              
+              // 2.6. Ostatnia próba - dopasowanie według indeksu (tylko jeśli liczba pozycji się zgadza)
+              if (orderItemIndex === -1 && updatedItems.length === cmr.items.length && i < updatedItems.length) {
+                console.log(`Próba dopasowania według indeksu ${i}`);
+                orderItemIndex = i;
+              }
             }
             
             console.log(`Dopasowanie dla "${cmrItem.description}": indeks ${orderItemIndex}`);

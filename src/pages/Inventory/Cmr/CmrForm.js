@@ -1191,6 +1191,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       volume: orderItem.volume || '',
       notes: `Importowano z zamówienia ${orderItem.orderNumber}`,
       linkedBatches: [],
+      orderItemId: orderItem.id,
+      orderId: orderItem.orderId,
       // Dodaj informacje o potencjalnej recepturze
       originalOrderItem: orderItem
     };
