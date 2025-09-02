@@ -57,7 +57,9 @@ import {
   ArrowDropDown as DropdownIcon,
   Inventory as InventoryIcon,
   Schedule as ScheduleIcon,
-  GetApp as ExportIcon
+  GetApp as ExportIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
@@ -814,6 +816,8 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
   const [selectedOrder, setSelectedOrder] = useState('all');
   const [materialsList, setMaterialsList] = useState([]);
   const [ordersList, setOrdersList] = useState([]);
+  const [sortField, setSortField] = useState('consumptionDate');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   // Funkcja do agregacji danych konsumpcji z zadań produkcyjnych
   const aggregateConsumptionData = (tasks) => {
@@ -1107,9 +1111,11 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
     console.log(`[RAPORT KONSUMPCJI] Wyniki: ${materialSummary.length} materiałów, ${filtered.length} szczegółowych pozycji`);
     
     setConsumptionData(materialSummary);
-    setFilteredConsumption(filtered);
+    // Sortuj dane przed ustawieniem
+    const sortedFiltered = sortConsumptionData(filtered, sortField, sortDirection);
+    setFilteredConsumption(sortedFiltered);
     setLoading(false);
-  }, [tasks, startDate, endDate, selectedMaterial, selectedOrder]);
+  }, [tasks, startDate, endDate, selectedMaterial, selectedOrder, sortField, sortDirection]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pl-PL', {
@@ -1121,6 +1127,122 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
 
   const formatQuantity = (value, precision = 3) => {
     return Number(value).toFixed(precision);
+  };
+
+  // Funkcja sortowania danych konsumpcji
+  const sortConsumptionData = (data, field, direction) => {
+    return [...data].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (field) {
+        case 'consumptionDate':
+          aValue = a.consumptionDate ? new Date(a.consumptionDate).getTime() : 0;
+          bValue = b.consumptionDate ? new Date(b.consumptionDate).getTime() : 0;
+          break;
+        case 'taskName':
+          aValue = (a.taskName || '').toLowerCase();
+          bValue = (b.taskName || '').toLowerCase();
+          break;
+        case 'moNumber':
+          aValue = (a.moNumber || '').toLowerCase();
+          bValue = (b.moNumber || '').toLowerCase();
+          break;
+        case 'productName':
+          aValue = (a.productName || '').toLowerCase();
+          bValue = (b.productName || '').toLowerCase();
+          break;
+        case 'materialName':
+          aValue = (a.materialName || '').toLowerCase();
+          bValue = (b.materialName || '').toLowerCase();
+          break;
+        case 'batchNumber':
+          aValue = (a.batchNumber || '').toLowerCase();
+          bValue = (b.batchNumber || '').toLowerCase();
+          break;
+        case 'quantity':
+          aValue = Number(a.quantity) || 0;
+          bValue = Number(b.quantity) || 0;
+          break;
+        case 'unit':
+          aValue = (a.unit || '').toLowerCase();
+          bValue = (b.unit || '').toLowerCase();
+          break;
+        case 'unitPrice':
+          aValue = Number(a.unitPrice) || 0;
+          bValue = Number(b.unitPrice) || 0;
+          break;
+        case 'totalCost':
+          aValue = Number(a.totalCost) || 0;
+          bValue = Number(b.totalCost) || 0;
+          break;
+        case 'userName':
+          aValue = (a.userName || '').toLowerCase();
+          bValue = (b.userName || '').toLowerCase();
+          break;
+        case 'orderNumber':
+          // Dla zamówienia musimy pobrać dane z zadania
+          const taskA = tasks.find(t => t.id === a.taskId);
+          const taskB = tasks.find(t => t.id === b.taskId);
+          aValue = (taskA?.orderNumber || '').toLowerCase();
+          bValue = (taskB?.orderNumber || '').toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aValue < bValue) {
+        return direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  // Funkcja obsługi kliknięcia w nagłówek kolumny
+  const handleSort = (field) => {
+    const newDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
+    setSortField(field);
+    setSortDirection(newDirection);
+    
+    // Posortuj bieżące dane
+    const sortedData = sortConsumptionData(filteredConsumption, field, newDirection);
+    setFilteredConsumption(sortedData);
+  };
+
+  // Komponent nagłówka kolumny z sortowaniem
+  const SortableTableCell = ({ field, children, align = 'left', ...props }) => {
+    const isActive = sortField === field;
+    const isDesc = sortDirection === 'desc';
+    
+    return (
+      <TableCell 
+        {...props}
+        align={align}
+        sx={{ 
+          cursor: 'pointer', 
+          userSelect: 'none',
+          '&:hover': {
+            backgroundColor: 'rgba(0, 0, 0, 0.04)'
+          },
+          fontWeight: isActive ? 'bold' : 'medium',
+          position: 'relative'
+        }}
+        onClick={() => handleSort(field)}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+          {children}
+          <Box sx={{ ml: 0.5, display: 'flex', flexDirection: 'column', opacity: isActive ? 1 : 0.3 }}>
+            {isActive && isDesc ? (
+              <ArrowDownwardIcon sx={{ fontSize: '0.8rem' }} />
+            ) : (
+              <ArrowUpwardIcon sx={{ fontSize: '0.8rem' }} />
+            )}
+          </Box>
+        </Box>
+      </TableCell>
+    );
   };
 
   // Funkcja eksportu podsumowania materiałów do CSV
@@ -1541,17 +1663,39 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, 
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.consumptionDate')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.task')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.order')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.product')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.material')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.batch')}</TableCell>
-                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.quantity')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.unit')}</TableCell>
-                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.unitPrice')}</TableCell>
-                  <TableCell align="right">{t('production.reports.consumption.tableHeaders.cost')}</TableCell>
-                  <TableCell>{t('production.reports.consumption.tableHeaders.user')}</TableCell>
+                  <SortableTableCell field="consumptionDate">
+                    {t('production.reports.consumption.tableHeaders.consumptionDate')}
+                  </SortableTableCell>
+                  <SortableTableCell field="taskName">
+                    {t('production.reports.consumption.tableHeaders.task')}
+                  </SortableTableCell>
+                  <SortableTableCell field="orderNumber">
+                    {t('production.reports.consumption.tableHeaders.order')}
+                  </SortableTableCell>
+                  <SortableTableCell field="productName">
+                    {t('production.reports.consumption.tableHeaders.product')}
+                  </SortableTableCell>
+                  <SortableTableCell field="materialName">
+                    {t('production.reports.consumption.tableHeaders.material')}
+                  </SortableTableCell>
+                  <SortableTableCell field="batchNumber">
+                    {t('production.reports.consumption.tableHeaders.batch')}
+                  </SortableTableCell>
+                  <SortableTableCell field="quantity" align="right">
+                    {t('production.reports.consumption.tableHeaders.quantity')}
+                  </SortableTableCell>
+                  <SortableTableCell field="unit">
+                    {t('production.reports.consumption.tableHeaders.unit')}
+                  </SortableTableCell>
+                  <SortableTableCell field="unitPrice" align="right">
+                    {t('production.reports.consumption.tableHeaders.unitPrice')}
+                  </SortableTableCell>
+                  <SortableTableCell field="totalCost" align="right">
+                    {t('production.reports.consumption.tableHeaders.cost')}
+                  </SortableTableCell>
+                  <SortableTableCell field="userName">
+                    {t('production.reports.consumption.tableHeaders.user')}
+                  </SortableTableCell>
                   <TableCell align="center">{t('production.reports.consumption.tableHeaders.includeInCosts')}</TableCell>
                 </TableRow>
               </TableHead>
