@@ -56,7 +56,8 @@ import {
   NavigateNext as NextIcon,
   ArrowDropDown as DropdownIcon,
   Inventory as InventoryIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  GetApp as ExportIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
@@ -780,6 +781,10 @@ const ProductionReportPage = () => {
           endDate={endDate}
           customers={customers}
           isMobile={isMobile}
+          onDateChange={(newStartDate, newEndDate) => {
+            setStartDate(newStartDate);
+            setEndDate(newEndDate);
+          }}
         />
       )}
 
@@ -797,13 +802,14 @@ const ProductionReportPage = () => {
 };
 
 // Komponent zakładki konsumpcji MO
-const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }) => {
+const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile, onDateChange }) => {
   const { t } = useTranslation();
   const [consumptionData, setConsumptionData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filteredConsumption, setFilteredConsumption] = useState([]);
-  const [consumptionStartDate, setConsumptionStartDate] = useState(startDate);
-  const [consumptionEndDate, setConsumptionEndDate] = useState(endDate);
+  // Używaj filtrów dat z głównego komponentu zamiast własnych
+  const consumptionStartDate = startDate;
+  const consumptionEndDate = endDate;
   const [selectedMaterial, setSelectedMaterial] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState('all');
   const [materialsList, setMaterialsList] = useState([]);
@@ -812,7 +818,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
   // Funkcja do agregacji danych konsumpcji z zadań produkcyjnych
   const aggregateConsumptionData = (tasks) => {
     console.log(`[RAPORT KONSUMPCJI] Rozpoczynam agregację dla ${tasks.length} zadań`);
-    console.log(`[RAPORT KONSUMPCJI] Zakres dat: ${format(consumptionStartDate, 'dd.MM.yyyy')} - ${format(consumptionEndDate, 'dd.MM.yyyy')}`);
+    console.log(`[RAPORT KONSUMPCJI] Zakres dat: ${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`);
     
     const aggregatedData = [];
     const materialSummary = {};
@@ -885,13 +891,14 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
           
           console.log(`[RAPORT KONSUMPCJI] -- Data konsumpcji: ${consumptionDate ? format(consumptionDate, 'dd.MM.yyyy HH:mm') : 'BRAK'}`);
           
-          // Sprawdź czy konsumpcja jest w wybranym zakresie dat
+          // GŁÓWNE FILTROWANIE: według rzeczywistej daty konsumpcji, a nie planowanej daty zadania
+          // To pozwala uwzględnić konsumpcje z opóźnionych zadań produkcyjnych
           let isInDateRange = false;
           let dateReason = '';
           
           if (consumptionDate) {
-            isInDateRange = consumptionDate >= consumptionStartDate && 
-                           consumptionDate <= consumptionEndDate;
+            isInDateRange = consumptionDate >= startDate && 
+                           consumptionDate <= endDate;
             dateReason = isInDateRange ? 'w zakresie dat' : 'poza zakresem dat';
           } else {
             // Jeśli nie ma daty konsumpcji, użyj daty zadania lub załóż że jest aktualna
@@ -1079,13 +1086,16 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
     // DEBUG: Analizuj strukturę zadań
     debugTasksStructure(tasks);
     
-    // Filtruj zadania po wybranym zamówieniu przed agregacją
+    // NIE FILTRUJ zadań według planowanej daty - filtrowanie tylko według rzeczywistej daty konsumpcji
+    // To pozwala uwzględnić konsumpcje z zadań opóźnionych względem planowanej daty
     let filteredTasks = tasks;
+    
+    // Filtruj zadania po wybranym zamówieniu
     if (selectedOrder !== 'all') {
-      filteredTasks = tasks.filter(task => task.orderId === selectedOrder);
+      filteredTasks = filteredTasks.filter(task => task.orderId === selectedOrder);
     }
     
-    console.log(`[RAPORT KONSUMPCJI] Przetwarzam ${filteredTasks.length} zadań po filtrach`);
+    console.log(`[RAPORT KONSUMPCJI] Przetwarzam ${filteredTasks.length} zadań po filtrach (z ${tasks.length} całkowitych)`);
     
     const { detailedData, materialSummary } = aggregateConsumptionData(filteredTasks);
     
@@ -1099,7 +1109,7 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
     setConsumptionData(materialSummary);
     setFilteredConsumption(filtered);
     setLoading(false);
-  }, [tasks, consumptionStartDate, consumptionEndDate, selectedMaterial, selectedOrder]);
+  }, [tasks, startDate, endDate, selectedMaterial, selectedOrder]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pl-PL', {
@@ -1111,6 +1121,173 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
 
   const formatQuantity = (value, precision = 3) => {
     return Number(value).toFixed(precision);
+  };
+
+  // Funkcja eksportu podsumowania materiałów do CSV
+  const exportSummaryToCSV = () => {
+    try {
+      // Przygotuj nagłówki CSV dla podsumowania
+      const headers = [
+        'Materiał',
+        'Całkowita ilość',
+        'Jednostka',
+        'Średnia cena jednostkowa (EUR)',
+        'Całkowity koszt (EUR)',
+        'Liczba partii',
+        'Liczba zadań'
+      ];
+
+      // Przygotuj dane CSV dla podsumowania
+      const csvData = consumptionData.map(material => [
+        material.materialName || '-',
+        formatQuantity(material.totalQuantity, 3),
+        material.unit || '-',
+        material.avgUnitPrice.toFixed(4),
+        material.totalCost.toFixed(4),
+        material.batchCount.toString(),
+        material.taskCount.toString()
+      ]);
+
+      // Dodaj podsumowanie całkowite
+      const totalCost = consumptionData.reduce((sum, material) => sum + material.totalCost, 0);
+      const totalBatches = consumptionData.reduce((sum, material) => sum + material.batchCount, 0);
+      const uniqueTasks = new Set(consumptionData.flatMap(material => material.taskCount)).size;
+      
+      csvData.push([]);
+      csvData.push(['SUMA:', '', '', '', totalCost.toFixed(4), totalBatches.toString(), uniqueTasks.toString()]);
+
+      // Połącz nagłówki z danymi
+      const fullData = [headers, ...csvData];
+
+      // Konwertuj do CSV string
+      const csvContent = fullData.map(row => 
+        row.map(field => {
+          const stringField = String(field);
+          if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+            return `"${stringField.replace(/"/g, '""')}"`;
+          }
+          return stringField;
+        }).join(',')
+      ).join('\n');
+
+      // Dodaj BOM dla poprawnego wyświetlania polskich znaków w Excel
+      const BOM = '\uFEFF';
+      const csvWithBOM = BOM + csvContent;
+
+      // Utwórz i pobierz plik
+      const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      
+      // Nazwa pliku z datą
+      const fileName = `podsumowanie_konsumpcji_${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}.csv`;
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      console.log(`[EKSPORT CSV] Wyeksportowano podsumowanie ${consumptionData.length} materiałów do pliku ${fileName}`);
+    } catch (error) {
+      console.error('[EKSPORT CSV] Błąd podczas eksportu podsumowania:', error);
+      alert('Wystąpił błąd podczas eksportu podsumowania do CSV');
+    }
+  };
+
+  // Funkcja eksportu szczegółów do CSV
+  const exportToCSV = () => {
+    try {
+      // Przygotuj nagłówki CSV
+      const headers = [
+        'Data konsumpcji',
+        'Zadanie',
+        'MO',
+        'Zamówienie (CO)',
+        'Klient',
+        'Produkt',
+        'Materiał',
+        'Partia',
+        'Ilość',
+        'Jednostka',
+        'Cena jednostkowa (EUR)',
+        'Koszt całkowity (EUR)',
+        'Użytkownik',
+        'Wliczane do kosztów'
+      ];
+
+      // Przygotuj dane CSV
+      const csvData = filteredConsumption.map(consumption => {
+        // Znajdź zadanie aby pobrać informacje o zamówieniu
+        const task = tasks.find(t => t.id === consumption.taskId);
+        const orderNumber = task?.orderNumber || '-';
+        const customerName = task?.customer?.name || task?.customer || '-';
+
+        return [
+          consumption.consumptionDate 
+            ? format(consumption.consumptionDate, 'dd.MM.yyyy HH:mm')
+            : '-',
+          consumption.taskName || '-',
+          consumption.moNumber || '-',
+          `CO #${orderNumber}`,
+          customerName,
+          consumption.productName || '-',
+          consumption.materialName || '-',
+          consumption.batchNumber || '-',
+          formatQuantity(consumption.quantity, 3),
+          consumption.unit || '-',
+          consumption.unitPrice.toFixed(4),
+          consumption.totalCost.toFixed(4),
+          consumption.userName || '-',
+          consumption.includeInCosts ? 'TAK' : 'NIE'
+        ];
+      });
+
+      // Dodaj podsumowanie na końcu
+      const totalCost = filteredConsumption.reduce((sum, item) => sum + item.totalCost, 0);
+      csvData.push([]);
+      csvData.push(['PODSUMOWANIE:', '', '', '', '', '', '', '', '', '', '', totalCost.toFixed(4), '', '']);
+
+      // Połącz nagłówki z danymi
+      const fullData = [headers, ...csvData];
+
+      // Konwertuj do CSV string
+      const csvContent = fullData.map(row => 
+        row.map(field => {
+          // Zabezpiecz pola zawierające przecinki, cudzysłowy lub nowe linie
+          const stringField = String(field);
+          if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+            return `"${stringField.replace(/"/g, '""')}"`;
+          }
+          return stringField;
+        }).join(',')
+      ).join('\n');
+
+      // Dodaj BOM dla poprawnego wyświetlania polskich znaków w Excel
+      const BOM = '\uFEFF';
+      const csvWithBOM = BOM + csvContent;
+
+      // Utwórz i pobierz plik
+      const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      
+      // Nazwa pliku z datą
+      const fileName = `konsumpcja_materialow_${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}.csv`;
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      console.log(`[EKSPORT CSV] Wyeksportowano ${filteredConsumption.length} pozycji konsumpcji do pliku ${fileName}`);
+    } catch (error) {
+      console.error('[EKSPORT CSV] Błąd podczas eksportu:', error);
+      alert('Wystąpił błąd podczas eksportu do CSV');
+    }
   };
 
   if (loading) {
@@ -1133,8 +1310,8 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
                 label={t('production.reports.startDate')}
-                value={consumptionStartDate}
-                onChange={(newDate) => setConsumptionStartDate(newDate)}
+                value={startDate}
+                onChange={(newDate) => onDateChange(newDate, endDate)}
                 slotProps={{ 
                   textField: { 
                     fullWidth: true,
@@ -1148,8 +1325,8 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
                 label={t('production.reports.endDate')}
-                value={consumptionEndDate}
-                onChange={(newDate) => setConsumptionEndDate(newDate)}
+                value={endDate}
+                onChange={(newDate) => onDateChange(startDate, newDate)}
                 slotProps={{ 
                   textField: { 
                     fullWidth: true,
@@ -1199,11 +1376,24 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
 
       {/* Podsumowanie konsumpcji materiałów */}
       <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('production.reports.consumption.summary')}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="h6">
+            {t('production.reports.consumption.summary')}
+          </Typography>
+          {consumptionData.length > 0 && (
+            <Button
+              variant="outlined"
+              startIcon={<ExportIcon />}
+              onClick={exportSummaryToCSV}
+              size={isMobile ? "small" : "medium"}
+              sx={{ ml: 2 }}
+            >
+              Eksportuj CSV
+            </Button>
+          )}
+        </Box>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Okres: {format(consumptionStartDate, 'dd.MM.yyyy')} - {format(consumptionEndDate, 'dd.MM.yyyy')}
+          Okres: {format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}
         </Typography>
         
         {consumptionData.length === 0 ? (
@@ -1211,9 +1401,26 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
             <Typography variant="h6" color="text.secondary" gutterBottom>
               Brak podsumowania konsumpcji
             </Typography>
-            <Typography color="text.secondary">
+            <Typography color="text.secondary" paragraph>
               Nie znaleziono żadnej konsumpcji materiałów w wybranym okresie i filtrach.
             </Typography>
+            <Typography variant="body2" color="primary" sx={{ fontWeight: 'medium' }}>
+              💡 Aby dane pojawiły się w raporcie:
+            </Typography>
+            <Box component="ul" sx={{ textAlign: 'left', display: 'inline-block', mt: 1, pl: 2 }}>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Przejdź do szczegółów zadania produkcyjnego (MO)
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                W zakładce "Materiały i koszty" kliknij "Konsumuj materiały"
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Wybierz rzeczywiście zużyte partie i ilości materiałów
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Potwierdź konsumpcję - dane pojawią się w raporcie
+              </Typography>
+            </Box>
           </Box>
         ) : (
           <TableContainer sx={{ overflowX: 'auto' }}>
@@ -1286,9 +1493,22 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
 
       {/* Szczegółowa lista konsumpcji */}
       <Paper sx={{ p: isMobile ? 1.5 : 3 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('production.reports.consumption.detailedList')}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            {t('production.reports.consumption.detailedList')}
+          </Typography>
+          {filteredConsumption.length > 0 && (
+            <Button
+              variant="outlined"
+              startIcon={<ExportIcon />}
+              onClick={exportToCSV}
+              size={isMobile ? "small" : "medium"}
+              sx={{ ml: 2 }}
+            >
+              Eksportuj CSV
+            </Button>
+          )}
+        </Box>
         
         {filteredConsumption.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -1296,20 +1516,23 @@ const ConsumptionReportTab = ({ tasks, startDate, endDate, customers, isMobile }
               Brak danych konsumpcji materiałów
             </Typography>
             <Typography color="text.secondary" sx={{ mb: 2 }}>
-              W wybranym okresie ({format(consumptionStartDate, 'dd.MM.yyyy')} - {format(consumptionEndDate, 'dd.MM.yyyy')}) nie znaleziono żadnych danych konsumpcji materiałów.
+              W wybranym okresie ({format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}) nie znaleziono żadnych danych konsumpcji materiałów.
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Możliwe przyczyny:
+            <Typography variant="body2" color="primary" sx={{ fontWeight: 'medium', mb: 1 }}>
+              💡 Jak wykonać konsumpcję materiałów:
             </Typography>
-            <Box component="ul" sx={{ textAlign: 'left', display: 'inline-block', mt: 1 }}>
+            <Box component="ol" sx={{ textAlign: 'left', display: 'inline-block', mt: 1, pl: 2 }}>
               <Typography component="li" variant="body2" color="text.secondary">
-                Brak zadań produkcyjnych z zapisaną konsumpcją w tym okresie
+                Przejdź do zadania produkcyjnego → zakładka "Materiały i koszty"
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Konsumpcja materiałów nie została jeszcze zarejestrowana
+                W sekcji "Zarezerwowane materiały" kliknij "Konsumuj materiały"
               </Typography>
               <Typography component="li" variant="body2" color="text.secondary">
-                Sprawdź zakres dat lub filtry materiałów/zamówień
+                Wybierz partie i wprowadź rzeczywiste ilości zużytych materiałów
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Potwierdź konsumpcję - dane automatycznie pojawią się w raporcie
               </Typography>
             </Box>
           </Box>
