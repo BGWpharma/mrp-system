@@ -920,7 +920,7 @@ const TaskList = () => {
       case 'cancelled':
         return '#f44336'; // oryginalny czerwony
       case 'Wstrzymane':
-        return '#757575'; // oryginalny szary
+        return '#9e9e9e'; // oryginalny szary
       default:
         return '#757575'; // oryginalny szary
     }

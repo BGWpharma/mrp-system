@@ -303,7 +303,7 @@ const ProductionReportPage = () => {
       case 'W trakcie': return '#ff9800'; // warning
       case 'Zakończone': return '#2e7d32'; // success
       case 'Anulowane': return '#d32f2f'; // error
-      case 'Wstrzymane': return '#757575'; // default
+      case 'Wstrzymane': return '#9e9e9e'; // default
       case 'Potwierdzenie zużycia': return '#0288d1'; // info
       default: return '#757575'; // default
     }

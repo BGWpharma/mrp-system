@@ -1289,7 +1289,7 @@ const ProductionCalendar = () => {
       case 'Anulowane':
         return '#e74c3c'; // czerwony
       case 'Wstrzymane':
-        return '#757575'; // szary
+        return '#9e9e9e'; // szary
       default:
         return '#95a5a6'; // szary
     }
@@ -3212,7 +3212,7 @@ const ProductionCalendar = () => {
                 size="small"
                 label="Wstrzymane" 
                 sx={{ 
-                  bgcolor: '#757575', 
+                  bgcolor: '#9e9e9e', 
                   color: 'white', 
                   fontSize: '0.65rem',
                   height: 24,

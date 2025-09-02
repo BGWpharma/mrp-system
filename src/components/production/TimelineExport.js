@@ -49,7 +49,7 @@ const generateTimelineReport = (tasks, workstations, customers, startDate, endDa
         case 'Anulowane':
           return '#e74c3c';
         case 'Wstrzymane':
-          return '#757575';
+          return '#9e9e9e';
         default:
           return '#95a5a6';
       }
@@ -359,7 +359,7 @@ const generateTimelineReport = (tasks, workstations, customers, startDate, endDa
               fgColor: { rgb: task.statusColor.replace('#', '') }
             },
             font: {
-              color: { rgb: task.statusColor === '#757575' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
+              color: { rgb: task.statusColor === '#9e9e9e' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
             }
           };
         }
@@ -407,7 +407,7 @@ const generateTimelineReport = (tasks, workstations, customers, startDate, endDa
             fgColor: { rgb: task.statusColor.replace('#', '') }
           },
           font: {
-            color: { rgb: task.statusColor === '#757575' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
+            color: { rgb: task.statusColor === '#9e9e9e' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
           }
         };
       }

@@ -251,7 +251,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       case 'Anulowane':
         return '#e74c3c';
       case 'Wstrzymane':
-        return '#757575';
+        return '#9e9e9e';
       default:
         return '#95a5a6';
     }
@@ -701,7 +701,7 @@ const ProductionTimeline = React.memo(() => {
       case 'Anulowane':
         return '#e74c3c';
       case 'Wstrzymane':
-        return '#757575';
+        return '#9e9e9e';
       default:
         return '#95a5a6';
     }
@@ -2439,7 +2439,7 @@ const ProductionTimeline = React.memo(() => {
             <Chip size="small" label={t('production.timeline.statuses.inProgress')} sx={{ bgcolor: '#f39c12', color: 'white', fontSize: '0.7rem' }} />
             <Chip size="small" label={t('production.timeline.statuses.completed')} sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: '0.7rem' }} />
             <Chip size="small" label={t('production.timeline.statuses.cancelled')} sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label={t('production.timeline.statuses.onHold')} sx={{ bgcolor: '#757575', color: 'white', fontSize: '0.7rem' }} />
+            <Chip size="small" label={t('production.timeline.statuses.onHold')} sx={{ bgcolor: '#9e9e9e', color: 'white', fontSize: '0.7rem' }} />
           </>
         )}
       </Box>
@@ -2537,15 +2537,18 @@ const ProductionTimeline = React.memo(() => {
             let textColor = '#fff'; // domyślny biały kolor
             
             // Ustaw kolor czcionki na podstawie statusu rezerwacji
-            if (reservationStatus.status === 'fully_reserved') {
-              const statusColors = getReservationStatusColors('fully_reserved');
-              textColor = statusColors.main;
-            } else if (reservationStatus.status === 'partially_reserved') {
-              const statusColors = getReservationStatusColors('partially_reserved');
-              textColor = statusColors.main;
-            } else if (reservationStatus.status === 'not_reserved') {
-              const statusColors = getReservationStatusColors('not_reserved');
-              textColor = statusColors.main;
+            // ALE TYLKO jeśli zadanie NIE jest zakończone
+            if (item.task.status !== 'Zakończone' && item.task.status !== 'completed') {
+              if (reservationStatus.status === 'fully_reserved') {
+                const statusColors = getReservationStatusColors('fully_reserved');
+                textColor = statusColors.main;
+              } else if (reservationStatus.status === 'partially_reserved') {
+                const statusColors = getReservationStatusColors('partially_reserved');
+                textColor = statusColors.main;
+              } else if (reservationStatus.status === 'not_reserved') {
+                const statusColors = getReservationStatusColors('not_reserved');
+                textColor = statusColors.main;
+              }
             }
             
             return (
@@ -2579,7 +2582,10 @@ const ProductionTimeline = React.memo(() => {
                    whiteSpace: 'nowrap',
                    cursor: 'pointer',
                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                   fontWeight: reservationStatus.status !== 'no_materials' && reservationStatus.status !== 'completed_confirmed' ? '600' : 'normal' // pogrubienie dla statusów rezerwacji
+                   fontWeight: (reservationStatus.status !== 'no_materials' && 
+                              reservationStatus.status !== 'completed_confirmed' && 
+                              item.task.status !== 'Zakończone' && 
+                              item.task.status !== 'completed') ? '600' : 'normal' // pogrubienie dla statusów rezerwacji
                  }}
               >
                 {itemContext.title}

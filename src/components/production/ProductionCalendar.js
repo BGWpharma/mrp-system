@@ -117,7 +117,7 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
         case 'Anulowane':
           return '#e74c3c'; // red
         case 'Wstrzymane':
-          return '#757575'; // gray
+          return '#9e9e9e'; // gray
         default:
           return '#95a5a6'; // gray
       }
@@ -480,7 +480,7 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
               fgColor: { rgb: task.statusColor.replace('#', '') }
             },
             font: {
-              color: { rgb: task.statusColor === '#757575' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
+              color: { rgb: task.statusColor === '#9e9e9e' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
             }
           };
         }
@@ -529,7 +529,7 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
             fgColor: { rgb: task.statusColor.replace('#', '') }
           },
           font: {
-            color: { rgb: task.statusColor === '#757575' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
+            color: { rgb: task.statusColor === '#9e9e9e' || task.statusColor === '#95a5a6' ? '000000' : 'FFFFFF' }
           }
         };
       }
@@ -558,7 +558,7 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
       { status: 'In Progress', color: '#f39c12' },
       { status: 'Completed', color: '#2ecc71' },
       { status: 'Cancelled', color: '#e74c3c' },
-      { status: 'On Hold', color: '#757575' }
+      { status: 'On Hold', color: '#9e9e9e' }
     ];
     
     // Add legend header
@@ -587,7 +587,7 @@ const generateGanttReport = (tasks, workstations, customers, startDate, endDate,
           fgColor: { rgb: legendItem.color.replace('#', '') }
         },
         font: {
-          color: { rgb: legendItem.color === '#757575' || legendItem.color === '#95a5a6' ? '000000' : 'FFFFFF' },
+          color: { rgb: legendItem.color === '#9e9e9e' || legendItem.color === '#95a5a6' ? '000000' : 'FFFFFF' },
           bold: true
         }
       };
@@ -1412,7 +1412,7 @@ const ProductionCalendar = () => {
       case 'Anulowane':
         return '#e74c3c'; // czerwony
       case 'Wstrzymane':
-        return '#757575'; // szary
+        return '#9e9e9e'; // szary
       default:
         return '#95a5a6'; // szary
     }
@@ -3312,7 +3312,7 @@ const ProductionCalendar = () => {
                 size="small"
                 label="Wstrzymane" 
                 sx={{ 
-                  bgcolor: '#757575', 
+                  bgcolor: '#9e9e9e', 
                   color: 'white', 
                   fontSize: '0.65rem',
                   height: 24,
