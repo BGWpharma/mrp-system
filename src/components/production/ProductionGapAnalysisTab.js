@@ -280,7 +280,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
   const ProductionTimeline = ({ data, workStartHour, workEndHour, isMobileView }) => {
     if (!data || data.length === 0) return null;
 
-    const timelineHeight = isMobileView ? 25 : 32; // jeszcze bardziej zmniejszona wysokość
+    const timelineHeight = isMobileView ? 40 : 50; // Zwiększona wysokość dla nakładających się sesji
     const timelineWidth = 800; // szerokość timeline
     const hourWidth = timelineWidth / (workEndHour - workStartHour);
 
@@ -326,6 +326,64 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
        return colors[overlappingCount % colors.length];
      };
 
+     // Funkcja do obliczania pozycji pionowej dla nakładających się sesji
+     // NOWE PODEJŚCIE: Podział na pół zamiast stosów
+     const getVerticalPosition = (sessions, currentIndex) => {
+       const currentSession = sessions[currentIndex];
+       const currentStart = new Date(currentSession.startTime);
+       const currentEnd = new Date(currentSession.endTime);
+       
+       // Sprawdź czy ta sesja nakłada się z jakąkolwiek inną
+       let hasOverlap = false;
+       let isFirstInOverlap = true;
+       
+       for (let i = 0; i < sessions.length; i++) {
+         if (i === currentIndex) continue;
+         
+         const otherSession = sessions[i];
+         const otherStart = new Date(otherSession.startTime);
+         const otherEnd = new Date(otherSession.endTime);
+         
+         // Sprawdź czy sesje się nakładają w czasie
+         if (currentStart < otherEnd && currentEnd > otherStart) {
+           hasOverlap = true;
+           // Jeśli znaleźliśmy wcześniejszą sesję która się nakłada, to nie jesteśmy pierwszymi
+           if (i < currentIndex) {
+             isFirstInOverlap = false;
+           }
+         }
+       }
+       
+       // Jeśli nie ma nakładki, zwróć pełną wysokość
+       if (!hasOverlap) {
+         return {
+           top: '15%',
+           height: '70%',
+           hasOverlap: false,
+           position: 'full'
+         };
+       }
+       
+       // Jeśli jest nakładka, podziel na pół
+       if (isFirstInOverlap) {
+         // Pierwsza sesja - górna połowa
+         return {
+           top: '15%',
+           height: '35%', // Połowa z 70%
+           hasOverlap: true,
+           position: 'top'
+         };
+       } else {
+         // Druga sesja - dolna połowa
+         return {
+           top: '50%', // 15% + 35% = 50%
+           height: '35%', // Połowa z 70%
+           hasOverlap: true,
+           position: 'bottom'
+         };
+       }
+     };
+
     return (
       <Box sx={{ mb: 1.5 }}>
         <Typography variant={isMobileView ? "body2" : "subtitle1"} gutterBottom sx={{ mb: 0.5, fontWeight: 'bold' }}>
@@ -345,6 +403,34 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
             <Box sx={{ width: isMobileView ? 8 : 10, height: isMobileView ? 8 : 10, backgroundColor: '#f44336' }} />
             <Typography variant="caption" sx={{ fontSize: isMobileView ? '0.6rem' : '0.65rem' }}>{t('productionReport.timeAnalysis.gapAnalysis.timeline.legend.gaps')}</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
+            <Box sx={{ 
+              width: isMobileView ? 8 : 10, 
+              height: isMobileView ? 8 : 10,
+              position: 'relative',
+              border: '1px solid #ddd'
+            }}>
+              {/* Górna połowa */}
+              <Box sx={{ 
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                backgroundColor: '#4caf50'
+              }} />
+              {/* Dolna połowa */}
+              <Box sx={{ 
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                backgroundColor: '#2e7d32'
+              }} />
+            </Box>
+            <Typography variant="caption" sx={{ fontSize: isMobileView ? '0.6rem' : '0.65rem' }}>Nakładające się sesje</Typography>
           </Box>
         </Box>
 
@@ -450,14 +536,41 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                           <Typography variant="caption" sx={{ display: 'block' }}>
                             {t('productionReport.timeAnalysis.gapAnalysis.timeline.duration')}: {formatMinutes(gap.gapMinutes)}
                           </Typography>
-                          {gap.beforeSession?.task && (
+                          {/* Wsparcie dla nowych pól z tablicami sesji */}
+                          {(gap.beforeSessions || gap.beforeSession) && (
                             <Typography variant="caption" sx={{ display: 'block' }}>
-                              Przed: {gap.beforeSession.task.moNumber || gap.beforeSession.task.name}
+                              Przed: {
+                                gap.beforeSessions ? 
+                                  gap.beforeSessions.map(s => s.task?.moNumber || s.task?.name).filter(Boolean).join(', ') :
+                                  (gap.beforeSession.task?.moNumber || gap.beforeSession.task?.name)
+                              }
                             </Typography>
                           )}
-                          {gap.afterSession?.task && (
+                          {(gap.afterSessions || gap.afterSession) && (
                             <Typography variant="caption" sx={{ display: 'block' }}>
-                              Po: {gap.afterSession.task.moNumber || gap.afterSession.task.name}
+                              Po: {
+                                gap.afterSessions ? 
+                                  gap.afterSessions.map(s => s.task?.moNumber || s.task?.name).filter(Boolean).join(', ') :
+                                  (gap.afterSession.task?.moNumber || gap.afterSession.task?.name)
+                              }
+                            </Typography>
+                          )}
+                          {(gap.nextSessions || gap.nextSession) && (
+                            <Typography variant="caption" sx={{ display: 'block' }}>
+                              Następne: {
+                                gap.nextSessions ? 
+                                  gap.nextSessions.map(s => s.task?.moNumber || s.task?.name).filter(Boolean).join(', ') :
+                                  (gap.nextSession.task?.moNumber || gap.nextSession.task?.name)
+                              }
+                            </Typography>
+                          )}
+                          {(gap.previousSessions || gap.previousSession) && (
+                            <Typography variant="caption" sx={{ display: 'block' }}>
+                              Poprzednie: {
+                                gap.previousSessions ? 
+                                  gap.previousSessions.map(s => s.task?.moNumber || s.task?.name).filter(Boolean).join(', ') :
+                                  (gap.previousSession.task?.moNumber || gap.previousSession.task?.name)
+                              }
                             </Typography>
                           )}
                         </Box>
@@ -487,14 +600,27 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                            boxShadow: gap.type === 'full_day' ? '0 2px 6px rgba(255, 235, 59, 0.4)' : '0 2px 6px rgba(244, 67, 54, 0.4)'
                          }}
                         onClick={() => {
-                          if (gap.beforeSession?.taskId) {
-                            handleTaskClick(gap.beforeSession.taskId);
-                          } else if (gap.afterSession?.taskId) {
-                            handleTaskClick(gap.afterSession.taskId);
-                          } else if (gap.nextSession?.taskId) {
-                            handleTaskClick(gap.nextSession.taskId);
-                          } else if (gap.previousSession?.taskId) {
-                            handleTaskClick(gap.previousSession.taskId);
+                          // Logika click dla nowych pól z tablicami sesji
+                          const getFirstTaskId = (sessions, fallbackSession) => {
+                            if (sessions && sessions.length > 0) {
+                              return sessions[0].taskId;
+                            }
+                            return fallbackSession?.taskId;
+                          };
+
+                          const beforeTaskId = getFirstTaskId(gap.beforeSessions, gap.beforeSession);
+                          const afterTaskId = getFirstTaskId(gap.afterSessions, gap.afterSession);
+                          const nextTaskId = getFirstTaskId(gap.nextSessions, gap.nextSession);
+                          const previousTaskId = getFirstTaskId(gap.previousSessions, gap.previousSession);
+
+                          if (beforeTaskId) {
+                            handleTaskClick(beforeTaskId);
+                          } else if (afterTaskId) {
+                            handleTaskClick(afterTaskId);
+                          } else if (nextTaskId) {
+                            handleTaskClick(nextTaskId);
+                          } else if (previousTaskId) {
+                            handleTaskClick(previousTaskId);
                           }
                         }}
                       />
@@ -512,6 +638,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
 
                    const task = gapAnalysis?.tasksMap?.[session.taskId];
                    const sessionColor = getSessionColor(day.sessions, sessionIndex);
+                   const verticalPosition = getVerticalPosition(day.sessions, sessionIndex);
 
                   return (
                     <Tooltip
@@ -541,26 +668,31 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                        <Box
                          sx={{
                            position: 'absolute',
-                           top: '15%',
+                           top: verticalPosition.top,
                            left: `${left}%`,
                            width: `${width}%`,
-                           height: '70%',
+                           height: verticalPosition.height,
                            backgroundColor: sessionColor,
                            cursor: 'pointer',
                            opacity: 0.95,
                            '&:hover': {
                              opacity: 1,
                              transform: 'scale(1.05)',
-                             zIndex: 50,
+                             zIndex: 60,
                              boxShadow: `0 4px 12px ${sessionColor}60`,
                              outline: '2px solid #fff'
                            },
                            transition: 'all 0.2s ease',
                            border: `1px solid ${sessionColor}`,
                            borderRadius: 0.3,
-                           zIndex: 10 + sessionIndex, // Wyższy z-index dla późniejszych sesji
+                           zIndex: 10 + sessionIndex,
                            boxShadow: `0 2px 6px ${sessionColor}40`,
-                           minHeight: '2px' // Minimalna wysokość dla bardzo małych sesji
+                           minHeight: '2px', // Minimalna wysokość dla bardzo małych sesji
+                           // Dodatkowe style dla nakładających się sesji
+                           ...(verticalPosition.hasOverlap && {
+                             border: `2px solid ${sessionColor}`,
+                             boxShadow: `0 2px 6px ${sessionColor}60`
+                           })
                          }}
                         onClick={() => handleTaskClick(session.taskId)}
                       >
@@ -575,7 +707,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                               transform: 'translate(-50%, -50%)',
                               color: 'white',
                               fontWeight: 'bold',
-                              fontSize: isMobileView ? '0.5rem' : '0.6rem',
+                              fontSize: isMobileView ? '0.4rem' : '0.55rem', // Nieco mniejszy font dla nakładek
                               textAlign: 'center',
                               overflow: 'hidden',
                               whiteSpace: 'nowrap',

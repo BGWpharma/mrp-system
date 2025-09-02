@@ -385,68 +385,70 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
         continue;
       }
 
-      // Sprawdź lukę przed pierwszą sesją
-      const firstSession = daysSessions[0];
-      if (isAfter(firstSession.startTime, dayStart)) {
-        const gapMinutes = differenceInMinutes(firstSession.startTime, dayStart);
-        if (gapMinutes >= minGapMinutes) {
-          const gap = {
-            type: 'before_first_session',
-            date: dayKey,
-            formattedDate: format(day, 'dd.MM.yyyy'),
-            dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
-            startTime: dayStart,
-            endTime: firstSession.startTime,
-            formattedStartTime: format(dayStart, 'HH:mm'),
-            formattedEndTime: format(firstSession.startTime, 'HH:mm'),
-            gapMinutes,
-            nextSession: {
-              id: firstSession.id,
-              taskId: firstSession.taskId,
-              quantity: firstSession.quantity,
-              task: tasksMap[firstSession.taskId] || null
-            },
-            description: `Luka przed pierwszą sesją produkcyjną (${format(dayStart, 'HH:mm')} - ${format(firstSession.startTime, 'HH:mm')})`
-          };
+      // NOWA LOGIKA: Łączenie nakładających się sesji w ciągłe okresy produkcji
+      const mergedPeriods = [];
+      
+      if (daysSessions.length > 0) {
+        // Sortuj sesje według czasu rozpoczęcia (już posortowane, ale dla pewności)
+        const sortedDaySessions = [...daysSessions].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+        
+        let currentPeriod = {
+          startTime: sortedDaySessions[0].startTime,
+          endTime: sortedDaySessions[0].endTime,
+          sessions: [sortedDaySessions[0]]
+        };
+        
+        for (let i = 1; i < sortedDaySessions.length; i++) {
+          const session = sortedDaySessions[i];
           
-          gaps.push(gap);
-          dailyAnalysis[dayKey].gaps.push(gap);
-          dailyAnalysis[dayKey].gapMinutes += gapMinutes;
-          totalGapMinutes += gapMinutes;
+          // Sprawdź czy sesja nakłada się lub bezpośrednio sąsiaduje z obecnym okresem
+          // Używamy <= zamiast < aby uwzględnić przypadki gdy jedna sesja kończy się dokładnie gdy druga się zaczyna
+          if (session.startTime <= currentPeriod.endTime) {
+            // Sesja nakłada się lub sąsiaduje - rozszerz obecny okres
+            currentPeriod.endTime = new Date(Math.max(currentPeriod.endTime.getTime(), session.endTime.getTime()));
+            currentPeriod.sessions.push(session);
+            
+            console.log(`[ANALIZA LUK] Połączono nakładające się sesje: ${format(session.startTime, 'HH:mm')}-${format(session.endTime, 'HH:mm')} z okresem ${format(currentPeriod.startTime, 'HH:mm')}-${format(currentPeriod.endTime, 'HH:mm')}`);
+          } else {
+            // Sesja nie nakłada się - zakończ obecny okres i rozpocznij nowy
+            mergedPeriods.push(currentPeriod);
+            currentPeriod = {
+              startTime: session.startTime,
+              endTime: session.endTime,
+              sessions: [session]
+            };
+          }
         }
+        
+        // Dodaj ostatni okres
+        mergedPeriods.push(currentPeriod);
+        
+        console.log(`[ANALIZA LUK] Dzień ${dayKey}: ${daysSessions.length} sesji połączono w ${mergedPeriods.length} ciągłych okresów produkcji`);
       }
 
-      // Sprawdź luki między sesjami
-      for (let i = 0; i < daysSessions.length - 1; i++) {
-        const currentSession = daysSessions[i];
-        const nextSession = daysSessions[i + 1];
-        
-        if (isAfter(nextSession.startTime, currentSession.endTime)) {
-          const gapMinutes = differenceInMinutes(nextSession.startTime, currentSession.endTime);
+      // Sprawdź lukę przed pierwszym okresem
+      if (mergedPeriods.length > 0) {
+        const firstPeriod = mergedPeriods[0];
+        if (isAfter(firstPeriod.startTime, dayStart)) {
+          const gapMinutes = differenceInMinutes(firstPeriod.startTime, dayStart);
           if (gapMinutes >= minGapMinutes) {
             const gap = {
-              type: 'between_sessions',
+              type: 'before_first_session',
               date: dayKey,
               formattedDate: format(day, 'dd.MM.yyyy'),
               dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
-              startTime: currentSession.endTime,
-              endTime: nextSession.startTime,
-              formattedStartTime: format(currentSession.endTime, 'HH:mm'),
-              formattedEndTime: format(nextSession.startTime, 'HH:mm'),
+              startTime: dayStart,
+              endTime: firstPeriod.startTime,
+              formattedStartTime: format(dayStart, 'HH:mm'),
+              formattedEndTime: format(firstPeriod.startTime, 'HH:mm'),
               gapMinutes,
-              beforeSession: {
-                id: currentSession.id,
-                taskId: currentSession.taskId,
-                quantity: currentSession.quantity,
-                task: tasksMap[currentSession.taskId] || null
-              },
-              afterSession: {
-                id: nextSession.id,
-                taskId: nextSession.taskId,
-                quantity: nextSession.quantity,
-                task: tasksMap[nextSession.taskId] || null
-              },
-              description: `Luka między sesjami produkcyjnymi (${format(currentSession.endTime, 'HH:mm')} - ${format(nextSession.startTime, 'HH:mm')})`
+              nextSessions: firstPeriod.sessions.map(session => ({
+                id: session.id,
+                taskId: session.taskId,
+                quantity: session.quantity,
+                task: tasksMap[session.taskId] || null
+              })),
+              description: `Luka przed pierwszym okresem produkcyjnym (${format(dayStart, 'HH:mm')} - ${format(firstPeriod.startTime, 'HH:mm')})`
             };
             
             gaps.push(gap);
@@ -457,34 +459,76 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
         }
       }
 
-      // Sprawdź lukę po ostatniej sesji
-      const lastSession = daysSessions[daysSessions.length - 1];
-      if (isBefore(lastSession.endTime, dayEnd)) {
-        const gapMinutes = differenceInMinutes(dayEnd, lastSession.endTime);
+      // Sprawdź luki między okresami produkcji
+      for (let i = 0; i < mergedPeriods.length - 1; i++) {
+        const currentPeriod = mergedPeriods[i];
+        const nextPeriod = mergedPeriods[i + 1];
+        
+        // Teraz sprawdzamy luki tylko między rzeczywiście oddzielonymi okresami
+        const gapMinutes = differenceInMinutes(nextPeriod.startTime, currentPeriod.endTime);
         if (gapMinutes >= minGapMinutes) {
           const gap = {
-            type: 'after_last_session',
+            type: 'between_sessions',
             date: dayKey,
             formattedDate: format(day, 'dd.MM.yyyy'),
             dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
-            startTime: lastSession.endTime,
-            endTime: dayEnd,
-            formattedStartTime: format(lastSession.endTime, 'HH:mm'),
-            formattedEndTime: format(dayEnd, 'HH:mm'),
+            startTime: currentPeriod.endTime,
+            endTime: nextPeriod.startTime,
+            formattedStartTime: format(currentPeriod.endTime, 'HH:mm'),
+            formattedEndTime: format(nextPeriod.startTime, 'HH:mm'),
             gapMinutes,
-            previousSession: {
-              id: lastSession.id,
-              taskId: lastSession.taskId,
-              quantity: lastSession.quantity,
-              task: tasksMap[lastSession.taskId] || null
-            },
-            description: `Luka po ostatniej sesji produkcyjnej (${format(lastSession.endTime, 'HH:mm')} - ${format(dayEnd, 'HH:mm')})`
+            beforeSessions: currentPeriod.sessions.map(session => ({
+              id: session.id,
+              taskId: session.taskId,
+              quantity: session.quantity,
+              task: tasksMap[session.taskId] || null
+            })),
+            afterSessions: nextPeriod.sessions.map(session => ({
+              id: session.id,
+              taskId: session.taskId,
+              quantity: session.quantity,
+              task: tasksMap[session.taskId] || null
+            })),
+            description: `Luka między okresami produkcyjnymi (${format(currentPeriod.endTime, 'HH:mm')} - ${format(nextPeriod.startTime, 'HH:mm')})`
           };
           
           gaps.push(gap);
           dailyAnalysis[dayKey].gaps.push(gap);
           dailyAnalysis[dayKey].gapMinutes += gapMinutes;
           totalGapMinutes += gapMinutes;
+        }
+      }
+
+      // Sprawdź lukę po ostatnim okresie
+      if (mergedPeriods.length > 0) {
+        const lastPeriod = mergedPeriods[mergedPeriods.length - 1];
+        if (isBefore(lastPeriod.endTime, dayEnd)) {
+          const gapMinutes = differenceInMinutes(dayEnd, lastPeriod.endTime);
+          if (gapMinutes >= minGapMinutes) {
+            const gap = {
+              type: 'after_last_session',
+              date: dayKey,
+              formattedDate: format(day, 'dd.MM.yyyy'),
+              dayOfWeek: format(day, 'EEEE', { locale: plLocale }),
+              startTime: lastPeriod.endTime,
+              endTime: dayEnd,
+              formattedStartTime: format(lastPeriod.endTime, 'HH:mm'),
+              formattedEndTime: format(dayEnd, 'HH:mm'),
+              gapMinutes,
+              previousSessions: lastPeriod.sessions.map(session => ({
+                id: session.id,
+                taskId: session.taskId,
+                quantity: session.quantity,
+                task: tasksMap[session.taskId] || null
+              })),
+              description: `Luka po ostatnim okresie produkcyjnym (${format(lastPeriod.endTime, 'HH:mm')} - ${format(dayEnd, 'HH:mm')})`
+            };
+            
+            gaps.push(gap);
+            dailyAnalysis[dayKey].gaps.push(gap);
+            dailyAnalysis[dayKey].gapMinutes += gapMinutes;
+            totalGapMinutes += gapMinutes;
+          }
         }
       }
 
