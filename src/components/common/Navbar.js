@@ -24,7 +24,8 @@ import {
   Divider,
   ListItemIcon,
   useMediaQuery,
-  useTheme as useMuiTheme
+  useTheme as useMuiTheme,
+  Portal
 } from '@mui/material';
 import { 
   Notifications as NotificationsIcon, 
@@ -123,8 +124,10 @@ const Navbar = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const navigate = useNavigate();
   const searchResultsRef = useRef(null);
+  const searchContainerRef = useRef(null);
   
   // Używamy kontekstu sidebara
   const { isOpen, toggle } = useSidebar();
@@ -174,6 +177,31 @@ const Navbar = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Kalkulacja pozycji dropdown
+  useEffect(() => {
+    if (isSearchFocused && searchContainerRef.current) {
+      const updatePosition = () => {
+        const rect = searchContainerRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY + 8, // 8px margines jak w mt: 1
+          left: rect.left + window.scrollX,
+          width: rect.width
+        });
+      };
+      
+      updatePosition();
+      
+      // Aktualizuj pozycję przy zmianie rozmiaru okna
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition);
+      
+      return () => {
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition);
+      };
+    }
+  }, [isSearchFocused]);
 
   // Sprawdza czy wynik w cache jest ważny
   const isCacheValid = (cacheEntry) => {
@@ -506,7 +534,7 @@ const Navbar = () => {
             mx: isMobile ? 1 : 2,
             ml: isMobile ? 1 : 2,
             mr: isMobile ? 1 : 2
-          }} ref={searchResultsRef}>
+          }} ref={searchContainerRef}>
             <SearchIconWrapper>
               <SearchIcon sx={{ 
                 color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(51, 65, 85, 0.8)', // slate-700/80 - ciemniejszy dla lepszego kontrastu
@@ -594,22 +622,23 @@ const Navbar = () => {
               </IconButton>
             )}
             
-            {/* Wyniki wyszukiwania */}
+            {/* Wyniki wyszukiwania - używamy Portal żeby uniknąć problemów z z-index */}
             {isSearchFocused && searchResults.length > 0 && (
-              <Paper
-                sx={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  zIndex: 1000,
-                  mt: 1,
-                  maxHeight: '80vh',
-                  overflow: 'auto',
-                  boxShadow: 3,
-                  bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
-                }}
-              >
+              <Portal>
+                <Paper
+                  ref={searchResultsRef}
+                  sx={{
+                    position: 'fixed',
+                    top: dropdownPosition.top,
+                    left: dropdownPosition.left,
+                    width: dropdownPosition.width,
+                    zIndex: 10002,
+                    maxHeight: '80vh',
+                    overflow: 'auto',
+                    boxShadow: 3,
+                    bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+                  }}
+                >
                 <List>
                   {searchResults.map((result) => (
                     <ListItem 
@@ -663,28 +692,30 @@ const Navbar = () => {
                     </ListItem>
                   ))}
                 </List>
-              </Paper>
+                </Paper>
+              </Portal>
             )}
 
-            {/* Informacja o minimalnej liczbie znaków */}
+            {/* Informacja o minimalnej liczbie znaków - również w Portal */}
             {isSearchFocused && searchQuery.length > 0 && searchQuery.length < 2 && (
-              <Paper
-                sx={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  zIndex: 1000,
-                  mt: 1,
-                  p: 2,
-                  boxShadow: 3,
-                  bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary" align="center">
-                  Wpisz co najmniej 2 znaki aby rozpocząć wyszukiwanie
-                </Typography>
-              </Paper>
+              <Portal>
+                <Paper
+                  sx={{
+                    position: 'fixed',
+                    top: dropdownPosition.top,
+                    left: dropdownPosition.left,
+                    width: dropdownPosition.width,
+                    zIndex: 10002,
+                    p: 2,
+                    boxShadow: 3,
+                    bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" align="center">
+                    Wpisz co najmniej 2 znaki aby rozpocząć wyszukiwanie
+                  </Typography>
+                </Paper>
+              </Portal>
             )}
           </Box>
           

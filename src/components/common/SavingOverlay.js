@@ -10,7 +10,7 @@ import {
 import { styled } from '@mui/material/styles';
 
 const StyledBackdrop = styled(Backdrop)(({ theme }) => ({
-  zIndex: theme.zIndex.modal + 1,
+  zIndex: 999, // Niższy od dropdown wyszukiwania (1000) ale wyższy od zawartości strony
   backdropFilter: 'blur(8px)',
   background: 'rgba(0, 0, 0, 0.3)',
 }));
