@@ -589,7 +589,7 @@ const Sidebar = ({ onToggle }) => {
                         fontSize: '0.875rem',
                         fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
                         color: isMenuActive(item.path) 
-                          ? (mode === 'dark' ? '#ffffff' : '#ffffff') // zawsze biały dla selected w obu motywach
+                          ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
                           : 'inherit'
                       }} 
                     />
@@ -646,7 +646,7 @@ const Sidebar = ({ onToggle }) => {
                             fontSize: '0.875rem',
                             fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
                             color: subItem.path && location.pathname === subItem.path
-                              ? (mode === 'dark' ? '#ffffff' : '#ffffff') // biały tekst dla selected sub-items
+                              ? (mode === 'dark' ? '#ffffff' : '#1e293b') // biały dla dark mode, ciemny dla light mode
                               : 'inherit'
                           }} 
                         />
@@ -684,7 +684,7 @@ const Sidebar = ({ onToggle }) => {
                       ? location.pathname === '/' ? 'bold' : 'normal'
                       : isActive(item.path) ? 'bold' : 'normal',
                     color: (item.path === '/' ? location.pathname === '/' : isActive(item.path))
-                      ? (mode === 'dark' ? '#ffffff' : '#ffffff') // biały tekst dla selected items
+                      ? '#ffffff' // biały tekst dla selected items - działa dla obu motywów dzięki gradientowi tła
                       : 'inherit'
                   }} 
                 />
