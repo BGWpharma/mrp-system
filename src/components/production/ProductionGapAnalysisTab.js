@@ -77,6 +77,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobileView = useMediaQuery(theme.breakpoints.down('sm'));
+  const isDarkMode = theme.palette.mode === 'dark';
 
   const [loading, setLoading] = useState(false);
   const [gapAnalysisStartDate, setGapAnalysisStartDate] = useState(startDate);
@@ -472,7 +473,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                 sx={{
                   width: isMobileView ? 70 : 90,
                   p: isMobileView ? 0.2 : 0.5,
-                  backgroundColor: 'grey.50',
+                  backgroundColor: isDarkMode ? 'grey.800' : 'grey.50',
                   borderRight: '1px solid',
                   borderColor: 'divider',
                   display: 'flex',
@@ -480,13 +481,35 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                   justifyContent: 'center'
                 }}
               >
-                <Typography variant="caption" fontWeight="bold" sx={{ fontSize: isMobileView ? '0.6rem' : '0.7rem', lineHeight: 1.1 }}>
+                <Typography 
+                  variant="caption" 
+                  fontWeight="bold" 
+                  sx={{ 
+                    fontSize: isMobileView ? '0.6rem' : '0.7rem', 
+                    lineHeight: 1.1,
+                    color: isDarkMode ? 'grey.100' : 'text.primary'
+                  }}
+                >
                   {isMobileView ? day.formattedDate.substring(0, 5) : day.formattedDate.substring(0, 8)}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: isMobileView ? '0.55rem' : '0.65rem', lineHeight: 1 }}>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    fontSize: isMobileView ? '0.55rem' : '0.65rem', 
+                    lineHeight: 1,
+                    color: isDarkMode ? 'grey.300' : 'text.secondary'
+                  }}
+                >
                   {isMobileView ? day.dayOfWeek.substring(0, 2) : day.dayOfWeek.substring(0, 3)}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: isMobileView ? '0.55rem' : '0.65rem', lineHeight: 1 }}>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    fontSize: isMobileView ? '0.55rem' : '0.65rem', 
+                    lineHeight: 1,
+                    color: isDarkMode ? 'grey.300' : 'text.secondary'
+                  }}
+                >
                   {day.coverage}%
                 </Typography>
               </Box>

@@ -950,6 +950,46 @@ body.dark-mode .react-calendar-timeline .rct-sidebar-header {
   border-bottom: 2px solid #3949ab !important;
 }
 
+/* Style dla wierszy sidebar w trybie ciemnym */
+body.dark-mode .react-calendar-timeline .rct-sidebar-row {
+  background-color: #2d3748 !important;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid #4a5568 !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-sidebar-row-even {
+  background-color: #374151 !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-sidebar-row-odd {
+  background-color: #2d3748 !important;
+}
+
+/* Style dla tekstu w wierszach sidebar */
+body.dark-mode .react-calendar-timeline .rct-sidebar-row .rct-sidebar-row-title,
+body.dark-mode .react-calendar-timeline .rct-sidebar-row .rct-sidebar-row-content {
+  color: #e2e8f0 !important;
+}
+
+/* Style dla wszystkich elementów w sidebar timeline */
+body.dark-mode .react-calendar-timeline .rct-sidebar {
+  background-color: #2d3748 !important;
+  color: #e2e8f0 !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-sidebar .rct-sidebar-title {
+  color: #ffffff !important;
+}
+
+/* Ogólny styl dla wszystkich elementów tekstu w sidebar react-calendar-timeline w trybie ciemnym */
+body.dark-mode .react-calendar-timeline .rct-sidebar * {
+  color: #e2e8f0 !important;
+}
+
+body.dark-mode .react-calendar-timeline .rct-sidebar .rct-sidebar-header * {
+  color: #ffffff !important;
+}
+
 /* Animacje dla nagłówków */
 .react-calendar-timeline .rct-header-cell {
   transition: all 0.2s ease !important;
