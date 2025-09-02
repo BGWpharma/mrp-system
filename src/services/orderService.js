@@ -1853,30 +1853,67 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
       }
     }
     
-    // Jeśli nie znaleziono CMR, zachowaj istniejące dane
+    // POPRAWKA: Jeśli nie znaleziono CMR, resetuj wszystko do zera
     if (linkedCMRs.length === 0) {
-      console.log('Brak powiązanych CMR - zachowuję istniejące dane');
+      console.log('🧹 Brak powiązanych CMR - resetuję wszystkie ilości do zera');
+      
+      // Resetuj wszystkie pozycje do zera
+      const zeroedItems = items.map(item => ({
+        ...item,
+        shippedQuantity: 0,
+        lastShipmentDate: null,
+        lastCmrNumber: null,
+        cmrHistory: [], // CAŁKOWITE WYCZYSZCZENIE historii CMR
+        resetAt: new Date().toISOString(),
+        resetReason: 'no_cmr_found_refresh_operation'
+      }));
+      
+      // Zapisz resetowane dane do bazy
+      await updateDoc(orderRef, {
+        items: zeroedItems,
+        updatedBy: userId,
+        updatedAt: serverTimestamp(),
+        lastCmrRefreshReset: serverTimestamp()
+      });
+      
+      console.log('✅ Wszystkie ilości zresetowane do zera - brak CMR');
+      
       return { 
         success: true, 
-        updatedItems: items,
+        updatedItems: zeroedItems,
         stats: {
           processedCMRs: 0,
-          shippedItems: items.filter(item => parseFloat(item.shippedQuantity || 0) > 0).length,
-          cmrReferences: 0
+          shippedItems: 0,
+          cmrReferences: 0,
+          message: 'Zresetowano wszystkie ilości - brak powiązanych CMR'
         }
       };
     }
     
-    // Resetuj wszystkie ilości wysłane i historie CMR
+    // KROK 1: NATYCHMIASTOWE RESETOWANIE - zapisz reset do bazy przed przeliczaniem
+    console.log('🔄 KROK 1: Resetowanie wszystkich ilości wysłanych i historii CMR...');
     const resetItems = items.map(item => ({
       ...item,
       shippedQuantity: 0,
       lastShipmentDate: null,
       lastCmrNumber: null,
-      cmrHistory: []
+      cmrHistory: [], // CAŁKOWITE WYCZYSZCZENIE historii CMR
+      resetAt: new Date().toISOString(), // Znacznik czasu resetu
+      resetReason: 'refresh_cmr_operation'
     }));
     
-    // Oblicz ponownie ilości wysłane na podstawie wszystkich CMR
+    // NATYCHMIAST zapisz reset do bazy danych
+    console.log('💾 Zapisywanie zresetowanych danych do bazy...');
+    await updateDoc(orderRef, {
+      items: resetItems,
+      updatedBy: userId,
+      updatedAt: serverTimestamp(),
+      lastCmrRefreshReset: serverTimestamp()
+    });
+    console.log('✅ Reset zapisany - wszystkie ilości wysłane i cmrHistory wyzerowane');
+    
+    // KROK 2: Oblicz ponownie ilości wysłane na podstawie wszystkich CMR
+    console.log('🔄 KROK 2: Przeliczanie ilości na podstawie istniejących CMR...');
     let updatedItems = [...resetItems];
     let processedCMRs = 0;
     
@@ -1928,6 +1965,22 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
     
     for (const cmr of linkedCMRs) {
       console.log(`Sprawdzanie CMR ${cmr.cmrNumber} (status: ${cmr.status})...`);
+      
+      // NOWA FUNKCJONALNOŚĆ: Sprawdź czy dokument CMR nadal istnieje w bazie danych
+      try {
+        const { getCmrDocumentById } = await import('./cmrService');
+        const cmrExists = await getCmrDocumentById(cmr.id);
+        
+        if (!cmrExists) {
+          console.warn(`⚠️ CMR ${cmr.cmrNumber} (ID: ${cmr.id}) nie istnieje w bazie danych - pomijam`);
+          continue;
+        }
+        
+        console.log(`✅ CMR ${cmr.cmrNumber} istnieje w bazie danych`);
+      } catch (error) {
+        console.warn(`⚠️ Nie można sprawdzić istnienia CMR ${cmr.cmrNumber} (ID: ${cmr.id}): ${error.message} - pomijam`);
+        continue;
+      }
       
       // Przetwarzaj tylko CMR w statusie "W transporcie", "Dostarczone" lub "Zakończony"
       if (cmr.status === 'W transporcie' || cmr.status === 'Dostarczone' || cmr.status === 'Zakończony') {

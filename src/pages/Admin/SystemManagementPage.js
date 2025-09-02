@@ -27,6 +27,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { migrateAIMessageLimits, migrateNutritionalComponents, cleanupOrphanedProductionHistory } from '../../services/migrationService';
+import { cleanNegativeCmrHistoryEntries } from '../../services/cmrService';
 import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';
@@ -53,6 +54,10 @@ const SystemManagementPage = () => {
   // Nowe stany dla czyszczenia historii produkcji
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupResults, setCleanupResults] = useState(null);
+  
+  // Stany dla czyszczenia ujemnych wpisów CMR
+  const [cmrCleanupLoading, setCmrCleanupLoading] = useState(false);
+  const [cmrCleanupResults, setCmrCleanupResults] = useState(null);
   
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
@@ -179,6 +184,36 @@ const SystemManagementPage = () => {
     }
   };
 
+  // Funkcja do czyszczenia ujemnych wpisów w cmrHistory
+  const handleCleanNegativeCmrEntries = async () => {
+    const confirmMessage = `Czy na pewno chcesz wyczyścić ujemne wpisy w historii CMR? Ta operacja usunie wszystkie ujemne wartości z cmrHistory i przeliczy ilości wysłane. Operacja jest nieodwracalna!`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setCmrCleanupLoading(true);
+      setCmrCleanupResults(null);
+      
+      showNotification('Rozpoczynam oczyszczanie ujemnych wpisów CMR...', 'info');
+      
+      const results = await cleanNegativeCmrHistoryEntries(currentUser.uid);
+      
+      if (results.success) {
+        setCmrCleanupResults(results);
+        showSuccess(`Oczyszczanie zakończone: ${results.cleanedOrders} zamówień, ${results.cleanedEntries} ujemnych wpisów usuniętych`);
+      } else {
+        showError(`Błąd podczas oczyszczania: ${results.error || 'Nieznany błąd'}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas oczyszczania ujemnych wpisów CMR:', error);
+      showError('Wystąpił błąd podczas oczyszczania ujemnych wpisów CMR. Sprawdź konsolę.');
+    } finally {
+      setCmrCleanupLoading(false);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -205,7 +240,60 @@ const SystemManagementPage = () => {
         {/* Zarządzanie składnikami odżywczymi */}
         <NutritionalComponentsManager />
         
-        {/* NOWA SEKCJA: Czyszczenie sierocych wpisów historii produkcji */}
+        {/* NOWA SEKCJA: Czyszczenie ujemnych wpisów CMR */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              🗑️ Czyszczenie ujemnych wpisów CMR
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              To narzędzie znajdzie i usunie ujemne wpisy w historii CMR (cmrHistory) z zamówień.
+              Ujemne wartości mogą powstać przez błędy w systemie anulowania CMR i powodują nieprawidłowe wyświetlanie ilości wysłanych w tabeli CO.
+              Po oczyszczeniu ilości wysłane będą przeliczone na podstawie pozostałych pozytywnych wpisów CMR.
+            </Typography>
+            
+            {cmrCleanupResults && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="success">
+                  Oczyszczanie ujemnych wpisów CMR zakończone pomyślnie!
+                </Alert>
+                <List dense>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Przetworzono zamówień: ${cmrCleanupResults.processedOrders}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Oczyszczono zamówień: ${cmrCleanupResults.cleanedOrders}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Usunięto ujemnych wpisów: ${cmrCleanupResults.cleanedEntries}`} 
+                    />
+                  </ListItem>
+                </List>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Szczegóły operacji zostały wyświetlone w konsoli przeglądarki (F12).
+                </Alert>
+              </Box>
+            )}
+          </CardContent>
+          <CardActions>
+            <Button 
+              startIcon={cmrCleanupLoading ? <CircularProgress size={20} /> : <CleaningIcon />}
+              variant="contained" 
+              color="warning"
+              onClick={handleCleanNegativeCmrEntries}
+              disabled={cmrCleanupLoading}
+            >
+              {cmrCleanupLoading ? 'Oczyszczanie...' : 'Wyczyść ujemne wpisy CMR'}
+            </Button>
+          </CardActions>
+        </Card>
+
+        {/* SEKCJA: Czyszczenie sierocych wpisów historii produkcji */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>

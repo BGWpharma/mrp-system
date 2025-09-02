@@ -331,36 +331,9 @@ export const createCmrDocument = async (cmrData, userId) => {
       await Promise.all(itemPromises);
     }
     
-    // NOWA FUNKCJONALNOŚĆ: Automatyczna aktualizacja ilości wysłanych przy tworzeniu CMR
-    // (nie tylko przy zmianie statusu na "W transporcie")
-    if (items && items.length > 0 && (cmrDataWithoutItems.linkedOrderId || (cmrDataWithoutItems.linkedOrderIds && cmrDataWithoutItems.linkedOrderIds.length > 0))) {
-      try {
-        console.log('🚀 Automatyczna aktualizacja ilości wysłanych przy tworzeniu CMR...');
-        
-        const ordersToUpdate = [];
-        
-        // Sprawdź nowy format (wiele zamówień)
-        if (cmrDataWithoutItems.linkedOrderIds && Array.isArray(cmrDataWithoutItems.linkedOrderIds) && cmrDataWithoutItems.linkedOrderIds.length > 0) {
-          ordersToUpdate.push(...cmrDataWithoutItems.linkedOrderIds);
-        }
-        
-        // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
-        if (cmrDataWithoutItems.linkedOrderId && !ordersToUpdate.includes(cmrDataWithoutItems.linkedOrderId)) {
-          ordersToUpdate.push(cmrDataWithoutItems.linkedOrderId);
-        }
-        
-        if (ordersToUpdate.length > 0) {
-          console.log(`🔄 Aktualizacja ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy tworzeniu CMR...`);
-          for (const orderId of ordersToUpdate) {
-            await updateLinkedOrderShippedQuantities(orderId, items, cleanedCmrData.cmrNumber, userId);
-            console.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie nowego CMR ${cleanedCmrData.cmrNumber}`);
-          }
-        }
-      } catch (orderUpdateError) {
-        console.error('❌ Błąd podczas automatycznej aktualizacji ilości wysłanych przy tworzeniu CMR:', orderUpdateError);
-        // Nie przerywamy procesu tworzenia CMR - tylko logujemy błąd
-      }
-    }
+    // USUNIĘTO: Automatyczne aktualizacje ilości przy tworzeniu CMR
+    // Ilości są aktualizowane TYLKO przy zmianie statusu na "W transporcie"
+    console.log('📝 CMR utworzony - ilości wysłane będą zaktualizowane po zmianie statusu na "W transporcie"');
 
     return {
       id: cmrRef.id,
@@ -518,51 +491,9 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       loadingDate: convertedLoadingDate
     });
 
-    // NOWA FUNKCJONALNOŚĆ: Automatyczna aktualizacja ilości wysłanych przy edycji CMR
-    // (nie tylko przy zmianie statusu na "W transporcie")
-    if (items && items.length > 0 && (cleanedUpdateData.linkedOrderId || (cleanedUpdateData.linkedOrderIds && cleanedUpdateData.linkedOrderIds.length > 0))) {
-      try {
-        console.log('🚀 Automatyczna aktualizacja ilości wysłanych przy edycji CMR...');
-        
-        const ordersToUpdate = [];
-        
-        // Sprawdź nowy format (wiele zamówień)
-        if (cleanedUpdateData.linkedOrderIds && Array.isArray(cleanedUpdateData.linkedOrderIds) && cleanedUpdateData.linkedOrderIds.length > 0) {
-          ordersToUpdate.push(...cleanedUpdateData.linkedOrderIds);
-        }
-        
-        // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
-        if (cleanedUpdateData.linkedOrderId && !ordersToUpdate.includes(cleanedUpdateData.linkedOrderId)) {
-          ordersToUpdate.push(cleanedUpdateData.linkedOrderId);
-        }
-        
-        // Jeśli brak powiązanych zamówień w danych aktualizacji, sprawdź istniejący dokument CMR
-        if (ordersToUpdate.length === 0) {
-          try {
-            const existingCmrData = await getCmrDocumentById(cmrId);
-            if (existingCmrData.linkedOrderIds && Array.isArray(existingCmrData.linkedOrderIds) && existingCmrData.linkedOrderIds.length > 0) {
-              ordersToUpdate.push(...existingCmrData.linkedOrderIds);
-            }
-            if (existingCmrData.linkedOrderId && !ordersToUpdate.includes(existingCmrData.linkedOrderId)) {
-              ordersToUpdate.push(existingCmrData.linkedOrderId);
-            }
-          } catch (fetchError) {
-            console.warn('Nie udało się pobrać istniejących danych CMR dla automatycznej aktualizacji:', fetchError);
-          }
-        }
-        
-        if (ordersToUpdate.length > 0) {
-          console.log(`🔄 Aktualizacja ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy edycji CMR...`);
-          for (const orderId of ordersToUpdate) {
-            await updateLinkedOrderShippedQuantities(orderId, items, cleanedUpdateData.cmrNumber || 'CMR-UPDATED', userId);
-            console.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie zaktualizowanego CMR`);
-          }
-        }
-      } catch (orderUpdateError) {
-        console.error('❌ Błąd podczas automatycznej aktualizacji ilości wysłanych przy edycji CMR:', orderUpdateError);
-        // Nie przerywamy procesu edycji CMR - tylko logujemy błąd
-      }
-    }
+    // USUNIĘTO: Automatyczne aktualizacje ilości przy edycji CMR
+    // Ilości są aktualizowane TYLKO przy zmianie statusu na "W transporcie"
+    console.log('📝 CMR zaktualizowany - ilości wysłane będą zaktualizowane po zmianie statusu na "W transporcie"');
 
     return {
       id: cmrId,
@@ -580,26 +511,76 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
 // Usunięcie dokumentu CMR
 export const deleteCmrDocument = async (cmrId) => {
   try {
-    // Usuń elementy dokumentu CMR
+    console.log(`🗑️ Rozpoczęcie usuwania CMR ${cmrId}...`);
+    
+    // KROK 1: Pobierz dane CMR przed usunięciem (dla anulowania ilości wysłanych)
+    let cmrData = null;
+    try {
+      cmrData = await getCmrDocumentById(cmrId);
+      console.log(`📋 Pobrano dane CMR do usunięcia: ${cmrData.cmrNumber}`);
+    } catch (error) {
+      console.warn('Nie udało się pobrać danych CMR przed usunięciem:', error);
+    }
+    
+    // KROK 2: Anuluj ilości wysłane w powiązanych zamówieniach (jeśli CMR miał pozycje)
+    if (cmrData && cmrData.items && cmrData.items.length > 0) {
+      try {
+        const ordersToUpdate = [];
+        
+        // Sprawdź nowy format (wiele zamówień)
+        if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds) && cmrData.linkedOrderIds.length > 0) {
+          ordersToUpdate.push(...cmrData.linkedOrderIds);
+        }
+        
+        // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
+        if (cmrData.linkedOrderId && !ordersToUpdate.includes(cmrData.linkedOrderId)) {
+          ordersToUpdate.push(cmrData.linkedOrderId);
+        }
+        
+        if (ordersToUpdate.length > 0) {
+          console.log(`🔄 Anulowanie ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy usuwaniu CMR...`);
+          for (const orderId of ordersToUpdate) {
+            await cancelLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, 'system');
+            console.log(`✅ Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie usuniętego CMR ${cmrData.cmrNumber}`);
+          }
+        }
+      } catch (orderUpdateError) {
+        console.error('❌ Błąd podczas anulowania ilości wysłanych przy usuwaniu CMR:', orderUpdateError);
+        // Nie przerywamy procesu usuwania CMR - tylko logujemy błąd
+      }
+    }
+    
+    // KROK 3: Usuń elementy dokumentu CMR (cmrItems)
     const itemsRef = collection(db, CMR_ITEMS_COLLECTION);
     const q = query(itemsRef, where('cmrId', '==', cmrId));
     const itemsSnapshot = await getDocs(q);
     
+    console.log(`🗑️ Usuwanie ${itemsSnapshot.docs.length} pozycji CMR...`);
     const deletePromises = itemsSnapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
     
-    // Usuń dokument CMR
+    // KROK 4: Usuń dokument CMR
     const cmrRef = doc(db, CMR_COLLECTION, cmrId);
     await deleteDoc(cmrRef);
+    console.log(`✅ Usunięto dokument CMR ${cmrId}`);
     
-    return { success: true };
+    // KROK 5: KLUCZOWE - Wyczyść cache CMR i usuń dokument z cache
+    console.log('🧹 Czyszczenie cache CMR po usunięciu...');
+    removeCmrDocumentFromCache(cmrId);
+    
+    // Opcjonalnie: wyczyść cały cache jeśli usuwanie jednego dokumentu nie wystarczy
+    // clearCmrDocumentsCache();
+    
+    console.log(`✅ CMR ${cmrId} został całkowicie usunięty i wyczyszczony z cache`);
+    return { success: true, cmrId: cmrId, cmrNumber: cmrData?.cmrNumber || 'UNKNOWN' };
   } catch (error) {
-    console.error('Błąd podczas usuwania dokumentu CMR:', error);
+    console.error('❌ Błąd podczas usuwania dokumentu CMR:', error);
     throw error;
   }
 };
 
-// Funkcja do walidacji czy wszystkie pozycje CMR mają przypisane partie magazynowe
+// ULEPSZONA funkcja do walidacji czy wszystkie pozycje CMR mają przypisane partie magazynowe
+// NOWA FUNKCJONALNOŚĆ: sprawdza również czy ilość w partiach pokrywa ilość w pozycji CMR
 const validateCmrBatches = async (cmrId) => {
   try {
     const cmrData = await getCmrDocumentById(cmrId);
@@ -614,30 +595,152 @@ const validateCmrBatches = async (cmrId) => {
     const errors = [];
     
     cmrData.items.forEach((item, index) => {
+      const itemNumber = index + 1;
+      const itemDescription = item.description || `Pozycja ${itemNumber}`;
+      const cmrQuantity = parseFloat(item.quantity) || parseFloat(item.numberOfPackages) || 0;
+      
+      // WALIDACJA 1: Sprawdź czy pozycja ma przypisane partie
       if (!item.linkedBatches || item.linkedBatches.length === 0) {
         errors.push({
-          index: index + 1,
-          description: item.description || `Pozycja ${index + 1}`,
-          error: 'Brak powiązanych partii magazynowych'
+          index: itemNumber,
+          description: itemDescription,
+          error: 'Brak powiązanych partii magazynowych',
+          type: 'no_batches'
         });
+        return; // Przejdź do następnej pozycji
+      }
+      
+      // WALIDACJA 2: Sprawdź czy pozycja CMR ma określoną ilość
+      if (cmrQuantity <= 0) {
+        errors.push({
+          index: itemNumber,
+          description: itemDescription,
+          error: 'Pozycja CMR ma zerową lub nieprawidłową ilość',
+          type: 'invalid_cmr_quantity',
+          cmrQuantity: cmrQuantity
+        });
+        return; // Przejdź do następnej pozycji
+      }
+      
+      // WALIDACJA 3: Oblicz łączną ilość w przypisanych partiach
+      let totalBatchQuantity = 0;
+      const batchDetails = [];
+      
+      item.linkedBatches.forEach((batch, batchIndex) => {
+        const batchQuantity = parseFloat(batch.quantity) || 0;
+        totalBatchQuantity += batchQuantity;
+        
+        batchDetails.push({
+          batchNumber: batch.batchNumber || batch.lotNumber || `Partia ${batchIndex + 1}`,
+          quantity: batchQuantity,
+          unit: batch.unit || item.unit || 'szt'
+        });
+        
+        // Sprawdź czy pojedyncza partia ma prawidłową ilość
+        if (batchQuantity <= 0) {
+          errors.push({
+            index: itemNumber,
+            description: itemDescription,
+            error: `Partia "${batch.batchNumber || batch.lotNumber || 'Nieznana'}" ma zerową lub nieprawidłową ilość (${batchQuantity})`,
+            type: 'invalid_batch_quantity',
+            batchNumber: batch.batchNumber || batch.lotNumber,
+            batchQuantity: batchQuantity
+          });
+        }
+      });
+      
+      // WALIDACJA 4: KLUCZOWA - Sprawdź czy łączna ilość w partiach pokrywa ilość CMR
+      if (totalBatchQuantity < cmrQuantity) {
+        const deficit = cmrQuantity - totalBatchQuantity;
+        errors.push({
+          index: itemNumber,
+          description: itemDescription,
+          error: `Niewystarczająca ilość w partiach. Wymagane: ${cmrQuantity} ${item.unit || 'szt'}, dostępne w partiach: ${totalBatchQuantity} ${item.unit || 'szt'}, brakuje: ${deficit} ${item.unit || 'szt'}`,
+          type: 'insufficient_batch_quantity',
+          cmrQuantity: cmrQuantity,
+          totalBatchQuantity: totalBatchQuantity,
+          deficit: deficit,
+          unit: item.unit || 'szt',
+          batchDetails: batchDetails
+        });
+      }
+      
+      // WALIDACJA 5: Opcjonalne ostrzeżenie o nadmiarze (nie blokuje operacji)
+      if (totalBatchQuantity > cmrQuantity) {
+        const surplus = totalBatchQuantity - cmrQuantity;
+        console.warn(`⚠️ Pozycja "${itemDescription}" ma nadmiar w partiach: +${surplus} ${item.unit || 'szt'} (CMR: ${cmrQuantity}, partie: ${totalBatchQuantity})`);
       }
     });
     
     if (errors.length > 0) {
-      const errorMessages = errors.map(err => `• ${err.description}: ${err.error}`).join('\n');
+      // Podziel błędy na kategorie dla lepszego komunikatu
+      const noBatchesErrors = errors.filter(err => err.type === 'no_batches');
+      const insufficientQuantityErrors = errors.filter(err => err.type === 'insufficient_batch_quantity');
+      const invalidQuantityErrors = errors.filter(err => err.type === 'invalid_cmr_quantity' || err.type === 'invalid_batch_quantity');
+      
+      let errorMessage = 'Nie można rozpocząć transportu z następującymi błędami:\n\n';
+      
+      if (noBatchesErrors.length > 0) {
+        errorMessage += '🚫 BRAK PRZYPISANYCH PARTII:\n';
+        errorMessage += noBatchesErrors.map(err => `• ${err.description}`).join('\n');
+        errorMessage += '\n\n';
+      }
+      
+      if (insufficientQuantityErrors.length > 0) {
+        errorMessage += '📉 NIEWYSTARCZAJĄCA ILOŚĆ W PARTIACH:\n';
+        insufficientQuantityErrors.forEach(err => {
+          errorMessage += `• ${err.description}:\n`;
+          errorMessage += `  - Wymagane: ${err.cmrQuantity} ${err.unit}\n`;
+          errorMessage += `  - W partiach: ${err.totalBatchQuantity} ${err.unit}\n`;
+          errorMessage += `  - Brakuje: ${err.deficit} ${err.unit}\n`;
+          if (err.batchDetails && err.batchDetails.length > 0) {
+            errorMessage += `  - Partie: ${err.batchDetails.map(b => `${b.batchNumber} (${b.quantity} ${b.unit})`).join(', ')}\n`;
+          }
+        });
+        errorMessage += '\n';
+      }
+      
+      if (invalidQuantityErrors.length > 0) {
+        errorMessage += '❌ NIEPRAWIDŁOWE ILOŚCI:\n';
+        errorMessage += invalidQuantityErrors.map(err => `• ${err.description}: ${err.error}`).join('\n');
+        errorMessage += '\n';
+      }
+      
+      errorMessage += '\nAby rozpocząć transport, upewnij się że wszystkie pozycje mają:\n';
+      errorMessage += '✅ Przypisane partie magazynowe\n';
+      errorMessage += '✅ Wystarczającą ilość w partiach do pokrycia zamówionej ilości';
+      
       return {
         isValid: false,
-        message: `Następujące pozycje nie mają przypisanych partii magazynowych:\n${errorMessages}`,
-        errors
+        message: errorMessage,
+        errors,
+        summary: {
+          totalErrors: errors.length,
+          noBatchesCount: noBatchesErrors.length,
+          insufficientQuantityCount: insufficientQuantityErrors.length,
+          invalidQuantityCount: invalidQuantityErrors.length
+        }
       };
     }
     
-    return { isValid: true, message: 'Wszystkie pozycje mają przypisane partie' };
+    // Wszystkie walidacje przeszły pomyślnie
+    const totalPositions = cmrData.items.length;
+    const totalBatches = cmrData.items.reduce((sum, item) => sum + (item.linkedBatches ? item.linkedBatches.length : 0), 0);
+    
+    return { 
+      isValid: true, 
+      message: `✅ Walidacja zakończona pomyślnie!\n\nPozycje CMR: ${totalPositions}\nPrzypisane partie: ${totalBatches}\n\nWszystkie pozycje mają wystarczającą ilość w partiach magazynowych.`,
+      summary: {
+        totalPositions,
+        totalBatches,
+        allValid: true
+      }
+    };
   } catch (error) {
     console.error('Błąd podczas walidacji partii CMR:', error);
     return {
       isValid: false,
-      message: `Błąd podczas walidacji: ${error.message}`
+      message: `❌ Błąd podczas walidacji: ${error.message}`
     };
   }
 };
@@ -1580,24 +1683,206 @@ const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, 
   }
 };
 
-// Funkcja pomocnicza do anulowania ilości wysłanych w powiązanym zamówieniu
+// POPRAWIONA funkcja pomocnicza do anulowania ilości wysłanych - usuwa wpisy z cmrHistory zamiast dodawać ujemne wartości
 const cancelLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, userId) => {
   try {
-    // Mapuj elementy CMR na aktualizacje zamówienia z ujemnymi wartościami (anulowanie)
-    const itemUpdates = cmrItems.map((item, index) => ({
-      itemName: item.description,
-      quantity: -(parseFloat(item.quantity) || parseFloat(item.numberOfPackages) || 0), // Ujemna wartość dla anulowania
-      itemIndex: index,
-      cmrNumber: cmrNumber
-    })).filter(update => update.quantity < 0); // Filtruj tylko ujemne wartości
+    console.log(`🗑️ Rozpoczęcie anulowania przez usunięcie wpisów CMR ${cmrNumber} z zamówienia ${orderId}...`);
     
-    if (itemUpdates.length > 0) {
-      await updateOrderItemShippedQuantity(orderId, itemUpdates, userId);
-      console.log(`Anulowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber}`);
+    // KROK 1: Pobierz aktualne dane zamówienia
+    const { getOrderById } = await import('./orderService');
+    const orderData = await getOrderById(orderId);
+    
+    if (!orderData || !orderData.items || orderData.items.length === 0) {
+      console.log('❌ Zamówienie nie istnieje lub nie ma pozycji');
+      return;
     }
+    
+    console.log(`📋 Zamówienie ma ${orderData.items.length} pozycji do sprawdzenia dla CMR ${cmrNumber}`);
+    
+    // KROK 2: Usuń wpisy CMR z historii zamiast dodawać ujemne wartości
+    const updatedItems = orderData.items.map(item => {
+      // Sprawdź czy pozycja ma historię CMR
+      if (!item.cmrHistory || !Array.isArray(item.cmrHistory) || item.cmrHistory.length === 0) {
+        return item; // Brak historii CMR - zostaw bez zmian
+      }
+      
+      // Znajdź wpisy do usunięcia dla tego CMR
+      const entriesToRemove = item.cmrHistory.filter(entry => entry.cmrNumber === cmrNumber);
+      
+      if (entriesToRemove.length === 0) {
+        return item; // Brak wpisów dla tego CMR - zostaw bez zmian
+      }
+      
+      console.log(`🗑️ Usuwanie ${entriesToRemove.length} wpisów CMR ${cmrNumber} z pozycji "${item.name}"`);
+      
+      // Usuń wpisy dla tego CMR z historii
+      const updatedCmrHistory = item.cmrHistory.filter(entry => entry.cmrNumber !== cmrNumber);
+      
+      // Przelicz łączną ilość wysłaną na podstawie pozostałej historii
+      const newShippedQuantity = updatedCmrHistory.reduce((total, entry) => {
+        return total + (parseFloat(entry.quantity) || 0);
+      }, 0);
+      
+      // Znajdź najnowszy wpis CMR dla aktualizacji lastShipmentDate i lastCmrNumber
+      let lastShipmentDate = null;
+      let lastCmrNumber = null;
+      
+      if (updatedCmrHistory.length > 0) {
+        const sortedEntries = updatedCmrHistory.sort((a, b) => new Date(b.shipmentDate) - new Date(a.shipmentDate));
+        lastShipmentDate = sortedEntries[0].shipmentDate;
+        lastCmrNumber = sortedEntries[0].cmrNumber;
+      }
+      
+      console.log(`✅ Pozycja "${item.name}": usunięto CMR ${cmrNumber}, nowa ilość wysłana: ${newShippedQuantity} (z ${updatedCmrHistory.length} pozostałych CMR)`);
+      
+      return {
+        ...item,
+        shippedQuantity: newShippedQuantity,
+        lastShipmentDate: lastShipmentDate,
+        lastCmrNumber: lastCmrNumber,
+        cmrHistory: updatedCmrHistory,
+        canceledAt: new Date().toISOString(), // Dodaj znacznik czasu anulowania
+        canceledCmr: cmrNumber, // Dodaj informację o anulowanym CMR
+        canceledBy: userId
+      };
+    });
+    
+    // KROK 3: Zapisz zaktualizowane dane zamówienia
+    const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('./firebase/config'); 
+    const orderRef = doc(db, 'orders', orderId);
+    
+    await updateDoc(orderRef, {
+      items: updatedItems,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    });
+    
+    // Policz statystyki
+    const updatedPositions = updatedItems.filter((item, index) => {
+      const originalItem = orderData.items[index];
+      return originalItem.cmrHistory?.some(entry => entry.cmrNumber === cmrNumber);
+    }).length;
+    
+    console.log(`✅ Anulowano CMR ${cmrNumber} w zamówieniu ${orderId}: zaktualizowano ${updatedPositions} pozycji przez usunięcie wpisów z historii`);
+    
   } catch (error) {
-    console.error('Błąd podczas anulowania ilości wysłanych w zamówieniu:', error);
-    // Nie rzucamy błędu, aby nie przerywać procesu zmiany statusu CMR
+    console.error('❌ Błąd podczas anulowania przez usunięcie wpisów CMR z historii:', error);
+    // Nie rzucamy błędu, aby nie przerywać procesu zmiany statusu/usuwania CMR
+  }
+};
+
+/**
+ * Funkcja do oczyszczenia ujemnych wartości z cmrHistory w całej bazie danych
+ * @param {string} userId - ID użytkownika wykonującego oczyszczanie
+ * @returns {Promise<object>} - Wynik operacji oczyszczania
+ */
+export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
+  try {
+    console.log('🧹 Rozpoczynanie oczyszczania ujemnych wpisów z cmrHistory...');
+    
+    const { collection, getDocs, updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
+    const { db } = await import('./firebase/config');
+    
+    const ordersRef = collection(db, 'orders');
+    const snapshot = await getDocs(ordersRef);
+    
+    let cleanedOrders = 0;
+    let cleanedEntries = 0;
+    let processedOrders = 0;
+    
+    for (const orderDoc of snapshot.docs) {
+      const orderData = orderDoc.data();
+      const items = orderData.items || [];
+      let needsUpdate = false;
+      processedOrders++;
+      
+      if (processedOrders % 50 === 0) {
+        console.log(`📊 Przetworzono ${processedOrders} zamówień...`);
+      }
+      
+      const cleanedItems = items.map(item => {
+        if (!item.cmrHistory || !Array.isArray(item.cmrHistory)) {
+          return item;
+        }
+        
+        // Usuń ujemne wpisy z cmrHistory
+        const positiveEntries = item.cmrHistory.filter(entry => {
+          const quantity = parseFloat(entry.quantity) || 0;
+          if (quantity < 0) {
+            console.log(`🗑️ Usuwanie ujemnego wpisu z pozycji "${item.name}": CMR ${entry.cmrNumber}, ilość: ${quantity}`);
+            cleanedEntries++;
+            needsUpdate = true;
+            return false;
+          }
+          return true;
+        });
+        
+        if (needsUpdate && positiveEntries.length !== item.cmrHistory.length) {
+          // Przelicz ilość wysłaną na podstawie pozytywnych wpisów
+          const newShippedQuantity = positiveEntries.reduce((total, entry) => {
+            return total + (parseFloat(entry.quantity) || 0);
+          }, 0);
+          
+          // Znajdź najnowszy wpis dla lastShipmentDate i lastCmrNumber
+          let lastShipmentDate = null;
+          let lastCmrNumber = null;
+          
+          if (positiveEntries.length > 0) {
+            const sortedEntries = positiveEntries.sort((a, b) => new Date(b.shipmentDate) - new Date(a.shipmentDate));
+            lastShipmentDate = sortedEntries[0].shipmentDate;
+            lastCmrNumber = sortedEntries[0].cmrNumber;
+          }
+          
+          return {
+            ...item,
+            cmrHistory: positiveEntries,
+            shippedQuantity: newShippedQuantity,
+            lastShipmentDate: lastShipmentDate,
+            lastCmrNumber: lastCmrNumber,
+            cleanedNegativeCmr: true,
+            cleanedAt: new Date().toISOString()
+          };
+        }
+        
+        return item;
+      });
+      
+      if (needsUpdate) {
+        await updateDoc(doc(db, 'orders', orderDoc.id), {
+          items: cleanedItems,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+          cleanedNegativeCmrHistory: true,
+          cleanedAt: serverTimestamp()
+        });
+        
+        cleanedOrders++;
+        console.log(`✅ Oczyszczono zamówienie ${orderData.orderNumber || orderDoc.id}`);
+        
+        // Dodaj małą pauzę co 10 zamówień, żeby nie przeciążyć bazy
+        if (cleanedOrders % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+    }
+    
+    console.log(`🎉 Oczyszczanie zakończone:`);
+    console.log(`   📋 Przetworzono: ${processedOrders} zamówień`);
+    console.log(`   🧹 Oczyszczono: ${cleanedOrders} zamówień`);
+    console.log(`   🗑️ Usunięto: ${cleanedEntries} ujemnych wpisów CMR`);
+    
+    return { 
+      success: true, 
+      processedOrders,
+      cleanedOrders, 
+      cleanedEntries,
+      message: `Oczyszczono ${cleanedOrders} zamówień, usunięto ${cleanedEntries} ujemnych wpisów z cmrHistory`
+    };
+    
+  } catch (error) {
+    console.error('❌ Błąd podczas oczyszczania ujemnych wpisów:', error);
+    throw error;
   }
 };
 
