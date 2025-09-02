@@ -32,7 +32,9 @@ import {
   Select,
   MenuItem,
   FormControlLabel,
-  Switch
+  Switch,
+  Checkbox,
+  ListItemText
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -44,7 +46,9 @@ import {
   Done as DoneIcon,
   Close as CancelIcon,
   Save as SaveIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Filter as FilterIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import {
   getStocktakingById,
@@ -116,6 +120,13 @@ const StocktakingDetailsPage = () => {
   // Dodaję stan do przechowywania nazw użytkowników
   const [userNames, setUserNames] = useState({});
   
+  // Stan dla filtra pozycji wymagających uzupełnienia
+  const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(false);
+  
+  // Stany dla multi-select funkcjonalności
+  const [selectedBatches, setSelectedBatches] = useState([]); // Koszyk wybranych partii
+  const [currentStep, setCurrentStep] = useState('category'); // 'category', 'product', 'batches'
+  
   useEffect(() => {
     fetchStocktakingData();
     fetchInventoryCategories();
@@ -123,7 +134,7 @@ const StocktakingDetailsPage = () => {
   
   useEffect(() => {
     filterItems();
-  }, [searchTerm, items]);
+  }, [searchTerm, items, showOnlyIncomplete]);
   
   // Funkcja pobierająca dane użytkownika - zoptymalizowana wersja
   const fetchUserNames = async (userIds) => {
@@ -274,67 +285,125 @@ const StocktakingDetailsPage = () => {
   };
   
   const filterItems = () => {
-    if (!searchTerm.trim()) {
-      setFilteredItems(items);
-      return;
+    let filtered = items;
+    
+    // Filtruj według wyszukiwania
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.name && item.name.toLowerCase().includes(term)) ||
+        (item.category && item.category.toLowerCase().includes(term)) ||
+        // Dodaj wyszukiwanie po numerze LOT/partii
+        (item.lotNumber && item.lotNumber.toLowerCase().includes(term)) ||
+        (item.batchNumber && item.batchNumber.toLowerCase().includes(term))
+      );
     }
     
-    const term = searchTerm.toLowerCase();
-    const filtered = items.filter(item => 
-      (item.name && item.name.toLowerCase().includes(term)) ||
-      (item.category && item.category.toLowerCase().includes(term)) ||
-      // Dodaj wyszukiwanie po numerze LOT/partii
-      (item.lotNumber && item.lotNumber.toLowerCase().includes(term)) ||
-      (item.batchNumber && item.batchNumber.toLowerCase().includes(term))
-    );
+    // Filtruj według pozycji wymagających uzupełnienia
+    if (showOnlyIncomplete) {
+      filtered = filtered.filter(item => 
+        item.countedQuantity === null || item.countedQuantity === undefined
+      );
+    }
     
     setFilteredItems(filtered);
   };
   
+  // Funkcje obsługi multi-select
+  const handleBatchToggle = (batch) => {
+    setSelectedBatches(prev => {
+      const isSelected = prev.some(b => b.id === batch.id);
+      if (isSelected) {
+        return prev.filter(b => b.id !== batch.id);
+      } else {
+        return [...prev, {
+          ...batch,
+          itemId: selectedItem.id,
+          itemName: selectedItem.name,
+          itemCategory: selectedCategory,
+          itemUnit: selectedItem.unit
+        }];
+      }
+    });
+  };
+
+  const handleSelectAllBatches = (checked) => {
+    if (checked) {
+      // Filtruj tylko partie, które nie są już dodane do inwentaryzacji
+      const existingBatchIds = items.map(item => item.batchId).filter(Boolean);
+      const batchesToAdd = batches.filter(batch => 
+        !selectedBatches.some(selected => selected.id === batch.id) &&
+        !existingBatchIds.includes(batch.id) // Nie dodawaj już istniejących partii
+      ).map(batch => ({
+        ...batch,
+        itemId: selectedItem.id,
+        itemName: selectedItem.name,
+        itemCategory: selectedCategory,
+        itemUnit: selectedItem.unit
+      }));
+      setSelectedBatches(prev => [...prev, ...batchesToAdd]);
+    } else {
+      const batchIds = batches.map(b => b.id);
+      setSelectedBatches(prev => prev.filter(selected => !batchIds.includes(selected.id)));
+    }
+  };
+
+  const handleAddAnotherProduct = () => {
+    setSelectedItem(null);
+    setSelectedBatch(null);
+    setBatches([]);
+    setCurrentStep('product');
+  };
+
+  const resetDialog = () => {
+    setSelectedCategory('');
+    setSelectedItem(null);
+    setSelectedBatch(null);
+    setBatches([]);
+    setInventoryItems([]);
+    setSelectedBatches([]);
+    setCurrentStep('category');
+    setNotes('');
+    setCategoryCache({});
+  };
+  
   const handleAddItem = async () => {
-    // Walidacja (tryb LOT zawsze włączony)
-    if (!selectedCategory) {
-      showError('Wybierz kategorię produktu');
+    // Walidacja multi-select
+    if (selectedBatches.length === 0) {
+      showError('Zaznacz przynajmniej jedną partię do dodania');
       return;
     }
     
-    if (!selectedItem) {
-      showError('Wybierz produkt z magazynu');
-      return;
-    }
+    // Sprawdź czy któraś z wybranych partii już istnieje w inwentaryzacji
+    const existingBatchIds = items.map(item => item.batchId).filter(Boolean);
+    const duplicateBatches = selectedBatches.filter(batch => existingBatchIds.includes(batch.id));
     
-    if (!selectedBatch) {
-      showError('Wybierz partię (LOT) produktu');
-      return;
-    }
-    
-    if (countedQuantity === '' || isNaN(countedQuantity) || Number(countedQuantity) < 0) {
-      showError('Podaj prawidłową ilość policzoną');
+    if (duplicateBatches.length > 0) {
+      const duplicateNames = duplicateBatches.map(batch => 
+        `${batch.itemName} (LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'})`
+      ).join(', ');
+      
+      showError(`Następujące partie są już dodane do inwentaryzacji: ${duplicateNames}`);
       return;
     }
     
     try {
-      // Dodaj pozycję jako partię (LOT)
-      await addItemToStocktaking(id, {
-        batchId: selectedBatch.id,
-        countedQuantity: Number(countedQuantity),
-        notes
-      }, currentUser.uid);
+      // Dodaj wszystkie zaznaczone partie
+      const promises = selectedBatches.map(batch => 
+        addItemToStocktaking(id, {
+          batchId: batch.id,
+          countedQuantity: null, // Pozycja wymaga uzupełnienia - użytkownik poda ilość później
+          notes
+        }, currentUser.uid)
+      );
       
-      showSuccess('Partia została dodana do inwentaryzacji');
+      await Promise.all(promises);
+      
+      showSuccess(`Dodano ${selectedBatches.length} partii do inwentaryzacji. Uzupełnij ilości policzone w szczegółach.`);
       setAddItemDialogOpen(false);
       
       // Reset form
-      setSelectedCategory('');
-      setSelectedItem(null);
-      setSelectedBatch(null);
-      setBatches([]);
-      setInventoryItems([]);
-      setCountedQuantity('');
-      setNotes('');
-      
-      // OPTYMALIZACJA: Wyczyść cache po dodaniu produktu
-      setCategoryCache({});
+      resetDialog();
       
       // Refresh data
       fetchStocktakingData();
@@ -349,7 +418,7 @@ const StocktakingDetailsPage = () => {
     if (!item) return;
     
     setEditItemId(itemId);
-    setCountedQuantity(item.countedQuantity.toString());
+    setCountedQuantity(item.countedQuantity !== null && item.countedQuantity !== undefined ? item.countedQuantity.toString() : '');
     setNotes(item.notes || '');
   };
   
@@ -404,6 +473,16 @@ const StocktakingDetailsPage = () => {
   };
   
   const handleCompleteStocktaking = async () => {
+    // Sprawdź czy są pozycje bez uzupełnionej ilości
+    const incompleteItems = items.filter(item => item.countedQuantity === null || item.countedQuantity === undefined);
+    
+    if (incompleteItems.length > 0) {
+      const proceed = window.confirm(
+        `Uwaga: ${incompleteItems.length} pozycji nie ma uzupełnionej ilości policzonej. Czy chcesz kontynuować?`
+      );
+      if (!proceed) return;
+    }
+    
     // Sprawdź wpływ korekt na rezerwacje przed otwarciem dialogu
     if (confirmAdjustInventory) {
       setCheckingReservations(true);
@@ -675,6 +754,17 @@ const StocktakingDetailsPage = () => {
               {t('stocktaking.addProduct')}
             </Button>
           )}
+          {items.length > 0 && (
+            <Button
+              variant={showOnlyIncomplete ? "contained" : "outlined"}
+              color="warning"
+              startIcon={<FilterIcon />}
+              onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
+              sx={{ mr: 1 }}
+            >
+              Pozycje do uzupełnienia
+            </Button>
+          )}
           {(!isCompleted || isInCorrection) && items.length > 0 && (
             <Button
               variant="contained"
@@ -731,8 +821,29 @@ const StocktakingDetailsPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredItems.map((item) => (
-                <TableRow key={item.id} hover>
+              {filteredItems.map((item) => {
+                const needsQuantity = item.countedQuantity === null || item.countedQuantity === undefined;
+                
+                return (
+                  <TableRow 
+                    key={item.id} 
+                    hover
+                    sx={{
+                      // Wyróżnij pozycje wymagające uzupełnienia ilości
+                      backgroundColor: needsQuantity 
+                        ? (theme) => theme.palette.mode === 'dark' 
+                          ? 'rgba(255, 193, 7, 0.15)' // Subtelny żółto-pomarańczowy dla ciemnego motywu
+                          : 'rgba(255, 193, 7, 0.08)' // Bardzo jasny żółto-pomarańczowy dla jasnego motywu
+                        : 'inherit',
+                      '&:hover': {
+                        backgroundColor: needsQuantity 
+                          ? (theme) => theme.palette.mode === 'dark'
+                            ? 'rgba(255, 193, 7, 0.25)' // Trochę więcej koloru przy hover w ciemnym motywie
+                            : 'rgba(255, 193, 7, 0.15)' // Trochę więcej koloru przy hover w jasnym motywie
+                          : 'action.hover'
+                      }
+                    }}
+                  >
                   {editItemId === item.id ? (
                     <>
                       <TableCell>{item.name}</TableCell>
@@ -791,7 +902,17 @@ const StocktakingDetailsPage = () => {
                     </>
                   ) : (
                     <>
-                      <TableCell>{item.name}</TableCell>
+                      <TableCell>
+                        {item.name}
+                        {needsQuantity && (
+                          <Chip 
+                            label="Wymaga uzupełnienia ilości" 
+                            color="warning" 
+                            size="small" 
+                            sx={{ ml: 1 }}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         {item.lotNumber || item.batchNumber || 'N/D'}
                         {item.expiryDate && (
@@ -802,7 +923,13 @@ const StocktakingDetailsPage = () => {
                       </TableCell>
                       <TableCell>{item.category}</TableCell>
                       <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
-                      <TableCell align="right">{item.countedQuantity} {item.unit}</TableCell>
+                      <TableCell align="right">
+                        {needsQuantity ? (
+                          <Chip label="Do uzupełnienia" color="warning" size="small" />
+                        ) : (
+                          `${item.countedQuantity} ${item.unit}`
+                        )}
+                      </TableCell>
                       <TableCell align="right">
                         <Chip 
                           label={item.discrepancy} 
@@ -827,6 +954,13 @@ const StocktakingDetailsPage = () => {
                           <IconButton color="primary" onClick={() => handleEditItem(item.id)} size="small">
                             <EditIcon />
                           </IconButton>
+                          {needsQuantity && (
+                            <Tooltip title="Pozycja wymaga uzupełnienia ilości">
+                              <IconButton color="warning" size="small">
+                                <WarningIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <IconButton color="error" onClick={() => handleDeleteItem(item.id)} size="small">
                             <DeleteIcon />
                           </IconButton>
@@ -835,19 +969,30 @@ const StocktakingDetailsPage = () => {
                     </>
                   )}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
       )}
       
-      {/* Dialog dodawania produktu */}
-      <Dialog open={addItemDialogOpen} onClose={() => setAddItemDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('stocktaking.addProductDialog.title')}</DialogTitle>
+      {/* Dialog dodawania pozycji - wersja multi-select */}
+      <Dialog open={addItemDialogOpen} onClose={() => setAddItemDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          Dodaj pozycje do inwentaryzacji
+          {selectedBatches.length > 0 && (
+            <Chip 
+              label={`Zaznaczono: ${selectedBatches.length}`} 
+              color="primary" 
+              size="small" 
+              sx={{ ml: 2 }}
+            />
+          )}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             
-            {/* Selektor kategorii */}
+            {/* Krok 1: Wybór kategorii */}
             <FormControl fullWidth margin="normal">
               <InputLabel id="category-select-label">Wybierz kategorię *</InputLabel>
               <Select
@@ -877,6 +1022,7 @@ const StocktakingDetailsPage = () => {
               </Select>
             </FormControl>
             
+            {/* Krok 2: Wybór produktu */}
             <Autocomplete
               options={inventoryItems}
               getOptionLabel={(option) => option.name}
@@ -886,7 +1032,7 @@ const StocktakingDetailsPage = () => {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label={selectedCategory ? t('stocktaking.addProductDialog.selectProduct') : 'Najpierw wybierz kategorię'}
+                  label={selectedCategory ? 'Wybierz produkt' : 'Najpierw wybierz kategorię'}
                   fullWidth
                   required
                   margin="normal"
@@ -895,91 +1041,151 @@ const StocktakingDetailsPage = () => {
               )}
             />
             
-            {/* Pole wyboru partii (tryb LOT zawsze włączony) */}
-            {selectedItem && (
-              <FormControl fullWidth margin="normal">
-                <InputLabel id="batch-select-label">Wybierz partię (LOT)</InputLabel>
-                <Select
-                  labelId="batch-select-label"
-                  value={selectedBatch || ''}
-                  onChange={(e) => setSelectedBatch(e.target.value)}
-
-                  required
-                  renderValue={(selected) => {
-                    if (!selected) return <em>Wybierz partię</em>;
-                    return `LOT: ${selected.lotNumber || selected.batchNumber} - Ilość: ${selected.quantity} ${selectedItem.unit}`;
-                  }}
-                  label="Wybierz partię (LOT)"
-                >
-                  {loadingBatches ? (
-                    <MenuItem disabled>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
-                        <CircularProgress size={24} sx={{ mr: 1 }} />
-                        <Typography>Ładowanie partii...</Typography>
+            {/* Krok 3: Multi-select partii */}
+            {selectedItem && batches.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Wybierz partie dla produktu: <strong>{selectedItem.name}</strong>
+                </Typography>
+                
+                {/* Opcja zaznacz wszystkie */}
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      indeterminate={
+                        selectedBatches.filter(b => b.itemId === selectedItem.id).length > 0 && 
+                        selectedBatches.filter(b => b.itemId === selectedItem.id).length < batches.length
+                      }
+                      checked={
+                        batches.length > 0 && 
+                        selectedBatches.filter(b => b.itemId === selectedItem.id).length === batches.length
+                      }
+                      onChange={(e) => handleSelectAllBatches(e.target.checked)}
+                    />
+                  }
+                  label="Zaznacz wszystkie partie tego produktu"
+                  sx={{ mb: 1 }}
+                />
+                
+                {/* Lista partii z checkboxami */}
+                <Box sx={{ 
+                  maxHeight: 300, 
+                  overflow: 'auto', 
+                  border: (theme) => `1px solid ${theme.palette.divider}`, 
+                  borderRadius: 1, 
+                  p: 1,
+                  backgroundColor: (theme) => theme.palette.background.paper
+                }}>
+                  {batches.map((batch) => {
+                    const isSelected = selectedBatches.some(b => b.id === batch.id);
+                    const isAlreadyAdded = items.some(item => item.batchId === batch.id);
+                    
+                    return (
+                      <Box key={batch.id} sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        p: 1, 
+                        borderRadius: 1,
+                        opacity: isAlreadyAdded ? 0.5 : 1,
+                        '&:hover': { 
+                          backgroundColor: !isAlreadyAdded ? (theme) => theme.palette.action.hover : 'transparent'
+                        },
+                        backgroundColor: isAlreadyAdded 
+                          ? (theme) => theme.palette.grey[200]
+                          : isSelected 
+                            ? (theme) => theme.palette.mode === 'dark' 
+                              ? theme.palette.primary.dark 
+                              : theme.palette.primary.light
+                            : 'transparent'
+                      }}>
+                        <Checkbox
+                          checked={isSelected}
+                          disabled={isAlreadyAdded}
+                          onChange={() => !isAlreadyAdded && handleBatchToggle(batch)}
+                        />
+                        <Box sx={{ ml: 1, flex: 1 }}>
+                          <Typography variant="body2">
+                            <strong>LOT:</strong> {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
+                            {isAlreadyAdded && (
+                              <Chip 
+                                label="Już dodana" 
+                                color="default" 
+                                size="small" 
+                                sx={{ ml: 1 }}
+                              />
+                            )}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary">
+                            Ilość: {batch.quantity} {selectedItem.unit}
+                            {batch.expiryDate && ` | Ważne do: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}`}
+                            {batch.unitPrice > 0 && ` | Cena: ${batch.unitPrice.toFixed(2)} EUR`}
+                          </Typography>
+                        </Box>
                       </Box>
-                    </MenuItem>
-                  ) : batches.length === 0 ? (
-                    <MenuItem disabled>Brak partii dla wybranego produktu</MenuItem>
-                  ) : (
-                    batches.map((batch) => (
-                      <MenuItem key={batch.id} value={batch}>
-                        <Grid container>
-                          <Grid item xs={12}>
-                            <Typography variant="body1">
-                              LOT: {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="body2" color="textSecondary">
-                              Ilość: {batch.quantity} {selectedItem.unit} 
-                              {batch.expiryDate && ` | Data ważności: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}`}
-                              {batch.unitPrice > 0 && ` | Cena: ${batch.unitPrice.toFixed(2)} EUR`}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-              </FormControl>
+                    );
+                  })}
+                </Box>
+                
+                {/* Przycisk dodania kolejnego produktu */}
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={handleAddAnotherProduct}
+                  sx={{ mt: 2 }}
+                >
+                  Dodaj partie innego produktu
+                </Button>
+              </Box>
             )}
             
-            {/* Wyświetl informację o cenie jednostkowej dla wybranej partii */}
-            {selectedBatch && selectedBatch.unitPrice > 0 && (
-              <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
-                {t('stocktaking.addProductDialog.batchUnitPrice', { price: selectedBatch.unitPrice.toFixed(2) })}
-              </Alert>
+            {/* Koszyk wybranych pozycji */}
+            {selectedBatches.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Wybrane pozycje do dodania ({selectedBatches.length}):
+                </Typography>
+                <Box sx={{ 
+                  maxHeight: 200, 
+                  overflow: 'auto', 
+                  border: (theme) => `1px solid ${theme.palette.divider}`, 
+                  borderRadius: 1, 
+                  p: 1,
+                  backgroundColor: (theme) => theme.palette.background.paper
+                }}>
+                  {selectedBatches.map((batch, index) => (
+                    <Box key={batch.id} sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      p: 1,
+                      borderRadius: 1,
+                      '&:hover': { 
+                        backgroundColor: (theme) => theme.palette.action.hover
+                      }
+                    }}>
+                      <Typography variant="body2">
+                        {batch.itemName} - LOT: {batch.lotNumber || batch.batchNumber || 'Brak numeru'}
+                      </Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => setSelectedBatches(prev => prev.filter(b => b.id !== batch.id))}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
             )}
             
+            {/* Informacja */}
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Wybrane pozycje zostaną dodane do inwentaryzacji. Ilości policzone będziesz mógł podać później w szczegółach.
+            </Alert>
+            
+            {/* Pole notatek */}
             <TextField
-              label={t('stocktaking.addProductDialog.countedQuantityLabel')}
-              type="number"
-              fullWidth
-              required
-              value={countedQuantity}
-              onChange={(e) => setCountedQuantity(e.target.value)}
-              margin="normal"
-              inputProps={{ min: 0, step: 0.01 }}
-            />
-            
-            {/* Wyświetl różnicę i jej wartość pieniężną, jeśli wybrano partię */}
-            {selectedBatch && countedQuantity !== '' && !isNaN(countedQuantity) && (
-              <Alert 
-                severity={Number(countedQuantity) === selectedBatch.quantity ? "success" : Number(countedQuantity) > selectedBatch.quantity ? "info" : "warning"}
-                sx={{ mt: 1, mb: 1 }}
-              >
-                {t('stocktaking.addProductDialog.differenceAlert', { 
-                  difference: Number(countedQuantity) - selectedBatch.quantity, 
-                  unit: selectedItem?.unit 
-                })}
-                {selectedBatch.unitPrice > 0 && t('stocktaking.addProductDialog.valueDifferenceAlert', { 
-                  value: ((Number(countedQuantity) - selectedBatch.quantity) * selectedBatch.unitPrice).toFixed(2) 
-                })}
-              </Alert>
-            )}
-            
-            <TextField
-              label={t('stocktaking.addProductDialog.notesLabel')}
+              label="Notatki (będą dodane do wszystkich wybranych pozycji)"
               fullWidth
               multiline
               rows={2}
@@ -990,8 +1196,20 @@ const StocktakingDetailsPage = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddItemDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleAddItem} color="primary">Dodaj</Button>
+          <Button onClick={() => {
+            setAddItemDialogOpen(false);
+            resetDialog();
+          }}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleAddItem} 
+            color="primary" 
+            variant="contained"
+            disabled={selectedBatches.length === 0}
+          >
+            Dodaj pozycje ({selectedBatches.length})
+          </Button>
         </DialogActions>
       </Dialog>
       

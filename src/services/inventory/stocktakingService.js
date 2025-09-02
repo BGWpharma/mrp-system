@@ -23,6 +23,7 @@ import {
 import { 
   validateId, 
   validatePositiveNumber,
+  validateNonNegativeNumber,
   validateStocktakingData,
   ValidationError 
 } from './utils/validators.js';
@@ -508,7 +509,7 @@ export const updateStocktakingItem = async (itemId, itemData, userId) => {
     const validatedUserId = validateId(userId, 'userId');
 
     if (itemData.countedQuantity !== undefined) {
-      validatePositiveNumber(itemData.countedQuantity, 'countedQuantity', true); // Zezwól na 0
+      validateNonNegativeNumber(itemData.countedQuantity, 'countedQuantity'); // Zezwól na 0 i wartości dodatnie
     }
 
     const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING_ITEMS, validatedItemId);
@@ -852,8 +853,12 @@ const createBatchStocktakingItem = async (stocktakingId, itemData, userId) => {
     batchNumber: batch.batchNumber || '',
     expiryDate: batch.expiryDate || null,
     systemQuantity: formatQuantityPrecision(batch.quantity || 0),
-    countedQuantity: formatQuantityPrecision(itemData.countedQuantity || 0),
-    discrepancy: formatQuantityPrecision((itemData.countedQuantity || 0) - (batch.quantity || 0)),
+    countedQuantity: itemData.countedQuantity !== null && itemData.countedQuantity !== undefined 
+      ? formatQuantityPrecision(itemData.countedQuantity) 
+      : null,
+    discrepancy: itemData.countedQuantity !== null && itemData.countedQuantity !== undefined
+      ? formatQuantityPrecision(itemData.countedQuantity - (batch.quantity || 0))
+      : null,
     unitPrice: batch.unitPrice || 0,
     notes: itemData.notes || '',
     status: 'Dodano',
@@ -881,8 +886,12 @@ const createInventoryStocktakingItem = async (stocktakingId, itemData, userId) =
     unit: inventoryItem.unit,
     location: inventoryItem.location,
     systemQuantity: formatQuantityPrecision(inventoryItem.quantity || 0),
-    countedQuantity: formatQuantityPrecision(itemData.countedQuantity || 0),
-    discrepancy: formatQuantityPrecision((itemData.countedQuantity || 0) - (inventoryItem.quantity || 0)),
+    countedQuantity: itemData.countedQuantity !== null && itemData.countedQuantity !== undefined 
+      ? formatQuantityPrecision(itemData.countedQuantity) 
+      : null,
+    discrepancy: itemData.countedQuantity !== null && itemData.countedQuantity !== undefined
+      ? formatQuantityPrecision(itemData.countedQuantity - (inventoryItem.quantity || 0))
+      : null,
     unitPrice: inventoryItem.averagePrice || inventoryItem.unitPrice || 0,
     notes: itemData.notes || '',
     status: 'Dodano',
