@@ -242,13 +242,56 @@ export const validateInventoryItemData = (itemData) => {
   // Numer CAS jest opcjonalny
   validated.casNumber = validateRequiredString(itemData.casNumber || '', 'casNumber', false);
   
+  // Kod kreskowy jest opcjonalny
+  validated.barcode = validateRequiredString(itemData.barcode || '', 'barcode', false);
+  
+  // Lokalizacja jest opcjonalna
+  validated.location = validateRequiredString(itemData.location || '', 'location', false);
+  
+  // Waluta jest opcjonalna
+  validated.currency = validateRequiredString(itemData.currency || '', 'currency', false);
+  
+  // Informacje o dostawcy są opcjonalne
+  validated.supplierInfo = validateRequiredString(itemData.supplierInfo || '', 'supplierInfo', false);
+  
+  // Grupa pakowania jest opcjonalna
+  validated.packingGroup = validateRequiredString(itemData.packingGroup || '', 'packingGroup', false);
+  
+  // ID pozycji kartonowej jest opcjonalne
+  validated.parentPackageItemId = validateRequiredString(itemData.parentPackageItemId || '', 'parentPackageItemId', false);
+  
+  // Numeryczne pola opcjonalne
+  if (itemData.minStock !== undefined && itemData.minStock !== null && itemData.minStock !== '') {
+    validated.minStock = validateNonNegativeNumber(itemData.minStock, 'minStock');
+  }
+  
+  if (itemData.maxStock !== undefined && itemData.maxStock !== null && itemData.maxStock !== '') {
+    validated.maxStock = validateNonNegativeNumber(itemData.maxStock, 'maxStock');
+  }
+  
+  if (itemData.minOrderQuantity !== undefined && itemData.minOrderQuantity !== null && itemData.minOrderQuantity !== '') {
+    validated.minOrderQuantity = validateNonNegativeNumber(itemData.minOrderQuantity, 'minOrderQuantity');
+  }
+  
+  if (itemData.weight !== undefined && itemData.weight !== null && itemData.weight !== '') {
+    validated.weight = validateNonNegativeNumber(itemData.weight, 'weight');
+  }
+  
+  if (itemData.boxesPerPallet !== undefined && itemData.boxesPerPallet !== null && itemData.boxesPerPallet !== '') {
+    validated.boxesPerPallet = validateNonNegativeNumber(itemData.boxesPerPallet, 'boxesPerPallet');
+  }
+  
+  if (itemData.itemsPerBox !== undefined && itemData.itemsPerBox !== null && itemData.itemsPerBox !== '') {
+    validated.itemsPerBox = validateNonNegativeNumber(itemData.itemsPerBox, 'itemsPerBox');
+  }
+  
   // Ilość (może być 0)
   if (itemData.quantity !== undefined) {
     validated.quantity = validateQuantity(itemData.quantity);
   }
   
   // Cena jednostkowa
-  if (itemData.unitPrice !== undefined) {
+  if (itemData.unitPrice !== undefined && itemData.unitPrice !== null && itemData.unitPrice !== '') {
     validated.unitPrice = validatePrice(itemData.unitPrice);
   }
   
@@ -322,7 +365,7 @@ export const validateBatchData = (batchData) => {
   }
   
   // Cena jednostkowa jest opcjonalna
-  if (batchData.unitPrice !== undefined) {
+  if (batchData.unitPrice !== undefined && batchData.unitPrice !== null && batchData.unitPrice !== '') {
     validated.unitPrice = validatePrice(batchData.unitPrice);
   }
   
@@ -368,7 +411,7 @@ export const validateBatchUpdateData = (batchData) => {
   }
   
   // Cena jednostkowa jest opcjonalna
-  if (batchData.unitPrice !== undefined) {
+  if (batchData.unitPrice !== undefined && batchData.unitPrice !== null && batchData.unitPrice !== '') {
     validated.unitPrice = validatePrice(batchData.unitPrice);
   }
   
@@ -560,7 +603,7 @@ export const validateSupplierPriceData = (supplierPriceData, isComplete = true) 
   }
 
   // Opcjonalne walidacje z przekonwertowaniem
-  if (supplierPriceData.price !== undefined) {
+  if (supplierPriceData.price !== undefined && supplierPriceData.price !== null && supplierPriceData.price !== '') {
     validated.price = validatePrice(supplierPriceData.price, 'price');
   }
 

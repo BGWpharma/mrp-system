@@ -56,6 +56,8 @@ const InventoryItemForm = ({ itemId }) => {
     location: '',
     minStock: '',
     maxStock: '',
+    minOrderQuantity: '',
+    weight: '',
     supplierInfo: '',
     packingGroup: '',
     boxesPerPallet: '',
