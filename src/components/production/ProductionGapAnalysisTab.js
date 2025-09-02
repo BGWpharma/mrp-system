@@ -895,11 +895,17 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                     />
                     <YAxis />
                     <ChartTooltip 
-                      formatter={(value, name) => [
-                        `${Math.round(value * 100) / 100}h`,
-                        name === 'productionHours' ? 'Produkcja' : 
-                        name === 'gapHours' ? 'Luki' : 'Czas pracy'
-                      ]}
+                      formatter={(value, name) => {
+                        const formattedValue = `${Math.round(value * 100) / 100}h`;
+                        if (name === 'workHours') {
+                          return [formattedValue, 'Czas pracy'];
+                        } else if (name === 'productionHours') {
+                          return [formattedValue, 'Produkcja'];
+                        } else if (name === 'gapHours') {
+                          return [formattedValue, 'Luki'];
+                        }
+                        return [formattedValue, name];
+                      }}
                       labelFormatter={(label) => {
                         const dayData = chartData.find(d => d.date === label);
                         return dayData ? `${dayData.formattedDate} (${dayData.dayOfWeek})` : label;

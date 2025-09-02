@@ -553,15 +553,18 @@ const TimeAnalysisContent = ({
                 <XAxis dataKey="period" />
                 <YAxis />
                 <Tooltip 
-                  formatter={(value, name) => [
-                    name === 'timeHours' ? `${value} h` : value,
-                    name === 'timeHours' ? t('productionReport.timeAnalysis.charts.timeHours') : 
-                    name === 'sessions' ? t('productionReport.timeAnalysis.charts.sessions') : t('productionReport.timeAnalysis.charts.quantity')
-                  ]}
+                  formatter={(value, name) => {
+                    if (name === 'timeHours') {
+                      return [`${value} h`, 'Czas pracy'];
+                    } else if (name === 'sessions') {
+                      return [value, 'Sesje'];
+                    }
+                    return [value, name];
+                  }}
                 />
                 <Legend />
-                <Bar dataKey="timeHours" fill={chartColors[0]} name={t('productionReport.timeAnalysis.charts.timeHours')} />
-                <Bar dataKey="sessions" fill={chartColors[1]} name={t('productionReport.timeAnalysis.charts.sessions')} />
+                <Bar dataKey="timeHours" fill={chartColors[0]} name="Czas pracy" />
+                <Bar dataKey="sessions" fill={chartColors[1]} name="Sesje" />
               </BarChart>
             </ResponsiveContainer>
           </Paper>
