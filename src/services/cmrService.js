@@ -20,7 +20,7 @@ import {
   deleteObject 
 } from 'firebase/storage';
 import { format } from 'date-fns';
-import { updateOrderItemShippedQuantity } from './orderService';
+import { updateOrderItemShippedQuantity, updateOrderItemShippedQuantityPrecise } from './orderService';
 import { createRealtimeStatusChangeNotification } from './notificationService';
 import { safeParseDate } from '../utils/dateUtils';
 
@@ -331,6 +331,37 @@ export const createCmrDocument = async (cmrData, userId) => {
       await Promise.all(itemPromises);
     }
     
+    // NOWA FUNKCJONALNOŚĆ: Automatyczna aktualizacja ilości wysłanych przy tworzeniu CMR
+    // (nie tylko przy zmianie statusu na "W transporcie")
+    if (items && items.length > 0 && (cmrDataWithoutItems.linkedOrderId || (cmrDataWithoutItems.linkedOrderIds && cmrDataWithoutItems.linkedOrderIds.length > 0))) {
+      try {
+        console.log('🚀 Automatyczna aktualizacja ilości wysłanych przy tworzeniu CMR...');
+        
+        const ordersToUpdate = [];
+        
+        // Sprawdź nowy format (wiele zamówień)
+        if (cmrDataWithoutItems.linkedOrderIds && Array.isArray(cmrDataWithoutItems.linkedOrderIds) && cmrDataWithoutItems.linkedOrderIds.length > 0) {
+          ordersToUpdate.push(...cmrDataWithoutItems.linkedOrderIds);
+        }
+        
+        // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
+        if (cmrDataWithoutItems.linkedOrderId && !ordersToUpdate.includes(cmrDataWithoutItems.linkedOrderId)) {
+          ordersToUpdate.push(cmrDataWithoutItems.linkedOrderId);
+        }
+        
+        if (ordersToUpdate.length > 0) {
+          console.log(`🔄 Aktualizacja ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy tworzeniu CMR...`);
+          for (const orderId of ordersToUpdate) {
+            await updateLinkedOrderShippedQuantities(orderId, items, cleanedCmrData.cmrNumber, userId);
+            console.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie nowego CMR ${cleanedCmrData.cmrNumber}`);
+          }
+        }
+      } catch (orderUpdateError) {
+        console.error('❌ Błąd podczas automatycznej aktualizacji ilości wysłanych przy tworzeniu CMR:', orderUpdateError);
+        // Nie przerywamy procesu tworzenia CMR - tylko logujemy błąd
+      }
+    }
+
     return {
       id: cmrRef.id,
       ...cleanedCmrData,
@@ -486,6 +517,52 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       deliveryDate: convertedDeliveryDate,
       loadingDate: convertedLoadingDate
     });
+
+    // NOWA FUNKCJONALNOŚĆ: Automatyczna aktualizacja ilości wysłanych przy edycji CMR
+    // (nie tylko przy zmianie statusu na "W transporcie")
+    if (items && items.length > 0 && (cleanedUpdateData.linkedOrderId || (cleanedUpdateData.linkedOrderIds && cleanedUpdateData.linkedOrderIds.length > 0))) {
+      try {
+        console.log('🚀 Automatyczna aktualizacja ilości wysłanych przy edycji CMR...');
+        
+        const ordersToUpdate = [];
+        
+        // Sprawdź nowy format (wiele zamówień)
+        if (cleanedUpdateData.linkedOrderIds && Array.isArray(cleanedUpdateData.linkedOrderIds) && cleanedUpdateData.linkedOrderIds.length > 0) {
+          ordersToUpdate.push(...cleanedUpdateData.linkedOrderIds);
+        }
+        
+        // Sprawdź stary format (pojedyncze zamówienie) - dla kompatybilności wstecznej
+        if (cleanedUpdateData.linkedOrderId && !ordersToUpdate.includes(cleanedUpdateData.linkedOrderId)) {
+          ordersToUpdate.push(cleanedUpdateData.linkedOrderId);
+        }
+        
+        // Jeśli brak powiązanych zamówień w danych aktualizacji, sprawdź istniejący dokument CMR
+        if (ordersToUpdate.length === 0) {
+          try {
+            const existingCmrData = await getCmrDocumentById(cmrId);
+            if (existingCmrData.linkedOrderIds && Array.isArray(existingCmrData.linkedOrderIds) && existingCmrData.linkedOrderIds.length > 0) {
+              ordersToUpdate.push(...existingCmrData.linkedOrderIds);
+            }
+            if (existingCmrData.linkedOrderId && !ordersToUpdate.includes(existingCmrData.linkedOrderId)) {
+              ordersToUpdate.push(existingCmrData.linkedOrderId);
+            }
+          } catch (fetchError) {
+            console.warn('Nie udało się pobrać istniejących danych CMR dla automatycznej aktualizacji:', fetchError);
+          }
+        }
+        
+        if (ordersToUpdate.length > 0) {
+          console.log(`🔄 Aktualizacja ilości wysłanych w ${ordersToUpdate.length} zamówieniach przy edycji CMR...`);
+          for (const orderId of ordersToUpdate) {
+            await updateLinkedOrderShippedQuantities(orderId, items, cleanedUpdateData.cmrNumber || 'CMR-UPDATED', userId);
+            console.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie zaktualizowanego CMR`);
+          }
+        }
+      } catch (orderUpdateError) {
+        console.error('❌ Błąd podczas automatycznej aktualizacji ilości wysłanych przy edycji CMR:', orderUpdateError);
+        // Nie przerywamy procesu edycji CMR - tylko logujemy błąd
+      }
+    }
 
     return {
       id: cmrId,
@@ -1354,22 +1431,151 @@ export const generateCmrReport = async (filters = {}) => {
 }; 
 
 // Funkcja pomocnicza do aktualizacji ilości wysłanych w powiązanym zamówieniu
+// ULEPSZONA WERSJA - używa tej samej logiki dopasowania co refreshShippedQuantitiesFromCMR
 const updateLinkedOrderShippedQuantities = async (orderId, cmrItems, cmrNumber, userId) => {
   try {
-    // Mapuj elementy CMR na aktualizacje zamówienia
-    const itemUpdates = cmrItems.map((item, index) => ({
-      itemName: item.description,
-      quantity: parseFloat(item.quantity) || parseFloat(item.numberOfPackages) || 0,
-      itemIndex: index,
-      cmrNumber: cmrNumber
-    })).filter(update => update.quantity > 0);
+    console.log(`🔄 Rozpoczęcie inteligentnej aktualizacji ilości wysłanych dla zamówienia ${orderId} z CMR ${cmrNumber}...`);
     
-    if (itemUpdates.length > 0) {
-      await updateOrderItemShippedQuantity(orderId, itemUpdates, userId);
-      console.log(`Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber}`);
+    // KROK 1: Pobierz aktualne dane zamówienia
+    const { getOrderById } = await import('./orderService');
+    const orderData = await getOrderById(orderId);
+    
+    if (!orderData || !orderData.items || orderData.items.length === 0) {
+      console.log('❌ Zamówienie nie istnieje lub nie ma pozycji');
+      return;
     }
+    
+    console.log(`📋 Zamówienie ma ${orderData.items.length} pozycji:`, 
+      orderData.items.map(item => ({ id: item.id, name: item.name, quantity: item.quantity })));
+    
+    // KROK 2: Użyj ulepszonego algorytmu dopasowania (kopiuj z refreshShippedQuantitiesFromCMR)
+    const preciseItemUpdates = [];
+    
+    for (let cmrItemIndex = 0; cmrItemIndex < cmrItems.length; cmrItemIndex++) {
+      const cmrItem = cmrItems[cmrItemIndex];
+      const quantity = parseFloat(cmrItem.quantity) || parseFloat(cmrItem.numberOfPackages) || 0;
+      
+      console.log(`🔍 Dopasowywanie CMR pozycji ${cmrItemIndex}: "${cmrItem.description}", ilość: ${quantity}`);
+      
+      if (quantity <= 0) {
+        console.log(`⏭️ Pomijam pozycję z zerową ilością`);
+        continue;
+      }
+      
+      // ALGORYTM DOPASOWANIA (skopiowany z refreshShippedQuantitiesFromCMR)
+      let orderItemIndex = -1;
+      
+      // 1. PRIORYTET: Sprawdź orderItemId z walidacją
+      if (cmrItem.orderItemId && (
+          cmrItem.orderId === orderId ||
+          (!cmrItem.orderId && cmrItem.orderNumber === orderData.orderNumber)
+      )) {
+        orderItemIndex = orderData.items.findIndex(orderItem => orderItem.id === cmrItem.orderItemId);
+        if (orderItemIndex !== -1) {
+          console.log(`✅ Dopasowano przez orderItemId: ${cmrItem.orderItemId} dla pozycji "${cmrItem.description}"`);
+        } else {
+          console.warn(`⚠️ NIEAKTUALNE powiązanie: orderItemId ${cmrItem.orderItemId} nie istnieje w zamówieniu "${cmrItem.description}"`);
+        }
+      } else if (cmrItem.orderItemId && cmrItem.orderId && cmrItem.orderId !== orderId) {
+        console.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderId): ${cmrItem.orderId} vs ${orderId}`);
+        continue;
+      } else if (cmrItem.orderItemId && cmrItem.orderNumber && cmrItem.orderNumber !== orderData.orderNumber) {
+        console.log(`⏭️ Pomijam pozycję CMR z innego zamówienia (orderNumber): ${cmrItem.orderNumber} vs ${orderData.orderNumber}`);
+        continue;
+      }
+      
+      // 2. Funkcja normalizacji nazw (skopiowana z refreshShippedQuantitiesFromCMR)
+      const normalizeProductName = (name) => {
+        if (!name) return '';
+        return name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '') // usuń wszystkie znaki niealfanumeryczne
+          .replace(/omega3/g, 'omega')
+          .replace(/omegacaps/g, 'omega')
+          .replace(/caps$/g, ''); // usuń "caps" na końcu
+      };
+      
+      const normalizedCmrName = normalizeProductName(cmrItem.description);
+      
+      // 3. Jeśli nie ma orderItemId lub nie znaleziono, użyj obecnej logiki nazw
+      if (orderItemIndex === -1) {
+        // 3.1. Dokładne dopasowanie nazwy
+        orderItemIndex = orderData.items.findIndex(orderItem => 
+          orderItem.name && cmrItem.description && 
+          orderItem.name.trim().toLowerCase() === cmrItem.description.trim().toLowerCase()
+        );
+      
+        // 3.2. Jeśli nie znaleziono, spróbuj dopasowania przez ID
+        if (orderItemIndex === -1 && cmrItem.itemId) {
+          orderItemIndex = orderData.items.findIndex(orderItem => orderItem.id === cmrItem.itemId);
+        }
+        
+        // 3.3. Dopasowanie przez znormalizowane nazwy
+        if (orderItemIndex === -1 && normalizedCmrName) {
+          orderItemIndex = orderData.items.findIndex(orderItem => {
+            const normalizedOrderName = normalizeProductName(orderItem.name);
+            return normalizedOrderName === normalizedCmrName;
+          });
+        }
+        
+        // 3.4. Częściowe dopasowanie nazwy
+        if (orderItemIndex === -1) {
+          orderItemIndex = orderData.items.findIndex(orderItem => {
+            if (!orderItem.name || !cmrItem.description) return false;
+            const orderName = orderItem.name.trim().toLowerCase();
+            const cmrDesc = cmrItem.description.trim().toLowerCase();
+            return orderName.includes(cmrDesc) || cmrDesc.includes(orderName);
+          });
+        }
+        
+        // 3.5. Specjalne dopasowanie dla produktów OMEGA
+        if (orderItemIndex === -1 && cmrItem.description && cmrItem.description.toLowerCase().includes('omega')) {
+          orderItemIndex = orderData.items.findIndex(orderItem => 
+            orderItem.name && orderItem.name.toLowerCase().includes('omega')
+          );
+        }
+        
+        // 3.6. Ostatnia próba - dopasowanie według indeksu (tylko jeśli liczba pozycji się zgadza)
+        if (orderItemIndex === -1 && orderData.items.length === cmrItems.length && cmrItemIndex < orderData.items.length) {
+          console.log(`🔄 Próba dopasowania według indeksu ${cmrItemIndex}`);
+          orderItemIndex = cmrItemIndex;
+        }
+      }
+      
+      console.log(`🎯 Rezultat dopasowania dla "${cmrItem.description}": indeks ${orderItemIndex}`);
+      
+      if (orderItemIndex !== -1) {
+        // DOKŁADNE DOPASOWANIE - dodaj do precyzyjnych aktualizacji
+        preciseItemUpdates.push({
+          orderItemId: orderData.items[orderItemIndex].id,  // PRECYZYJNE ID zamiast nazwy/indeksu
+          orderItemIndex: orderItemIndex,                   // Dodatkowa walidacja
+          itemName: cmrItem.description,
+          quantity: quantity,
+          cmrNumber: cmrNumber,
+          matchMethod: cmrItem.orderItemId ? 'orderItemId' : 'name_matching'
+        });
+        
+        console.log(`✅ Dodano precyzyjną aktualizację dla pozycji "${orderData.items[orderItemIndex].name}" (ID: ${orderData.items[orderItemIndex].id})`);
+      } else {
+        console.warn(`❌ Nie znaleziono odpowiadającej pozycji w zamówieniu dla "${cmrItem.description}" z CMR ${cmrNumber}`);
+        console.log('📝 Dostępne pozycje w zamówieniu:', orderData.items.map((item, idx) => `${idx}: "${item.name}" (ID: ${item.id})`));
+      }
+    }
+    
+    // KROK 3: Zastosuj precyzyjne aktualizacje
+    if (preciseItemUpdates.length > 0) {
+      console.log(`🚀 Aplikowanie ${preciseItemUpdates.length} precyzyjnych aktualizacji do zamówienia ${orderId}`);
+      
+      // Użyj ulepszonej funkcji aktualizacji
+      await updateOrderItemShippedQuantityPrecise(orderId, preciseItemUpdates, userId);
+      console.log(`✅ Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrNumber} (precyzyjny algorytm)`);
+    } else {
+      console.log(`⚠️ Brak pozycji do aktualizacji w zamówieniu ${orderId} dla CMR ${cmrNumber}`);
+    }
+    
   } catch (error) {
-    console.error('Błąd podczas aktualizacji ilości wysłanych w zamówieniu:', error);
+    console.error('❌ Błąd podczas inteligentnej aktualizacji ilości wysłanych w zamówieniu:', error);
     // Nie rzucamy błędu, aby nie przerywać procesu tworzenia CMR
   }
 };

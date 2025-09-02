@@ -689,6 +689,117 @@ export const updateOrderItemShippedQuantity = async (orderId, itemUpdates, userI
 };
 
 /**
+ * ULEPSZONA FUNKCJA: Aktualizuje ilość wysłaną dla pozycji zamówienia na podstawie CMR
+ * Używa precyzyjnych ID zamiast dopasowania przez nazwy - rozwiązuje problem duplikowania dla pozycji bliźniaczych
+ */
+export const updateOrderItemShippedQuantityPrecise = async (orderId, itemUpdates, userId) => {
+  try {
+    console.log(`🎯 Rozpoczęcie precyzyjnej aktualizacji ilości wysłanych dla zamówienia ${orderId}`);
+    console.log(`📋 Aktualizacje do zastosowania:`, itemUpdates.map(update => ({
+      orderItemId: update.orderItemId,
+      quantity: update.quantity,
+      cmrNumber: update.cmrNumber,
+      matchMethod: update.matchMethod
+    })));
+    
+    // Pobierz aktualne dane zamówienia
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const orderData = orderDoc.data();
+    const items = orderData.items || [];
+    
+    console.log(`📦 Zamówienie ma ${items.length} pozycji`);
+    
+    // PRECYZYJNE aktualizacje - używamy orderItemId zamiast nazw/indeksów
+    const updatedItems = items.map(item => {
+      // Znajdź aktualizację dla tej konkretnej pozycji (według ID)
+      const itemUpdate = itemUpdates.find(update => update.orderItemId === item.id);
+      
+      if (itemUpdate) {
+        console.log(`🎯 PRECYZYJNE dopasowanie: pozycja "${item.name}" (ID: ${item.id}) z CMR ${itemUpdate.cmrNumber}`);
+        
+        const currentShipped = parseFloat(item.shippedQuantity) || 0;
+        const additionalShipped = parseFloat(itemUpdate.quantity) || 0;
+        
+        // Inicjalizuj historię CMR jeśli nie istnieje
+        const cmrHistory = item.cmrHistory || [];
+        
+        // Sprawdź, czy CMR już istnieje w historii
+        const existingCmrIndex = cmrHistory.findIndex(entry => entry.cmrNumber === itemUpdate.cmrNumber);
+        
+        let updatedCmrHistory;
+        if (existingCmrIndex !== -1) {
+          // Jeśli CMR już istnieje, zaktualizuj ilość
+          updatedCmrHistory = [...cmrHistory];
+          updatedCmrHistory[existingCmrIndex] = {
+            ...updatedCmrHistory[existingCmrIndex],
+            quantity: (parseFloat(updatedCmrHistory[existingCmrIndex].quantity) || 0) + additionalShipped,
+            shipmentDate: new Date().toISOString()
+          };
+          console.log(`🔄 Zaktualizowano istniejący wpis CMR ${itemUpdate.cmrNumber}: ${updatedCmrHistory[existingCmrIndex].quantity}`);
+        } else {
+          // Dodaj nowy wpis do historii CMR
+          const newCmrEntry = {
+            cmrNumber: itemUpdate.cmrNumber,
+            quantity: additionalShipped,
+            shipmentDate: new Date().toISOString(),
+            unit: item.unit || 'szt.',
+            matchMethod: itemUpdate.matchMethod || 'unknown'
+          };
+          updatedCmrHistory = [...cmrHistory, newCmrEntry];
+          console.log(`➕ Dodano nowy wpis CMR ${itemUpdate.cmrNumber}: ${additionalShipped} ${newCmrEntry.unit}`);
+        }
+        
+        const updatedItem = {
+          ...item,
+          shippedQuantity: currentShipped + additionalShipped,
+          lastShipmentDate: new Date().toISOString(),
+          lastCmrNumber: itemUpdate.cmrNumber,
+          cmrHistory: updatedCmrHistory
+        };
+        
+        console.log(`✅ Pozycja "${item.name}" zaktualizowana: ${currentShipped} + ${additionalShipped} = ${updatedItem.shippedQuantity}`);
+        return updatedItem;
+      }
+      
+      // Pozycja bez aktualizacji - pozostaw bez zmian
+      return item;
+    });
+    
+    // Policz ile pozycji zostało zaktualizowanych
+    const updatedCount = itemUpdates.length;
+    const totalQuantityAdded = itemUpdates.reduce((sum, update) => sum + (parseFloat(update.quantity) || 0), 0);
+    
+    console.log(`📊 Podsumowanie: ${updatedCount} pozycji zaktualizowanych, łącznie dodano ${totalQuantityAdded} jednostek`);
+    
+    // Zaktualizuj zamówienie
+    await updateDoc(orderRef, {
+      items: updatedItems,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    });
+    
+    console.log(`✅ Precyzyjna aktualizacja ilości wysłanych zakończona dla zamówienia ${orderId}`);
+    
+    return { 
+      success: true, 
+      updatedItems,
+      updatedCount,
+      totalQuantityAdded,
+      method: 'precise_id_matching'
+    };
+  } catch (error) {
+    console.error('❌ Błąd podczas precyzyjnej aktualizacji ilości wysłanej:', error);
+    throw error;
+  }
+};
+
+/**
  * Aktualizuje status zamówienia
  */
 export const updateOrderStatus = async (orderId, status, userId) => {
