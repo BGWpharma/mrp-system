@@ -76,6 +76,7 @@ import {
 import { getExchangeRate, getExchangeRates } from '../../services/exchangeRateService';
 import PurchaseOrderFileUpload from './PurchaseOrderFileUpload';
 import PurchaseOrderCategorizedFileUpload from './PurchaseOrderCategorizedFileUpload';
+import SavingOverlay from '../common/SavingOverlay';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { t } = useTranslation();
@@ -90,6 +91,8 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   const [loading, setLoading] = useState(!!currentOrderId && currentOrderId !== 'new');
   const [saving, setSaving] = useState(false);
+  const [savingMessage, setSavingMessage] = useState('');
+  const [savingSubtitle, setSavingSubtitle] = useState('');
   const [loadingSupplierSuggestions, setLoadingSupplierSuggestions] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -1130,8 +1133,10 @@ const PurchaseOrderForm = ({ orderId }) => {
       return;
     }
     
-    // Pokazuj loader podczas zapisywania
+    // Pokazuj overlay z informacją o zapisywaniu
     setSaving(true);
+    setSavingMessage('Przygotowywanie danych...');
+    setSavingSubtitle('Sprawdzanie poprawności formularza i przygotowywanie zamówienia');
     
     try {
       // Przygotuj dane zamówienia do zapisu
@@ -1152,6 +1157,10 @@ const PurchaseOrderForm = ({ orderId }) => {
       };
       
       console.log("Dane zamówienia do zapisu:", orderWithSupplierId);
+      
+      // Aktualizuj komunikat o zapisywaniu
+      setSavingMessage('Zapisuje i aktualizuje wartości...');
+      setSavingSubtitle('Obliczanie sum, podatków i zapisywanie do bazy danych');
       
       // Zapisz zamówienie do bazy danych - calculateTotals wewnątrz savePurchaseOrder 
       // obliczy prawidłowe wartości na podstawie indywidualnych stawek VAT
@@ -1176,6 +1185,8 @@ const PurchaseOrderForm = ({ orderId }) => {
       showError(`Nie udało się zapisać zamówienia: ${error.message}`);
     } finally {
       setSaving(false);
+      setSavingMessage('');
+      setSavingSubtitle('');
     }
   };
   
@@ -3885,6 +3896,13 @@ const PurchaseOrderForm = ({ orderId }) => {
           </Box>
         </form>
       </Paper>
+      
+      {/* Overlay z informacją o zapisywaniu */}
+      <SavingOverlay 
+        open={saving} 
+        message={savingMessage || 'Zapisuje...'} 
+        subtitle={savingSubtitle}
+      />
     </Container>
   );
 };
