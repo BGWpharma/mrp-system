@@ -56,7 +56,8 @@ import {
   getAvailableProformasForOrder,
   getAvailableProformasForOrderWithExclusion,
   updateMultipleProformasUsage,
-  removeMultipleProformasUsage
+  removeMultipleProformasUsage,
+  syncProformaNumberInLinkedInvoices
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -1175,8 +1176,14 @@ const InvoiceForm = ({ invoiceId }) => {
                   name="number"
                   value={invoice.number}
                   onChange={handleChange}
-                  disabled={invoiceId !== undefined}
-                  helperText={invoiceId ? t('invoices.form.fields.invoiceNumberReadonly') : 'Zostanie wygenerowany automatycznie jeśli pozostawisz to pole puste'}
+                  helperText={invoiceId ? 
+                    (invoice.isProforma ? 
+                      'UWAGA: Zmiana numeru proformy zostanie automatycznie zsynchronizowana w powiązanych fakturach' : 
+                      'UWAGA: Zmiana numeru faktury może wpłynąć na spójność danych księgowych'
+                    ) : 
+                    'Zostanie wygenerowany automatycznie jeśli pozostawisz to pole puste'
+                  }
+                  color={invoiceId ? "warning" : "primary"}
                 />
               </Grid>
 

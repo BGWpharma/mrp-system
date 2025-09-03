@@ -45,7 +45,7 @@
     "fields": {
       "basicData": "Dane podstawowe",
       "invoiceNumber": "Numer faktury",
-      "invoiceNumberReadonly": "Numer faktury nie może być zmieniony",
+      "invoiceNumberReadonly": "UWAGA: Zmiana numeru faktury może wpłynąć na spójność danych księgowych",
       "issueDate": "Data wystawienia",
       "dueDate": "Termin płatności",
       "invoiceStatus": "Status faktury",
@@ -83,11 +83,11 @@
       "used": "wykorzystane",
       "amountToSettle": "Kwota do rozliczenia",
       "exceedsAvailable": "Przekracza dostępną kwotę",
-              "proformaFullyUsed": "Ta proforma została całkowicie wykorzystana",
-        "settlementSummary": "Podsumowanie rozliczenia:",
-        "totalAdvanceAmount": "Łączna kwota zaliczek:",
-        "requiredAdvancePayment": "Wymagana przedpłata (%)",
-        "requiredAdvancePaymentHelper": "Procent kwoty faktury wymagany jako przedpłata (0-100%). Gdy osiągnięto tę kwotę, faktura będzie oznaczona jako opłacona."
+      "proformaFullyUsed": "Ta proforma została całkowicie wykorzystana",
+      "settlementSummary": "Podsumowanie rozliczenia:",
+      "totalAdvanceAmount": "Łączna kwota zaliczek:",
+      "requiredAdvancePayment": "Wymagana przedpłata (%)",
+      "requiredAdvancePaymentHelper": "Procent kwoty faktury wymagany jako przedpłata (0-100%). Gdy osiągnięto tę kwotę, faktura będzie oznaczona jako opłacona."
     },
     "buttons": {
       "save": "Zapisz",
@@ -205,10 +205,10 @@
         "loadPayments": "Błąd podczas ładowania płatności",
         "savePayment": "Błąd podczas zapisywania płatności",
         "deletePayment": "Błąd podczas usuwania płatności",
-                  "amountMustBePositive": "Kwota płatności musi być większa od zera"
-        }
-      },
-      "requiredAdvancePayment": "Wymagana przedpłata"
+        "amountMustBePositive": "Kwota płatności musi być większa od zera"
+      }
+    },
+    "requiredAdvancePayment": "Wymagana przedpłata"
   },
   "dialogs": {
     "deleteConfirm": {

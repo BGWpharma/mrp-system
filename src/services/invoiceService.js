@@ -214,7 +214,7 @@ export const getInvoicesByOrderId = async (orderId) => {
 export const createInvoice = async (invoiceData, userId) => {
   try {
     // Walidacja danych faktury
-    validateInvoiceData(invoiceData);
+    await validateInvoiceData(invoiceData);
     
     // Generowanie numeru faktury, jeśli nie został podany
     if (!invoiceData.number) {
@@ -448,7 +448,7 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     const oldSettledAdvancePayments = parseFloat(oldInvoiceData?.settledAdvancePayments || 0);
     
     // Walidacja danych faktury
-    validateInvoiceData(invoiceData);
+    await validateInvoiceData(invoiceData, invoiceId);
     
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
     const linkedPurchaseOrders = invoiceData.linkedPurchaseOrders || [];
@@ -520,6 +520,20 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
       } catch (proformaError) {
         console.warn('Błąd podczas aktualizacji wykorzystania proform:', proformaError);
         // Nie przerywamy procesu aktualizacji faktury z powodu błędu proform
+      }
+    }
+    
+    // NOWE: Jeśli to proforma i zmienił się jej numer, zsynchronizuj go w powiązanych fakturach
+    if (invoiceData.isProforma && oldInvoiceData?.number !== invoiceData.number) {
+      try {
+        console.log(`Wykryto zmianę numeru proformy: "${oldInvoiceData.number}" → "${invoiceData.number}"`);
+        const syncResult = await syncProformaNumberInLinkedInvoices(invoiceId, invoiceData.number, userId);
+        if (syncResult.updatedInvoices > 0) {
+          console.log(`✅ Zsynchronizowano numer proformy w ${syncResult.updatedInvoices} powiązanych fakturach`);
+        }
+      } catch (syncError) {
+        console.warn('Błąd podczas synchronizacji numeru proformy w powiązanych fakturach:', syncError);
+        // Nie przerywamy procesu aktualizacji proformy z powodu błędu synchronizacji
       }
     }
     
@@ -700,9 +714,34 @@ export const generateAndSaveInvoicePdf = async (invoiceId, userId) => {
 };
 
 /**
+ * Sprawdza czy numer faktury już istnieje w systemie
+ */
+const checkInvoiceNumberExists = async (invoiceNumber, excludeInvoiceId = null) => {
+  try {
+    const invoicesQuery = query(
+      collection(db, INVOICES_COLLECTION),
+      where('number', '==', invoiceNumber)
+    );
+    
+    const querySnapshot = await getDocs(invoicesQuery);
+    
+    // Jeśli jest to edycja faktury, wykluczamy aktualnie edytowaną fakturę
+    if (excludeInvoiceId) {
+      const existingInvoices = querySnapshot.docs.filter(doc => doc.id !== excludeInvoiceId);
+      return existingInvoices.length > 0;
+    }
+    
+    return !querySnapshot.empty;
+  } catch (error) {
+    console.error('Błąd podczas sprawdzania numeru faktury:', error);
+    throw error;
+  }
+};
+
+/**
  * Waliduje dane faktury
  */
-const validateInvoiceData = (invoiceData) => {
+const validateInvoiceData = async (invoiceData, invoiceId = null) => {
   if (!invoiceData.customer || !invoiceData.customer.id) {
     throw new Error('Klient jest wymagany');
   }
@@ -713,6 +752,17 @@ const validateInvoiceData = (invoiceData) => {
   
   if (!invoiceData.dueDate) {
     throw new Error('Termin płatności jest wymagany');
+  }
+  
+  // Walidacja numeru faktury
+  if (!invoiceData.number || invoiceData.number.trim() === '') {
+    throw new Error('Numer faktury jest wymagany');
+  }
+  
+  // Sprawdź unikalność numeru faktury
+  const numberExists = await checkInvoiceNumberExists(invoiceData.number.trim(), invoiceId);
+  if (numberExists) {
+    throw new Error(`Numer faktury "${invoiceData.number}" już istnieje w systemie`);
   }
   
   if (!invoiceData.items || !Array.isArray(invoiceData.items) || invoiceData.items.length === 0) {
@@ -1813,6 +1863,129 @@ export const migrateInvoiceItemsOrderIds = async (orderId) => {
     console.log(`[MIGRATION] Migracja zakończona dla zamówienia ${orderId}`);
   } catch (error) {
     console.error('Błąd podczas migracji orderItemId w fakturach:', error);
+    throw error;
+  }
+};
+
+/**
+ * Synchronizuje numer proformy we wszystkich powiązanych fakturach
+ * @param {string} proformaId - ID proformy
+ * @param {string} newProformaNumber - Nowy numer proformy
+ * @param {string} userId - ID użytkownika wykonującego operację
+ * @returns {Promise<Object>} Wynik operacji z informacjami o zaktualizowanych fakturach
+ */
+export const syncProformaNumberInLinkedInvoices = async (proformaId, newProformaNumber, userId) => {
+  try {
+    console.log(`Rozpoczęcie synchronizacji numeru proformy ${proformaId} na "${newProformaNumber}"`);
+    
+    // Pobierz dane proformy aby sprawdzić linkedAdvanceInvoices
+    const proformaDoc = await getDoc(doc(db, INVOICES_COLLECTION, proformaId));
+    if (!proformaDoc.exists()) {
+      throw new Error('Proforma nie została znaleziona');
+    }
+    
+    const proformaData = proformaDoc.data();
+    const linkedInvoiceIds = proformaData.linkedAdvanceInvoices || [];
+    
+    if (linkedInvoiceIds.length === 0) {
+      console.log('Brak powiązanych faktur do aktualizacji');
+      return {
+        success: true,
+        updatedInvoices: 0,
+        skippedInvoices: 0,
+        message: 'Brak powiązanych faktur do aktualizacji'
+      };
+    }
+    
+    console.log(`Znaleziono ${linkedInvoiceIds.length} powiązanych faktur:`, linkedInvoiceIds);
+    
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const updateResults = [];
+    
+    // Aktualizuj każdą powiązaną fakturę
+    for (const invoiceId of linkedInvoiceIds) {
+      try {
+        const invoiceDoc = await getDoc(doc(db, INVOICES_COLLECTION, invoiceId));
+        
+        if (!invoiceDoc.exists()) {
+          console.warn(`Faktura ${invoiceId} nie istnieje, pomijam`);
+          skippedCount++;
+          updateResults.push({
+            invoiceId,
+            success: false,
+            error: 'Faktura nie istnieje'
+          });
+          continue;
+        }
+        
+        const invoiceData = invoiceDoc.data();
+        const proformAllocation = invoiceData.proformAllocation || [];
+        
+        // Sprawdź czy ta faktura rzeczywiście używa tej proformy
+        const allocationIndex = proformAllocation.findIndex(allocation => allocation.proformaId === proformaId);
+        
+        if (allocationIndex === -1) {
+          console.warn(`Faktura ${invoiceId} nie ma alokacji dla proformy ${proformaId}, pomijam`);
+          skippedCount++;
+          updateResults.push({
+            invoiceId,
+            success: false,
+            error: 'Brak alokacji dla tej proformy'
+          });
+          continue;
+        }
+        
+        // Zaktualizuj numer proformy w alokacji
+        const updatedAllocation = [...proformAllocation];
+        const oldNumber = updatedAllocation[allocationIndex].proformaNumber;
+        updatedAllocation[allocationIndex] = {
+          ...updatedAllocation[allocationIndex],
+          proformaNumber: newProformaNumber
+        };
+        
+        // Zaktualizuj fakturę w bazie danych
+        await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), {
+          proformAllocation: updatedAllocation,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+        
+        console.log(`✅ Zaktualizowano fakturę ${invoiceData.number}: "${oldNumber}" → "${newProformaNumber}"`);
+        updatedCount++;
+        updateResults.push({
+          invoiceId,
+          invoiceNumber: invoiceData.number,
+          success: true,
+          oldNumber,
+          newNumber: newProformaNumber
+        });
+        
+      } catch (error) {
+        console.error(`Błąd podczas aktualizacji faktury ${invoiceId}:`, error);
+        skippedCount++;
+        updateResults.push({
+          invoiceId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+    
+    const result = {
+      success: true,
+      updatedInvoices: updatedCount,
+      skippedInvoices: skippedCount,
+      totalInvoices: linkedInvoiceIds.length,
+      updateResults,
+      message: `Zaktualizowano ${updatedCount} faktur, pominięto ${skippedCount}`
+    };
+    
+    console.log('Synchronizacja numerów proform zakończona:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('Błąd podczas synchronizacji numerów proform:', error);
     throw error;
   }
 };
