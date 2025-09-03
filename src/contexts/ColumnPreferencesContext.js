@@ -28,8 +28,7 @@ const defaultColumnPreferences = {
     orderDate: true,
     expectedDeliveryDate: true,
     value: true,
-    status: true,
-    paymentStatus: false,
+    statusAndPayment: true, // Nowa kolumna łącząca status i płatność
     actions: true
   },
   // Zadania produkcyjne
@@ -37,7 +36,7 @@ const defaultColumnPreferences = {
     name: true,
     productName: true,
     quantityProgress: true,
-    status: true,
+    statusAndMaterials: true, // Nowa kolumna łącząca status i materiały
     plannedStart: true,
     plannedEnd: true,
     cost: true,

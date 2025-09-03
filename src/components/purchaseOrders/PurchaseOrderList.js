@@ -690,13 +690,9 @@ const PurchaseOrderList = () => {
             <Checkbox checked={!!visibleColumns['value']} />
             <ListItemText primary={t('purchaseOrders.table.totalValue')} />
           </MenuItem>
-          <MenuItem onClick={() => toggleColumnVisibility('status')}>
-            <Checkbox checked={!!visibleColumns['status']} />
-            <ListItemText primary={t('purchaseOrders.table.status')} />
-          </MenuItem>
-          <MenuItem onClick={() => toggleColumnVisibility('paymentStatus')}>
-            <Checkbox checked={!!visibleColumns['paymentStatus']} />
-            <ListItemText primary={t('purchaseOrders.table.paymentStatus')} />
+          <MenuItem onClick={() => toggleColumnVisibility('statusAndPayment')}>
+            <Checkbox checked={!!visibleColumns['statusAndPayment']} />
+            <ListItemText primary="Status / Płatność" />
           </MenuItem>
         </Menu>
       </Paper>
@@ -712,8 +708,7 @@ const PurchaseOrderList = () => {
                   {visibleColumns['orderDate'] && <SortableTableCell id="orderDate" label={t('purchaseOrders.table.orderDate')} sx={{ width: '130px', minWidth: '120px' }} />}
                   {visibleColumns['expectedDeliveryDate'] && <SortableTableCell id="expectedDeliveryDate" label="Oczekiwana dostawa" sx={{ width: '140px', minWidth: '130px' }} />}
                   {visibleColumns['value'] && <SortableTableCell id="value" label={t('purchaseOrders.table.totalValue')} />}
-                  {visibleColumns['status'] && <SortableTableCell id="status" label={t('purchaseOrders.table.status')} />}
-                  {visibleColumns['paymentStatus'] && <SortableTableCell id="paymentStatus" label={t('purchaseOrders.table.paymentStatus')} />}
+                  {visibleColumns['statusAndPayment'] && <SortableTableCell id="status" label="Status / Płatność" />}
                   <TableCell align="right">{t('purchaseOrders.table.actions')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -746,14 +741,12 @@ const PurchaseOrderList = () => {
                           <Skeleton variant="text" width="50%" height={24} />
                         </TableCell>
                       )}
-                      {visibleColumns['status'] && (
+                      {visibleColumns['statusAndPayment'] && (
                         <TableCell>
-                          <Skeleton variant="rectangular" width={80} height={24} />
-                        </TableCell>
-                      )}
-                      {visibleColumns['paymentStatus'] && (
-                        <TableCell>
-                          <Skeleton variant="rectangular" width={100} height={24} />
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Skeleton variant="rectangular" width={80} height={24} />
+                            <Skeleton variant="rectangular" width={100} height={24} />
+                          </Box>
                         </TableCell>
                       )}
                       <TableCell align="right">
@@ -768,7 +761,7 @@ const PurchaseOrderList = () => {
                   ))
                 ) : filteredPOs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={7} align="center">
                       <Typography variant="body1">{t('purchaseOrders.noOrdersFound')}</Typography>
                     </TableCell>
                   </TableRow>
@@ -864,15 +857,12 @@ const PurchaseOrderList = () => {
                         </TableCell>
                       )}
                       
-                      {visibleColumns['status'] && (
+                      {visibleColumns['statusAndPayment'] && (
                         <TableCell>
-                          {getStatusChip(po.status, po)}
-                        </TableCell>
-                      )}
-                      
-                      {visibleColumns['paymentStatus'] && (
-                        <TableCell>
-                          {getPaymentStatusChip(po.paymentStatus, po)}
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {getStatusChip(po.status, po)}
+                            {getPaymentStatusChip(po.paymentStatus, po)}
+                          </Box>
                         </TableCell>
                       )}
                       

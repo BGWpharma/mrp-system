@@ -1655,13 +1655,13 @@ const TaskList = () => {
                     </TableCell>
                   )}
 
-                  {visibleColumns.status && (
+                  {visibleColumns.statusAndMaterials && (
                     <TableCell
                       onClick={() => handleSort('status')}
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {t('production.taskListColumns.status')}
+                        Status / Materiały
                         {tableSort.field === 'status' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -1674,7 +1674,6 @@ const TaskList = () => {
                       </Box>
                     </TableCell>
                   )}
-                  {visibleColumns.materialsReserved && <TableCell>{t('production.taskListColumns.materialsReserved')}</TableCell>}
                   {visibleColumns.plannedStart && (
                     <TableCell
                       onClick={() => handleSort('scheduledDate')}
@@ -1782,39 +1781,37 @@ const TaskList = () => {
                         </TableCell>
                       )}
 
-                      {visibleColumns.status && (
+                      {visibleColumns.statusAndMaterials && (
                         <TableCell>
-                          <Chip 
-                            label={task.status} 
-                            size="small"
-                            sx={{
-                              backgroundColor: getStatusColor(task.status),
-                              color: 'white'
-                            }}
-                          />
-                        </TableCell>
-                      )}
-                      {visibleColumns.materialsReserved && (
-                        <TableCell>
-                          {(() => {
-                            const reservationStatus = calculateMaterialReservationStatus(task);
-                            const statusColors = getReservationStatusColors(reservationStatus.status);
-                            
-                            return (
-                              <Chip 
-                                label={reservationStatus.label} 
-                                size="small" 
-                                variant="outlined"
-                                sx={{
-                                  borderColor: statusColors.main,
-                                  color: statusColors.main,
-                                  '&:hover': {
-                                    backgroundColor: statusColors.light + '20',
-                                  }
-                                }}
-                              />
-                            );
-                          })()}
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Chip 
+                              label={task.status} 
+                              size="small"
+                              sx={{
+                                backgroundColor: getStatusColor(task.status),
+                                color: 'white'
+                              }}
+                            />
+                            {(() => {
+                              const reservationStatus = calculateMaterialReservationStatus(task);
+                              const statusColors = getReservationStatusColors(reservationStatus.status);
+                              
+                              return (
+                                <Chip 
+                                  label={reservationStatus.label} 
+                                  size="small" 
+                                  variant="outlined"
+                                  sx={{
+                                    borderColor: statusColors.main,
+                                    color: statusColors.main,
+                                    '&:hover': {
+                                      backgroundColor: statusColors.light + '20',
+                                    }
+                                  }}
+                                />
+                              );
+                            })()}
+                          </Box>
                         </TableCell>
                       )}
                       {visibleColumns.plannedStart && (
@@ -1949,13 +1946,9 @@ const TaskList = () => {
           <ListItemText primary={t('production.taskListColumns.quantityProgress')} />
         </MenuItem>
         
-        <MenuItem onClick={() => toggleColumnVisibility('status')}>
-          <Checkbox checked={visibleColumns.status} />
-          <ListItemText primary={t('production.taskListColumns.status')} />
-        </MenuItem>
-        <MenuItem onClick={() => toggleColumnVisibility('materialsReserved')}>
-          <Checkbox checked={visibleColumns.materialsReserved} />
-          <ListItemText primary={t('production.taskListColumns.materialsReserved')} />
+        <MenuItem onClick={() => toggleColumnVisibility('statusAndMaterials')}>
+          <Checkbox checked={visibleColumns.statusAndMaterials} />
+          <ListItemText primary="Status / Materiały" />
         </MenuItem>
         <MenuItem onClick={() => toggleColumnVisibility('plannedStart')}>
           <Checkbox checked={visibleColumns.plannedStart} />

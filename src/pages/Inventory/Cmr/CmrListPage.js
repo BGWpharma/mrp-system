@@ -893,7 +893,7 @@ const CmrListPage = () => {
                       sx={{ cursor: 'pointer', userSelect: 'none' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {translate('cmr.table.status')}
+                        Status / Płatność
                         {tableSort.field === 'status' && (
                           <ArrowDropDownIcon 
                             sx={{ 
@@ -905,7 +905,6 @@ const CmrListPage = () => {
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell>{translate('cmr.table.paymentStatus')}</TableCell>
                     <TableCell>{translate('cmr.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
@@ -916,8 +915,12 @@ const CmrListPage = () => {
                       <TableCell>{formatDate(cmr.issueDate)}</TableCell>
                       <TableCell>{cmr.sender}</TableCell>
                       <TableCell>{cmr.recipient}</TableCell>
-                      <TableCell>{renderStatusChip(cmr.status)}</TableCell>
-                      <TableCell>{getPaymentStatusChip(cmr.paymentStatus, cmr)}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          {renderStatusChip(cmr.status)}
+                          {getPaymentStatusChip(cmr.paymentStatus, cmr)}
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         <IconButton
                           size="small"
