@@ -1241,6 +1241,9 @@ export const checkShortExpiryItems = (items, orderDate) => {
     
     // Sprawdź które pozycje mają datę ważności krótszą niż 16 miesięcy
     const shortExpiryItems = items.filter(item => {
+      // Pomiń pozycje oznaczone jako "brak daty ważności"
+      if (item.noExpiryDate === true) return false;
+      
       if (!item.expiryDate) return false;
       
       let expiryDateObj;
@@ -1277,9 +1280,9 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     
     // Walidacja daty ważności przy zmianie statusu z "szkic" na "zamówione"
     if (oldStatus === PURCHASE_ORDER_STATUSES.DRAFT && newStatus === PURCHASE_ORDER_STATUSES.ORDERED) {
-      const itemsWithoutExpiryDate = poData.items?.filter(item => !item.expiryDate) || [];
+      const itemsWithoutExpiryDate = poData.items?.filter(item => !item.expiryDate && !item.noExpiryDate) || [];
       if (itemsWithoutExpiryDate.length > 0) {
-        throw new Error('Wszystkie pozycje muszą mieć określoną datę ważności przed zmianą statusu na "Zamówione"');
+        throw new Error('Wszystkie pozycje muszą mieć określoną datę ważności lub być oznaczone jako "brak daty ważności" przed zmianą statusu na "Zamówione"');
       }
     }
     

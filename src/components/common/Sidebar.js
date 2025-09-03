@@ -62,6 +62,7 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
   borderRadius: '12px',
   margin: '2px 8px',
   padding: '8px 12px',
+  border: 'none',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   '&.Mui-selected': {
     background: theme.palette.mode === 'dark'
@@ -69,6 +70,7 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
       : 'linear-gradient(to right, #1d4ed8, #6d28d9)', // blue-700 to purple-700 dla light - lepszy kontrast
     color: '#ffffff',
     fontWeight: 'bold',
+    border: 'none',
     boxShadow: theme.palette.mode === 'dark'
       ? '0 4px 12px rgba(59, 130, 246, 0.3)'
       : '0 4px 12px rgba(29, 78, 216, 0.4)',
@@ -77,6 +79,7 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
         ? 'linear-gradient(to right, #2563eb, #7c3aed)' // blue-600 to purple-600 dla dark
         : 'linear-gradient(to right, #1e3a8a, #581c87)', // blue-800 to purple-800 dla light
       transform: 'translateY(-1px)',
+      border: 'none',
       boxShadow: theme.palette.mode === 'dark'
         ? '0 6px 16px rgba(59, 130, 246, 0.4)'
         : '0 6px 16px rgba(29, 78, 216, 0.5)',
@@ -90,6 +93,7 @@ const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
       ? 'inherit' 
       : '#1e293b', // slate-800 dla lepszego kontrastu hover w jasnym motywie
     transform: 'translateX(4px)',
+    border: 'none',
     backdropFilter: 'blur(4px)',
   },
 }));
@@ -98,7 +102,17 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   borderRadius: '8px',
   margin: '1px 12px',
   padding: '4px 8px',
+  border: 'none !important',
+  outline: 'none !important',
+  boxShadow: 'none !important',
+  backgroundColor: 'transparent !important', // Przezroczyste tło domyślnie
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  '&::before': {
+    display: 'none !important',
+  },
+  '&::after': {
+    display: 'none !important',
+  },
   '&.Mui-selected': {
     backgroundColor: theme.palette.mode === 'dark'
       ? 'rgba(59, 130, 246, 0.2)'
@@ -106,6 +120,11 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
     borderLeft: theme.palette.mode === 'dark' 
       ? '3px solid #3b82f6' 
       : '3px solid #1d4ed8', // blue-700 dla light mode
+    borderRight: 'none !important',
+    borderTop: 'none !important',
+    borderBottom: 'none !important',
+    outline: 'none !important',
+    boxShadow: 'none !important',
     color: theme.palette.mode === 'dark' 
       ? 'inherit' 
       : '#1e293b', // slate-800 dla lepszego kontrastu w jasnym motywie
@@ -114,6 +133,11 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
         ? 'rgba(59, 130, 246, 0.3)'
         : 'rgba(29, 78, 216, 0.2)', // ciemniejszy dla lepszego kontrastu
       transform: 'translateX(2px)',
+      borderRight: 'none !important',
+      borderTop: 'none !important',
+      borderBottom: 'none !important',
+      outline: 'none !important',
+      boxShadow: 'none !important',
     },
   },
   '&:hover': {
@@ -121,6 +145,9 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
       ? 'rgba(55, 65, 81, 0.6)'
       : 'rgba(241, 245, 249, 0.6)',
     transform: 'translateX(2px)',
+    border: 'none !important',
+    outline: 'none !important',
+    boxShadow: 'none !important',
   },
 }));
 
@@ -532,28 +559,34 @@ const Sidebar = ({ onToggle }) => {
         </IconButton>
       </Box>
 
-      <List sx={{ 
-        pt: 1,
-        flexGrow: 1,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        '&::-webkit-scrollbar': {
-          width: '8px',
-        },
-        '&::-webkit-scrollbar-track': {
-          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-          borderRadius: '4px',
-        },
-        '&::-webkit-scrollbar-thumb:hover': {
-          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
-        }
-      }}
-      role="menu"
-      aria-label="Menu nawigacyjne"
-      tabIndex={-1}
+      <List 
+        className="sidebar-list"
+        sx={{ 
+          pt: 1,
+          flexGrow: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          backgroundColor: 'transparent !important',
+          background: 'transparent !important',
+          border: 'none !important',
+          backdropFilter: 'none !important',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)',
+          }
+        }}
+        role="menu"
+        aria-label="Menu nawigacyjne"
+        tabIndex={-1}
       >
         {menuItems.map((item) => (
           item.children ? (
@@ -601,15 +634,35 @@ const Sidebar = ({ onToggle }) => {
                 in={openSubmenu === item.text} 
                 timeout="auto" 
                 unmountOnExit
-              >
-                <List component="div" disablePadding sx={{ 
-                  overflowX: 'hidden',
-                  '&::-webkit-scrollbar:horizontal': {
-                    display: 'none',
+                sx={{
+                  backgroundColor: 'transparent !important',
+                  '& .MuiCollapse-wrapper': {
+                    backgroundColor: 'transparent !important',
+                  },
+                  '& .MuiCollapse-wrapperInner': {
+                    backgroundColor: 'transparent !important',
                   }
                 }}
-                role="menu"
-                aria-label={`Podmenu ${item.text}`}
+              >
+                <List 
+                  component="div" 
+                  disablePadding 
+                  className="sidebar-list"
+                                     sx={{ 
+                     overflowX: 'hidden',
+                     backgroundColor: 'transparent !important',
+                     background: 'transparent !important',
+                     border: 'none !important',
+                     backdropFilter: 'none !important',
+                     '&::-webkit-scrollbar:horizontal': {
+                       display: 'none',
+                     },
+                     '& .MuiListItem-divider': {
+                       borderBottom: 'none !important',
+                     }
+                   }}
+                  role="menu"
+                  aria-label={`Podmenu ${item.text}`}
                 >
                   {item.children
                     .filter((subItem) => {
@@ -625,8 +678,22 @@ const Sidebar = ({ onToggle }) => {
                       to={subItem.path}
                       onClick={subItem.onClick}
                       selected={subItem.path ? location.pathname === subItem.path : false}
+                      divider={false}
                       role="menuitem"
-                      sx={{ pl: isDrawerOpen ? 4 : 2 }}
+                                             sx={{ 
+                         pl: isDrawerOpen ? 4 : 2,
+                         borderRight: 'none !important',
+                         borderTop: 'none !important',
+                         borderBottom: 'none !important',
+                         outline: 'none !important',
+                         boxShadow: 'none !important',
+                         '&::before': {
+                           display: 'none !important',
+                         },
+                         '&::after': {
+                           display: 'none !important',
+                         }
+                       }}
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
                         <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>

@@ -9,6 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import App from './App';
 import './assets/styles/global.css';
+import './styles/enhancements.css';
 
 const root = createRoot(document.getElementById('root'));
 
