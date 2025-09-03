@@ -478,7 +478,6 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const [importOptions, setImportOptions] = useState({
     recipientData: true,
     deliveryPlace: true,
-    deliveryDate: true,
     documents: true
   });
   
@@ -1495,11 +1494,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
           importedDataSummary.push('Miejsce dostawy');
         }
         
-        // Data dostawy (jeśli jest ustawiona w zamówieniu)
-        if (importOptions.deliveryDate && order.expectedDeliveryDate) {
-          updatedForm.deliveryDate = new Date(order.expectedDeliveryDate);
-          importedDataSummary.push('Data dostawy');
-        }
+
         
         // Dodajemy numer zamówienia jako dokument załączony
         if (importOptions.documents) {
@@ -1845,16 +1840,7 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     } 
                     label="Miejsce dostawy" 
                   />
-                  <FormControlLabel 
-                    control={
-                      <Checkbox 
-                        checked={importOptions.deliveryDate} 
-                        onChange={handleImportOptionChange} 
-                        name="deliveryDate" 
-                      />
-                    } 
-                    label="Data dostawy" 
-                  />
+
                   <FormControlLabel 
                     control={
                       <Checkbox 
