@@ -7,6 +7,8 @@ import {
   Tooltip, Menu, Checkbox, ListItemText, TableSortLabel, Pagination, TableFooter, CircularProgress,
   Fade, Skeleton, List, ListItem, ListItemIcon, ListItemText as MuiListItemText, Alert
 } from '@mui/material';
+import { format, isValid } from 'date-fns';
+import { pl } from 'date-fns/locale';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon } from '@mui/icons-material';
 import { 
   getAllPurchaseOrders, 
@@ -23,6 +25,7 @@ import {
   updateBatchPricesOnAnySave,
   updateBatchPricesWithDetails,
   getPurchaseOrderById,
+  checkShortExpiryItems,
   PURCHASE_ORDER_STATUSES, 
   PURCHASE_ORDER_PAYMENT_STATUSES, 
   translateStatus, 
@@ -54,6 +57,8 @@ const PurchaseOrderList = () => {
   const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
   const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
+  const [shortExpiryConfirmDialogOpen, setShortExpiryConfirmDialogOpen] = useState(false);
+  const [shortExpiryItems, setShortExpiryItems] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   
@@ -312,6 +317,20 @@ const PurchaseOrderList = () => {
   const handleStatusUpdate = async () => {
     if (poToUpdateStatus && newStatus) {
       try {
+        // Sprawdź czy status zmienia się na "ordered" i czy są pozycje z krótką datą ważności
+        if (newStatus === 'ordered' && 
+            poToUpdateStatus?.items?.length > 0 && 
+            poToUpdateStatus?.orderDate) {
+          
+          const itemsWithShortExpiry = checkShortExpiryItems(poToUpdateStatus.items, poToUpdateStatus.orderDate);
+          if (itemsWithShortExpiry.length > 0) {
+            // Pokaż dialog potwierdzenia dla krótkich dat ważności
+            setShortExpiryItems(itemsWithShortExpiry);
+            setShortExpiryConfirmDialogOpen(true);
+            return;
+          }
+        }
+        
         // Sprawdź czy status zmienia się na "completed" i czy zamówienie ma pozycje i dostawcę
         if (newStatus === 'completed' && 
             poToUpdateStatus?.items?.length > 0 && 
@@ -346,10 +365,46 @@ const PurchaseOrderList = () => {
         setPoToUpdateStatus(null);
         setNewStatus('');
       } catch (error) {
-        console.error('Błąd podczas aktualizacji statusu zamówienia zakupu:', error);
-        showError(t('purchaseOrders.notifications.statusUpdateError'));
+        // Wyświetl konkretny komunikat błędu jeśli dostępny, w przeciwnym razie ogólny
+        const errorMessage = error.message || t('purchaseOrders.notifications.statusUpdateError');
+        showError(errorMessage);
       }
     }
+  };
+
+  // Funkcje obsługujące dialog potwierdzenia krótkich dat ważności
+  const handleShortExpiryConfirm = async () => {
+    try {
+      setShortExpiryConfirmDialogOpen(false);
+      
+      // Kontynuuj z aktualizacją statusu
+      await updatePurchaseOrderStatus(poToUpdateStatus.id, newStatus, currentUser.uid);
+      
+      // Zaktualizuj w cache zamiast odświeżania całej listy
+      updatePurchaseOrderInCache(poToUpdateStatus.id, { 
+        status: newStatus,
+        updatedAt: new Date()
+      });
+      
+      // Odśwież listę
+      await fetchPurchaseOrdersOptimized();
+      
+      showSuccess(t('purchaseOrders.notifications.statusUpdateSuccess'));
+      setStatusDialogOpen(false);
+      setPoToUpdateStatus(null);
+      setNewStatus('');
+    } catch (error) {
+      const errorMessage = error.message || t('purchaseOrders.notifications.statusUpdateError');
+      showError(errorMessage);
+    } finally {
+      setShortExpiryItems([]);
+    }
+  };
+
+  const handleShortExpiryCancel = () => {
+    setShortExpiryConfirmDialogOpen(false);
+    setShortExpiryItems([]);
+    setNewStatus('');
   };
 
   const handlePaymentStatusClick = (po) => {
@@ -1274,6 +1329,74 @@ const PurchaseOrderList = () => {
         <DialogActions>
           <Button onClick={() => setBatchUpdateDialogOpen(false)} variant="contained">
             Zamknij
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia krótkich dat ważności */}
+      <Dialog
+        open={shortExpiryConfirmDialogOpen}
+        onClose={handleShortExpiryCancel}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Ostrzeżenie - Krótkie daty ważności</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Następujące pozycje mają datę ważności krótszą niż 16 miesięcy od daty zamówienia:
+          </DialogContentText>
+          
+          {shortExpiryItems.length > 0 && (
+            <Table size="small" sx={{ mt: 2 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nazwa produktu</TableCell>
+                  <TableCell>Data ważności</TableCell>
+                  <TableCell>Miesiące do wygaśnięcia</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {shortExpiryItems.map((item, index) => {
+                  const orderDate = new Date(poToUpdateStatus?.orderDate);
+                  const expiryDate = typeof item.expiryDate === 'string' 
+                    ? new Date(item.expiryDate) 
+                    : item.expiryDate instanceof Date 
+                      ? item.expiryDate 
+                      : item.expiryDate?.toDate?.() || new Date();
+                  
+                  const monthsDiff = Math.floor((expiryDate - orderDate) / (1000 * 60 * 60 * 24 * 30.44));
+                  
+                  return (
+                    <TableRow key={index}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>
+                        {isValid(expiryDate) 
+                          ? format(expiryDate, 'dd.MM.yyyy', { locale: pl })
+                          : 'Nieprawidłowa data'
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={`${monthsDiff} miesięcy`}
+                          color={monthsDiff < 12 ? 'error' : monthsDiff < 16 ? 'warning' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+          
+          <DialogContentText sx={{ mt: 2, fontWeight: 'bold' }}>
+            Czy na pewno chcesz kontynuować zmianę statusu na "Zamówione"?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleShortExpiryCancel}>Anuluj</Button>
+          <Button onClick={handleShortExpiryConfirm} color="warning" variant="contained">
+            Kontynuuj mimo ostrzeżenia
           </Button>
         </DialogActions>
       </Dialog>

@@ -1213,6 +1213,56 @@ export const deletePurchaseOrder = async (id) => {
   }
 };
 
+/**
+ * Sprawdza czy są pozycje z datą ważności krótszą niż 16 miesięcy od daty zamówienia
+ * @param {Array} items - pozycje zamówienia
+ * @param {Date|string} orderDate - data zamówienia
+ * @returns {Array} - pozycje z krótką datą ważności
+ */
+export const checkShortExpiryItems = (items, orderDate) => {
+  if (!items || !orderDate) return [];
+  
+  try {
+    // Konwertuj orderDate na obiekt Date
+    let orderDateObj;
+    if (typeof orderDate === 'string') {
+      orderDateObj = new Date(orderDate);
+    } else if (orderDate instanceof Date) {
+      orderDateObj = orderDate;
+    } else if (orderDate && typeof orderDate.toDate === 'function') {
+      orderDateObj = orderDate.toDate();
+    } else {
+      return [];
+    }
+    
+    // Oblicz datę 16 miesięcy od daty zamówienia
+    const sixteenMonthsLater = new Date(orderDateObj);
+    sixteenMonthsLater.setMonth(orderDateObj.getMonth() + 16);
+    
+    // Sprawdź które pozycje mają datę ważności krótszą niż 16 miesięcy
+    const shortExpiryItems = items.filter(item => {
+      if (!item.expiryDate) return false;
+      
+      let expiryDateObj;
+      if (typeof item.expiryDate === 'string') {
+        expiryDateObj = new Date(item.expiryDate);
+      } else if (item.expiryDate instanceof Date) {
+        expiryDateObj = item.expiryDate;
+      } else if (item.expiryDate && typeof item.expiryDate.toDate === 'function') {
+        expiryDateObj = item.expiryDate.toDate();
+      } else {
+        return false;
+      }
+      
+      return expiryDateObj < sixteenMonthsLater;
+    });
+    
+    return shortExpiryItems;
+  } catch (error) {
+    return [];
+  }
+};
+
 export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, userId) => {
   try {
     const poRef = doc(db, PURCHASE_ORDERS_COLLECTION, purchaseOrderId);
@@ -1224,6 +1274,14 @@ export const updatePurchaseOrderStatus = async (purchaseOrderId, newStatus, user
     
     const poData = poSnapshot.data();
     const oldStatus = poData.status;
+    
+    // Walidacja daty ważności przy zmianie statusu z "szkic" na "zamówione"
+    if (oldStatus === PURCHASE_ORDER_STATUSES.DRAFT && newStatus === PURCHASE_ORDER_STATUSES.ORDERED) {
+      const itemsWithoutExpiryDate = poData.items?.filter(item => !item.expiryDate) || [];
+      if (itemsWithoutExpiryDate.length > 0) {
+        throw new Error('Wszystkie pozycje muszą mieć określoną datę ważności przed zmianą statusu na "Zamówione"');
+      }
+    }
     
     // Aktualizuj tylko jeśli status faktycznie się zmienił
     if (oldStatus !== newStatus) {

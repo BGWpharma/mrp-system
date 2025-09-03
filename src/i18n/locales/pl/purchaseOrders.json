@@ -110,7 +110,8 @@
       "discount": "Rabat %",
       "vatRate": "VAT",
       "amountAfterConversion": "Kwota po przew.",
-      "defaultSupplierPrice": "Domyślna cena dostawcy"
+      "defaultSupplierPrice": "Domyślna cena dostawcy",
+      "expiryDate": "Data ważności"
     },
     "summary": {
       "title": "Podsumowanie kosztów",

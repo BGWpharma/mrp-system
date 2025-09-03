@@ -466,7 +466,8 @@ const PurchaseOrderForm = ({ orderId }) => {
         invoiceNumber: '', // Numer faktury
         invoiceDate: '', // Data faktury
         plannedDeliveryDate: '', // Planowana data dostawy
-        actualDeliveryDate: '' // Rzeczywista data dostawy
+        actualDeliveryDate: '', // Rzeczywista data dostawy
+        expiryDate: '' // Data ważności
       }]
     }));
   };
@@ -1103,6 +1104,15 @@ const PurchaseOrderForm = ({ orderId }) => {
     if (invalidItem) {
       showError('Uzupełnij wszystkie dane dla każdego przedmiotu');
       return false;
+    }
+    
+    // Sprawdź czy wszystkie pozycje mają datę ważności przy zmianie statusu na "zamówione"
+    if (poData.status === PURCHASE_ORDER_STATUSES.ORDERED) {
+      const itemWithoutExpiryDate = poData.items.find(item => !item.expiryDate);
+      if (itemWithoutExpiryDate) {
+        showError('Wszystkie pozycje muszą mieć określoną datę ważności przed zmianą statusu na "Zamówione"');
+        return false;
+      }
     }
     
     // Sprawdź minimalne ilości zamówienia - ale tylko wyświetl informację, nie blokuj zapisu
@@ -3524,6 +3534,59 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     }
                                   }}
                                   minDate={new Date('1900-01-01')}
+                                  maxDate={new Date('2100-12-31')}
+                                  slotProps={{ 
+                                    textField: { 
+                                      fullWidth: true, 
+                                      size: 'small',
+                                      placeholder: 'dd.mm.yyyy',
+                                      error: false
+                                    } 
+                                  }}
+                                  format="dd.MM.yyyy"
+                                />
+                              </LocalizationProvider>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
+                                {t('purchaseOrders.form.orderItems.expiryDate')}
+                              </Typography>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                                <DatePicker
+                                  value={(() => {
+                                    if (!item.expiryDate) return null;
+                                    try {
+                                      let date;
+                                      if (typeof item.expiryDate === 'string') {
+                                        if (item.expiryDate.includes('Invalid') || item.expiryDate.trim() === '') {
+                                          return null;
+                                        }
+                                        date = item.expiryDate.includes('T') || item.expiryDate.includes('Z') 
+                                          ? parseISO(item.expiryDate) 
+                                          : new Date(item.expiryDate + 'T00:00:00');
+                                      } else if (item.expiryDate instanceof Date) {
+                                        date = item.expiryDate;
+                                      } else if (item.expiryDate && typeof item.expiryDate.toDate === 'function') {
+                                        date = item.expiryDate.toDate();
+                                      } else {
+                                        return null;
+                                      }
+                                      return isValid(date) ? date : null;
+                                    } catch (error) {
+                                      console.error('Błąd parsowania expiryDate:', error, item.expiryDate);
+                                      return null;
+                                    }
+                                  })()}
+                                  onChange={(newValue) => {
+                                    // Zapisz obiekt Date bezpośrednio
+                                    if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                      handleItemChange(index, 'expiryDate', newValue);
+                                    } else {
+                                      // Usuń datę
+                                      handleItemChange(index, 'expiryDate', null);
+                                    }
+                                  }}
+                                  minDate={new Date()}
                                   maxDate={new Date('2100-12-31')}
                                   slotProps={{ 
                                     textField: { 
