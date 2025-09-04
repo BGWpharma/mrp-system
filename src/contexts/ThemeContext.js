@@ -41,8 +41,13 @@ const commonValues = {
       fontSize: '1.75rem',
     },
     h4: {
-      fontWeight: 600,
+      fontWeight: 700,
       fontSize: '1.5rem',
+      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text',
+      textShadow: '0 0 30px rgba(59, 130, 246, 0.3)',
     },
     h5: {
       fontWeight: 600,
@@ -99,6 +104,33 @@ const getCommonComponents = (theme) => ({
     styleOverrides: {
       body: {
         scrollbarWidth: 'thin',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: -2,
+          pointerEvents: 'none',
+          background: theme.palette.mode === 'dark' 
+            ? 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 25%, rgba(51, 65, 85, 0.85) 50%, rgba(71, 85, 105, 0.8) 75%, rgba(30, 58, 138, 0.2) 100%)'
+            : 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.03) 25%, rgba(236, 254, 255, 0.8) 50%, rgba(219, 234, 254, 0.6) 75%, rgba(165, 180, 252, 0.04) 100%)'
+        },
+        '&::after': {
+          content: '""',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: -1,
+          pointerEvents: 'none',
+          background: theme.palette.mode === 'dark'
+            ? `radial-gradient(circle at 15% 25%, ${alpha('#3b82f6', 0.12)} 0%, transparent 50%), radial-gradient(circle at 85% 75%, ${alpha('#8b5cf6', 0.1)} 0%, transparent 50%), radial-gradient(circle at 50% 60%, ${alpha('#06b6d4', 0.08)} 0%, transparent 50%)`
+            : `radial-gradient(circle at 15% 25%, ${alpha('#3b82f6', 0.08)} 0%, transparent 50%), radial-gradient(circle at 85% 75%, ${alpha('#8b5cf6', 0.06)} 0%, transparent 50%), radial-gradient(circle at 50% 60%, ${alpha('#06b6d4', 0.04)} 0%, transparent 50%)`
+        },
         '&::-webkit-scrollbar': {
           width: '8px',
           height: '8px',
@@ -310,15 +342,33 @@ const createDarkTheme = () => {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: 'rgba(31, 41, 55, 0.8)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.15)',
-          transition: 'all 0.3s ease',
+          backgroundColor: 'rgba(30, 41, 59, 0.85)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          border: '1px solid rgba(59, 130, 246, 0.2)',
+          borderRadius: 16,
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.3), 0px 1px 0px rgba(255, 255, 255, 0.1) inset',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%, rgba(255, 255, 255, 0.05) 100%)',
+            pointerEvents: 'none',
+            opacity: 0,
+            transition: 'opacity 0.3s ease'
+          },
           '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.25)',
+            transform: 'translateY(-4px)',
             borderColor: 'rgba(59, 130, 246, 0.3)',
+            boxShadow: '0px 20px 40px rgba(59, 130, 246, 0.2), 0px 1px 0px rgba(255, 255, 255, 0.15) inset',
+            '&::before': {
+              opacity: 1
+            }
           },
         },
       },
@@ -662,15 +712,33 @@ const createLightTheme = () => {
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(0, 0, 0, 0.05)',
-          boxShadow: '0px 5px 15px rgba(0, 0, 0, 0.08)',
-          transition: 'all 0.3s ease',
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          border: '1px solid rgba(59, 130, 246, 0.1)',
+          borderRadius: 16,
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0px 8px 32px rgba(59, 130, 246, 0.1), 0px 1px 0px rgba(255, 255, 255, 0.8) inset',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%, rgba(255, 255, 255, 0.05) 100%)',
+            pointerEvents: 'none',
+            opacity: 0,
+            transition: 'opacity 0.3s ease'
+          },
           '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.15)',
-            borderColor: 'rgba(25, 118, 210, 0.3)',
+            transform: 'translateY(-4px)',
+            borderColor: 'rgba(59, 130, 246, 0.3)',
+            boxShadow: '0px 20px 40px rgba(59, 130, 246, 0.15), 0px 1px 0px rgba(255, 255, 255, 0.9) inset',
+            '&::before': {
+              opacity: 1
+            }
           },
         },
       },

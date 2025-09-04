@@ -757,26 +757,111 @@ const Dashboard = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <AnimatedContainer delay={0}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" gutterBottom>
-            {t('dashboard.title')}
-          </Typography>
-          <Button 
-            startIcon={<RefreshIcon />}
-            onClick={refreshAllData}
-            variant="outlined"
-            disabled={loading}
+    <Box sx={{ 
+      minHeight: '100vh', 
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Floating Background Elements */}
+      <Box sx={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0, 
+        zIndex: -1, 
+        pointerEvents: 'none',
+        overflow: 'hidden',
+        display: { xs: 'none', lg: 'block' }
+      }}>
+        <Box sx={{
+          position: 'absolute',
+          top: '10%',
+          left: '15%',
+          width: '400px',
+          height: '400px',
+          borderRadius: '50%',
+          background: 'linear-gradient(45deg, #3b82f6, #8b5cf6)',
+          filter: 'blur(120px)',
+          opacity: 0.1,
+          animation: 'float 20s ease-in-out infinite'
+        }} />
+        <Box sx={{
+          position: 'absolute',
+          bottom: '10%',
+          right: '15%',
+          width: '350px',
+          height: '350px',
+          borderRadius: '50%',
+          background: 'linear-gradient(45deg, #06b6d4, #3b82f6)',
+          filter: 'blur(120px)',
+          opacity: 0.08,
+          animation: 'float 20s ease-in-out infinite',
+          animationDelay: '-7s'
+        }} />
+        <Box sx={{
+          position: 'absolute',
+          top: '60%',
+          left: '50%',
+          width: '300px',
+          height: '300px',
+          borderRadius: '50%',
+          background: 'linear-gradient(45deg, #8b5cf6, #ec4899)',
+          filter: 'blur(120px)',
+          opacity: 0.06,
+          animation: 'float 20s ease-in-out infinite',
+          animationDelay: '-14s',
+          transform: 'translateX(-50%)'
+        }} />
+      </Box>
+
+      <Container maxWidth="lg" sx={{ pt: 4, pb: 4, position: 'relative', zIndex: 1 }}>
+        <AnimatedContainer delay={0}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography 
+              variant="h4" 
+              gutterBottom
+              className="dashboard-fade-in-left"
+            >
+              {t('dashboard.title')}
+            </Typography>
+            <Button 
+              startIcon={<RefreshIcon />}
+              onClick={refreshAllData}
+              variant="outlined"
+              disabled={loading}
+              className="dashboard-fade-in-right delay-200"
+              sx={{
+                backdropFilter: 'blur(10px)',
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'rgba(59, 130, 246, 0.1)' 
+                  : 'rgba(59, 130, 246, 0.05)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                '&:hover': {
+                  background: (theme) => theme.palette.mode === 'dark' 
+                    ? 'rgba(59, 130, 246, 0.2)' 
+                    : 'rgba(59, 130, 246, 0.1)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 25px rgba(59, 130, 246, 0.2)'
+                }
+              }}
+            >
+              {loading ? t('dashboard.refreshing') : t('dashboard.refreshAll')}
+              {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
+            </Button>
+          </Box>
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+              mb: 2,
+              color: 'text.secondary',
+              opacity: 0.8
+            }}
+            className="dashboard-fade-in-up delay-300"
           >
-            {loading ? t('dashboard.refreshing') : t('dashboard.refreshAll')}
-            {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
-          </Button>
-        </Box>
-        <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          {t('dashboard.welcome', { name: currentUser.displayName || currentUser.email })}
-        </Typography>
-      </AnimatedContainer>
+            {t('dashboard.welcome', { name: currentUser.displayName || currentUser.email })}
+          </Typography>
+        </AnimatedContainer>
 
       {/* Sekcja Ogłoszeń */}
       <AnimatedSection direction="down" delay={400}>
@@ -898,7 +983,12 @@ const Dashboard = () => {
       <Grid container spacing={3}>
         {/* Główne karty KPI */}
         <Grid item xs={12} md={3}>
-          <AnimatedCard index={0} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard 
+            index={0} 
+            delay={400} 
+            className="dashboard-fade-in-up delay-400"
+            sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <RecipesIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">{t('dashboard.cards.recipes.title')}</Typography>
@@ -922,7 +1012,12 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <AnimatedCard index={1} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard 
+            index={1} 
+            delay={400} 
+            className="dashboard-fade-in-up delay-500"
+            sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <ProductionIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">{t('dashboard.cards.production.title')}</Typography>
@@ -949,7 +1044,12 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <AnimatedCard index={2} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard 
+            index={2} 
+            delay={400} 
+            className="dashboard-fade-in-up delay-600"
+            sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <InventoryIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">{t('dashboard.cards.inventory.title')}</Typography>
@@ -974,7 +1074,12 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <AnimatedCard index={3} delay={400} sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <AnimatedCard 
+            index={3} 
+            delay={400} 
+            className="dashboard-fade-in-up delay-700"
+            sx={{ borderRadius: 2, boxShadow: 3, height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
             <CardContent sx={{ textAlign: 'center', p: 3, flexGrow: 1 }}>
               <FormsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
               <Typography variant="h6">{t('dashboard.cards.forms.title')}</Typography>
@@ -1257,7 +1362,8 @@ const Dashboard = () => {
           </AnimatedCard>
         </Grid>
       </Grid>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 
