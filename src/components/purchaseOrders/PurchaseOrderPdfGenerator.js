@@ -14,7 +14,7 @@ class PurchaseOrderPdfGenerator {
       language: 'en',
       imageQuality: 0.85,         // Jakość kompresji obrazu (0.1-1.0) - podwyższono dla lepszej jakości
       enableCompression: true,    // Czy włączyć kompresję PDF
-      precision: 2,               // Ogranicz precyzję do 2 miejsc po przecinku
+      precision: 4,               // Ogranicz precyzję do 4 miejsc po przecinku
       hidePricing: false,         // Czy ukryć ceny i koszty
       useOriginalCurrency: true,  // Czy używać oryginalnej waluty zamiast przewalutowanej
       dpi: 150,                   // DPI dla renderowania obrazu (podwyższono z 72 do 150)
@@ -174,7 +174,7 @@ class PurchaseOrderPdfGenerator {
   /**
    * Formatuje walutę dla PDF bez konwersji symboli walut
    */
-  formatCurrencyForPdf(value, currency = 'EUR', precision = 2) {
+  formatCurrencyForPdf(value, currency = 'EUR', precision = 4) {
     // Mapowanie walut na bezpieczne symbole dla PDF
     const currencySymbols = {
       'PLN': 'PLN',
@@ -232,7 +232,7 @@ class PurchaseOrderPdfGenerator {
   /**
    * Oblicza wartości VAT dla pozycji zamówienia
    */
-  calculateVATValues(items = [], additionalCostsItems = []) {
+  calculateVATValues(items = []) {
     let itemsNetTotal = 0;
     let itemsVatTotal = 0;
     
@@ -245,33 +245,19 @@ class PurchaseOrderPdfGenerator {
       itemsVatTotal += itemVat;
     });
     
-    let additionalCostsNetTotal = 0;
-    let additionalCostsVatTotal = 0;
-    
-    additionalCostsItems.forEach(cost => {
-      const costNet = parseFloat(cost.value) || 0;
-      additionalCostsNetTotal += costNet;
-      
-      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
-      const costVat = (costNet * vatRate) / 100;
-      additionalCostsVatTotal += costVat;
-    });
-    
-    const totalNet = itemsNetTotal + additionalCostsNetTotal;
-    const totalVat = itemsVatTotal + additionalCostsVatTotal;
+    // Dodatkowe koszty nie są uwzględniane w PDF PO
+    const totalNet = itemsNetTotal;
+    const totalVat = itemsVatTotal;
     const totalGross = totalNet + totalVat;
     
     return {
       itemsNetTotal,
       itemsVatTotal,
-      additionalCostsNetTotal,
-      additionalCostsVatTotal,
       totalNet,
       totalVat,
       totalGross,
       vatRates: {
-        items: Array.from(new Set(items.map(item => item.vatRate))),
-        additionalCosts: Array.from(new Set(additionalCostsItems.map(cost => cost.vatRate)))
+        items: Array.from(new Set(items.map(item => item.vatRate)))
       }
     };
   }
@@ -308,29 +294,14 @@ class PurchaseOrderPdfGenerator {
       });
     }
     
-    // Przetwórz dodatkowe koszty (zawsze w walucie PO)
-    if (this.purchaseOrder.additionalCostsItems) {
-      this.purchaseOrder.additionalCostsItems.forEach(cost => {
-        const currency = this.purchaseOrder.currency;
-        const netValue = parseFloat(cost.value) || 0;
-        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
-        const vatValue = (netValue * vatRate) / 100;
-        
-        if (!currencySummary[currency]) {
-          currencySummary[currency] = { net: 0, vat: 0, gross: 0 };
-        }
-        
-        currencySummary[currency].net += netValue;
-        currencySummary[currency].vat += vatValue;
-        currencySummary[currency].gross += netValue + vatValue;
-      });
-    }
+    // Dodatkowe koszty nie są uwzględniane w PDF PO
+    // (usunięto logikę dodawania additionalCostsItems)
     
-    // Zaokrąglij wartości do 2 miejsc po przecinku
+    // Zaokrąglij wartości do 4 miejsc po przecinku
     Object.keys(currencySummary).forEach(currency => {
-      currencySummary[currency].net = Math.round(currencySummary[currency].net * 100) / 100;
-      currencySummary[currency].vat = Math.round(currencySummary[currency].vat * 100) / 100;
-      currencySummary[currency].gross = Math.round(currencySummary[currency].gross * 100) / 100;
+      currencySummary[currency].net = Math.round(currencySummary[currency].net * 10000) / 10000;
+      currencySummary[currency].vat = Math.round(currencySummary[currency].vat * 10000) / 10000;
+      currencySummary[currency].gross = Math.round(currencySummary[currency].gross * 10000) / 10000;
     });
     
     return currencySummary;
@@ -619,7 +590,7 @@ class PurchaseOrderPdfGenerator {
           const displayPrice = shouldUseOriginal ? item.originalUnitPrice : item.unitPrice;
           const displayCurrency = shouldUseOriginal ? item.currency : this.purchaseOrder.currency;
           
-          doc.text(this.formatCurrencyForPdf(displayPrice, displayCurrency, 2), currentX + 2, currentY + 3.5);
+          doc.text(this.formatCurrencyForPdf(displayPrice, displayCurrency, 4), currentX + 2, currentY + 3.5);
           currentX += colWidths[3];
           
           // Wartość - oblicz odpowiednio do wybranej opcji
@@ -740,7 +711,7 @@ class PurchaseOrderPdfGenerator {
       }
     } else {
       // Standardowe podsumowanie w walucie PO
-      const vatValues = this.calculateVATValues(this.purchaseOrder.items, this.purchaseOrder.additionalCostsItems);
+      const vatValues = this.calculateVATValues(this.purchaseOrder.items);
       const summaryX = pageWidth - 90;
       
       doc.text(this.convertPolishChars(`Net value: ${this.formatCurrencyForPdf(vatValues.totalNet, this.purchaseOrder.currency)}`), summaryX, currentY);
@@ -819,7 +790,7 @@ class PurchaseOrderPdfGenerator {
  *   - useTemplate: boolean (domyślnie true) - czy używać szablonu tła
  *   - imageQuality: number (0.1-1.0, domyślnie 0.85) - jakość kompresji obrazu
  *   - enableCompression: boolean (domyślnie true) - czy włączyć kompresję PDF
- *   - precision: number (domyślnie 2) - precyzja liczb (miejsca po przecinku)
+ *   - precision: number (domyślnie 4) - precyzja liczb (miejsca po przecinku)
  *   - dpi: number (domyślnie 150) - rozdzielczość renderowania obrazu
  *   - hidePricing: boolean (domyślnie false) - czy ukryć ceny i koszty
  *   - templatePath: string - ścieżka do szablonu
