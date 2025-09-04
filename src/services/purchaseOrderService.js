@@ -3536,7 +3536,7 @@ export const getPurchaseOrdersOptimized = async ({
       
       allOrders = allOrders.filter(order => {
         // Wyszukiwanie w numerze zamówienia
-        if (order.orderNumber && order.orderNumber.toLowerCase().includes(searchLower)) {
+        if (order.number && order.number.toLowerCase().includes(searchLower)) {
           return true;
         }
         
