@@ -721,7 +721,7 @@ body.dark-mode .fc-timeline-event {
 }
 
 /* Bardzo kompaktowy tryb dla wąskich ekranów */
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
   .fc-timeline-event {
     min-height: 14px !important;
     font-size: 9px !important;
@@ -741,7 +741,7 @@ body.dark-mode .fc-timeline-event {
 }
 
 /* Dodatkowa optymalizacja dla bardzo małych ekranów */
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .fc-timeline-event {
     min-height: 12px !important;
     font-size: 8px !important;

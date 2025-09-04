@@ -61,8 +61,7 @@
     background: linear-gradient(90deg,
             rgba(33, 150, 243, 0.08) 0%,
             rgba(139, 92, 246, 0.04) 100%);
-    transform: translateX(4px);
-    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.12);
 }
 
 [data-theme='dark'] .MuiTableBody-root .MuiTableRow-root:hover {

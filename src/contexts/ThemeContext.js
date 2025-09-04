@@ -9,6 +9,15 @@ export const ThemeContext = createContext();
 
 // Wspólne wartości dla obu motywów
 const commonValues = {
+  breakpoints: {
+    values: {
+      xs: 0,
+      sm: 600,
+      md: 1100,  // Zwiększone z domyślnych 900px do 1100px
+      lg: 1400,  // Zwiększone z domyślnych 1200px do 1400px
+      xl: 1800,  // Zwiększone z domyślnych 1536px do 1800px
+    },
+  },
   typography: {
     fontFamily: [
       'Roboto',
@@ -319,10 +328,9 @@ const createDarkTheme = () => {
       styleOverrides: {
         root: {
           '& .MuiTableRow-root': {
-            transition: 'all 0.2s ease',
+            transition: 'background-color 0.2s ease',
             '&:hover': {
               backgroundColor: 'rgba(59, 130, 246, 0.08)',
-              transform: 'scale(1.001)',
             },
           },
         },
@@ -400,7 +408,7 @@ const createDarkTheme = () => {
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
           borderRadius: 16,
-          overflow: 'hidden',
+          overflowX: 'auto',
           boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.3), inset 0px 1px 0px rgba(255, 255, 255, 0.1)',
           '&:hover': {
             borderColor: 'rgba(59, 130, 246, 0.3)',
@@ -672,10 +680,9 @@ const createLightTheme = () => {
       styleOverrides: {
         root: {
           '& .MuiTableRow-root': {
-            transition: 'all 0.2s ease',
+            transition: 'background-color 0.2s ease',
             '&:hover': {
               backgroundColor: 'rgba(25, 118, 210, 0.04)',
-              transform: 'scale(1.001)',
             },
           },
         },
@@ -753,7 +760,7 @@ const createLightTheme = () => {
           backdropFilter: 'blur(8px)',
           border: '1px solid rgba(0, 0, 0, 0.05)',
           borderRadius: 16,
-          overflow: 'hidden',
+          overflowX: 'auto',
           boxShadow: '0px 8px 32px rgba(25, 118, 210, 0.1), inset 0px 1px 0px rgba(255, 255, 255, 0.8)',
           '&:hover': {
             borderColor: 'rgba(25, 118, 210, 0.3)',
