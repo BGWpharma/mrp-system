@@ -365,13 +365,13 @@ class PurchaseOrderPdfGenerator {
     currentY = this.addSupplierSection(doc, 60, leftMargin);
 
     // ORDER DETAILS w lewej kolumnie (pod SUPPLIER)
-    currentY = this.addOrderDetailsSection(doc, currentY + 10, leftMargin);
+    currentY = this.addOrderDetailsSection(doc, currentY + 6, leftMargin);
 
     // PRAWA KOLUMNA - BUYER i DELIVERY ADDRESS
     this.addBuyerAndDeliverySection(doc, pageWidth, companyData, targetWarehouse);
 
-    // Tabela z pozycjami zamówienia
-    currentY = this.addItemsTable(doc, Math.max(currentY, 160), leftMargin, pageWidth, pageHeight, template);
+    // Tabela z pozycjami zamówienia - używamy dynamicznej wysokości, minimum 140
+    currentY = this.addItemsTable(doc, Math.max(currentY + 8, 140), leftMargin, pageWidth, pageHeight, template);
 
     // Podsumowanie
     currentY = this.addSummarySection(doc, currentY + 8, pageWidth, pageHeight, template, leftMargin);
@@ -394,7 +394,7 @@ class PurchaseOrderPdfGenerator {
     doc.setTextColor(0, 0, 0);
     doc.text(this.convertPolishChars('SUPPLIER:'), leftMargin, currentY);
     
-    currentY += 8;
+    currentY += 6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
@@ -442,7 +442,7 @@ class PurchaseOrderPdfGenerator {
     doc.setTextColor(0, 0, 0);
     doc.text(this.convertPolishChars('ORDER DETAILS:'), leftMargin, currentY);
     
-    currentY += 8;
+    currentY += 6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
@@ -467,7 +467,7 @@ class PurchaseOrderPdfGenerator {
     doc.setTextColor(0, 0, 0);
     doc.text(this.convertPolishChars('BUYER:'), rightColumnX, rightY);
     
-    rightY += 8;
+    rightY += 6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
@@ -513,11 +513,11 @@ class PurchaseOrderPdfGenerator {
     
     // DELIVERY ADDRESS (pod BUYER)
     if (targetWarehouse) {
-      rightY += 10;
+      rightY += 8;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
       doc.text(this.convertPolishChars('DELIVERY ADDRESS:'), rightColumnX, rightY);
-      rightY += 8;
+      rightY += 6;
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
@@ -548,7 +548,7 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text(this.convertPolishChars('ORDER ITEMS:'), leftMargin, currentY);
-    currentY += 10;
+    currentY += 7;
 
     // Nagłówki tabeli - dostosuj kolumny w zależności od opcji hidePricing
     let colWidths, headers;
@@ -566,14 +566,14 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setFillColor(240, 240, 240);
-    doc.rect(startX, currentY, colWidths.reduce((a, b) => a + b, 0), 8, 'F');
+    doc.rect(startX, currentY, colWidths.reduce((a, b) => a + b, 0), 7, 'F');
     
     headers.forEach((header, index) => {
-      doc.text(this.convertPolishChars(header), currentX + 2, currentY + 6);
+      doc.text(this.convertPolishChars(header), currentX + 2, currentY + 5);
       currentX += colWidths[index];
     });
     
-    currentY += 10;
+    currentY += 8;
 
     // Dane tabeli
     doc.setFont('helvetica', 'normal');
@@ -587,7 +587,7 @@ class PurchaseOrderPdfGenerator {
         
         // Nazwa produktu (może być długa, dzielimy na linie)
         const nameLines = doc.splitTextToSize(this.convertPolishChars(item.name || ''), colWidths[0] - 4);
-        const lineHeight = Math.max(6, nameLines.length * 4);
+        const lineHeight = Math.max(5, nameLines.length * 3.5);
         
         // Tło wiersza
         if (index % 2 === 1) {
@@ -597,16 +597,16 @@ class PurchaseOrderPdfGenerator {
         
         // Nazwa produktu
         nameLines.forEach((line, lineIndex) => {
-          doc.text(line, currentX + 2, currentY + 4 + (lineIndex * 4));
+          doc.text(line, currentX + 2, currentY + 3.5 + (lineIndex * 3.5));
         });
         currentX += colWidths[0];
         
         // Ilość
-        doc.text(this.convertPolishChars((item.quantity || '').toString()), currentX + 2, currentY + 4);
+        doc.text(this.convertPolishChars((item.quantity || '').toString()), currentX + 2, currentY + 3.5);
         currentX += colWidths[1];
         
         // Jednostka
-        doc.text(this.convertPolishChars(item.unit || ''), currentX + 2, currentY + 4);
+        doc.text(this.convertPolishChars(item.unit || ''), currentX + 2, currentY + 3.5);
         currentX += colWidths[2];
         
         if (!this.options.hidePricing) {
@@ -619,7 +619,7 @@ class PurchaseOrderPdfGenerator {
           const displayPrice = shouldUseOriginal ? item.originalUnitPrice : item.unitPrice;
           const displayCurrency = shouldUseOriginal ? item.currency : this.purchaseOrder.currency;
           
-          doc.text(this.formatCurrencyForPdf(displayPrice, displayCurrency, 2), currentX + 2, currentY + 4);
+          doc.text(this.formatCurrencyForPdf(displayPrice, displayCurrency, 2), currentX + 2, currentY + 3.5);
           currentX += colWidths[3];
           
           // Wartość - oblicz odpowiednio do wybranej opcji
@@ -627,11 +627,11 @@ class PurchaseOrderPdfGenerator {
             ? (parseFloat(item.originalUnitPrice) || 0) * (parseFloat(item.quantity) || 0)
             : item.totalPrice;
           
-          doc.text(this.formatCurrencyForPdf(displayTotalPrice, displayCurrency), currentX + 2, currentY + 4);
+          doc.text(this.formatCurrencyForPdf(displayTotalPrice, displayCurrency), currentX + 2, currentY + 3.5);
           currentX += colWidths[4];
           
           // VAT
-          doc.text(`${item.vatRate || 0}%`, currentX + 2, currentY + 4);
+          doc.text(`${item.vatRate || 0}%`, currentX + 2, currentY + 3.5);
           currentX += colWidths[5];
         }
         
@@ -639,7 +639,7 @@ class PurchaseOrderPdfGenerator {
         const expectedDateIndex = this.options.hidePricing ? 3 : 6;
         const expectedDate = item.plannedDeliveryDate ? 
           new Date(item.plannedDeliveryDate).toLocaleDateString('en-GB') : '-';
-        doc.text(expectedDate, currentX + 2, currentY + 4);
+        doc.text(expectedDate, currentX + 2, currentY + 3.5);
         
         currentY += lineHeight;
       });
@@ -669,7 +669,7 @@ class PurchaseOrderPdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text(this.convertPolishChars('SUMMARY:'), leftMargin, currentY);
-    currentY += 10;
+    currentY += 7;
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
