@@ -551,11 +551,17 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
       
       snapshotAll.docs.forEach(doc => {
         const data = doc.data();
+        const batchItemPoId = data.purchaseOrderDetails?.itemPoId || data.sourceDetails?.itemPoId;
+        const isMatching = batchItemPoId === reservation.poItemId;
+        
         console.log('Partia:', {
           id: doc.id,
           itemId: data.itemId,
+          itemName: data.itemName,
           poId: data.purchaseOrderDetails?.id,
-          itemPoId: data.purchaseOrderDetails?.itemPoId,
+          itemPoId: batchItemPoId,
+          expectedItemPoId: reservation.poItemId,
+          isMatching: isMatching ? '✅ ZGODNY' : '❌ NIEZGODNY',
           batchNumber: data.batchNumber || data.lotNumber
         });
       });
@@ -875,6 +881,9 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                                 <Box>
                                   <Typography variant="body2">
                                     Dostępne: {item.availableQuantity} {item.unit} z {item.totalQuantity} {item.unit}
+                                    {item.receivedQuantity > 0 && (
+                                      <> • Przyjęto: {item.receivedQuantity} {item.unit}</>
+                                    )}
                                   </Typography>
                                   <Typography variant="body2">
                                     Cena: {formatCurrency(item.unitPrice, item.currency)} / {item.unit}

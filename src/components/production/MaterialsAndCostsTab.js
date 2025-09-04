@@ -396,17 +396,30 @@ const MaterialsAndCostsTab = ({
                               {poReservationsForMaterial.map((reservation, index) => {
                                 const convertedQuantity = reservation.convertedQuantity || 0;
                                 const reservedQuantity = reservation.reservedQuantity || 0;
+                                const deliveredQuantity = reservation.deliveredQuantity || 0;
                                 const availableQuantity = reservedQuantity - convertedQuantity;
+                                
+                                // Określ status wizualny na podstawie dostawy
+                                const isDelivered = deliveredQuantity > 0;
+                                const chipColor = isDelivered ? 'success' : 'warning';
+                                
+                                const tooltipText = [
+                                  `Rezerwacja z zamówienia ${reservation.poNumber}`,
+                                  `Status: ${reservation.status}`,
+                                  `Zarezerwowano: ${reservedQuantity} ${material.unit}`,
+                                  deliveredQuantity > 0 ? `Dostarczone: ${deliveredQuantity} ${material.unit}` : null,
+                                  convertedQuantity > 0 ? `Przekształcone: ${convertedQuantity} ${material.unit}` : null
+                                ].filter(Boolean).join('\n');
                                 
                                 return (
                                   <Chip 
                                     key={`po-${index}`}
                                     size="small" 
-                                    label={`PO: ${reservation.poNumber} (${availableQuantity} ${material.unit})`} 
-                                    color="warning" 
+                                    label={`PO: ${reservation.poNumber} (${availableQuantity} ${material.unit}${isDelivered ? ' ✓' : ''})`} 
+                                    color={chipColor} 
                                     variant="outlined" 
                                     sx={{ mr: 0.5, mb: 0.5 }}
-                                    title={`Rezerwacja z zamówienia ${reservation.poNumber} - Status: ${reservation.status}${convertedQuantity > 0 ? `, przekształcone: ${convertedQuantity}` : ''}`}
+                                    title={tooltipText}
                                   />
                                 );
                               })}

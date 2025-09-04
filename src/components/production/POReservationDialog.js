@@ -382,6 +382,9 @@ const POReservationDialog = ({
                                         <Box>
                                           <Typography variant="caption">
                                             Dostępne: {item.availableQuantity} {item.unit} z {item.totalQuantity} {item.unit}
+                                            {item.receivedQuantity > 0 && (
+                                              <> • Przyjęto: {item.receivedQuantity} {item.unit}</>
+                                            )}
                                             {item.reservedQuantity > 0 && (
                                               <> • Zarezerwowane: {item.reservedQuantity} {item.unit}</>
                                             )}

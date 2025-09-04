@@ -88,13 +88,26 @@ export const createPOReservation = async (taskId, poId, poItemId, reservedQuanti
       throw new Error('Pozycja w zamówieniu zakupowym nie istnieje');
     }
     
-    // Sprawdź czy pozycja nie jest już w pełni zarezerwowana
+    // Sprawdź czy pozycja nie została już w pełni przyjęta na magazyn
+    const received = parseFloat(poItem.received || 0);
+    const ordered = parseFloat(poItem.quantity || 0);
+    const notYetReceived = ordered - received;
+    
+    if (notYetReceived <= 0) {
+      throw new Error(`Pozycja "${poItem.name}" została już w pełni przyjęta na magazyn (${received}/${ordered} ${poItem.unit}). Nie można tworzyć rezerwacji PO dla pozycji już przyjętych.`);
+    }
+    
+    if (received > 0) {
+      console.warn(`UWAGA: Pozycja "${poItem.name}" jest częściowo przyjęta (${received}/${ordered} ${poItem.unit}). Rezerwacja dotyczy tylko części jeszcze nieprzyjętej.`);
+    }
+    
+    // Sprawdź czy pozycja nie jest już w pełni zarezerwowana (z uwzględnieniem już przyjętych ilości)
     const existingReservations = await getPOReservationsForItem(poId, poItemId);
     const totalReserved = existingReservations.reduce((sum, res) => sum + res.reservedQuantity, 0);
-    const availableQuantity = parseFloat(poItem.quantity) - totalReserved;
+    const availableQuantity = notYetReceived - totalReserved;
     
     if (reservedQuantity > availableQuantity) {
-      throw new Error(`Nie można zarezerwować ${reservedQuantity} ${poItem.unit}. Dostępne: ${availableQuantity} ${poItem.unit}`);
+      throw new Error(`Nie można zarezerwować ${reservedQuantity} ${poItem.unit}. Z pozycji zamówionej (${ordered} ${poItem.unit}) już przyjęto ${received} ${poItem.unit}, zarezerwowano ${totalReserved} ${poItem.unit}. Dostępne do rezerwacji: ${availableQuantity} ${poItem.unit}`);
     }
     
     // Utwórz rezerwację
@@ -333,15 +346,26 @@ export const updatePOReservationsOnDelivery = async (poId, deliveredItems, userI
           console.log(`- Partia ${batch.id}: itemPoId=${batch.purchaseOrderDetails?.itemPoId}, itemName=${batch.itemName}`);
         });
         
-        // Spróbuj dopasować partie na podstawie nazwy materiału
+        // Spróbuj dopasować partie na podstawie nazwy materiału - ale TYLKO dla konkretnej pozycji
         for (const reservation of reservations) {
-          const matchingBatches = allBatches.filter(batch => 
-            batch.itemId === reservation.materialId || 
-            batch.itemName?.toLowerCase() === reservation.materialName?.toLowerCase()
-          );
+          // KRYTYCZNE: Sprawdź czy partia ma itemPoId zgodny z rezerwacją
+          const matchingBatches = allBatches.filter(batch => {
+            const batchItemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
+            
+            // Jeśli partia ma itemPoId, musi się zgadzać z rezerwacją
+            if (batchItemPoId && reservation.poItemId) {
+              return batchItemPoId === reservation.poItemId && 
+                     (batch.itemId === reservation.materialId || 
+                      batch.itemName?.toLowerCase() === reservation.materialName?.toLowerCase());
+            }
+            
+            // Fallback tylko gdy partia nie ma itemPoId (stare dane)
+            return batch.itemId === reservation.materialId || 
+                   batch.itemName?.toLowerCase() === reservation.materialName?.toLowerCase();
+          });
           
           if (matchingBatches.length > 0) {
-            console.log(`Znaleziono ${matchingBatches.length} partii dla materiału ${reservation.materialName} na podstawie dopasowania nazwy/ID`);
+            console.log(`Znaleziono ${matchingBatches.length} partii dla materiału ${reservation.materialName} (itemPoId: ${reservation.poItemId}) na podstawie dopasowania nazwy/ID`);
             batches = matchingBatches;
             break;
           }
@@ -504,27 +528,37 @@ export const getAvailablePOItems = async (materialId) => {
       if (po.items && Array.isArray(po.items)) {
         for (const item of po.items) {
           if (item.inventoryItemId === materialId) {
-            // Pobierz istniejące rezerwacje dla tej pozycji
-            const existingReservations = await getPOReservationsForItem(poDoc.id, item.id);
-            const totalReserved = existingReservations.reduce((sum, res) => sum + res.reservedQuantity, 0);
-            const availableQuantity = parseFloat(item.quantity) - totalReserved;
+            // Sprawdź ile już zostało przyjęte na magazyn
+            const received = parseFloat(item.received || 0);
+            const ordered = parseFloat(item.quantity || 0);
+            const notYetReceived = ordered - received;
             
-            if (availableQuantity > 0) {
-              availableItems.push({
-                poId: poDoc.id,
-                poNumber: po.number,
-                poItemId: item.id,
-                materialName: item.name,
-                totalQuantity: parseFloat(item.quantity),
-                reservedQuantity: totalReserved,
-                availableQuantity,
-                unit: item.unit,
-                unitPrice: parseFloat(item.unitPrice || 0),
-                currency: po.currency || 'EUR',
-                expectedDeliveryDate: po.expectedDeliveryDate,
-                supplier: po.supplier,
-                status: po.status
-              });
+            // Tylko nieprzyjeżte ilości mogą być rezerwowane
+            if (notYetReceived > 0) {
+              // Pobierz istniejące rezerwacje dla tej pozycji
+              const existingReservations = await getPOReservationsForItem(poDoc.id, item.id);
+              const totalReserved = existingReservations.reduce((sum, res) => sum + res.reservedQuantity, 0);
+              const availableQuantity = notYetReceived - totalReserved;
+              
+              if (availableQuantity > 0) {
+                availableItems.push({
+                  poId: poDoc.id,
+                  poNumber: po.number,
+                  poItemId: item.id,
+                  materialName: item.name,
+                  totalQuantity: ordered,
+                  receivedQuantity: received,
+                  notYetReceivedQuantity: notYetReceived,
+                  reservedQuantity: totalReserved,
+                  availableQuantity,
+                  unit: item.unit,
+                  unitPrice: parseFloat(item.unitPrice || 0),
+                  currency: po.currency || 'EUR',
+                  expectedDeliveryDate: po.expectedDeliveryDate,
+                  supplier: po.supplier,
+                  status: po.status
+                });
+              }
             }
           }
         }
@@ -664,7 +698,7 @@ export const syncPOReservationsWithBatches = async (taskId = null, userId = 'sys
           }));
         }
         
-        // 3. Wyszukiwanie po materialId (itemId)
+        // 3. Wyszukiwanie po materialId z uwzględnieniem itemPoId
         if (batches.length === 0) {
           const materialQuery = query(
             collection(db, INVENTORY_BATCHES_COLLECTION),
@@ -673,10 +707,29 @@ export const syncPOReservationsWithBatches = async (taskId = null, userId = 'sys
           );
           
           const materialSnapshot = await getDocs(materialQuery);
-          batches = materialSnapshot.docs.map(doc => ({
+          const allMaterialBatches = materialSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
+          
+          // Filtruj partie aby znaleźć tylko te z właściwym itemPoId
+          batches = allMaterialBatches.filter(batch => {
+            const batchItemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
+            
+            // Jeśli partia ma itemPoId, musi się zgadzać z rezerwacją
+            if (batchItemPoId && reservation.poItemId) {
+              return batchItemPoId === reservation.poItemId;
+            }
+            
+            // Fallback dla partii bez itemPoId (stare dane) - ale tylko jeśli nie ma innych partii z itemPoId
+            const batchesWithItemPoId = allMaterialBatches.filter(b => 
+              (b.purchaseOrderDetails?.itemPoId || b.sourceDetails?.itemPoId)
+            );
+            
+            return batchesWithItemPoId.length === 0;
+          });
+          
+          console.log(`Znaleziono ${batches.length} partii dla materialId ${reservation.materialId} z uwzględnieniem itemPoId: ${reservation.poItemId}`);
         }
         
         if (batches.length > 0) {
