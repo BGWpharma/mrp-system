@@ -105,6 +105,8 @@ import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExclud
 
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
+// Import enhanced styles dla ProductionTimeline
+import './ProductionTimeline.css';
 
 // ✅ OPTYMALIZACJE WYDAJNOŚCI - Helper functions
 const debounce = (func, delay) => {
@@ -2284,7 +2286,7 @@ const ProductionTimeline = React.memo(() => {
         sx={{ p: 2, height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}
       >
       {/* Nagłówek */}
-      <Box sx={{ 
+      <Box className="production-timeline-header" sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
@@ -2298,6 +2300,7 @@ const ProductionTimeline = React.memo(() => {
         
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <FormControlLabel
+            className="timeline-switch"
             control={
               <Switch
                 checked={useWorkstationColors}
@@ -2311,6 +2314,7 @@ const ProductionTimeline = React.memo(() => {
           {editMode && (
             <Tooltip title={t('production.timeline.snapToPreviousTooltip')} arrow>
               <FormControlLabel
+                className="timeline-switch"
                 control={
                   <Switch
                     checked={snapToPrevious}
@@ -2326,24 +2330,19 @@ const ProductionTimeline = React.memo(() => {
           
           <Tooltip title={t('production.timeline.editModeTooltip')} arrow>
             <Button
+              className={`timeline-action-button ${editMode ? 'active' : ''}`}
               variant={editMode ? "contained" : "outlined"}
               size="small"
               onClick={handleEditModeToggle}
               startIcon={editMode ? <EditIcon /> : <LockIcon />}
               color={editMode ? "primary" : "default"}
-              sx={{ 
-                minWidth: '120px',
-                backgroundColor: editMode ? 'primary.main' : 'transparent',
-                '&:hover': {
-                  backgroundColor: editMode ? 'primary.dark' : 'rgba(0, 0, 0, 0.04)'
-                }
-              }}
             >
               {editMode ? t('production.timeline.editMode') + ' ON' : t('production.timeline.editMode') + ' OFF'}
             </Button>
           </Tooltip>
           
           <Button
+            className="timeline-action-button"
             variant="outlined"
             size="small"
             onClick={() => setGroupBy(groupBy === 'workstation' ? 'order' : 'workstation')}
@@ -2353,13 +2352,12 @@ const ProductionTimeline = React.memo(() => {
           </Button>
           
           {/* Przyciski skali czasowej */}
-          <Box sx={{ display: 'flex', gap: 0.5, border: '1px solid #ddd', borderRadius: 1 }}>
+          <Box className="timeline-button-group">
             <Tooltip title={t('production.timeline.hourly') + ' (3 dni)'}>
               <IconButton 
+                className={`timeline-icon-button ${timeScale === 'hourly' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('hourly')}
-                color={timeScale === 'hourly' ? 'primary' : 'default'}
-                sx={{ borderRadius: 0 }}
               >
                 <HourlyIcon />
               </IconButton>
@@ -2367,10 +2365,9 @@ const ProductionTimeline = React.memo(() => {
             
             <Tooltip title={t('production.timeline.daily') + ' (2 tygodnie)'}>
               <IconButton 
+                className={`timeline-icon-button ${timeScale === 'daily' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('daily')}
-                color={timeScale === 'daily' ? 'primary' : 'default'}
-                sx={{ borderRadius: 0 }}
               >
                 <DailyIcon />
               </IconButton>
@@ -2378,10 +2375,9 @@ const ProductionTimeline = React.memo(() => {
             
             <Tooltip title={t('production.timeline.weekly') + ' (2 miesiące)'}>
               <IconButton 
+                className={`timeline-icon-button ${timeScale === 'weekly' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('weekly')}
-                color={timeScale === 'weekly' ? 'primary' : 'default'}
-                sx={{ borderRadius: 0 }}
               >
                 <WeeklyIcon />
               </IconButton>
@@ -2389,10 +2385,9 @@ const ProductionTimeline = React.memo(() => {
             
             <Tooltip title={t('production.timeline.monthly') + ' (6 miesięcy)'}>
               <IconButton 
+                className={`timeline-icon-button ${timeScale === 'monthly' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('monthly')}
-                color={timeScale === 'monthly' ? 'primary' : 'default'}
-                sx={{ borderRadius: 0 }}
               >
                 <MonthlyIcon />
               </IconButton>
@@ -2400,21 +2395,21 @@ const ProductionTimeline = React.memo(() => {
           </Box>
           
           {/* Kontrolki zoom */}
-          <Box sx={{ display: 'flex', gap: 0.5, border: '1px solid #ddd', borderRadius: 1 }}>
+          <Box className="timeline-button-group">
             <Tooltip title={t('production.timeline.zoom.in') + ' (Ctrl + scroll)'}>
-              <IconButton size="small" onClick={zoomIn} sx={{ borderRadius: 0 }}>
+              <IconButton className="timeline-icon-button" size="small" onClick={zoomIn}>
                 <ZoomInIcon />
               </IconButton>
             </Tooltip>
             
             <Tooltip title={t('production.timeline.zoom.out')}>
-              <IconButton size="small" onClick={zoomOut} sx={{ borderRadius: 0 }}>
+              <IconButton className="timeline-icon-button" size="small" onClick={zoomOut}>
                 <ZoomOutIcon />
               </IconButton>
             </Tooltip>
             
             <Tooltip title={t('production.timeline.zoom.reset')}>
-              <IconButton size="small" onClick={resetZoom} sx={{ borderRadius: 0 }}>
+              <IconButton className="timeline-icon-button" size="small" onClick={resetZoom}>
                 <ResetZoomIcon />
               </IconButton>
             </Tooltip>
@@ -2424,14 +2419,10 @@ const ProductionTimeline = React.memo(() => {
           <Tooltip title={`Cofnij ostatnią akcję (Ctrl+Z) - ${undoStack.length} dostępnych`}>
             <span>
               <IconButton 
+                className="timeline-undo-button"
                 size="small" 
                 onClick={handleUndo}
                 disabled={undoStack.length === 0}
-                sx={{ 
-                  border: '1px solid #ddd', 
-                  borderRadius: 1,
-                  opacity: undoStack.length === 0 ? 0.5 : 1
-                }}
               >
                 <UndoIcon />
               </IconButton>
@@ -2439,6 +2430,7 @@ const ProductionTimeline = React.memo(() => {
           </Tooltip>
           
           <Button
+            className={`timeline-filter-button ${(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) ? 'active' : ''}`}
             variant="outlined"
             size="small"
             onClick={handleFilterMenuClick}
@@ -2460,7 +2452,7 @@ const ProductionTimeline = React.memo(() => {
             showError={showError}
           />
           
-          <IconButton size="small" onClick={fetchTasks}>
+          <IconButton className="timeline-refresh-button" size="small" onClick={fetchTasks}>
             <RefreshIcon />
           </IconButton>
           
@@ -2470,39 +2462,40 @@ const ProductionTimeline = React.memo(() => {
 
 
       {/* Legenda */}
-      <Box sx={{ 
-        display: 'flex', 
-        flexWrap: 'wrap', 
-        gap: 1, 
-        mb: 2,
-        alignItems: 'center'
-      }}>
-        <Typography variant="caption" sx={{ mr: 1, fontWeight: 'medium' }}>
-          {t('production.timeline.legend')}
-        </Typography>
+      <Box className="timeline-legend-container">
+        <Box sx={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: 1, 
+          alignItems: 'center'
+        }}>
+          <Typography className="timeline-legend-title" variant="caption">
+            {t('production.timeline.legend')}
+          </Typography>
         
-        {useWorkstationColors ? (
-          workstations.map(workstation => (
-            <Chip 
-              key={workstation.id}
-              size="small"
-              label={workstation.name} 
-              sx={{ 
-                bgcolor: workstation.color || getWorkstationColor(workstation.id), 
-                color: 'white',
-                fontSize: '0.7rem'
-              }} 
-            />
-          ))
-        ) : (
-          <>
-            <Chip size="small" label={t('production.timeline.statuses.scheduled')} sx={{ bgcolor: '#3788d8', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label={t('production.timeline.statuses.inProgress')} sx={{ bgcolor: '#f39c12', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label={t('production.timeline.statuses.completed')} sx={{ bgcolor: '#2ecc71', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label={t('production.timeline.statuses.cancelled')} sx={{ bgcolor: '#e74c3c', color: 'white', fontSize: '0.7rem' }} />
-            <Chip size="small" label={t('production.timeline.statuses.onHold')} sx={{ bgcolor: '#9e9e9e', color: 'white', fontSize: '0.7rem' }} />
-          </>
-        )}
+          {useWorkstationColors ? (
+            workstations.map(workstation => (
+              <Chip 
+                key={workstation.id}
+                className="timeline-legend-chip"
+                size="small"
+                label={workstation.name} 
+                sx={{ 
+                  bgcolor: workstation.color || getWorkstationColor(workstation.id), 
+                  color: 'white'
+                }} 
+              />
+            ))
+          ) : (
+            <>
+              <Chip className="timeline-legend-chip status-scheduled" size="small" label={t('production.timeline.statuses.scheduled')} />
+              <Chip className="timeline-legend-chip status-inprogress" size="small" label={t('production.timeline.statuses.inProgress')} />
+              <Chip className="timeline-legend-chip status-completed" size="small" label={t('production.timeline.statuses.completed')} />
+              <Chip className="timeline-legend-chip status-cancelled" size="small" label={t('production.timeline.statuses.cancelled')} />
+              <Chip className="timeline-legend-chip status-onhold" size="small" label={t('production.timeline.statuses.onHold')} />
+            </>
+          )}
+        </Box>
       </Box>
 
       {/* Instrukcje zoom */}
