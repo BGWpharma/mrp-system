@@ -136,6 +136,21 @@ const ConsumptionPage = () => {
       setLoading(false);
     }
   };
+
+  // ✅ NOWA FUNKCJA: Selektywne odświeżanie podstawowych danych zadania
+  const refreshTaskBasicData = async () => {
+    try {
+      console.log('🔄 Odświeżanie podstawowych danych zadania...');
+      
+      const taskData = await getTaskById(taskId);
+      setTask(taskData);
+      
+      console.log('✅ Odświeżenie podstawowych danych zakończone');
+    } catch (error) {
+      console.error('❌ Błąd podczas odświeżania danych:', error);
+      showError('Nie udało się odświeżyć danych zadania: ' + error.message);
+    }
+  };
   
   const formatDate = (dateValue) => {
     if (!dateValue) return 'Nie określono';
@@ -421,8 +436,8 @@ const ConsumptionPage = () => {
       setEditDialogOpen(false);
       setSelectedConsumption(null);
       
-      // Odśwież dane
-      await fetchTaskData();
+      // Odśwież dane (selektywnie)
+      await refreshTaskBasicData();
       
     } catch (error) {
       console.error('Błąd podczas edycji konsumpcji:', error);
@@ -599,8 +614,8 @@ const ConsumptionPage = () => {
       setSelectedConsumption(null);
       setRestoreReservation(true); // Reset do domyślnej wartości
       
-      // Odśwież dane
-      await fetchTaskData();
+      // Odśwież dane (selektywnie)
+      await refreshTaskBasicData();
       
     } catch (error) {
       console.error('Błąd podczas usuwania konsumpcji:', error);

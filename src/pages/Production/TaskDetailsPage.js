@@ -862,6 +862,49 @@ const TaskDetailsPage = () => {
     await fetchAllTaskData();
   };
 
+  // ✅ NOWA FUNKCJA: Selektywne odświeżanie tylko rezerwacji i konsumpcji
+  const refreshTaskReservations = async () => {
+    try {
+      console.log('🔄 Selektywne odświeżanie rezerwacji i konsumpcji...');
+      
+      // Pobierz tylko podstawowe dane zadania (bez cache, bezpośrednio z serwera)
+      const taskRef = doc(db, 'productionTasks', id);
+      const taskSnapshot = await getDoc(taskRef);
+      
+      if (!taskSnapshot.exists()) {
+        throw new Error('Zadanie nie istnieje');
+      }
+      
+      const freshTaskData = {
+        id: taskSnapshot.id,
+        ...taskSnapshot.data()
+      };
+      
+      // Aktualizuj tylko kluczowe pola związane z rezerwacjami i konsumpcją
+      setTask(prevTask => ({
+        ...prevTask,
+        materialBatches: freshTaskData.materialBatches || {},
+        consumedMaterials: freshTaskData.consumedMaterials || [],
+        materialsReserved: freshTaskData.materialsReserved || false,
+        updatedAt: freshTaskData.updatedAt,
+        // Zachowaj inne pola bez zmian
+        updatedBy: freshTaskData.updatedBy
+      }));
+      
+      console.log('✅ Selektywne odświeżenie zakończone:', {
+        materialBatchesKeys: Object.keys(freshTaskData.materialBatches || {}),
+        consumedMaterialsCount: (freshTaskData.consumedMaterials || []).length,
+        materialsReserved: freshTaskData.materialsReserved
+      });
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas selektywnego odświeżania:', error);
+      showError('Nie udało się odświeżyć danych rezerwacji: ' + error.message);
+      // Fallback do pełnego odświeżenia tylko w przypadku krytycznego błędu
+      // await fetchAllTaskData();
+    }
+  };
+
   // Funkcja do pobierania rezerwacji PO
   const fetchPOReservations = async () => {
     try {
@@ -2329,8 +2372,8 @@ const TaskDetailsPage = () => {
             updatedBy: currentUser.uid
           });
           
-          // Odśwież dane zadania
-          await fetchAllTaskData();
+          // Odśwież dane zadania (selektywnie)
+          await refreshTaskReservations();
           
           showSuccess(`Usunięto rezerwację partii ${batchNumber} (bezpośrednia aktualizacja zadania)`);
           return;
@@ -2347,8 +2390,8 @@ const TaskDetailsPage = () => {
       // Usuń rezerwację
       await deleteReservation(reservationDoc.id, currentUser.uid);
       
-      // Odśwież dane zadania
-      await fetchAllTaskData();
+      // Odśwież dane zadania (selektywnie)
+      await refreshTaskReservations();
       
       showSuccess(`Usunięto rezerwację partii ${batchNumber}`);
       
