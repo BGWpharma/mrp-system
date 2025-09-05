@@ -154,6 +154,7 @@ import { pl } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
 import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
+import { useUserNames } from '../../hooks/useUserNames';
 
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
@@ -202,7 +203,10 @@ const TaskDetailsPage = () => {
   const [packagingQuantities, setPackagingQuantities] = useState({});
   const [searchPackaging, setSearchPackaging] = useState('');
   const [consumePackagingImmediately, setConsumePackagingImmediately] = useState(true);
-  const [userNames, setUserNames] = useState({});
+  
+  // Hook do zarządzania nazwami użytkowników
+  const { userNames, getUserName, fetchUserNames } = useUserNames();
+  
   const [productionHistory, setProductionHistory] = useState([]);
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
   const [editedHistoryItem, setEditedHistoryItem] = useState({
@@ -453,9 +457,8 @@ const TaskDetailsPage = () => {
       const userIds = task.statusHistory.map(change => change.changedBy).filter(id => id);
       const uniqueUserIds = [...new Set(userIds)];
       
-      if (uniqueUserIds.length > 0 && Object.keys(userNames).length === 0) {
-        const names = await getUsersDisplayNames(uniqueUserIds);
-        setUserNames(names);
+      if (uniqueUserIds.length > 0) {
+        await fetchUserNames(uniqueUserIds);
       }
       
       setLoadedTabs(prev => ({ ...prev, changeHistory: true }));
@@ -532,6 +535,17 @@ const TaskDetailsPage = () => {
   useEffect(() => {
     enrichProductionHistoryWithMachineData();
   }, [productionHistory, selectedMachineId]);
+
+  // Automatyczne pobieranie nazw użytkowników gdy historia produkcji się zmieni
+  useEffect(() => {
+    if (productionHistory && productionHistory.length > 0) {
+      const userIds = productionHistory.map(session => session.userId).filter(Boolean);
+      if (userIds.length > 0) {
+        console.log('useEffect: Pobieranie nazw użytkowników z historii produkcji:', userIds);
+        fetchUserNames(userIds);
+      }
+    }
+  }, [productionHistory, fetchUserNames]);
 
   // Zachowujemy useEffect dla synchronizacji formularza magazynu
   useEffect(() => {
@@ -793,11 +807,45 @@ const TaskDetailsPage = () => {
         });
       }
       
-      // Jeśli zadanie ma historię statusów, pobierz dane użytkowników
-      if (fetchedTask.statusHistory && fetchedTask.statusHistory.length > 0) {
-        const userIds = fetchedTask.statusHistory.map(change => change.changedBy).filter(id => id);
-        const uniqueUserIds = [...new Set(userIds)];
-        await fetchStatusHistory(uniqueUserIds);
+      // KROK 4: Pobierz historię produkcji i nazwy użytkowników z różnych źródeł
+      if (fetchedTask?.id) {
+        try {
+          // Pobierz historię produkcji
+          const history = await getProductionHistory(fetchedTask.id);
+          setProductionHistory(history || []);
+          
+          // Zbierz wszystkie ID użytkowników z różnych źródeł
+          const allUserIds = new Set();
+          
+          // Dodaj użytkowników z historii produkcji
+          history?.forEach(session => {
+            if (session.userId) allUserIds.add(session.userId);
+          });
+          
+          // Dodaj użytkowników z historii statusów
+          fetchedTask.statusHistory?.forEach(change => {
+            if (change.changedBy) allUserIds.add(change.changedBy);
+          });
+          
+          // Dodaj użytkowników z materiałów skonsumowanych
+          fetchedTask.consumedMaterials?.forEach(consumed => {
+            if (consumed.userId) allUserIds.add(consumed.userId);
+            if (consumed.createdBy) allUserIds.add(consumed.createdBy);
+          });
+          
+          // Dodaj użytkowników z historii kosztów
+          fetchedTask.costHistory?.forEach(costChange => {
+            if (costChange.userId) allUserIds.add(costChange.userId);
+          });
+          
+          // Pobierz wszystkie nazwy użytkowników jednocześnie
+          if (allUserIds.size > 0) {
+            console.log('Pobieranie wszystkich nazw użytkowników:', [...allUserIds]);
+            await fetchUserNames([...allUserIds]);
+          }
+        } catch (historyError) {
+          console.error('Błąd podczas pobierania historii produkcji i użytkowników:', historyError);
+        }
       }
     } catch (error) {
       console.error('Błąd podczas pobierania zadania:', error);
@@ -1081,6 +1129,13 @@ const TaskDetailsPage = () => {
     try {
       const history = await getProductionHistory(task.id);
       setProductionHistory(history || []);
+      
+      // Pobierz nazwy użytkowników z historii produkcji
+      const userIds = history?.map(session => session.userId).filter(Boolean) || [];
+      if (userIds.length > 0) {
+        console.log('Pobieranie nazw użytkowników z historii produkcji:', userIds);
+        await fetchUserNames(userIds);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania historii produkcji:', error);
       setProductionHistory([]);
@@ -1429,10 +1484,6 @@ const TaskDetailsPage = () => {
     }
   }, [editedHistoryItem.quantity, addToInventoryOnHistory]);
 
-  const fetchStatusHistory = async (userIds) => {
-    const names = await getUsersDisplayNames(userIds);
-    setUserNames(names);
-  };
 
   const handleStatusChange = async (newStatus) => {
     try {
@@ -1455,11 +1506,7 @@ const TaskDetailsPage = () => {
         const missingUserIds = uniqueUserIds.filter(id => !userNames[id]);
         
         if (missingUserIds.length > 0) {
-          const newNames = await getUsersDisplayNames(missingUserIds);
-          setUserNames(prevNames => ({
-            ...prevNames,
-            ...newNames
-          }));
+          await fetchUserNames(missingUserIds);
         }
       }
       
@@ -2887,30 +2934,6 @@ const TaskDetailsPage = () => {
     );
   };
 
-  // Funkcja zwracająca nazwę użytkownika zamiast ID
-  const getUserName = (userId) => {
-    if (!userId) return 'System';
-    
-    // Jeśli mamy już nazwę użytkownika w stanie, użyj jej
-    if (userNames[userId]) {
-      return userNames[userId];
-    }
-    
-    // Jeśli ID jest dłuższe niż 10 znaków, zwróć skróconą wersję
-    if (userId.length > 10) {
-      // Pobierz dane użytkownika asynchronicznie tylko raz
-      if (!userNames[userId] && !userNames[`loading_${userId}`]) {
-        // Nie wywołuj setState w render - zostanie załadowane przez useEffect
-        // setUserNames jest przeniesione do useEffect
-        // Ładowanie nazw przeniesione do useEffect
-      }
-      
-      // Tymczasowo zwróć skróconą wersję ID
-      return `${userId.substring(0, 5)}...${userId.substring(userId.length - 4)}`;
-    }
-    
-    return userId;
-  };
 
   // Dodaj funkcję do generowania i pobierania raportu materiałów i LOT-ów
   const handlePrintMaterialsAndLots = async () => {
@@ -5379,7 +5402,6 @@ const TaskDetailsPage = () => {
               where('referenceId', '==', id),
               where('itemId', '==', materialId),
               where('batchId', '==', batchData.batchId),
-              where('status', 'in', ['active', 'pending']),
               limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
             );
             
@@ -5620,6 +5642,55 @@ const TaskDetailsPage = () => {
       // Oblicz różnicę w ilości
       const quantityDifference = editedQuantity - selectedConsumption.quantity;
 
+      // Walidacja dostępności magazynowej przed zwiększeniem konsumpcji
+      if (quantityDifference > 0) {
+        try {
+          const { getInventoryBatch } = await import('../../services/inventory');
+          const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
+          
+          if (!currentBatch) {
+            showError('Nie znaleziono partii magazynowej');
+            return;
+          }
+
+          const physicalQuantity = Number(currentBatch.quantity) || 0;
+          
+          // Sprawdź aktywne rezerwacje dla tej partii (poza obecnym zadaniem)
+          const transactionsRef = collection(db, 'inventoryTransactions');
+          const reservationsQuery = query(
+            transactionsRef,
+            where('type', '==', 'booking'),
+            where('batchId', '==', selectedConsumption.batchId),
+            where('referenceId', '!=', id) // Wykluczamy obecne zadanie
+          );
+          
+          const reservationsSnapshot = await getDocs(reservationsQuery);
+          const totalReservedByOthers = reservationsSnapshot.docs.reduce((total, doc) => {
+            return total + (Number(doc.data().quantity) || 0);
+          }, 0);
+          
+          const effectivelyAvailable = physicalQuantity - totalReservedByOthers;
+          
+          if (quantityDifference > effectivelyAvailable) {
+            showError(`Niewystarczająca ilość w partii magazynowej po uwzględnieniu rezerwacji. Fizycznie dostępne: ${physicalQuantity.toFixed(3)} ${selectedConsumption.unit || 'szt.'}, zarezerwowane przez inne zadania: ${totalReservedByOthers.toFixed(3)} ${selectedConsumption.unit || 'szt.'}, efektywnie dostępne: ${effectivelyAvailable.toFixed(3)} ${selectedConsumption.unit || 'szt.'}, wymagane dodatkowo: ${quantityDifference.toFixed(3)} ${selectedConsumption.unit || 'szt.'}`);
+            return;
+          }
+          
+          console.log('Walidacja dostępności przeszła pomyślnie:', {
+            fizycznieDosstępne: physicalQuantity,
+            zarezerwowanePrzezInne: totalReservedByOthers,
+            efektywnieDosstępne: effectivelyAvailable,
+            wymaganeDodatkowo: quantityDifference,
+            batchId: selectedConsumption.batchId
+          });
+          
+        } catch (error) {
+          console.error('Błąd podczas walidacji dostępności:', error);
+          showError('Nie udało się sprawdzić dostępności w magazynie: ' + error.message);
+          return;
+        }
+      }
+
       // Aktualizuj stan magazynowy
       const { updateBatch } = await import('../../services/inventory');
       const { getInventoryBatch } = await import('../../services/inventory');
@@ -5662,7 +5733,6 @@ const TaskDetailsPage = () => {
           where('referenceId', '==', id),
           where('itemId', '==', selectedConsumption.materialId),
           where('batchId', '==', selectedConsumption.batchId),
-          where('status', 'in', ['active', 'pending']),
           limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
         );
         
@@ -5845,7 +5915,6 @@ const TaskDetailsPage = () => {
             where('referenceId', '==', id),
             where('itemId', '==', selectedConsumption.materialId),
             where('batchId', '==', selectedConsumption.batchId),
-            where('status', 'in', ['active', 'pending']),
             limit(1) // Dodany limit - potrzebujemy tylko jednej rezerwacji
           );
           

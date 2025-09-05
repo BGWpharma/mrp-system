@@ -70,6 +70,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate } from '../../utils/formatters';
 import { getUsersDisplayNames } from '../../services/userService';
+import { useUserNames } from '../../hooks/useUserNames';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 
@@ -117,8 +118,8 @@ const StocktakingDetailsPage = () => {
   const [deleteItemId, setDeleteItemId] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
-  // Dodaję stan do przechowywania nazw użytkowników
-  const [userNames, setUserNames] = useState({});
+  // Hook do zarządzania nazwami użytkowników
+  const { userNames, getUserName, fetchUserNames } = useUserNames();
   
   // Stan dla filtra pozycji wymagających uzupełnienia
   const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(false);
@@ -136,27 +137,6 @@ const StocktakingDetailsPage = () => {
     filterItems();
   }, [searchTerm, items, showOnlyIncomplete]);
   
-  // Funkcja pobierająca dane użytkownika - zoptymalizowana wersja
-  const fetchUserNames = async (userIds) => {
-    if (!userIds || userIds.length === 0) return;
-    
-    // Usuń duplikaty
-    const uniqueUserIds = [...new Set(userIds.filter(id => id))];
-    
-    if (uniqueUserIds.length === 0) return;
-    
-    try {
-      const names = await getUsersDisplayNames(uniqueUserIds);
-      setUserNames(names);
-    } catch (error) {
-      console.error("Błąd podczas pobierania danych użytkowników:", error);
-    }
-  };
-  
-  // Funkcja zwracająca nazwę użytkownika zamiast ID
-  const getUserName = (userId) => {
-    return userNames[userId] || userId || 'System';
-  };
   
   const fetchStocktakingData = async () => {
     try {

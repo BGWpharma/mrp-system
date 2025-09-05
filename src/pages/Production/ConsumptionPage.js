@@ -189,6 +189,58 @@ const ConsumptionPage = () => {
         return;
       }
 
+      // Oblicz różnicę w ilości
+      const quantityDifference = quantity - selectedConsumption.quantity;
+
+      // Walidacja dostępności magazynowej przed zwiększeniem konsumpcji
+      if (quantityDifference > 0) {
+        try {
+          const { getInventoryBatch } = await import('../../services/inventory');
+          const currentBatch = await getInventoryBatch(selectedConsumption.batchId);
+          
+          if (!currentBatch) {
+            showError('Nie znaleziono partii magazynowej');
+            return;
+          }
+
+          const physicalQuantity = Number(currentBatch.quantity) || 0;
+          
+          // Sprawdź aktywne rezerwacje dla tej partii (poza obecnym zadaniem)
+          const transactionsRef = collection(db, 'inventoryTransactions');
+          const reservationsQuery = query(
+            transactionsRef,
+            where('type', '==', 'booking'),
+            where('batchId', '==', selectedConsumption.batchId),
+            where('referenceId', '!=', taskId) // Wykluczamy obecne zadanie
+          );
+          
+          const reservationsSnapshot = await getDocs(reservationsQuery);
+          const totalReservedByOthers = reservationsSnapshot.docs.reduce((total, doc) => {
+            return total + (Number(doc.data().quantity) || 0);
+          }, 0);
+          
+          const effectivelyAvailable = physicalQuantity - totalReservedByOthers;
+          
+          if (quantityDifference > effectivelyAvailable) {
+            showError(`Niewystarczająca ilość w partii magazynowej po uwzględnieniu rezerwacji. Fizycznie dostępne: ${physicalQuantity.toFixed(3)} ${selectedConsumption.unit || 'szt.'}, zarezerwowane przez inne zadania: ${totalReservedByOthers.toFixed(3)} ${selectedConsumption.unit || 'szt.'}, efektywnie dostępne: ${effectivelyAvailable.toFixed(3)} ${selectedConsumption.unit || 'szt.'}, wymagane dodatkowo: ${quantityDifference.toFixed(3)} ${selectedConsumption.unit || 'szt.'}`);
+            return;
+          }
+          
+          console.log('Walidacja dostępności przeszła pomyślnie:', {
+            fizycznieDosstępne: physicalQuantity,
+            zarezerwowanePrzezInne: totalReservedByOthers,
+            efektywnieDosstępne: effectivelyAvailable,
+            wymaganeDodatkowo: quantityDifference,
+            batchId: selectedConsumption.batchId
+          });
+          
+        } catch (error) {
+          console.error('Błąd podczas walidacji dostępności:', error);
+          showError('Nie udało się sprawdzić dostępności w magazynie: ' + error.message);
+          return;
+        }
+      }
+
       // Pobierz rzeczywistą cenę z partii magazynowej
       let actualUnitPrice = selectedConsumption.unitPrice;
       if (selectedConsumption.batchId) {
@@ -204,9 +256,6 @@ const ConsumptionPage = () => {
           console.error(`Błąd podczas pobierania ceny z partii ${selectedConsumption.batchId}:`, error);
         }
       }
-
-      // Oblicz różnicę w ilości
-      const quantityDifference = quantity - selectedConsumption.quantity;
 
       // Aktualizuj stan magazynowy
       const { updateBatch } = await import('../../services/inventory');
@@ -249,8 +298,7 @@ const ConsumptionPage = () => {
           where('type', '==', 'booking'),
           where('referenceId', '==', taskId),
           where('itemId', '==', selectedConsumption.materialId),
-          where('batchId', '==', selectedConsumption.batchId),
-          where('status', 'in', ['active', 'pending'])
+          where('batchId', '==', selectedConsumption.batchId)
         );
         
         let reservationSnapshot = await getDocs(reservationQuery);
@@ -428,8 +476,7 @@ const ConsumptionPage = () => {
             where('type', '==', 'booking'),
             where('referenceId', '==', taskId),
             where('itemId', '==', selectedConsumption.materialId),
-            where('batchId', '==', selectedConsumption.batchId),
-            where('status', 'in', ['active', 'pending'])
+            where('batchId', '==', selectedConsumption.batchId)
           );
           
           let reservationSnapshot = await getDocs(reservationQuery);

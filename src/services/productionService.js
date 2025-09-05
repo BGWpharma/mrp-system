@@ -3683,6 +3683,19 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           ...historyDoc.data()
         };
       } else {
+        // Pobierz nazwę użytkownika jeśli nie ma userName w sesji
+        let userName = session.userName || 'System';
+        if (!session.userName && session.createdBy) {
+          try {
+            const { getUserById } = await import('./userService');
+            const userData = await getUserById(session.createdBy);
+            userName = userData?.displayName || userData?.email || session.createdBy;
+          } catch (error) {
+            console.warn('Nie udało się pobrać nazwy użytkownika dla historii:', error);
+            userName = session.createdBy;
+          }
+        }
+
         // Utwórz nowy dokument w kolekcji productionHistory
         const newHistoryItem = {
           taskId,
@@ -3692,6 +3705,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
           timeSpent: session.timeSpent,
           quantity: session.completedQuantity,
           userId: session.createdBy,
+          userName: userName, // Dodaj nazwę użytkownika
           createdAt: serverTimestamp()
         };
         
@@ -3811,11 +3825,25 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         }
       }
       
+      // Pobierz dane użytkownika dla zapisania nazwy
+      let userName = 'System';
+      if (userId) {
+        try {
+          const { getUserById } = await import('./userService');
+          const userData = await getUserById(userId);
+          userName = userData?.displayName || userData?.email || userId;
+        } catch (error) {
+          console.warn('Nie udało się pobrać nazwy użytkownika dla aktualizacji:', error);
+          userName = userId;
+        }
+      }
+
       // Aktualizuj dane w dokumencie productionHistory
       await updateDoc(sessionRef, {
         ...updateData,
         updatedAt: serverTimestamp(),
-        updatedBy: userId
+        updatedBy: userId,
+        updatedByName: userName // Dodaj nazwę użytkownika aktualizującego
       });
       
       // Aktualizuj dane w tablicy sesji zadania
@@ -3933,6 +3961,19 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         console.log(`Pomijam aktualizację partii dla sesji - zostanie zaktualizowana przez addTaskProductToInventory`);
       }
       
+      // Pobierz dane użytkownika dla zapisania nazwy
+      let userName = 'System';
+      if (sessionData.userId) {
+        try {
+          const { getUserById } = await import('./userService');
+          const userData = await getUserById(sessionData.userId);
+          userName = userData?.displayName || userData?.email || sessionData.userId;
+        } catch (error) {
+          console.warn('Nie udało się pobrać nazwy użytkownika:', error);
+          userName = sessionData.userId;
+        }
+      }
+
       // Dodaj nową sesję produkcyjną
       const newSession = {
         startDate: sessionData.startTime,
@@ -3940,6 +3981,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         completedQuantity: sessionData.quantity,
         timeSpent: sessionData.timeSpent,
         createdBy: sessionData.userId,
+        userName: userName, // Dodaj nazwę użytkownika
         createdAt: new Date().toISOString() // Używamy zwykłej daty zamiast serverTimestamp()
       };
       
@@ -3969,6 +4011,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         timeSpent: sessionData.timeSpent,
         quantity: sessionData.quantity,
         userId: sessionData.userId,
+        userName: userName, // Dodaj nazwę użytkownika
         createdAt: serverTimestamp()
       };
       
