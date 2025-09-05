@@ -76,7 +76,10 @@ const EndProductReportTab = ({
   formatClinicalFileSize,
   getAdaptiveBackgroundStyle,
   sortIngredientsByQuantity,
-  ingredientBatchAttachments
+  ingredientBatchAttachments,
+  onRefreshBatchAttachments,
+  refreshingBatchAttachments,
+  loadingReportAttachments
 }) => {
   const { showSuccess, showError, showInfo } = useNotification();
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -186,9 +189,9 @@ const EndProductReportTab = ({
         });
       }
       
-      // Dodaj załączniki z PO (fizykochemiczne)
-      if (ingredientAttachments && Object.keys(ingredientAttachments).length > 0) {
-        Object.values(ingredientAttachments).flat().forEach(attachment => {
+      // Dodaj załączniki CoA z partii składników (zamiast z PO)
+      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
+        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
           if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
             const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
             const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
@@ -213,22 +216,6 @@ const EndProductReportTab = ({
               fileName: attachment.fileName,
               fileType: fileType,
               fileUrl: attachment.downloadURL
-            });
-          }
-        });
-      }
-      
-      // Dodaj załączniki z partii składników
-      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
-        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
-          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
-            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: attachment.fileName,
-              fileType: fileType,
-              fileUrl: attachment.downloadURL || attachment.fileUrl
             });
           }
         });
@@ -302,7 +289,7 @@ const EndProductReportTab = ({
         formResponses,
         clinicalAttachments,
         additionalAttachments,
-        ingredientAttachments,
+        ingredientBatchAttachments, // Zmienione z ingredientAttachments
         ingredientBatchAttachments,
         materials, // Dodaję brakujące materiały
         currentUser,
@@ -643,7 +630,6 @@ const EndProductReportTab = ({
                       <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.unit')}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.casNumber')}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.notes')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>{t('endProductReport.tableHeaders.batchAttachments')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -663,44 +649,6 @@ const EndProductReportTab = ({
                         </TableCell>
                         <TableCell sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {ingredient.notes || '-'}
-                        </TableCell>
-                        <TableCell sx={{ minWidth: '200px' }}>
-                          {ingredientBatchAttachments[ingredient.name] && ingredientBatchAttachments[ingredient.name].length > 0 ? (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                              {ingredientBatchAttachments[ingredient.name].map((attachment, attachIndex) => (
-                                <Box key={attachIndex} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<AttachFileIcon />}
-                                    onClick={() => window.open(attachment.downloadURL || attachment.fileUrl, '_blank')}
-                                    sx={{ 
-                                      textTransform: 'none',
-                                      fontSize: '0.75rem',
-                                      minWidth: 'auto',
-                                      flex: 1,
-                                      justifyContent: 'flex-start'
-                                    }}
-                                  >
-                                    {attachment.fileName}
-                                  </Button>
-                                  <Chip 
-                                    size="small" 
-                                    label={attachment.source === 'batch_certificate' 
-                                      ? `Certyfikat: ${attachment.batchNumber}` 
-                                      : `Partia: ${attachment.batchNumber}`}
-                                    variant="outlined"
-                                    color={attachment.source === 'batch_certificate' ? 'success' : 'secondary'}
-                                    sx={{ fontSize: '0.65rem' }}
-                                  />
-                                </Box>
-                              ))}
-                            </Box>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                              Brak załączników
-                            </Typography>
-                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -922,18 +870,40 @@ const EndProductReportTab = ({
 
           {/* 4. Physicochemical properties */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              {t('endProductReport.sections.physicochemicalProperties')}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                {t('endProductReport.sections.physicochemicalProperties')}
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<RefreshIcon />}
+                onClick={onRefreshBatchAttachments}
+                disabled={refreshingBatchAttachments}
+                sx={{ minWidth: 'auto' }}
+              >
+                {refreshingBatchAttachments ? 'Odświeżam...' : 'Odśwież załączniki'}
+              </Button>
+            </Box>
             
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Certyfikaty analiz (CoA) składników z powiązanych zamówień zakupu. Jeśli brak CoA, wyświetlane są załączniki z kompatybilności wstecznej.
+              Certyfikaty analiz (CoA) składników z załączników wykorzystanych partii.
             </Typography>
+            
+            {/* Wskaźnik ładowania załączników */}
+            {loadingReportAttachments && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, p: 2, backgroundColor: 'info.light', borderRadius: 1 }}>
+                <CircularProgress size={20} />
+                <Typography variant="body2" color="text.secondary">
+                  Ładowanie załączników raportu...
+                </Typography>
+              </Box>
+            )}
 
-            {/* Wyświetlanie załączników z PO pogrupowanych według składników */}
-            {Object.keys(ingredientAttachments).length > 0 ? (
+            {/* Wyświetlanie załączników z partii składników pogrupowanych według składników */}
+            {Object.keys(ingredientBatchAttachments).length > 0 ? (
               <Box>
-                {Object.entries(ingredientAttachments).map(([ingredientName, attachments]) => (
+                {Object.entries(ingredientBatchAttachments).map(([ingredientName, attachments]) => (
                   <Paper key={ingredientName} sx={{ p: 2, mb: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider' }} elevation={0}>
                     <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                       {ingredientName}
@@ -965,22 +935,22 @@ const EndProductReportTab = ({
                             </Typography>
                           </Box>
                           
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <Chip 
-                              size="small" 
-                              label={attachment.category || 'CoA'}
-                              variant="filled"
-                              color={attachment.category === 'CoA' ? 'success' : 'default'}
-                              sx={{ fontSize: '0.70rem' }}
-                            />
-                            <Chip 
-                              size="small" 
-                              label={`PO: ${attachment.poNumber}`}
-                              variant="outlined"
-                              color="info"
-                              sx={{ fontSize: '0.75rem' }}
-                            />
-                          </Box>
+                                                     <Box sx={{ display: 'flex', gap: 1 }}>
+                             <Chip 
+                               size="small" 
+                               label={attachment.source === 'batch_certificate' ? 'CoA' : 'Załącznik'}
+                               variant="filled"
+                               color={attachment.source === 'batch_certificate' ? 'success' : 'default'}
+                               sx={{ fontSize: '0.70rem' }}
+                             />
+                             <Chip 
+                               size="small" 
+                               label={`LOT: ${attachment.batchNumber || '-'}`}
+                               variant="outlined"
+                               color="info"
+                               sx={{ fontSize: '0.75rem' }}
+                             />
+                           </Box>
                           
                           <Box sx={{ display: 'flex', gap: 1 }}>
                             <Tooltip title="Pobierz">
@@ -997,39 +967,39 @@ const EndProductReportTab = ({
                       ))}
                     </Box>
                     
-                    {/* Podsumowanie dla składnika */}
-                    <Box sx={{ mt: 1, p: 1, backgroundColor: 'success.light', borderRadius: 1, opacity: 0.6 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Załączników: {attachments.length} • 
-                        Zamówienia: {[...new Set(attachments.map(a => a.poNumber))].length} • 
-                        Łączny rozmiar: {formatClinicalFileSize(attachments.reduce((sum, a) => sum + a.size, 0))}
-                      </Typography>
-                    </Box>
+                                         {/* Podsumowanie dla składnika */}
+                     <Box sx={{ mt: 1, p: 1, backgroundColor: 'success.light', borderRadius: 1, opacity: 0.6 }}>
+                       <Typography variant="caption" color="text.secondary">
+                         Załączników: {attachments.length} • 
+                         Partie: {[...new Set(attachments.map(a => a.batchNumber))].filter(Boolean).length} • 
+                         Łączny rozmiar: {formatClinicalFileSize(attachments.reduce((sum, a) => sum + (a.size || 0), 0))}
+                       </Typography>
+                     </Box>
                   </Paper>
                 ))}
                 
-                {/* Globalne podsumowanie */}
-                <Box sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    Podsumowanie załączników fizykochemicznych:
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    • Składników z załącznikami: {Object.keys(ingredientAttachments).length}<br/>
-                    • Łączna liczba załączników: {Object.values(ingredientAttachments).reduce((sum, attachments) => sum + attachments.length, 0)}<br/>
-                    • Powiązane zamówienia: {[...new Set(Object.values(ingredientAttachments).flat().map(a => a.poNumber))].length}<br/>
-                    • Łączny rozmiar: {formatClinicalFileSize(
-                      Object.values(ingredientAttachments).flat().reduce((sum, attachment) => sum + attachment.size, 0)
-                    )}
-                  </Typography>
-                </Box>
+                                 {/* Globalne podsumowanie */}
+                 <Box sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                     Podsumowanie załączników z partii:
+                   </Typography>
+                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                     • Składników z załącznikami: {Object.keys(ingredientBatchAttachments).length}<br/>
+                     • Łączna liczba załączników: {Object.values(ingredientBatchAttachments).reduce((sum, attachments) => sum + attachments.length, 0)}<br/>
+                     • Powiązane partie: {[...new Set(Object.values(ingredientBatchAttachments).flat().map(a => a.batchNumber))].filter(Boolean).length}<br/>
+                     • Łączny rozmiar: {formatClinicalFileSize(
+                       Object.values(ingredientBatchAttachments).flat().reduce((sum, attachment) => sum + (attachment.size || 0), 0)
+                     )}
+                   </Typography>
+                 </Box>
               </Box>
             ) : (
               <Paper sx={{ p: 3, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
                 <Typography variant="body2" color="text.secondary" align="center">
-                  Brak załączników fizykochemicznych z powiązanych zamówień zakupu
+                  Brak załączników CoA z wykorzystanych partii
                 </Typography>
                 <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
-                  Załączniki zostaną wyświetlone po konsumpcji materiałów z zamówień zawierających dokumenty
+                  Załączniki zostaną wyświetlone po konsumpcji materiałów z partii zawierających certyfikaty
                 </Typography>
               </Paper>
             )}

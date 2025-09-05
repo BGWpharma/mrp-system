@@ -1132,8 +1132,8 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
     // 4. Physicochemical properties (CoA - Certificates of Analysis)
     addSectionHeader(4, 'Physicochemical properties (CoA)', '#6C35EA');
     
-    if (Object.keys(ingredientAttachments).length > 0) {
-      Object.entries(ingredientAttachments).forEach(([ingredientName, attachments]) => {
+    if (Object.keys(ingredientBatchAttachments).length > 0) {
+      Object.entries(ingredientBatchAttachments).forEach(([ingredientName, attachments]) => {
         checkPageBreak(20);
         
         doc.setTextColor(25, 118, 210);
@@ -1142,12 +1142,11 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
         doc.text(ingredientName, margin, currentY);
         currentY += 6;
 
-        const physHeaders = ['File name', 'Type', 'Size', 'PO Number', 'Upload date'];
+        const physHeaders = ['File name', 'Type', 'Batch Number', 'Upload date'];
         const physData = attachments.map(attachment => [
           attachment.fileName,
-          attachment.category || 'CoA',
-          formatFileSize(attachment.size),
-          attachment.poNumber,
+          attachment.source === 'batch_certificate' ? 'CoA' : 'Attachment',
+          attachment.batchNumber || '-',
           new Date(attachment.uploadedAt).toLocaleDateString('en-GB')
         ]);
 
@@ -1156,21 +1155,19 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       });
 
       // Global summary
-      const totalAttachments = Object.values(ingredientAttachments).reduce((sum, attachments) => sum + attachments.length, 0);
-      const totalSize = Object.values(ingredientAttachments).flat().reduce((sum, attachment) => sum + attachment.size, 0);
-      const uniquePOs = [...new Set(Object.values(ingredientAttachments).flat().map(a => a.poNumber))].length;
+      const totalAttachments = Object.values(ingredientBatchAttachments).reduce((sum, attachments) => sum + attachments.length, 0);
+      const totalSize = Object.values(ingredientBatchAttachments).flat().reduce((sum, attachment) => sum + (attachment.size || 0), 0);
 
       doc.setTextColor(25, 118, 210);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('CoA certificates summary:', margin, currentY);
+      doc.text('CoA certificates from batch attachments summary:', margin, currentY);
       doc.setTextColor(85, 85, 85);
       doc.setFont('helvetica', 'normal');
-      doc.text(`• Ingredients with CoA certificates: ${Object.keys(ingredientAttachments).length}`, margin, currentY + 4);
-      doc.text(`• Total CoA certificates: ${totalAttachments}`, margin, currentY + 8);
-      doc.text(`• Related purchase orders: ${uniquePOs}`, margin, currentY + 12);
-      doc.text(`• Total size: ${formatFileSize(totalSize)}`, margin, currentY + 16);
-      currentY += 24;
+      doc.text(`• Ingredients with batch attachments: ${Object.keys(ingredientBatchAttachments).length}`, margin, currentY + 4);
+      doc.text(`• Total batch attachments: ${totalAttachments}`, margin, currentY + 8);
+      doc.text(`• Total size: ${formatFileSize(totalSize)}`, margin, currentY + 12);
+      currentY += 20;
     } else {
       doc.setTextColor(150, 150, 150);
       doc.setFontSize(9);

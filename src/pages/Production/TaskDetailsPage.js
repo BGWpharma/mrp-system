@@ -317,6 +317,8 @@ const TaskDetailsPage = () => {
   
   // Stan dla załączników z partii składników
   const [ingredientBatchAttachments, setIngredientBatchAttachments] = useState({});
+  const [refreshingBatchAttachments, setRefreshingBatchAttachments] = useState(false);
+  const [loadingReportAttachments, setLoadingReportAttachments] = useState(false);
   
   // Stan dla powiązań składników z rezerwacjami w planie mieszań
   const [ingredientReservationLinks, setIngredientReservationLinks] = useState({});
@@ -1106,13 +1108,13 @@ const TaskDetailsPage = () => {
     }
   }, [task?.consumedMaterials]);
 
-  // Dodaję efekt pobierający załączniki z PO dla składników
-  useEffect(() => {
-    if (task?.recipe?.ingredients && task?.consumedMaterials && materials.length > 0) {
-      fetchIngredientAttachments();
-      fetchIngredientBatchAttachments();
-    }
-  }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
+  // Efekt pobierający załączniki z PO dla składników (przeniesione do lazy loading w zakładce raportu)
+  // useEffect(() => {
+  //   if (task?.recipe?.ingredients && task?.consumedMaterials && materials.length > 0) {
+  //     fetchIngredientAttachments();
+  //     fetchIngredientBatchAttachments();
+  //   }
+  // }, [task?.recipe?.ingredients, task?.consumedMaterials, materials]);
 
   // Efekt z listenerem w czasie rzeczywistym dla powiązań składników z rezerwacjami
   useEffect(() => {
@@ -1176,12 +1178,13 @@ const TaskDetailsPage = () => {
   }, [task?.id]);
 
   // Pobieranie załączników badań klinicznych
-  useEffect(() => {
-    if (task?.id) {
-      fetchClinicalAttachments();
-      fetchAdditionalAttachments();
-    }
-  }, [task?.id]);
+  // Pobieranie załączników zadania (przeniesione do lazy loading w zakładce raportu)
+  // useEffect(() => {
+  //   if (task?.id) {
+  //     fetchClinicalAttachments();
+  //     fetchAdditionalAttachments();
+  //   }
+  // }, [task?.id]);
 
   // Pobieranie alergenów z receptury przy załadowaniu zadania
   useEffect(() => {
@@ -6544,10 +6547,42 @@ const TaskDetailsPage = () => {
           const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
           const materialName = consumed.materialName || material?.name || '';
           
-          // Sprawdź czy nazwa materiału pasuje do nazwy składnika (case-insensitive)
-          return materialName.toLowerCase().includes(ingredient.name.toLowerCase()) ||
-                 ingredient.name.toLowerCase().includes(materialName.toLowerCase());
+          // Ulepszona logika dopasowywania
+          const ingredientLower = ingredient.name.toLowerCase().trim();
+          const materialLower = materialName.toLowerCase().trim();
+          
+          // 1. Dokładne dopasowanie
+          const exactMatch = ingredientLower === materialLower;
+          
+          // 2. Dopasowanie zawierające (oryginalna logika)
+          const containsMatch = materialLower.includes(ingredientLower) || ingredientLower.includes(materialLower);
+          
+          // 3. Dopasowanie przez podzielone słowa (np. "PACKCOR MULTIVITAMIN" vs "PACKCOR-MULTIVITAMIN")
+          const ingredientWords = ingredientLower.split(/[\s\-_]+/).filter(w => w.length > 2);
+          const materialWords = materialLower.split(/[\s\-_]+/).filter(w => w.length > 2);
+          const wordMatch = ingredientWords.some(iWord => 
+            materialWords.some(mWord => 
+              iWord.includes(mWord) || mWord.includes(iWord) || 
+              (iWord.length > 3 && mWord.length > 3 && 
+               (iWord.startsWith(mWord.substring(0, 4)) || mWord.startsWith(iWord.substring(0, 4))))
+            )
+          );
+          
+          // 4. Dopasowanie przez usuniecie prefiksów/sufiksów
+          const cleanIngredient = ingredientLower.replace(/^(packcor|bgw|pharma)[\s\-_]*/i, '').replace(/[\s\-_]*(premium|standard|plus)$/i, '');
+          const cleanMaterial = materialLower.replace(/^(packcor|bgw|pharma)[\s\-_]*/i, '').replace(/[\s\-_]*(premium|standard|plus)$/i, '');
+          const cleanMatch = cleanIngredient && cleanMaterial && 
+                             (cleanIngredient.includes(cleanMaterial) || cleanMaterial.includes(cleanIngredient));
+          
+          const matches = exactMatch || containsMatch || wordMatch || cleanMatch;
+          
+          return matches;
         });
+
+        // Fallback: Jeśli nie ma dopasowań i jest tylko jeden składnik w recepturze, spróbuj wszystkie materiały
+        if (matchingConsumedMaterials.length === 0 && task.recipe.ingredients.length === 1) {
+          matchingConsumedMaterials.push(...task.consumedMaterials);
+        }
 
         // Dla każdego pasującego skonsumowanego materiału pobierz załączniki z partii
         for (const consumed of matchingConsumedMaterials) {
@@ -6607,13 +6642,37 @@ const TaskDetailsPage = () => {
         );
 
         if (uniqueAttachments.length > 0) {
-          attachments[ingredient.name] = uniqueAttachments;
+          // Użyj nazwy materiału zamiast nazwy składnika, jeśli dostępna
+          const displayName = uniqueAttachments.length > 0 ? 
+            (uniqueAttachments[0].materialName || ingredient.name) : ingredient.name;
+          
+          attachments[displayName] = uniqueAttachments;
         }
       }
 
       setIngredientBatchAttachments(attachments);
     } catch (error) {
-      console.warn('Błąd podczas pobierania załączników z partii składników:', error);
+      console.error('Błąd podczas pobierania załączników z partii składników:', error);
+    }
+  };
+
+  // Funkcja ręcznego odświeżenia załączników z partii
+  const handleRefreshBatchAttachments = async () => {
+    try {
+      setRefreshingBatchAttachments(true);
+      
+      // Wyczyść aktualne załączniki
+      setIngredientBatchAttachments({});
+      
+      // Ponownie pobierz załączniki
+      await fetchIngredientBatchAttachments();
+      
+      showSuccess('Załączniki z partii zostały odświeżone');
+    } catch (error) {
+      console.error('Błąd podczas odświeżania załączników:', error);
+      showError('Błąd podczas odświeżania załączników z partii');
+    } finally {
+      setRefreshingBatchAttachments(false);
     }
   };
 
@@ -6798,9 +6857,9 @@ const TaskDetailsPage = () => {
         });
       }
       
-      // Dodaj załączniki z PO (fizykochemiczne)
-      if (ingredientAttachments && Object.keys(ingredientAttachments).length > 0) {
-        Object.values(ingredientAttachments).flat().forEach(attachment => {
+      // Dodaj załączniki CoA z partii składników (zamiast z PO)
+      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
+        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
           if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
             const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
             const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
@@ -6825,22 +6884,6 @@ const TaskDetailsPage = () => {
               fileName: attachment.fileName,
               fileType: fileType,
               fileUrl: attachment.downloadURL
-            });
-          }
-        });
-      }
-      
-      // Dodaj załączniki z partii składników
-      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
-        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
-          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
-            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
-            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
-            
-            attachments.push({
-              fileName: attachment.fileName,
-              fileType: fileType,
-              fileUrl: attachment.downloadURL || attachment.fileUrl
             });
           }
         });
@@ -6914,7 +6957,7 @@ const TaskDetailsPage = () => {
         formResponses,
         clinicalAttachments,
         additionalAttachments,
-        ingredientAttachments,
+        ingredientBatchAttachments, // Zmienione z ingredientAttachments
         ingredientBatchAttachments,
         materials,
         currentUser,
@@ -7045,6 +7088,45 @@ const TaskDetailsPage = () => {
       fetchWorkstationData();
     }
   }, [mainTab, task?.workstationId]);
+
+  // Lazy loading załączników - tylko dla zakładki raportu
+  useEffect(() => {
+    const loadReportAttachments = async () => {
+      if (mainTab === 5 && task?.id) {
+        try {
+          setLoadingReportAttachments(true);
+          
+          // Sprawdź czy załączniki zostały już załadowane (cache)
+          const needsClinicalAttachments = clinicalAttachments.length === 0;
+          const needsAdditionalAttachments = additionalAttachments.length === 0;
+          const needsBatchAttachments = Object.keys(ingredientBatchAttachments).length === 0;
+          
+          // Pobierz załączniki zadania (tylko jeśli nie są załadowane)
+          const taskAttachmentsPromises = [];
+          if (needsClinicalAttachments) taskAttachmentsPromises.push(fetchClinicalAttachments());
+          if (needsAdditionalAttachments) taskAttachmentsPromises.push(fetchAdditionalAttachments());
+          
+          if (taskAttachmentsPromises.length > 0) {
+            await Promise.all(taskAttachmentsPromises);
+          }
+          
+          // Pobierz załączniki z partii i PO (jeśli są dostępne dane i nie są załadowane)
+          if (needsBatchAttachments && task?.recipe?.ingredients && task?.consumedMaterials && materials.length > 0) {
+            await Promise.all([
+              fetchIngredientAttachments(), // dla kompatybilności
+              fetchIngredientBatchAttachments()
+            ]);
+          }
+        } catch (error) {
+          console.error('Błąd podczas ładowania załączników raportu:', error);
+        } finally {
+          setLoadingReportAttachments(false);
+        }
+      }
+    };
+    
+    loadReportAttachments();
+  }, [mainTab, task?.id, task?.recipe?.ingredients, task?.consumedMaterials, materials, clinicalAttachments.length, additionalAttachments.length, ingredientBatchAttachments]);
 
   // Renderuj stronę
     return (
@@ -7261,7 +7343,7 @@ const TaskDetailsPage = () => {
                 setClinicalAttachments={setClinicalAttachments}
                 additionalAttachments={additionalAttachments}
                 setAdditionalAttachments={setAdditionalAttachments}
-                ingredientAttachments={ingredientAttachments}
+                ingredientAttachments={ingredientBatchAttachments}
                 selectedAllergens={selectedAllergens}
                 setSelectedAllergens={setSelectedAllergens}
                 availableAllergens={availableAllergens}
@@ -7280,6 +7362,9 @@ const TaskDetailsPage = () => {
                 getAdaptiveBackgroundStyle={getAdaptiveBackgroundStyle}
                 sortIngredientsByQuantity={sortIngredientsByQuantity}
                 ingredientBatchAttachments={ingredientBatchAttachments}
+                onRefreshBatchAttachments={handleRefreshBatchAttachments}
+                refreshingBatchAttachments={refreshingBatchAttachments}
+                loadingReportAttachments={loadingReportAttachments}
               />
             </Suspense>
           )}
