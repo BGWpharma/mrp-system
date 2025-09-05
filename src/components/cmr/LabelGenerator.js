@@ -157,6 +157,17 @@ const BoxLabel = ({
               {boxDetails.totalWeight} kg
             </Typography>
 
+            <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '12px', display: 'block', mb: 0.5 }}>
+              EXPIRY DATE:
+            </Typography>
+            <Typography variant="body2" sx={{ 
+              fontSize: '12px', 
+              fontWeight: 'bold', 
+              mb: 1.5,
+              color: formatDate(itemData.linkedBatches?.[0]?.expiryDate) === 'N/A' ? 'text.secondary' : 'inherit'
+            }}>
+              {formatDate(itemData.linkedBatches?.[0]?.expiryDate)}
+            </Typography>
 
           </Box>
         </Grid>
@@ -348,8 +359,19 @@ const PalletLabel = ({
             <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '12px', display: 'block', mb: 0.5 }}>
               PALLET WEIGHT:
             </Typography>
-            <Typography variant="body2" sx={{ fontSize: '12px', fontWeight: 'bold' }}>
+            <Typography variant="body2" sx={{ fontSize: '12px', fontWeight: 'bold', mb: 1.5 }}>
               {palletDetails.totalWeight} kg
+            </Typography>
+
+            <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: '12px', display: 'block', mb: 0.5 }}>
+              EXPIRY DATE:
+            </Typography>
+            <Typography variant="body2" sx={{ 
+              fontSize: '12px', 
+              fontWeight: 'bold',
+              color: formatDate(itemData.linkedBatches?.[0]?.expiryDate) === '' ? 'text.secondary' : 'inherit'
+            }}>
+              {formatDate(itemData.linkedBatches?.[0]?.expiryDate) || 'N/A'}
             </Typography>
           </Box>
         </Grid>

@@ -365,6 +365,21 @@ class LabelPdfGenerator {
     leftY = this.drawText(page, `${boxDetails.totalWeight || 0} kg`, leftColumnX, leftY, 
       { size: 9, font: this.fonts.bold });
 
+    leftY -= 6;
+
+    // Data ważności
+    page.drawText('EXPIRY DATE:', {
+      x: leftColumnX,
+      y: leftY,
+      size: 10,
+      font: this.fonts.bold
+    });
+    leftY -= 11;
+
+    const expiryDate = this.formatDate(itemData.linkedBatches?.[0]?.expiryDate) || 'N/A';
+    leftY = this.drawText(page, expiryDate, leftColumnX, leftY, 
+      { size: 9, font: this.fonts.bold });
+
     // Prawa kolumna
     let rightY = currentY;
 
@@ -591,6 +606,21 @@ class LabelPdfGenerator {
     leftY -= 11;
 
     leftY = this.drawText(page, `${palletDetails.totalWeight || 0} kg`, leftColumnX, leftY, 
+      { size: 9, font: this.fonts.bold });
+
+    leftY -= 6;
+
+    // Data ważności
+    page.drawText('EXPIRY DATE:', {
+      x: leftColumnX,
+      y: leftY,
+      size: 10,
+      font: this.fonts.bold
+    });
+    leftY -= 11;
+
+    const expiryDate = this.formatDate(itemData.linkedBatches?.[0]?.expiryDate) || 'N/A';
+    leftY = this.drawText(page, expiryDate, leftColumnX, leftY, 
       { size: 9, font: this.fonts.bold });
 
     // Prawa kolumna
