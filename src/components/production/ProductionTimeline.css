@@ -895,3 +895,77 @@
   --timeline-warning: #d97706;
   --timeline-error: #dc2626;
 }
+
+/* ===== TOOLTIP CONFLICT RESOLUTION ===== */
+
+/* Disable native browser tooltips for elements that have MUI Tooltips */
+.timeline-icon-button,
+.timeline-action-button,
+.timeline-filter-button,
+.timeline-refresh-button,
+.timeline-undo-button,
+.timeline-legend-chip,
+.MuiIconButton-root,
+.MuiButton-root {
+  /* Remove browser default title tooltips */
+  pointer-events: auto !important;
+}
+
+/* Specifically target elements within Tooltip wrappers */
+.MuiTooltip-root .timeline-icon-button,
+.MuiTooltip-root .timeline-action-button,
+.MuiTooltip-root .timeline-filter-button,
+.MuiTooltip-root .timeline-refresh-button,
+.MuiTooltip-root .timeline-undo-button,
+.MuiTooltip-root .MuiIconButton-root,
+.MuiTooltip-root .MuiButton-root {
+  /* Completely disable browser tooltips for MUI Tooltip wrapped elements */
+  title: none !important;
+}
+
+/* Hide any remaining browser tooltips */
+.timeline-icon-button:hover::before,
+.timeline-action-button:hover::before,
+.timeline-filter-button:hover::before,
+.timeline-refresh-button:hover::before,
+.timeline-undo-button:hover::before {
+  /* Ensure our custom tooltips take precedence */
+  z-index: 1500 !important;
+}
+
+/* Custom CSS to suppress browser tooltips */
+.production-timeline-header [title],
+.timeline-legend-container [title] {
+  /* This will be handled by JavaScript to remove title attributes */
+  position: relative;
+}
+
+/* Timeline-specific tooltip z-index management */
+.MuiTooltip-tooltip {
+  z-index: 1600 !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  background: var(--timeline-surface) !important;
+  border: 1px solid var(--timeline-border) !important;
+  box-shadow: var(--timeline-shadow-xl) !important;
+  border-radius: var(--timeline-radius-md) !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.025em !important;
+  padding: 8px 12px !important;
+  max-width: 300px !important;
+}
+
+[data-theme='dark'] .MuiTooltip-tooltip {
+  background: rgba(30, 41, 59, 0.95) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.MuiTooltip-arrow {
+  color: var(--timeline-surface) !important;
+}
+
+[data-theme='dark'] .MuiTooltip-arrow {
+  color: rgba(30, 41, 59, 0.95) !important;
+}

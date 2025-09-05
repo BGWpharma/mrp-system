@@ -2278,7 +2278,74 @@ const ProductionTimeline = React.memo(() => {
     };
   }, [visibleTimeStart, visibleTimeEnd]);
 
+  // ✅ TOOLTIP CONFLICT RESOLUTION - Remove title attributes from elements with MUI Tooltips
+  useEffect(() => {
+    const removeNativeTooltips = () => {
+      // Target all elements within timeline that might have title attributes
+      const elementsWithTooltips = document.querySelectorAll(`
+        .production-timeline-header [title],
+        .timeline-legend-container [title],
+        .timeline-icon-button[title],
+        .timeline-action-button[title],
+        .timeline-filter-button[title],
+        .timeline-refresh-button[title],
+        .timeline-undo-button[title],
+        .MuiTooltip-root [title],
+        .MuiIconButton-root[title],
+        .MuiButton-root[title]
+      `);
+      
+      elementsWithTooltips.forEach(element => {
+        // Store original title in data attribute if needed
+        if (element.getAttribute('title') && !element.getAttribute('data-original-title')) {
+          element.setAttribute('data-original-title', element.getAttribute('title'));
+        }
+        // Remove the title attribute to prevent browser tooltip
+        element.removeAttribute('title');
+      });
+    };
 
+    // Remove tooltips initially
+    removeNativeTooltips();
+
+    // Set up observer to remove tooltips when new elements are added
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // Check if the added element or its children have title attributes
+              const elementsWithTitle = node.querySelectorAll ? 
+                [node, ...node.querySelectorAll('[title]')] : 
+                node.getAttribute && node.getAttribute('title') ? [node] : [];
+              
+              elementsWithTitle.forEach(element => {
+                if (element.getAttribute && element.getAttribute('title')) {
+                  element.setAttribute('data-original-title', element.getAttribute('title'));
+                  element.removeAttribute('title');
+                }
+              });
+            }
+          });
+        }
+      });
+    });
+
+    // Start observing
+    const timelineContainer = document.querySelector('.production-timeline-header')?.parentElement;
+    if (timelineContainer) {
+      observer.observe(timelineContainer, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['title']
+      });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   return (
     <Box sx={{ position: 'relative' }}>
@@ -2312,7 +2379,13 @@ const ProductionTimeline = React.memo(() => {
           />
           
           {editMode && (
-            <Tooltip title={t('production.timeline.snapToPreviousTooltip')} arrow>
+            <Tooltip 
+              title={t('production.timeline.snapToPreviousTooltip')} 
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
               <FormControlLabel
                 className="timeline-switch"
                 control={
@@ -2324,11 +2397,18 @@ const ProductionTimeline = React.memo(() => {
                   />
                 }
                 label={t('production.timeline.snapToPrevious')}
+                title=""
               />
             </Tooltip>
           )}
           
-          <Tooltip title={t('production.timeline.editModeTooltip')} arrow>
+          <Tooltip 
+            title={t('production.timeline.editModeTooltip')} 
+            arrow
+            disableInteractive
+            enterDelay={500}
+            leaveDelay={200}
+          >
             <Button
               className={`timeline-action-button ${editMode ? 'active' : ''}`}
               variant={editMode ? "contained" : "outlined"}
@@ -2336,6 +2416,7 @@ const ProductionTimeline = React.memo(() => {
               onClick={handleEditModeToggle}
               startIcon={editMode ? <EditIcon /> : <LockIcon />}
               color={editMode ? "primary" : "default"}
+              title=""
             >
               {editMode ? t('production.timeline.editMode') + ' ON' : t('production.timeline.editMode') + ' OFF'}
             </Button>
@@ -2353,41 +2434,69 @@ const ProductionTimeline = React.memo(() => {
           
           {/* Przyciski skali czasowej */}
           <Box className="timeline-button-group">
-            <Tooltip title={t('production.timeline.hourly') + ' (3 dni)'}>
+            <Tooltip 
+              title={t('production.timeline.hourly') + ' (3 dni)'}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
               <IconButton 
                 className={`timeline-icon-button ${timeScale === 'hourly' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('hourly')}
+                title=""
               >
                 <HourlyIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={t('production.timeline.daily') + ' (2 tygodnie)'}>
+            <Tooltip 
+              title={t('production.timeline.daily') + ' (2 tygodnie)'}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
               <IconButton 
                 className={`timeline-icon-button ${timeScale === 'daily' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('daily')}
+                title=""
               >
                 <DailyIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={t('production.timeline.weekly') + ' (2 miesiące)'}>
+            <Tooltip 
+              title={t('production.timeline.weekly') + ' (2 miesiące)'}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
               <IconButton 
                 className={`timeline-icon-button ${timeScale === 'weekly' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('weekly')}
+                title=""
               >
                 <WeeklyIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={t('production.timeline.monthly') + ' (6 miesięcy)'}>
+            <Tooltip 
+              title={t('production.timeline.monthly') + ' (6 miesięcy)'}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
               <IconButton 
                 className={`timeline-icon-button ${timeScale === 'monthly' ? 'active' : ''}`}
                 size="small" 
                 onClick={() => zoomToScale('monthly')}
+                title=""
               >
                 <MonthlyIcon />
               </IconButton>
@@ -2396,33 +2505,58 @@ const ProductionTimeline = React.memo(() => {
           
           {/* Kontrolki zoom */}
           <Box className="timeline-button-group">
-            <Tooltip title={t('production.timeline.zoom.in') + ' (Ctrl + scroll)'}>
-              <IconButton className="timeline-icon-button" size="small" onClick={zoomIn}>
+            <Tooltip 
+              title={t('production.timeline.zoom.in') + ' (Ctrl + scroll)'}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
+              <IconButton className="timeline-icon-button" size="small" onClick={zoomIn} title="">
                 <ZoomInIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={t('production.timeline.zoom.out')}>
-              <IconButton className="timeline-icon-button" size="small" onClick={zoomOut}>
+            <Tooltip 
+              title={t('production.timeline.zoom.out')}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
+              <IconButton className="timeline-icon-button" size="small" onClick={zoomOut} title="">
                 <ZoomOutIcon />
               </IconButton>
             </Tooltip>
             
-            <Tooltip title={t('production.timeline.zoom.reset')}>
-              <IconButton className="timeline-icon-button" size="small" onClick={resetZoom}>
+            <Tooltip 
+              title={t('production.timeline.zoom.reset')}
+              arrow
+              disableInteractive
+              enterDelay={500}
+              leaveDelay={200}
+            >
+              <IconButton className="timeline-icon-button" size="small" onClick={resetZoom} title="">
                 <ResetZoomIcon />
               </IconButton>
             </Tooltip>
           </Box>
           
           {/* Przycisk Undo */}
-          <Tooltip title={`Cofnij ostatnią akcję (Ctrl+Z) - ${undoStack.length} dostępnych`}>
+          <Tooltip 
+            title={`Cofnij ostatnią akcję (Ctrl+Z) - ${undoStack.length} dostępnych`}
+            arrow
+            disableInteractive
+            enterDelay={500}
+            leaveDelay={200}
+          >
             <span>
               <IconButton 
                 className="timeline-undo-button"
                 size="small" 
                 onClick={handleUndo}
                 disabled={undoStack.length === 0}
+                title=""
               >
                 <UndoIcon />
               </IconButton>
@@ -2623,6 +2757,7 @@ const ProductionTimeline = React.memo(() => {
                    ...itemProps.style,
                    background: item.backgroundColor || '#1976d2',
                    color: textColor,
+                   textShadow: '0 1px 2px rgba(0, 0, 0, 0.7)', // Dodane shadow dla lepszego kontrastu
                    border: '1px solid rgba(255, 255, 255, 0.3)',
                    borderRadius: '4px',
                    padding: '2px 6px',

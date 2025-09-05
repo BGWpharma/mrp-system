@@ -164,34 +164,34 @@ export const getReservationStatusColors = (status) => {
   switch (status) {
     case 'fully_reserved':
       return {
-        main: '#2e7d32',      // Ciemniejszy zielony (nie kolizja z timeline)
+        main: '#00e676',      // Jaśniejszy Material Green A400 - doskonały kontrast
         light: '#66bb6a',
         contrastText: '#ffffff'
       };
     case 'partially_reserved':
       return {
-        main: '#ed6c02',      // Pomarańczowy (nie kolizja z timeline)
+        main: '#ff9800',      // Material Orange 500 - lepszy kontrast
         light: '#ffb74d',
         contrastText: '#ffffff'
       };
     case 'not_reserved':
       return {
-        main: '#d32f2f',      // Czerwony (nie kolizja z timeline)
+        main: '#ff1744',      // Material Red A400 - bardziej widoczny
         light: '#e57373',
         contrastText: '#ffffff'
       };
     case 'completed_confirmed':
       return {
-        main: '#388e3c',      // Zielony dla zakończonych
+        main: '#4caf50',      // Material Green 500 - standardowy, dobrze czytelny
         light: '#81c784',
         contrastText: '#ffffff'
       };
     case 'no_materials':
     default:
       return {
-        main: '#9e9e9e',      // Szary dla brak materiałów
-        light: '#e0e0e0',
-        contrastText: '#ffffff'
+        main: '#e0e0e0',      // Jaśniejszy szary dla lepszej widoczności
+        light: '#f5f5f5',
+        contrastText: '#000000'  // Czarny tekst dla jasnego szarego tła
       };
   }
 }; 
