@@ -614,8 +614,8 @@ const ConsumptionPage = () => {
       setSelectedConsumption(null);
       setRestoreReservation(true); // Reset do domyślnej wartości
       
-      // Odśwież dane (selektywnie)
-      await refreshTaskBasicData();
+      // Odśwież dane (pełne odświeżenie z konsumpcjami)
+      await fetchTaskData();
       
     } catch (error) {
       console.error('Błąd podczas usuwania konsumpcji:', error);

@@ -3357,20 +3357,18 @@ const TaskDetailsPage = () => {
       // Sprawdź czy dane opakowanie już istnieje i aktualizuj ilość lub dodaj nowe
       newMaterials.forEach(newMaterial => {
         const existingIndex = updatedMaterials.findIndex(m => 
-          m.id === newMaterial.id && 
-          m.selectedBatch?.id === newMaterial.selectedBatch?.id
+          m.id === newMaterial.id
         );
         
         if (existingIndex >= 0) {
-          // Aktualizuj istniejące opakowanie z tą samą partią
+          // Aktualizuj istniejące opakowanie - sumuj ilości niezależnie od partii
           updatedMaterials[existingIndex].quantity = 
             (parseFloat(updatedMaterials[existingIndex].quantity) || 0) + 
             (parseFloat(newMaterial.quantity) || 0);
           
-          if (updatedMaterials[existingIndex].selectedBatch && newMaterial.selectedBatch) {
-            updatedMaterials[existingIndex].selectedBatch.quantity = 
-              (parseFloat(updatedMaterials[existingIndex].selectedBatch.quantity) || 0) + 
-              (parseFloat(newMaterial.selectedBatch.quantity) || 0);
+          // Zaktualizuj informacje o partii na najnowszą dodawaną
+          if (newMaterial.selectedBatch) {
+            updatedMaterials[existingIndex].selectedBatch = newMaterial.selectedBatch;
           }
         } else {
           // Dodaj nowe opakowanie
@@ -6061,8 +6059,10 @@ const TaskDetailsPage = () => {
       }
 
       // Usuń konsumpcję z listy
-      const updatedConsumedMaterials = task.consumedMaterials.filter((consumed, index) => 
-        index !== task.consumedMaterials.indexOf(selectedConsumption)
+      const updatedConsumedMaterials = task.consumedMaterials.filter(c => 
+        !(c.materialId === selectedConsumption.materialId &&
+          c.batchId === selectedConsumption.batchId &&
+          c.timestamp === selectedConsumption.timestamp)
       );
 
       // Zaktualizuj zadanie w bazie danych
