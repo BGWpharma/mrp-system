@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { getAllWarehouses } from './inventoryService';
-import { preciseSubtract, fixFloatingPointPrecision } from '../utils/mathUtils';
+import { preciseSubtract, preciseAdd, fixFloatingPointPrecision } from '../utils/mathUtils';
 const INGREDIENT_LINKS_COLLECTION = 'ingredientReservationLinks';
 
 // Funkcja pomocnicza do formatowania wartości liczbowych z precyzją
@@ -125,7 +125,6 @@ const getReservationSnapshot = async (taskId, reservationId) => {
 export const getStandardReservationsForTask = async (taskId) => {
   try {
     const functionStartTime = performance.now();
-    // getStandardReservationsForTask dla ${taskId}
     
     // Pobierz zadanie produkcyjne
     const taskRef = doc(db, 'productionTasks', taskId);
@@ -137,7 +136,6 @@ export const getStandardReservationsForTask = async (taskId) => {
     }
     
     const task = taskDoc.data();
-    // Dane zadania pobrane
     
     // Pobierz wszystkie powiązania składników z rezerwacjami dla tego zadania
     const ingredientLinks = await getIngredientReservationLinks(taskId);
@@ -147,13 +145,23 @@ export const getStandardReservationsForTask = async (taskId) => {
       if (Array.isArray(linksArray)) {
         linksArray.forEach(link => {
           if (link.reservationId && (link.linkedQuantity || link.quantity)) {
-            const quantity = link.linkedQuantity || link.quantity;
-            linkedQuantities[link.reservationId] = (linkedQuantities[link.reservationId] || 0) + parseFloat(quantity);
+            const linkedQty = link.linkedQuantity || link.quantity;
+            linkedQuantities[link.reservationId] = (linkedQuantities[link.reservationId] || 0) + parseFloat(linkedQty);
           }
         });
       }
     });
-    // Powiązane ilości obliczone
+    
+    // Oblicz skonsumowane ilości z task.consumedMaterials dla każdej partii
+    const consumedQuantitiesByBatch = {};
+    if (task.consumedMaterials && Array.isArray(task.consumedMaterials)) {
+      task.consumedMaterials.forEach(consumed => {
+        if (consumed.batchId && consumed.materialId) {
+          const key = `${consumed.materialId}_${consumed.batchId}`;
+          consumedQuantitiesByBatch[key] = (consumedQuantitiesByBatch[key] || 0) + parseFloat(consumed.quantity || 0);
+        }
+      });
+    }
     
     // Pobierz informacje o magazynach
     const warehouses = await getAllWarehouses();
@@ -216,16 +224,22 @@ export const getStandardReservationsForTask = async (taskId) => {
             const linkedQuantity = linkedQuantities[reservationId] || 0;
             
             // Użyj precyzyjnych obliczeń aby uniknąć błędów zmiennoprzecinkowych
-            const baseAvailableQuantity = preciseSubtract(
-              fixFloatingPointPrecision(batch.quantity || 0), 
-              fixFloatingPointPrecision(batch.consumedQuantity || 0)
-            );
-            const finalAvailableQuantity = preciseSubtract(
-              baseAvailableQuantity, 
-              fixFloatingPointPrecision(linkedQuantity)
-            );
+            // ✅ POPRAWKA: dostępna ilość = rezerwacja - aktywne powiązania + skonsumowane z tej partii
+            const reservedQuantityInBatch = fixFloatingPointPrecision(batch.quantity || 0);
+            const totalLinkedQuantity = fixFloatingPointPrecision(linkedQuantity || 0);
             
-            // Kalkulacja dla ${reservationId}: ${finalAvailableQuantity} dostępne
+            // Znajdź skonsumowane ilości dla tej konkretnej partii
+            const consumedKey = `${materialId}_${batch.batchId}`;
+            const totalConsumedFromBatch = fixFloatingPointPrecision(consumedQuantitiesByBatch[consumedKey] || 0);
+            
+            // Dostępna ilość = rezerwacja - aktywne powiązania + skonsumowane (skonsumowane uwalnia się do ponownego powiązania)
+            // Logika: jeśli miałem 500kg rezerwacji, powiązałem 450kg, ale skonsumowałem 100kg
+            // to dostępne = 500kg - 450kg + 100kg = 150kg
+            const finalAvailableQuantity = Math.max(0, preciseAdd(
+              preciseSubtract(reservedQuantityInBatch, totalLinkedQuantity),
+              totalConsumedFromBatch
+            ));
+            
             
             // Użyj już pobranych szczegółów partii (brak zapytania w pętli!)
             const batchDetails = batchDetailsMap.get(batch.batchId);

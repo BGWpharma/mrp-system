@@ -939,7 +939,7 @@ const EnhancedMixingPlan = ({
         <DialogTitle>
           Powiąż składnik z rezerwacją
           {selectedIngredient && (
-            <Typography variant="subtitle2" color="text.secondary">
+            <Typography component="div" variant="subtitle2" color="text.secondary">
               Składnik: {selectedIngredient.text}
             </Typography>
           )}
@@ -984,8 +984,10 @@ const EnhancedMixingPlan = ({
                 value={selectedReservation}
                 onChange={(event, newValue) => setSelectedReservation(newValue)}
                 getOptionLabel={(option) => `LOT: ${option.batchNumber} - ${option.availableQuantity} ${option.unit}`}
-                renderOption={(props, option) => (
-                  <Box component="li" {...props}>
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props;
+                  return (
+                    <Box component="li" key={key} {...otherProps}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {renderReservationChip(option)}
@@ -1024,7 +1026,8 @@ const EnhancedMixingPlan = ({
                       )}
                     </Box>
                   </Box>
-                )}
+                  );
+                }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -1174,7 +1177,7 @@ const EnhancedMixingPlan = ({
         <DialogTitle>
           Edytuj ilość składnika
           {editingIngredient && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography component="div" variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               {editingIngredient.text}
             </Typography>
           )}
