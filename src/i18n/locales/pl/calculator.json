@@ -24,7 +24,7 @@
   "mainIngredientLabel": "Główny składnik na mieszanie",
   "numberOfMixings": "Liczba mieszań",
   "mixingNumber": "Nr mieszania",
-  "volume": "Objętość",
+  "volume": "Waga składników",
   "piecesCount": "Liczba sztuk",
   "ingredient": "Składnik",
   "quantity": "Ilość",
@@ -33,12 +33,25 @@
 
   "kg": "kg",
   "pieces": "szt.",
+  "caps": "caps",
+  "capsulesPerPortion": "Liczba kapsułek na porcję",
+  "capsulesPerPortionHelper": "Podaj ile kapsułek będzie w jednej porcji produkcyjnej",
+  "portionNumber": "Nr porcji",
+  "capsulesCount": "Liczba kapsułek",
   "selectRecipeFirst": "Najpierw wybierz recepturę",
+  "mode": {
+    "title": "Tryb kalkulacji",
+    "pieces": "Standardowy (sztuki)",
+    "capsules": "Kapsułki",
+    "piecesDescription": "Standardowy tryb obliczania dla produktów w sztukach",
+    "capsulesDescription": "Specjalny tryb dla produktów w kapsułkach - uwzględnia kapsułki jako główny składnik"
+  },
   "summary": {
     "title": "Podsumowanie planu mieszań",
     "totalMixings": "Łącznie mieszań",
+    "totalPortions": "Łącznie porcji",
     "totalPieces": "Łącznie sztuk",
-    "totalWeight": "Łączna waga",
+    "totalWeight": "Łączna waga składników",
     "mainIngredientTotal": "Łącznie głównego składnika",
     "roundingTooltip": "Znak ~ oznacza wartość zaokrągloną (nie jest to liczba całkowita)"
   },
@@ -51,7 +64,7 @@
     "fetchRecipesFailed": "Nie udało się pobrać receptur",
     "fetchTasksFailed": "Nie udało się pobrać zadań produkcyjnych",
     "csv": {
-      "volume": "Objętość",
+      "volume": "Waga składników",
       "piecesCount": "Liczba sztuk",
       "productName": "Nazwa produktu", 
       "ingredient": "Składnik",
@@ -93,7 +106,7 @@
     "planSavedToTask": "Plan mieszań został zapisany jako checklista w zadaniu produkcyjnym"
   },
   "csv": {
-    "volume": "Objętość",
+    "volume": "Waga składników",
     "piecesCount": "Liczba sztuk",
     "productName": "Nazwa produktu",
     "ingredient": "Składnik",

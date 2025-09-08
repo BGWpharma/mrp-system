@@ -24,7 +24,7 @@
   "mainIngredientLabel": "Main ingredient per mixing",
   "numberOfMixings": "Number of mixings",
   "mixingNumber": "Mixing No.",
-  "volume": "Volume",
+  "volume": "Ingredients weight",
   "piecesCount": "Pieces count",
   "ingredient": "Ingredient",
   "quantity": "Quantity",
@@ -33,12 +33,25 @@
 
   "kg": "kg",
   "pieces": "pcs",
+  "caps": "caps",
+  "capsulesPerPortion": "Number of capsules per portion",
+  "capsulesPerPortionHelper": "Enter how many capsules will be in one production portion",
+  "portionNumber": "Portion No.",
+  "capsulesCount": "Capsules count",
   "selectRecipeFirst": "Please select recipe first",
+  "mode": {
+    "title": "Calculation Mode",
+    "pieces": "Standard (pieces)",
+    "capsules": "Capsules",
+    "piecesDescription": "Standard calculation mode for products in pieces",
+    "capsulesDescription": "Special mode for capsule products - considers capsules as main ingredient"
+  },
   "summary": {
     "title": "Mixing Plan Summary",
     "totalMixings": "Total mixings",
+    "totalPortions": "Total portions",
     "totalPieces": "Total pieces",
-    "totalWeight": "Total weight",
+    "totalWeight": "Total ingredients weight",
     "mainIngredientTotal": "Total main ingredient",
     "roundingTooltip": "The ~ symbol indicates a rounded value (not a whole number)"
   },
@@ -73,7 +86,7 @@
     "planSavedToTask": "Mixing plan saved as checklist in production task"
   },
   "csv": {
-    "volume": "Volume",
+    "volume": "Ingredients weight",
     "piecesCount": "Pieces count",
     "productName": "Product name",
     "ingredient": "Ingredient",

@@ -4275,7 +4275,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
               id: `mixing-${mixing.mixingNumber}-ingredient-${index}`,
               type: 'ingredient',
               text: ingredient.name,
-              details: `Ilość: ${ingredient.quantity.toFixed(4)} ${ingredient.unit}`,
+              details: `Ilość: ${ingredient.unit === 'caps' ? ingredient.quantity.toFixed(0) : ingredient.quantity.toFixed(4)} ${ingredient.unit}`,
               parentId: headerItem.id,
               completed: false,
               createdAt: new Date().toISOString(),
@@ -4381,7 +4381,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Zaktualizuj składnik
       const updatedIngredient = {
         ...ingredient,
-        details: `Ilość: ${parsedQuantity.toFixed(4)} ${unit}`,
+        details: `Ilość: ${unit === 'caps' ? parsedQuantity.toFixed(0) : parsedQuantity.toFixed(4)} ${unit}`,
         quantityValue: parsedQuantity, // Dodaj wartość liczbową dla łatwiejszej manipulacji
         updatedAt: new Date().toISOString(),
         updatedBy: userId
@@ -4433,7 +4433,7 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
 
       return {
         success: true,
-        message: `Zaktualizowano ilość składnika ${ingredient.text} na ${parsedQuantity.toFixed(4)} ${unit}`,
+        message: `Zaktualizowano ilość składnika ${ingredient.text} na ${unit === 'caps' ? parsedQuantity.toFixed(0) : parsedQuantity.toFixed(4)} ${unit}`,
         updatedIngredient: updatedIngredient
       };
 

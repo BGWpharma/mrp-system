@@ -24,7 +24,11 @@ import {
   IconButton,
   FormHelperText,
   Autocomplete,
-  InputAdornment
+  InputAdornment,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -52,6 +56,7 @@ const CalculatorPage = () => {
   const [mainIngredientQuantity, setMainIngredientQuantity] = useState(100);
   const [targetAmount, setTargetAmount] = useState(1000);
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
+  const [calculationMode, setCalculationMode] = useState('pieces'); // 'pieces' lub 'capsules'
   
   // Stany pomocnicze
   const [recipes, setRecipes] = useState([]);
@@ -183,6 +188,295 @@ const CalculatorPage = () => {
     }
   }, [selectedRecipeId, showError]);
   
+  // Funkcja pomocnicza do obliczania planu mieszań w standardowym trybie (sztuki)
+  const calculateMixingsStandardMode = (recipe, mainIngredient, mainIngredientQuantity, targetAmount) => {
+    const mixingPlan = [];
+    
+    // Oblicz współczynnik skalowania na podstawie głównego składnika
+    const mainIngredientOriginalQuantity = parseFloat(mainIngredient.quantity);
+    const scaleFactor = mainIngredientQuantity / mainIngredientOriginalQuantity;
+    
+    console.log(`[DEBUG] Oryginalana ilość głównego składnika w recepturze: ${mainIngredientOriginalQuantity} ${mainIngredient.unit}`);
+    console.log(`[DEBUG] Współczynnik skalowania: ${scaleFactor.toFixed(6)}`);
+    
+    // Oblicz ile sztuk można wyprodukować z jednego mieszania
+    const recipeYield = recipe.yield?.quantity || 1;
+    const piecesPerMixing = scaleFactor * recipeYield;
+    
+    console.log(`[DEBUG] Wydajność receptury: ${recipeYield} szt.`);
+    console.log(`[DEBUG] Sztuki z jednego mieszania: ${piecesPerMixing.toFixed(6)}`);
+    
+    // Oblicz liczbę mieszań potrzebnych do wyprodukowania docelowej ilości
+    const totalMixingsNeeded = targetAmount / piecesPerMixing;
+    const fullMixingsCount = Math.floor(totalMixingsNeeded);
+    
+    // Używamy precyzyjnej arytmetyki aby uniknąć błędów zmiennoprzecinkowych
+    // Obliczamy dokładną liczbę sztuk które pozostały
+    const piecesInFullMixings = fullMixingsCount * piecesPerMixing;
+    const remainingPieces = Math.round((targetAmount - piecesInFullMixings) * 1000000) / 1000000;
+    
+    console.log(`[DEBUG] Całkowita liczba mieszań potrzebnych: ${totalMixingsNeeded.toFixed(6)}`);
+    console.log(`[DEBUG] Liczba pełnych mieszań: ${fullMixingsCount}`);
+    console.log(`[DEBUG] Sztuki w pełnych mieszaniach: ${piecesInFullMixings.toFixed(6)}`);
+    console.log(`[DEBUG] Pozostałe sztuki: ${remainingPieces.toFixed(6)}`);
+    
+    // Dodanie pełnych mieszań
+    for (let i = 0; i < fullMixingsCount; i++) {
+      const ingredients = calculateIngredientsForBatch(piecesPerMixing, recipe, true);
+      const totalWeight = ingredients
+        .filter(ing => ing.unit === 'kg')
+        .reduce((sum, ing) => sum + ing.quantity, 0);
+        
+      mixingPlan.push({
+        mixingNumber: i + 1,
+        volumeToMix: totalWeight,
+        calculatedWeight: totalWeight,
+        piecesCount: piecesPerMixing,
+        recipeName: recipe.name,
+        mainIngredientName: mainIngredient.name,
+        mainIngredientQuantity: mainIngredientQuantity,
+        ingredients: ingredients
+      });
+    }
+    
+    // Dodanie mieszania dla pozostałych sztuk, jeśli istnieją
+    if (remainingPieces > 0.000001) {
+      const ingredients = calculateIngredientsForBatch(remainingPieces, recipe, true);
+      const totalWeight = ingredients
+        .filter(ing => ing.unit === 'kg')
+        .reduce((sum, ing) => sum + ing.quantity, 0);
+      
+      // Oblicz proporcjonalną ilość głównego składnika dla ostatniego mieszania
+      const lastMixingMainIngredientQuantity = (remainingPieces / piecesPerMixing) * mainIngredientQuantity;
+        
+      mixingPlan.push({
+        mixingNumber: fullMixingsCount + 1,
+        volumeToMix: totalWeight,
+        calculatedWeight: totalWeight,
+        piecesCount: remainingPieces,
+        recipeName: recipe.name,
+        mainIngredientName: mainIngredient.name,
+        mainIngredientQuantity: lastMixingMainIngredientQuantity,
+        ingredients: ingredients
+      });
+    }
+    
+    return {
+      mixingPlan,
+      fullMixingsCount,
+      remainingPieces,
+      piecesPerMixing,
+      totalMixings: remainingPieces > 0.000001 ? fullMixingsCount + 1 : fullMixingsCount
+    };
+  };
+  
+  // Funkcja pomocnicza do znajdowania głównego składnika w trybie kapsułek
+  const findMainIngredientForCapsules = (recipe) => {
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+      return null;
+    }
+
+    // Przefiltruj składniki, pomijając opakowania
+    const filteredIngredients = recipe.ingredients.filter(ingredient => {
+      const categoryFromIngredient = ingredient.category;
+      const categoryFromItem = ingredient.inventoryItem?.category;
+      const categoryDirectly = ingredient.inventoryItemCategory;
+      const effectiveCategory = categoryFromIngredient || categoryFromItem || categoryDirectly;
+      const isPackaging = effectiveCategory === 'Opakowania';
+      const isPackagingByName = ingredient.name && 
+        (ingredient.name.startsWith('PACK') || ingredient.name.includes('PACK'));
+      return !isPackaging && !isPackagingByName;
+    });
+
+    if (filteredIngredients.length === 0) {
+      return null;
+    }
+
+    // PRIORYTET 1: Znajdź składnik w jednostce "caps" (kapsułki)
+    let capsuleIngredient = null;
+    let maxCapsuleQuantity = 0;
+
+    filteredIngredients.forEach(ingredient => {
+      const quantity = parseFloat(ingredient.quantity || 0);
+      if (ingredient.unit === 'caps' && quantity > maxCapsuleQuantity) {
+        maxCapsuleQuantity = quantity;
+        capsuleIngredient = ingredient;
+      }
+    });
+
+    if (capsuleIngredient) {
+      console.log(`[DEBUG] Główny składnik (kapsułki): ${capsuleIngredient.name} (${maxCapsuleQuantity} caps)`);
+      return capsuleIngredient;
+    }
+
+    // PRIORYTET 2: Jeśli nie ma kapsułek, użyj standardowej logiki
+    console.log(`[DEBUG] Brak składników w jednostce 'caps', używam standardowej logiki`);
+    return findMainIngredient(recipe);
+  };
+
+  // Funkcja pomocnicza do przeliczania składników dla porcji kapsułek
+  const calculateIngredientsForCapsulePortion = (capsulesCount, recipe) => {
+    if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+      return [];
+    }
+    
+    console.log(`[DEBUG] calculateIngredientsForCapsulePortion: ${capsulesCount} kapsułek`);
+    
+    // Przefiltruj składniki, pomijając opakowania
+    const filteredIngredients = recipe.ingredients.filter(ingredient => {
+      const categoryFromIngredient = ingredient.category;
+      const categoryFromItem = ingredient.inventoryItem?.category;
+      const categoryDirectly = ingredient.inventoryItemCategory;
+      const effectiveCategory = categoryFromIngredient || categoryFromItem || categoryDirectly;
+      const isPackaging = effectiveCategory === 'Opakowania';
+      const isPackagingByName = ingredient.name && 
+        (ingredient.name.startsWith('PACK') || ingredient.name.includes('PACK'));
+      return !isPackaging && !isPackagingByName;
+    });
+    
+    // Znajdź główny składnik (kapsułki)
+    const mainCapsuleIngredient = filteredIngredients.find(ing => ing.unit === 'caps');
+    if (!mainCapsuleIngredient) {
+      console.warn('[DEBUG] Brak głównego składnika w kapsułkach');
+      return [];
+    }
+    
+    const originalCapsuleCount = parseFloat(mainCapsuleIngredient.quantity || 0);
+    if (originalCapsuleCount <= 0) {
+      console.warn('[DEBUG] Nieprawidłowa ilość kapsułek w recepturze');
+      return [];
+    }
+    
+    // Oblicz współczynnik skalowania na podstawie kapsułek
+    const scaleFactor = capsulesCount / originalCapsuleCount;
+    console.log(`[DEBUG] Współczynnik skalowania dla kapsułek: ${scaleFactor.toFixed(6)}`);
+    
+    // Przelicz wszystkie składniki
+    const calculatedIngredients = filteredIngredients.map(ingredient => {
+      const originalQuantity = parseFloat(ingredient.quantity || 0);
+      let scaledQuantity = originalQuantity * scaleFactor;
+      
+      // Konwertuj do kg dla spójności w wyświetlaniu wagi składników (bez kapsułek)
+      let weightInKg = 0;
+      if (ingredient.unit === 'kg') {
+        weightInKg = scaledQuantity;
+      } else if (ingredient.unit === 'g') {
+        weightInKg = scaledQuantity / 1000;
+      } else if (ingredient.unit === 'mg') {
+        weightInKg = scaledQuantity / 1000000;
+      } else if (ingredient.unit === 'caps') {
+        // Kapsułki to opakowanie - nie wliczamy ich do wagi składników do mieszania
+        weightInKg = 0;
+      }
+      
+      return {
+        ...ingredient,
+        quantity: scaledQuantity,
+        weightInKg: weightInKg,
+        originalQuantity: originalQuantity,
+        scaleFactor: scaleFactor
+      };
+    });
+    
+    console.log(`[DEBUG] Przeliczono ${calculatedIngredients.length} składników dla ${capsulesCount} kapsułek`);
+    return calculatedIngredients;
+  };
+
+  // Funkcja pomocnicza do obliczania planu mieszań w trybie kapsułek
+  const calculateMixingsCapsulesMode = (recipe, mainIngredient, capsulesPerPortion, targetAmount) => {
+    const mixingPlan = [];
+    
+    console.log(`[DEBUG] === TRYB KAPSUŁEK (PORCJE) ===`);
+    console.log(`[DEBUG] Receptura: ${recipe.name}`);
+    console.log(`[DEBUG] Główny składnik: ${mainIngredient.name} (${mainIngredient.quantity} ${mainIngredient.unit})`);
+    console.log(`[DEBUG] Kapsułek na porcję: ${capsulesPerPortion}`);
+    console.log(`[DEBUG] Docelowa ilość produktu: ${targetAmount} szt.`);
+    
+    // Sprawdź czy główny składnik to rzeczywiście kapsułki
+    if (mainIngredient.unit !== 'caps') {
+      console.warn(`[DEBUG] Główny składnik nie jest w jednostce 'caps', używam standardowej logiki`);
+      return calculateMixingsStandardMode(recipe, mainIngredient, capsulesPerPortion, targetAmount);
+    }
+    
+    // Pobierz wydajność receptury (ile produktów końcowych z jednej realizacji receptury)
+    const recipeYield = recipe.yield?.quantity || 1;
+    const originalCapsuleCount = parseFloat(mainIngredient.quantity || 0);
+    
+    console.log(`[DEBUG] Wydajność receptury: ${recipeYield} szt. produktu końcowego`);
+    console.log(`[DEBUG] Kapsułek w oryginalnej recepturze: ${originalCapsuleCount} caps`);
+    
+    // Oblicz ile kapsułek potrzeba na 1 sztukę produktu końcowego
+    const capsulesPerFinalProduct = originalCapsuleCount / recipeYield;
+    console.log(`[DEBUG] Kapsułek na 1 szt. produktu końcowego: ${capsulesPerFinalProduct} caps`);
+    
+    // Oblicz ile sztuk produktu końcowego powstanie z jednej porcji
+    const productsPerPortion = capsulesPerPortion / capsulesPerFinalProduct;
+    console.log(`[DEBUG] Produktów z jednej porcji: ${productsPerPortion} szt.`);
+    
+    // Oblicz liczbę porcji potrzebnych
+    const totalPortionsNeeded = targetAmount / productsPerPortion;
+    const fullPortionsCount = Math.floor(totalPortionsNeeded);
+    
+    // Oblicz pozostałe produkty
+    const productsInFullPortions = fullPortionsCount * productsPerPortion;
+    const remainingProducts = targetAmount - productsInFullPortions;
+    
+    console.log(`[DEBUG] Liczba pełnych porcji: ${fullPortionsCount}`);
+    console.log(`[DEBUG] Produkty w pełnych porcjach: ${productsInFullPortions}`);
+    console.log(`[DEBUG] Pozostałe produkty: ${remainingProducts}`);
+    
+    // Dodaj pełne porcje
+    for (let i = 0; i < fullPortionsCount; i++) {
+      const ingredients = calculateIngredientsForCapsulePortion(capsulesPerPortion, recipe);
+      const totalWeight = ingredients.reduce((sum, ing) => sum + (ing.weightInKg || 0), 0);
+      
+      console.log(`[DEBUG] Porcja ${i + 1}: całkowita waga składników = ${totalWeight.toFixed(4)} kg`);
+      
+      mixingPlan.push({
+        mixingNumber: i + 1,
+        volumeToMix: totalWeight,
+        calculatedWeight: totalWeight,
+        capsulesCount: capsulesPerPortion,
+        piecesCount: productsPerPortion,
+        recipeName: recipe.name,
+        mainIngredientName: mainIngredient.name,
+        mainIngredientQuantity: capsulesPerPortion,
+        ingredients: ingredients
+      });
+    }
+    
+    // Dodaj porcję dla pozostałych produktów, jeśli istnieją
+    if (remainingProducts > 0.000001) {
+      const remainingCapsules = remainingProducts * capsulesPerFinalProduct;
+      const ingredients = calculateIngredientsForCapsulePortion(remainingCapsules, recipe);
+      const totalWeight = ingredients.reduce((sum, ing) => sum + (ing.weightInKg || 0), 0);
+      
+      console.log(`[DEBUG] Ostatnia porcja: całkowita waga składników = ${totalWeight.toFixed(4)} kg`);
+      
+      mixingPlan.push({
+        mixingNumber: fullPortionsCount + 1,
+        volumeToMix: totalWeight,
+        calculatedWeight: totalWeight,
+        capsulesCount: remainingCapsules,
+        piecesCount: remainingProducts,
+        recipeName: recipe.name,
+        mainIngredientName: mainIngredient.name,
+        mainIngredientQuantity: remainingCapsules,
+        ingredients: ingredients
+      });
+    }
+    
+    console.log(`[DEBUG] Plan porcji dla kapsułek utworzony: ${mixingPlan.length} porcji`);
+    
+    return {
+      mixingPlan,
+      fullMixingsCount: fullPortionsCount,
+      remainingPieces: remainingProducts,
+      piecesPerMixing: productsPerPortion,
+      totalMixings: mixingPlan.length
+    };
+  };
+  
   // Funkcja do obliczania planu mieszań
   const calculateMixings = () => {
     if (!selectedRecipe) {
@@ -200,8 +494,10 @@ const CalculatorPage = () => {
       return;
     }
 
-    // Znajdź główny składnik w recepturze
-    const mainIngredient = findMainIngredient(selectedRecipe);
+    // Znajdź główny składnik w recepturze (różna logika dla kapsułek)
+    const mainIngredient = calculationMode === 'capsules' 
+      ? findMainIngredientForCapsules(selectedRecipe)
+      : findMainIngredient(selectedRecipe);
     if (!mainIngredient) {
       showError(t('calculator.errors.noMainIngredientFound'));
       return;
@@ -212,80 +508,24 @@ const CalculatorPage = () => {
       console.log(`[DEBUG] Główny składnik: ${mainIngredient.name} (${mainIngredient.quantity} ${mainIngredient.unit})`);
       console.log(`[DEBUG] Ilość głównego składnika na mieszanie: ${mainIngredientQuantity} ${mainIngredient.unit}`);
       console.log(`[DEBUG] Docelowa ilość: ${targetAmount} szt.`);
+      console.log(`[DEBUG] Tryb kalkulacji: ${calculationMode}`);
       
       let mixingPlan = [];
       
-      console.log(`[DEBUG] Tryb kalkulacji: Sztuki (jedyny dostępny tryb)`);
-      
-      // Logika oparta na ilości głównego składnika - tylko tryb sztuk
-      // Oblicz współczynnik skalowania na podstawie głównego składnika
-      const mainIngredientOriginalQuantity = parseFloat(mainIngredient.quantity);
-      const scaleFactor = mainIngredientQuantity / mainIngredientOriginalQuantity;
-      
-      console.log(`[DEBUG] Oryginalana ilość głównego składnika w recepturze: ${mainIngredientOriginalQuantity} ${mainIngredient.unit}`);
-      console.log(`[DEBUG] Współczynnik skalowania: ${scaleFactor.toFixed(6)}`);
-      
-      // Oblicz ile sztuk można wyprodukować z jednego mieszania
-      const recipeYield = selectedRecipe.yield?.quantity || 1;
-      const piecesPerMixing = scaleFactor * recipeYield;
-      
-      console.log(`[DEBUG] Wydajność receptury: ${recipeYield} szt.`);
-      console.log(`[DEBUG] Sztuki z jednego mieszania: ${piecesPerMixing.toFixed(6)}`);
-      
-      // Oblicz liczbę mieszań potrzebnych do wyprodukowania docelowej ilości
-      const totalMixingsNeeded = targetAmount / piecesPerMixing;
-      const fullMixingsCount = Math.floor(totalMixingsNeeded);
-      
-      // Używamy precyzyjnej arytmetyki aby uniknąć błędów zmiennoprzecinkowych
-      // Obliczamy dokładną liczbę sztuk które pozostały
-      const piecesInFullMixings = fullMixingsCount * piecesPerMixing;
-      const remainingPieces = Math.round((targetAmount - piecesInFullMixings) * 1000000) / 1000000; // Zaokrąglenie do 6 miejsc po przecinku
-      
-      console.log(`[DEBUG] Całkowita liczba mieszań potrzebnych: ${totalMixingsNeeded.toFixed(6)}`);
-      console.log(`[DEBUG] Liczba pełnych mieszań: ${fullMixingsCount}`);
-      console.log(`[DEBUG] Sztuki w pełnych mieszaniach: ${piecesInFullMixings.toFixed(6)}`);
-      console.log(`[DEBUG] Pozostałe sztuki: ${remainingPieces.toFixed(6)}`);
-      
-      // Dodanie pełnych mieszań
-      for (let i = 0; i < fullMixingsCount; i++) {
-        const ingredients = calculateIngredientsForBatch(piecesPerMixing, selectedRecipe, true);
-        const totalWeight = ingredients
-          .filter(ing => ing.unit === 'kg')
-          .reduce((sum, ing) => sum + ing.quantity, 0);
-          
-        mixingPlan.push({
-          mixingNumber: i + 1,
-          volumeToMix: totalWeight,
-          calculatedWeight: totalWeight,
-          piecesCount: piecesPerMixing,
-          recipeName: selectedRecipe.name,
-          mainIngredientName: mainIngredient.name,
-          mainIngredientQuantity: mainIngredientQuantity,
-          ingredients: ingredients
-        });
+      // Rozgałęzienie logiki w zależności od trybu kalkulacji
+      let calculationResult;
+      if (calculationMode === 'capsules') {
+        console.log(`[DEBUG] Tryb kapsułek`);
+        calculationResult = calculateMixingsCapsulesMode(selectedRecipe, mainIngredient, mainIngredientQuantity, targetAmount);
+      } else {
+        // Standardowy tryb (sztuki)
+        console.log(`[DEBUG] Tryb standardowy (sztuki)`);
+        calculationResult = calculateMixingsStandardMode(selectedRecipe, mainIngredient, mainIngredientQuantity, targetAmount);
       }
       
-      // Dodanie mieszania dla pozostałych sztuk, jeśli istnieją
-      if (remainingPieces > 0.000001) { // Precyzyjny próg
-        const ingredients = calculateIngredientsForBatch(remainingPieces, selectedRecipe, true);
-        const totalWeight = ingredients
-          .filter(ing => ing.unit === 'kg')
-          .reduce((sum, ing) => sum + ing.quantity, 0);
-        
-        // Oblicz proporcjonalną ilość głównego składnika dla ostatniego mieszania
-        const lastMixingMainIngredientQuantity = (remainingPieces / piecesPerMixing) * mainIngredientQuantity;
-          
-        mixingPlan.push({
-          mixingNumber: fullMixingsCount + 1,
-          volumeToMix: totalWeight,
-          calculatedWeight: totalWeight,
-          piecesCount: remainingPieces,
-          recipeName: selectedRecipe.name,
-          mainIngredientName: mainIngredient.name,
-          mainIngredientQuantity: lastMixingMainIngredientQuantity,
-          ingredients: ingredients
-        });
-      }
+      // Wyodrębnij wyniki z obliczeń
+      mixingPlan = calculationResult.mixingPlan;
+      const { fullMixingsCount, remainingPieces, piecesPerMixing, totalMixings } = calculationResult;
       
       // Ustawienie wyniku obliczenia
       setCalculationResult({
@@ -296,9 +536,10 @@ const CalculatorPage = () => {
         fullMixingsCount,
         remainingPieces,
         piecesPerMixing,
-        totalMixings: remainingPieces > 0.000001 ? fullMixingsCount + 1 : fullMixingsCount,
+        totalMixings,
         recipeName: selectedRecipe.name,
-        isProductPieces: true
+        isProductPieces: true,
+        calculationMode: calculationMode // Dodaj informację o trybie kalkulacji
       });
       
       // Walidacja i korekta sumy sztuk
@@ -334,12 +575,11 @@ const CalculatorPage = () => {
           return;
         }
         
+        // Sumuj wagę wszystkich składników do mieszania (bez kapsułek)
         const totalWeight = mixing.ingredients
-          .filter(ing => ing.unit === 'kg')
           .reduce((sum, ing) => {
-            // Upewniamy się, że wartość jest liczbą
-            const quantity = parseFloat(ing.quantity || 0);
-            return isNaN(quantity) ? sum : sum + quantity;
+            const weight = parseFloat(ing.weightInKg || 0);
+            return isNaN(weight) ? sum : sum + weight;
           }, 0);
         
         totalCalculatedWeight += totalWeight;
@@ -495,11 +735,25 @@ const CalculatorPage = () => {
       
       console.log(`Składnik: ${ingredient.name}, ilość oryginalna: ${originalQuantity}, współczynnik: ${scaleFactor}, ilość przeliczona: ${calculatedQuantity}`);
       
+      // Konwertuj do kg dla spójności w wyświetlaniu wagi składników (bez kapsułek)
+      let weightInKg = 0;
+      if (ingredient.unit === 'kg') {
+        weightInKg = calculatedQuantity;
+      } else if (ingredient.unit === 'g') {
+        weightInKg = calculatedQuantity / 1000;
+      } else if (ingredient.unit === 'mg') {
+        weightInKg = calculatedQuantity / 1000000;
+      } else if (ingredient.unit === 'caps') {
+        // Kapsułki to opakowanie - nie wliczamy ich do wagi składników do mieszania
+        weightInKg = 0;
+      }
+
       return {
         id: ingredient.id,
         name: ingredient.name,
         quantity: calculatedQuantity, // Zachowujemy pełną precyzję
-        unit: ingredient.unit
+        unit: ingredient.unit,
+        weightInKg: weightInKg
       };
     });
     
@@ -577,7 +831,9 @@ const CalculatorPage = () => {
             // Formatujemy liczby, sprawdzając czy nie są NaN
             let formattedQuantity;
             if (typeof ingredient.quantity === 'number' && !isNaN(ingredient.quantity)) {
-              formattedQuantity = `="${ingredient.quantity.toFixed(4)}"`; 
+              formattedQuantity = ingredient.unit === 'caps' 
+                ? `="${ingredient.quantity.toFixed(0)}"` 
+                : `="${ingredient.quantity.toFixed(4)}"`; 
               
               // Dodaj wartość do sumy dla danego surowca
               if (!ingredientTotals[ingredient.name]) {
@@ -611,7 +867,9 @@ const CalculatorPage = () => {
         csvContent += `"${t('calculator.csv.totalsPerIngredient')}"${';'.repeat(8)}\n`;
         Object.keys(ingredientTotals).forEach(ingredientName => {
           const ingredientData = ingredientTotals[ingredientName];
-          const formattedQuantity = `="${ingredientData.quantity.toFixed(4)}"`;
+          const formattedQuantity = ingredientData.unit === 'caps' 
+            ? `="${ingredientData.quantity.toFixed(0)}"` 
+            : `="${ingredientData.quantity.toFixed(4)}"`;
           
           csvContent += `;;;${ingredientName};${formattedQuantity};${ingredientData.unit};;;\n`;
         });
@@ -665,6 +923,7 @@ const CalculatorPage = () => {
     setSelectedRecipeId('');
     setSelectedTaskId('');
     setMoSearchQuery('');
+    setCalculationMode('pieces'); // Reset do domyślnego trybu
     setCalculationResult(null);
     setMixings([]);
     showInfo(t('calculator.success.calculatorReset'));
@@ -776,28 +1035,71 @@ const CalculatorPage = () => {
         
         <Divider sx={{ my: 3 }} />
         
+        {/* Wybór trybu kalkulacji */}
+        <Box sx={{ mb: 3 }}>
+          <FormControl component="fieldset">
+            <FormLabel component="legend">{t('calculator.mode.title')}</FormLabel>
+            <RadioGroup
+              row
+              value={calculationMode}
+              onChange={(e) => setCalculationMode(e.target.value)}
+              sx={{ mt: 1 }}
+            >
+              <FormControlLabel 
+                value="pieces" 
+                control={<Radio />} 
+                label={t('calculator.mode.pieces')} 
+              />
+              <FormControlLabel 
+                value="capsules" 
+                control={<Radio />} 
+                label={t('calculator.mode.capsules')} 
+              />
+            </RadioGroup>
+            <FormHelperText sx={{ mt: 1 }}>
+              {calculationMode === 'pieces' ? t('calculator.mode.piecesDescription') : t('calculator.mode.capsulesDescription')}
+            </FormHelperText>
+          </FormControl>
+        </Box>
+        
+        <Divider sx={{ my: 3 }} />
+        
         <Grid container spacing={3}>
-          {/* Wybór ilości głównego składnika na mieszanie */}
+           {/* Wybór ilości głównego składnika na mieszanie/porcję */}
           <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               type="number"
-              label={t('calculator.mainIngredientQuantity')}
+              label={
+                calculationMode === 'capsules' 
+                  ? t('calculator.capsulesPerPortion')
+                  : t('calculator.mainIngredientQuantity')
+              }
               value={mainIngredientQuantity}
               onChange={(e) => setMainIngredientQuantity(Number(e.target.value))}
               InputProps={{
                 endAdornment: (
                   <Typography variant="caption" color="text.secondary">
-                    {selectedRecipe && findMainIngredient(selectedRecipe) 
-                      ? findMainIngredient(selectedRecipe).unit 
-                      : 'kg'}
+                    {calculationMode === 'capsules' 
+                      ? 'caps'
+                      : (selectedRecipe && findMainIngredient(selectedRecipe) 
+                          ? findMainIngredient(selectedRecipe).unit 
+                          : 'kg')
+                    }
                   </Typography>
-                )
+                ),
+                inputProps: calculationMode === 'capsules' 
+                  ? { min: "1", step: "1" }
+                  : { min: "0" }
               }}
               variant="outlined"
-              helperText={selectedRecipe && findMainIngredient(selectedRecipe) 
-                ? `Główny składnik: ${findMainIngredient(selectedRecipe).name}`
-                : t('calculator.selectRecipeFirst')}
+              helperText={
+                calculationMode === 'capsules'
+                  ? t('calculator.capsulesPerPortionHelper')
+                  : (selectedRecipe && findMainIngredient(selectedRecipe) 
+                      ? `Główny składnik: ${findMainIngredient(selectedRecipe).name}`
+                      : t('calculator.selectRecipeFirst'))
+              }
             />
           </Grid>
           
@@ -1067,9 +1369,12 @@ const CalculatorPage = () => {
                     color: theme => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.87)' : 'rgba(0, 0, 0, 0.87)'
                   }
                 }}>
-                  <TableCell>{t('calculator.mixingNumber')}</TableCell>
+                   <TableCell>
+                     {calculationMode === 'capsules' ? t('calculator.portionNumber') : t('calculator.mixingNumber')}
+                   </TableCell>
                   <TableCell>{t('calculator.volume')}</TableCell>
                   <TableCell>{t('calculator.piecesCount')}</TableCell>
+                  {calculationMode === 'capsules' && <TableCell>{t('calculator.capsulesCount')}</TableCell>}
                   <TableCell>{t('calculator.ingredient')}</TableCell>
                   <TableCell align="right">{t('calculator.quantity')}</TableCell>
                   <TableCell>{t('calculator.unit')}</TableCell>
@@ -1098,21 +1403,28 @@ const CalculatorPage = () => {
                               ({t('calculator.ingredientsSum')}: {mixing.totalIngredientsWeight ? mixing.totalIngredientsWeight.toFixed(4) : mixing.volumeToMix.toFixed(4)} {t('calculator.kg')})
                             </Typography>
                           </TableCell>
-                          <TableCell rowSpan={mixing.ingredients.length}>
-                            <Tooltip title={t('calculator.summary.roundingTooltip')} arrow>
-                              <span style={{ cursor: 'help' }}>
-                                {(() => {
-                                  const pieces = mixing.piecesCount || 0;
-                                  const isRounded = Math.abs(pieces - Math.round(pieces)) > 0.001;
-                                  return `${isRounded ? '~' : ''}${pieces.toFixed(3)}`;
-                                })()}
-                              </span>
-                            </Tooltip>
-                          </TableCell>
+                           <TableCell rowSpan={mixing.ingredients.length}>
+                             <Tooltip title={t('calculator.summary.roundingTooltip')} arrow>
+                               <span style={{ cursor: 'help' }}>
+                                 {(() => {
+                                   const pieces = mixing.piecesCount || 0;
+                                   const isRounded = Math.abs(pieces - Math.round(pieces)) > 0.001;
+                                   return `${isRounded ? '~' : ''}${pieces.toFixed(3)}`;
+                                 })()}
+                               </span>
+                             </Tooltip>
+                           </TableCell>
+                           {calculationMode === 'capsules' && (
+                             <TableCell rowSpan={mixing.ingredients.length}>
+                               {Math.round(mixing.capsulesCount || 0)} caps
+                             </TableCell>
+                           )}
                         </>
                       )}
                       <TableCell>{ingredient.name}</TableCell>
-                      <TableCell align="right">{ingredient.quantity.toFixed(4)}</TableCell>
+                      <TableCell align="right">
+                        {ingredient.unit === 'caps' ? ingredient.quantity.toFixed(0) : ingredient.quantity.toFixed(4)}
+                      </TableCell>
                       <TableCell>{ingredient.unit}</TableCell>
                     </TableRow>
                   ))
@@ -1133,9 +1445,9 @@ const CalculatorPage = () => {
             </Typography>
             <Grid container spacing={2}>
               <Grid item xs={6} md={3}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('calculator.summary.totalMixings')}
-                </Typography>
+                 <Typography variant="body2" color="text.secondary">
+                   {calculationMode === 'capsules' ? t('calculator.summary.totalPortions') : t('calculator.summary.totalMixings')}
+                 </Typography>
                 <Typography variant="h6">
                   {calculationResult.totalMixings}
                 </Typography>
