@@ -20,7 +20,6 @@ import {
   TableHead,
   TableRow,
   Divider,
-  Tooltip,
   IconButton,
   FormHelperText,
   Autocomplete,
@@ -28,7 +27,10 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  FormLabel
+  FormLabel,
+  ToggleButtonGroup,
+  ToggleButton,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,12 +42,15 @@ import {
   Assignment as AssignmentIcon,
   FileDownload as FileDownloadIcon,
   SaveAlt as SaveAltIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  ViewModule as ViewModuleIcon,
+  Medication as MedicationIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
+import { palettes, gradients } from '../../styles/colorConfig';
 
 const CalculatorPage = () => {
   const { showSuccess, showError, showInfo } = useNotification();
@@ -1037,36 +1042,139 @@ const CalculatorPage = () => {
         
         {/* Wybór trybu kalkulacji */}
         <Box sx={{ mb: 3 }}>
-          <FormControl component="fieldset">
-            <FormLabel component="legend">{t('calculator.mode.title')}</FormLabel>
-            <RadioGroup
-              row
+          <Typography variant="body2" sx={{ mb: 2, fontWeight: 600, color: 'text.primary' }}>
+            {t('calculator.mode.title')}
+          </Typography>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: { xs: 'flex-start', md: 'center' }, 
+            gap: 2, 
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap' 
+          }}>
+            <ToggleButtonGroup
               value={calculationMode}
-              onChange={(e) => setCalculationMode(e.target.value)}
-              sx={{ mt: 1 }}
+              exclusive
+              onChange={(e, newMode) => {
+                if (newMode !== null) {
+                  setCalculationMode(newMode);
+                }
+              }}
+              size="small"
+              sx={{
+                height: { xs: 36, md: 40 },
+                '& .MuiToggleButton-root': {
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '8px !important',
+                  px: { xs: 2, md: 2.5 },
+                  py: { xs: 0.8, md: 1 },
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  color: 'text.secondary',
+                  backgroundColor: 'background.paper',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                    borderColor: 'primary.light',
+                    transform: 'translateY(-1px)',
+                  },
+                  '&.Mui-selected': {
+                    backgroundColor: 'transparent',
+                    color: 'white',
+                    '&[value="pieces"]': {
+                      background: gradients.primary,
+                      borderColor: palettes.primary.main,
+                      '&:hover': {
+                        background: gradients.primary,
+                        boxShadow: `0 4px 12px ${palettes.primary.main}40`,
+                      }
+                    },
+                    '&[value="capsules"]': {
+                      background: gradients.warning,
+                      borderColor: palettes.warning.main,
+                      '&:hover': {
+                        background: gradients.warning,
+                        boxShadow: `0 4px 12px ${palettes.warning.main}40`,
+                      }
+                    },
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                    }
+                  },
+                  '&:not(:first-of-type)': {
+                    marginLeft: '8px'
+                  }
+                }
+              }}
             >
-              <FormControlLabel 
-                value="pieces" 
-                control={<Radio />} 
-                label={t('calculator.mode.pieces')} 
-              />
-              <FormControlLabel 
-                value="capsules" 
-                control={<Radio />} 
-                label={t('calculator.mode.capsules')} 
-              />
-            </RadioGroup>
-            <FormHelperText sx={{ mt: 1 }}>
-              {calculationMode === 'pieces' ? t('calculator.mode.piecesDescription') : t('calculator.mode.capsulesDescription')}
-            </FormHelperText>
-          </FormControl>
+              <ToggleButton value="pieces" sx={{ minWidth: { xs: 100, md: 120 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1 } }}>
+                  <ViewModuleIcon sx={{ fontSize: { xs: 16, md: 18 } }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'inherit', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                    {t('calculator.mode.pieces')}
+                  </Typography>
+                </Box>
+              </ToggleButton>
+              
+              <ToggleButton value="capsules" sx={{ minWidth: { xs: 100, md: 120 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1 } }}>
+                  <MedicationIcon sx={{ fontSize: { xs: 16, md: 18 } }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'inherit', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+                    {t('calculator.mode.capsules')}
+                  </Typography>
+                </Box>
+              </ToggleButton>
+            </ToggleButtonGroup>
+            
+            <Typography variant="caption" sx={{ 
+              color: 'text.secondary',
+              maxWidth: 400,
+              lineHeight: 1.4
+            }}>
+              {calculationMode === 'pieces' 
+                ? t('calculator.mode.piecesDescription') 
+                : t('calculator.mode.capsulesDescription')
+              }
+            </Typography>
+          </Box>
         </Box>
         
         <Divider sx={{ my: 3 }} />
         
+        {/* Pierwszy rząd - wybór receptury */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12}>
+            <FormControl fullWidth>
+              <InputLabel id="recipe-select-label">{t('calculator.selectRecipe')}</InputLabel>
+              <Select
+                labelId="recipe-select-label"
+                value={selectedRecipeId}
+                onChange={(e) => setSelectedRecipeId(e.target.value)}
+                label={t('calculator.selectRecipe')}
+                disabled={loading}
+              >
+                <MenuItem value="">
+                  <em>{t('calculator.selectRecipePlaceholder')}</em>
+                </MenuItem>
+                {recipes.map((recipe) => (
+                  <MenuItem key={recipe.id} value={recipe.id}>
+                    {recipe.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Najpierw wybierz recepturę
+              </FormHelperText>
+            </FormControl>
+          </Grid>
+        </Grid>
+
+        {/* Drugi rząd - parametry kalkulacji */}
         <Grid container spacing={3}>
-           {/* Wybór ilości głównego składnika na mieszanie/porcję */}
-          <Grid item xs={12} md={4}>
+          {/* Ilość głównego składnika na mieszanie/porcję */}
+          <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
               type="number"
@@ -1103,8 +1211,8 @@ const CalculatorPage = () => {
             />
           </Grid>
           
-          {/* Podanie docelowej ilości produktu */}
-          <Grid item xs={12} md={4}>
+          {/* Docelowa ilość produktu */}
+          <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
               type="number"
@@ -1122,29 +1230,10 @@ const CalculatorPage = () => {
               helperText={t('calculator.piecesOnlyMode')}
             />
           </Grid>
-          
-          {/* Wybór receptury */}
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel id="recipe-select-label">{t('calculator.selectRecipe')}</InputLabel>
-              <Select
-                labelId="recipe-select-label"
-                value={selectedRecipeId}
-                onChange={(e) => setSelectedRecipeId(e.target.value)}
-                label={t('calculator.selectRecipe')}
-                disabled={loading}
-              >
-                <MenuItem value="">
-                  <em>{t('calculator.selectRecipePlaceholder')}</em>
-                </MenuItem>
-                {recipes.map((recipe) => (
-                  <MenuItem key={recipe.id} value={recipe.id}>
-                    {recipe.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+        </Grid>
+
+        {/* Trzeci rząd - wybór zadania produkcyjnego (opcjonalny) */}
+        <Grid container spacing={3} sx={{ mt: 1 }}>
           
           {/* Wybór zadania produkcyjnego (MO) */}
           <Grid item xs={12} md={6}>
@@ -1219,53 +1308,53 @@ const CalculatorPage = () => {
             />
           </Grid>
           
-          {/* Przyciski akcji */}
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={calculateMixings}
-                disabled={loading || !selectedRecipeId || mainIngredientQuantity <= 0 || targetAmount <= 0}
-                startIcon={<CalculateIcon />}
-              >
-                {t('calculator.calculate')}
-              </Button>
-              
-              {mixings.length > 0 && (
-                <Button
-                  variant="outlined"
-                  color="success"
-                  onClick={generateCSV}
-                  startIcon={<FileDownloadIcon />}
-                >
-                  {t('calculator.exportCsv')}
-                </Button>
-              )}
-              
-              {mixings.length > 0 && selectedTaskId && (
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  onClick={saveMixingPlanToTask}
-                  startIcon={<SaveAltIcon />}
-                  disabled={loading}
-                >
-                  {t('calculator.saveToPlan')}
-                </Button>
-              )}
-              
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={resetCalculator}
-                startIcon={<ResetIcon />}
-              >
-                {t('calculator.reset')}
-              </Button>
-            </Box>
-          </Grid>
         </Grid>
+
+        {/* Sekcja przycisków akcji */}
+        <Box sx={{ display: 'flex', gap: 2, mt: 4, flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={calculateMixings}
+            disabled={loading || !selectedRecipeId || mainIngredientQuantity <= 0 || targetAmount <= 0}
+            startIcon={<CalculateIcon />}
+            size="large"
+          >
+            {t('calculator.calculate')}
+          </Button>
+          
+          {mixings.length > 0 && (
+            <Button
+              variant="outlined"
+              color="success"
+              onClick={generateCSV}
+              startIcon={<FileDownloadIcon />}
+            >
+              {t('calculator.exportCsv')}
+            </Button>
+          )}
+          
+          {mixings.length > 0 && selectedTaskId && (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={saveMixingPlanToTask}
+              startIcon={<SaveAltIcon />}
+              disabled={loading}
+            >
+              {t('calculator.saveToPlan')}
+            </Button>
+          )}
+          
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={resetCalculator}
+            startIcon={<ResetIcon />}
+          >
+            {t('calculator.reset')}
+          </Button>
+        </Box>
       </Paper>
       
       {/* Wyświetlanie wyników obliczeń */}
