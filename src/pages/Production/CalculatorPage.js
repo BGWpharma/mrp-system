@@ -1373,6 +1373,21 @@ const CalculatorPage = () => {
               {t('calculator.exportToCsv')}
             </Button>
           </Box>
+
+          {/* Ostrzeżenie o przekroczeniu 200kg w standardowym trybie */}
+          {calculationMode === 'pieces' && mixings.some(mixing => {
+            const weight = mixing.totalIngredientsWeight || mixing.volumeToMix;
+            return weight > 200;
+          }) && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                ⚠️ Uwaga: Niektóre mieszania przekraczają 200kg
+              </Typography>
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                Mieszania powyżej 200kg są oznaczone czerwonym kolorem w tabeli. Sprawdź pojemność mieszalnika.
+              </Typography>
+            </Alert>
+          )}
           
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={6} md={3}>
@@ -1484,13 +1499,38 @@ const CalculatorPage = () => {
                             {mixing.mixingNumber}
                           </TableCell>
                           <TableCell rowSpan={mixing.ingredients.length}>
-                            {mixing.volumeToMix.toFixed(4)} {t('calculator.kg')}
-                            {/* Dodajemy informację o rzeczywistej wadze składników */}
-                            <Typography variant="caption" display="block" color={theme => 
-                              theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'
-                            }>
-                              ({t('calculator.ingredientsSum')}: {mixing.totalIngredientsWeight ? mixing.totalIngredientsWeight.toFixed(4) : mixing.volumeToMix.toFixed(4)} {t('calculator.kg')})
-                            </Typography>
+                            {(() => {
+                              const weight = mixing.totalIngredientsWeight || mixing.volumeToMix;
+                              const isOverLimit = calculationMode === 'pieces' && weight > 200;
+                              return (
+                                <Box>
+                                  <Typography sx={{ 
+                                    color: isOverLimit ? 'error.main' : 'inherit',
+                                    fontWeight: isOverLimit ? 'bold' : 'normal'
+                                  }}>
+                                    {mixing.volumeToMix.toFixed(4)} {t('calculator.kg')}
+                                  </Typography>
+                                  
+                                  {/* Dodajemy informację o rzeczywistej wadze składników */}
+                                  <Typography variant="caption" display="block" color={theme => 
+                                    theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'text.secondary'
+                                  }>
+                                    ({t('calculator.ingredientsSum')}: {weight.toFixed(4)} {t('calculator.kg')})
+                                  </Typography>
+                                  
+                                  {/* Ostrzeżenie dla mieszań powyżej 200kg */}
+                                  {isOverLimit && (
+                                    <Typography variant="caption" display="block" sx={{ 
+                                      color: 'error.main',
+                                      fontWeight: 'bold',
+                                      mt: 0.5
+                                    }}>
+                                      ⚠️ Przekroczono 200kg!
+                                    </Typography>
+                                  )}
+                                </Box>
+                              );
+                            })()}
                           </TableCell>
                            <TableCell rowSpan={mixing.ingredients.length}>
                              <Tooltip title={t('calculator.summary.roundingTooltip')} arrow>
