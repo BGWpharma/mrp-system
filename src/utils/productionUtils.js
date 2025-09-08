@@ -63,11 +63,10 @@ export const calculateMaterialReservationStatus = (task) => {
     };
   }
 
-  let totalRequired = 0;
-  let totalReservedAndConsumed = 0;
+  let hasAnyUnreservedMaterial = false;
   let hasAnyReservationOrConsumption = false;
 
-  // Oblicz dla każdego materiału
+  // Oblicz dla każdego materiału osobno
   task.materials.forEach(material => {
     const materialId = material.inventoryItemId || material.id;
     if (!materialId) return;
@@ -83,11 +82,15 @@ export const calculateMaterialReservationStatus = (task) => {
     
     const materialTotalCovered = consumedQuantity + reservedQuantity;
 
-    totalRequired += requiredQuantity;
-    totalReservedAndConsumed += Math.min(materialTotalCovered, requiredQuantity); // Nie przekraczamy wymaganej ilości
-
     if (materialTotalCovered > 0) {
       hasAnyReservationOrConsumption = true;
+    }
+
+    // KLUCZOWA ZMIANA: sprawdź pokrycie dla każdego materiału osobno
+    // Wymagamy pełnego pokrycia dla każdego materiału, nie łącznego wskaźnika
+    const materialCoverageRatio = requiredQuantity > 0 ? materialTotalCovered / requiredQuantity : 1;
+    if (materialCoverageRatio < 0.99) {  // materiał nie ma pełnego pokrycia (99% tolerancja dla błędów zaokrąglenia)
+      hasAnyUnreservedMaterial = true;
     }
   });
 
@@ -100,16 +103,8 @@ export const calculateMaterialReservationStatus = (task) => {
     };
   }
 
-  // Sprawdź pokrycie
-  const coverageRatio = totalRequired > 0 ? totalReservedAndConsumed / totalRequired : 0;
-
-  if (coverageRatio >= 0.99) { // 99% pokrycia lub więcej (uwzględniając błędy zaokrąglenia)
-    return {
-      status: 'fully_reserved',
-      label: 'Zarezerwowane',
-      color: 'success'
-    };
-  } else if (coverageRatio > 0) {
+  // Sprawdź czy wszystkie materiały mają pełne pokrycie
+  if (hasAnyUnreservedMaterial) {
     return {
       status: 'partially_reserved',
       label: 'Cz. zarezerwowane',
@@ -117,9 +112,9 @@ export const calculateMaterialReservationStatus = (task) => {
     };
   } else {
     return {
-      status: 'not_reserved',
-      label: 'Niezarezerwowane',
-      color: 'error'
+      status: 'fully_reserved',
+      label: 'Zarezerwowane',
+      color: 'success'
     };
   }
 };
