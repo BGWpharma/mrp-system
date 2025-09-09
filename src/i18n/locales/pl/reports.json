@@ -26,8 +26,8 @@
         "thisMonth": "Bieżący miesiąc",
         "custom": "Niestandardowy"
       },
-      "startDate": "Data początkowa",
-      "endDate": "Data końcowa",
+      "startDate": "Data zamówienia od",
+      "endDate": "Data zamówienia do",
       "customer": {
         "label": "Klient",
         "all": "Wszyscy klienci"

@@ -150,7 +150,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { pl } from 'date-fns/locale';
+import { pl, enUS } from 'date-fns/locale';
 import { calculateMaterialReservationStatus, getReservationStatusColors, getConsumedQuantityForMaterial, getReservedQuantityForMaterial, isConsumptionExceedingIssued, calculateConsumptionExcess } from '../../utils/productionUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
 import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
@@ -165,7 +165,7 @@ const MaterialsAndCostsTab = lazy(() => import('../../components/production/Mate
 const BasicDataTab = lazy(() => import('../../components/production/BasicDataTab'));
 
 const TaskDetailsPage = () => {
-  const { t } = useTranslation('taskDetails');
+  const { t, currentLanguage } = useTranslation('taskDetails');
   const { id } = useParams();
   const navigate = useNavigate();
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
@@ -8332,7 +8332,7 @@ const TaskDetailsPage = () => {
                 </Alert>
               )}
 
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                 <Box sx={{ my: 2 }}>
                   <DateTimePicker
                     label="Data ważności gotowego produktu *"

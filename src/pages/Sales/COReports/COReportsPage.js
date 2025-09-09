@@ -1280,7 +1280,7 @@ const COReportsPage = () => {
             </Grid>
             
             <Grid item xs={12} md={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                 <DatePicker
                   label={t('coReports.filters.startDate')}
                   value={startDate}
@@ -1294,7 +1294,7 @@ const COReportsPage = () => {
             </Grid>
             
             <Grid item xs={12} md={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                 <DatePicker
                   label={t('coReports.filters.endDate')}
                   value={endDate}

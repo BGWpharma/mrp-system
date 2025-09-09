@@ -26,8 +26,8 @@
         "thisMonth": "This month",
         "custom": "Custom"
       },
-      "startDate": "Start date",
-      "endDate": "End date",
+      "startDate": "Order date from",
+      "endDate": "Order date to",
       "customer": {
         "label": "Customer",
         "all": "All customers"

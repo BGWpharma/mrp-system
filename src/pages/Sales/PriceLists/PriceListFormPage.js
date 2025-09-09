@@ -17,7 +17,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import pl from 'date-fns/locale/pl';
+import { pl, enUS } from 'date-fns/locale';
 
 import { 
   getPriceListById, 
@@ -47,7 +47,7 @@ const PriceListFormPage = () => {
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   
   useEffect(() => {
     async function loadData() {
@@ -220,7 +220,7 @@ const PriceListFormPage = () => {
               </Grid>
               
               <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                   <DatePicker
                     label={t('priceLists.form.validFrom')}
                     value={formData.validFrom}
@@ -237,7 +237,7 @@ const PriceListFormPage = () => {
               </Grid>
               
               <Grid item xs={12} md={6}>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                   <DatePicker
                     label={t('priceLists.form.validTo')}
                     value={formData.validTo}

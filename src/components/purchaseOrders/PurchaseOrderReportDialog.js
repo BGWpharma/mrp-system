@@ -15,14 +15,14 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { pl } from 'date-fns/locale';
+import { pl, enUS } from 'date-fns/locale';
 import { subYears, format } from 'date-fns';
 import { getAllInventoryItems } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   const { showSuccess, showError } = useNotification();
   
   const [loading, setLoading] = useState(false);
@@ -99,7 +99,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>
           Raport Purchase Orders

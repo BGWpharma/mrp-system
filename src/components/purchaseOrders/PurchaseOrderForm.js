@@ -50,7 +50,7 @@ import {
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
-import { pl } from 'date-fns/locale';
+import { pl, enUS } from 'date-fns/locale';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { 
@@ -81,7 +81,7 @@ import PurchaseOrderCategorizedFileUpload from './PurchaseOrderCategorizedFileUp
 import SavingOverlay from '../common/SavingOverlay';
 
 const PurchaseOrderForm = ({ orderId }) => {
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
   const { poId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -2561,7 +2561,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             
             {/* Data zamówienia */}
             <Grid item xs={12} md={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                 <DatePicker
                   label={t('purchaseOrders.form.orderDate')}
                   value={(() => {
@@ -2601,7 +2601,7 @@ const PurchaseOrderForm = ({ orderId }) => {
             
             {/* Planowana data dostawy */}
             <Grid item xs={12} md={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                 <DatePicker
                   label={t('purchaseOrders.form.expectedDeliveryDate')}
                   value={(() => {
@@ -2876,7 +2876,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                     <Typography variant="caption" display="block" gutterBottom>
                                       Data faktury
                                     </Typography>
-                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                                       <DatePicker
                                         value={(() => {
                                           if (!cost.invoiceDate) return null;
@@ -3364,7 +3364,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Data faktury
                               </Typography>
-                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                                 <DatePicker
                                   value={(() => {
                                     if (!item.invoiceDate) return null;
@@ -3447,7 +3447,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Planowana data dostawy
                               </Typography>
-                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                                 <DatePicker
                                   value={(() => {
                                     if (!item.plannedDeliveryDate) return null;
@@ -3500,7 +3500,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                               <Typography variant="caption" display="block" gutterBottom>
                                 Rzeczywista data dostawy
                               </Typography>
-                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                                 <DatePicker
                                   value={(() => {
                                     if (!item.actualDeliveryDate) return null;
@@ -3554,7 +3554,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                                 {t('purchaseOrders.form.orderItems.expiryDate')}
                               </Typography>
                               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
                                   <DatePicker
                                     value={(() => {
                                       if (!item.expiryDate || item.noExpiryDate) return null;
