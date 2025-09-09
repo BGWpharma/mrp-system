@@ -17,7 +17,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase/config';
-import { getAllWarehouses } from './inventoryService';
+import { getAllWarehouses } from './inventory';
 import { preciseSubtract, preciseAdd, fixFloatingPointPrecision } from '../utils/mathUtils';
 const INGREDIENT_LINKS_COLLECTION = 'ingredientReservationLinks';
 

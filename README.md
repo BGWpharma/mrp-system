@@ -115,9 +115,20 @@ src/
 |
 |-- services/               # Usługi (komunikacja z API)
 |   |-- firebase/           # Konfiguracja Firebase
+|   |-- inventory/          # Zmodularyzowany system magazynowy (refaktoryzacja z inventoryService.js)
+|   |   |-- config/         # Konfiguracja i stałe Firebase
+|   |   |-- utils/          # Funkcje pomocnicze i walidacja
+|   |   |-- warehouseService.js       # Zarządzanie magazynami
+|   |   |-- inventoryItemsService.js  # CRUD pozycji magazynowych
+|   |   |-- batchService.js           # Zarządzanie partiami/LOT
+|   |   |-- inventoryOperationsService.js # Przyjęcia/wydania (FIFO/FEFO)
+|   |   |-- reservationService.js     # System rezerwacji i bookowania
+|   |   |-- transactionService.js     # Historia zmian i analityka
+|   |   |-- stocktakingService.js     # Inwentaryzacja (spis z natury)
+|   |   |-- supplierPriceService.js   # Zarządzanie cenami dostawców
+|   |   `-- index.js        # Główny punkt eksportu wszystkich funkcji
 |   |-- recipeService.js    # Usługi zarządzania recepturami
 |   |-- productionService.js # Usługi planowania produkcji
-|   |-- inventoryService.js # Usługi zarządzania magazynem
 |   |-- qualityService.js   # Usługi kontroli jakości
 |
 |-- utils/                  # Funkcje pomocnicze

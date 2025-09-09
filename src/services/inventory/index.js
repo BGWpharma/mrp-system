@@ -5,7 +5,7 @@
  * 
  * Główny punkt wejścia dla kompletnego systemu zarządzania magazynem.
  * Ten moduł stanowi rezultat kompleksowej refaktoryzacji oryginalnego
- * pliku inventoryService.js (7,557 linii) w 9 dedykowanych modułów.
+ * pliku inventoryService.js (7,481 linii) w 9 dedykowanych modułów.
  * 
  * 📦 ARCHITEKTURA MODUŁOWA:
  * ├── config/          - Konfiguracja Firebase, stałe systemowe
