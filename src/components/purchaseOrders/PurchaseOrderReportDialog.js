@@ -6,21 +6,18 @@ import {
   DialogActions,
   Button,
   TextField,
-  MenuItem,
   Box,
-  FormControl,
-  InputLabel,
-  Select,
   CircularProgress,
   Typography,
-  Divider
+  Divider,
+  Autocomplete
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { subYears, format } from 'date-fns';
-import { getAllSuppliers } from '../../services/supplierService';
+import { getAllInventoryItems } from '../../services/inventoryService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -30,43 +27,38 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
   
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [suppliers, setSuppliers] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
   
   // Domyślne daty - ostatni rok
   const [dateFrom, setDateFrom] = useState(() => subYears(new Date(), 1));
   const [dateTo, setDateTo] = useState(() => new Date());
-  const [selectedSupplierId, setSelectedSupplierId] = useState('');
-  const [selectedSupplierName, setSelectedSupplierName] = useState('');
+  const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     if (open) {
-      loadSuppliers();
+      loadInventoryItems();
     }
   }, [open]);
 
-  const loadSuppliers = async () => {
+  const loadInventoryItems = async () => {
     setLoading(true);
     try {
-      const suppliersData = await getAllSuppliers();
-      setSuppliers(suppliersData || []);
+      const itemsData = await getAllInventoryItems();
+      // Filtruj pozycje - usuń kategorie "Gotowe produkty" i "Inne"
+      const filteredItems = (itemsData || []).filter(item => 
+        item.category !== 'Gotowe produkty' && item.category !== 'Inne'
+      );
+      setInventoryItems(filteredItems);
     } catch (error) {
-      console.error('Błąd podczas ładowania dostawców:', error);
-      showError('Błąd podczas ładowania listy dostawców');
+      console.error('Błąd podczas ładowania pozycji magazynowych:', error);
+      showError('Błąd podczas ładowania listy pozycji magazynowych');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSupplierChange = (event) => {
-    const supplierId = event.target.value;
-    setSelectedSupplierId(supplierId);
-    
-    if (supplierId === '') {
-      setSelectedSupplierName('');
-    } else {
-      const supplier = suppliers.find(s => s.id === supplierId);
-      setSelectedSupplierName(supplier ? supplier.name : '');
-    }
+  const handleItemChange = (event, newValue) => {
+    setSelectedItem(newValue);
   };
 
   const generateReport = async () => {
@@ -86,8 +78,8 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
       await onGenerate({
         dateFrom,
         dateTo,
-        supplierId: selectedSupplierId || null,
-        supplierName: selectedSupplierName || 'Wszyscy dostawcy'
+        itemId: selectedItem?.id || null,
+        itemName: selectedItem?.name || 'Wszystkie pozycje'
       });
       
       showSuccess('Raport został wygenerowany i pobrany');
@@ -110,7 +102,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Generowanie raportu Purchase Orders (Excel)
+          Raport Purchase Orders
         </DialogTitle>
         
         <DialogContent>
@@ -141,33 +133,54 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
 
             <Divider />
 
-            {/* Wybór dostawcy */}
+            {/* Wybór pozycji magazynowej */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Dostawca
+                Pozycja magazynowa
               </Typography>
-              <FormControl fullWidth disabled={loading || generating}>
-                <InputLabel>Wybierz dostawcę</InputLabel>
-                <Select
-                  value={selectedSupplierId}
-                  onChange={handleSupplierChange}
-                  label="Wybierz dostawcę"
-                >
-                  <MenuItem value="">
-                    <em>Wszyscy dostawcy</em>
-                  </MenuItem>
-                  {suppliers.map((supplier) => (
-                    <MenuItem key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {loading && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-                  <CircularProgress size={20} />
-                </Box>
-              )}
+              <Autocomplete
+                fullWidth
+                disabled={loading || generating}
+                options={inventoryItems}
+                value={selectedItem}
+                onChange={handleItemChange}
+                getOptionLabel={(option) => option?.name || ''}
+                isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Wyszukaj pozycję (lub zostaw puste dla wszystkich)"
+                    placeholder="Zacznij pisać nazwę pozycji..."
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} key={option.id}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        {option.name}
+                      </Typography>
+                      {option.category && (
+                        <Typography variant="caption" color="textSecondary">
+                          Kategoria: {option.category}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                noOptionsText={loading ? "Ładowanie..." : "Brak wyników"}
+                clearText="Wyczyść"
+                closeText="Zamknij"
+                openText="Otwórz"
+              />
             </Box>
 
             <Divider />
@@ -181,7 +194,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
                 <strong>Okres:</strong> {dateFrom ? format(dateFrom, 'dd.MM.yyyy') : '---'} - {dateTo ? format(dateTo, 'dd.MM.yyyy') : '---'}
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                <strong>Dostawca:</strong> {selectedSupplierName || 'Wszyscy dostawcy'}
+                <strong>Pozycja:</strong> {selectedItem?.name || 'Wszystkie pozycje'}
               </Typography>
               <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
                 Raport Excel będzie zawierał 4 arkusze: Podsumowanie PO, Pozycje szczegółowe, Podsumowanie pozycji i Statystyki dostawców.
@@ -204,7 +217,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
             disabled={generating || loading}
             startIcon={generating ? <CircularProgress size={16} /> : null}
           >
-            {generating ? 'Generowanie...' : 'Generuj raport Excel'}
+            {generating ? 'Generowanie...' : 'Generuj raport'}
           </Button>
         </DialogActions>
       </Dialog>

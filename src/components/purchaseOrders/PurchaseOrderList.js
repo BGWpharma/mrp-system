@@ -739,7 +739,7 @@ const PurchaseOrderList = () => {
             onClick={() => setReportDialogOpen(true)}
             size="small"
           >
-            Generuj raport Excel
+            Raport
           </Button>
         </Box>
         

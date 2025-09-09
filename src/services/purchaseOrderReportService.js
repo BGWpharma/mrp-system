@@ -40,10 +40,10 @@ const safeConvertDate = (dateField) => {
 };
 
 /**
- * Pobiera Purchase Orders z wybranego okresu i dostawcy
+ * Pobiera Purchase Orders z wybranego okresu i pozycji magazynowej
  */
 export const getPurchaseOrdersForReport = async (filters) => {
-  const { dateFrom, dateTo, supplierId } = filters;
+  const { dateFrom, dateTo, itemId } = filters;
   
   try {
     let q = query(
@@ -63,10 +63,8 @@ export const getPurchaseOrdersForReport = async (filters) => {
       q = query(q, where('orderDate', '<', endDate));
     }
 
-    // Filtrowanie po dostawcy
-    if (supplierId) {
-      q = query(q, where('supplierId', '==', supplierId));
-    }
+    // Nie filtrujemy na poziomie query po pozycji magazynowej,
+    // bo musimy sprawdzić items w każdym PO
 
     const querySnapshot = await getDocs(q);
     
@@ -84,14 +82,27 @@ export const getPurchaseOrdersForReport = async (filters) => {
       const poData = docRef.data();
       const supplierData = poData.supplierId ? suppliersMap[poData.supplierId] || null : null;
       
-      purchaseOrders.push({
-        id: docRef.id,
-        ...poData,
-        supplier: supplierData,
-        orderDate: safeConvertDate(poData.orderDate),
-        expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
-        createdAt: safeConvertDate(poData.createdAt),
-      });
+      // Filtrowanie po pozycji magazynowej
+      let includeThisPO = true;
+      if (itemId) {
+        includeThisPO = false;
+        if (poData.items && Array.isArray(poData.items)) {
+          includeThisPO = poData.items.some(item => 
+            item.inventoryItemId === itemId
+          );
+        }
+      }
+      
+      if (includeThisPO) {
+        purchaseOrders.push({
+          id: docRef.id,
+          ...poData,
+          supplier: supplierData,
+          orderDate: safeConvertDate(poData.orderDate),
+          expectedDeliveryDate: safeConvertDate(poData.expectedDeliveryDate),
+          createdAt: safeConvertDate(poData.createdAt),
+        });
+      }
     });
 
     return purchaseOrders;
@@ -140,6 +151,11 @@ export const generatePurchaseOrderReport = async (filters) => {
     purchaseOrders.forEach(po => {
       if (po.items && Array.isArray(po.items)) {
         po.items.forEach(item => {
+          // Jeśli wybrano konkretną pozycję, filtruj tylko tę pozycję
+          if (filters.itemId && item.inventoryItemId !== filters.itemId) {
+            return; // Pomiń tę pozycję
+          }
+          
           const itemDetail = {
             poNumber: po.number || `PO${po.id?.substring(0, 6) || ''}`,
             supplierName: po.supplier?.name || 'Nieznany dostawca',
@@ -162,6 +178,7 @@ export const generatePurchaseOrderReport = async (filters) => {
           itemsData.push(itemDetail);
           
           // Agreguj dane do podsumowania pozycji
+          
           const itemKey = item.name || 'Nieznana pozycja';
           if (!itemsSummaryMap[itemKey]) {
             itemsSummaryMap[itemKey] = {
@@ -302,9 +319,9 @@ export const generatePurchaseOrderReport = async (filters) => {
 
     // Generuj nazwy plików
     const dateRange = `${formatDateForExport(filters.dateFrom, 'yyyy-MM-dd')}_${formatDateForExport(filters.dateTo, 'yyyy-MM-dd')}`;
-    const supplierSuffix = filters.supplierName && filters.supplierName !== 'Wszyscy dostawcy' 
-      ? `_${filters.supplierName.replace(/[^a-zA-Z0-9]/g, '_')}` 
-      : '_wszyscy_dostawcy';
+    const itemSuffix = filters.itemName && filters.itemName !== 'Wszystkie pozycje' 
+      ? `_${filters.itemName.replace(/[^a-zA-Z0-9]/g, '_')}` 
+      : '_wszystkie_pozycje';
 
     // Przygotuj arkusze dla pliku Excel
     const worksheets = [
@@ -333,7 +350,7 @@ export const generatePurchaseOrderReport = async (filters) => {
     // Eksportuj jeden plik Excel z arkuszami
     const success = exportToExcel(
       worksheets,
-      `PO_Raport_${dateRange}${supplierSuffix}`
+      `PO_Raport_${dateRange}${itemSuffix}`
     );
 
     if (success) {
