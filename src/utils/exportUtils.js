@@ -1,8 +1,9 @@
 /**
- * Utility functions for exporting data to CSV and PDF
+ * Utility functions for exporting data to CSV, Excel and PDF
  */
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 /**
  * Converts data to CSV format and triggers download
@@ -243,4 +244,102 @@ export const formatCurrencyForExport = (value, currency = 'EUR') => {
   if (value === null || value === undefined) return '';
   
   return `${Number(value).toFixed(2)} ${currency}`;
+};
+
+/**
+ * Exports multiple datasets to Excel with separate worksheets
+ * 
+ * @param {Array} worksheets - Array of worksheet objects: {name, data, headers}
+ * @param {string} filename - Filename for the Excel file (without extension)
+ * @returns {boolean} - Success status
+ */
+export const exportToExcel = (worksheets, filename) => {
+  if (!worksheets || !worksheets.length) {
+    console.error('Invalid worksheets data for Excel export');
+    return false;
+  }
+
+  try {
+    // Create a new workbook
+    const workbook = XLSX.utils.book_new();
+
+    worksheets.forEach((worksheet, index) => {
+      const { name, data, headers } = worksheet;
+      
+      if (!data || !headers || !data.length || !headers.length) {
+        console.warn(`Skipping worksheet ${name} - invalid data or headers`);
+        return;
+      }
+
+      // Convert data to worksheet format
+      const worksheetData = [];
+      
+      // Add headers as first row
+      const headerRow = headers.map(header => header.label);
+      worksheetData.push(headerRow);
+      
+      // Add data rows
+      data.forEach(row => {
+        const dataRow = headers.map(header => {
+          // Get the value from the data using the header key
+          const value = header.key.split('.').reduce((obj, key) => {
+            return obj && obj[key] !== undefined ? obj[key] : '';
+          }, row);
+          
+          // Format the value for Excel
+          if (value === null || value === undefined) {
+            return '';
+          } else if (typeof value === 'number') {
+            return isNaN(value) ? '' : value;
+          } else if (typeof value === 'boolean') {
+            return value ? 'Tak' : 'Nie';
+          } else if (value instanceof Date) {
+            return value.toLocaleDateString();
+          } else {
+            return value.toString();
+          }
+        });
+        worksheetData.push(dataRow);
+      });
+
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+      
+      // Auto-size columns
+      const colWidths = [];
+      worksheetData.forEach(row => {
+        row.forEach((cell, colIndex) => {
+          const cellLength = cell ? cell.toString().length : 0;
+          colWidths[colIndex] = Math.max(colWidths[colIndex] || 0, cellLength + 2);
+        });
+      });
+      
+      ws['!cols'] = colWidths.map(width => ({ width: Math.min(width, 50) }));
+      
+      // Style the header row
+      const headerRange = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "366092" } },
+            alignment: { horizontal: "center" }
+          };
+        }
+      }
+
+      // Add worksheet to workbook with proper name
+      const sheetName = name.replace(/[[\]\\\/\?\*\:]/g, '_').substring(0, 31);
+      XLSX.utils.book_append_sheet(workbook, ws, sheetName);
+    });
+
+    // Save the file
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
+    return true;
+    
+  } catch (error) {
+    console.error('Error exporting to Excel:', error);
+    return false;
+  }
 }; 

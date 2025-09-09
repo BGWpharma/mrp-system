@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import { format, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon, Assessment as ReportIcon } from '@mui/icons-material';
 import { 
   getAllPurchaseOrders, 
   deletePurchaseOrder, 
@@ -36,6 +36,8 @@ import { useNotification } from '../../hooks/useNotification';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
 import { useTranslation } from '../../hooks/useTranslation';
+import PurchaseOrderReportDialog from './PurchaseOrderReportDialog';
+import { generatePurchaseOrderReport } from '../../services/purchaseOrderReportService';
 
 const PurchaseOrderList = () => {
   const { t } = useTranslation();
@@ -66,6 +68,9 @@ const PurchaseOrderList = () => {
   const [updatingBatches, setUpdatingBatches] = useState({});
   const [batchUpdateDialogOpen, setBatchUpdateDialogOpen] = useState(false);
   const [batchUpdateResults, setBatchUpdateResults] = useState(null);
+  
+  // Stan dla dialogu raportu CSV
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
   
   // Dodajemy stan dla opóźnionego wyszukiwania
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -305,6 +310,17 @@ const PurchaseOrderList = () => {
         console.error('Błąd podczas usuwania zamówienia zakupu:', error);
         showError(t('purchaseOrders.notifications.deleteError'));
       }
+    }
+  };
+
+  // Funkcja generowania raportu CSV
+  const handleGenerateReport = async (filters) => {
+    try {
+      const result = await generatePurchaseOrderReport(filters);
+      showSuccess(result.message);
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu:', error);
+      showError(error.message || 'Błąd podczas generowania raportu');
     }
   };
   
@@ -715,6 +731,16 @@ const PurchaseOrderList = () => {
               <ViewColumnIcon />
             </IconButton>
           </Tooltip>
+          
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<ReportIcon />}
+            onClick={() => setReportDialogOpen(true)}
+            size="small"
+          >
+            Generuj raport Excel
+          </Button>
         </Box>
         
         <Menu
@@ -1400,6 +1426,13 @@ const PurchaseOrderList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Dialog generowania raportu CSV */}
+      <PurchaseOrderReportDialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        onGenerate={handleGenerateReport}
+      />
     </Container>
   );
 };
