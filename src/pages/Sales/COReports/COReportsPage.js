@@ -33,7 +33,8 @@ import {
   Popover,
   MenuList,
   ClickAwayListener,
-  Grow
+  Grow,
+
 } from '@mui/material';
 import {
   DateRange as DateRangeIcon,
@@ -47,7 +48,8 @@ import {
   TableChart as CsvIcon,
   KeyboardArrowDown as ArrowDownIcon,
   Assessment as AssessmentIcon,
-  MonetizationOn as MoneyIcon
+  MonetizationOn as MoneyIcon,
+  Link as LinkIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -600,6 +602,14 @@ const COReportsPage = () => {
     return customer ? customer.name : 'Nieznany klient';
   };
   
+  // Funkcja do otwierania zadania produkcyjnego w nowym oknie
+  const openProductionTaskInNewWindow = (taskId) => {
+    if (taskId) {
+      const taskUrl = `/production/tasks/${taskId}`;
+      window.open(window.location.origin + taskUrl, '_blank');
+    }
+  };
+  
   // Obsługa zmiany zakładki
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -619,24 +629,31 @@ const COReportsPage = () => {
               try {
                 // Tylko dodaj pozycję jeśli ma rzeczywiste dane zadania produkcyjnego
                 if (item.productionTaskId && item.productionTaskNumber && item.productionTaskNumber !== 'N/A') {
-                  productionCosts.push({
-                    orderId: order.id,
-                    orderNumber: order.orderNumber || order.id,
-                    orderDate: order.orderDate,
-                    customerName: order.customer?.name || 'Nieznany klient',
-                    itemName: item.name || 'Produkt bez nazwy',
-                    quantity: parseFloat(item.quantity) || 0,
-                    unit: item.unit || 'szt.',
-                    productionTaskId: item.productionTaskId,
-                    productionTaskNumber: item.productionTaskNumber,
-                    productionCost: parseFloat(item.productionCost || 0),
-                    fullProductionCost: parseFloat(item.fullProductionCost || 0),
-                    unitProductionCost: parseFloat(item.productionUnitCost || 0),
-                    fullProductionUnitCost: parseFloat(item.fullProductionUnitCost || 0),
-                    totalItemValue: (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0),
-                    totalProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.productionUnitCost || item.productionCost || 0),
-                    totalFullProductionCost: (parseFloat(item.quantity) || 0) * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0)
-                  });
+                  const quantity = parseFloat(item.quantity) || 0;
+                  const fullProductionUnitCost = parseFloat(item.fullProductionUnitCost || 0);
+                  const totalFullProductionCost = quantity * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0);
+                  
+                  // Filtruj pozycje z zerowymi kosztami - pomiń jeśli pełny koszt jednostkowy i łączny pełny koszt to 0
+                  if (fullProductionUnitCost > 0 || totalFullProductionCost > 0) {
+                    productionCosts.push({
+                      orderId: order.id,
+                      orderNumber: order.orderNumber || order.id,
+                      orderDate: order.orderDate,
+                      customerName: order.customer?.name || 'Nieznany klient',
+                      itemName: item.name || 'Produkt bez nazwy',
+                      quantity: quantity,
+                      unit: item.unit || 'szt.',
+                      productionTaskId: item.productionTaskId,
+                      productionTaskNumber: item.productionTaskNumber,
+                      productionCost: parseFloat(item.productionCost || 0),
+                      fullProductionCost: parseFloat(item.fullProductionCost || 0),
+                      unitProductionCost: parseFloat(item.productionUnitCost || 0),
+                      fullProductionUnitCost: fullProductionUnitCost,
+                      totalItemValue: quantity * (parseFloat(item.price) || 0),
+                      totalProductionCost: quantity * parseFloat(item.productionUnitCost || item.productionCost || 0),
+                      totalFullProductionCost: totalFullProductionCost
+                    });
+                  }
                 }
               } catch (itemError) {
                 console.error('Błąd podczas przetwarzania pozycji zamówienia:', itemError, item);
@@ -965,9 +982,8 @@ const COReportsPage = () => {
         // Filtruj koszty produkcji dla wybranego produktu
         const filteredCosts = productionCosts.filter(item => item.itemName === selectedProduct);
         
-        // Grupuj koszty po datach zamówień
-        const costsByDate = {};
-        filteredCosts.forEach(item => {
+        // Przygotuj dane historyczne jako indywidualne pozycje (nie grupuj)
+        const historyData = filteredCosts.map(item => {
           let orderDate;
           if (typeof item.orderDate === 'string') {
             orderDate = new Date(item.orderDate);
@@ -979,30 +995,18 @@ const COReportsPage = () => {
             orderDate = new Date(); // Domyślna data
           }
           
-          const dateStr = format(orderDate, 'yyyy-MM-dd');
-          
-          if (!costsByDate[dateStr]) {
-            costsByDate[dateStr] = {
-              date: orderDate,
-              unitCost: 0,
-              totalCost: 0,
-              fullUnitCost: 0,
-              totalFullCost: 0,
-              quantity: 0,
-              count: 0
-            };
-          }
-          
-          costsByDate[dateStr].totalCost += item.totalProductionCost;
-          costsByDate[dateStr].totalFullCost += item.totalFullProductionCost;
-          costsByDate[dateStr].quantity += item.quantity;
-          costsByDate[dateStr].count += 1;
-          costsByDate[dateStr].unitCost = costsByDate[dateStr].totalCost / costsByDate[dateStr].quantity;
-          costsByDate[dateStr].fullUnitCost = costsByDate[dateStr].totalFullCost / costsByDate[dateStr].quantity;
-        });
+          return {
+            date: orderDate,
+            orderNumber: item.orderNumber,
+            customerName: item.customerName,
+            quantity: item.quantity,
+            fullUnitCost: item.fullProductionUnitCost || (item.quantity > 0 ? item.fullProductionCost / item.quantity : 0),
+            totalFullCost: item.totalFullProductionCost,
+            productionTaskId: item.productionTaskId,
+            productionTaskNumber: item.productionTaskNumber
+          };
+        }).sort((a, b) => a.date - b.date);
         
-        // Konwertuj na tablicę i sortuj według daty
-        const historyData = Object.values(costsByDate).sort((a, b) => a.date - b.date);
         setProductCostHistory(historyData);
         
         // Znajdź zamówienia zawierające wybrany produkt
@@ -1019,7 +1023,9 @@ const COReportsPage = () => {
               unitCost: item.productionCost,
               fullUnitCost: item.fullProductionUnitCost || item.fullProductionCost / item.quantity,
               totalCost: item.totalProductionCost,
-              totalFullCost: item.totalFullProductionCost
+              totalFullCost: item.totalFullProductionCost,
+              productionTaskId: item.productionTaskId,
+              productionTaskNumber: item.productionTaskNumber
             });
           }
         });
@@ -1613,18 +1619,38 @@ const COReportsPage = () => {
                               <TableHead>
                                 <TableRow>
                                   <TableCell>{t('coReports.table.date')}</TableCell>
+                                  <TableCell>{t('coReports.table.orderNumber')}</TableCell>
+                                  <TableCell>{t('coReports.table.customer')}</TableCell>
                                   <TableCell align="right">{t('coReports.table.quantity')}</TableCell>
                                   <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
                                   <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
+                                  <TableCell>MO</TableCell>
+                                  <TableCell align="center">{t('coReports.table.actions')}</TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
                                 {productCostHistory.map((entry, index) => (
                                   <TableRow key={index}>
                                     <TableCell>{formatDateDisplay(entry.date)}</TableCell>
+                                    <TableCell>{entry.orderNumber}</TableCell>
+                                    <TableCell>{entry.customerName}</TableCell>
                                     <TableCell align="right">{entry.quantity}</TableCell>
                                     <TableCell align="right">{formatCurrency(entry.fullUnitCost)}</TableCell>
                                     <TableCell align="right">{formatCurrency(entry.totalFullCost)}</TableCell>
+                                    <TableCell>{entry.productionTaskNumber || '-'}</TableCell>
+                                    <TableCell align="center">
+                                      {entry.productionTaskId && (
+                                        <Tooltip title="Otwórz zadanie produkcyjne w nowym oknie">
+                                          <IconButton 
+                                            size="small"
+                                            onClick={() => openProductionTaskInNewWindow(entry.productionTaskId)}
+                                            color="primary"
+                                          >
+                                            <LinkIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -1653,6 +1679,8 @@ const COReportsPage = () => {
                           <TableCell align="right">{t('coReports.table.quantity')}</TableCell>
                           <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
                           <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
+                          <TableCell>MO</TableCell>
+                          <TableCell align="center">{t('coReports.table.actions')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1664,6 +1692,20 @@ const COReportsPage = () => {
                             <TableCell align="right">{order.quantity}</TableCell>
                             <TableCell align="right">{formatCurrency(order.fullUnitCost)}</TableCell>
                             <TableCell align="right">{formatCurrency(order.totalFullCost)}</TableCell>
+                            <TableCell>{order.productionTaskNumber || '-'}</TableCell>
+                            <TableCell align="center">
+                              {order.productionTaskId && (
+                                <Tooltip title="Otwórz zadanie produkcyjne w nowym oknie">
+                                  <IconButton 
+                                    size="small"
+                                    onClick={() => openProductionTaskInNewWindow(order.productionTaskId)}
+                                    color="primary"
+                                  >
+                                    <LinkIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
