@@ -46,7 +46,8 @@ import {
   Print as PrintIcon,
   Delete as DeleteIcon,
   FileUpload as FileUploadIcon,
-  InsertDriveFile as InsertDriveFileIcon
+  InsertDriveFile as InsertDriveFileIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { 
   getInventoryItemById, 
@@ -109,6 +110,7 @@ const BatchesPage = () => {
   const [loadingReservations, setLoadingReservations] = useState(false);
   const [selectedTransferSource, setSelectedTransferSource] = useState(''); // 'free' lub ID rezerwacji
   const [availableTransferQuantity, setAvailableTransferQuantity] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const fileInputRef = React.useRef(null);
 
   // Dodaję wykrywanie urządzeń mobilnych
@@ -180,6 +182,62 @@ const BatchesPage = () => {
 
     fetchData();
   }, [id, showError]);
+
+  // Funkcja odświeżania danych partii
+  const handleRefreshData = async () => {
+    try {
+      setRefreshing(true);
+      
+      let itemData = null;
+      let batchesData = [];
+      
+      // Pobierz informacje o produkcie
+      try {
+        itemData = await getInventoryItemById(id);
+        setItem(itemData);
+      } catch (itemError) {
+        console.warn('Nie udało się pobrać danych produktu, ale można kontynuować:', itemError);
+      }
+      
+      try {
+        // Pobierz partie
+        batchesData = await getItemBatches(id);
+      } catch (batchError) {
+        console.error('Error fetching batches:', batchError);
+        showError('Nie znaleziono partii: ' + batchError.message);
+        return;
+      }
+      
+      if (batchesData.length === 0) {
+        setBatches([]);
+        setFilteredBatches([]);
+        showSuccess('Dane zostały odświeżone. Brak partii dla tego produktu.');
+        return;
+      }
+      
+      const warehousesData = await getAllWarehouses();
+      setWarehouses(warehousesData);
+      
+      // Dodaj informacje o lokalizacji magazynu do każdej partii
+      const enhancedBatches = batchesData.map(batch => {
+        const warehouse = warehousesData.find(w => w.id === batch.warehouseId);
+        return {
+          ...batch,
+          warehouseName: warehouse?.name || 'Magazyn podstawowy',
+          warehouseAddress: warehouse?.address || '',
+        };
+      });
+      
+      setBatches(enhancedBatches);
+      setFilteredBatches(enhancedBatches);
+      showSuccess(`Dane zostały odświeżone. Znaleziono ${enhancedBatches.length} partii.`);
+    } catch (error) {
+      showError('Błąd podczas odświeżania danych: ' + error.message);
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -815,20 +873,42 @@ const BatchesPage = () => {
               display: 'flex', 
               alignItems: isMobile ? 'flex-start' : 'center',
               flexDirection: isMobile ? 'column' : 'row',
-              gap: isMobile ? 1 : 0
+              gap: isMobile ? 1 : 0,
+              justifyContent: 'space-between'
             }}>
-              {item ? (
-                <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
-                  <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(item.quantity)} {item.unit}
-                </Typography>
-              ) : (
-                <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
-                  <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || t('common.pieces')}
-                </Typography>
-              )}
-              <Tooltip title={t('inventory.batches.fefoInfo')}>
-                <IconButton size="small">
-                  <InfoIcon />
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                flexDirection: isMobile ? 'column' : 'row',
+                gap: isMobile ? 1 : 0
+              }}>
+                {item ? (
+                  <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
+                    <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(item.quantity)} {item.unit}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
+                    <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || t('common.pieces')}
+                  </Typography>
+                )}
+                <Tooltip title={t('inventory.batches.fefoInfo')}>
+                  <IconButton size="small">
+                    <InfoIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Tooltip title={t('inventory.batches.refreshData')}>
+                <IconButton 
+                  size="small" 
+                  onClick={handleRefreshData}
+                  disabled={refreshing}
+                  color="primary"
+                >
+                  {refreshing ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <RefreshIcon />
+                  )}
                 </IconButton>
               </Tooltip>
             </Box>

@@ -313,7 +313,8 @@
     "cannotDeleteBatch": "Nie można usunąć partii",
     "certificateAddedSuccessfully": "Certyfikat został pomyślnie dodany do partii",
     "confirmDeleteCertificate": "Czy na pewno chcesz usunąć certyfikat tej partii? Ta operacja jest nieodwracalna.",
-    "certificateDeletedSuccessfully": "Certyfikat został pomyślnie usunięty"
+    "certificateDeletedSuccessfully": "Certyfikat został pomyślnie usunięty",
+    "refreshData": "Odśwież dane partii"
   },
   "forms": {
     "responses": {
