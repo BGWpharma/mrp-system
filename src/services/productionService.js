@@ -876,6 +876,59 @@ import {
       throw new Error('Zadanie produkcyjne nie istnieje');
     }
   };
+
+  /**
+   * Pobiera wiele zadań produkcyjnych w jednym zapytaniu batch
+   * @param {Array} taskIds - Lista ID zadań do pobrania
+   * @returns {Promise<Object>} Mapa zadań {taskId: taskData}
+   */
+  export const getMultipleTasksById = async (taskIds) => {
+    if (!taskIds || taskIds.length === 0) {
+      return {};
+    }
+
+    try {
+      console.log(`🚀 Pobieranie ${taskIds.length} zadań produkcyjnych w batch query`);
+      const startTime = performance.now();
+      
+      // Firestore batch get - maksymalnie 500 dokumentów na raz
+      const batchSize = 500;
+      const taskDocsMap = {};
+      
+      for (let i = 0; i < taskIds.length; i += batchSize) {
+        const batchIds = taskIds.slice(i, i + batchSize);
+        
+        // Pobierz dokumenty równolegle
+        const docPromises = batchIds.map(async (taskId) => {
+          try {
+            const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+            const taskDoc = await getDoc(taskRef);
+            return { taskId, doc: taskDoc };
+          } catch (error) {
+            console.warn(`Nie udało się pobrać zadania ${taskId}:`, error);
+            return { taskId, doc: null };
+          }
+        });
+        
+        const results = await Promise.all(docPromises);
+        
+        // Przetwórz wyniki
+        results.forEach(({ taskId, doc }) => {
+          if (doc && doc.exists()) {
+            taskDocsMap[taskId] = { id: doc.id, ...doc.data() };
+          }
+        });
+      }
+      
+      const endTime = performance.now();
+      console.log(`✅ Pobrano ${Object.keys(taskDocsMap).length}/${taskIds.length} zadań w ${Math.round(endTime - startTime)}ms`);
+      
+      return taskDocsMap;
+    } catch (error) {
+      console.error('Błąd podczas batch pobierania zadań:', error);
+      return {};
+    }
+  };
   
   // Tworzenie nowego zadania produkcyjnego
 export const createTask = async (taskData, userId, autoReserveMaterials = true) => {

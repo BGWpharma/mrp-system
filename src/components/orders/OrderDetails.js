@@ -73,6 +73,81 @@ import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, migrateInvoiceIte
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
 import { useTranslation } from '../../hooks/useTranslation';
 
+// 🚀 CACHE SYSTEM dla optymalizacji zapytań
+const orderCache = new Map();
+const defaultCacheTTL = 5 * 60 * 1000; // 5 minut
+
+const getCacheKey = (type, id) => `${type}_${id}`;
+
+const getCachedData = (key, ttl = defaultCacheTTL) => {
+  const cached = orderCache.get(key);
+  if (cached && (Date.now() - cached.timestamp) < ttl) {
+    console.log(`📦 Cache hit dla ${key}`);
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key, data) => {
+  orderCache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+  console.log(`💾 Zapisano do cache: ${key}`);
+};
+
+const invalidateCache = (pattern) => {
+  const keysToDelete = [];
+  orderCache.forEach((_, key) => {
+    if (key.includes(pattern)) {
+      keysToDelete.push(key);
+    }
+  });
+  keysToDelete.forEach(key => {
+    orderCache.delete(key);
+    console.log(`🗑️ Usunięto z cache: ${key}`);
+  });
+};
+
+// Cache funkcje pomocnicze
+const getCachedUserNames = async (userIds) => {
+  if (!userIds?.length) return {};
+  
+  const cacheKey = getCacheKey('userNames', userIds.sort().join(','));
+  const cached = getCachedData(cacheKey, 10 * 60 * 1000); // 10 minut dla nazwisk
+  
+  if (cached) return cached;
+  
+  console.log('🔄 Pobieranie danych użytkowników...');
+  const data = await getUsersDisplayNames(userIds);
+  setCachedData(cacheKey, data);
+  return data;
+};
+
+const getCachedOrderInvoices = async (orderId) => {
+  const cacheKey = getCacheKey('orderInvoices', orderId);
+  const cached = getCachedData(cacheKey, 2 * 60 * 1000); // 2 minuty dla faktur
+  
+  if (cached) return cached;
+  
+  console.log('🔄 Pobieranie faktur zamówienia...');
+  const data = await getInvoicesByOrderId(orderId);
+  setCachedData(cacheKey, data);
+  return data;
+};
+
+const getCachedOrderCmrDocuments = async (orderId) => {
+  const cacheKey = getCacheKey('orderCmr', orderId);
+  const cached = getCachedData(cacheKey, 2 * 60 * 1000); // 2 minuty dla CMR
+  
+  if (cached) return cached;
+  
+  console.log('🔄 Pobieranie dokumentów CMR...');
+  const data = await getCmrDocumentsByOrderId(orderId);
+  setCachedData(cacheKey, data);
+  return data;
+};
+
 // Funkcja obliczająca sumę wartości pozycji z uwzględnieniem kosztów produkcji dla pozycji spoza listy cenowej
 const calculateItemTotalValue = (item) => {
   // Podstawowa wartość pozycji
@@ -99,57 +174,26 @@ const verifyProductionTasks = async (orderToVerify) => {
   }
 
   try {
-    const { getTaskById } = await import('../../services/productionService');
+    const { getMultipleTasksById } = await import('../../services/productionService');
     const { removeProductionTaskFromOrder } = await import('../../services/orderService');
+    
+    // 🚀 OPTYMALIZACJA: Pobierz wszystkie zadania równolegle
+    const taskIds = orderToVerify.productionTasks.map(task => task.id);
+    const taskDocsMap = await getMultipleTasksById(taskIds);
     
     const verifiedTasks = [];
     const tasksToRemove = [];
     
-    // Sprawdź każde zadanie produkcyjne
+    // Przetwórz wyniki batch query
     for (const task of orderToVerify.productionTasks) {
-      try {
-        // Próba pobrania zadania z bazy
-        const taskDoc = await getTaskById(task.id);
-        
-        // Sprawdź czy dane są aktualne i wymagają synchronizacji
-        const needsUpdate = 
-          task.status !== taskDoc.status ||
-          Math.abs((task.totalMaterialCost || 0) - (taskDoc.totalMaterialCost || 0)) > 0.01 ||
-          Math.abs((task.totalFullProductionCost || 0) - (taskDoc.totalFullProductionCost || 0)) > 0.01 ||
-          task.moNumber !== taskDoc.moNumber ||
-          task.name !== taskDoc.name ||
-          task.productName !== taskDoc.productName ||
-          task.quantity !== taskDoc.quantity;
-        
-        if (needsUpdate) {
-          console.log(`[SYNC] Wykryto nieaktualne dane zadania ${task.id}, synchronizuję z bazą danych`);
-          
-          // Aktualizuj dane zadania w zamówieniu
-          const updatedTask = {
-            ...task,
-            status: taskDoc.status,
-            totalMaterialCost: taskDoc.totalMaterialCost || 0,
-            unitMaterialCost: taskDoc.unitMaterialCost || 0,
-            totalFullProductionCost: taskDoc.totalFullProductionCost || 0,
-            unitFullProductionCost: taskDoc.unitFullProductionCost || 0,
-            moNumber: taskDoc.moNumber,
-            name: taskDoc.name,
-            productName: taskDoc.productName,
-            quantity: taskDoc.quantity,
-            unit: taskDoc.unit,
-            updatedAt: new Date().toISOString()
-          };
-          
-          verifiedTasks.push(updatedTask);
-        } else {
-          // Dane są aktualne
-          verifiedTasks.push(task);
-        }
-      } catch (error) {
-        console.error(`Błąd podczas weryfikacji zadania ${task.id}:`, error);
+      const taskDoc = taskDocsMap[task.id];
+      
+      if (!taskDoc) {
+        // Zadanie nie istnieje - dodaj do usunięcia
+        console.error(`Zadanie ${task.id} nie istnieje w bazie danych`);
         tasksToRemove.push(task);
         
-        // Aktualizuj też powiązane elementy zamówienia
+        // Aktualizuj powiązane elementy zamówienia
         if (orderToVerify.items) {
           orderToVerify.items = orderToVerify.items.map(item => {
             if (item.productionTaskId === task.id) {
@@ -164,6 +208,40 @@ const verifyProductionTasks = async (orderToVerify) => {
             return item;
           });
         }
+        continue;
+      }
+      
+      // Sprawdź czy dane wymagają synchronizacji
+      const needsUpdate = 
+        task.status !== taskDoc.status ||
+        Math.abs((task.totalMaterialCost || 0) - (taskDoc.totalMaterialCost || 0)) > 0.01 ||
+        Math.abs((task.totalFullProductionCost || 0) - (taskDoc.totalFullProductionCost || 0)) > 0.01 ||
+        task.moNumber !== taskDoc.moNumber ||
+        task.name !== taskDoc.name ||
+        task.productName !== taskDoc.productName ||
+        task.quantity !== taskDoc.quantity;
+      
+      if (needsUpdate) {
+        console.log(`[SYNC] Wykryto nieaktualne dane zadania ${task.id}, synchronizuję z bazą danych`);
+        
+        const updatedTask = {
+          ...task,
+          status: taskDoc.status,
+          totalMaterialCost: taskDoc.totalMaterialCost || 0,
+          unitMaterialCost: taskDoc.unitMaterialCost || 0,
+          totalFullProductionCost: taskDoc.totalFullProductionCost || 0,
+          unitFullProductionCost: taskDoc.unitFullProductionCost || 0,
+          moNumber: taskDoc.moNumber,
+          name: taskDoc.name,
+          productName: taskDoc.productName,
+          quantity: taskDoc.quantity,
+          unit: taskDoc.unit,
+          updatedAt: new Date().toISOString()
+        };
+        
+        verifiedTasks.push(updatedTask);
+      } else {
+        verifiedTasks.push(task);
       }
     }
     
@@ -245,6 +323,68 @@ const OrderDetails = () => {
   const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
   const [invoicedAmounts, setInvoicedAmounts] = useState({});
 
+  // 🚀 LAZY LOADING State Management
+  const [activeSection, setActiveSection] = useState('basic'); // basic, production, documents, history
+  const [sectionsLoaded, setSectionsLoaded] = useState({
+    basic: true,      // Podstawowe dane zawsze załadowane
+    production: false, // Zadania produkcyjne
+    documents: false,  // CMR i faktury
+    history: false     // Historia statusów
+  });
+
+  // Funkcja do załadowania sekcji na żądanie
+  const loadSectionData = async (sectionName) => {
+    if (sectionsLoaded[sectionName] || !order) return;
+
+    console.log(`🔄 Lazy loading danych dla sekcji: ${sectionName}`);
+    
+    try {
+      switch (sectionName) {
+        case 'production':
+          // Dane produkcyjne już ładowane w głównym useEffect
+          break;
+        case 'documents':
+          if (!invoices.length && !loadingInvoices) {
+            setLoadingInvoices(true);
+            const orderInvoices = await getCachedOrderInvoices(orderId);
+            setInvoices(orderInvoices);
+            setLoadingInvoices(false);
+          }
+          if (!cmrDocuments.length && !loadingCmrDocuments) {
+            setLoadingCmrDocuments(true);
+            const orderCmr = await getCachedOrderCmrDocuments(orderId);
+            setCmrDocuments(orderCmr);
+            setLoadingCmrDocuments(false);
+          }
+          break;
+        case 'history':
+          if (order.statusHistory?.length > 0 && Object.keys(userNames).length === 0) {
+            const userIds = [...new Set(
+              order.statusHistory
+                .map(change => change.changedBy)
+                .filter(id => id)
+            )];
+            if (userIds.length > 0) {
+              const names = await getCachedUserNames(userIds);
+              setUserNames(names);
+            }
+          }
+          break;
+      }
+      
+      setSectionsLoaded(prev => ({ ...prev, [sectionName]: true }));
+      console.log(`✅ Załadowano sekcję: ${sectionName}`);
+    } catch (error) {
+      console.error(`Błąd podczas ładowania sekcji ${sectionName}:`, error);
+    }
+  };
+
+  // Handler do zmiany aktywnej sekcji z lazy loading
+  const handleSectionChange = (sectionName) => {
+    setActiveSection(sectionName);
+    loadSectionData(sectionName);
+  };
+
   useEffect(() => {
     const fetchOrderDetails = async (retries = 3, delay = 1000) => {
       try {
@@ -266,50 +406,45 @@ const OrderDetails = () => {
           showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
         }
         
-        // Sprawdź, czy wartość zamówienia jest ujemna - jeśli tak, odśwież dane
-        if (verifiedOrder.totalValue < 0) {
-          console.log("Wykryto ujemną wartość zamówienia:", verifiedOrder.totalValue);
-          setOrder(verifiedOrder);
-          setTimeout(() => refreshOrderData(), 500); // Odśwież dane zamówienia z małym opóźnieniem
-          return;
-        }
-        
         setOrder(verifiedOrder);
         
-        // OPTYMALIZACJA: Równoległe pobieranie wszystkich powiązanych danych
-        console.log('🚀 OrderDetails - rozpoczynam równoległe pobieranie danych powiązanych...');
+        // 🚀 OPTYMALIZACJA: Równoległe pobieranie z cache
+        console.log('🚀 OrderDetails - rozpoczynam optymalne pobieranie danych...');
         
-        // Przygotuj promises dla równoległego wykonania
         const fetchPromises = [];
         
-        // 1. Dane użytkowników (jeśli potrzebne)
+        // 1. Dane użytkowników z cache
         let userNamesPromise = null;
-        if (verifiedOrder.statusHistory && verifiedOrder.statusHistory.length > 0) {
-          const userIds = verifiedOrder.statusHistory.map(change => change.changedBy).filter(id => id);
-          const uniqueUserIds = [...new Set(userIds)];
-          if (uniqueUserIds.length > 0) {
-            userNamesPromise = getUsersDisplayNames(uniqueUserIds);
+        if (verifiedOrder.statusHistory?.length > 0) {
+          const userIds = [...new Set(
+            verifiedOrder.statusHistory
+              .map(change => change.changedBy)
+              .filter(id => id)
+          )];
+          
+          if (userIds.length > 0) {
+            userNamesPromise = getCachedUserNames(userIds);
             fetchPromises.push(userNamesPromise);
           }
         }
         
-        // 2. Faktury i zafakturowane kwoty
+        // 2. Faktury z cache
         setLoadingInvoices(true);
-        const invoicesPromise = getInvoicesByOrderId(orderId);
+        const invoicesPromise = getCachedOrderInvoices(orderId);
         fetchPromises.push(invoicesPromise);
         
-        // 3. Dokumenty CMR
+        // 3. Dokumenty CMR z cache
         setLoadingCmrDocuments(true);
-        const cmrDocumentsPromise = getCmrDocumentsByOrderId(orderId);
+        const cmrDocumentsPromise = getCachedOrderCmrDocuments(orderId);
         fetchPromises.push(cmrDocumentsPromise);
         
         try {
           // Wykonaj wszystkie zapytania równolegle
           const results = await Promise.allSettled(fetchPromises);
           
+          // Przetwórz wyniki z lepszym error handlingiem
           let resultIndex = 0;
           
-          // Przetwórz wyniki - nazwy użytkowników
           if (userNamesPromise) {
             const userNamesResult = results[resultIndex++];
             if (userNamesResult.status === 'fulfilled') {
@@ -320,7 +455,6 @@ const OrderDetails = () => {
             }
           }
           
-          // Przetwórz wyniki - faktury
           const invoicesResult = results[resultIndex++];
           if (invoicesResult.status === 'fulfilled') {
             try {
@@ -328,8 +462,12 @@ const OrderDetails = () => {
               const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
               setInvoices(verifiedInvoices);
               
-              // Pobierz zafakturowane kwoty (używając już pobranych faktur)
-              const invoicedData = await getInvoicedAmountsByOrderItems(orderId, verifiedInvoices);
+              // Oblicz zafakturowane kwoty używając już pobranych danych
+              const invoicedData = await getInvoicedAmountsByOrderItems(
+                orderId, 
+                verifiedInvoices,  // przekaż już pobrane faktury
+                verifiedOrder      // przekaż już pobrane dane zamówienia
+              );
               setInvoicedAmounts(invoicedData);
               
               if (removedInvoicesCount > 0) {
@@ -467,17 +605,21 @@ const OrderDetails = () => {
         return;
       }
       
+      // 🗑️ Wyczyść cache dla tego zamówienia przed odświeżeniem
+      console.log('🧹 Czyszczenie cache przed odświeżeniem...');
+      invalidateCache(orderId);
+      
       const freshOrder = await getOrderById(orderId);
       
       // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
       const { order: verifiedOrder, removedCount } = await verifyProductionTasks(freshOrder);
       
       if (removedCount > 0) {
-              showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
-    }
-    
-    setOrder(verifiedOrder);
-    showSuccess(t('orderDetails.notifications.refreshSuccess'));
+        showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
+      }
+      
+      setOrder(verifiedOrder);
+      showSuccess(t('orderDetails.notifications.refreshSuccess'));
     } catch (error) {
       if (!location.pathname.includes('/purchase-orders/')) {
         console.error('Error refreshing order data:', error);
