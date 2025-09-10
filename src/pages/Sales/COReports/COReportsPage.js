@@ -1392,17 +1392,21 @@ const COReportsPage = () => {
           </Grid>
         </Paper>
 
-        {productionCosts.length === 0 ? (
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+            <CircularProgress size={60} />
+          </Box>
+        ) : productionCosts.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 8 }}>
             <MoneyIcon sx={{ fontSize: '4rem', color: 'text.secondary', mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              Brak kosztów produkcji
+              {t('coReports.productionCosts.empty.title')}
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              W wybranym okresie nie ma zamówień z kosztami produkcji.
+              {t('coReports.productionCosts.empty.description')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Koszty produkcji są dostępne tylko dla pozycji zamówień powiązanych z zadaniami produkcyjnymi.
+              {t('coReports.productionCosts.empty.hint')}
             </Typography>
           </Box>
         ) : (
