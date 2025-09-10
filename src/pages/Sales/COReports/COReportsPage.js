@@ -66,9 +66,9 @@ import {
 } from 'date-fns';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
-import { getAllOrders, updateOrder } from '../../../services/orderService';
+import { getAllOrders, updateOrder, getOrdersByDateRange } from '../../../services/orderService';
 import { getAllCustomers } from '../../../services/customerService';
-import { getTaskById } from '../../../services/productionService';
+import { getTaskById, getMultipleTasksById } from '../../../services/productionService';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { exportToCSV, exportToPDF, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
 import {
@@ -98,6 +98,22 @@ const TIME_PERIODS = {
   LAST_MONTH: 'lastMonth',
   THIS_MONTH: 'thisMonth',
   CUSTOM: 'custom'
+};
+
+// Cache dla zamówień - zwiększa wydajność przy ponownych zapytaniach
+const ordersCache = {
+  data: null,
+  timestamp: null,
+  dateRange: null,
+  customerId: null,
+  ttl: 5 * 60 * 1000 // 5 minut TTL
+};
+
+// Cache dla zadań produkcyjnych
+const tasksCache = {
+  data: new Map(),
+  timestamp: null,
+  ttl: 3 * 60 * 1000 // 3 minuty TTL dla zadań
 };
 
 const COReportsPage = () => {
@@ -139,96 +155,235 @@ const COReportsPage = () => {
   // Stan dla wybranego produktu
   const [selectedProduct, setSelectedProduct] = useState('');
   
-  // Pobieranie danych
+  // Pobieranie danych - zoptymalizowane dla zakresu dat
   useEffect(() => {
-    fetchData();
+    // Debugging - sprawdź faktyczne daty
+    console.log('🔍 Faktyczne daty w fetchData:', {
+      startDate: startDate?.toISOString().split('T')[0],
+      endDate: endDate?.toISOString().split('T')[0],
+      selectedCustomer
+    });
+    
+    // Opóźnij ładowanie aby state dates były ustawione
+    const timeoutId = setTimeout(() => {
+      fetchData();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, []);
   
-  // Filtrowanie danych po zmianie filtrów
+  // Filtrowanie danych po zmianie filtrów - z inteligentną invalidacją cache
   useEffect(() => {
     if (orders.length > 0) {
       filterAndProcessData();
     }
   }, [orders, startDate, endDate, selectedCustomer]);
+
+  // Invalidacja cache przy zmianie dat lub klienta - z debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const dateKey = `${startDate.getTime()}_${endDate.getTime()}`;
+      
+      // Sprawdź czy cache trzeba invalidować
+      if (ordersCache.dateRange && ordersCache.dateRange !== dateKey) {
+        console.log('📅 Zmiana dat - invalidacja cache zamówień');
+        ordersCache.data = null;
+        ordersCache.timestamp = null;
+        
+        // Automatycznie pobierz nowe dane
+        fetchData();
+      }
+      
+      if (ordersCache.customerId && ordersCache.customerId !== selectedCustomer) {
+        console.log('👤 Zmiana klienta - invalidacja cache zamówień');
+        ordersCache.data = null;
+        ordersCache.timestamp = null;
+        
+        // Automatycznie pobierz nowe dane  
+        fetchData();
+      }
+    }, 300); // 300ms debounce
+    
+    return () => clearTimeout(timeoutId);
+  }, [startDate, endDate, selectedCustomer]);
   
-  // Pobieranie zamówień i klientów
+  // Funkcja pomocnicza do sprawdzania cache
+  const getCachedOrders = async (startDate, endDate, customerId) => {
+    const now = Date.now();
+    const dateKey = `${startDate.getTime()}_${endDate.getTime()}`;
+    
+    // Sprawdź czy cache jest aktualny
+    const isCacheValid = ordersCache.data &&
+      ordersCache.timestamp &&
+      (now - ordersCache.timestamp) < ordersCache.ttl &&
+      ordersCache.dateRange === dateKey &&
+      ordersCache.customerId === customerId;
+
+    if (isCacheValid) {
+      console.log('📦 Używam cache dla zamówień');
+      return ordersCache.data;
+    }
+
+    console.log('🔄 Pobieranie nowych danych zamówień...');
+    const filters = customerId && customerId !== 'all' ? { customerId } : {};
+    let orders = await getOrdersByDateRange(startDate, endDate, 500, filters);
+
+    // FALLBACK: Jeśli brak wyników, spróbuj z getAllOrders() jako backup
+    if (orders.length === 0) {
+      console.log('⚠️ getOrdersByDateRange zwróciła 0 wyników - próbuję fallback z getAllOrders()');
+      const allOrders = await getAllOrders(filters);
+      
+      // Filtruj manualnie po datach
+      orders = allOrders.filter(order => {
+        if (!order.orderDate) return false;
+        
+        let orderDate;
+        if (typeof order.orderDate === 'string') {
+          orderDate = new Date(order.orderDate);
+        } else if (order.orderDate?.toDate) {
+          orderDate = order.orderDate.toDate();
+        } else if (order.orderDate instanceof Date) {
+          orderDate = order.orderDate;
+        } else {
+          return false;
+        }
+        
+        return orderDate >= startDate && orderDate <= endDate;
+      });
+      
+      console.log(`🔄 Fallback: przefiltrowano ${orders.length} zamówień z ${allOrders.length} wszystkich`);
+    }
+
+    // Zapisz w cache
+    ordersCache.data = orders;
+    ordersCache.timestamp = now;
+    ordersCache.dateRange = dateKey;
+    ordersCache.customerId = customerId;
+
+    return orders;
+  };
+
+  // Zoptymalizowana funkcja batch sprawdzania zadań produkcyjnych
+  const validateProductionTasksBatch = async (orders) => {
+    // Zbierz wszystkie unikalne ID zadań
+    const taskIds = [...new Set(
+      orders.flatMap(order => 
+        order.items?.filter(item => item.productionTaskId)
+          .map(item => item.productionTaskId) || []
+      )
+    )];
+
+    if (taskIds.length === 0) {
+      return orders; // Brak zadań do sprawdzenia
+    }
+
+    console.log(`🚀 Sprawdzanie ${taskIds.length} zadań produkcyjnych w trybie batch...`);
+    
+    // Sprawdź cache zadań
+    const now = Date.now();
+    let validTasks = {};
+    const uncachedTaskIds = [];
+
+    for (const taskId of taskIds) {
+      if (tasksCache.data.has(taskId) && 
+          tasksCache.timestamp && 
+          (now - tasksCache.timestamp) < tasksCache.ttl) {
+        validTasks[taskId] = tasksCache.data.get(taskId);
+      } else {
+        uncachedTaskIds.push(taskId);
+      }
+    }
+
+    // Pobierz niezcachowane zadania
+    if (uncachedTaskIds.length > 0) {
+      const batchTasks = await getMultipleTasksById(uncachedTaskIds);
+      
+      // Aktualizuj cache
+      for (const [taskId, taskData] of Object.entries(batchTasks)) {
+        tasksCache.data.set(taskId, taskData);
+        validTasks[taskId] = taskData;
+      }
+      tasksCache.timestamp = now;
+    }
+
+    // Oczyść nieistniejące zadania z zamówień
+    const cleanedOrders = [];
+    
+    for (const order of orders) {
+      let orderChanged = false;
+      const cleanedOrder = { ...order };
+      
+      if (cleanedOrder.items && Array.isArray(cleanedOrder.items)) {
+        for (let i = 0; i < cleanedOrder.items.length; i++) {
+          const item = cleanedOrder.items[i];
+          
+          if (item.productionTaskId && !validTasks[item.productionTaskId]) {
+            console.log(`Czyszczę nieistniejące zadanie ${item.productionTaskId} z pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
+            orderChanged = true;
+            
+            cleanedOrder.items[i] = {
+              ...item,
+              productionTaskId: null,
+              productionTaskNumber: null,
+              productionStatus: null,
+              productionCost: 0,
+              fullProductionCost: 0
+            };
+          }
+        }
+      }
+      
+      // Aktualizuj zamówienie jeśli się zmieniło (ale nie blokuj na błędach)
+      if (orderChanged) {
+        try {
+          const safeUpdateData = {
+            items: cleanedOrder.items,
+            orderNumber: cleanedOrder.orderNumber,
+            orderDate: cleanedOrder.orderDate,
+            status: cleanedOrder.status,
+            customer: cleanedOrder.customer,
+            shippingCost: cleanedOrder.shippingCost,
+            totalValue: cleanedOrder.totalValue,
+            additionalCostsItems: cleanedOrder.additionalCostsItems,
+            productionTasks: cleanedOrder.productionTasks,
+            linkedPurchaseOrders: cleanedOrder.linkedPurchaseOrders
+          };
+          
+          // Asynchronicznie aktualizuj - nie czekaj na wynik
+          updateOrder(order.id, safeUpdateData, 'system').catch(error => {
+            console.error(`Błąd podczas czyszczenia zamówienia ${order.orderNumber}:`, error);
+          });
+        } catch (updateError) {
+          console.error(`Błąd podczas przygotowania aktualizacji zamówienia ${order.orderNumber}:`, updateError);
+        }
+      }
+      
+      cleanedOrders.push(cleanedOrder);
+    }
+
+    return cleanedOrders;
+  };
+
+  // Pobieranie zamówień i klientów - ZOPTYMALIZOWANA WERSJA
   const fetchData = async () => {
     try {
       setLoading(true);
+      const startTime = performance.now();
       
-      // Pobierz wszystkie zamówienia
-      const allOrders = await getAllOrders();
+      // Pobierz zamówienia tylko z odpowiedniego zakresu dat (zamiast wszystkich)
+      const orders = await getCachedOrders(startDate, endDate, selectedCustomer);
       
-      // Sprawdź i oczyść nieaktualne dane zadań produkcyjnych
-      // Importy są już na górze pliku
-      
-      const cleanedOrders = [];
-      
-      for (const order of allOrders) {
-        let orderChanged = false;
-        const cleanedOrder = { ...order };
-        
-        if (cleanedOrder.items && Array.isArray(cleanedOrder.items)) {
-          for (let i = 0; i < cleanedOrder.items.length; i++) {
-            const item = cleanedOrder.items[i];
-            
-            // Jeśli pozycja ma przypisane zadanie produkcyjne, sprawdź czy nadal istnieje
-            if (item.productionTaskId) {
-              try {
-                await getTaskById(item.productionTaskId);
-                // Zadanie istnieje, zachowaj dane
-              } catch (error) {
-                // Zadanie nie istnieje, wyczyść dane
-                if (error.message && error.message.includes('nie istnieje')) {
-                  console.log(`Czyszczę nieistniejące zadanie ${item.productionTaskId} z pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
-                  orderChanged = true;
-                  
-                  cleanedOrder.items[i] = {
-                    ...item,
-                    productionTaskId: null,
-                    productionTaskNumber: null,
-                    productionStatus: null,
-                    productionCost: 0,
-                    fullProductionCost: 0
-                  };
-                }
-              }
-            }
-          }
-        }
-        
-        // Jeśli dane zamówienia się zmieniły, zapisz je (ale nie blokuj ładowania na błędach zapisu)
-        if (orderChanged) {
-          try {
-            const safeUpdateData = {
-              items: cleanedOrder.items,
-              orderNumber: cleanedOrder.orderNumber,
-              orderDate: cleanedOrder.orderDate,
-              status: cleanedOrder.status,
-              customer: cleanedOrder.customer,
-              shippingCost: cleanedOrder.shippingCost,
-              totalValue: cleanedOrder.totalValue,
-              additionalCostsItems: cleanedOrder.additionalCostsItems,
-              productionTasks: cleanedOrder.productionTasks,
-              linkedPurchaseOrders: cleanedOrder.linkedPurchaseOrders
-            };
-            
-            await updateOrder(order.id, safeUpdateData, 'system');
-            console.log(`Zaktualizowano zamówienie ${order.orderNumber} - usunięto nieistniejące zadania produkcyjne`);
-          } catch (updateError) {
-            console.error(`Błąd podczas czyszczenia zamówienia ${order.orderNumber}:`, updateError);
-            // Kontynuuj mimo błędu zapisu
-          }
-        }
-        
-        cleanedOrders.push(cleanedOrder);
-      }
+      // Batch sprawdzenie zadań produkcyjnych
+      const cleanedOrders = await validateProductionTasksBatch(orders);
       
       setOrders(cleanedOrders);
       
       // Pobierz wszystkich klientów
       const allCustomers = await getAllCustomers();
       setCustomers(allCustomers || []);
+      
+      const endTime = performance.now();
+      console.log(`⚡ fetchData zakończone w ${Math.round(endTime - startTime)}ms`);
       
       setLoading(false);
     } catch (error) {
@@ -238,8 +393,10 @@ const COReportsPage = () => {
     }
   };
   
-  // Funkcja do filtrowania i przetwarzania danych
-  const filterAndProcessData = () => {
+  // Funkcja do filtrowania i przetwarzania danych - ZOPTYMALIZOWANA z memoizacją
+  const filterAndProcessData = React.useCallback(() => {
+    console.log('🔍 filterAndProcessData - rozpoczynam filtrowanie:', orders.length, 'zamówień');
+    
     // Filtrowanie zamówień wg daty i klienta
     const filtered = orders.filter(order => {
       // Przetwarzanie daty zamówienia - obsługa różnych formatów daty
@@ -273,7 +430,9 @@ const COReportsPage = () => {
     
     // Obliczanie statystyk
     calculateStats(filtered);
-  };
+    
+    console.log('✅ filterAndProcessData - przefiltrowano do:', filtered.length, 'zamówień');
+  }, [orders, startDate, endDate, selectedCustomer]); // Zoptymalizowane dependencies
   
   // Obliczanie statystyk
   const calculateStats = (filteredOrders) => {
@@ -487,105 +646,35 @@ const COReportsPage = () => {
     }
   };
   
-  // Funkcja do odświeżenia danych
+  // Funkcja do odświeżenia danych - ZOPTYMALIZOWANA
   const handleRefreshData = async () => {
     try {
       setLoading(true);
       showInfo('Odświeżanie danych...');
+      const startTime = performance.now();
       
-      // Najpierw pobierz wszystkie zamówienia
-      const allOrders = await getAllOrders();
+      // Wyczyść cache aby wymusić świeże dane
+      ordersCache.data = null;
+      ordersCache.timestamp = null;
+      tasksCache.data.clear();
+      tasksCache.timestamp = null;
       
-      // Następnie sprawdź i zaktualizuj dane zadań produkcyjnych dla każdego zamówienia
-      // Importy są już na górze pliku
+      console.log('🗑️ Cache wyczyszczony - wymuszanie odświeżenia danych');
       
-      const updatedOrders = [];
+      // Pobierz zamówienia z wybranego zakresu dat (nie wszystkie)
+      const refreshedOrders = await getCachedOrders(startDate, endDate, selectedCustomer);
       
-      for (const order of allOrders) {
-        let orderChanged = false;
-        const updatedOrderData = { ...order };
-        
-        if (updatedOrderData.items && Array.isArray(updatedOrderData.items)) {
-          for (let i = 0; i < updatedOrderData.items.length; i++) {
-            const item = updatedOrderData.items[i];
-            
-            // Jeśli pozycja ma przypisane zadanie produkcyjne, sprawdź czy nadal istnieje
-            if (item.productionTaskId) {
-              try {
-                const taskDetails = await getTaskById(item.productionTaskId);
-                
-                // Sprawdź czy dane zadania się zmieniły
-                const currentCost = item.productionCost || 0;
-                const newCost = taskDetails.totalMaterialCost || 0;
-                const currentFullCost = item.fullProductionCost || 0;
-                const newFullCost = taskDetails.totalFullProductionCost || 0;
-                
-                if (Math.abs(currentCost - newCost) > 0.01 || 
-                    Math.abs(currentFullCost - newFullCost) > 0.01 ||
-                    item.productionTaskNumber !== taskDetails.moNumber ||
-                    item.productionStatus !== taskDetails.status) {
-                  
-                  orderChanged = true;
-                  updatedOrderData.items[i] = {
-                    ...item,
-                    productionTaskNumber: taskDetails.moNumber,
-                    productionStatus: taskDetails.status,
-                    productionCost: newCost,
-                    fullProductionCost: newFullCost
-                  };
-                }
-              } catch (error) {
-                // Jeśli zadanie nie istnieje, wyczyść dane z pozycji
-                if (error.message && error.message.includes('nie istnieje')) {
-                  console.log(`Zadanie ${item.productionTaskId} nie istnieje, czyszczę dane z pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
-                  orderChanged = true;
-                  
-                  updatedOrderData.items[i] = {
-                    ...item,
-                    productionTaskId: null,
-                    productionTaskNumber: null,
-                    productionStatus: null,
-                    productionCost: 0,
-                    fullProductionCost: 0
-                  };
-                }
-              }
-            }
-          }
-        }
-        
-        // Jeśli dane zamówienia się zmieniły, zapisz je
-        if (orderChanged) {
-          try {
-            const safeUpdateData = {
-              items: updatedOrderData.items,
-              orderNumber: updatedOrderData.orderNumber,
-              orderDate: updatedOrderData.orderDate,
-              status: updatedOrderData.status,
-              customer: updatedOrderData.customer,
-              shippingCost: updatedOrderData.shippingCost,
-              totalValue: updatedOrderData.totalValue,
-              additionalCostsItems: updatedOrderData.additionalCostsItems,
-              productionTasks: updatedOrderData.productionTasks,
-              linkedPurchaseOrders: updatedOrderData.linkedPurchaseOrders
-            };
-            
-            await updateOrder(order.id, safeUpdateData, 'system');
-            console.log(`Zaktualizowano dane zadań produkcyjnych w zamówieniu ${order.orderNumber}`);
-          } catch (updateError) {
-            console.error(`Błąd podczas aktualizacji zamówienia ${order.orderNumber}:`, updateError);
-          }
-        }
-        
-        updatedOrders.push(updatedOrderData);
-      }
+      // Batch synchronizacja zadań produkcyjnych z aktualizacją kosztów
+      const syncedOrders = await syncProductionTasksWithCostUpdate(refreshedOrders);
       
-      // Zaktualizuj stan z synchronizowanymi danymi
-      setOrders(updatedOrders);
+      setOrders(syncedOrders);
       
       // Pobierz klientów
       const allCustomers = await getAllCustomers();
       setCustomers(allCustomers || []);
+      
+      const endTime = performance.now();
+      console.log(`⚡ handleRefreshData zakończone w ${Math.round(endTime - startTime)}ms`);
       
       setLoading(false);
       showSuccess('Dane zostały odświeżone i zsynchronizowane');
@@ -594,6 +683,113 @@ const COReportsPage = () => {
       setLoading(false);
       showError('Nie udało się odświeżyć danych');
     }
+  };
+
+  // Zaawansowana funkcja do synchronizacji zadań z aktualizacją kosztów
+  const syncProductionTasksWithCostUpdate = async (orders) => {
+    // Zbierz wszystkie unikalne ID zadań
+    const taskIds = [...new Set(
+      orders.flatMap(order => 
+        order.items?.filter(item => item.productionTaskId)
+          .map(item => item.productionTaskId) || []
+      )
+    )];
+
+    if (taskIds.length === 0) {
+      return orders;
+    }
+
+    console.log(`🔄 Synchronizacja ${taskIds.length} zadań produkcyjnych z aktualizacją kosztów...`);
+    
+    // Pobierz aktualne dane zadań
+    const currentTasks = await getMultipleTasksById(taskIds);
+    
+    // Zaktualizuj cache zadań
+    for (const [taskId, taskData] of Object.entries(currentTasks)) {
+      tasksCache.data.set(taskId, taskData);
+    }
+    tasksCache.timestamp = Date.now();
+
+    // Synchronizuj zamówienia z aktualnymi danymi zadań
+    const syncedOrders = [];
+    
+    for (const order of orders) {
+      let orderChanged = false;
+      const syncedOrder = { ...order };
+      
+      if (syncedOrder.items && Array.isArray(syncedOrder.items)) {
+        for (let i = 0; i < syncedOrder.items.length; i++) {
+          const item = syncedOrder.items[i];
+          
+          if (item.productionTaskId) {
+            const currentTask = currentTasks[item.productionTaskId];
+            
+            if (!currentTask) {
+              // Zadanie nie istnieje - wyczyść dane
+              console.log(`Zadanie ${item.productionTaskId} nie istnieje, czyszczę dane z pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
+              orderChanged = true;
+              
+              syncedOrder.items[i] = {
+                ...item,
+                productionTaskId: null,
+                productionTaskNumber: null,
+                productionStatus: null,
+                productionCost: 0,
+                fullProductionCost: 0
+              };
+            } else {
+              // Sprawdź czy dane się zmieniły
+              const currentCost = item.productionCost || 0;
+              const newCost = currentTask.totalMaterialCost || 0;
+              const currentFullCost = item.fullProductionCost || 0;
+              const newFullCost = currentTask.totalFullProductionCost || 0;
+              
+              if (Math.abs(currentCost - newCost) > 0.01 || 
+                  Math.abs(currentFullCost - newFullCost) > 0.01 ||
+                  item.productionTaskNumber !== currentTask.moNumber ||
+                  item.productionStatus !== currentTask.status) {
+                
+                orderChanged = true;
+                syncedOrder.items[i] = {
+                  ...item,
+                  productionTaskNumber: currentTask.moNumber,
+                  productionStatus: currentTask.status,
+                  productionCost: newCost,
+                  fullProductionCost: newFullCost
+                };
+                
+                console.log(`Zaktualizowano koszty dla pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
+              }
+            }
+          }
+        }
+      }
+      
+      // Asynchronicznie zaktualizuj zamówienie jeśli się zmieniło
+      if (orderChanged) {
+        const safeUpdateData = {
+          items: syncedOrder.items,
+          orderNumber: syncedOrder.orderNumber,
+          orderDate: syncedOrder.orderDate,
+          status: syncedOrder.status,
+          customer: syncedOrder.customer,
+          shippingCost: syncedOrder.shippingCost,
+          totalValue: syncedOrder.totalValue,
+          additionalCostsItems: syncedOrder.additionalCostsItems,
+          productionTasks: syncedOrder.productionTasks,
+          linkedPurchaseOrders: syncedOrder.linkedPurchaseOrders
+        };
+        
+        // Nie czekaj na wynik zapisu - wykonaj asynchronicznie
+        updateOrder(order.id, safeUpdateData, 'system').catch(error => {
+          console.error(`Błąd podczas aktualizacji zamówienia ${order.orderNumber}:`, error);
+        });
+      }
+      
+      syncedOrders.push(syncedOrder);
+    }
+
+    return syncedOrders;
   };
   
   // Funkcja pomocnicza do uzyskania nazwy klienta
@@ -615,8 +811,8 @@ const COReportsPage = () => {
     setSelectedTab(newValue);
   };
 
-  // Funkcja do obliczania kosztów produkcji
-  const calculateProductionCosts = () => {
+  // Funkcja do obliczania kosztów produkcji - ZOPTYMALIZOWANA z memoizacją
+  const calculateProductionCosts = React.useCallback(() => {
     const productionCosts = [];
     
     try {
@@ -667,10 +863,10 @@ const COReportsPage = () => {
     }
     
     return productionCosts;
-  };
+  }, [filteredOrders, selectedProduct]); // Zoptymalizowane dependencies
 
-  // Funkcja do obliczania statystyk kosztów produkcji
-  const calculateProductionCostStats = (productionCosts) => {
+  // Funkcja do obliczania statystyk kosztów produkcji - ZOPTYMALIZOWANA z memoizacją
+  const calculateProductionCostStats = React.useCallback((productionCosts) => {
     const totalItems = productionCosts.length;
     const totalProductionCost = productionCosts.reduce((sum, item) => sum + item.totalProductionCost, 0);
     const totalFullProductionCost = productionCosts.reduce((sum, item) => sum + item.totalFullProductionCost, 0);
@@ -726,7 +922,7 @@ const COReportsPage = () => {
       costsByProduct: Object.values(costsByProduct),
       costsByCustomer: Object.values(costsByCustomer)
     };
-  };
+  }, []); // Bez zależności - czysta funkcja kalkulacyjna
 
   // Komponent zakładki "Raport zamówień"
   const OrdersReportTab = () => (
@@ -966,10 +1162,18 @@ const COReportsPage = () => {
     </>
   );
 
-  // Komponent zakładki "Koszty produkcji"
+  // Komponent zakładki "Koszty produkcji" - ZOPTYMALIZOWANY
   const ProductionCostsTab = () => {
-    const productionCosts = React.useMemo(() => calculateProductionCosts(), [filteredOrders]);
-    const costStats = React.useMemo(() => calculateProductionCostStats(productionCosts), [productionCosts]);
+    // Memoizacja kosztownych obliczeń - przeliczaj tylko gdy zmienią się dane
+    const productionCosts = React.useMemo(() => {
+      console.log('🔄 Przeliczanie kosztów produkcji...');
+      return calculateProductionCosts();
+    }, [calculateProductionCosts]);
+    
+    const costStats = React.useMemo(() => {
+      console.log('📊 Przeliczanie statystyk kosztów...');
+      return calculateProductionCostStats(productionCosts);
+    }, [productionCosts, calculateProductionCostStats]);
     
     // Stan dla danych historycznych kosztów wybranego produktu
     const [productCostHistory, setProductCostHistory] = useState([]);

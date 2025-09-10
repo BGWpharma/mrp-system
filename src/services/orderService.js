@@ -163,6 +163,143 @@ export const getAllOrders = async (filters = null) => {
 };
 
 /**
+ * Pobiera zamówienia w określonym zakresie dat (ZOPTYMALIZOWANA)
+ * @param {Date} startDate - Data początkowa
+ * @param {Date} endDate - Data końcowa  
+ * @param {number} limitCount - Maksymalna liczba wyników (domyślnie 500)
+ * @param {object} filters - Dodatkowe filtry
+ */
+export const getOrdersByDateRange = async (startDate, endDate, limitCount = 500, filters = {}) => {
+  try {
+    console.log('🔍 getOrdersByDateRange WEJŚCIE:', {
+      startDate: startDate?.toISOString(),
+      endDate: endDate?.toISOString(),
+      limitCount,
+      filters
+    });
+    
+    const conditions = [];
+    
+    // Filtrowanie po datach - z bezpieczną konwersją
+    if (startDate) {
+      const startTimestamp = Timestamp.fromDate(new Date(startDate));
+      conditions.push(where('orderDate', '>=', startTimestamp));
+      console.log('📅 Dodano filtr startDate >= ', startTimestamp);
+    }
+    
+    if (endDate) {
+      const endTimestamp = Timestamp.fromDate(new Date(endDate));
+      conditions.push(where('orderDate', '<=', endTimestamp));
+      console.log('📅 Dodano filtr endDate <= ', endTimestamp);
+    }
+    
+    // Dodatkowe filtry
+    if (filters.status && filters.status !== 'all') {
+      conditions.push(where('status', '==', filters.status));
+      console.log('🏷️ Dodano filtr status =', filters.status);
+    }
+    
+    if (filters.customerId && filters.customerId !== 'all') {
+      conditions.push(where('customer.id', '==', filters.customerId));
+      console.log('👤 Dodano filtr customerId =', filters.customerId);
+    }
+    
+    console.log('📝 Łącznie warunków zapytania:', conditions.length);
+    
+    // Buduj zapytanie z limitem
+    const ordersQuery = query(
+      collection(db, ORDERS_COLLECTION),
+      ...conditions,
+      orderBy('orderDate', 'desc'),
+      limit(limitCount)
+    );
+    
+    const querySnapshot = await getDocs(ordersQuery);
+    
+    // Funkcja pomocnicza do bezpiecznej konwersji dat (kopiowana z getAllOrders)
+    const safeConvertDate = (dateValue, fieldName, docId) => {
+      if (!dateValue) return null;
+      
+      try {
+        if (dateValue instanceof Timestamp) {
+          return dateValue.toDate();
+        } else if (dateValue instanceof Date) {
+          return isNaN(dateValue.getTime()) ? null : dateValue;
+        } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+          const converted = new Date(dateValue);
+          if (isNaN(converted.getTime())) {
+            return null;
+          }
+          return converted;
+        }
+        return null;
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const orders = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        orderDate: safeConvertDate(data.orderDate, 'orderDate', doc.id),
+        expectedDeliveryDate: safeConvertDate(data.expectedDeliveryDate, 'expectedDeliveryDate', doc.id),
+        deadline: safeConvertDate(data.deadline, 'deadline', doc.id),
+        deliveryDate: safeConvertDate(data.deliveryDate, 'deliveryDate', doc.id),
+      };
+    });
+    
+    // Zbierz wszystkie ID klientów
+    const customerIds = new Set();
+    orders.forEach(order => {
+      if (order.customerId && !order.customer) {
+        customerIds.add(order.customerId);
+      }
+    });
+    
+    // Pobierz klientów jednym zapytaniem, z uwzględnieniem limitu 10 elementów per zapytanie
+    const customersMap = {};
+    if (customerIds.size > 0) {
+      const customerIdsArray = Array.from(customerIds);
+      
+      // Pobierz klientów w grupach po 10 (limit Firestore dla operatora 'in')
+      const batchSize = 10;
+      for (let i = 0; i < customerIdsArray.length; i += batchSize) {
+        const batch = customerIdsArray.slice(i, i + batchSize);
+        const customersQuery = query(
+          collection(db, CUSTOMERS_COLLECTION),
+          where('__name__', 'in', batch)
+        );
+        
+        const customersSnapshot = await getDocs(customersQuery);
+        customersSnapshot.forEach(doc => {
+          customersMap[doc.id] = { id: doc.id, ...doc.data() };
+        });
+      }
+    }
+    
+    // Przypisz dane klientów do zamówień
+    const ordersWithCustomers = orders.map(order => {
+      if (order.customerId && !order.customer && customersMap[order.customerId]) {
+        return {
+          ...order,
+          customer: customersMap[order.customerId]
+        };
+      }
+      return order;
+    });
+    
+    console.log(`📊 getOrdersByDateRange: Pobrano ${ordersWithCustomers.length} zamówień dla okresu ${startDate?.toISOString().split('T')[0]} - ${endDate?.toISOString().split('T')[0]}`);
+    
+    return ordersWithCustomers;
+  } catch (error) {
+    console.error('Błąd podczas pobierania zamówień z zakresu dat:', error);
+    throw error;
+  }
+};
+
+/**
  * Pobiera zamówienie po ID
  */
 export const getOrderById = async (id) => {
