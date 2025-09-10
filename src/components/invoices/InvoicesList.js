@@ -705,7 +705,7 @@ const InvoicesList = () => {
                                 // Sprawdź czy proforma została opłacona
                                 const total = parseFloat(invoice.total || 0);
                                 const paid = parseFloat(invoice.totalPaid || 0);
-                                const isFullyPaid = paid >= total;
+                                const isFullyPaid = preciseCompare(paid, total, 0.01) >= 0;
                                 
                                 if (!isFullyPaid) {
                                   // Proforma nie została opłacona - nie wyświetlaj kwoty dostępnej
