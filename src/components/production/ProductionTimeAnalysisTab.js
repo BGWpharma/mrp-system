@@ -506,10 +506,10 @@ const TimeAnalysisContent = ({
             <CardContent sx={{ textAlign: 'center' }}>
               <AnalysisIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
               <Typography variant="h4" color="success.main">
-                {formatMinutes(filteredAnalysis.averageTimePerSession)}
+                {filteredAnalysis.totalQuantity.toLocaleString('pl-PL')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {t('productionReport.timeAnalysis.averageTimePerSession')}
+                Łączna wyprodukowana ilość
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -527,7 +527,7 @@ const TimeAnalysisContent = ({
                 {formatMinutes(filteredAnalysis.averageTimePerUnit)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {t('productionReport.timeAnalysis.averageTimePerUnit')}
+                Łączny czas / Łączną wyprodukowaną ilość
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>

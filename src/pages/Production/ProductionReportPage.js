@@ -81,11 +81,7 @@ const ProductionReportPage = () => {
   const [startDate, setStartDate] = useState(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState(endOfMonth(new Date()));
   const [filteredTasks, setFilteredTasks] = useState([]);
-  const [statusStats, setStatusStats] = useState([]);
-  const [customerStats, setCustomerStats] = useState([]);
-  const [timeStats, setTimeStats] = useState({ totalMinutes: 0, avgTaskTime: 0 });
   const [selectedCustomer, setSelectedCustomer] = useState('all');
-  const [workstationNames, setWorkstationNames] = useState({});
   const [selectedTab, setSelectedTab] = useState(0);
   const { showError } = useNotification();
   
@@ -106,29 +102,6 @@ const ProductionReportPage = () => {
     }
   }, [tasks, orders, customers, startDate, endDate, selectedCustomer]);
 
-  useEffect(() => {
-    const fetchWorkstationNames = async () => {
-      const workstationData = {};
-      
-      for (const task of filteredTasks) {
-        if (task.workstationId && !workstationData[task.workstationId]) {
-          try {
-            const workstation = await getWorkstationById(task.workstationId);
-            workstationData[task.workstationId] = workstation.name;
-          } catch (error) {
-            console.error(`Błąd podczas pobierania stanowiska dla ID ${task.workstationId}:`, error);
-            workstationData[task.workstationId] = "Nieznane stanowisko";
-          }
-        }
-      }
-      
-      setWorkstationNames(workstationData);
-    };
-    
-    if (filteredTasks.length > 0) {
-      fetchWorkstationNames();
-    }
-  }, [filteredTasks]);
 
   const fetchData = async () => {
     try {
@@ -170,9 +143,9 @@ const ProductionReportPage = () => {
     }
   };
 
-  // Funkcja do filtrowania i przetwarzania danych
+  // Funkcja do filtrowania zadań
   const filterAndProcessData = () => {
-    // 1. Filtruj zadania według daty i klienta
+    // Filtruj zadania według daty i klienta
     let filtered = tasks.filter(task => {
       // Przetwórz datę zadania
       let taskDate;
@@ -207,120 +180,8 @@ const ProductionReportPage = () => {
     });
     
     setFilteredTasks(filtered);
-    
-    // 2. Oblicz statystyki dla statusów
-    const statusCounts = {};
-    filtered.forEach(task => {
-      const status = task.status || 'Nieznany';
-      statusCounts[status] = (statusCounts[status] || 0) + 1;
-    });
-    
-    const statusData = Object.keys(statusCounts).map(status => ({
-      name: status,
-      value: statusCounts[status]
-    }));
-    
-    setStatusStats(statusData);
-    
-    // 3. Oblicz statystyki dla klientów
-    const customerTaskCounts = {};
-    const customerTaskList = {};
-    
-    filtered.forEach(task => {
-      // Znajdź zamówienie powiązane z zadaniem
-      const relatedOrder = orders.find(order => 
-        order.productionTasks?.some(prodTask => prodTask.id === task.id)
-      );
-      
-      if (relatedOrder && relatedOrder.customer) {
-        const customerId = relatedOrder.customer.id;
-        const customerName = relatedOrder.customer.name || 'Nieznany klient';
-        
-        if (!customerTaskCounts[customerId]) {
-          customerTaskCounts[customerId] = {
-            name: customerName,
-            value: 0,
-            tasks: []
-          };
-        }
-        
-        customerTaskCounts[customerId].value++;
-        customerTaskCounts[customerId].tasks.push(task);
-        
-        if (!customerTaskList[customerId]) {
-          customerTaskList[customerId] = [];
-        }
-        customerTaskList[customerId].push(task);
-      } else {
-        // Zadania bez klienta
-        if (!customerTaskCounts['unknown']) {
-          customerTaskCounts['unknown'] = {
-            name: 'Bez przypisanego klienta',
-            value: 0,
-            tasks: []
-          };
-        }
-        
-        customerTaskCounts['unknown'].value++;
-        customerTaskCounts['unknown'].tasks.push(task);
-      }
-    });
-    
-    const customerData = Object.values(customerTaskCounts);
-    setCustomerStats(customerData);
-    
-    // 4. Oblicz statystyki czasu pracy
-    let totalMinutes = 0;
-    let tasksWithTime = 0;
-    
-    filtered.forEach(task => {
-      if (task.productionSessions && task.productionSessions.length > 0) {
-        const taskTimeSpent = task.productionSessions.reduce((sum, session) => {
-          return sum + (session.timeSpent || 0);
-        }, 0);
-        
-        totalMinutes += taskTimeSpent;
-        tasksWithTime++;
-      }
-    });
-    
-    setTimeStats({
-      totalMinutes,
-      avgTaskTime: tasksWithTime > 0 ? totalMinutes / tasksWithTime : 0
-    });
   };
 
-  const formatTime = (minutes) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.floor(minutes % 60);
-    
-    if (hours > 0) {
-      return `${hours} godz. ${mins} min.`;
-    }
-    return `${mins} min.`;
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Zaplanowane': return '#1976d2'; // primary
-      case 'W trakcie': return '#ff9800'; // warning
-      case 'Zakończone': return '#2e7d32'; // success
-      case 'Anulowane': return '#d32f2f'; // error
-      case 'Wstrzymane': return '#9e9e9e'; // default
-      case 'Potwierdzenie zużycia': return '#0288d1'; // info
-      default: return '#757575'; // default
-    }
-  };
-  
-  const handlePreviousMonth = () => {
-    setStartDate(startOfMonth(subMonths(startDate, 1)));
-    setEndDate(endOfMonth(subMonths(endDate, 1)));
-  };
-  
-  const handleNextMonth = () => {
-    setStartDate(startOfMonth(addMonths(startDate, 1)));
-    setEndDate(endOfMonth(addMonths(endDate, 1)));
-  };
   
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -379,8 +240,8 @@ const ProductionReportPage = () => {
           }}
         >
           <Tab 
-            label={t('production.productionReport.generalReport')} 
-            icon={<AssessmentIcon />} 
+            label={t('production.productionReport.productionTime')}
+            icon={<ScheduleIcon />} 
             iconPosition="start"
             sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
@@ -390,389 +251,19 @@ const ProductionReportPage = () => {
             iconPosition="start"
             sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
-          <Tab 
-            label={t('production.productionReport.productionTime')}
-            icon={<ScheduleIcon />} 
-            iconPosition="start"
-            sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
-          />
         </Tabs>
       </Box>
 
       {/* Zawartość zakładek */}
+      
+      {/* Zakładka Czas Produkcji (domyślna) */}
       {selectedTab === 0 && (
-        <React.Fragment>
-          {/* Filtry */}
-          <Paper sx={{ p: isMobile ? 1.5 : 3, mb: isMobile ? 1.5 : 3 }}>
-            <Grid container spacing={isMobile ? 1 : 3} alignItems="center">
-              <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-                  {t('production.reports.startDate')}
-                </Typography>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
-                  <DatePicker
-                    label={isMobile ? "" : t('production.reports.startDate')}
-                    value={startDate}
-                    onChange={(newDate) => setStartDate(newDate)}
-                    slotProps={{ 
-                      textField: { 
-                        fullWidth: true,
-                        size: "small",
-                        placeholder: isMobile ? t('production.reports.startDate') : "",
-                        sx: {
-                          '& .MuiInputLabel-root': {
-                            display: isMobile ? 'none' : 'block'
-                          }
-                        }
-                      } 
-                    }}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-                  {t('production.reports.endDate')}
-                </Typography>
-                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
-                  <DatePicker
-                    label={isMobile ? "" : t('production.reports.endDate')}
-                    value={endDate}
-                    onChange={(newDate) => setEndDate(newDate)}
-                    slotProps={{ 
-                      textField: { 
-                        fullWidth: true,
-                        size: "small",
-                        placeholder: isMobile ? t('production.reports.endDate') : "",
-                        sx: {
-                          '& .MuiInputLabel-root': {
-                            display: isMobile ? 'none' : 'block'
-                          }
-                        }
-                      } 
-                    }}
-                  />
-                </LocalizationProvider>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Typography variant="caption" sx={{ display: isMobile ? 'block' : 'none', mb: 0.5 }}>
-                  Klient
-                </Typography>
-                <FormControl fullWidth size="small">
-                  <InputLabel sx={{ display: isMobile ? 'none' : 'block' }}>{t('production.productionReport.customerFilter')}</InputLabel>
-                  <Select
-                    value={selectedCustomer}
-                    onChange={(e) => setSelectedCustomer(e.target.value)}
-                    label={isMobile ? "" : t('production.productionReport.customerFilter')}
-                    displayEmpty={isMobile}
-                    placeholder={isMobile ? t('production.productionReport.customerFilter') : ""}
-                  >
-                    <MenuItem value="all">{t('production.productionReport.allCustomers')}</MenuItem>
-                    {customers.map(customer => (
-                      <MenuItem key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'center', 
-                  alignItems: 'center',
-                  height: '100%',
-                  gap: 1,
-                  mt: isMobile ? 1 : 0
-                }}>
-                  <IconButton 
-                    color="primary"
-                    onClick={handlePreviousMonth}
-                    size="small"
-                    sx={{ 
-                      border: '1px solid rgba(25, 118, 210, 0.5)', 
-                      borderRadius: 1, 
-                      width: 36, 
-                      height: 36,
-                      minWidth: 36, 
-                      p: 0.5,
-                      mx: 0.5
-                    }}
-                  >
-                    <PrevIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton 
-                    color="primary"
-                    onClick={handleNextMonth}
-                    size="small"
-                    sx={{ 
-                      border: '1px solid rgba(25, 118, 210, 0.5)', 
-                      borderRadius: 1, 
-                      width: 36, 
-                      height: 36,
-                      minWidth: 36, 
-                      p: 0.5,
-                      mx: 0.5
-                    }}
-                  >
-                    <NextIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              </Grid>
-            </Grid>
-          </Paper>
-
-          {/* Podsumowanie */}
-          <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
-            <Grid item xs={6} sm={6} md={3}>
-              <Card>
-                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    {t('production.reports.taskCount')}
-                  </Typography>
-                  <Typography variant="h5" color="primary" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                    {filteredTasks.length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} sm={6} md={3}>
-              <Card>
-                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    {t('production.reports.completedTasks')}
-                  </Typography>
-                  <Typography variant="h5" color="success.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                    {filteredTasks.filter(task => task.status === 'Zakończone').length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} sm={6} md={3}>
-              <Card>
-                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    {t('production.reports.tasksInProgress')}
-                  </Typography>
-                  <Typography variant="h5" color="warning.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                    {filteredTasks.filter(task => task.status === 'W trakcie').length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={6} sm={6} md={3}>
-              <Card>
-                <CardContent sx={{ p: isMobile ? 1 : 2, '&:last-child': { pb: isMobile ? 1 : 2 } }}>
-                  <Typography variant="caption" sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
-                    {t('production.reports.workTime')}
-                  </Typography>
-                  <Typography variant="h5" color="info.main" sx={{ fontSize: isMobile ? '1.2rem' : '1.5rem', mt: 0.5 }}>
-                    {formatTime(timeStats.totalMinutes)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* Wykresy - na urządzeniach mobilnych pokazujemy tylko wykres statusów */}
-          <Grid container spacing={isMobile ? 1 : 3} sx={{ mb: isMobile ? 1.5 : 3 }}>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: isMobile ? 1 : 3, height: '100%' }}>
-                <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mb: 1, fontSize: isMobile ? '0.8rem' : '1rem' }}>
-                  {t('production.reports.tasksByStatus')}
-                </Typography>
-                <Box sx={{ height: isMobile ? 200 : 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={statusStats}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={false}
-                        outerRadius={isMobile ? 50 : 80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {statusStats.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={getStatusColor(entry.name)} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => [`${value} zadań`, 'Liczba']} />
-                      <Legend layout="horizontal" align="center" verticalAlign="bottom" wrapperStyle={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Paper>
-            </Grid>
-            {!isMobile && (
-              <Grid item xs={12} md={6}>
-                <Paper sx={{ p: 3, height: '100%' }}>
-                  <Typography variant="h6" gutterBottom align="center">
-                    {t('production.reports.tasksByCustomer')}
-                  </Typography>
-                  <Box sx={{ height: 300 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        width={500}
-                        height={300}
-                        data={customerStats}
-                        margin={{
-                          top: 5,
-                          right: 30,
-                          left: 20,
-                          bottom: 5,
-                        }}
-                      >
-                        <XAxis dataKey="name" textAnchor="middle" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="value" name={t('production.reports.taskCount')} fill="#8884d8" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Box>
-                </Paper>
-              </Grid>
-            )}
-          </Grid>
-
-          {/* Tabela szczegółowa - na urządzeniach mobilnych pokazujemy prostszą wersję */}
-          {isMobile ? (
-            <Paper sx={{ p: 1.5 }}>
-              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: '0.8rem' }}>
-                {t('production.productionReport.tabs.taskList')}
-              </Typography>
-              <Divider sx={{ mb: 1.5 }} />
-              
-              {filteredTasks.length === 0 ? (
-                <Typography align="center" sx={{ py: 2, fontSize: '0.8rem' }}>
-                  Brak zadań w wybranym okresie
-                </Typography>
-              ) : (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {filteredTasks.map((task) => (
-                    <Card 
-                      key={task.id} 
-                      variant="outlined" 
-                      sx={{ 
-                        cursor: 'pointer',
-                        '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.03)' } 
-                      }}
-                      onClick={() => navigate(`/production/tasks/${task.id}`)}
-                    >
-                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium', fontSize: '0.8rem' }}>
-                            {task.name}
-                          </Typography>
-                          <Chip 
-                            label={task.status} 
-                            sx={{ 
-                              backgroundColor: getStatusColor(task.status),
-                              color: 'white',
-                              fontSize: '0.65rem',
-                              height: '20px'
-                            }}
-                            size="small" 
-                          />
-                        </Box>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                          <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                            {task.productName}
-                          </Typography>
-                          <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                            {task.scheduledDate 
-                              ? format(
-                                  typeof task.scheduledDate === 'string'
-                                    ? new Date(task.scheduledDate)
-                                    : task.scheduledDate instanceof Date
-                                      ? task.scheduledDate
-                                      : task.scheduledDate.toDate(),
-                                  'dd.MM.yyyy'
-                                )
-                              : '-'}
-                          </Typography>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Box>
-              )}
-            </Paper>
-          ) : (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                {t('production.productionReport.tabs.detailedTaskList')}
-              </Typography>
-              <Divider sx={{ mb: 2 }} />
-              
-              {filteredTasks.length === 0 ? (
-                <Typography align="center" sx={{ py: 3 }}>
-                  {t('production.productionReport.noTasksInPeriod')}
-                </Typography>
-              ) : (
-                <TableContainer sx={{ overflowX: 'auto' }}>
-                  <Table size="medium" sx={{ minWidth: 850 }}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>{t('production.productionReport.tableHeaders.taskName')}</TableCell>
-                        <TableCell>{t('production.productionReport.tableHeaders.moNumber')}</TableCell>
-                        <TableCell>{t('production.productionReport.tableHeaders.product')}</TableCell>
-                        <TableCell>{t('production.productionReport.tableHeaders.client')}</TableCell>
-                        <TableCell>{t('production.productionReport.tableHeaders.date')}</TableCell>
-                        <TableCell>{t('production.productionReport.tableHeaders.status')}</TableCell>
-                        <TableCell align="right">{t('production.productionReport.tableHeaders.workTime')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredTasks.map((task) => (
-                        <TableRow 
-                          key={task.id}
-                          hover
-                          onClick={() => navigate(`/production/tasks/${task.id}`)}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          <TableCell>{task.name}</TableCell>
-                          <TableCell>{task.moNumber}</TableCell>
-                          <TableCell>{task.productName}</TableCell>
-                          <TableCell>{getTaskCustomerName(task)}</TableCell>
-                          <TableCell>
-                            {task.scheduledDate 
-                              ? format(
-                                  typeof task.scheduledDate === 'string'
-                                    ? new Date(task.scheduledDate)
-                                    : task.scheduledDate instanceof Date
-                                      ? task.scheduledDate
-                                      : task.scheduledDate.toDate(),
-                                  'dd.MM.yyyy'
-                                )
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={task.status} 
-                              sx={{ 
-                                backgroundColor: getStatusColor(task.status),
-                                color: 'white',
-                                fontSize: '0.75rem'
-                              }}
-                              size="small" 
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {task.productionSessions 
-                              ? task.productionSessions.reduce((sum, session) => sum + (session.timeSpent || 0), 0)
-                              : '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </Paper>
-          )}
-        </React.Fragment>
+        <ProductionTimeAnalysisTab 
+          startDate={startDate}
+          endDate={endDate}
+          customers={customers}
+          isMobile={isMobile}
+        />
       )}
 
       {/* Zakładka Konsumpcja MO */}
@@ -790,15 +281,6 @@ const ProductionReportPage = () => {
         />
       )}
 
-      {/* Nowa zakładka Czas Produkcji */}
-      {selectedTab === 2 && (
-        <ProductionTimeAnalysisTab 
-          startDate={startDate}
-          endDate={endDate}
-          customers={customers}
-          isMobile={isMobile}
-        />
-      )}
     </Container>
   );
 };

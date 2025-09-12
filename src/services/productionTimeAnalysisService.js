@@ -215,8 +215,12 @@ export const formatMinutes = (minutes) => {
   
   if (hours > 0) {
     return `${hours}h ${remainingMinutes}min`;
-  } else {
+  } else if (remainingMinutes > 0) {
     return `${remainingMinutes} min`;
+  } else {
+    // Dla wartości poniżej 1 minuty pokazuj sekundy
+    const seconds = Math.round(minutes * 60);
+    return `${seconds} sek`;
   }
 };
 
