@@ -23,7 +23,9 @@ import {
   DialogTitle,
   Tooltip,
   TablePagination,
-  Chip
+  Chip,
+  TextField,
+  Grid
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -71,6 +73,14 @@ const InventoryFormsResponsesPage = () => {
   // Stan dla dialogu potwierdzenia usunięcia
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteItemData, setDeleteItemData] = useState(null);
+  
+  // Stan dla dialogu wyboru zakresu dat eksportu
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportDateRange, setExportDateRange] = useState({
+    fromDate: '',
+    toDate: ''
+  });
+  const [exportFilename, setExportFilename] = useState('');
 
   // ✅ FALLBACK: Funkcja do sekwencyjnego ładowania stron gdy brakuje kursorów
   const loadSequentiallyToPage = async (targetPage, formType) => {
@@ -334,18 +344,69 @@ const InventoryFormsResponsesPage = () => {
     return '-';
   };
   
-  // ✅ OPTYMALIZACJA: Export all data (not just current page)
-  const handleExportToCSV = async (filename) => {
+  // Funkcja pomocnicza do formatowania wartości CSV
+  const formatCSVValue = (value) => {
+    if (value === null || value === undefined) {
+      return '""';
+    }
+    
+    const stringValue = String(value);
+    
+    // Jeśli wartość zawiera przecinki, cudzysłowy lub znaki nowej linii, lub spacje, owijamy w cudzysłowy
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r') || stringValue.includes(' ')) {
+      // Eskapeuj cudzysłowy przez podwojenie
+      const escapedValue = stringValue.replace(/"/g, '""');
+      return `"${escapedValue}"`;
+    }
+    
+    // Dla bezpieczeństwa owijamy wszystkie wartości w cudzysłowy
+    return `"${stringValue}"`;
+  };
+  
+  // Funkcja otwierania dialogu wyboru zakresu dat
+  const handleOpenExportDialog = (defaultFilename) => {
+    setExportFilename(defaultFilename);
+    // Ustaw domyślny zakres - ostatnie 30 dni
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    setExportDateRange({
+      fromDate: thirtyDaysAgo.toISOString().split('T')[0],
+      toDate: today.toISOString().split('T')[0]
+    });
+    setExportDialogOpen(true);
+  };
+
+  // Funkcja zamykania dialogu eksportu
+  const handleCloseExportDialog = () => {
+    setExportDialogOpen(false);
+    setExportDateRange({ fromDate: '', toDate: '' });
+    setExportFilename('');
+  };
+
+  // ✅ OPTYMALIZACJA: Export data with date range filtering
+  const handleExportToCSV = async (filename, dateRange = null) => {
     try {
       setLoading(true);
       
-      // Pobierz wszystkie dane dla eksportu (bez paginacji)
+      // Pobierz dane dla eksportu z filtrowaniem po datach
       const formType = tabValue === 0 ? INVENTORY_FORM_TYPES.LOADING_REPORT : INVENTORY_FORM_TYPES.UNLOADING_REPORT;
+      
+      // Przygotuj filtry
+      const filters = {};
+      if (dateRange && dateRange.fromDate) {
+        filters.fromDate = dateRange.fromDate;
+      }
+      if (dateRange && dateRange.toDate) {
+        filters.toDate = dateRange.toDate;
+      }
+      
       const result = await getInventoryFormResponsesWithPagination(
         formType,
         1, // First page
-        1000, // Large limit to get all data
-        {} // No filters
+        10000, // Large limit to get all data
+        filters
       );
       
       let csvContent = "data:text/csv;charset=utf-8,";
@@ -353,7 +414,7 @@ const InventoryFormsResponsesPage = () => {
       if (tabValue === 0) {
         csvContent += `${t('inventory.forms.fillDate')},${t('inventory.forms.email')},${t('inventory.forms.employeeName')},${t('inventory.forms.position')},${t('inventory.forms.cmrNumber')},${t('inventory.forms.loadingDate')},${t('inventory.forms.carrierName')},${t('inventory.forms.vehicleRegistration')},${t('inventory.forms.vehicleTechnicalCondition')},${t('inventory.forms.clientName')},${t('inventory.forms.orderNumber')},${t('inventory.forms.palletProductName')},${t('inventory.forms.palletQuantity')},${t('inventory.forms.weight')},${t('inventory.forms.loadingNotes')},${t('inventory.forms.goodsNotes')}\n`;
         result.data.forEach(row => {
-          csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.cmrNumber || ''},${row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.clientName || ''},${row.orderNumber || ''},${row.palletProductName || ''},${row.palletQuantity || ''},${row.weight || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
+          csvContent += `${formatCSVValue(formatDateTime(row.fillDate))},${formatCSVValue(row.email || '')},${formatCSVValue(row.employeeName || '')},${formatCSVValue(row.position || '')},${formatCSVValue(row.cmrNumber || '')},${formatCSVValue(row.loadingDate ? format(row.loadingDate, 'dd.MM.yyyy') : '')},${formatCSVValue(row.carrierName || '')},${formatCSVValue(row.vehicleRegistration || '')},${formatCSVValue(row.vehicleTechnicalCondition || '')},${formatCSVValue(row.clientName || '')},${formatCSVValue(row.orderNumber || '')},${formatCSVValue(row.palletProductName || '')},${formatCSVValue(row.palletQuantity || '')},${formatCSVValue(row.weight || '')},${formatCSVValue(row.notes || '')},${formatCSVValue(row.goodsNotes || '')}\n`;
         });
       } else if (tabValue === 1) {
         csvContent += `${t('inventory.forms.fillDate')},${t('inventory.forms.email')},${t('inventory.forms.employeeName')},${t('inventory.forms.position')},${t('inventory.forms.unloadingDate')},${t('inventory.forms.carrierName')},${t('inventory.forms.vehicleRegistration')},${t('inventory.forms.vehicleTechnicalCondition')},${t('inventory.forms.transportHygiene')},${t('inventory.forms.supplierName')},${t('inventory.forms.poNumber')},${t('inventory.forms.deliveredItems')},${t('inventory.forms.palletQuantity')},${t('inventory.forms.cartonsTubsQuantity')},${t('inventory.forms.weight')},${t('inventory.forms.visualInspectionResult')},${t('inventory.forms.ecoCertificateNumber')},${t('inventory.forms.unloadingNotes')},${t('inventory.forms.goodsNotes')}\n`;
@@ -380,7 +441,7 @@ const InventoryFormsResponsesPage = () => {
             itemsText = row.goodsDescription;
           }
           
-          csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.employeeName || ''},${row.position || ''},${row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy') : ''},${row.carrierName || ''},${row.vehicleRegistration || ''},${row.vehicleTechnicalCondition || ''},${row.transportHygiene || ''},${row.supplierName || ''},${row.poNumber || ''},${itemsText},${row.palletQuantity || ''},${row.cartonsTubsQuantity || ''},${row.weight || ''},${row.visualInspectionResult || ''},${row.ecoCertificateNumber || ''},${row.notes || ''},${row.goodsNotes || ''}\n`;
+          csvContent += `${formatCSVValue(formatDateTime(row.fillDate))},${formatCSVValue(row.email || '')},${formatCSVValue(row.employeeName || '')},${formatCSVValue(row.position || '')},${formatCSVValue(row.unloadingDate ? format(row.unloadingDate, 'dd.MM.yyyy') : '')},${formatCSVValue(row.carrierName || '')},${formatCSVValue(row.vehicleRegistration || '')},${formatCSVValue(row.vehicleTechnicalCondition || '')},${formatCSVValue(row.transportHygiene || '')},${formatCSVValue(row.supplierName || '')},${formatCSVValue(row.poNumber || '')},${formatCSVValue(itemsText)},${formatCSVValue(row.palletQuantity || '')},${formatCSVValue(row.cartonsTubsQuantity || '')},${formatCSVValue(row.weight || '')},${formatCSVValue(row.visualInspectionResult || '')},${formatCSVValue(row.ecoCertificateNumber || '')},${formatCSVValue(row.notes || '')},${formatCSVValue(row.goodsNotes || '')}\n`;
         });
       }
       
@@ -398,6 +459,28 @@ const InventoryFormsResponsesPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Funkcja obsługi eksportu z dialogu
+  const handleConfirmExport = async () => {
+    if (!exportDateRange.fromDate || !exportDateRange.toDate) {
+      alert('Proszę wybrać zakres dat');
+      return;
+    }
+    
+    if (new Date(exportDateRange.fromDate) > new Date(exportDateRange.toDate)) {
+      alert('Data początkowa nie może być późniejsza niż data końcowa');
+      return;
+    }
+    
+    // Zamknij dialog
+    setExportDialogOpen(false);
+    
+    // Wykonaj eksport z wybranym zakresem dat
+    await handleExportToCSV(exportFilename, exportDateRange);
+    
+    // Wyczyść stan
+    handleCloseExportDialog();
   };
 
   // Funkcje do obsługi dialogu potwierdzenia usunięcia
@@ -480,7 +563,7 @@ const InventoryFormsResponsesPage = () => {
         <Box>
           <Button 
             variant="outlined" 
-            onClick={() => handleExportToCSV('raporty-zaladunku-towaru.csv')}
+            onClick={() => handleOpenExportDialog('raporty-zaladunku-towaru.csv')}
             disabled={loading || totalCount === 0}
             sx={{ mr: 1 }}
           >
@@ -616,7 +699,7 @@ const InventoryFormsResponsesPage = () => {
         <Box>
           <Button 
             variant="outlined" 
-            onClick={() => handleExportToCSV('raporty-rozladunku-towaru.csv')}
+            onClick={() => handleOpenExportDialog('raporty-rozladunku-towaru.csv')}
             disabled={loading || totalCount === 0}
             sx={{ mr: 1 }}
           >
@@ -814,6 +897,59 @@ const InventoryFormsResponsesPage = () => {
         <DialogActions>
           <Button onClick={handleDeleteCancel} color="primary">{t('inventory.forms.deleteConfirm.cancel')}</Button>
           <Button onClick={handleDeleteConfirm} color="error" autoFocus>{t('inventory.forms.deleteConfirm.delete')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wyboru zakresu dat dla eksportu */}
+      <Dialog open={exportDialogOpen} onClose={handleCloseExportDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {t('inventory.forms.export')} - {t('inventory.forms.selectDateRange')}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz zakres dat dla eksportowanych danych. Domyślnie pokazane są ostatnie 30 dni.
+          </DialogContentText>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Data od"
+                type="date"
+                value={exportDateRange.fromDate}
+                onChange={(e) => setExportDateRange(prev => ({ ...prev, fromDate: e.target.value }))}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                variant="outlined"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Data do"
+                type="date"
+                value={exportDateRange.toDate}
+                onChange={(e) => setExportDateRange(prev => ({ ...prev, toDate: e.target.value }))}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                variant="outlined"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseExportDialog} color="secondary">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmExport} 
+            color="primary" 
+            variant="contained"
+            disabled={!exportDateRange.fromDate || !exportDateRange.toDate}
+          >
+            Eksportuj CSV
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>

@@ -86,6 +86,15 @@ const FormsResponsesPage = () => {
   
   // Stan dla panelu filtrów
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Stan dla dialogu wyboru zakresu dat eksportu
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportDateRange, setExportDateRange] = useState({
+    fromDate: '',
+    toDate: ''
+  });
+  const [exportFilename, setExportFilename] = useState('');
+  const [exportFormType, setExportFormType] = useState('');
 
   // ✅ FALLBACK: Funkcja do sekwencyjnego ładowania stron gdy brakuje kursorów
   const loadSequentiallyToPage = async (targetPage, formType) => {
@@ -310,6 +319,104 @@ const FormsResponsesPage = () => {
     }
   };
   
+  // Funkcja pomocnicza do formatowania wartości CSV
+  const formatCSVValue = (value) => {
+    if (value === null || value === undefined) {
+      return '""';
+    }
+    
+    const stringValue = String(value);
+    
+    // Jeśli wartość zawiera przecinki, cudzysłowy lub znaki nowej linii, lub spacje, owijamy w cudzysłowy
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r') || stringValue.includes(' ')) {
+      // Eskapeuj cudzysłowy przez podwojenie
+      const escapedValue = stringValue.replace(/"/g, '""');
+      return `"${escapedValue}"`;
+    }
+    
+    // Dla bezpieczeństwa owijamy wszystkie wartości w cudzysłowy
+    return `"${stringValue}"`;
+  };
+  
+  // Funkcja otwierania dialogu wyboru zakresu dat
+  const handleOpenExportDialog = (defaultFilename, formType) => {
+    setExportFilename(defaultFilename);
+    setExportFormType(formType);
+    // Ustaw domyślny zakres - ostatnie 30 dni
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    setExportDateRange({
+      fromDate: thirtyDaysAgo.toISOString().split('T')[0],
+      toDate: today.toISOString().split('T')[0]
+    });
+    setExportDialogOpen(true);
+  };
+
+  // Funkcja zamykania dialogu eksportu
+  const handleCloseExportDialog = () => {
+    setExportDialogOpen(false);
+    setExportDateRange({ fromDate: '', toDate: '' });
+    setExportFilename('');
+    setExportFormType('');
+  };
+
+  // Funkcja obsługi eksportu z dialogu
+  const handleConfirmExport = async () => {
+    if (!exportDateRange.fromDate || !exportDateRange.toDate) {
+      alert('Proszę wybrać zakres dat');
+      return;
+    }
+    
+    if (new Date(exportDateRange.fromDate) > new Date(exportDateRange.toDate)) {
+      alert('Data początkowa nie może być późniejsza niż data końcowa');
+      return;
+    }
+    
+    // Zamknij dialog
+    setExportDialogOpen(false);
+    
+    // Wykonaj eksport z wybranym zakresem dat
+    await handleExportToCSVWithDateRange(exportFilename, exportFormType, exportDateRange);
+    
+    // Wyczyść stan
+    handleCloseExportDialog();
+  };
+
+  // Nowa funkcja eksportu z filtrowaniem po datach
+  const handleExportToCSVWithDateRange = async (filename, formType, dateRange) => {
+    try {
+      setLoading(true);
+      
+      // Przygotuj filtry
+      const filters = {};
+      if (dateRange && dateRange.fromDate) {
+        filters.fromDate = dateRange.fromDate;
+      }
+      if (dateRange && dateRange.toDate) {
+        filters.toDate = dateRange.toDate;
+      }
+      
+      // Pobierz dane z serwisu z filtrowaniem po datach
+      const result = await getFormResponsesWithPagination(
+        formType,
+        1, // First page
+        10000, // Large limit to get all data
+        filters
+      );
+      
+      // Użyj istniejącej funkcji eksportu z pobranymi danymi
+      handleExportToCSV(result.data, filename);
+      
+    } catch (error) {
+      console.error('Błąd podczas eksportu do CSV:', error);
+      setError(`Błąd podczas eksportu: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleExportToCSV = (data, filename) => {
     // Funkcja do eksportu danych do pliku CSV
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -318,18 +425,18 @@ const FormsResponsesPage = () => {
     if (tabValue === 0) {
       csvContent += "Data,Email,Numer MO,Ilość produktu,Straty opakowania,Straty produktu,Straty surowca,Waga netto kapsułek\n";
       data.forEach(row => {
-        csvContent += `${formatDateTime(row.date)},${row.email || ''},${row.moNumber || ''},${row.productQuantity || ''},${row.packagingLoss || ''},${row.bulkLoss || ''},${row.rawMaterialLoss || ''},${row.netCapsuleWeight || ''}\n`;
+        csvContent += `${formatCSVValue(formatDateTime(row.date))},${formatCSVValue(row.email || '')},${formatCSVValue(row.moNumber || '')},${formatCSVValue(row.productQuantity || '')},${formatCSVValue(row.packagingLoss || '')},${formatCSVValue(row.bulkLoss || '')},${formatCSVValue(row.rawMaterialLoss || '')},${formatCSVValue(row.netCapsuleWeight || '')}\n`;
       });
     } else if (tabValue === 1) {
       csvContent += "Data,Email,Imię i nazwisko,Stanowisko,Manufacturing Order,Customer Order,Nazwa produktu,Numer LOT,Temperatura,Wilgotność,Skan dokumentów,Zdjęcie produktu 1,Zdjęcie produktu 2,Zdjęcie produktu 3\n";
       data.forEach(row => {
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.name || ''},${row.position || ''},${row.manufacturingOrder || ''},${row.customerOrder || ''},${row.productName || ''},${row.lotNumber || ''},${row.temperature || ''},${row.humidity || ''},${row.documentScansUrl || ''},${row.productPhoto1Url || ''},${row.productPhoto2Url || ''},${row.productPhoto3Url || ''}\n`;
+        csvContent += `${formatCSVValue(formatDateTime(row.fillDate))},${formatCSVValue(row.email || '')},${formatCSVValue(row.name || '')},${formatCSVValue(row.position || '')},${formatCSVValue(row.manufacturingOrder || '')},${formatCSVValue(row.customerOrder || '')},${formatCSVValue(row.productName || '')},${formatCSVValue(row.lotNumber || '')},${formatCSVValue(row.temperature || '')},${formatCSVValue(row.humidity || '')},${formatCSVValue(row.documentScansUrl || '')},${formatCSVValue(row.productPhoto1Url || '')},${formatCSVValue(row.productPhoto2Url || '')},${formatCSVValue(row.productPhoto3Url || '')}\n`;
       });
     } else {
       csvContent += "Data,Email,Osoba odpowiedzialna,Rodzaj zmiany,Produkt,Numer MO,Ilość produkcji,Pracownicy,Straty surowca,Inne czynności\n";
       data.forEach(row => {
         const workers = Array.isArray(row.shiftWorkers) ? row.shiftWorkers.join(', ') : '';
-        csvContent += `${formatDateTime(row.fillDate)},${row.email || ''},${row.responsiblePerson || ''},${row.shiftType || ''},${row.product || ''},${row.moNumber || ''},${row.productionQuantity || ''},"${workers}",${row.rawMaterialLoss || ''},${row.otherActivities || ''}\n`;
+        csvContent += `${formatCSVValue(formatDateTime(row.fillDate))},${formatCSVValue(row.email || '')},${formatCSVValue(row.responsiblePerson || '')},${formatCSVValue(row.shiftType || '')},${formatCSVValue(row.product || '')},${formatCSVValue(row.moNumber || '')},${formatCSVValue(row.productionQuantity || '')},${formatCSVValue(workers)},${formatCSVValue(row.rawMaterialLoss || '')},${formatCSVValue(row.otherActivities || '')}\n`;
       });
     }
     
@@ -459,7 +566,7 @@ const FormsResponsesPage = () => {
         <Box>
           <Button 
             variant="outlined" 
-            onClick={() => handleExportToCSV(completedMOResponses, 'raport-zakonczonych-mo.csv')}
+            onClick={() => handleOpenExportDialog('raport-zakonczonych-mo.csv', FORM_TYPES.COMPLETED_MO)}
             disabled={completedMOResponses.length === 0}
             sx={{ mr: 1 }}
           >
@@ -576,7 +683,7 @@ const FormsResponsesPage = () => {
         <Box>
           <Button 
             variant="outlined" 
-            onClick={() => handleExportToCSV(productionControlResponses, 'raporty-kontroli-produkcji.csv')}
+            onClick={() => handleOpenExportDialog('raporty-kontroli-produkcji.csv', FORM_TYPES.PRODUCTION_CONTROL)}
             disabled={productionControlResponses.length === 0}
             sx={{ mr: 1 }}
           >
@@ -766,7 +873,7 @@ const FormsResponsesPage = () => {
           <Box>
             <Button 
               variant="outlined" 
-              onClick={() => handleExportToCSV(filteredShiftResponses, 'raporty-zmian-produkcyjnych.csv')}
+              onClick={() => handleOpenExportDialog('raporty-zmian-produkcyjnych.csv', FORM_TYPES.PRODUCTION_SHIFT)}
               disabled={filteredShiftResponses.length === 0}
               sx={{ mr: 1 }}
             >
@@ -1062,6 +1169,59 @@ const FormsResponsesPage = () => {
           </Button>
           <Button onClick={handleDeleteConfirm} color="error" autoFocus>
             {t('delete')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wyboru zakresu dat dla eksportu */}
+      <Dialog open={exportDialogOpen} onClose={handleCloseExportDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          Eksport do CSV - Wybór zakresu dat
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Wybierz zakres dat dla eksportowanych danych. Domyślnie pokazane są ostatnie 30 dni.
+          </DialogContentText>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Data od"
+                type="date"
+                value={exportDateRange.fromDate}
+                onChange={(e) => setExportDateRange(prev => ({ ...prev, fromDate: e.target.value }))}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                variant="outlined"
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Data do"
+                type="date"
+                value={exportDateRange.toDate}
+                onChange={(e) => setExportDateRange(prev => ({ ...prev, toDate: e.target.value }))}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                variant="outlined"
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseExportDialog} color="secondary">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmExport} 
+            color="primary" 
+            variant="contained"
+            disabled={!exportDateRange.fromDate || !exportDateRange.toDate}
+          >
+            Eksportuj CSV
           </Button>
         </DialogActions>
       </Dialog>
