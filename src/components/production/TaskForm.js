@@ -44,7 +44,8 @@ import {
   Link as LinkIcon,
   Update as UpdateIcon,
   History as HistoryIcon,
-  Calculate as CalculateIcon
+  Calculate as CalculateIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import {
   createTask,
@@ -58,6 +59,7 @@ import {
   getInventoryItemById
 } from '../../services/inventory';
 import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
+import { getOrderById } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
@@ -120,6 +122,7 @@ const TaskForm = ({ taskId }) => {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [updatingRecipe, setUpdatingRecipe] = useState(false);
   const [availableRecipeVersions, setAvailableRecipeVersions] = useState([]);
+  const [refreshingProductName, setRefreshingProductName] = useState(false);
 
   // Funkcja do cache'owania danych w sessionStorage
   const getCachedData = useCallback((key) => {
@@ -1126,6 +1129,61 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  // Funkcja do odświeżania nazwy produktu z powiązanego zamówienia
+  const handleRefreshProductName = async () => {
+    if (!taskData.orderId || !taskData.orderItemId) {
+      showWarning('To zadanie nie jest powiązane z zamówieniem klienta');
+      return;
+    }
+
+    try {
+      setRefreshingProductName(true);
+      
+      // Pobierz zamówienie
+      const order = await getOrderById(taskData.orderId);
+      
+      if (!order || !order.items || !Array.isArray(order.items)) {
+        showError('Nie znaleziono zamówienia lub pozycji zamówienia');
+        return;
+      }
+      
+      // Znajdź pozycję zamówienia odpowiadającą temu zadaniu
+      const orderItem = order.items.find(item => item.id === taskData.orderItemId);
+      
+      if (!orderItem) {
+        showError('Nie znaleziono pozycji zamówienia powiązanej z tym zadaniem');
+        return;
+      }
+      
+      const currentProductName = taskData.productName || '';
+      const newProductName = orderItem.name || '';
+      
+      if (currentProductName === newProductName) {
+        showSuccess('Nazwa produktu jest już aktualna');
+        return;
+      }
+      
+      // Zaktualizuj nazwę produktu
+      setTaskData(prev => ({
+        ...prev,
+        productName: newProductName
+      }));
+      
+      // Poinformuj użytkownika o różnych sytuacjach
+      if (taskData.inventoryProductId) {
+        showSuccess(`Zaktualizowano nazwę produktu z zamówienia: "${currentProductName}" → "${newProductName}"\n\nUwaga: Nazwa została nadpisana względem produktu z magazynu. Zapisz zadanie aby zachować zmiany.`);
+      } else {
+        showSuccess(`Zaktualizowano nazwę produktu: "${currentProductName}" → "${newProductName}"`);
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas odświeżania nazwy produktu:', error);
+      showError('Nie udało się odświeżyć nazwy produktu: ' + error.message);
+    } finally {
+      setRefreshingProductName(false);
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="md">
@@ -1376,17 +1434,45 @@ const TaskForm = ({ taskId }) => {
                   </Grid>
                 )}
                 <Grid item xs={12} sm={8}>
-                  <TextField
-                    fullWidth
-                    label="Nazwa produktu"
-                    name="productName"
-                    value={taskData.productName || ''}
-                    onChange={handleChange}
-                    required
-                    variant="outlined"
-                    disabled={!!taskData.inventoryProductId}
-                    helperText={taskData.inventoryProductId ? "Nazwa produktu pobrana z magazynu" : ""}
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <TextField
+                      fullWidth
+                      label="Nazwa produktu"
+                      name="productName"
+                      value={taskData.productName || ''}
+                      onChange={handleChange}
+                      required
+                      variant="outlined"
+                      helperText={
+                        taskData.inventoryProductId 
+                          ? "Nazwa produktu pochodzi z magazynu. Możesz ją edytować lub odświeżyć z zamówienia." 
+                          : ""
+                      }
+                      sx={{ flexGrow: 1 }}
+                    />
+                    {/* Przycisk do odświeżenia nazwy produktu - tylko w trybie edycji */}
+                    {taskId && taskId !== 'new' && taskData.orderId && taskData.orderItemId && (
+                      <Tooltip 
+                        title="Odśwież nazwę produktu z aktualnej pozycji zamówienia" 
+                        arrow
+                      >
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          onClick={handleRefreshProductName}
+                          disabled={refreshingProductName}
+                          startIcon={refreshingProductName ? <CircularProgress size={16} /> : <RefreshIcon />}
+                          sx={{ 
+                            height: 56, 
+                            minWidth: 120,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {refreshingProductName ? 'Odświeżam...' : 'Odśwież'}
+                        </Button>
+                      </Tooltip>
+                    )}
+                  </Box>
                 </Grid>
                 <Grid item xs={12} sm={4}>
                   <FormControl fullWidth variant="outlined">
