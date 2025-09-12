@@ -1467,16 +1467,42 @@ export const getAvailableProformaAmount = async (proformaId) => {
     const total = parseFloat(proformaData.total || 0);
     const paid = parseFloat(proformaData.totalPaid || 0);
     const used = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    const requiredAdvancePaymentPercentage = parseFloat(proformaData.requiredAdvancePaymentPercentage || 0);
     
-    // Sprawdź czy proforma została w pełni opłacona
-    const isFullyPaid = paid >= total;
+    // Sprawdź czy proforma została wystarczająco opłacona
+    let isReadyForSettlement;
+    let requiredPaymentAmount;
+    
+    if (requiredAdvancePaymentPercentage > 0) {
+      // Proforma z wymaganą przedpłatą - sprawdź czy opłacono wymaganą kwotę
+      requiredPaymentAmount = total * requiredAdvancePaymentPercentage / 100;
+      isReadyForSettlement = paid >= requiredPaymentAmount;
+    } else {
+      // Proforma bez wymaganej przedpłaty - wymaga pełnego opłacenia
+      requiredPaymentAmount = total;
+      isReadyForSettlement = paid >= total;
+    }
+    
+    // Oblicz maksymalną dostępną kwotę na podstawie procentu przedpłaty
+    let maxAvailableAmount;
+    if (requiredAdvancePaymentPercentage > 0) {
+      // Ograniczenie do procentu przedpłaty
+      maxAvailableAmount = (total * requiredAdvancePaymentPercentage / 100) - used;
+    } else {
+      // Brak ograniczenia procentowego - dostępna cała kwota
+      maxAvailableAmount = total - used;
+    }
     
     return {
       total,
       paid,
       used,
-      available: isFullyPaid ? (total - used) : 0, // Kwota dostępna tylko jeśli proforma jest opłacona
-      isFullyPaid
+      requiredAdvancePaymentPercentage,
+      requiredPaymentAmount,
+      maxAvailableAmount: Math.max(0, maxAvailableAmount),
+      available: isReadyForSettlement ? Math.max(0, maxAvailableAmount) : 0, // Kwota dostępna gdy opłacono wymaganą kwotę
+      isFullyPaid: paid >= total, // Pełne opłacenie proformy
+      isReadyForSettlement // Czy można użyć do rozliczenia (opłacono wymaganą kwotę)
     };
   } catch (error) {
     console.error('Błąd podczas pobierania dostępnej kwoty proformy:', error);
@@ -1513,7 +1539,8 @@ export const getAvailableProformasForOrder = async (orderId) => {
               paid: parseFloat(proforma.totalPaid || 0),
               used: 0,
               available: 0, // Dla błędnych proform nie pozwalamy na użycie
-              isFullyPaid: false
+              isFullyPaid: false,
+              isReadyForSettlement: false
             }
           };
         }
@@ -1522,7 +1549,7 @@ export const getAvailableProformasForOrder = async (orderId) => {
     
     // Filtruj tylko opłacone proformy z dostępną kwotą
     const availableProformas = proformasWithAmounts.filter(proforma => 
-      proforma.amountInfo.isFullyPaid && proforma.amountInfo.available > 0
+      proforma.amountInfo.isReadyForSettlement && proforma.amountInfo.available > 0
     );
     
     return availableProformas;
@@ -1565,7 +1592,7 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
           
                      // Jeśli edytujemy fakturę, dodaj z powrotem kwoty już przez nią wykorzystane
            let adjustedAvailable = amountInfo.available;
-           if (excludeInvoiceId && amountInfo.isFullyPaid) {
+           if (excludeInvoiceId && amountInfo.isReadyForSettlement) {
              const usageFromExcluded = excludedInvoiceProformUsage.find(u => u.proformaId === proforma.id);
              if (usageFromExcluded) {
                console.log(`Dodaję z powrotem kwotę ${usageFromExcluded.amount} do proformy ${proforma.number} (było dostępne: ${adjustedAvailable})`);
@@ -1590,7 +1617,8 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
               paid: parseFloat(proforma.totalPaid || 0),
               used: 0,
               available: 0, // Dla błędnych proform nie pozwalamy na użycie
-              isFullyPaid: false
+              isFullyPaid: false,
+              isReadyForSettlement: false
             }
           };
         }
@@ -1599,7 +1627,7 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
     
     // Filtruj tylko opłacone proformy z dostępną kwotą
     const availableProformas = proformasWithAmounts.filter(proforma => 
-      proforma.amountInfo.isFullyPaid && proforma.amountInfo.available > 0
+      proforma.amountInfo.isReadyForSettlement && proforma.amountInfo.available > 0
     );
     
     return availableProformas;

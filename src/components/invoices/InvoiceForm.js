@@ -981,9 +981,10 @@ const InvoiceForm = ({ invoiceId }) => {
           return false;
         }
         
-        // Sprawdź czy proforma została opłacona
-        if (!proforma.amountInfo.isFullyPaid) {
-          showError(`Proforma ${allocation.proformaNumber} nie została w pełni opłacona i nie może być użyta`);
+        // Sprawdź czy proforma została wystarczająco opłacona
+        if (!proforma.amountInfo.isReadyForSettlement) {
+          const requiredAmount = proforma.amountInfo.requiredPaymentAmount || proforma.total;
+          showError(`Proforma ${allocation.proformaNumber} nie została wystarczająco opłacona (wymagane: ${requiredAmount.toFixed(2)} ${proforma.currency || 'EUR'}) i nie może być użyta`);
           return false;
         }
         
