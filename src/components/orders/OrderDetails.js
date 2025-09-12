@@ -54,7 +54,6 @@ import {
   PictureAsPdf as PdfIcon,
   Link as LinkIcon,
   OpenInNew as OpenInNewIcon,
-  Label as LabelIcon,
   Add as AddIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData } from '../../services/orderService';
@@ -315,8 +314,6 @@ const OrderDetails = () => {
   const [userNames, setUserNames] = useState({});
   const [driveLinkDialogOpen, setDriveLinkDialogOpen] = useState(false);
   const [driveLink, setDriveLink] = useState('');
-  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
-  const [selectedItemForLabel, setSelectedItemForLabel] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [cmrDocuments, setCmrDocuments] = useState([]);
@@ -944,6 +941,116 @@ const OrderDetails = () => {
     return userNames[userId] || userId || 'System';
   };
 
+  // Funkcja pomocnicza do formatowania wartości CSV
+  const formatCSVValue = (value) => {
+    if (value === null || value === undefined) {
+      return '""';
+    }
+    
+    const stringValue = String(value);
+    
+    // Jeśli wartość zawiera przecinki, cudzysłowy lub znaki nowej linii, lub spacje, owijamy w cudzysłowy
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n') || stringValue.includes('\r') || stringValue.includes(' ')) {
+      // Eskapeuj cudzysłowy przez podwojenie
+      const escapedValue = stringValue.replace(/"/g, '""');
+      return `"${escapedValue}"`;
+    }
+    
+    // Dla bezpieczeństwa owijamy wszystkie wartości w cudzysłowy
+    return `"${stringValue}"`;
+  };
+
+  // Funkcja eksportu pozycji zamówienia do CSV
+  const handleExportItemsToCSV = () => {
+    try {
+      if (!order || !order.items || order.items.length === 0) {
+        showError('Brak pozycji do eksportu');
+        return;
+      }
+
+      // Przygotuj nagłówki CSV
+      const csvHeaders = [
+        'Lp.',
+        'Nazwa produktu',
+        'Ilość zamówiona',
+        'Jednostka',
+        'Ilość wysłana',
+        'Cena jednostkowa',
+        'Wartość pozycji',
+        'Zafakturowana kwota',
+        'Koszt produkcji',
+        'Zysk',
+        'Ostatni CMR',
+        'Status produkcji',
+        'Lista cen',
+        'Numer zadania produkcyjnego'
+      ];
+
+      // Przygotuj dane pozycji
+      const csvData = order.items.map((item, index) => {
+        const itemTotalValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+        const shippedQuantity = item.shippedQuantity || 0;
+        const lastCmr = item.lastCmrNumber || (item.cmrHistory && item.cmrHistory.length > 0 ? 
+          item.cmrHistory[item.cmrHistory.length - 1].cmrNumber : '-');
+        
+        // Pobierz zafakturowaną kwotę
+        const itemId = item.id || `${orderId}_item_${index}`;
+        const invoicedData = invoicedAmounts[itemId];
+        const invoicedAmount = invoicedData && invoicedData.totalInvoiced > 0 ? invoicedData.totalInvoiced : 0;
+        
+        // Oblicz koszt produkcji
+        const productionCost = parseFloat(item.productionCost) || 0;
+        
+        // Oblicz zysk (wartość pozycji - koszt produkcji)
+        const profit = itemTotalValue - productionCost;
+        
+        return [
+          formatCSVValue(index + 1),
+          formatCSVValue(item.name || ''),
+          formatCSVValue(`${item.quantity || 0}`),
+          formatCSVValue(item.unit || ''),
+          formatCSVValue(`${shippedQuantity}`),
+          formatCSVValue(formatCurrency(item.price).replace(/\s/g, '')),
+          formatCSVValue(formatCurrency(itemTotalValue).replace(/\s/g, '')),
+          formatCSVValue(formatCurrency(invoicedAmount).replace(/\s/g, '')),
+          formatCSVValue(formatCurrency(productionCost).replace(/\s/g, '')),
+          formatCSVValue(formatCurrency(profit).replace(/\s/g, '')),
+          formatCSVValue(lastCmr),
+          formatCSVValue(item.productionStatus || '-'),
+          formatCSVValue(item.priceList || '-'),
+          formatCSVValue(item.productionTaskNumber || '-')
+        ];
+      });
+
+      // Utwórz zawartość CSV
+      const csvContent = [
+        csvHeaders.map(header => formatCSVValue(header)).join(','),
+        ...csvData.map(row => row.join(','))
+      ].join('\n');
+
+      // Dodaj BOM dla poprawnego kodowania w Excel
+      const csvBlob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(csvBlob);
+      
+      // Utwórz link i pobierz plik
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `pozycje_zamowienia_${order.orderNumber || order.id}_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Zwolnij pamięć
+      URL.revokeObjectURL(url);
+      
+      showSuccess('Pozycje zamówienia zostały wyeksportowane do CSV');
+      
+    } catch (error) {
+      console.error('Błąd podczas eksportu pozycji do CSV:', error);
+      showError('Błąd podczas eksportu pozycji do CSV');
+    }
+  };
+
   // Dodaję komponent wyświetlający historię zmian statusu przed sekcją z listą produktów
   const renderStatusHistory = () => {
     if (!order.statusHistory || order.statusHistory.length === 0) {
@@ -1050,27 +1157,6 @@ const OrderDetails = () => {
     return url && url.includes('drive.google.com');
   };
 
-  const handleLabelDialogOpen = (item) => {
-    setSelectedItemForLabel(item);
-    setLabelDialogOpen(true);
-  };
-
-  const handleLabelDialogClose = () => {
-    setLabelDialogOpen(false);
-    setSelectedItemForLabel(null);
-  };
-
-  const handlePrintLabel = () => {
-    // Przekierowanie do strony drukowania etykiety wysyłkowej dla wybranego produktu
-    navigate(`/orders/${orderId}/shipping-label`, { 
-      state: { 
-        item: selectedItemForLabel,
-        orderNumber: order.orderNumber, 
-        returnTo: `/orders/${orderId}`
-      } 
-    });
-    handleLabelDialogClose();
-  };
 
   // Funkcja do określania statusu produkcji dla danego elementu
   // Funkcja do pobierania faktur powiązanych z zamówieniem
@@ -1438,14 +1524,6 @@ const OrderDetails = () => {
             >
               {t('orderDetails.actions.print')}
             </Button>
-            <Button 
-              startIcon={<LabelIcon />} 
-              variant="outlined"
-              onClick={() => setLabelDialogOpen(true)}
-              sx={{ mr: 1 }}
-            >
-              {t('orderDetails.actions.generateLabel')}
-            </Button>
             {/* Przycisk migracji - tylko do testowania */}
             <Button 
               startIcon={<RefreshIcon />} 
@@ -1609,7 +1687,18 @@ const OrderDetails = () => {
 
         {/* Lista produktów */}
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.products')}</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">{t('orderDetails.sections.products')}</Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleExportItemsToCSV}
+              disabled={!order || !order.items || order.items.length === 0}
+              sx={{ ml: 2 }}
+            >
+              Eksportuj do CSV
+            </Button>
+          </Box>
           <Divider sx={{ mb: 2 }} />
           <Table>
             <TableHead>
@@ -1827,15 +1916,19 @@ const OrderDetails = () => {
                     })()}
                   </TableCell>
                   <TableCell>
-                    <Tooltip title={t('orderDetails.tooltips.printLabel')}>
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleLabelDialogOpen(item)}
-                      >
-                        <LabelIcon />
-                      </IconButton>
-                    </Tooltip>
+                    {item.productionTaskId ? (
+                      <Tooltip title={`Przejdź do zadania produkcyjnego ${item.productionTaskNumber || item.productionTaskId}`}>
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
+                        >
+                          <EngineeringIcon />
+                        </IconButton>
+                      </Tooltip>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -2510,53 +2603,6 @@ const OrderDetails = () => {
           </DialogActions>
         </Dialog>
 
-        {/* Dialog wyboru etykiety produktu */}
-        <Dialog open={labelDialogOpen} onClose={handleLabelDialogClose}>
-          <DialogTitle>{t('orderDetails.dialogs.productLabel.title')}</DialogTitle>
-          <DialogContent>
-            {selectedItemForLabel ? (
-              <DialogContentText>
-                {t('orderDetails.dialogs.productLabel.selectedProduct', { name: selectedItemForLabel.name })}
-              </DialogContentText>
-            ) : (
-              <DialogContentText>
-                {t('orderDetails.dialogs.productLabel.selectProduct')}
-              </DialogContentText>
-            )}
-            
-            {!selectedItemForLabel && (
-              <FormControl fullWidth sx={{ mt: 2 }}>
-                <InputLabel>{t('orderDetails.dialogs.productLabel.productLabel')}</InputLabel>
-                <Select
-                  value={selectedItemForLabel?.id || ''}
-                  onChange={(e) => {
-                    const selected = order.items.find(item => item.id === e.target.value);
-                    setSelectedItemForLabel(selected);
-                  }}
-                  label={t('orderDetails.dialogs.productLabel.productLabel')}
-                >
-                  {order.items && order.items.map((item, index) => (
-                    <MenuItem key={index} value={item.id || index}>
-                      {item.name} ({item.quantity} {item.unit})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleLabelDialogClose}>{t('orderDetails.dialogs.productLabel.cancel')}</Button>
-            <Button 
-              onClick={handlePrintLabel} 
-              variant="contained" 
-              color="primary" 
-              disabled={!selectedItemForLabel}
-              startIcon={<LabelIcon />}
-            >
-              {t('orderDetails.dialogs.productLabel.printLabel')}
-            </Button>
-          </DialogActions>
-        </Dialog>
       </Box>
     </div>
   );

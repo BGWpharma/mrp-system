@@ -78,7 +78,6 @@ import QualityReportsPage from './pages/Quality/QualityReportsPage';
 import OrdersList from './components/orders/OrdersList';
 import OrderForm from './components/orders/OrderForm';
 import OrderDetails from './components/orders/OrderDetails';
-import ShippingLabelPage from './pages/Orders/ShippingLabelPage';
 
 // Purchase Orders
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
@@ -283,7 +282,6 @@ function App() {
                     <Route path="/orders" element={<PrivateLayout><OrdersList /></PrivateLayout>} />
                     <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
                     <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
-                    <Route path="/orders/:orderId/shipping-label" element={<PrivateLayout><ShippingLabelPage /></PrivateLayout>} />
                     <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
                     
                     {/* Price Lists Routes - nowy moduł */}
