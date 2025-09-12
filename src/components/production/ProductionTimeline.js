@@ -111,10 +111,14 @@ import './ProductionTimeline.css';
 // ✅ OPTYMALIZACJE WYDAJNOŚCI - Helper functions
 const debounce = (func, delay) => {
   let timeoutId;
-  return function (...args) {
+  const debounced = function (...args) {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => func.apply(this, args), delay);
   };
+  debounced.cancel = () => {
+    clearTimeout(timeoutId);
+  };
+  return debounced;
 };
 
 const throttle = (func, delay) => {
@@ -455,7 +459,10 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
 });
 
 // Zoptymalizowany główny komponent z debouncing
-const ProductionTimeline = React.memo(() => {
+const ProductionTimeline = React.memo(({ 
+  readOnly = false, 
+  performanceMode = false 
+} = {}) => {
   const [tasks, setTasks] = useState([]);
   const [workstations, setWorkstations] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -536,17 +543,17 @@ const ProductionTimeline = React.memo(() => {
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
 
-  // ✅ OPTYMALIZACJE WYDAJNOŚCI - Throttled tooltip update
-  const throttledTooltipUpdate = useMemo(() => 
-    throttle((e, task) => {
+  // ✅ OPTYMALIZACJE WYDAJNOŚCI - Debounced tooltip update (poprawiona wydajność)
+  const debouncedTooltipUpdate = useMemo(() => 
+    debounce((e, task) => {
       setTooltipData(task);
       setTooltipPosition({
         x: e.clientX + 10,
         y: e.clientY - 10
       });
       setTooltipVisible(true);
-    }, 100), // Co 100ms
-    []
+    }, performanceMode ? 300 : 250), // Zwiększone opóźnienie dla lepszej wydajności
+    [performanceMode]
   );
 
   // Pobranie danych
@@ -1911,6 +1918,11 @@ const ProductionTimeline = React.memo(() => {
 
   // Ulepszony zoom wheel handler z obsługą touchpada
   const handleWheel = useCallback((event) => {
+    // ✅ Ukryj tooltip podczas wheel events (jak w customer-portal)
+    debouncedTooltipUpdate.cancel();
+    setTooltipVisible(false);
+    setTooltipData(null);
+    
     const isTouchpad = detectTouchpad(event);
     
     // Dla Shift + scroll - poziome przewijanie
@@ -2073,11 +2085,16 @@ const ProductionTimeline = React.memo(() => {
         }
       }
     }
-  }, [visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd, zoomLevel, detectTouchpad, touchpadScrollTimeout]);
+  }, [visibleTimeStart, visibleTimeEnd, canvasTimeStart, canvasTimeEnd, zoomLevel, detectTouchpad, touchpadScrollTimeout, debouncedTooltipUpdate]);
 
   // ✅ OPTYMALIZACJE WYDAJNOŚCI - Debounced scroll sync
   const handleScrollSync = useMemo(() => 
     debounce(() => {
+      // ✅ Ukryj tooltip podczas przewijania (jak w customer-portal)
+      debouncedTooltipUpdate.cancel();
+      setTooltipVisible(false);
+      setTooltipData(null);
+      
       if (updateScrollCanvasRef.current) {
         requestAnimationFrame(() => {
           if (updateScrollCanvasRef.current) {
@@ -2086,7 +2103,7 @@ const ProductionTimeline = React.memo(() => {
         });
       }
     }, 16), // ~60fps limit
-    [visibleTimeStart, visibleTimeEnd]
+    [visibleTimeStart, visibleTimeEnd, debouncedTooltipUpdate]
   );
 
   // Obsługa dotykowych gestów dla urządzeń mobilnych
@@ -2245,8 +2262,13 @@ const ProductionTimeline = React.memo(() => {
     debouncedCanvasSync();
   }, [visibleTimeStart, visibleTimeEnd, debouncedCanvasSync]);
 
-  // ✅ OPTYMALIZOWANE - Obserwatory DOM z debounce
+  // ✅ OPTYMALIZOWANE - Obserwatory DOM z debounce (wyłączone w trybie readonly/performance)
   useEffect(() => {
+    // Wyłącz DOM observery w trybie readonly lub performance dla lepszej wydajności
+    if (readOnly || performanceMode) {
+      return;
+    }
+
     const timelineElement = document.querySelector('.react-calendar-timeline');
     if (!timelineElement) return;
 
@@ -2276,7 +2298,7 @@ const ProductionTimeline = React.memo(() => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  }, [visibleTimeStart, visibleTimeEnd]);
+  }, [visibleTimeStart, visibleTimeEnd, readOnly, performanceMode]);
 
   // ✅ TOOLTIP CONFLICT RESOLUTION - Remove title attributes from elements with MUI Tooltips
   useEffect(() => {
@@ -2664,7 +2686,23 @@ const ProductionTimeline = React.memo(() => {
           onItemMove={handleItemMove}
           onItemSelect={handleItemSelect}
           moveResizeValidator={(action, item, time, resizeEdge) => {
-            // Podczas przeciągania zachowaj oryginalny rozmiar zadania BEZ korekty weekendu
+            // ✅ LAZY LOADING - Wyłącz walidację w trybie readonly lub performance
+            if (readOnly) {
+              return false; // Blokuj wszystkie operacje move/resize w trybie readonly
+            }
+            
+            if (performanceMode) {
+              // W trybie performance używaj tylko podstawowej walidacji bez heavy calculations
+              if (action === 'move') {
+                return roundToMinute(new Date(time)).getTime();
+              }
+              if (action === 'resize') {
+                return false; // Blokuj resize w trybie performance
+              }
+              return time;
+            }
+            
+            // Pełna walidacja tylko w trybie normalnym
             if (action === 'move') {
               const originalDurationMinutes = item.originalDuration || Math.round((item.end_time - item.start_time) / (1000 * 60));
               const newStartTime = roundToMinute(new Date(time));
@@ -2745,11 +2783,13 @@ const ProductionTimeline = React.memo(() => {
                 {...itemProps}
                                  onMouseEnter={(e) => {
                    if (item.task) {
-                     // ✅ Throttled tooltip update dla lepszej wydajności
-                     throttledTooltipUpdate(e, item.task);
+                     // ✅ Debounced tooltip update dla lepszej wydajności
+                     debouncedTooltipUpdate(e, item.task);
                    }
                  }}
                  onMouseLeave={() => {
+                   // ✅ Anuluj oczekujące pokazanie tooltip
+                   debouncedTooltipUpdate.cancel();
                    setTooltipVisible(false);
                    setTooltipData(null);
                  }}
