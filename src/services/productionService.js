@@ -1219,7 +1219,10 @@ export const updateTask = async (taskId, taskData, userId) => {
       };
       
       await updateDoc(taskRef, updatedTask);
-      
+
+      // Sprawdź czy data ważności została zmieniona i zaktualizuj powiązane partie
+      await updateRelatedBatchesExpiryDate(taskId, currentTask, updatedTask, userId);
+
       // Automatycznie aktualizuj koszty jeśli zmieniono materiały lub skonsumowane materiały
       // TYLKO jeśli aktualizacja nie zawiera już kosztów
       const shouldUpdateCosts = 
@@ -5708,5 +5711,81 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
     } catch (error) {
       console.error('Błąd podczas tworzenia pustej partii produktu:', error);
       throw error;
+    }
+  };
+
+  /**
+   * Aktualizuje datę ważności we wszystkich partiach powiązanych z zadaniem produkcyjnym
+   * @param {string} taskId - ID zadania produkcyjnego
+   * @param {Object} currentTask - Aktualne dane zadania (przed aktualizacją)
+   * @param {Object} updatedTask - Nowe dane zadania (po aktualizacji)
+   * @param {string} userId - ID użytkownika wykonującego aktualizację
+   * @returns {Promise<Object>} - Wynik aktualizacji
+   */
+  export const updateRelatedBatchesExpiryDate = async (taskId, currentTask, updatedTask, userId) => {
+    try {
+      // Sprawdź czy data ważności została zmieniona
+      const currentExpiryDate = currentTask.expiryDate;
+      const newExpiryDate = updatedTask.expiryDate;
+
+      // Jeśli data nie została podana lub się nie zmieniła, nie rób nic
+      if (!newExpiryDate || !currentExpiryDate) {
+        return { success: true, updated: 0, message: 'Brak daty ważności do aktualizacji' };
+      }
+
+      // Sprawdź czy data faktycznie się zmieniła
+      const currentDate = currentExpiryDate instanceof Date ? currentExpiryDate :
+                         currentExpiryDate.toDate ? currentExpiryDate.toDate() : new Date(currentExpiryDate);
+      const newDate = newExpiryDate instanceof Date ? newExpiryDate :
+                     newExpiryDate.toDate ? newExpiryDate.toDate() : new Date(newExpiryDate);
+
+      if (currentDate.getTime() === newDate.getTime()) {
+        return { success: true, updated: 0, message: 'Data ważności nie została zmieniona' };
+      }
+
+      console.log(`[BATCH-EXPIRY-UPDATE] Aktualizacja daty ważności dla zadania ${taskId}`);
+
+      // Znajdź wszystkie partie powiązane z tym zadaniem
+      const batchesRef = collection(db, 'inventoryBatches');
+      const q = query(batchesRef, where('sourceId', '==', taskId));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        console.log(`[BATCH-EXPIRY-UPDATE] Nie znaleziono partii powiązanych z zadaniem ${taskId}`);
+        return { success: true, updated: 0, message: 'Brak partii do aktualizacji' };
+      }
+
+      // Przygotuj aktualizacje dla wszystkich partii
+      const batch = writeBatch(db);
+
+      querySnapshot.forEach((doc) => {
+        const batchRef = doc.ref;
+        batch.update(batchRef, {
+          expiryDate: Timestamp.fromDate(newDate),
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+          expiryDateUpdatedFromTask: true,
+          expiryDateUpdatedAt: serverTimestamp()
+        });
+      });
+
+      // Wykonaj aktualizację wszystkich partii w jednej transakcji
+      await batch.commit();
+
+      console.log(`[BATCH-EXPIRY-UPDATE] Zaktualizowano datę ważności w ${querySnapshot.size} partiach dla zadania ${taskId}`);
+
+      return {
+        success: true,
+        updated: querySnapshot.size,
+        message: `Zaktualizowano datę ważności w ${querySnapshot.size} partiach`
+      };
+
+    } catch (error) {
+      console.error(`[BATCH-EXPIRY-UPDATE] Błąd podczas aktualizacji daty ważności partii dla zadania ${taskId}:`, error);
+      return {
+        success: false,
+        updated: 0,
+        message: `Błąd: ${error.message}`
+      };
     }
   };
