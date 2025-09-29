@@ -4924,19 +4924,6 @@ const TaskDetailsPage = () => {
                   {t('materialsSummary.updateManually')}
                 </Button>
               )}
-              
-              {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
-                <Button 
-                  variant="outlined" 
-                  color="secondary" 
-                  startIcon={<RefreshIcon />}
-                  onClick={updateConsumedMaterialPricesFromBatches}
-                  size="small"
-                  title="Aktualizuje ceny w konsumpcjach do aktualnych cen partii"
-                >
-                  Aktualizuj ceny konsumpcji
-                </Button>
-              )}
             </Box>
           </Grid>
         </Grid>
