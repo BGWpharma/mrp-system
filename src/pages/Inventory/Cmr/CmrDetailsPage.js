@@ -732,11 +732,11 @@ const CmrDetailsPage = () => {
             
             // Dostosowanie wysokości linii w zależności od pola
             let lineHeight;
-            if (fieldId === 'field-goods' || fieldId === 'field-packages' || 
+            if (fieldId === 'field-goods' || fieldId === 'field-packages' ||
                 fieldId === 'field-weight' || fieldId === 'field-volume' ||
                 fieldId === 'field-statistical-number' || fieldId === 'field-marks' ||
                 fieldId === 'field-packing') {
-              lineHeight = parseInt(fontSize) * 1.8; // Zwiększona wysokość dla pól w tabeli towarów
+              lineHeight = parseInt(fontSize) * 1.6; // Wyważona wysokość dla pól w tabeli towarów - kompromis między zwartym a czytelnym
             } else {
               lineHeight = parseInt(fontSize) * 1.2; // Standardowa wysokość dla pozostałych pól
             }
@@ -864,34 +864,33 @@ const CmrDetailsPage = () => {
               const items = cmrData.items;
               
               // Cechy i numery (pole 6)
-              let marksText = items.map((item, index) => 
-                index === 0 ? item.id || '' : '\n\n\n' + (item.id || '')
+              let marksText = items.map((item, index) =>
+                index === 0 ? item.id || '' : '\n\n' + (item.id || '')
               ).join('');
-              addTextToField(svgDoc, 'field-marks', marksText, '7px');
-              
+              addTextToField(svgDoc, 'field-marks', marksText, '6px');
+
               // Ilość sztuk (pole 7)
-              let packagesText = items.map((item, index) => 
-                index === 0 ? item.quantity?.toString() || '' : '\n\n\n' + (item.quantity?.toString() || '')
+              let packagesText = items.map((item, index) =>
+                index === 0 ? item.quantity?.toString() || '' : '\n\n' + (item.quantity?.toString() || '')
               ).join('');
-              addTextToField(svgDoc, 'field-packages', packagesText, '7px');
-              
+              addTextToField(svgDoc, 'field-packages', packagesText, '6px');
+
               // Sposób opakowania (pole 8)
-              let packingText = items.map((item, index) => 
-                index === 0 ? item.unit || '' : '\n\n\n' + (item.unit || '')
+              let packingText = items.map((item, index) =>
+                index === 0 ? item.unit || '' : '\n\n' + (item.unit || '')
               ).join('');
-              addTextToField(svgDoc, 'field-packing', packingText, '7px');
-              
+              addTextToField(svgDoc, 'field-packing', packingText, '6px');
+
               // Rodzaj towaru (pole 9)
-              let goodsText = items.map((item, index) => 
-                index === 0 ? item.description || '' : '\n\n\n' + (item.description || '')
+              let goodsText = items.map((item, index) =>
+                index === 0 ? item.description || '' : '\n\n' + (item.description || '')
               ).join('');
-              addTextToField(svgDoc, 'field-goods', goodsText, '7px');
-              
+              addTextToField(svgDoc, 'field-goods', goodsText, '6px');
+
               // Numer Statystyczny (pole 10) - numer CO z którego pochodzi pozycja
-              // POPRAWKA: Dodano zwiększoną wysokość linii dla prawidłowego wyrównania z wierszami towarów
               let statisticalNumberText = items.map((item, index) => {
                 let coNumber = '';
-                
+
                 // Sprawdź czy pozycja ma informacje o zamówieniu z którego pochodzi
                 if (item.originalOrderItem && item.originalOrderItem.orderNumber) {
                   coNumber = item.originalOrderItem.orderNumber;
@@ -905,23 +904,23 @@ const CmrDetailsPage = () => {
                     coNumber = cmrData.linkedOrders[0].orderNumber || '';
                   }
                 }
-                
+
                 console.log(`CMR pozycja ${index + 1}: towar="${item.description}", CO="${coNumber}"`);
-                return index === 0 ? coNumber : '\n\n\n' + coNumber;
+                return index === 0 ? coNumber : '\n\n' + coNumber;
               }).join('');
-              addTextToField(svgDoc, 'field-statistical-number', statisticalNumberText, '7px');
-              
+              addTextToField(svgDoc, 'field-statistical-number', statisticalNumberText, '6.5px');
+
               // Waga brutto (pole 11)
-              let weightsText = items.map((item, index) => 
-                index === 0 ? item.weight?.toString() || '' : '\n\n\n' + (item.weight?.toString() || '')
+              let weightsText = items.map((item, index) =>
+                index === 0 ? item.weight?.toString() || '' : '\n\n' + (item.weight?.toString() || '')
               ).join('');
-              addTextToField(svgDoc, 'field-weight', weightsText, '7px');
-              
+              addTextToField(svgDoc, 'field-weight', weightsText, '6.5px');
+
               // Objętość (pole 12)
-              let volumesText = items.map((item, index) => 
-                index === 0 ? item.volume?.toString() || '' : '\n\n\n' + (item.volume?.toString() || '')
+              let volumesText = items.map((item, index) =>
+                index === 0 ? item.volume?.toString() || '' : '\n\n' + (item.volume?.toString() || '')
               ).join('');
-              addTextToField(svgDoc, 'field-volume', volumesText, '7px');
+              addTextToField(svgDoc, 'field-volume', volumesText, '6.5px');
             }
             
             // Dane przewoźnika
