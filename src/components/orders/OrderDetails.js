@@ -1932,15 +1932,96 @@ const OrderDetails = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              <TableRow>
-                <TableCell colSpan={3} />
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  Suma częściowa:
+              {/* Wiersz podsumowania */}
+              <TableRow sx={{ 
+                bgcolor: 'action.hover', 
+                borderTop: '2px solid', 
+                borderColor: 'primary.main',
+                '& .MuiTableCell-root': {
+                  fontWeight: 'bold',
+                  color: 'text.primary'
+                }
+              }}>
+                <TableCell>PODSUMOWANIE:</TableCell>
+                <TableCell align="right">
+                  {/* Suma ilości */}
+                  {order.items?.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0) || 0}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                <TableCell align="right">
+                  {/* Suma wysłanych */}
+                  {order.items?.reduce((sum, item) => sum + (parseFloat(item.shippedQuantity) || 0), 0) || 0}
+                </TableCell>
+                <TableCell align="right">
+                  {/* Cena - nie sumujemy */}
+                  -
+                </TableCell>
+                <TableCell align="right">
+                  {/* Suma wartości (ilość × cena) */}
+                  {formatCurrency(order.items?.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0), 0) || 0)}
+                </TableCell>
+                <TableCell align="right">
+                  {/* Suma zafakturowanych kwot */}
+                  {(() => {
+                    let totalInvoiced = 0;
+                    order.items?.forEach((item, index) => {
+                      const itemId = item.id || `${orderId}_item_${index}`;
+                      const invoicedData = invoicedAmounts[itemId];
+                      if (invoicedData && invoicedData.totalInvoiced > 0) {
+                        totalInvoiced += invoicedData.totalInvoiced;
+                      }
+                    });
+                    return formatCurrency(totalInvoiced);
+                  })()}
+                </TableCell>
+                <TableCell align="right">
+                  {/* Lista cenowa - nie sumujemy */}
+                  -
+                </TableCell>
+                <TableCell align="right">
+                  {/* Status produkcji - nie sumujemy */}
+                  -
+                </TableCell>
+                <TableCell align="right">
+                  {/* Suma kosztów produkcji */}
+                  {formatCurrency(order.items?.reduce((sum, item) => {
+                    return sum + (item.productionTaskId && item.productionCost !== undefined ? parseFloat(item.productionCost) || 0 : 0);
+                  }, 0) || 0)}
+                </TableCell>
+                <TableCell align="right">
+                  {/* Suma zysków */}
+                  {(() => {
+                    const totalProfit = order.items?.reduce((sum, item) => {
+                      if (item.fromPriceList && parseFloat(item.price || 0) > 0 && item.productionCost !== undefined) {
+                        return sum + (item.quantity * item.price - item.productionCost);
+                      }
+                      return sum;
+                    }, 0) || 0;
+                    return (
+                      <Typography sx={{ 
+                        fontWeight: 'inherit',
+                        color: totalProfit > 0 ? 'success.main' : totalProfit < 0 ? 'error.main' : 'inherit'
+                      }}>
+                        {formatCurrency(totalProfit)}
+                      </Typography>
+                    );
+                  })()}
+                </TableCell>
+                <TableCell align="right">
+                  {/* Suma wartości pozycji */}
                   {formatCurrency(order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0)}
                 </TableCell>
-                <TableCell colSpan={7} />
+                <TableCell align="right">
+                  {/* Koszt całkowity na jednostkę - nie sumujemy */}
+                  -
+                </TableCell>
+                <TableCell align="right">
+                  {/* Pełny koszt produkcji na jednostkę - nie sumujemy */}
+                  -
+                </TableCell>
+                <TableCell align="right">
+                  {/* Akcje - nie sumujemy */}
+                  -
+                </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell colSpan={3} />
