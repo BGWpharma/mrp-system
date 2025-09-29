@@ -4024,24 +4024,47 @@ const TaskDetailsPage = () => {
 
   // Funkcja do pobierania aktualnych cen skonsumowanych partii i aktualizacji cen w konsumpcjach
   const updateConsumedMaterialPricesFromBatches = useCallback(async () => {
-    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) return;
+    if (!task?.consumedMaterials || task.consumedMaterials.length === 0) {
+      showError('Brak skonsumowanych materiałów do aktualizacji');
+      return;
+    }
     
     try {
+      console.log('🔄 [PRICE-UPDATE] Rozpoczynam aktualizację cen konsumpcji z aktualnych partii...');
+      
       const { getInventoryBatch } = await import('../../services/inventory');
       let hasChanges = false;
+      let updateCount = 0;
+      let errorCount = 0;
       const updatedConsumedMaterials = [...task.consumedMaterials];
+      const updateDetails = [];
 
       // Dla każdej konsumpcji, sprawdź aktualną cenę partii
       for (let i = 0; i < updatedConsumedMaterials.length; i++) {
         const consumed = updatedConsumedMaterials[i];
+        
+        if (!consumed.batchId) {
+          console.warn(`⚠️ [PRICE-UPDATE] Konsumpcja ${i} nie ma batchId - pomijam`);
+          continue;
+        }
+
         try {
           const batchData = await getInventoryBatch(consumed.batchId);
-          if (batchData && batchData.unitPrice) {
+          if (batchData && batchData.unitPrice !== undefined) {
             const currentPrice = consumed.unitPrice || 0;
             const newPrice = parseFloat(batchData.unitPrice) || 0;
             
-            // Sprawdź czy cena się zmieniła przed aktualizacją
-            if (Math.abs(currentPrice - newPrice) > 0.001) {
+            // 🔍 DEBUG: Szczegóły porównania cen
+            console.log(`🔍 [PRICE-UPDATE] Partia ${consumed.batchId}:`, {
+              material: consumed.materialName || consumed.materialId,
+              currentPriceInConsumption: currentPrice,
+              actualPriceInBatch: newPrice,
+              difference: Math.abs(currentPrice - newPrice),
+              willUpdate: Math.abs(currentPrice - newPrice) > 0.001
+            });
+            
+            // Sprawdź czy cena się zmieniła przed aktualizacją (tolerancja 0.0001 = 4 miejsca po przecinku)
+            if (Math.abs(currentPrice - newPrice) > 0.0001) {
               updatedConsumedMaterials[i] = {
                 ...consumed,
                 unitPrice: newPrice,
@@ -4049,11 +4072,28 @@ const TaskDetailsPage = () => {
                 priceUpdatedFrom: 'batch-price-sync'
               };
               hasChanges = true;
-              console.log(`💰 [SKONSUMOWANE] Zaktualizowano cenę partii ${batchData.batchNumber || consumed.batchId}: ${currentPrice.toFixed(4)}€ -> ${newPrice.toFixed(4)}€`);
+              updateCount++;
+              
+              const materialName = consumed.materialName || consumed.materialId || 'Nieznany materiał';
+              const batchNumber = batchData.batchNumber || consumed.batchId;
+              
+              updateDetails.push({
+                material: materialName,
+                batch: batchNumber,
+                oldPrice: currentPrice,
+                newPrice: newPrice,
+                quantity: consumed.quantity || 0
+              });
+              
+              console.log(`💰 [PRICE-UPDATE] ${materialName} (${batchNumber}): ${currentPrice.toFixed(6)}€ → ${newPrice.toFixed(6)}€`);
             }
+          } else {
+            console.warn(`⚠️ [PRICE-UPDATE] Brak ceny w partii ${consumed.batchId}`);
+            errorCount++;
           }
         } catch (error) {
-          console.error(`Błąd podczas pobierania danych partii ${consumed.batchId}:`, error);
+          console.error(`❌ [PRICE-UPDATE] Błąd podczas pobierania partii ${consumed.batchId}:`, error);
+          errorCount++;
         }
       }
 
@@ -4061,7 +4101,8 @@ const TaskDetailsPage = () => {
       if (hasChanges) {
         await updateDoc(doc(db, 'productionTasks', id), {
           consumedMaterials: updatedConsumedMaterials,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser?.uid || 'system'
         });
         
         // Zaktualizuj lokalny stan
@@ -4070,13 +4111,24 @@ const TaskDetailsPage = () => {
           consumedMaterials: updatedConsumedMaterials
         }));
         
-        console.log('✅ [SKONSUMOWANE] Zaktualizowano ceny skonsumowanych partii - automatyczna aktualizacja kosztów zostanie uruchomiona');
+        // Pokaż szczegółowy raport aktualizacji
+        const successMessage = `Zaktualizowano ceny ${updateCount} konsumpcji. ${errorCount > 0 ? `Błędów: ${errorCount}` : ''}`;
+        console.log(`✅ [PRICE-UPDATE] ${successMessage}`);
+        console.table(updateDetails);
+        
+        showSuccess(successMessage);
+        
         // Automatyczna aktualizacja kosztów zostanie wywołana przez useEffect z dependency na task.consumedMaterials
+      } else {
+        const message = `Sprawdzono ${task.consumedMaterials.length} konsumpcji - wszystkie ceny są aktualne. ${errorCount > 0 ? `Błędów: ${errorCount}` : ''}`;
+        console.log(`ℹ️ [PRICE-UPDATE] ${message}`);
+        showSuccess(message);
       }
     } catch (error) {
-      console.error('Błąd podczas aktualizacji cen skonsumowanych partii:', error);
+      console.error('❌ [PRICE-UPDATE] Błąd podczas aktualizacji cen skonsumowanych partii:', error);
+      showError('Błąd podczas aktualizacji cen konsumpcji: ' + error.message);
     }
-  }, [task?.consumedMaterials, id]);
+  }, [task?.consumedMaterials, id, currentUser, showSuccess, showError]);
   
   // Aktualizuj ceny materiałów przy każdym załadowaniu zadania lub zmianie zarezerwowanych partii
   useEffect(() => {
@@ -4860,18 +4912,32 @@ const TaskDetailsPage = () => {
                 </Typography>
               )}
             </Typography>
-            {costChanged && (
-              <Button 
-                variant="outlined" 
-                color="primary" 
-                startIcon={<SaveIcon />}
-                onClick={updateMaterialCostsManually}
-                sx={{ mt: 1 }}
-                size="small"
-              >
-                {t('materialsSummary.updateManually')}
-              </Button>
-            )}
+            <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {costChanged && (
+                <Button 
+                  variant="outlined" 
+                  color="primary" 
+                  startIcon={<SaveIcon />}
+                  onClick={updateMaterialCostsManually}
+                  size="small"
+                >
+                  {t('materialsSummary.updateManually')}
+                </Button>
+              )}
+              
+              {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
+                <Button 
+                  variant="outlined" 
+                  color="secondary" 
+                  startIcon={<RefreshIcon />}
+                  onClick={updateConsumedMaterialPricesFromBatches}
+                  size="small"
+                  title="Aktualizuje ceny w konsumpcjach do aktualnych cen partii"
+                >
+                  Aktualizuj ceny konsumpcji
+                </Button>
+              )}
+            </Box>
           </Grid>
         </Grid>
       </Box>
