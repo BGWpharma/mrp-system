@@ -325,6 +325,8 @@
         "title": "Podsumowanie kosztów materiałów",
         "totalCost": "Łączny koszt materiałów",
         "unitCost": "Koszt jednostkowy",
+        "totalFullProductionCost": "Pełny koszt produkcji",
+        "unitFullProductionCost": "Pełny koszt na jednostkę",
         "consumed": "Skonsumowane",
         "reserved": "Zarezerwowane",
         "updateManually": "Aktualizuj ręcznie",

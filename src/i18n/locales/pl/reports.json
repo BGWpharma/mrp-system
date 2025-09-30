@@ -76,8 +76,8 @@
       "ordersContainingProduct": "Zamówienia klientów (CO) zawierające produkt",
       "cards": {
         "itemsWithCosts": "Pozycje z kosztami",
-        "totalProductionCost": "Łączny koszt produkcji",
-        "totalFullProductionCost": "Pełny koszt produkcji",
+      "totalProductionCost": "Łączny koszt materiałów",
+      "totalFullProductionCost": "Łączny bazowy koszt materiałów",
         "shareInOrdersValue": "Udział w wartości zamówień"
       },
       "byProduct": {
@@ -125,8 +125,8 @@
       "product": "Produkt",
       "quantity": "Ilość",
       "totalQuantity": "Łączna ilość",
-      "productionCost": "Koszt produkcji",
-      "fullCost": "Pełny koszt",
+      "productionCost": "Koszt materiałów",
+      "fullCost": "Bazowy koszt materiałów",
       "ordersCount": "Liczba zamówień",
       "itemsCount": "Liczba pozycji",
       "avgCostPerUnit": "Średni koszt/szt.",

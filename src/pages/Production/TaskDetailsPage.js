@@ -4897,7 +4897,7 @@ const TaskDetailsPage = () => {
               )}
             </Typography>
             <Typography variant="body1" sx={{ mt: 1, color: 'primary.main' }}>
-              <strong>Pełny koszt produkcji:</strong> {totalFullProductionCost.toFixed(2)} €
+              <strong>{t('taskDetails:materialsSummary.totalFullProductionCost')}:</strong> {totalFullProductionCost.toFixed(2)} €
               {task.totalFullProductionCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   (W bazie: {task.totalFullProductionCost.toFixed(2)} €)
@@ -4905,7 +4905,7 @@ const TaskDetailsPage = () => {
               )}
             </Typography>
             <Typography variant="body1" sx={{ color: 'primary.main' }}>
-              <strong>Pełny koszt na jednostkę:</strong> ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
+              <strong>{t('taskDetails:materialsSummary.unitFullProductionCost')}:</strong> ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
               {task.unitFullProductionCost !== undefined && costChanged && (
                 <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   (W bazie: ~{task.unitFullProductionCost.toFixed(4)} €/{task.unit})

@@ -76,8 +76,8 @@
       "ordersContainingProduct": "Customer orders (CO) containing product",
       "cards": {
         "itemsWithCosts": "Items with costs",
-        "totalProductionCost": "Total production cost",
-        "totalFullProductionCost": "Total full production cost",
+      "totalProductionCost": "Total materials cost",
+      "totalFullProductionCost": "Total base materials cost",
         "shareInOrdersValue": "Share in orders value"
       },
       "byProduct": {
@@ -125,8 +125,8 @@
       "product": "Product",
       "quantity": "Quantity",
       "totalQuantity": "Total quantity",
-      "productionCost": "Production cost",
-      "fullCost": "Full cost",
+      "productionCost": "Materials cost",
+      "fullCost": "Base materials cost",
       "ordersCount": "Orders count",
       "itemsCount": "Items count",
       "avgCostPerUnit": "Avg cost/unit",

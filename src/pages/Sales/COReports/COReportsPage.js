@@ -58,6 +58,7 @@ import { enUS } from 'date-fns/locale';
 import { 
   format, 
   subDays, 
+  subYears,
   startOfMonth, 
   endOfMonth, 
   parseISO, 
@@ -138,10 +139,10 @@ const COReportsPage = () => {
   const isProductionExportMenuOpen = Boolean(productionExportMenuAnchor);
   
   // Filtry
-  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [startDate, setStartDate] = useState(subYears(new Date(), 1));
   const [endDate, setEndDate] = useState(new Date());
   const [selectedCustomer, setSelectedCustomer] = useState('all');
-  const [reportPeriod, setReportPeriod] = useState(TIME_PERIODS.LAST_30_DAYS);
+  const [reportPeriod, setReportPeriod] = useState(TIME_PERIODS.CUSTOM);
   
   // Statystyki
   const [stats, setStats] = useState({
@@ -825,6 +826,16 @@ const COReportsPage = () => {
               try {
                 // Tylko dodaj pozycję jeśli ma rzeczywiste dane zadania produkcyjnego
                 if (item.productionTaskId && item.productionTaskNumber && item.productionTaskNumber !== 'N/A') {
+                  // Sprawdź status zadania produkcyjnego - uwzględniaj tylko zadania "Zakończone"
+                  const taskData = tasksCache.data.get(item.productionTaskId);
+                  const taskStatus = taskData?.status || item.productionStatus;
+                  
+                  // Pomiń zadania, które nie mają statusu "Zakończone"
+                  if (taskStatus !== 'Zakończone') {
+                    console.log(`Pomijam zadanie ${item.productionTaskNumber} ze statusem "${taskStatus}" dla pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
+                    return; // Pomiń tę pozycję
+                  }
+                  
                   const quantity = parseFloat(item.quantity) || 0;
                   const fullProductionUnitCost = parseFloat(item.fullProductionUnitCost || 0);
                   const totalFullProductionCost = quantity * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0);
@@ -1305,7 +1316,6 @@ const COReportsPage = () => {
         { label: t('coReports.table.product'), key: 'itemName' },
         { label: t('coReports.table.quantity'), key: 'quantity' },
         { label: t('common.pieces'), key: 'unit' },
-        { label: t('coReports.table.avgCostPerUnit'), key: 'unitProductionCost' },
         { label: t('coReports.table.fullCostPerUnit'), key: 'fullProductionUnitCost' },
         { label: t('coReports.table.productionCost'), key: 'totalProductionCost' },
         { label: t('coReports.table.totalFullCost'), key: 'totalFullProductionCost' },
@@ -1363,7 +1373,6 @@ const COReportsPage = () => {
         { label: t('coReports.table.customer'), key: 'customerName' },
         { label: t('coReports.table.product'), key: 'itemName' },
         { label: t('coReports.table.quantity'), key: 'quantity' },
-        { label: t('coReports.table.avgCostPerUnit'), key: 'unitProductionCost' },
         { label: t('coReports.table.fullCostPerUnit'), key: 'fullProductionUnitCost' },
         { label: t('coReports.table.totalFullCost'), key: 'totalFullProductionCost' },
         { label: 'MO', key: 'productionTaskNumber' }
@@ -1993,7 +2002,7 @@ const COReportsPage = () => {
                           <TableCell align="right">{t('coReports.table.productionCost')}</TableCell>
                           <TableCell align="right">{t('coReports.table.fullCost')}</TableCell>
                           <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.avgCostPerUnit')}</TableCell>
+                          <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
                           <TableCell align="center">{t('coReports.table.actions')}</TableCell>
                         </TableRow>
                       </TableHead>
@@ -2006,7 +2015,7 @@ const COReportsPage = () => {
                             <TableCell align="right">{formatCurrency(product.totalFullCost)}</TableCell>
                             <TableCell align="right">{product.orderCount}</TableCell>
                             <TableCell align="right">
-                              {formatCurrency(product.totalQuantity > 0 ? product.totalCost / product.totalQuantity : 0)}
+                              {formatCurrency(product.totalQuantity > 0 ? product.totalFullCost / product.totalQuantity : 0)}
                             </TableCell>
                             <TableCell align="center">
                               <Tooltip title={t('coReports.productionCosts.byProduct.showProductDetails')}>

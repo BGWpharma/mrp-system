@@ -325,6 +325,8 @@
         "title": "Material Costs Summary",
         "totalCost": "Total Material Cost",
         "unitCost": "Unit Cost",
+        "totalFullProductionCost": "Total Production Cost",
+        "unitFullProductionCost": "Unit Production Cost",
         "consumed": "Consumed",
         "reserved": "Reserved",
         "updateManually": "Update Manually",
