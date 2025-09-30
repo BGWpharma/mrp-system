@@ -362,8 +362,33 @@ const MaterialsAndCostsTab = ({
                             );
                           }
                           
+                          // Oblicz łączną sumę zarezerwowanych ilości
+                          const totalStandardReserved = standardReservations.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+                          const totalPOReserved = poReservationsForMaterial.reduce((sum, reservation) => {
+                            const convertedQuantity = reservation.convertedQuantity || 0;
+                            const reservedQuantity = reservation.reservedQuantity || 0;
+                            return sum + (reservedQuantity - convertedQuantity);
+                          }, 0);
+                          const totalReserved = totalStandardReserved + totalPOReserved;
+                          
                           return (
                             <Box>
+                              {/* Suma zarezerwowanych ilości */}
+                              {totalReserved > 0 && (
+                                <Box sx={{ mb: 1 }}>
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontWeight: 600, 
+                                      color: 'primary.main',
+                                      fontSize: '0.875rem'
+                                    }}
+                                  >
+                                    Suma: {totalReserved.toFixed(2)} {material.unit}
+                                  </Typography>
+                                </Box>
+                              )}
+                              
                               {/* Standardowe rezerwacje magazynowe */}
                               {standardReservations.map((batch, index) => (
                                 <Chip 
