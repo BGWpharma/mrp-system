@@ -282,7 +282,27 @@
         "linkageStats": "Statystyki powiązań",
         "totalIngredients": "Wszystkie składniki",
         "linkedIngredients": "Powiązane składniki",
-        "linkagePercentage": "Procent powiązań"
+        "linkagePercentage": "Procent powiązań",
+        "addMixing": "Dodaj mieszanie",
+        "addMixingDialogTitle": "Dodaj nowe mieszanie",
+        "piecesCount": "Liczba sztuk",
+        "piecesCountHelper": "Opcjonalne - liczba sztuk produktu z tego mieszania",
+        "ingredients": "Składniki",
+        "ingredientName": "Nazwa składnika",
+        "ingredientNamePlaceholder": "np. Substancja A, Wypełniacz",
+        "quantity": "Ilość",
+        "unit": "Jednostka",
+        "addIngredient": "Dodaj składnik",
+        "noIngredients": "Dodaj co najmniej jeden składnik",
+        "invalidIngredients": "Wszystkie składniki muszą mieć nazwę i ilość",
+        "noTaskMaterials": "Brak materiałów w zadaniu produkcyjnym. Wprowadź nazwę składnika ręcznie.",
+        "removeMixing": "Usuń",
+        "confirmRemoveMixing": "Czy na pewno chcesz usunąć mieszanie nr {{number}}?",
+        "errors": {
+            "addMixingFailed": "Nie udało się dodać mieszania",
+            "removeMixingFailed": "Nie udało się usunąć mieszania",
+            "invalidMixingId": "Nieprawidłowy identyfikator mieszania"
+        }
     },
     "productionHistory": {
         "title": "Historia produkcji",

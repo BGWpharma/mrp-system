@@ -1756,6 +1756,9 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
       }
     }
     
+    // Śledzimy które pozycje zamówienia już zostały dopasowane (dla usług o tej samej nazwie)
+    const usedOrderItemIds = new Set();
+    
     invoices.forEach((invoice, invoiceIndex) => {
       // Pomijaj proformy - nie są rzeczywistymi fakturami
       if (invoice.isProforma) {
@@ -1768,20 +1771,33 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
           let itemId = invoiceItem.orderItemId;
           
           if (!itemId) {
-            // Spróbuj dopasować pozycję do zamówienia na podstawie nazwy i ilości
+            // Spróbuj dopasować pozycję do zamówienia na podstawie nazwy, ilości I CENY
             if (orderData && orderData.items) {
               const matchingOrderItem = orderData.items.find((orderItem, orderIndex) => {
-                return orderItem.name === invoiceItem.name && 
-                       parseFloat(orderItem.quantity) === parseFloat(invoiceItem.quantity);
+                const orderItemId = orderItem.id || `${orderId}_item_${orderIndex}`;
+                
+                // Sprawdź czy ta pozycja nie została już użyta
+                if (usedOrderItemIds.has(orderItemId)) {
+                  return false;
+                }
+                
+                // Dopasuj po nazwie, ilości i cenie
+                const nameMatch = orderItem.name === invoiceItem.name;
+                const quantityMatch = parseFloat(orderItem.quantity) === parseFloat(invoiceItem.quantity);
+                const priceMatch = Math.abs(parseFloat(orderItem.price || 0) - parseFloat(invoiceItem.price || 0)) < 0.01;
+                
+                return nameMatch && quantityMatch && priceMatch;
               });
               
               if (matchingOrderItem) {
-                itemId = matchingOrderItem.id || `${orderId}_item_${orderData.items.indexOf(matchingOrderItem)}`;
-                console.log(`[INVOICED_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" przez nazwę i ilość: ${itemId}`);
+                const orderIndex = orderData.items.indexOf(matchingOrderItem);
+                itemId = matchingOrderItem.id || `${orderId}_item_${orderIndex}`;
+                usedOrderItemIds.add(itemId); // Zaznacz jako użyte
+                console.log(`[INVOICED_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (cena: ${invoiceItem.price}) przez nazwę, ilość i cenę: ${itemId}`);
               } else {
                 // Fallback - używaj indeksu pozycji w fakturze
                 itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
-                console.log(`[INVOICED_AMOUNTS_DEBUG] Nie udało się dopasować pozycji "${invoiceItem.name}", używam fallback: ${itemId}`);
+                console.log(`[INVOICED_AMOUNTS_DEBUG] Nie udało się dopasować pozycji "${invoiceItem.name}" (cena: ${invoiceItem.price}), używam fallback: ${itemId}`);
               }
             } else {
               itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;

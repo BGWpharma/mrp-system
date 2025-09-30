@@ -38,6 +38,8 @@
     "refresh": "Refresh",
     "all": "All",
     "details": "Details",
+    "adding": "Adding...",
+    "removing": "Removing...",
     "rows": "Rows",
     "rowsPerPage": "Rows per page",
     "select": "Select",

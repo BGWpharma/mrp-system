@@ -39,7 +39,8 @@ import {
   Divider,
   CircularProgress,
   InputAdornment,
-  FormHelperText
+  FormHelperText,
+  MenuItem
 } from '@mui/material';
 import {
   Link as LinkIcon,
@@ -49,7 +50,9 @@ import {
   Refresh as RefreshIcon,
   LocationOn as LocationIcon,
   Schedule as ExpiryIcon,
-  Edit as EditIcon
+  Edit as EditIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon
 } from '@mui/icons-material';
 
 import { useTranslation } from '../../hooks/useTranslation';
@@ -99,7 +102,17 @@ const EnhancedMixingPlan = ({
   const [realtimeTask, setRealtimeTask] = useState(null);
   const [isTaskUpdating, setIsTaskUpdating] = useState(false);
   const [isLinksUpdating, setIsLinksUpdating] = useState(false);
-  
+
+  // Stany dla dodawania mieszanki
+  const [addMixingDialogOpen, setAddMixingDialogOpen] = useState(false);
+  const [newMixingIngredients, setNewMixingIngredients] = useState([{ name: '', quantity: '', unit: 'kg' }]);
+  const [newMixingPiecesCount, setNewMixingPiecesCount] = useState('');
+  const [addingMixing, setAddingMixing] = useState(false);
+  const [taskMaterials, setTaskMaterials] = useState([]);
+  const [removingMixing, setRemovingMixing] = useState(null);
+  const [removeMixingDialogOpen, setRemoveMixingDialogOpen] = useState(false);
+  const [mixingToRemove, setMixingToRemove] = useState(null);
+
   // Stany dla edycji ilości składników
   const [editQuantityDialogOpen, setEditQuantityDialogOpen] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState(null);
@@ -110,14 +123,28 @@ const EnhancedMixingPlan = ({
   const totalIngredients = task?.mixingPlanChecklist
     ? task.mixingPlanChecklist.filter(item => item.type === 'ingredient').length
     : 0;
-  const linkedIngredients = Object.keys(ingredientLinks).filter(key => 
+  const linkedIngredients = Object.keys(ingredientLinks).filter(key =>
     ingredientLinks[key] && ingredientLinks[key].length > 0
   ).length;
-  const linkagePercentage = totalIngredients > 0 
+  const linkagePercentage = totalIngredients > 0
     ? Math.round((linkedIngredients / totalIngredients) * 100)
     : 0;
 
-
+  // Pobierz materiały z zadania produkcyjnego dla autouzupełniania
+  useEffect(() => {
+    if (task?.materials && Array.isArray(task.materials)) {
+      // Przekształć materiały zadania na format opcji autouzupełniania
+      const materialOptions = task.materials.map(material => ({
+        label: material.name,
+        value: material.name,
+        id: material.id || material.inventoryItemId,
+        unit: material.unit || 'szt.'
+      }));
+      setTaskMaterials(materialOptions);
+    } else {
+      setTaskMaterials([]);
+    }
+  }, [task?.materials]);
 
   // Real-time listener dla zadania (dla synchronizacji zmian checklisty z kiosku)
   useEffect(() => {
@@ -484,6 +511,131 @@ const EnhancedMixingPlan = ({
     }
   };
 
+  // Funkcja do dodawania nowej mieszanki
+  const handleAddMixing = async () => {
+    if (!currentUser?.uid) {
+      showError(t('auth.errors.notAuthenticated'));
+      return;
+    }
+
+    if (newMixingIngredients.length === 0 || !newMixingIngredients[0].name) {
+      showError(t('mixingPlan.noIngredients'));
+      return;
+    }
+
+    // Sprawdź czy wszystkie składniki mają nazwy i ilości
+    const validIngredients = newMixingIngredients.filter(ing => ing.name && ing.quantity > 0);
+    if (validIngredients.length === 0) {
+      showError(t('mixingPlan.invalidIngredients'));
+      return;
+    }
+
+    try {
+      setAddingMixing(true);
+
+      const mixingData = {
+        ingredients: validIngredients.map(ing => ({
+          name: ing.name,
+          quantity: parseFloat(ing.quantity),
+          unit: ing.unit
+        })),
+        piecesCount: newMixingPiecesCount ? parseFloat(newMixingPiecesCount) : undefined
+      };
+
+      const { addMixingToPlan } = await import('../../services/productionService');
+      const result = await addMixingToPlan(task.id, mixingData, currentUser.uid);
+
+      if (result.success) {
+        showSuccess(result.message);
+        setAddMixingDialogOpen(false);
+        setNewMixingIngredients([{ name: '', quantity: '', unit: 'kg' }]);
+        setNewMixingPiecesCount('');
+
+        // Odśwież dane zadania
+        if (onPlanUpdate) {
+          onPlanUpdate();
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas dodawania mieszania:', error);
+      showError(t('mixingPlan.errors.addMixingFailed') + ': ' + error.message);
+    } finally {
+      setAddingMixing(false);
+    }
+  };
+
+  // Funkcja do dodawania składnika w modalu
+  const addIngredientField = () => {
+    setNewMixingIngredients([...newMixingIngredients, { name: '', quantity: '', unit: 'kg' }]);
+  };
+
+  // Funkcja do usuwania składnika w modalu
+  const removeIngredientField = (index) => {
+    const updated = newMixingIngredients.filter((_, i) => i !== index);
+    setNewMixingIngredients(updated);
+  };
+
+  // Funkcja do aktualizacji składnika w modalu
+  const updateIngredientField = (index, field, value) => {
+    const updated = newMixingIngredients.map((ing, i) =>
+      i === index ? { ...ing, [field]: value } : ing
+    );
+    setNewMixingIngredients(updated);
+  };
+
+  // Funkcja do usuwania mieszanki
+  const handleRemoveMixing = async (mixingId) => {
+    if (!currentUser?.uid) {
+      showError(t('auth.errors.notAuthenticated'));
+      return;
+    }
+
+    // Wyciągnij numer mieszania z ID
+    const mixingNumber = mixingId.match(/mixing-(\d+)/)?.[1];
+    if (!mixingNumber) {
+      showError(t('mixingPlan.errors.invalidMixingId'));
+      return;
+    }
+
+    // Otwórz dialog potwierdzenia zamiast używać confirm
+    setMixingToRemove({ id: mixingId, number: mixingNumber });
+    setRemoveMixingDialogOpen(true);
+  };
+
+  // Funkcja do potwierdzania usunięcia mieszanki
+  const handleConfirmRemoveMixing = async () => {
+    if (!mixingToRemove) return;
+
+    try {
+      setRemovingMixing(mixingToRemove.id);
+
+      const { removeMixingFromPlan } = await import('../../services/productionService');
+      const result = await removeMixingFromPlan(task.id, parseInt(mixingToRemove.number), currentUser.uid);
+
+      if (result.success) {
+        showSuccess(result.message);
+
+        // Odśwież dane zadania
+        if (onPlanUpdate) {
+          onPlanUpdate();
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas usuwania mieszania:', error);
+      showError(t('mixingPlan.errors.removeMixingFailed') + ': ' + error.message);
+    } finally {
+      setRemovingMixing(null);
+      setRemoveMixingDialogOpen(false);
+      setMixingToRemove(null);
+    }
+  };
+
+  // Funkcja do anulowania usunięcia mieszanki
+  const handleCancelRemoveMixing = () => {
+    setRemoveMixingDialogOpen(false);
+    setMixingToRemove(null);
+  };
+
   // Renderuj chip rezerwacji (tylko standardowe)
   const renderReservationChip = (reservation) => {
     return (
@@ -715,7 +867,16 @@ const EnhancedMixingPlan = ({
               </Typography>
             </Box>
           )}
-          
+
+          <Button
+            startIcon={<AddIcon />}
+            onClick={() => setAddMixingDialogOpen(true)}
+            size="small"
+            sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
+          >
+            {t('mixingPlan.addMixing')}
+          </Button>
+
           <Button
             startIcon={<RefreshIcon />}
             onClick={refreshData}
@@ -752,20 +913,36 @@ const EnhancedMixingPlan = ({
             bgcolor: colors.paper
           }}>
             {/* Nagłówek mieszania z tłem */}
-            <Box sx={{ 
-              p: 2, 
+            <Box sx={{
+              p: 2,
               bgcolor: colors.background,
               borderBottom: '1px solid',
-              borderColor: borderColor
+              borderColor: borderColor,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start'
             }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5 }}>
-                {headerItem.text}
-              </Typography>
-              {headerItem.details && (
-                <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                  {headerItem.details}
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5 }}>
+                  {headerItem.text}
                 </Typography>
-              )}
+                {headerItem.details && (
+                  <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                    {headerItem.details}
+                  </Typography>
+                )}
+              </Box>
+              <Button
+                size="small"
+                color="error"
+                variant="outlined"
+                startIcon={<UnlinkIcon />}
+                onClick={() => handleRemoveMixing(headerItem.id)}
+                disabled={removingMixing === headerItem.id}
+                sx={{ minWidth: 'auto', px: 1 }}
+              >
+                {removingMixing === headerItem.id ? t('common.removing') : t('mixingPlan.removeMixing')}
+              </Button>
             </Box>
             
             <Box sx={{ p: 2 }}>
@@ -1226,6 +1403,186 @@ const EnhancedMixingPlan = ({
             startIcon={editQuantityLoading ? <CircularProgress size={16} /> : null}
           >
             {editQuantityLoading ? 'Zapisuję...' : 'Zapisz'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog do dodawania nowej mieszanki */}
+      <Dialog
+        open={addMixingDialogOpen}
+        onClose={() => setAddMixingDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('mixingPlan.addMixingDialogTitle')}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+
+            {/* Liczba sztuk (opcjonalne) */}
+            <TextField
+              fullWidth
+              label={t('mixingPlan.piecesCount')}
+              type="number"
+              value={newMixingPiecesCount}
+              onChange={(e) => setNewMixingPiecesCount(e.target.value)}
+              helperText={t('mixingPlan.piecesCountHelper')}
+              InputProps={{
+                inputProps: { min: 0, step: 0.01 }
+              }}
+            />
+
+            {/* Składniki */}
+            <Box>
+              <Typography variant="subtitle1" gutterBottom>
+                {t('mixingPlan.ingredients')}
+              </Typography>
+
+              {taskMaterials.length === 0 && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  {t('mixingPlan.noTaskMaterials')}
+                </Alert>
+              )}
+
+              {newMixingIngredients.map((ingredient, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center' }}>
+                  <Autocomplete
+                    fullWidth
+                    options={taskMaterials}
+                    getOptionLabel={(option) => option?.label || ''}
+                    value={ingredient.name ? taskMaterials.find(material => material.value === ingredient.name) || { label: ingredient.name, value: ingredient.name } : null}
+                    onChange={(event, newValue) => {
+                      // Jeśli newValue jest null (kliknięcie poza polem), nie rób nic
+                      if (newValue === null) {
+                        return;
+                      }
+
+                      // Jeśli newValue ma wartość, ustaw ją
+                      if (newValue && newValue.value) {
+                        updateIngredientField(index, 'name', newValue.value);
+                        // Automatycznie ustaw jednostkę jeśli materiał ją ma
+                        if (newValue.unit && newValue.unit !== 'szt.') {
+                          updateIngredientField(index, 'unit', newValue.unit);
+                        }
+                      } else {
+                        // W innych przypadkach (np. wyczyszczenie pola przez użytkownika)
+                        updateIngredientField(index, 'name', '');
+                      }
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label={`${t('mixingPlan.ingredientName')} ${index + 1}`}
+                        placeholder={t('mixingPlan.ingredientNamePlaceholder')}
+                      />
+                    )}
+                    freeSolo
+                    autoSelect
+                    onBlur={(event) => {
+                      // Gdy użytkownik kliknie poza polem, nie czyść wartości jeśli była wpisana ręcznie
+                      const inputValue = event.target.value;
+                      if (inputValue && inputValue.trim() !== '') {
+                        // Sprawdź czy wartość jest już ustawiona jako ingredient.name
+                        if (ingredient.name !== inputValue.trim()) {
+                          updateIngredientField(index, 'name', inputValue.trim());
+                        }
+                      }
+                    }}
+                  />
+
+                  <TextField
+                    label={t('mixingPlan.quantity')}
+                    type="number"
+                    value={ingredient.quantity}
+                    onChange={(e) => updateIngredientField(index, 'quantity', e.target.value)}
+                    InputProps={{
+                      inputProps: { min: 0, step: 0.01 }
+                    }}
+                    sx={{ width: 150 }}
+                  />
+
+                  <TextField
+                    select
+                    label={t('mixingPlan.unit')}
+                    value={ingredient.unit}
+                    onChange={(e) => updateIngredientField(index, 'unit', e.target.value)}
+                    sx={{ width: 100 }}
+                  >
+                    <MenuItem value="kg">kg</MenuItem>
+                    <MenuItem value="g">g</MenuItem>
+                    <MenuItem value="mg">mg</MenuItem>
+                    <MenuItem value="caps">caps</MenuItem>
+                  </TextField>
+
+                  {newMixingIngredients.length > 1 && (
+                    <IconButton
+                      color="error"
+                      onClick={() => removeIngredientField(index)}
+                      size="small"
+                    >
+                      <RemoveIcon />
+                    </IconButton>
+                  )}
+                </Box>
+              ))}
+
+              <Button
+                startIcon={<AddIcon />}
+                onClick={addIngredientField}
+                variant="outlined"
+                size="small"
+              >
+                {t('mixingPlan.addIngredient')}
+              </Button>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddMixingDialogOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={handleAddMixing}
+            variant="contained"
+            disabled={addingMixing}
+            startIcon={addingMixing ? <CircularProgress size={16} /> : <AddIcon />}
+          >
+            {addingMixing ? t('common.adding') : t('mixingPlan.addMixing')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia usunięcia mieszanki */}
+      <Dialog
+        open={removeMixingDialogOpen}
+        onClose={handleCancelRemoveMixing}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('mixingPlan.removeMixing')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            {t('mixingPlan.confirmRemoveMixing', { number: mixingToRemove?.number })}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Ta akcja jest nieodwracalna.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelRemoveMixing}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={handleConfirmRemoveMixing}
+            variant="contained"
+            color="error"
+            disabled={removingMixing !== null}
+            startIcon={removingMixing !== null ? <CircularProgress size={16} /> : <UnlinkIcon />}
+          >
+            {removingMixing !== null ? t('common.removing') : t('mixingPlan.removeMixing')}
           </Button>
         </DialogActions>
       </Dialog>

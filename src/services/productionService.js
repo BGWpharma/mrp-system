@@ -4396,6 +4396,215 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     }
   };
 
+  // Dodaje dodatkowe mieszanie do istniejącego planu mieszań w zadaniu produkcyjnym
+  export const addMixingToPlan = async (taskId, mixingData, userId) => {
+    try {
+      if (!taskId) {
+        throw new Error('Nie podano ID zadania produkcyjnego');
+      }
+
+      if (!mixingData || !mixingData.ingredients || !Array.isArray(mixingData.ingredients)) {
+        throw new Error('Nieprawidłowe dane mieszania - brak listy składników');
+      }
+
+      // Pobierz referencję do dokumentu zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+
+      if (!taskDoc.exists()) {
+        throw new Error('Nie znaleziono zadania produkcyjnego');
+      }
+
+      const task = taskDoc.data();
+      const existingChecklist = task.mixingPlanChecklist || [];
+
+      // Znajdź najwyższy numer mieszania w istniejących danych
+      const existingHeaders = existingChecklist.filter(item => item.type === 'header');
+      const maxMixingNumber = existingHeaders.length > 0
+        ? Math.max(...existingHeaders.map(header => {
+            const match = header.id.match(/mixing-(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+          }))
+        : 0;
+
+      const newMixingNumber = maxMixingNumber + 1;
+
+      // Oblicz sumę składników (tylko dla składników z jednostką 'kg')
+      const totalIngredientsWeight = mixingData.ingredients
+        .filter(ingredient => ingredient.unit === 'kg' && ingredient.name && !ingredient.name.includes('PACK'))
+        .reduce((sum, ingredient) => sum + parseFloat(ingredient.quantity || 0), 0);
+
+      // Dodaj nagłówek nowej mieszanki
+      const headerItem = {
+        id: `mixing-${newMixingNumber}`,
+        type: 'header',
+        text: `Mieszanie nr ${newMixingNumber}`,
+        details: `Suma składników: ${totalIngredientsWeight.toFixed(4)} kg${mixingData.piecesCount ? `, Liczba sztuk: ${mixingData.piecesCount}` : ''}`,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        createdBy: userId
+      };
+
+      // Dodaj składniki jako elementy checklisty pod nagłówkiem
+      const ingredientItems = mixingData.ingredients.map((ingredient, index) => {
+        // Pomijamy opakowania (dodatkowe zabezpieczenie)
+        if (ingredient.name && !ingredient.name.includes('PACK')) {
+          return {
+            id: `mixing-${newMixingNumber}-ingredient-${index}`,
+            type: 'ingredient',
+            text: ingredient.name,
+            details: `Ilość: ${ingredient.unit === 'caps' ? ingredient.quantity.toFixed(0) : ingredient.quantity.toFixed(4)} ${ingredient.unit}`,
+            parentId: headerItem.id,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            createdBy: userId
+          };
+        }
+        return null;
+      }).filter(item => item !== null);
+
+      // Dodaj elementy sprawdzające dla nowej mieszanki
+      const checkItems = [
+        {
+          id: `mixing-${newMixingNumber}-check-ingredients`,
+          type: 'check',
+          text: 'Sprawdzenie składników',
+          parentId: headerItem.id,
+          completed: false,
+          createdAt: new Date().toISOString(),
+          createdBy: userId
+        },
+        {
+          id: `mixing-${newMixingNumber}-add-to-mixer`,
+          type: 'check',
+          text: 'Dodane do mieszalnika',
+          parentId: headerItem.id,
+          completed: false,
+          createdAt: new Date().toISOString(),
+          createdBy: userId
+        },
+        {
+          id: `mixing-${newMixingNumber}-mixing-complete`,
+          type: 'check',
+          text: 'Mieszanie zakończone',
+          parentId: headerItem.id,
+          completed: false,
+          createdAt: new Date().toISOString(),
+          createdBy: userId
+        }
+      ];
+
+      // Dodaj nowe elementy do istniejącej checklisty
+      const updatedChecklist = [
+        ...existingChecklist,
+        headerItem,
+        ...ingredientItems,
+        ...checkItems
+      ];
+
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        mixingPlanChecklist: updatedChecklist,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+
+      // Zapisz zaktualizowaną checklistę w zadaniu
+      await updateDoc(taskRef, updateData);
+
+      return {
+        success: true,
+        message: `Dodano mieszanie nr ${newMixingNumber} do planu mieszań`,
+        newMixingNumber: newMixingNumber,
+        addedItems: [headerItem, ...ingredientItems, ...checkItems].length
+      };
+    } catch (error) {
+      console.error('Błąd podczas dodawania mieszania do planu:', error);
+      throw error;
+    }
+  };
+
+  // Usuwa mieszanie z istniejącego planu mieszań w zadaniu produkcyjnym
+  export const removeMixingFromPlan = async (taskId, mixingNumber, userId) => {
+    try {
+      if (!taskId) {
+        throw new Error('Nie podano ID zadania produkcyjnego');
+      }
+
+      if (!mixingNumber) {
+        throw new Error('Nie podano numeru mieszania do usunięcia');
+      }
+
+      // Pobierz referencję do dokumentu zadania
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+
+      if (!taskDoc.exists()) {
+        throw new Error('Nie znaleziono zadania produkcyjnego');
+      }
+
+      const task = taskDoc.data();
+      const existingChecklist = task.mixingPlanChecklist || [];
+
+      // Znajdź wszystkie elementy mieszania do usunięcia
+      const itemsToRemove = existingChecklist.filter(item =>
+        item.id.startsWith(`mixing-${mixingNumber}`)
+      );
+
+      if (itemsToRemove.length === 0) {
+        throw new Error(`Nie znaleziono mieszania nr ${mixingNumber}`);
+      }
+
+      // Usuń elementy mieszania z checklisty
+      const updatedChecklist = existingChecklist.filter(item =>
+        !item.id.startsWith(`mixing-${mixingNumber}`)
+      );
+
+      // Usuń powiązania dla usuniętych elementów mieszania
+      const ingredientItems = itemsToRemove.filter(item => item.type === 'ingredient');
+      if (ingredientItems.length > 0) {
+        try {
+          const { unlinkIngredientFromReservation } = await import('./mixingPlanReservationService');
+
+          for (const ingredient of ingredientItems) {
+            try {
+              await unlinkIngredientFromReservation(taskId, ingredient.id, userId);
+              console.log(`Usunięto powiązania dla składnika ${ingredient.id}`);
+            } catch (ingredientError) {
+              console.warn(`Nie udało się usunąć powiązań dla składnika ${ingredient.id}:`, ingredientError);
+              // Kontynuuj z następnym składnikiem
+            }
+          }
+
+          console.log(`Przetworzono powiązania dla ${ingredientItems.length} usuniętych składników mieszania`);
+        } catch (error) {
+          console.warn('Ostrzeżenie: Nie udało się usunąć wszystkich powiązań usuniętych składników:', error);
+          // Kontynuuj mimo błędu - nie przerywaj procesu usuwania mieszania
+        }
+      }
+
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        mixingPlanChecklist: updatedChecklist,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      };
+
+      // Zapisz zaktualizowaną checklistę w zadaniu
+      await updateDoc(taskRef, updateData);
+
+      return {
+        success: true,
+        message: `Usunięto mieszanie nr ${mixingNumber} z planu mieszań`,
+        removedItems: itemsToRemove.length,
+        remainingItems: updatedChecklist.length
+      };
+    } catch (error) {
+      console.error('Błąd podczas usuwania mieszania z planu:', error);
+      throw error;
+    }
+  };
+
   // Aktualizuje ilość składnika w planie mieszań
   export const updateIngredientQuantityInMixingPlan = async (taskId, ingredientId, newQuantity, userId) => {
     try {
