@@ -53,6 +53,7 @@
       "title": "Raport kosztów produkcji",
       "selectProduct": "Wybierz produkt",
       "allProducts": "Wszystkie produkty",
+      "backToAllProducts": "Powrót do wszystkich produktów",
       "noDataToExport": "Brak danych kosztów produkcji do eksportu",
       "empty": {
         "title": "Brak kosztów produkcji",
@@ -130,6 +131,7 @@
       "ordersCount": "Liczba zamówień",
       "itemsCount": "Liczba pozycji",
       "avgCostPerUnit": "Średni koszt/szt.",
+      "productionTime": "Czas produkcji (h)",
       "ordersValue": "Wartość zamówień",
       "avgValue": "Średnia wartość",
       "actions": "Akcje",

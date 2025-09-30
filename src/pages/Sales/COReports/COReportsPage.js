@@ -49,7 +49,9 @@ import {
   KeyboardArrowDown as ArrowDownIcon,
   Assessment as AssessmentIcon,
   MonetizationOn as MoneyIcon,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Clear as ClearIcon,
+  GridOn as ExcelIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -71,7 +73,7 @@ import { getAllOrders, updateOrder, getOrdersByDateRange } from '../../../servic
 import { getAllCustomers } from '../../../services/customerService';
 import { getTaskById, getMultipleTasksById } from '../../../services/productionService';
 import { formatCurrency } from '../../../utils/formatUtils';
-import { exportToCSV, exportToPDF, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
+import { exportToCSV, exportToPDF, exportToExcel, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
 import {
   LineChart,
   Line,
@@ -568,14 +570,14 @@ const COReportsPage = () => {
   const handleExportCSV = () => {
     handleExportMenuClose();
     
-    // Definicja nagłówków dla CSV
+    // Definicja nagłówków dla CSV - zawsze w języku angielskim
     const headers = [
-      { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
-      { label: t('coReports.table.date'), key: 'orderDate' },
-      { label: t('coReports.table.customer'), key: 'customer.name' },
-      { label: t('coReports.table.status'), key: 'status' },
-      { label: t('coReports.table.value'), key: 'totalValue' },
-      { label: t('coReports.table.expectedDelivery'), key: 'expectedDeliveryDate' }
+      { label: 'Order Number', key: 'orderNumber' },
+      { label: 'Date', key: 'orderDate' },
+      { label: 'Customer', key: 'customer.name' },
+      { label: 'Status', key: 'status' },
+      { label: 'Value', key: 'totalValue' },
+      { label: 'Expected Delivery', key: 'expectedDeliveryDate' }
     ];
     
     // Przygotuj dane do eksportu
@@ -603,14 +605,14 @@ const COReportsPage = () => {
   const handleExportPDF = () => {
     handleExportMenuClose();
     
-    // Definicja nagłówków dla PDF
+    // Definicja nagłówków dla PDF - zawsze w języku angielskim
     const headers = [
-      { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
-      { label: t('coReports.table.date'), key: 'orderDate' },
-      { label: t('coReports.table.customer'), key: 'customer.name' },
-      { label: t('coReports.table.status'), key: 'status' },
-      { label: t('coReports.table.value'), key: 'totalValue' },
-      { label: t('coReports.table.expectedDelivery'), key: 'expectedDeliveryDate' }
+      { label: 'Order Number', key: 'orderNumber' },
+      { label: 'Date', key: 'orderDate' },
+      { label: 'Customer', key: 'customer.name' },
+      { label: 'Status', key: 'status' },
+      { label: 'Value', key: 'totalValue' },
+      { label: 'Expected Delivery', key: 'expectedDeliveryDate' }
     ];
     
     // Przygotuj dane do eksportu
@@ -832,13 +834,20 @@ const COReportsPage = () => {
                   
                   // Pomiń zadania, które nie mają statusu "Zakończone"
                   if (taskStatus !== 'Zakończone') {
-                    console.log(`Pomijam zadanie ${item.productionTaskNumber} ze statusem "${taskStatus}" dla pozycji ${item.name} w zamówieniu ${order.orderNumber}`);
                     return; // Pomiń tę pozycję
                   }
                   
                   const quantity = parseFloat(item.quantity) || 0;
                   const fullProductionUnitCost = parseFloat(item.fullProductionUnitCost || 0);
                   const totalFullProductionCost = quantity * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0);
+                  
+                  // Oblicz rzeczywisty czas produkcji z sesji produkcyjnych
+                  let actualProductionTime = 0;
+                  if (taskData && taskData.productionSessions && Array.isArray(taskData.productionSessions)) {
+                    actualProductionTime = taskData.productionSessions.reduce((total, session) => {
+                      return total + (parseFloat(session.timeSpent) || 0);
+                    }, 0);
+                  }
                   
                   // Filtruj pozycje z zerowymi kosztami - pomiń jeśli pełny koszt jednostkowy i łączny pełny koszt to 0
                   if (fullProductionUnitCost > 0 || totalFullProductionCost > 0) {
@@ -858,7 +867,9 @@ const COReportsPage = () => {
                       fullProductionUnitCost: fullProductionUnitCost,
                       totalItemValue: quantity * (parseFloat(item.price) || 0),
                       totalProductionCost: quantity * parseFloat(item.productionUnitCost || item.productionCost || 0),
-                      totalFullProductionCost: totalFullProductionCost
+                      totalFullProductionCost: totalFullProductionCost,
+                      actualProductionTimeMinutes: actualProductionTime,
+                      actualProductionTimeHours: actualProductionTime > 0 ? (actualProductionTime / 60).toFixed(2) : 0
                     });
                   }
                 }
@@ -874,7 +885,7 @@ const COReportsPage = () => {
     }
     
     return productionCosts;
-  }, [filteredOrders, selectedProduct]); // Zoptymalizowane dependencies
+  }, [filteredOrders, selectedProduct, tasksCache]); // Zoptymalizowane dependencies + tasksCache dla czasu produkcji
 
   // Funkcja do obliczania statystyk kosztów produkcji - ZOPTYMALIZOWANA z memoizacją
   const calculateProductionCostStats = React.useCallback((productionCosts) => {
@@ -1177,12 +1188,10 @@ const COReportsPage = () => {
   const ProductionCostsTab = () => {
     // Memoizacja kosztownych obliczeń - przeliczaj tylko gdy zmienią się dane
     const productionCosts = React.useMemo(() => {
-      console.log('🔄 Przeliczanie kosztów produkcji...');
       return calculateProductionCosts();
     }, [calculateProductionCosts]);
     
     const costStats = React.useMemo(() => {
-      console.log('📊 Przeliczanie statystyk kosztów...');
       return calculateProductionCostStats(productionCosts);
     }, [productionCosts, calculateProductionCostStats]);
     
@@ -1210,6 +1219,17 @@ const COReportsPage = () => {
             orderDate = new Date(); // Domyślna data
           }
           
+          // Pobierz dane zadania z cache, aby uzyskać rzeczywisty czas produkcji
+          const taskData = tasksCache.data.get(item.productionTaskId);
+          let actualProductionTime = 0;
+          
+          if (taskData && taskData.productionSessions && Array.isArray(taskData.productionSessions)) {
+            // Oblicz całkowity czas produkcji z wszystkich sesji (timeSpent jest w minutach)
+            actualProductionTime = taskData.productionSessions.reduce((total, session) => {
+              return total + (parseFloat(session.timeSpent) || 0);
+            }, 0);
+          }
+          
           return {
             date: orderDate,
             orderNumber: item.orderNumber,
@@ -1218,7 +1238,9 @@ const COReportsPage = () => {
             fullUnitCost: item.fullProductionUnitCost || (item.quantity > 0 ? item.fullProductionCost / item.quantity : 0),
             totalFullCost: item.totalFullProductionCost,
             productionTaskId: item.productionTaskId,
-            productionTaskNumber: item.productionTaskNumber
+            productionTaskNumber: item.productionTaskNumber,
+            actualProductionTimeMinutes: actualProductionTime,
+            actualProductionTimeHours: actualProductionTime > 0 ? (actualProductionTime / 60).toFixed(2) : 0
           };
         }).sort((a, b) => a.date - b.date);
         
@@ -1308,18 +1330,19 @@ const COReportsPage = () => {
         return;
       }
 
-      // Definicja nagłówków dla CSV
+      // Definicja nagłówków dla CSV - zawsze w języku angielskim
       const headers = [
-        { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
-        { label: t('coReports.table.date'), key: 'orderDate' },
-        { label: t('coReports.table.customer'), key: 'customerName' },
-        { label: t('coReports.table.product'), key: 'itemName' },
-        { label: t('coReports.table.quantity'), key: 'quantity' },
-        { label: t('common.pieces'), key: 'unit' },
-        { label: t('coReports.table.fullCostPerUnit'), key: 'fullProductionUnitCost' },
-        { label: t('coReports.table.productionCost'), key: 'totalProductionCost' },
-        { label: t('coReports.table.totalFullCost'), key: 'totalFullProductionCost' },
-        { label: 'MO', key: 'productionTaskNumber' }
+        { label: 'Order Number', key: 'orderNumber' },
+        { label: 'Date', key: 'orderDate' },
+        { label: 'Customer', key: 'customerName' },
+        { label: 'Product', key: 'itemName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'pcs', key: 'unit' },
+        { label: 'Base Materials Cost/Unit', key: 'fullProductionUnitCost' },
+        { label: 'Materials Cost', key: 'totalProductionCost' },
+        { label: 'Base Materials Cost', key: 'totalFullProductionCost' },
+        { label: 'MO', key: 'productionTaskNumber' },
+        { label: 'Production Time (h)', key: 'actualProductionTimeHours' }
       ];
       
       // Przygotuj dane do eksportu
@@ -1330,7 +1353,8 @@ const COReportsPage = () => {
         fullProductionUnitCost: formatCurrencyForExport(item.fullProductionUnitCost),
         totalProductionCost: formatCurrencyForExport(item.totalProductionCost),
         totalFullProductionCost: formatCurrencyForExport(item.totalFullProductionCost),
-        productionTaskNumber: item.productionTaskNumber || 'N/A'
+        productionTaskNumber: item.productionTaskNumber || 'N/A',
+        actualProductionTimeHours: item.actualProductionTimeHours > 0 ? item.actualProductionTimeHours : '-'
       }));
       
       // Wygeneruj plik CSV z nazwą uwzględniającą filtr produktu
@@ -1366,15 +1390,15 @@ const COReportsPage = () => {
 
       const filteredCostStats = calculateProductionCostStats(dataToExport);
 
-      // Definicja nagłówków dla PDF
+      // Definicja nagłówków dla PDF - zawsze w języku angielskim
       const headers = [
-        { label: t('coReports.table.orderNumber'), key: 'orderNumber' },
-        { label: t('coReports.table.date'), key: 'orderDate' },
-        { label: t('coReports.table.customer'), key: 'customerName' },
-        { label: t('coReports.table.product'), key: 'itemName' },
-        { label: t('coReports.table.quantity'), key: 'quantity' },
-        { label: t('coReports.table.fullCostPerUnit'), key: 'fullProductionUnitCost' },
-        { label: t('coReports.table.totalFullCost'), key: 'totalFullProductionCost' },
+        { label: 'Order Number', key: 'orderNumber' },
+        { label: 'Date', key: 'orderDate' },
+        { label: 'Customer', key: 'customerName' },
+        { label: 'Product', key: 'itemName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Base Materials Cost/Unit', key: 'fullProductionUnitCost' },
+        { label: 'Base Materials Cost', key: 'totalFullProductionCost' },
         { label: 'MO', key: 'productionTaskNumber' }
       ];
       
@@ -1392,15 +1416,15 @@ const COReportsPage = () => {
       // Utwórz datę i zakres filtrowania jako podtytuł
       const dateRange = `${formatDateForExport(startDate)} - ${formatDateForExport(endDate)}`;
       const customerFilter = selectedCustomer !== 'all' 
-        ? `, ${t('coReports.export.labels.customer')}: ${getCustomerName(selectedCustomer)}` 
+        ? `, Customer: ${getCustomerName(selectedCustomer)}` 
         : '';
       const productFilter = selectedProduct ? `, Product: ${selectedProduct}` : '';
       
-      // Opcje dla eksportu PDF
+      // Opcje dla eksportu PDF - zawsze w języku angielskim
       const pdfOptions = {
-        title: t('coReports.productionCosts.title'),
-        subtitle: `${t('coReports.export.labels.dateRange')}: ${dateRange}${customerFilter}${productFilter}`,
-        footerText: `${t('coReports.export.labels.generatedOn')}: ${new Date().toLocaleString()} | ${t('coReports.table.itemsCount')}: ${filteredCostStats.totalItems} | ${t('coReports.table.totalFullCost')}: ${formatCurrency(filteredCostStats.totalFullProductionCost)}`
+        title: 'Production Costs Report',
+        subtitle: `Date range: ${dateRange}${customerFilter}${productFilter}`,
+        footerText: `Generated on: ${new Date().toLocaleString()} | Items: ${filteredCostStats.totalItems} | Total Base Materials Cost: ${formatCurrency(filteredCostStats.totalFullProductionCost)}`
       };
       
       // Wygeneruj plik PDF z nazwą uwzględniającą filtr produktu
@@ -1415,6 +1439,80 @@ const COReportsPage = () => {
         showSuccess(message);
       } else {
         showError(t('coReports.messages.productionPdfError'));
+      }
+    };
+
+    // Funkcja do eksportu kosztów produkcji do Excel z osobną zakładką dla każdego CO
+    const handleExportProductionCostsToExcel = () => {
+      handleProductionExportMenuClose();
+      
+      let dataToExport = productionCosts;
+      
+      // Jeśli wybrano konkretny produkt, filtruj dane
+      if (selectedProduct) {
+        dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+      }
+      
+      if (dataToExport.length === 0) {
+        showError(t('coReports.productionCosts.noDataToExport'));
+        return;
+      }
+
+      // Grupuj dane według numeru zamówienia (CO)
+      const dataByOrder = {};
+      dataToExport.forEach(item => {
+        const orderNumber = item.orderNumber || 'Unknown';
+        if (!dataByOrder[orderNumber]) {
+          dataByOrder[orderNumber] = [];
+        }
+        dataByOrder[orderNumber].push(item);
+      });
+
+      // Nagłówki dla Excel - zawsze w języku angielskim
+      const headers = [
+        { label: 'Date', key: 'orderDate' },
+        { label: 'Customer', key: 'customerName' },
+        { label: 'Product', key: 'itemName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'pcs', key: 'unit' },
+        { label: 'Base Materials Cost/Unit', key: 'fullProductionUnitCost' },
+        { label: 'Materials Cost', key: 'totalProductionCost' },
+        { label: 'Base Materials Cost', key: 'totalFullProductionCost' },
+        { label: 'MO', key: 'productionTaskNumber' },
+        { label: 'Production Time (h)', key: 'actualProductionTimeHours' }
+      ];
+
+      // Przygotuj worksheets - jeden dla każdego zamówienia
+      const worksheets = Object.keys(dataByOrder).sort().map(orderNumber => {
+        const orderData = dataByOrder[orderNumber].map(item => ({
+          ...item,
+          orderDate: formatDateForExport(item.orderDate),
+          fullProductionUnitCost: formatCurrencyForExport(item.fullProductionUnitCost),
+          totalProductionCost: formatCurrencyForExport(item.totalProductionCost),
+          totalFullProductionCost: formatCurrencyForExport(item.totalFullProductionCost),
+          productionTaskNumber: item.productionTaskNumber || 'N/A',
+          actualProductionTimeHours: item.actualProductionTimeHours > 0 ? item.actualProductionTimeHours : '-'
+        }));
+
+        return {
+          name: orderNumber, // Nazwa zakładki to numer zamówienia
+          data: orderData,
+          headers: headers
+        };
+      });
+
+      // Wygeneruj plik Excel
+      const productSuffix = selectedProduct ? `_${selectedProduct.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+      const filename = `production_costs_by_order${productSuffix}_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
+      const success = exportToExcel(worksheets, filename);
+
+      if (success) {
+        const message = selectedProduct 
+          ? `Excel file generated successfully for product: ${selectedProduct} (${worksheets.length} orders)`
+          : `Excel file generated successfully (${worksheets.length} orders, each in separate tab)`;
+        showSuccess(message);
+      } else {
+        showError('Failed to generate Excel file.');
       }
     };
 
@@ -1463,6 +1561,12 @@ const COReportsPage = () => {
                           <CsvIcon fontSize="small" />
                         </ListItemIcon>
                         <ListItemText>Export as CSV</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportProductionCostsToExcel}>
+                        <ListItemIcon>
+                          <ExcelIcon fontSize="small" />
+                        </ListItemIcon>
+                        <ListItemText>Export to Excel (by CO)</ListItemText>
                       </MenuItem>
                     </MenuList>
                   </Paper>
@@ -1586,21 +1690,34 @@ const COReportsPage = () => {
             </Grid>
             
             <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>{t('coReports.productionCosts.selectProduct')}</InputLabel>
-                <Select
-                  value={selectedProduct}
-                  onChange={(e) => setSelectedProduct(e.target.value)}
-                  label={t('coReports.productionCosts.selectProduct')}
-                >
-                  <MenuItem value="">{t('coReports.productionCosts.allProducts')}</MenuItem>
-                  {costStats.costsByProduct.map((product, index) => (
-                    <MenuItem key={index} value={product.name}>
-                      {product.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <FormControl fullWidth>
+                  <InputLabel>{t('coReports.productionCosts.selectProduct')}</InputLabel>
+                  <Select
+                    value={selectedProduct}
+                    onChange={(e) => setSelectedProduct(e.target.value)}
+                    label={t('coReports.productionCosts.selectProduct')}
+                  >
+                    <MenuItem value="">{t('coReports.productionCosts.allProducts')}</MenuItem>
+                    {costStats.costsByProduct.map((product, index) => (
+                      <MenuItem key={index} value={product.name}>
+                        {product.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {selectedProduct && (
+                  <Tooltip title={t('coReports.productionCosts.backToAllProducts')}>
+                    <IconButton 
+                      onClick={() => setSelectedProduct('')}
+                      color="primary"
+                      sx={{ minWidth: '48px' }}
+                    >
+                      <ClearIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Grid>
           </Grid>
         </Paper>
@@ -1842,6 +1959,7 @@ const COReportsPage = () => {
                                   <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
                                   <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
                                   <TableCell>MO</TableCell>
+                                  <TableCell align="right">{t('coReports.table.productionTime')}</TableCell>
                                   <TableCell align="center">{t('coReports.table.actions')}</TableCell>
                                 </TableRow>
                               </TableHead>
@@ -1855,6 +1973,9 @@ const COReportsPage = () => {
                                     <TableCell align="right">{formatCurrency(entry.fullUnitCost)}</TableCell>
                                     <TableCell align="right">{formatCurrency(entry.totalFullCost)}</TableCell>
                                     <TableCell>{entry.productionTaskNumber || '-'}</TableCell>
+                                    <TableCell align="right">
+                                      {entry.actualProductionTimeHours > 0 ? `${entry.actualProductionTimeHours} h` : '-'}
+                                    </TableCell>
                                     <TableCell align="center">
                                       {entry.productionTaskId && (
                                         <Tooltip title="Otwórz zadanie produkcyjne w nowym oknie">
@@ -1936,7 +2057,7 @@ const COReportsPage = () => {
               <>
                 {/* Karty ze statystykami kosztów - widok oryginalny dla wszystkich produktów */}
                 <Grid container spacing={3} sx={{ mb: 3 }}>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={12} md={4}>
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
@@ -1948,7 +2069,7 @@ const COReportsPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={12} md={4}>
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
@@ -1960,7 +2081,7 @@ const COReportsPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={12} md={4}>
                     <Card>
                       <CardContent>
                         <Typography color="textSecondary" gutterBottom>
@@ -1968,18 +2089,6 @@ const COReportsPage = () => {
                         </Typography>
                         <Typography variant="h4" component="div">
                           {formatCurrency(costStats.totalFullProductionCost)}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                  <Grid item xs={12} md={3}>
-                    <Card>
-                      <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          {t('coReports.productionCosts.cards.shareInOrdersValue')}
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {costStats.productionCostRatio.toFixed(1)}%
                         </Typography>
                       </CardContent>
                     </Card>
@@ -2106,14 +2215,14 @@ const COReportsPage = () => {
           }}
         >
           <Tab 
-            label={t('coReports.tabs.ordersReport')} 
-            icon={<AssessmentIcon />} 
+            label={t('coReports.tabs.productionCosts')}
+            icon={<MoneyIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />
           <Tab 
-            label={t('coReports.tabs.productionCosts')}
-            icon={<MoneyIcon />} 
+            label={t('coReports.tabs.ordersReport')} 
+            icon={<AssessmentIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />
@@ -2121,8 +2230,8 @@ const COReportsPage = () => {
       </Box>
       
       <Box sx={{ py: 3 }}>
-        {selectedTab === 0 && <OrdersReportTab />}
-        {selectedTab === 1 && <ProductionCostsTab />}
+        {selectedTab === 0 && <ProductionCostsTab />}
+        {selectedTab === 1 && <OrdersReportTab />}
       </Box>
     </Container>
   );

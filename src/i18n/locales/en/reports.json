@@ -53,6 +53,7 @@
       "title": "Production costs report",
       "selectProduct": "Select product",
       "allProducts": "All products",
+      "backToAllProducts": "Back to all products",
       "noDataToExport": "No production cost data to export",
       "empty": {
         "title": "No production costs",
@@ -130,6 +131,7 @@
       "ordersCount": "Orders count",
       "itemsCount": "Items count",
       "avgCostPerUnit": "Avg cost/unit",
+      "productionTime": "Production time (h)",
       "ordersValue": "Orders value",
       "avgValue": "Average value",
       "actions": "Actions",
