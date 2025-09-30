@@ -165,8 +165,8 @@ export const getReservationStatusColors = (status) => {
       };
     case 'partially_reserved':
       return {
-        main: '#ff9800',      // Material Orange 500 - lepszy kontrast
-        light: '#ffb74d',
+        main: '#ffb74d',      // Jaśniejszy pomarańczowy - lepszy kontrast na ciemnym pomarańczowym tle
+        light: '#ffcc80',
         contrastText: '#ffffff'
       };
     case 'not_reserved':

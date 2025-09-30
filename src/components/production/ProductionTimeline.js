@@ -311,7 +311,7 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
       case 'scheduled':
         return '#3788d8';
       case 'W trakcie':
-        return '#f39c12';
+        return '#e67e22'; // Ciemniejszy pomarańczowy dla lepszego kontrastu
       case 'Zakończone':
         return '#2ecc71';
       case 'Anulowane':
@@ -777,7 +777,7 @@ const ProductionTimeline = React.memo(({
       case 'scheduled':
         return '#3788d8';
       case 'W trakcie':
-        return '#f39c12';
+        return '#e67e22'; // Ciemniejszy pomarańczowy dla lepszego kontrastu
       case 'Zakończone':
         return '#2ecc71';
       case 'Anulowane':
