@@ -120,15 +120,17 @@ const resources = {
   }
 };
 
-i18n
-  // Wykrywanie języka z przeglądarki/localStorage
-  .use(LanguageDetector)
-  // Możliwość ładowania tłumaczeń z plików (w przyszłości)
-  .use(HttpApi)
-  // Integracja z React
-  .use(initReactI18next)
-  // Inicjalizacja
-  .init({
+// Zabezpieczenie przed wielokrotną inicjalizacją (np. przez React.StrictMode)
+if (!i18n.isInitialized) {
+  i18n
+    // Wykrywanie języka z przeglądarki/localStorage
+    .use(LanguageDetector)
+    // Możliwość ładowania tłumaczeń z plików (w przyszłości)
+    .use(HttpApi)
+    // Integracja z React
+    .use(initReactI18next)
+    // Inicjalizacja
+    .init({
     resources,
     
     // Język domyślny
@@ -204,5 +206,6 @@ i18n
       transKeepBasicHtmlNodesFor: ['br', 'strong', 'i', 'em', 'b', 'span'],
     }
   });
+}
 
 export default i18n; 

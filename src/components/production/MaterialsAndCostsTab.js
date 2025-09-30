@@ -384,7 +384,7 @@ const MaterialsAndCostsTab = ({
                                       fontSize: '0.875rem'
                                     }}
                                   >
-                                    Suma: {totalReserved.toFixed(2)} {material.unit}
+                                    {t('materials.table.reservedTotal')}: {totalReserved.toFixed(2)} {material.unit}
                                   </Typography>
                                 </Box>
                               )}

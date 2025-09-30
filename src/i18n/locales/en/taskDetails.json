@@ -37,6 +37,7 @@
             "unitPrice": "Unit Price",
             "cost": "Cost",
             "reservedBatches": "Reserved Batches (LOT)",
+            "reservedTotal": "Total",
             "include": "Include",
             "actions": "Actions"
         },

@@ -37,6 +37,7 @@
             "unitPrice": "Cena jedn.",
             "cost": "Koszt",
             "reservedBatches": "Zarezerwowane partie (LOT)",
+            "reservedTotal": "Suma",
             "include": "Wliczaj",
             "actions": "Akcje"
         },
