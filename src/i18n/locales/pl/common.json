@@ -52,7 +52,8 @@
     "showing": "Wyświetlanie",
     "results": "wyników",
     "onPage": "na stronie",
-    "moreResultsAvailable": "Dostępne są kolejne wyniki"
+    "moreResultsAvailable": "Dostępne są kolejne wyniki",
+    "noOptions": "Brak opcji"
   },
   "navbar": {
     "searchPlaceholder": "Szukaj PO, CO, MO, LOT... (min. 2 znaki)",

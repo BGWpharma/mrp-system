@@ -34,6 +34,7 @@ import {
   MenuList,
   ClickAwayListener,
   Grow,
+  Autocomplete,
 
 } from '@mui/material';
 import {
@@ -1691,21 +1692,24 @@ const COReportsPage = () => {
             
             <Grid item xs={12} md={4}>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <FormControl fullWidth>
-                  <InputLabel>{t('coReports.productionCosts.selectProduct')}</InputLabel>
-                  <Select
-                    value={selectedProduct}
-                    onChange={(e) => setSelectedProduct(e.target.value)}
-                    label={t('coReports.productionCosts.selectProduct')}
-                  >
-                    <MenuItem value="">{t('coReports.productionCosts.allProducts')}</MenuItem>
-                    {costStats.costsByProduct.map((product, index) => (
-                      <MenuItem key={index} value={product.name}>
-                        {product.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  fullWidth
+                  value={selectedProduct || null}
+                  onChange={(event, newValue) => {
+                    setSelectedProduct(newValue || '');
+                  }}
+                  options={['', ...costStats.costsByProduct.map(product => product.name)]}
+                  getOptionLabel={(option) => option === '' ? t('coReports.productionCosts.allProducts') : option}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label={t('coReports.productionCosts.selectProduct')}
+                      placeholder={t('coReports.productionCosts.selectProduct')}
+                    />
+                  )}
+                  isOptionEqualToValue={(option, value) => option === value}
+                  noOptionsText={t('common.noOptions')}
+                />
                 {selectedProduct && (
                   <Tooltip title={t('coReports.productionCosts.backToAllProducts')}>
                     <IconButton 
