@@ -92,6 +92,7 @@ const UnloadingReportFormPage = () => {
     // Sekcja 3: Informacje o towarze
     supplierName: '',
     poNumber: '',
+    invoiceNumber: '',
     selectedItems: [],
     palletQuantity: '',
     cartonsTubsQuantity: '',
@@ -228,6 +229,7 @@ const UnloadingReportFormPage = () => {
           notes: editData.notes || '',
           supplierName: editData.supplierName || '',
           poNumber: editData.poNumber || '',
+          invoiceNumber: editData.invoiceNumber || '',
           selectedItems: editData.selectedItems || [],
           palletQuantity: editData.palletQuantity || '',
           cartonsTubsQuantity: editData.cartonsTubsQuantity || '',
@@ -625,6 +627,7 @@ const UnloadingReportFormPage = () => {
         notes: formData.notes,
         supplierName: formData.supplierName,
         poNumber: formData.poNumber,
+        invoiceNumber: formData.invoiceNumber,
         selectedItems: formData.selectedItems.map(item => ({
           ...item,
           expiryDate: item.expiryDate ? item.expiryDate : null, // Zachowaj datę jako Date object
@@ -686,9 +689,10 @@ const UnloadingReportFormPage = () => {
           transportHygiene: '',
           notes: '',
           supplierName: '',
-                  poNumber: '',
-        selectedItems: [],
-        palletQuantity: '',
+          poNumber: '',
+          invoiceNumber: '',
+          selectedItems: [],
+          palletQuantity: '',
           cartonsTubsQuantity: '',
           weight: '',
           visualInspectionResult: '',
@@ -812,7 +816,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.employeeName}>
-                <FormLabel component="legend">Imię i nazwisko: *</FormLabel>
+                <FormLabel component="legend">Imię i nazwisko: </FormLabel>
                 <RadioGroup
                   value={formData.employeeName}
                   onChange={handleInputChange('employeeName')}
@@ -835,7 +839,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.position}>
-                <FormLabel component="legend">Stanowisko: *</FormLabel>
+                <FormLabel component="legend">Stanowisko: </FormLabel>
                 <RadioGroup
                   value={formData.position}
                   onChange={handleInputChange('position')}
@@ -858,7 +862,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data wypełnienia *"
+                label="Data wypełnienia "
                 value={formData.fillDate}
                 onChange={handleDateChange('fillDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -926,7 +930,7 @@ const UnloadingReportFormPage = () => {
                  renderInput={(params) => (
                    <TextField
                      {...params}
-                     label="Numer zamówienia (PO) *"
+                     label="Numer zamówienia (PO) "
                      required
                      error={!!errors.poNumber}
                      helperText={errors.poNumber || "Wpisz min. 2 znaki aby wyszukać PO (numer lub dostawca)"}
@@ -967,6 +971,16 @@ const UnloadingReportFormPage = () => {
                />
             </Grid>
 
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Numer faktury"
+                value={formData.invoiceNumber}
+                onChange={handleInputChange('invoiceNumber')}
+                fullWidth
+                helperText="Numer faktury dostawy (opcjonalnie)"
+              />
+            </Grid>
+
             {/* Sekcja 2: Informacje o rozładunku */}
             <Grid item xs={12}>
               <Box sx={{ 
@@ -991,7 +1005,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data rozładunku *"
+                label="Data rozładunku "
                 value={formData.unloadingDate}
                 onChange={handleDateChange('unloadingDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -1014,7 +1028,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa przewoźnika *"
+                label="Nazwa przewoźnika "
                 value={formData.carrierName}
                 onChange={handleInputChange('carrierName')}
                 fullWidth
@@ -1026,7 +1040,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nr rejestracyjny samochodu *"
+                label="Nr rejestracyjny samochodu "
                 value={formData.vehicleRegistration}
                 onChange={handleInputChange('vehicleRegistration')}
                 fullWidth
@@ -1038,7 +1052,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.vehicleTechnicalCondition}>
-                <FormLabel component="legend">Stan techniczny samochodu: *</FormLabel>
+                <FormLabel component="legend">Stan techniczny samochodu:</FormLabel>
                 <RadioGroup
                   value={formData.vehicleTechnicalCondition}
                   onChange={handleInputChange('vehicleTechnicalCondition')}
@@ -1065,7 +1079,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.transportHygiene}>
-                <FormLabel component="legend">Higiena środka transportu i kierowcy: *</FormLabel>
+                <FormLabel component="legend">Higiena środka transportu i kierowcy: </FormLabel>
                 <RadioGroup
                   value={formData.transportHygiene}
                   onChange={handleInputChange('transportHygiene')}
@@ -1127,7 +1141,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa dostawcy *"
+                label="Nazwa dostawcy "
                 value={formData.supplierName}
                 onChange={handleInputChange('supplierName')}
                 fullWidth
@@ -1140,7 +1154,7 @@ const UnloadingReportFormPage = () => {
             <Grid item xs={12}>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                  Pozycje dostarczonego towaru *
+                  Pozycje dostarczonego towaru 
                 </Typography>
                 {formData.poNumber && (
                   <Button
@@ -1176,7 +1190,7 @@ const UnloadingReportFormPage = () => {
                         <TableCell>Nazwa produktu</TableCell>
                         <TableCell>Ilość w PO</TableCell>
                         <TableCell>Waga</TableCell>
-                        <TableCell>Ilość rozładowana *</TableCell>
+                        <TableCell>Ilość rozładowana </TableCell>
                         <TableCell>Data ważności</TableCell>
                       </TableRow>
                     </TableHead>
@@ -1267,11 +1281,10 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Ilość palet *"
+                label="Ilość palet "
                 value={formData.palletQuantity}
                 onChange={handleInputChange('palletQuantity')}
                 fullWidth
-                required
                 error={!!errors.palletQuantity}
                 helperText={errors.palletQuantity || "Tekst krótkiej odpowiedzi"}
               />
@@ -1279,11 +1292,10 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Ilość kartonów/tub *"
+                label="Ilość kartonów/tub "
                 value={formData.cartonsTubsQuantity}
                 onChange={handleInputChange('cartonsTubsQuantity')}
                 fullWidth
-                required
                 error={!!errors.cartonsTubsQuantity}
                 helperText={errors.cartonsTubsQuantity || "Tekst krótkiej odpowiedzi"}
               />
@@ -1291,11 +1303,10 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Waga *"
+                label="Waga "
                 value={formData.weight}
                 onChange={handleInputChange('weight')}
                 fullWidth
-                required
                 error={!!errors.weight}
                 helperText={errors.weight || "Tekst krótkiej odpowiedzi"}
               />
@@ -1303,7 +1314,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.visualInspectionResult}>
-                <FormLabel component="legend">Wynik oceny wizualnej (wygląd, zapach, opakowanie): *</FormLabel>
+                <FormLabel component="legend">Wynik oceny wizualnej (wygląd, zapach, opakowanie): </FormLabel>
                 <RadioGroup
                   value={formData.visualInspectionResult}
                   onChange={handleInputChange('visualInspectionResult')}

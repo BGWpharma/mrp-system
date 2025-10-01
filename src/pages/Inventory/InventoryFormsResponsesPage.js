@@ -752,6 +752,7 @@ const InventoryFormsResponsesPage = () => {
                   <TableCell>{t('inventory.forms.transportHygiene')}</TableCell>
                   <TableCell>{t('inventory.forms.supplierName')}</TableCell>
                   <TableCell>{t('inventory.forms.poNumber')}</TableCell>
+                  <TableCell>{t('inventory.forms.invoiceNumber')}</TableCell>
                   <TableCell>{t('inventory.forms.deliveredItems')}</TableCell>
                   <TableCell align="right">{t('inventory.forms.palletQuantity')}</TableCell>
                   <TableCell align="right">{t('inventory.forms.cartonsTubsQuantity')}</TableCell>
@@ -779,6 +780,7 @@ const InventoryFormsResponsesPage = () => {
                     <TableCell>{row.transportHygiene}</TableCell>
                     <TableCell>{row.supplierName}</TableCell>
                     <TableCell>{row.poNumber}</TableCell>
+                    <TableCell>{row.invoiceNumber || '-'}</TableCell>
                     <TableCell sx={{ maxWidth: 300, minWidth: 200 }}>
                       {formatDeliveredItems(row)}
                     </TableCell>

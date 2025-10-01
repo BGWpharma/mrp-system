@@ -351,6 +351,7 @@
     "transportHygiene": "Higiena transportu",
     "supplierName": "Dostawca",
     "poNumber": "Numer PO",
+    "invoiceNumber": "Numer faktury",
     "deliveredItems": "Pozycje dostarczone",
     "cartonsTubsQuantity": "Ilość kartonów/tub",
     "visualInspectionResult": "Ocena wizualna",

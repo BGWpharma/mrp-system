@@ -350,6 +350,7 @@
     "transportHygiene": "Transport hygiene",
     "supplierName": "Supplier",
     "poNumber": "PO number",
+    "invoiceNumber": "Invoice number",
     "deliveredItems": "Delivered items",
     "cartonsTubsQuantity": "Cartons/tubs quantity",
     "visualInspectionResult": "Visual inspection result",

@@ -2225,6 +2225,15 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       
                       <Grid item xs={6} sm={4} md={2}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          Numer faktury
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
+                          {report.invoiceNumber || 'Nie podano'}
+                        </Typography>
+                      </Grid>
+                      
+                      <Grid item xs={6} sm={4} md={2}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                           Ilość palet
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
