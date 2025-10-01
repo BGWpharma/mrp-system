@@ -996,10 +996,16 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
 
     // 3.2 Expiration date of materials
     if (task?.consumedMaterials && task.consumedMaterials.length > 0) {
+      // Filtruj materiały - wykluczamy "Opakowania zbiorcze"
+      const filteredConsumedMaterials = task.consumedMaterials.filter(consumed => {
+        const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
+        return material?.category !== 'Opakowania zbiorcze';
+      });
+
       // Calculate estimated height for this subsection
       const expiryHeadersForEstimation = ['Material name', 'Batch', 'Quantity', 'Unit', 'Expiration date'];
       // Create proper data array for estimation
-      const expiryDataSample = task.consumedMaterials.slice(0, 5).map(consumed => [
+      const expiryDataSample = filteredConsumedMaterials.slice(0, 5).map(consumed => [
         consumed.materialName || 'Material',
         consumed.batchNumber || consumed.lotNumber || '-',
         (consumed.quantity || consumed.consumedQuantity || '-').toString(),
@@ -1015,7 +1021,7 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       // Grupowanie konsumpcji według materiału i numeru partii (LOT)
       const groupedConsumptions = {};
       
-      task.consumedMaterials.forEach(consumed => {
+      filteredConsumedMaterials.forEach(consumed => {
         const material = materials.find(m => (m.inventoryItemId || m.id) === consumed.materialId);
         const materialName = consumed.materialName || material?.name || 'Unknown material';
         const materialUnit = consumed.unit || material?.unit || '-';
