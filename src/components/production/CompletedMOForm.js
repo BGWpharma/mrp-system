@@ -20,7 +20,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { formatDateForInput } from '../../utils/dateUtils';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Print as PrintIcon } from '@mui/icons-material';
+import { Send as SendIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, AttachFile as AttachFileIcon, Print as PrintIcon, Assignment as AssignmentIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { getMONumbersForSelect } from '../../services/moService';
 import { db, storage } from '../../services/firebase/config';
@@ -30,6 +30,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { 
+  getFormHeaderStyles, 
+  getFormContainerStyles, 
+  getFormPaperStyles, 
+  getFormButtonStyles,
+  getFormActionsStyles 
+} from '../../styles/formStyles';
 
 // Funkcja do pobierania szczegółów zadania produkcyjnego (MO) na podstawie numeru MO
 const getMODetailsById = async (moNumber) => {
@@ -801,30 +808,18 @@ const CompletedMOForm = () => {
   };
 
   return (
-    <Container maxWidth="md" sx={{ 
-      mt: { xs: 2, sm: 4 }, 
-      mb: { xs: 2, sm: 4 },
-      px: { xs: 1, sm: 3 }
-    }}>
-      <Paper sx={{ 
-        p: { xs: 2, sm: 4 },
-        borderRadius: { xs: 2, sm: 2 },
-        boxShadow: { xs: 2, sm: 3 }
-      }}>
-        <Box sx={{ 
-          mb: { xs: 2, sm: 3 },
-          p: { xs: 2, sm: 3 },
-          borderRadius: 2,
-          background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
-          : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
-          border: '1px solid',
-          borderColor: 'divider'
-        }}>
+    <Container maxWidth="md" sx={getFormContainerStyles()}>
+      <Paper sx={getFormPaperStyles(theme)}>
+        <Box sx={getFormHeaderStyles(theme, isEditMode)}>
           <Typography variant="h5" gutterBottom align="center" fontWeight="bold" sx={{
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
-            color: 'primary.main'
+            color: isEditMode ? 'warning.main' : 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 1
           }}>
+            <AssignmentIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
             {isEditMode ? 'EDYCJA - RAPORT SKOŃCZONE MO' : 'RAPORT - SKOŃCZONE MO'}
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" paragraph sx={{
@@ -1039,12 +1034,13 @@ const CompletedMOForm = () => {
             </Grid>
             
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={getFormActionsStyles()}>
                 <Button
                   variant="outlined"
                   color="secondary"
                   startIcon={<ArrowBackIcon />}
                   onClick={handleBack}
+                  sx={getFormButtonStyles('outlined')}
                 >
                   Powrót
                 </Button>
@@ -1055,6 +1051,7 @@ const CompletedMOForm = () => {
                     startIcon={<PrintIcon />}
                     onClick={handlePrintMODetails}
                     disabled={generatingPDF}
+                    sx={getFormButtonStyles('outlined')}
                   >
                     {generatingPDF ? 'Generowanie...' : 'Załącz szczegóły MO'}
                   </Button>
@@ -1063,9 +1060,11 @@ const CompletedMOForm = () => {
                   type="submit"
                   variant="contained"
                   color="primary"
-                  fullWidth
-                  size="large"
                   startIcon={<SendIcon />}
+                  sx={{
+                    ...getFormButtonStyles('contained'),
+                    flexGrow: 1
+                  }}
                 >
                   {isEditMode ? 'Aktualizuj raport' : 'Wyślij raport'}
                 </Button>

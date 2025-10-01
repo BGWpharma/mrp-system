@@ -33,7 +33,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Save as SaveIcon, ArrowBack as ArrowBackIcon, CloudUpload as CloudUploadIcon, Search as SearchIcon, AttachFile as AttachFileIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, CheckBox, CheckBoxOutlineBlank, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Save as SaveIcon, ArrowBack as ArrowBackIcon, CloudUpload as CloudUploadIcon, Search as SearchIcon, AttachFile as AttachFileIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, CheckBox, CheckBoxOutlineBlank, Refresh as RefreshIcon, LocalShipping as LocalShippingIcon, Person as PersonIcon, Inventory as InventoryIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
@@ -43,6 +43,14 @@ import { db, storage } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../../hooks/useAuth';
+import { 
+  getFormHeaderStyles, 
+  getFormSectionStyles, 
+  getFormContainerStyles, 
+  getFormPaperStyles, 
+  getFormButtonStyles,
+  getFormActionsStyles 
+} from '../../styles/formStyles';
 
 const UnloadingReportFormPage = () => {
   const navigate = useNavigate();
@@ -721,31 +729,19 @@ const UnloadingReportFormPage = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-      <Container maxWidth="md" sx={{ 
-        mt: { xs: 2, sm: 4 }, 
-        mb: { xs: 2, sm: 4 },
-        px: { xs: 1, sm: 3 }
-      }}>
-        <Paper sx={{ 
-          p: { xs: 2, sm: 4 },
-          borderRadius: { xs: 2, sm: 2 },
-          boxShadow: { xs: 2, sm: 3 }
-        }}>
+      <Container maxWidth="md" sx={getFormContainerStyles()}>
+        <Paper sx={getFormPaperStyles(theme)}>
           {/* Nagłówek formularza */}
-          <Box sx={{ 
-            mb: { xs: 2, sm: 3 },
-            p: { xs: 2, sm: 3 },
-            borderRadius: 2,
-            background: theme.palette.mode === 'dark' 
-              ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
-              : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
-            border: '1px solid',
-            borderColor: 'divider'
-          }}>
+          <Box sx={getFormHeaderStyles(theme, isEditMode)}>
             <Typography variant="h5" gutterBottom align="center" fontWeight="bold" sx={{
               fontSize: { xs: '1.25rem', sm: '1.5rem' },
-              color: 'primary.main'
+              color: isEditMode ? 'warning.main' : 'primary.main',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1
             }}>
+              <LocalShippingIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
               {isEditMode ? 'EDYCJA RAPORTU - ROZŁADUNEK TOWARU' : 'RAPORT - ROZŁADUNEK TOWARU'}
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary" sx={{
@@ -768,6 +764,7 @@ const UnloadingReportFormPage = () => {
               startIcon={<ArrowBackIcon />}
               onClick={handleBack}
               variant="outlined"
+              sx={getFormButtonStyles('outlined')}
             >
               Powrót
             </Button>
@@ -794,22 +791,16 @@ const UnloadingReportFormPage = () => {
             
             {/* Sekcja 1: Identyfikacja */}
             <Grid item xs={12}>
-              <Box sx={{ 
-                mt: 2, 
-                mb: 2, 
-                p: 2, 
-                borderRadius: 2, 
-                background: theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, rgba(33,150,243,0.1) 30%, rgba(156,39,176,0.1) 90%)'
-                  : 'linear-gradient(45deg, #e3f2fd 30%, #f3e5f5 90%)',
-                border: '1px solid',
-                borderColor: 'primary.light'
-              }}>
+              <Box sx={getFormSectionStyles(theme, 'primary')}>
                 <Typography variant="h6" gutterBottom sx={{ 
                   color: 'primary.main',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
                 }}>
-                  👤 Sekcja: Identyfikacja
+                  <PersonIcon className="section-icon" />
+                  Identyfikacja
                 </Typography>
               </Box>
             </Grid>
@@ -983,22 +974,16 @@ const UnloadingReportFormPage = () => {
 
             {/* Sekcja 2: Informacje o rozładunku */}
             <Grid item xs={12}>
-              <Box sx={{ 
-                mt: 2, 
-                mb: 2, 
-                p: 2, 
-                borderRadius: 2, 
-                background: theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, rgba(255,152,0,0.1) 30%, rgba(76,175,80,0.1) 90%)'
-                  : 'linear-gradient(45deg, #fff3e0 30%, #e8f5e8 90%)',
-                border: '1px solid',
-                borderColor: 'primary.light'
-              }}>
+              <Box sx={getFormSectionStyles(theme, 'warning')}>
                 <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'primary.main',
-                  fontWeight: 'bold'
+                  color: 'warning.main',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
                 }}>
-                  🚛 Sekcja: Informacje o rozładunku
+                  <LocalShippingIcon className="section-icon" />
+                  Informacje o rozładunku
                 </Typography>
               </Box>
             </Grid>
@@ -1119,22 +1104,16 @@ const UnloadingReportFormPage = () => {
 
             {/* Sekcja 3: Informacje o towarze */}
             <Grid item xs={12}>
-              <Box sx={{ 
-                mt: 2, 
-                mb: 2, 
-                p: 2, 
-                borderRadius: 2, 
-                background: theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, rgba(156,39,176,0.1) 30%, rgba(76,175,80,0.1) 90%)'
-                  : 'linear-gradient(45deg, #f3e5f5 30%, #e8f5e8 90%)',
-                border: '1px solid',
-                borderColor: 'primary.light'
-              }}>
+              <Box sx={getFormSectionStyles(theme, 'success')}>
                 <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'primary.main',
-                  fontWeight: 'bold'
+                  color: 'success.main',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
                 }}>
-                  📦 Sekcja: Informacje o towarze
+                  <InventoryIcon className="section-icon" />
+                  Informacje o towarze
                 </Typography>
               </Box>
             </Grid>
@@ -1456,10 +1435,11 @@ const UnloadingReportFormPage = () => {
             </Grid>
 
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 3 }}>
+              <Box sx={getFormActionsStyles()}>
                 <Button
                   variant="outlined"
                   onClick={handleBack}
+                  sx={getFormButtonStyles('outlined')}
                 >
                   Anuluj
                 </Button>
@@ -1467,6 +1447,7 @@ const UnloadingReportFormPage = () => {
                   type="submit"
                   variant="contained"
                   startIcon={<SaveIcon />}
+                  sx={getFormButtonStyles('contained')}
                 >
                   {isEditMode ? 'Zapisz zmiany' : 'Prześlij raport'}
                 </Button>

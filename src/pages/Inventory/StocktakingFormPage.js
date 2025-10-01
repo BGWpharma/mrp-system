@@ -16,11 +16,20 @@ import {
   Alert,
   Divider
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Save as SaveIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Inventory as InventoryIcon, Checklist as ChecklistIcon } from '@mui/icons-material';
 import { createStocktaking, getStocktakingById, updateStocktaking, getAllWarehouses } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useTheme } from '@mui/material/styles';
+import { 
+  getFormHeaderStyles, 
+  getFormSectionStyles, 
+  getFormContainerStyles, 
+  getFormPaperStyles, 
+  getFormButtonStyles,
+  getFormActionsStyles 
+} from '../../styles/formStyles';
 
 const StocktakingFormPage = () => {
   const { id } = useParams();
@@ -28,6 +37,8 @@ const StocktakingFormPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isEditMode = id && id !== 'new';
   
   const [stocktaking, setStocktaking] = useState({
     name: '',
@@ -128,7 +139,7 @@ const StocktakingFormPage = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <Container maxWidth="md" sx={getFormContainerStyles()}>
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
           <CircularProgress />
         </Box>
@@ -137,19 +148,38 @@ const StocktakingFormPage = () => {
   }
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+    <Container maxWidth="md" sx={getFormContainerStyles()}>
+      <Paper sx={getFormPaperStyles(theme)}>
+        {/* Nagłówek formularza */}
+        <Box sx={getFormHeaderStyles(theme, isEditMode)}>
+          <Typography variant="h5" gutterBottom align="center" fontWeight="bold" sx={{
+            fontSize: { xs: '1.25rem', sm: '1.5rem' },
+            color: isEditMode ? 'warning.main' : 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 1
+          }}>
+            <ChecklistIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
+            {isEditMode ? t('stocktaking.editStocktaking') : t('stocktaking.newStocktaking')}
+          </Typography>
+          <Typography variant="body2" align="center" color="text.secondary" sx={{
+            fontSize: { xs: '0.75rem', sm: '0.875rem' }
+          }}>
+            {isEditMode ? 'Edytuj dane inwentaryzacji' : 'Utwórz nową inwentaryzację magazynową'}
+          </Typography>
+        </Box>
+
+        {/* Przycisk powrotu */}
+        <Box sx={{ mb: 2 }}>
           <Button
             startIcon={<ArrowBackIcon />}
             onClick={handleCancel}
-            sx={{ mr: 2 }}
+            variant="outlined"
+            sx={getFormButtonStyles('outlined')}
           >
             {t('stocktaking.back')}
           </Button>
-          <Typography variant="h5" component="h1">
-            {id && id !== 'new' ? t('stocktaking.editStocktaking') : t('stocktaking.newStocktaking')}
-          </Typography>
         </Box>
         
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -242,28 +272,30 @@ const StocktakingFormPage = () => {
                 </FormControl>
               </Grid>
             )}
+            
+            <Grid item xs={12}>
+              <Box sx={getFormActionsStyles()}>
+                <Button
+                  variant="outlined"
+                  onClick={handleCancel}
+                  sx={getFormButtonStyles('outlined')}
+                  disabled={saving}
+                >
+                  {t('stocktaking.cancel')}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  startIcon={<SaveIcon />}
+                  disabled={saving}
+                  sx={getFormButtonStyles('contained')}
+                >
+                  {saving ? <CircularProgress size={24} /> : t('stocktaking.save')}
+                </Button>
+              </Box>
+            </Grid>
           </Grid>
-          
-          <Divider sx={{ my: 3 }} />
-          
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-            <Button
-              variant="outlined"
-              onClick={handleCancel}
-              sx={{ mr: 2 }}
-            >
-              {t('stocktaking.cancel')}
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              startIcon={<SaveIcon />}
-              disabled={saving}
-            >
-              {saving ? <CircularProgress size={24} /> : t('stocktaking.save')}
-            </Button>
-          </Box>
         </form>
       </Paper>
     </Container>
