@@ -2995,6 +2995,75 @@ const PurchaseOrderForm = ({ orderId }) => {
                                       }}
                                     />
                                   </Grid>
+                                  
+                                  {/* Nowe pole: Przypisanie do pozycji */}
+                                  <Grid item xs={12}>
+                                    <Typography variant="caption" display="block" gutterBottom>
+                                      Przypisz koszt do pozycji
+                                    </Typography>
+                                    <FormControl fullWidth size="small">
+                                      <Select
+                                        multiple
+                                        value={cost.affectedItems || []}
+                                        onChange={(e) => handleAdditionalCostChange(cost.id, 'affectedItems', e.target.value)}
+                                        renderValue={(selected) => {
+                                          if (!selected || selected.length === 0) {
+                                            return <em style={{ color: '#666' }}>Wszystkie pozycje (domyślnie)</em>;
+                                          }
+                                          const selectedItems = poData.items.filter(item => selected.includes(item.id));
+                                          if (selectedItems.length === poData.items.length) {
+                                            return <em style={{ color: '#666' }}>Wszystkie pozycje</em>;
+                                          }
+                                          return `${selectedItems.length} z ${poData.items.length} pozycji`;
+                                        }}
+                                        displayEmpty
+                                        sx={{ 
+                                          backgroundColor: 'background.paper',
+                                          '& .MuiSelect-select em': {
+                                            fontStyle: 'normal'
+                                          }
+                                        }}
+                                      >
+                                        <MenuItem value="" disabled>
+                                          <em>Wybierz pozycje lub pozostaw puste dla wszystkich</em>
+                                        </MenuItem>
+                                        {poData.items && poData.items.length > 0 ? (
+                                          poData.items.map((item) => (
+                                            <MenuItem key={item.id} value={item.id}>
+                                              <Checkbox 
+                                                checked={(cost.affectedItems || []).includes(item.id)}
+                                                size="small"
+                                              />
+                                              <Box sx={{ ml: 1 }}>
+                                                <Typography variant="body2">
+                                                  {item.name}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                  {item.quantity} {item.unit} × {formatCurrency(item.unitPrice || 0, poData.currency)} = {formatCurrency(item.totalPrice || 0, poData.currency)}
+                                                </Typography>
+                                              </Box>
+                                            </MenuItem>
+                                          ))
+                                        ) : (
+                                          <MenuItem disabled>
+                                            <Typography variant="body2" color="text.secondary">
+                                              Brak pozycji w zamówieniu
+                                            </Typography>
+                                          </MenuItem>
+                                        )}
+                                      </Select>
+                                    </FormControl>
+                                    {cost.affectedItems && cost.affectedItems.length > 0 && (
+                                      <Typography variant="caption" color="primary" sx={{ mt: 0.5, display: 'block' }}>
+                                        ℹ️ Koszt będzie rozliczony proporcjonalnie tylko na wybrane pozycje
+                                      </Typography>
+                                    )}
+                                    {(!cost.affectedItems || cost.affectedItems.length === 0) && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                        ℹ️ Koszt będzie rozliczony proporcjonalnie na wszystkie pozycje
+                                      </Typography>
+                                    )}
+                                  </Grid>
                                 </Grid>
                               </TableCell>
                             </TableRow>

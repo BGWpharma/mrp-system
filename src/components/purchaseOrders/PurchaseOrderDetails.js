@@ -1731,14 +1731,52 @@ const PurchaseOrderDetails = ({ orderId }) => {
                         <Typography variant="subtitle1" gutterBottom>
                           <strong>{t('purchaseOrders.details.additionalCostsDetails')}:</strong>
                         </Typography>
-                        {purchaseOrder.additionalCostsItems.map((cost, index) => (
-                          <Typography key={index} variant="body2" gutterBottom sx={{ pl: 2 }}>
-                            {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{formatCurrency(parseFloat(cost.value) || 0, purchaseOrder.currency)}</strong>
-                            {typeof cost.vatRate === 'number' && cost.vatRate > 0 && (
-                              <span> + VAT {cost.vatRate}%: <strong>{formatCurrency(((parseFloat(cost.value) || 0) * cost.vatRate) / 100, purchaseOrder.currency)}</strong></span>
-                            )}
-                          </Typography>
-                        ))}
+                        {purchaseOrder.additionalCostsItems.map((cost, index) => {
+                          // Znajdź nazwy pozycji, do których przypisany jest koszt
+                          const getAffectedItemsNames = () => {
+                            if (!cost.affectedItems || cost.affectedItems.length === 0) {
+                              return null; // Wszystkie pozycje
+                            }
+                            
+                            const affectedItems = purchaseOrder.items.filter(item => 
+                              cost.affectedItems.includes(item.id)
+                            );
+                            
+                            if (affectedItems.length === 0) {
+                              return [];
+                            }
+                            
+                            return affectedItems.map(item => item.name);
+                          };
+                          
+                          const affectedItemsNames = getAffectedItemsNames();
+                          
+                          return (
+                            <Box key={index} sx={{ pl: 2, mb: 1 }}>
+                              <Typography variant="body2" gutterBottom>
+                                {cost.description || `Dodatkowy koszt ${index+1}`}: <strong>{formatCurrency(parseFloat(cost.value) || 0, purchaseOrder.currency)}</strong>
+                                {typeof cost.vatRate === 'number' && cost.vatRate > 0 && (
+                                  <span> + VAT {cost.vatRate}%: <strong>{formatCurrency(((parseFloat(cost.value) || 0) * cost.vatRate) / 100, purchaseOrder.currency)}</strong></span>
+                                )}
+                              </Typography>
+                              
+                              {/* Informacja o przypisanych pozycjach */}
+                              {affectedItemsNames === null ? (
+                                <Typography variant="caption" sx={{ pl: 2, color: 'text.secondary', display: 'block' }}>
+                                  📦 Przypisane do wszystkich pozycji
+                                </Typography>
+                              ) : affectedItemsNames.length > 0 ? (
+                                <Typography variant="caption" sx={{ pl: 2, color: 'primary.main', display: 'block' }}>
+                                  📦 Przypisane do: {affectedItemsNames.join(', ')}
+                                </Typography>
+                              ) : (
+                                <Typography variant="caption" sx={{ pl: 2, color: 'warning.main', display: 'block' }}>
+                                  ⚠️ Brak przypisanych pozycji (sprawdź konfigurację)
+                                </Typography>
+                              )}
+                            </Box>
+                          );
+                        })}
                       </>
                     )}
                     

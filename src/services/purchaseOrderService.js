@@ -1928,35 +1928,11 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
   try {
     console.log(`Aktualizuję ceny partii dla zamówienia ${purchaseOrderId}`);
     
-    // Oblicz łączne dodatkowe koszty BRUTTO (z VAT)
-    let additionalCostsGrossTotal = 0;
-    
-    // Z nowego formatu additionalCostsItems
-    if (poData.additionalCostsItems && Array.isArray(poData.additionalCostsItems)) {
-      additionalCostsGrossTotal = poData.additionalCostsItems.reduce((sum, cost) => {
-        const net = parseFloat(cost.value) || 0;
-        const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
-        const vat = (net * vatRate) / 100;
-        return sum + net + vat;
-      }, 0);
-    } 
-    // Ze starego pola additionalCosts (dla kompatybilności, traktujemy jako brutto)
-    else if (poData.additionalCosts) {
-      additionalCostsGrossTotal = parseFloat(poData.additionalCosts) || 0;
-    }
-    
-    // Zawsze kontynuuj aktualizację - jeśli additionalCostsGrossTotal = 0, 
-    // to zresetujemy ceny partii do wartości bazowych
-    console.log(`Dodatkowe koszty do rozliczenia w zamówieniu ${purchaseOrderId}: ${additionalCostsGrossTotal}`);
-    if (additionalCostsGrossTotal <= 0) {
-      console.log(`Resetowanie cen partii do wartości bazowych (dodatkowe koszty = 0)`);
-    }
-    
     // Pobierz wszystkie partie magazynowe powiązane z tym zamówieniem
     const { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
     const firebaseConfig = await import('./firebase/config');
     const db = firebaseConfig.db;
-    const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches'; // Używamy bezpośrednio nazwy kolekcji
+    const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
     
     // Spróbuj znaleźć partie używając obu modeli danych
     let batchesToUpdate = [];
@@ -1991,11 +1967,9 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
       });
     }
     
-    // DEDUPLIKACJA: Usuń duplikaty partii (mogą pojawić się przy transferach)
-    // Użyj Map z ID jako kluczem, aby zapewnić unikalność
+    // DEDUPLIKACJA: Usuń duplikaty partii
     const uniqueBatchesMap = new Map();
     batchesToUpdate.forEach(batch => {
-      // Jeśli partia o tym ID nie została jeszcze dodana lub ma nowszą datę aktualizacji, dodaj/zaktualizuj
       if (!uniqueBatchesMap.has(batch.id) || 
           (batch.updatedAt && (!uniqueBatchesMap.get(batch.id).updatedAt || 
           batch.updatedAt.toDate() > uniqueBatchesMap.get(batch.id).updatedAt.toDate()))) {
@@ -2003,63 +1977,116 @@ const updateBatchPricesWithAdditionalCosts = async (purchaseOrderId, poData, use
       }
     });
     
-    // Konwertuj z powrotem na tablicę
     batchesToUpdate = Array.from(uniqueBatchesMap.values());
     
     console.log(`Znaleziono ${batchesToUpdate.length} unikalnych partii powiązanych z zamówieniem ${purchaseOrderId}`);
     
-    // Jeśli nie znaleziono partii, zakończ
     if (batchesToUpdate.length === 0) {
       console.log(`Nie znaleziono partii powiązanych z zamówieniem ${purchaseOrderId}`);
       return;
     }
     
-    // Oblicz łączną ilość początkową wszystkich partii do rozdzielenia kosztów proporcjonalnie
-    const totalInitialQuantity = batchesToUpdate.reduce((sum, batch) => {
-      const initialQuantity = parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0;
-      return sum + initialQuantity;
-    }, 0);
+    // Mapa do przechowywania dodatkowych kosztów na jednostkę dla każdej partii
+    const batchAdditionalCosts = new Map();
     
-    if (totalInitialQuantity <= 0) {
-      console.log(`Brak poprawnych ilości początkowych w partiach do podziału kosztów w zamówieniu ${purchaseOrderId}`);
-      return;
+    // Inicjalizuj mapę - każda partia zaczyna z kosztem 0
+    batchesToUpdate.forEach(batch => {
+      batchAdditionalCosts.set(batch.id, 0);
+    });
+    
+    // Przetwarzaj każdy dodatkowy koszt osobno
+    const additionalCostsItems = poData.additionalCostsItems || [];
+    
+    // Obsługa starego formatu (dla kompatybilności wstecznej)
+    if (poData.additionalCosts && (!additionalCostsItems || additionalCostsItems.length === 0)) {
+      const oldFormatCost = parseFloat(poData.additionalCosts) || 0;
+      if (oldFormatCost > 0) {
+        additionalCostsItems.push({
+          value: oldFormatCost,
+          vatRate: 0,
+          affectedItems: [] // Puste = wszystkie pozycje
+        });
+      }
     }
     
-    console.log(`Łączna ilość początkowa partii: ${totalInitialQuantity}, dodatkowe koszty: ${additionalCostsGrossTotal}`);
+    // Przetwórz każdy dodatkowy koszt
+    for (const cost of additionalCostsItems) {
+      const costNet = parseFloat(cost.value) || 0;
+      const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+      const costVat = (costNet * vatRate) / 100;
+      const costGrossTotal = costNet + costVat;
+      
+      if (costGrossTotal <= 0) {
+        continue; // Pomiń zerowe koszty
+      }
+      
+      // Określ, które partie są objęte tym kosztem
+      let affectedBatches = [];
+      
+      if (cost.affectedItems && Array.isArray(cost.affectedItems) && cost.affectedItems.length > 0) {
+        // Koszt dotyczy tylko wybranych pozycji
+        affectedBatches = batchesToUpdate.filter(batch => {
+          const itemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
+          return itemPoId && cost.affectedItems.includes(itemPoId);
+        });
+        console.log(`Koszt "${cost.description || 'bez opisu'}" (${costGrossTotal.toFixed(2)}) przypisany do ${cost.affectedItems.length} pozycji, znaleziono ${affectedBatches.length} partii`);
+      } else {
+        // Koszt dotyczy wszystkich pozycji (domyślnie)
+        affectedBatches = batchesToUpdate;
+        console.log(`Koszt "${cost.description || 'bez opisu'}" (${costGrossTotal.toFixed(2)}) przypisany do wszystkich pozycji (${affectedBatches.length} partii)`);
+      }
+      
+      if (affectedBatches.length === 0) {
+        console.log(`Brak partii dla kosztu "${cost.description || 'bez opisu'}", pomijam`);
+        continue;
+      }
+      
+      // Oblicz łączną ilość początkową dla objętych partii
+      const totalAffectedQuantity = affectedBatches.reduce((sum, batch) => {
+        const initialQuantity = parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0;
+        return sum + initialQuantity;
+      }, 0);
+      
+      if (totalAffectedQuantity <= 0) {
+        console.log(`Brak poprawnych ilości dla kosztu "${cost.description || 'bez opisu'}", pomijam`);
+        continue;
+      }
+      
+      // Rozlicz koszt proporcjonalnie na objęte partie
+      for (const batch of affectedBatches) {
+        const batchInitialQuantity = parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0;
+        
+        if (batchInitialQuantity > 0) {
+          const batchProportion = batchInitialQuantity / totalAffectedQuantity;
+          const batchCostTotal = costGrossTotal * batchProportion;
+          const costPerUnit = batchCostTotal / batchInitialQuantity;
+          
+          // Dodaj do już obliczonych kosztów dla tej partii
+          const currentCost = batchAdditionalCosts.get(batch.id) || 0;
+          batchAdditionalCosts.set(batch.id, currentCost + costPerUnit);
+        }
+      }
+    }
     
-    // Aktualizuj każdą partię - teraz koszty są rozdzielane proporcjonalnie do initialQuantity partii
+    // Aktualizuj każdą partię z obliczonymi kosztami
     const updatePromises = [];
     
     for (const batchData of batchesToUpdate) {
       const batchRef = doc(db, INVENTORY_BATCHES_COLLECTION, batchData.id);
-      
-      // Pobierz ilość początkową partii
-      const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
       
       // Zachowaj oryginalną cenę jako baseUnitPrice, jeśli nie jest już ustawiona
       const baseUnitPrice = batchData.baseUnitPrice !== undefined 
         ? batchData.baseUnitPrice 
         : batchData.unitPrice || 0;
       
-      let additionalCostPerUnit = 0;
-      let newUnitPrice = parseFloat(baseUnitPrice);
+      // Pobierz obliczony dodatkowy koszt dla tej partii
+      const additionalCostPerUnit = batchAdditionalCosts.get(batchData.id) || 0;
       
-      // Oblicz dodatkowy koszt tylko jeśli są dodatkowe koszty i ilość całkowita > 0
-      if (additionalCostsGrossTotal > 0 && totalInitialQuantity > 0) {
-        // Oblicz proporcjonalny udział dodatkowych kosztów dla tej partii
-        const batchProportion = batchInitialQuantity / totalInitialQuantity;
-        const batchAdditionalCostTotal = additionalCostsGrossTotal * batchProportion;
-        
-        // Oblicz dodatkowy koszt na jednostkę dla tej konkretnej partii
-        additionalCostPerUnit = batchInitialQuantity > 0 
-          ? batchAdditionalCostTotal / batchInitialQuantity 
-          : 0;
-        
-        // Ustawienie nowej ceny jednostkowej: cena bazowa + koszt dodatkowy na jednostkę
-        newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
-      }
+      // Oblicz nową cenę jednostkową
+      const newUnitPrice = parseFloat(baseUnitPrice) + additionalCostPerUnit;
       
-      console.log(`Aktualizuję partię ${batchData.id}: initialQuantity=${batchInitialQuantity}, additionalCostPerUnit=${additionalCostPerUnit}, basePrice=${baseUnitPrice}, newPrice=${newUnitPrice}`);
+      const batchInitialQuantity = parseFloat(batchData.initialQuantity) || parseFloat(batchData.quantity) || 0;
+      console.log(`Aktualizuję partię ${batchData.id}: initialQuantity=${batchInitialQuantity}, additionalCostPerUnit=${additionalCostPerUnit.toFixed(6)}, basePrice=${baseUnitPrice}, newPrice=${newUnitPrice.toFixed(6)}`);
       
       // Aktualizuj dokument partii
       updatePromises.push(updateDoc(batchRef, {
