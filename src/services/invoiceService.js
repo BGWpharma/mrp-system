@@ -280,6 +280,72 @@ export const createInvoice = async (invoiceData, userId) => {
 };
 
 /**
+ * Funkcja obliczająca wartość pozycji z uwzględnieniem kosztów produkcji
+ * (używana do obliczania proporcji w kosztach dodatkowych)
+ */
+export const calculateItemTotalValue = (item) => {
+  // Podstawowa wartość pozycji
+  const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+  
+  // Jeśli produkt jest z listy cenowej I ma cenę większą od 0, zwracamy tylko wartość pozycji
+  if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
+    return itemValue;
+  }
+  
+  // Jeśli produkt nie jest z listy cenowej LUB ma cenę 0, i ma koszt produkcji, dodajemy go
+  if (item.productionTaskId && item.productionCost !== undefined) {
+    return itemValue + parseFloat(item.productionCost || 0);
+  }
+  
+  // Domyślnie zwracamy tylko wartość pozycji
+  return itemValue;
+};
+
+/**
+ * Oblicza całkowity koszt jednostkowy pozycji uwzględniając:
+ * - wartość pozycji (cena + koszt produkcji jeśli nie z listy cenowej)
+ * - proporcjonalny udział w kosztach dodatkowych (transport + inne koszty)
+ * - proporcjonalny udział w rabatach
+ */
+export const calculateTotalUnitCost = (item, orderData) => {
+  // Oblicz wartość tej pozycji
+  const itemTotalValue = calculateItemTotalValue(item);
+  
+  // Oblicz sumę wartości wszystkich pozycji w zamówieniu
+  const allItemsValue = orderData.items?.reduce((sum, i) => sum + calculateItemTotalValue(i), 0) || 0;
+  
+  // Oblicz proporcję tej pozycji w całkowitej wartości
+  const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
+  
+  // Oblicz koszty dodatkowe
+  const shippingCost = parseFloat(orderData.shippingCost) || 0;
+  
+  // Suma dodatkowych kosztów (dodatnich)
+  const additionalCosts = orderData.additionalCostsItems ? 
+    orderData.additionalCostsItems
+      .filter(cost => parseFloat(cost.value) > 0)
+      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+  
+  // Suma rabatów (ujemnych kosztów)
+  const discounts = orderData.additionalCostsItems ? 
+    Math.abs(orderData.additionalCostsItems
+      .filter(cost => parseFloat(cost.value) < 0)
+      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+  
+  // Całkowity udział pozycji w kosztach dodatkowych
+  const additionalShare = proportion * (shippingCost + additionalCosts - discounts);
+  
+  // Całkowity koszt pozycji z kosztami dodatkowymi
+  const totalWithAdditional = itemTotalValue + additionalShare;
+  
+  // Koszt pojedynczej sztuki
+  const quantity = parseFloat(item.quantity) || 1;
+  const unitCost = totalWithAdditional / quantity;
+  
+  return unitCost;
+};
+
+/**
  * Tworzy fakturę na podstawie zamówienia
  */
 export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
@@ -319,10 +385,13 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
           // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
           const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
           
-          // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
-          finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
-            ? parseFloat(item.fullProductionUnitCost)
-            : parseFloat(item.price || 0);
+          // Użyj kosztu całkowitego (z udziałem w kosztach dodatkowych) jeśli warunki są spełnione
+          if (shouldUseProductionCost) {
+            finalPrice = calculateTotalUnitCost(item, orderData);
+            console.log(`Faktura: Używam kosztu całk./szt. ${finalPrice.toFixed(2)}€ dla ${item.name}`);
+          } else {
+            finalPrice = parseFloat(item.price || 0);
+          }
         }
 
         const orderItemId = item.id || `${orderId}_item_${index}`;

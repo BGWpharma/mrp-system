@@ -57,7 +57,8 @@ import {
   getAvailableProformasForOrderWithExclusion,
   updateMultipleProformasUsage,
   removeMultipleProformasUsage,
-  syncProformaNumberInLinkedInvoices
+  syncProformaNumberInLinkedInvoices,
+  calculateTotalUnitCost
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -450,10 +451,12 @@ const InvoiceForm = ({ invoiceId }) => {
         // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
         const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
         
-        // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
-        finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
-          ? parseFloat(item.fullProductionUnitCost)
-          : parseFloat(item.price || 0);
+        // Użyj kosztu całkowitego (z udziałem w kosztach dodatkowych) jeśli warunki są spełnione
+        if (shouldUseProductionCost && selectedOrder) {
+          finalPrice = calculateTotalUnitCost(item, selectedOrder);
+        } else {
+          finalPrice = parseFloat(item.price || 0);
+        }
       }
 
       return {
@@ -820,10 +823,13 @@ const InvoiceForm = ({ invoiceId }) => {
             // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
             const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
             
-            // Użyj kosztu całkowitego jeśli warunki są spełnione i koszt istnieje
-            finalPrice = shouldUseProductionCost && item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null
-              ? parseFloat(item.fullProductionUnitCost)
-              : parseFloat(item.price || 0);
+            // Użyj kosztu całkowitego (z udziałem w kosztach dodatkowych) jeśli warunki są spełnione
+            if (shouldUseProductionCost) {
+              finalPrice = calculateTotalUnitCost(item, selectedOrder);
+              console.log(`Faktura PO: Używam kosztu całk./szt. ${finalPrice.toFixed(2)}€ dla ${item.name}`);
+            } else {
+              finalPrice = parseFloat(item.price || 0);
+            }
           }
 
           return {
