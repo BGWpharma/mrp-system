@@ -31,7 +31,12 @@ import {
   Select,
   MenuItem,
   Tooltip,
-  Alert
+  Alert,
+  Popover,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -319,6 +324,10 @@ const OrderDetails = () => {
   const [cmrDocuments, setCmrDocuments] = useState([]);
   const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
   const [invoicedAmounts, setInvoicedAmounts] = useState({});
+  
+  // State dla popover z listą faktur
+  const [invoicePopoverAnchor, setInvoicePopoverAnchor] = useState(null);
+  const [selectedInvoiceData, setSelectedInvoiceData] = useState(null);
 
   // 🚀 LAZY LOADING State Management
   const [activeSection, setActiveSection] = useState('basic'); // basic, production, documents, history
@@ -1708,7 +1717,7 @@ const OrderDetails = () => {
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.shipped')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.price')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.value')}</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">Zafakturowana kwota</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.invoicedAmount')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.priceList')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.productionStatus')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">
@@ -1776,11 +1785,26 @@ const OrderDetails = () => {
                       
                       if (invoicedData && invoicedData.totalInvoiced > 0) {
                         return (
-                          <Tooltip title={`Zafakturowano w ${invoicedData.invoices.length} fakturach`}>
-                            <Typography sx={{ 
-                              fontWeight: 'medium',
-                              color: 'success.main'
-                            }}>
+                          <Tooltip title={t('orderDetails.tooltips.clickToSeeInvoiceDetails', { count: invoicedData.invoices.length })}>
+                            <Typography 
+                              sx={{ 
+                                fontWeight: 'medium',
+                                color: 'success.main',
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  textDecoration: 'underline',
+                                  color: 'success.dark'
+                                }
+                              }}
+                              onClick={(e) => {
+                                setInvoicePopoverAnchor(e.currentTarget);
+                                setSelectedInvoiceData({
+                                  itemName: item.name,
+                                  invoices: invoicedData.invoices,
+                                  totalInvoiced: invoicedData.totalInvoiced
+                                });
+                              }}
+                            >
                               {formatCurrency(invoicedData.totalInvoiced)}
                             </Typography>
                           </Tooltip>
@@ -1963,13 +1987,57 @@ const OrderDetails = () => {
                   {/* Suma zafakturowanych kwot */}
                   {(() => {
                     let totalInvoiced = 0;
+                    const invoicesMap = new Map();
+                    
                     order.items?.forEach((item, index) => {
                       const itemId = item.id || `${orderId}_item_${index}`;
                       const invoicedData = invoicedAmounts[itemId];
                       if (invoicedData && invoicedData.totalInvoiced > 0) {
                         totalInvoiced += invoicedData.totalInvoiced;
+                        invoicedData.invoices.forEach(inv => {
+                          if (invoicesMap.has(inv.invoiceId)) {
+                            const existing = invoicesMap.get(inv.invoiceId);
+                            existing.itemValue += inv.itemValue;
+                            existing.quantity += inv.quantity;
+                          } else {
+                            invoicesMap.set(inv.invoiceId, { 
+                              invoiceId: inv.invoiceId,
+                              invoiceNumber: inv.invoiceNumber,
+                              itemValue: inv.itemValue,
+                              quantity: inv.quantity
+                            });
+                          }
+                        });
                       }
                     });
+                    
+                    const allInvoices = Array.from(invoicesMap.values());
+                    
+                    if (totalInvoiced > 0) {
+                      return (
+                        <Tooltip title={t('orderDetails.tooltips.clickToSeeAllInvoices')}>
+                          <Typography
+                            sx={{ 
+                              cursor: 'pointer',
+                              '&:hover': {
+                                textDecoration: 'underline',
+                              }
+                            }}
+                            onClick={(e) => {
+                              setInvoicePopoverAnchor(e.currentTarget);
+                              setSelectedInvoiceData({
+                                itemName: t('orderDetails.invoicePopover.allOrderItems'),
+                                invoices: allInvoices,
+                                totalInvoiced: totalInvoiced
+                              });
+                            }}
+                          >
+                            {formatCurrency(totalInvoiced)}
+                          </Typography>
+                        </Tooltip>
+                      );
+                    }
+                    
                     return formatCurrency(totalInvoiced);
                   })()}
                 </TableCell>
@@ -2683,6 +2751,80 @@ const OrderDetails = () => {
             <Button onClick={handleDriveLinkSubmit} variant="contained">{t('orderDetails.dialogs.driveLink.add')}</Button>
           </DialogActions>
         </Dialog>
+
+        {/* Popover z listą faktur dla zafakturowanej kwoty */}
+        <Popover
+          open={Boolean(invoicePopoverAnchor)}
+          anchorEl={invoicePopoverAnchor}
+          onClose={() => {
+            setInvoicePopoverAnchor(null);
+            setSelectedInvoiceData(null);
+          }}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'center',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'center',
+          }}
+        >
+          {selectedInvoiceData && (
+            <Box sx={{ p: 2, minWidth: 300 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                {t('orderDetails.invoicePopover.title', { itemName: selectedInvoiceData.itemName })}
+              </Typography>
+              <Divider sx={{ mb: 1 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t('orderDetails.invoicePopover.totalInvoiced')} {formatCurrency(selectedInvoiceData.totalInvoiced)}
+              </Typography>
+              <List dense>
+                {selectedInvoiceData.invoices.map((invoice, idx) => (
+                  <ListItemButton
+                    key={idx}
+                    onClick={() => {
+                      window.open(`/invoices/${invoice.invoiceId}`, '_blank');
+                      setInvoicePopoverAnchor(null);
+                      setSelectedInvoiceData(null);
+                    }}
+                    sx={{
+                      borderRadius: 1,
+                      mb: 0.5,
+                      '&:hover': {
+                        bgcolor: 'action.hover'
+                      }
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography variant="body2" fontWeight="medium">
+                              {invoice.invoiceNumber}
+                            </Typography>
+                            <OpenInNewIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                          </Box>
+                          <Typography variant="body2" color="success.main" fontWeight="medium">
+                            {formatCurrency(invoice.itemValue)}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary">
+                          {t('orderDetails.invoicePopover.quantity')} {invoice.quantity}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+              <Divider sx={{ mt: 1, mb: 1 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center' }}>
+                {t('orderDetails.invoicePopover.clickToNavigate')}
+              </Typography>
+            </Box>
+          )}
+        </Popover>
 
       </Box>
     </div>

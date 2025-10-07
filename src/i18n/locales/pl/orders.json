@@ -163,6 +163,7 @@
       "shipped": "Wysłano",
       "price": "Cena",
       "value": "Wartość",
+      "invoicedAmount": "Zafakturowana kwota",
       "priceList": "Lista cenowa",
       "productionStatus": "Status produkcji",
       "productionCost": "Koszt produkcji",
@@ -193,7 +194,9 @@
       "productionTaskCost": "Koszt produkcji zadania",
       "refreshProductionTasks": "Odśwież dane zadań produkcyjnych",
       "refreshInvoicesList": "Odśwież listę faktur",
-      "refreshCmrDocuments": "Odśwież listę dokumentów CMR"
+      "refreshCmrDocuments": "Odśwież listę dokumentów CMR",
+      "clickToSeeInvoiceDetails": "Kliknij aby zobaczyć szczegóły faktur ({{count}})",
+      "clickToSeeAllInvoices": "Kliknij aby zobaczyć wszystkie faktury"
     },
     "deliveryProof": {
       "altText": "Dowód dostawy",
@@ -205,6 +208,13 @@
     "priceListLabels": {
       "yes": "Tak",
       "no": "Nie"
+    },
+    "invoicePopover": {
+      "title": "Faktury dla: {{itemName}}",
+      "totalInvoiced": "Suma zafakturowana:",
+      "quantity": "Ilość:",
+      "clickToNavigate": "Kliknij na fakturę, aby przejść do szczegółów",
+      "allOrderItems": "Wszystkie pozycje zamówienia"
     },
     "cmrStatuses": {
       "draft": "Szkic",

@@ -163,6 +163,7 @@
       "shipped": "Shipped",
       "price": "Price",
       "value": "Value",
+      "invoicedAmount": "Invoiced Amount",
       "priceList": "Price List",
       "productionStatus": "Production Status",
       "productionCost": "Production Cost",
@@ -193,7 +194,9 @@
       "productionTaskCost": "Production task cost",
       "refreshProductionTasks": "Refresh production task data",
       "refreshInvoicesList": "Refresh invoices list",
-      "refreshCmrDocuments": "Refresh CMR documents list"
+      "refreshCmrDocuments": "Refresh CMR documents list",
+      "clickToSeeInvoiceDetails": "Click to see invoice details ({{count}})",
+      "clickToSeeAllInvoices": "Click to see all invoices"
     },
     "deliveryProof": {
       "altText": "Delivery proof",
@@ -205,6 +208,13 @@
     "priceListLabels": {
       "yes": "Yes",
       "no": "No"
+    },
+    "invoicePopover": {
+      "title": "Invoices for: {{itemName}}",
+      "totalInvoiced": "Total invoiced:",
+      "quantity": "Quantity:",
+      "clickToNavigate": "Click on invoice to view details",
+      "allOrderItems": "All order items"
     },
     "cmrStatuses": {
       "draft": "Draft",
