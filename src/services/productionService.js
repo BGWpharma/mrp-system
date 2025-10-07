@@ -5036,6 +5036,12 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       return { success: false, message: 'Brak materiałów w zadaniu' };
     }
 
+    // SPRAWDŹ CZY AUTOMATYCZNE AKTUALIZACJE SĄ WYŁĄCZONE
+    if (task.disableAutomaticCostUpdates === true) {
+      console.log(`[AUTO] Automatyczne aktualizacje kosztów są wyłączone dla zadania ${taskId}`);
+      return { success: false, message: 'Automatyczne aktualizacje kosztów są wyłączone dla tego zadania' };
+    }
+
     console.log(`[AUTO-DEBUG] Stan zadania przed kalkulacją:`, {
       moNumber: task.moNumber,
       materialsCount: task.materials?.length || 0,

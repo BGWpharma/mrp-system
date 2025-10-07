@@ -30,7 +30,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tooltip
+  Tooltip,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -110,7 +112,13 @@ const TaskForm = ({ taskId }) => {
     workstationId: '', // ID stanowiska produkcyjnego
     lotNumber: '', // Numer partii produktu (LOT)
     expiryDate: null, // Data ważności produktu
-    linkedPurchaseOrders: [] // Powiązane zamówienia zakupowe
+    linkedPurchaseOrders: [], // Powiązane zamówienia zakupowe
+    // Pola dla ręcznych kosztów produkcji
+    disableAutomaticCostUpdates: false,
+    manualTotalMaterialCost: '',
+    manualTotalFullProductionCost: '',
+    manualUnitMaterialCost: '',
+    manualUnitFullProductionCost: ''
   });
 
   const [recipeYieldError, setRecipeYieldError] = useState(false);
@@ -364,7 +372,16 @@ const TaskForm = ({ taskId }) => {
            task.expiryDate.toDate ? task.expiryDate.toDate() : 
            new Date(task.expiryDate)) : null,
         linkedPurchaseOrders: task.linkedPurchaseOrders || [],
-        workingHoursPerDay: task.workingHoursPerDay || 16 // Domyślnie 16h dla istniejących zadań
+        workingHoursPerDay: task.workingHoursPerDay || 16, // Domyślnie 16h dla istniejących zadań
+        // Przenieś istniejące koszty do pól ręcznych jeśli automatyczne aktualizacje są wyłączone
+        manualTotalMaterialCost: task.disableAutomaticCostUpdates && task.totalMaterialCost !== undefined 
+          ? task.totalMaterialCost : '',
+        manualUnitMaterialCost: task.disableAutomaticCostUpdates && task.unitMaterialCost !== undefined 
+          ? task.unitMaterialCost : '',
+        manualTotalFullProductionCost: task.disableAutomaticCostUpdates && task.totalFullProductionCost !== undefined 
+          ? task.totalFullProductionCost : '',
+        manualUnitFullProductionCost: task.disableAutomaticCostUpdates && task.unitFullProductionCost !== undefined 
+          ? task.unitFullProductionCost : ''
       };
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
@@ -463,6 +480,85 @@ const TaskForm = ({ taskId }) => {
     }
   }, [dataLoaded]);
 
+  // Funkcja do aktualizacji powiązanych zamówień klientów po zapisaniu ręcznych kosztów
+  const updateRelatedCustomerOrders = async (taskId, totalMaterialCost, totalFullProductionCost) => {
+    try {
+      // Dynamicznie importuj potrzebne funkcje
+      const { getOrdersByProductionTaskId, updateOrder, calculateOrderTotal } = await import('../../services/orderService');
+      const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../../utils/costCalculator');
+      
+      // Pobierz tylko zamówienia powiązane z tym zadaniem
+      const relatedOrders = await getOrdersByProductionTaskId(taskId);
+      
+      if (relatedOrders.length === 0) {
+        console.log('Brak zamówień powiązanych z tym zadaniem');
+        return;
+      }
+      
+      console.log(`Znaleziono ${relatedOrders.length} zamówień do zaktualizowania`);
+      
+      // Przygotuj wszystkie aktualizacje równolegle
+      const updatePromises = relatedOrders.map(async (order) => {
+        let orderUpdated = false;
+        const updatedItems = [...order.items];
+        
+        for (let i = 0; i < updatedItems.length; i++) {
+          const item = updatedItems[i];
+          
+          if (item.productionTaskId === taskId) {
+            // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
+            const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, totalFullProductionCost);
+            const calculatedProductionUnitCost = calculateProductionUnitCost(item, totalMaterialCost);
+            
+            updatedItems[i] = {
+              ...item,
+              productionCost: totalMaterialCost,
+              fullProductionCost: totalFullProductionCost,
+              productionUnitCost: calculatedProductionUnitCost,
+              fullProductionUnitCost: calculatedFullProductionUnitCost
+            };
+            orderUpdated = true;
+            
+            console.log(`Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt=${totalMaterialCost.toFixed(4)}€, pełny koszt=${totalFullProductionCost.toFixed(4)}€`);
+          }
+        }
+        
+        if (orderUpdated) {
+          // Przelicz nową wartość zamówienia używając prawidłowej funkcji
+          // która uwzględnia koszty produkcji, dostawę, dodatkowe koszty i rabaty
+          const totalValue = calculateOrderTotal(
+            updatedItems,
+            order.shippingCost,
+            order.additionalCostsItems
+          );
+          
+          const orderData = {
+            items: updatedItems,
+            totalValue: totalValue
+          };
+          
+          // Zaktualizuj zamówienie w bazie danych
+          await updateOrder(order.id, orderData, currentUser?.uid || 'system');
+          console.log(`Zaktualizowano zamówienie ${order.orderNumber}, nowa wartość: ${totalValue.toFixed(2)}€`);
+          
+          return { orderId: order.id, orderNumber: order.orderNumber, updated: true };
+        }
+        
+        return { orderId: order.id, orderNumber: order.orderNumber, updated: false };
+      });
+      
+      // Wykonaj wszystkie aktualizacje równolegle
+      const results = await Promise.all(updatePromises);
+      const updatedCount = results.filter(r => r.updated).length;
+      
+      console.log(`Zaktualizowano koszty w ${updatedCount} z ${relatedOrders.length} zamówień`);
+      
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji zamówień klientów:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -485,6 +581,23 @@ const TaskForm = ({ taskId }) => {
         endDate: taskData.endDate instanceof Date ? 
           taskData.endDate : new Date(taskData.endDate)
       };
+
+      // Jeśli automatyczne aktualizacje kosztów są wyłączone i wprowadzono ręczne koszty,
+      // zapisz je jako rzeczywiste koszty zadania
+      if (taskData.disableAutomaticCostUpdates) {
+        if (taskData.manualTotalMaterialCost !== '') {
+          formattedData.totalMaterialCost = parseFloat(taskData.manualTotalMaterialCost);
+        }
+        if (taskData.manualUnitMaterialCost !== '') {
+          formattedData.unitMaterialCost = parseFloat(taskData.manualUnitMaterialCost);
+        }
+        if (taskData.manualTotalFullProductionCost !== '') {
+          formattedData.totalFullProductionCost = parseFloat(taskData.manualTotalFullProductionCost);
+        }
+        if (taskData.manualUnitFullProductionCost !== '') {
+          formattedData.unitFullProductionCost = parseFloat(taskData.manualUnitFullProductionCost);
+        }
+      }
       
       let savedTaskId;
       
@@ -492,6 +605,23 @@ const TaskForm = ({ taskId }) => {
         // Aktualizacja zadania
         await updateTask(taskId, formattedData, currentUser.uid);
         savedTaskId = taskId;
+        
+        // Jeśli zapisano ręczne koszty, zaktualizuj powiązane zamówienia klientów
+        if (taskData.disableAutomaticCostUpdates && 
+            (taskData.manualTotalMaterialCost !== '' || taskData.manualTotalFullProductionCost !== '')) {
+          try {
+            await updateRelatedCustomerOrders(
+              taskId,
+              parseFloat(taskData.manualTotalMaterialCost) || 0,
+              parseFloat(taskData.manualTotalFullProductionCost) || 0
+            );
+          } catch (error) {
+            console.error('Błąd podczas aktualizacji zamówień klientów:', error);
+            // Nie przerywamy procesu - pokazujemy tylko ostrzeżenie
+            showWarning('Zadanie zapisane, ale nie udało się zaktualizować powiązanych zamówień: ' + error.message);
+          }
+        }
+        
         showSuccess('Zadanie zostało zaktualizowane');
       } else {
         // Utworzenie nowego zadania
@@ -1786,6 +1916,180 @@ const TaskForm = ({ taskId }) => {
                     label="Notatki"
                   />
                 </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Sekcja kosztów produkcji */}
+            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                Koszty produkcji
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={taskData.disableAutomaticCostUpdates || false}
+                          onChange={(e) => setTaskData(prev => ({
+                            ...prev,
+                            disableAutomaticCostUpdates: e.target.checked
+                          }))}
+                          name="disableAutomaticCostUpdates"
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1" fontWeight="medium">
+                            Wyłącz automatyczne aktualizacje kosztów
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Po zaznaczeniu możesz ręcznie określić koszty produkcji. System nie będzie automatycznie przeliczał kosztów przy zmianach materiałów.
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </Box>
+                </Grid>
+
+                {taskData.disableAutomaticCostUpdates && (
+                  <>
+                    <Grid item xs={12}>
+                      <Alert severity="warning">
+                        <Typography variant="body2">
+                          <strong>Uwaga:</strong> Wyłączyłeś automatyczne aktualizacje kosztów. 
+                          Wprowadź koszty ręcznie lub pozostaw puste aby zachować aktualne wartości z bazy danych.
+                        </Typography>
+                      </Alert>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Całkowity koszt materiałów (€)"
+                        name="manualTotalMaterialCost"
+                        type="number"
+                        value={taskData.manualTotalMaterialCost || ''}
+                        onChange={(e) => {
+                          const totalCost = e.target.value === '' ? '' : parseFloat(e.target.value);
+                          const quantity = parseFloat(taskData.quantity) || 1;
+                          
+                          setTaskData(prev => ({
+                            ...prev,
+                            manualTotalMaterialCost: totalCost,
+                            manualUnitMaterialCost: totalCost !== '' ? (totalCost / quantity).toFixed(4) : ''
+                          }));
+                        }}
+                        variant="outlined"
+                        inputProps={{ min: 0, step: 0.01 }}
+                        helperText="Koszt materiałów wliczanych do ceny (bez opakowań)"
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Koszt materiałów na jednostkę (€)"
+                        name="manualUnitMaterialCost"
+                        type="number"
+                        value={taskData.manualUnitMaterialCost || ''}
+                        onChange={(e) => {
+                          const unitCost = e.target.value === '' ? '' : parseFloat(e.target.value);
+                          const quantity = parseFloat(taskData.quantity) || 1;
+                          
+                          setTaskData(prev => ({
+                            ...prev,
+                            manualUnitMaterialCost: unitCost,
+                            manualTotalMaterialCost: unitCost !== '' ? (unitCost * quantity).toFixed(4) : ''
+                          }));
+                        }}
+                        variant="outlined"
+                        inputProps={{ min: 0, step: 0.0001 }}
+                        helperText="Koszt na 1 jednostkę produktu"
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Całkowity pełny koszt produkcji (€)"
+                        name="manualTotalFullProductionCost"
+                        type="number"
+                        value={taskData.manualTotalFullProductionCost || ''}
+                        onChange={(e) => {
+                          const totalCost = e.target.value === '' ? '' : parseFloat(e.target.value);
+                          const quantity = parseFloat(taskData.quantity) || 1;
+                          
+                          setTaskData(prev => ({
+                            ...prev,
+                            manualTotalFullProductionCost: totalCost,
+                            manualUnitFullProductionCost: totalCost !== '' ? (totalCost / quantity).toFixed(4) : ''
+                          }));
+                        }}
+                        variant="outlined"
+                        inputProps={{ min: 0, step: 0.01 }}
+                        helperText="Pełny koszt produkcji włącznie z opakowaniami"
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Pełny koszt produkcji na jednostkę (€)"
+                        name="manualUnitFullProductionCost"
+                        type="number"
+                        value={taskData.manualUnitFullProductionCost || ''}
+                        onChange={(e) => {
+                          const unitCost = e.target.value === '' ? '' : parseFloat(e.target.value);
+                          const quantity = parseFloat(taskData.quantity) || 1;
+                          
+                          setTaskData(prev => ({
+                            ...prev,
+                            manualUnitFullProductionCost: unitCost,
+                            manualTotalFullProductionCost: unitCost !== '' ? (unitCost * quantity).toFixed(4) : ''
+                          }));
+                        }}
+                        variant="outlined"
+                        inputProps={{ min: 0, step: 0.0001 }}
+                        helperText="Pełny koszt na 1 jednostkę produktu"
+                      />
+                    </Grid>
+
+                    {taskData.quantity && (taskData.manualTotalMaterialCost || taskData.manualTotalFullProductionCost) && (
+                      <Grid item xs={12}>
+                        <Alert severity="info">
+                          <Typography variant="body2">
+                            <strong>Podsumowanie dla {taskData.quantity} {taskData.unit}:</strong>
+                          </Typography>
+                          {taskData.manualTotalMaterialCost && (
+                            <Typography variant="body2">
+                              • Całkowity koszt materiałów: {parseFloat(taskData.manualTotalMaterialCost).toFixed(2)} € 
+                              ({(parseFloat(taskData.manualTotalMaterialCost) / parseFloat(taskData.quantity)).toFixed(4)} €/{taskData.unit})
+                            </Typography>
+                          )}
+                          {taskData.manualTotalFullProductionCost && (
+                            <Typography variant="body2">
+                              • Całkowity pełny koszt: {parseFloat(taskData.manualTotalFullProductionCost).toFixed(2)} € 
+                              ({(parseFloat(taskData.manualTotalFullProductionCost) / parseFloat(taskData.quantity)).toFixed(4)} €/{taskData.unit})
+                            </Typography>
+                          )}
+                        </Alert>
+                      </Grid>
+                    )}
+                  </>
+                )}
+
+                {!taskData.disableAutomaticCostUpdates && (
+                  <Grid item xs={12}>
+                    <Alert severity="info">
+                      <Typography variant="body2">
+                        Koszty produkcji będą automatycznie obliczane na podstawie zużytych materiałów i ich cen. 
+                        Aby wprowadzić koszty ręcznie, zaznacz checkbox powyżej.
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                )}
               </Grid>
             </Paper>
 
