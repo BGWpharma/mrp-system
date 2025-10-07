@@ -7446,6 +7446,7 @@ const TaskDetailsPage = () => {
                 setEditedHistoryItem={setEditedHistoryItem}
                 warehouses={warehouses}
                 getUserName={getUserName}
+                fetchAllTaskData={fetchAllTaskData} // ✅ Przekaż funkcję odświeżania
                 onAddHistoryItem={(editedItem, historyData) => {
                   setEditedHistoryItem(editedItem);
                   setHistoryInventoryData(historyData);

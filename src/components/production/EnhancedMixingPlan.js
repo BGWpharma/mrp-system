@@ -8,7 +8,7 @@
  * - Zarządzanie mapowaniem składników na rezerwacje
  */
 
-import React, { useState, useEffect, memo, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, memo, useMemo, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -119,6 +119,10 @@ const EnhancedMixingPlan = ({
   const [editQuantityValue, setEditQuantityValue] = useState('');
   const [editQuantityLoading, setEditQuantityLoading] = useState(false);
 
+  // ✅ Ref do śledzenia ostatniego checklistu aby zapobiec pętlom synchronizacji
+  const lastChecklistRef = useRef(null);
+  const updateTimeoutRef = useRef(null);
+
   // Oblicz statystyki powiązań i postępu
   const totalIngredients = task?.mixingPlanChecklist
     ? task.mixingPlanChecklist.filter(item => item.type === 'ingredient').length
@@ -161,21 +165,43 @@ const EnhancedMixingPlan = ({
           if (docSnapshot.exists()) {
             const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
             
-            // Sprawdź czy checklist się zmienił
+            // ✅ POPRAWKA: Sprawdź czy checklist się zmienił względem ostatniego znanego stanu
             const newChecklist = taskData.mixingPlanChecklist || [];
-            const oldChecklist = task.mixingPlanChecklist || [];
+            const newChecklistStr = JSON.stringify(newChecklist);
             
-            const checklistChanged = JSON.stringify(newChecklist) !== JSON.stringify(oldChecklist);
+            // Porównaj z ostatnio zapisanym checklistem (nie z propem który może być nieaktualny)
+            if (lastChecklistRef.current === null) {
+              // Pierwsza inicjalizacja - zapisz aktualny stan bez wywoływania aktualizacji
+              lastChecklistRef.current = newChecklistStr;
+              console.log('🔷 Inicjalizacja listenera planu mieszań');
+              return;
+            }
+            
+            const checklistChanged = newChecklistStr !== lastChecklistRef.current;
             
             if (checklistChanged) {
+              console.log('🔄 Wykryto zmianę w planie mieszań przez listener');
+              lastChecklistRef.current = newChecklistStr;
+              
               setIsTaskUpdating(true);
               setRealtimeTask(taskData);
               
               // Animacja aktualizacji
               setTimeout(() => setIsTaskUpdating(false), 500);
               
-              // Plan mieszań zaktualizowany z kiosku
+              // Plan mieszań zaktualizowany z kiosku lub z innej sesji
               showInfo('Plan mieszań został zaktualizowany automatycznie');
+              
+              // ✅ Odłóż wywołanie onPlanUpdate aby uniknąć konfliktów
+              if (updateTimeoutRef.current) {
+                clearTimeout(updateTimeoutRef.current);
+              }
+              updateTimeoutRef.current = setTimeout(() => {
+                if (onPlanUpdate) {
+                  console.log('🔄 Wywołanie onPlanUpdate po wykryciu zmiany');
+                  onPlanUpdate();
+                }
+              }, 1500); // Opóźnienie 1.5s aby dać czas na zakończenie bieżących operacji
             }
           }
         }, (error) => {
@@ -233,6 +259,10 @@ const EnhancedMixingPlan = ({
       if (unsubscribeLinks) {
         unsubscribeLinks();
         // Odłączono listener powiązań
+      }
+      // ✅ Wyczyść timeout onPlanUpdate
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
       }
       // Wyczyść debounced funkcję
       handleLinkIngredient.cancel();
@@ -315,19 +345,42 @@ const EnhancedMixingPlan = ({
     // Przygotuj listę dostępnych rezerwacji dla tego składnika
     const ingredientName = ingredient.text;
     
+    // ✅ POPRAWKA: Bardziej elastyczne dopasowywanie nazw materiałów
     // Filtruj tylko rzeczywiste rezerwacje (nie wirtualne ze snapshotów) dla tego składnika
     // oraz wyklucz już powiązane rezerwacje
     const available = standardReservations.filter(res => {
-      console.log(`Sprawdzam rezerwację - Nazwa materiału: "${res.materialName}", Składnik: "${ingredientName}", AvailableQty: ${res.availableQuantity}, ReservedQty: ${res.reservedQuantity}`);
+      console.log(`🔍 Sprawdzam rezerwację - Nazwa materiału: "${res.materialName}", Składnik: "${ingredientName}", AvailableQty: ${res.availableQuantity}, ReservedQty: ${res.reservedQuantity}`);
       
       // Sprawdź czy to rzeczywista rezerwacja (ma reservedQuantity > linkedQuantity)
       // Wirtualne rezerwacje ze snapshotów mają reservedQuantity === linkedQuantity
       const isRealReservation = res.reservedQuantity > res.linkedQuantity;
-      const matchesIngredient = res.materialName === ingredientName;
+      
+      // ✅ ELASTYCZNE DOPASOWYWANIE: Sprawdź różne warianty dopasowania nazw
+      const materialNameLower = (res.materialName || '').toLowerCase().trim();
+      const ingredientNameLower = (ingredientName || '').toLowerCase().trim();
+      
+      // 1. Dokładne dopasowanie (case-insensitive)
+      const exactMatch = materialNameLower === ingredientNameLower;
+      
+      // 2. Nazwa materiału zawiera nazwę składnika (np. "RAWGW-SWEET 25kg" zawiera "RAWGW-SWEET")
+      const materialContainsIngredient = materialNameLower.includes(ingredientNameLower);
+      
+      // 3. Nazwa składnika zawiera nazwę materiału (np. "RAWGW-SWEET-EXTRA" zawiera "RAWGW-SWEET")
+      const ingredientContainsMaterial = ingredientNameLower.includes(materialNameLower);
+      
+      // 4. Dopasowanie po usunięciu znaków specjalnych (np. "RAWGW-SWEET" vs "RAWGW SWEET")
+      const normalizedMaterial = materialNameLower.replace(/[-_\s]/g, '');
+      const normalizedIngredient = ingredientNameLower.replace(/[-_\s]/g, '');
+      const normalizedMatch = normalizedMaterial === normalizedIngredient || 
+                              normalizedMaterial.includes(normalizedIngredient) ||
+                              normalizedIngredient.includes(normalizedMaterial);
+      
+      const matchesIngredient = exactMatch || materialContainsIngredient || ingredientContainsMaterial || normalizedMatch;
+      
       const hasAvailableQuantity = res.availableQuantity > 0;
       const notAlreadyLinked = !linkedReservationIds.includes(res.id);
       
-      console.log(`- IsReal: ${isRealReservation}, Matches: ${matchesIngredient}, HasQty: ${hasAvailableQuantity}, NotLinked: ${notAlreadyLinked}`);
+      console.log(`  ➜ IsReal: ${isRealReservation}, Matches: ${matchesIngredient} (exact: ${exactMatch}, contains: ${materialContainsIngredient}/${ingredientContainsMaterial}, normalized: ${normalizedMatch}), HasQty: ${hasAvailableQuantity}, NotLinked: ${notAlreadyLinked}`);
       
       return matchesIngredient && hasAvailableQuantity && isRealReservation && notAlreadyLinked;
     }).map(res => ({ ...res, type: 'standard' }));

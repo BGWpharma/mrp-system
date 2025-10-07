@@ -54,7 +54,8 @@ const ProductionPlanTab = ({
   onDeleteHistoryItem,
   toLocalDateTimeString,
   fromLocalDateTimeString,
-  onChecklistItemUpdate
+  onChecklistItemUpdate,
+  fetchAllTaskData // ✅ Funkcja do odświeżania danych zadania
 }) => {
   const { t } = useTranslation('taskDetails');
 
@@ -367,9 +368,13 @@ const ProductionPlanTab = ({
           <EnhancedMixingPlan
             task={task}
             onChecklistItemUpdate={onChecklistItemUpdate}
-            onPlanUpdate={() => {
-              // Opcjonalnie: odśwież dane zadania po aktualizacji planu
-              // Plan mieszań został zaktualizowany
+            onPlanUpdate={async () => {
+              // ✅ POPRAWKA: Odśwież dane zadania po aktualizacji planu mieszań
+              // Zapobiega cofaniu się zmian przez starą wersję danych w propie task
+              if (fetchAllTaskData) {
+                console.log('🔄 Odświeżanie danych zadania po aktualizacji planu mieszań...');
+                await fetchAllTaskData();
+              }
             }}
           />
         </Grid>
