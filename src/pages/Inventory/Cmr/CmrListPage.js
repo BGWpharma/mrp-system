@@ -90,6 +90,7 @@ const translations = {
     itemUnit: 'Jednostka',
     itemWeight: 'Waga (kg)',
     itemVolume: 'Objętość (m³)',
+    itemOrderNumber: 'Numer CO',
     summary: 'Podsumowanie',
     totalDocuments: 'Całkowita liczba dokumentów',
     reportPeriod: 'Okres raportu',
@@ -118,6 +119,7 @@ const translations = {
     itemUnit: 'Unit',
     itemWeight: 'Weight (kg)',
     itemVolume: 'Volume (m³)',
+    itemOrderNumber: 'CO Number',
     summary: 'Summary',
     totalDocuments: 'Total Documents',
     reportPeriod: 'Report Period',
@@ -588,7 +590,7 @@ const CmrListPage = () => {
       // Jeśli dokument ma pozycje i opcja includeItems jest włączona, dodaj je
       if (reportFilters.includeItems && doc.items && doc.items.length > 0) {
         // Dodaj nagłówki pozycji
-        rows.push(['', '', t.itemId, t.itemDescription, t.itemQuantity, t.itemUnit, t.itemWeight, t.itemVolume]);
+        rows.push(['', '', t.itemId, t.itemDescription, t.itemQuantity, t.itemUnit, t.itemWeight, t.itemVolume, t.itemOrderNumber]);
         
         // Dodaj wiersze dla każdej pozycji
         doc.items.forEach((item, index) => {
@@ -599,7 +601,8 @@ const CmrListPage = () => {
             item.quantity || item.numberOfPackages, 
             item.unit || item.packagingMethod, 
             item.weight, 
-            item.volume
+            item.volume,
+            item.orderNumber || item.originalOrderItem?.orderNumber || '-'
           ]);
         });
         
@@ -1218,6 +1221,7 @@ const CmrListPage = () => {
                             <TableCell>{t.itemUnit}</TableCell>
                             <TableCell>{t.itemWeight}</TableCell>
                             <TableCell>{t.itemVolume}</TableCell>
+                            <TableCell>{t.itemOrderNumber}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -1229,6 +1233,7 @@ const CmrListPage = () => {
                               <TableCell>{item.unit || item.packagingMethod}</TableCell>
                               <TableCell>{item.weight}</TableCell>
                               <TableCell>{item.volume}</TableCell>
+                              <TableCell>{item.orderNumber || item.originalOrderItem?.orderNumber || '-'}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

@@ -72,7 +72,8 @@
       "quantity": "Quantity",
       "unit": "Unit",
       "weight": "Weight (kg)",
-      "volume": "Volume (m³)"
+      "volume": "Volume (m³)",
+      "orderNumber": "CO Number"
     },
     "summary": {
       "title": "Summary",
