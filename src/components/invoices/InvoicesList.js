@@ -58,6 +58,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatters';
 import DeleteConfirmationDialog from '../common/DeleteConfirmationDialog';
+import InvoiceCsvExport from './InvoiceCsvExport';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
@@ -440,6 +441,12 @@ const InvoicesList = () => {
                 >
                   📋
                 </Button>
+              </Grid>
+              <Grid item>
+                <InvoiceCsvExport 
+                  invoices={filteredInvoices} 
+                  customers={customers}
+                />
               </Grid>
               <Grid item>
                 <Button

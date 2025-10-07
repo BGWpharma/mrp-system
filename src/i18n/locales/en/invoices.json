@@ -8,6 +8,7 @@
   "companyData": "Company Data",
   "clients": "Clients",
   "proforma": "Proforma",
+  "csvExport": "CSV Report",
   "table": {
     "invoiceNumber": "Invoice Number",
     "client": "Client",
