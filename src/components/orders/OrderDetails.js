@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -331,6 +331,8 @@ const OrderDetails = () => {
 
   // 🚀 LAZY LOADING State Management
   const [activeSection, setActiveSection] = useState('basic'); // basic, production, documents, history
+  const invoicesSectionRef = useRef(null);
+  const cmrSectionRef = useRef(null);
   const [sectionsLoaded, setSectionsLoaded] = useState({
     basic: true,      // Podstawowe dane zawsze załadowane
     production: false, // Zadania produkcyjne
@@ -339,7 +341,7 @@ const OrderDetails = () => {
   });
 
   // Funkcja do załadowania sekcji na żądanie
-  const loadSectionData = async (sectionName) => {
+  const loadSectionData = useCallback(async (sectionName) => {
     if (sectionsLoaded[sectionName] || !order) return;
 
     console.log(`🔄 Lazy loading danych dla sekcji: ${sectionName}`);
@@ -350,17 +352,42 @@ const OrderDetails = () => {
           // Dane produkcyjne już ładowane w głównym useEffect
           break;
         case 'documents':
+          // Ładuj pełne dane faktur z weryfikacją (jeśli nie są już załadowane)
           if (!invoices.length && !loadingInvoices) {
             setLoadingInvoices(true);
-            const orderInvoices = await getCachedOrderInvoices(orderId);
-            setInvoices(orderInvoices);
-            setLoadingInvoices(false);
+            try {
+              const orderInvoices = await getCachedOrderInvoices(orderId);
+              const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
+              setInvoices(verifiedInvoices);
+              
+              if (removedInvoicesCount > 0) {
+                showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
+              }
+              console.log('✅ OrderDetails (lazy) - pobrano i zweryfikowano faktury');
+            } catch (error) {
+              console.error('Błąd podczas ładowania faktur:', error);
+            } finally {
+              setLoadingInvoices(false);
+            }
           }
+          
+          // Ładuj dokumenty CMR z weryfikacją
           if (!cmrDocuments.length && !loadingCmrDocuments) {
             setLoadingCmrDocuments(true);
-            const orderCmr = await getCachedOrderCmrDocuments(orderId);
-            setCmrDocuments(orderCmr);
-            setLoadingCmrDocuments(false);
+            try {
+              const orderCmr = await getCachedOrderCmrDocuments(orderId);
+              const { cmrDocuments: verifiedCmrDocuments, removedCount: removedCmrCount } = await verifyCmrDocuments(orderCmr);
+              setCmrDocuments(verifiedCmrDocuments);
+              
+              if (removedCmrCount > 0) {
+                showInfo(`Usunięto ${removedCmrCount} nieistniejących dokumentów CMR z listy`);
+              }
+              console.log('✅ OrderDetails (lazy) - pobrano i zweryfikowano dokumenty CMR');
+            } catch (error) {
+              console.error('Błąd podczas ładowania dokumentów CMR:', error);
+            } finally {
+              setLoadingCmrDocuments(false);
+            }
           }
           break;
         case 'history':
@@ -383,13 +410,42 @@ const OrderDetails = () => {
     } catch (error) {
       console.error(`Błąd podczas ładowania sekcji ${sectionName}:`, error);
     }
-  };
+  }, [sectionsLoaded, order, invoices.length, loadingInvoices, orderId, cmrDocuments.length, loadingCmrDocuments, userNames, showInfo]);
 
   // Handler do zmiany aktywnej sekcji z lazy loading
   const handleSectionChange = (sectionName) => {
     setActiveSection(sectionName);
     loadSectionData(sectionName);
   };
+
+  // 🚀 INTERSECTION OBSERVER: Automatyczne ładowanie sekcji faktur i CMR gdy stają się widoczne
+  useEffect(() => {
+    if (!invoicesSectionRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !sectionsLoaded.documents) {
+            console.log('📊 Sekcja dokumentów stała się widoczna - ładuję dane...');
+            loadSectionData('documents');
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: '100px', // Załaduj 100px przed wejściem w viewport
+        threshold: 0.1
+      }
+    );
+
+    observer.observe(invoicesSectionRef.current);
+
+    return () => {
+      if (invoicesSectionRef.current) {
+        observer.unobserve(invoicesSectionRef.current);
+      }
+    };
+  }, [sectionsLoaded.documents, loadSectionData]);
 
   useEffect(() => {
     const fetchOrderDetails = async (retries = 3, delay = 1000) => {
@@ -434,15 +490,11 @@ const OrderDetails = () => {
           }
         }
         
-        // 2. Faktury z cache
+        // 2. 🚀 LAZY LOADING: Pobierz tylko faktury dla obliczenia invoicedAmounts (bez weryfikacji)
+        // Pełne dane faktur i CMR będą ładowane dopiero gdy użytkownik wyświetli sekcję dokumentów
         setLoadingInvoices(true);
         const invoicesPromise = getCachedOrderInvoices(orderId);
         fetchPromises.push(invoicesPromise);
-        
-        // 3. Dokumenty CMR z cache
-        setLoadingCmrDocuments(true);
-        const cmrDocumentsPromise = getCachedOrderCmrDocuments(orderId);
-        fetchPromises.push(cmrDocumentsPromise);
         
         try {
           // Wykonaj wszystkie zapytania równolegle
@@ -465,54 +517,29 @@ const OrderDetails = () => {
           if (invoicesResult.status === 'fulfilled') {
             try {
               const orderInvoices = invoicesResult.value;
-              const { invoices: verifiedInvoices, removedCount: removedInvoicesCount } = await verifyInvoices(orderInvoices);
-              setInvoices(verifiedInvoices);
               
-              // Oblicz zafakturowane kwoty używając już pobranych danych
+              // Oblicz zafakturowane kwoty używając już pobranych danych (BEZ weryfikacji)
               const invoicedData = await getInvoicedAmountsByOrderItems(
                 orderId, 
-                verifiedInvoices,  // przekaż już pobrane faktury
+                orderInvoices,     // przekaż już pobrane faktury (bez weryfikacji)
                 verifiedOrder      // przekaż już pobrane dane zamówienia
               );
               setInvoicedAmounts(invoicedData);
               
-              if (removedInvoicesCount > 0) {
-                showInfo(`Usunięto ${removedInvoicesCount} nieistniejących faktur z listy`);
-              }
-              console.log('✅ OrderDetails - pobrano faktury i zafakturowane kwoty');
+              console.log('✅ OrderDetails - obliczono zafakturowane kwoty (lazy loading - pełne dane faktur zostaną załadowane przy wyświetleniu sekcji)');
             } catch (error) {
-              console.error('Błąd podczas przetwarzania faktur:', error);
+              console.error('Błąd podczas obliczania zafakturowanych kwot:', error);
             }
           } else {
             console.error('Błąd podczas pobierania faktur:', invoicesResult.reason);
           }
           setLoadingInvoices(false);
           
-          // Przetwórz wyniki - dokumenty CMR
-          const cmrResult = results[resultIndex++];
-          if (cmrResult.status === 'fulfilled') {
-            try {
-              const orderCmrDocuments = cmrResult.value;
-              const { cmrDocuments: verifiedCmrDocuments, removedCount: removedCmrCount } = await verifyCmrDocuments(orderCmrDocuments);
-              setCmrDocuments(verifiedCmrDocuments);
-              if (removedCmrCount > 0) {
-                showInfo(`Usunięto ${removedCmrCount} nieistniejących dokumentów CMR z listy`);
-              }
-              console.log('✅ OrderDetails - pobrano dokumenty CMR');
-            } catch (error) {
-              console.error('Błąd podczas przetwarzania dokumentów CMR:', error);
-            }
-          } else {
-            console.error('Błąd podczas pobierania dokumentów CMR:', cmrResult.reason);
-          }
-          setLoadingCmrDocuments(false);
-          
-          console.log('🎉 OrderDetails - zakończono równoległe pobieranie wszystkich danych powiązanych');
+          console.log('🎉 OrderDetails - zakończono podstawowe pobieranie danych (faktury i CMR będą ładowane lazy)');
           
         } catch (error) {
           console.error('Błąd podczas równoległego pobierania danych powiązanych:', error);
           setLoadingInvoices(false);
-          setLoadingCmrDocuments(false);
         }
       } catch (error) {
         // Sprawdź, czy nie jesteśmy na stronie zamówienia zakupowego
@@ -2491,7 +2518,7 @@ const OrderDetails = () => {
         </Paper>
 
         {/* Sekcja faktur powiązanych z zamówieniem */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper ref={invoicesSectionRef} sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">{t('orderDetails.sections.relatedInvoices')}</Typography>
             <Box>
