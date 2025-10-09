@@ -99,8 +99,7 @@ const EnhancedMixingPlan = ({
   const [linkQuantity, setLinkQuantity] = useState('');
   const [maxAvailableQuantity, setMaxAvailableQuantity] = useState(0);
   const [requiredQuantity, setRequiredQuantity] = useState(0);
-  const [realtimeTask, setRealtimeTask] = useState(null);
-  const [isTaskUpdating, setIsTaskUpdating] = useState(false);
+  // ⚡ OPTYMALIZACJA: Usunięto realtimeTask - TaskDetailsPage już zarządza synchronizacją
   const [isLinksUpdating, setIsLinksUpdating] = useState(false);
 
   // Stany dla dodawania mieszanki
@@ -119,10 +118,10 @@ const EnhancedMixingPlan = ({
   const [editQuantityValue, setEditQuantityValue] = useState('');
   const [editQuantityLoading, setEditQuantityLoading] = useState(false);
 
-  // ✅ Ref do śledzenia ostatniego checklistu aby zapobiec pętlom synchronizacji
-  const lastChecklistRef = useRef(null);
-  const updateTimeoutRef = useRef(null);
-  const linksListenerInitialized = useRef(false); // Śledzi czy listener powiązań jest zainicjowany
+  // Śledzi czy listener powiązań jest zainicjowany
+  const linksListenerInitialized = useRef(false);
+  // 🔒 POPRAWKA: useRef dla timera aby uniknąć memory leak przy odmontowaniu
+  const updateTimerRef = useRef(null);
 
   // Oblicz statystyki powiązań i postępu
   const totalIngredients = task?.mixingPlanChecklist
@@ -151,87 +150,48 @@ const EnhancedMixingPlan = ({
     }
   }, [task?.materials]);
 
-  // Real-time listener dla zadania (dla synchronizacji zmian checklisty z kiosku)
+  // ⚡ NOWE: Odśwież rezerwacje gdy zmieniają się konsumpcje
+  // Problem: Dostępna ilość = (Rezerwacja - Powiązane) + Skonsumowane
+  // Gdy konsumpcja się zmienia, musimy przeliczyć dostępne ilości
+  useEffect(() => {
+    const refreshReservations = async () => {
+      if (!task?.id) return;
+      
+      console.log('🔄 [MIXING-PLAN] Wykryto zmianę konsumpcji, odświeżam dostępne ilości rezerwacji...');
+      
+      try {
+        const updatedStandardRes = await getStandardReservationsForTask(task.id);
+        setStandardReservations(prev => {
+          // Aktualizuj tylko standardowe rezerwacje, zachowaj wirtualne
+          const virtualRes = prev.filter(r => r.type === 'virtual');
+          const allReservations = [...updatedStandardRes, ...virtualRes];
+          
+          console.log(`✅ [MIXING-PLAN] Zaktualizowano ${updatedStandardRes.length} standardowych rezerwacji`);
+          return allReservations;
+        });
+      } catch (error) {
+        console.error('❌ [MIXING-PLAN] Błąd podczas odświeżania rezerwacji po konsumpcji:', error);
+      }
+    };
+    
+    refreshReservations();
+  }, [task?.consumedMaterials, task?.id]); // Reaguj na zmiany w consumedMaterials
+
+  // ⚡ OPTYMALIZACJA: Real-time listener tylko dla powiązań rezerwacji
+  // Listener zadania został przeniesiony do TaskDetailsPage aby uniknąć duplikacji snapshotów
+  // TaskDetailsPage już zarządza synchronizacją danych zadania w czasie rzeczywistym
   useEffect(() => {
     if (!task?.id) return;
 
-    let unsubscribeTask = null;
+    // 🔒 POPRAWKA: Zapisz taskId jako zmienną lokalną aby uniknąć używania stale referencji do task
+    const taskId = task.id;
     let unsubscribeLinks = null;
 
     const setupRealtimeListeners = async () => {
       try {
-        // 1. Real-time listener dla zadania produkcyjnego (dla checklisty)
-        const taskRef = doc(db, 'productionTasks', task.id);
-        unsubscribeTask = onSnapshot(taskRef, (docSnapshot) => {
-          if (docSnapshot.exists()) {
-            const taskData = { id: docSnapshot.id, ...docSnapshot.data() };
-            
-            // ✅ POPRAWKA: Sprawdź czy checklist się zmienił względem ostatniego znanego stanu
-            const newChecklist = taskData.mixingPlanChecklist || [];
-            const newChecklistStr = JSON.stringify(newChecklist);
-            
-            // Porównaj z ostatnio zapisanym checklistem (nie z propem który może być nieaktualny)
-            if (lastChecklistRef.current === null) {
-              // ✅ POPRAWKA: Pierwsza inicjalizacja - zapisz stan I ustaw realtimeTask
-              lastChecklistRef.current = newChecklistStr;
-              setRealtimeTask(taskData); // ⚡ Dodano: ustawiaj realtimeTask przy inicjalizacji
-              console.log('🔷 Inicjalizacja listenera planu mieszań z danymi real-time');
-              return;
-            }
-            
-            const checklistChanged = newChecklistStr !== lastChecklistRef.current;
-            
-            if (checklistChanged) {
-              console.log('🔄 Wykryto zmianę w planie mieszań przez listener');
-              
-              // ✅ POPRAWKA: Walidacja timestampów - ignoruj starsze snapshoty
-              // Zapobiega cofaniu się zmian gdy Firestore wysyła stare dane z cache/replikacji
-              const currentUpdatedAt = taskData.updatedAt?.toMillis ? taskData.updatedAt.toMillis() : 0;
-              const lastKnownUpdatedAt = (realtimeTask?.updatedAt?.toMillis ? realtimeTask.updatedAt.toMillis() : task?.updatedAt?.toMillis ? task.updatedAt.toMillis() : 0);
-              
-              if (currentUpdatedAt > 0 && lastKnownUpdatedAt > 0 && currentUpdatedAt < lastKnownUpdatedAt) {
-                console.warn('⚠️ Pominięto starszy snapshot planu mieszań:', {
-                  current: new Date(currentUpdatedAt).toISOString(),
-                  lastKnown: new Date(lastKnownUpdatedAt).toISOString(),
-                  difference: `${(lastKnownUpdatedAt - currentUpdatedAt) / 1000}s`
-                });
-                return; // ⚡ Pomiń starsze snapshoty
-              }
-              
-              lastChecklistRef.current = newChecklistStr;
-              
-              setIsTaskUpdating(true);
-              setRealtimeTask(taskData);
-              
-              // Animacja aktualizacji
-              setTimeout(() => setIsTaskUpdating(false), 500);
-              
-              // Plan mieszań zaktualizowany z kiosku lub z innej sesji
-              showInfo('Plan mieszań został zaktualizowany automatycznie');
-              
-              // ✅ POPRAWKA: Usunięto wywołanie onPlanUpdate - niepotrzebne odświeżanie całej strony
-              // Real-time listener już zapewnia synchronizację danych w czasie rzeczywistym
-              // Wywołanie fetchAllTaskData() powodowało konflikt i mogło cofać zmiany
-              
-              // ❌ USUNIĘTE - powodowało niepotrzebne pełne odświeżenie strony:
-              // if (updateTimeoutRef.current) {
-              //   clearTimeout(updateTimeoutRef.current);
-              // }
-              // updateTimeoutRef.current = setTimeout(() => {
-              //   if (onPlanUpdate) {
-              //     console.log('🔄 Wywołanie onPlanUpdate po wykryciu zmiany');
-              //     onPlanUpdate();
-              //   }
-              // }, 1500);
-            }
-          }
-        }, (error) => {
-          console.error('Błąd listenera zadania w planie mieszań:', error);
-        });
-
-        // 2. Real-time listener dla powiązań rezerwacji
+        // Real-time listener dla powiązań rezerwacji
         const linksRef = collection(db, 'ingredientReservationLinks');
-        const linksQuery = query(linksRef, where('taskId', '==', task.id));
+        const linksQuery = query(linksRef, where('taskId', '==', taskId));
         
         unsubscribeLinks = onSnapshot(linksQuery, async (snapshot) => {
           try {
@@ -239,9 +199,9 @@ const EnhancedMixingPlan = ({
             
             // Odśwież ZARÓWNO powiązania JAK I standardowe rezerwacje aby zaktualizować dostępne ilości
             const [updatedLinks, updatedStandardRes, updatedVirtualRes] = await Promise.all([
-              getIngredientReservationLinks(task.id),
-              getStandardReservationsForTask(task.id), // Ponowne pobranie z uwzględnieniem nowych powiązań
-              getVirtualReservationsFromSnapshots(task.id)
+              getIngredientReservationLinks(taskId),
+              getStandardReservationsForTask(taskId), // Ponowne pobranie z uwzględnieniem nowych powiązań
+              getVirtualReservationsFromSnapshots(taskId)
             ]);
             
             setIngredientLinks(updatedLinks);
@@ -250,8 +210,11 @@ const EnhancedMixingPlan = ({
             const allReservations = [...updatedStandardRes, ...updatedVirtualRes];
             setStandardReservations(allReservations);
             
-            // Animacja aktualizacji
-            setTimeout(() => setIsLinksUpdating(false), 800);
+            // 🔒 POPRAWKA: Animacja aktualizacji z cleanup timera
+            if (updateTimerRef.current) {
+              clearTimeout(updateTimerRef.current);
+            }
+            updateTimerRef.current = setTimeout(() => setIsLinksUpdating(false), 800);
             
             // ✅ POPRAWKA: Nie wyświetlaj powiadomienia przy pierwszej inicjalizacji listenera
             // Wyświetl tylko gdy rzeczywiście zmieniono powiązania (nie przy pierwszym załadowaniu)
@@ -281,32 +244,31 @@ const EnhancedMixingPlan = ({
 
     // Cleanup function
     return () => {
-      if (unsubscribeTask) {
-        unsubscribeTask();
-        // Odłączono listener zadania
-      }
       if (unsubscribeLinks) {
         unsubscribeLinks();
-        // Odłączono listener powiązań
+        console.log('🔌 Odłączono listener powiązań rezerwacji');
       }
-      // ✅ Wyczyść timeout (na wszelki wypadek, jeśli był ustawiony)
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
+      // 🔒 POPRAWKA: Wyczyść timer aby uniknąć memory leak
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+        updateTimerRef.current = null;
       }
       // Wyczyść debounced funkcję
       handleLinkIngredient.cancel();
       
-      // ✅ Zresetuj stan inicjalizacji listenerów przy odmontowaniu
-      lastChecklistRef.current = null;
+      // Zresetuj stan inicjalizacji listenera przy odmontowaniu
       linksListenerInitialized.current = false;
     };
   }, [task?.id, showInfo]);
 
-  const loadData = async () => {
+  // 🔒 POPRAWKA: Zmemoizowana funkcja loadData aby uniknąć recreating przy każdym renderze
+  const loadData = useCallback(async () => {
+    if (!task?.id) return;
+    
     try {
       setLoading(true);
       
-      // Ładowanie danych planu mieszań dla ${task.id}
+      // Ładowanie danych planu mieszań dla zadania
       
       const [standardRes, virtualRes, links] = await Promise.all([
         getStandardReservationsForTask(task.id), // Dla nowych powiązań
@@ -326,7 +288,7 @@ const EnhancedMixingPlan = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [task?.id, showError]);
 
   const refreshData = async () => {
     setRefreshing(true);
@@ -918,8 +880,8 @@ const EnhancedMixingPlan = ({
           )}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/* Wskaźnik synchronizacji */}
-          {(isTaskUpdating || isLinksUpdating) && (
+          {/* Wskaźnik synchronizacji powiązań */}
+          {isLinksUpdating && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Box
                 sx={{
@@ -964,13 +926,12 @@ const EnhancedMixingPlan = ({
 
 
 
-      {/* Lista mieszań - użyj danych real-time jeśli dostępne */}
-      {(realtimeTask || task).mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
-        const currentTask = realtimeTask || task;
-        const ingredients = currentTask.mixingPlanChecklist.filter(
+      {/* Lista mieszań - dane synchronizowane przez TaskDetailsPage */}
+      {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
+        const ingredients = task.mixingPlanChecklist.filter(
           item => item.parentId === headerItem.id && item.type === 'ingredient'
         );
-        const checkItems = currentTask.mixingPlanChecklist.filter(
+        const checkItems = task.mixingPlanChecklist.filter(
           item => item.parentId === headerItem.id && item.type === 'check'
         );
         

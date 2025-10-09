@@ -574,7 +574,8 @@ const MaterialsAndCostsTab = ({
                         batchNumber = batch.batchNumber; 
                       }
                     }
-                    const batchPrice = consumedBatchPrices[consumed.batchId] || (batch && batch.unitPrice) || 0;
+                    // 🔒 POPRAWKA: Priorytetowo używaj unitPrice z wzbogaconych danych consumed
+                    const batchPrice = consumed.unitPrice || consumedBatchPrices[consumed.batchId] || (batch && batch.unitPrice) || 0;
                     const materialId = material?.inventoryItemId || material?.id;
                     return (
                       <TableRow key={index}>
