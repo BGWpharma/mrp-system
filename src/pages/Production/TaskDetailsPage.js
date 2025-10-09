@@ -517,9 +517,11 @@ const TaskDetailsPage = () => {
   };
 
   // ✅ ETAP 2 OPTYMALIZACJI: Zastąpienie starych useEffect hooks jednym zoptymalizowanym
+  // ✅ POPRAWKA: Usunięto navigate i showError z dependencies - funkcje nie powinny wywoływać rerenderów
+  // Real-time listener w EnhancedMixingPlan zapewnia synchronizację danych
   useEffect(() => {
     fetchAllTaskData();
-  }, [id, navigate, showError]);
+  }, [id]);
 
   // Zachowujemy osobne useEffect dla magazynów (ładowane niezależnie)
   useEffect(() => {

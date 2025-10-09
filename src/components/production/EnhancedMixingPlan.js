@@ -122,6 +122,7 @@ const EnhancedMixingPlan = ({
   // ✅ Ref do śledzenia ostatniego checklistu aby zapobiec pętlom synchronizacji
   const lastChecklistRef = useRef(null);
   const updateTimeoutRef = useRef(null);
+  const linksListenerInitialized = useRef(false); // Śledzi czy listener powiązań jest zainicjowany
 
   // Oblicz statystyki powiązań i postępu
   const totalIngredients = task?.mixingPlanChecklist
@@ -171,9 +172,10 @@ const EnhancedMixingPlan = ({
             
             // Porównaj z ostatnio zapisanym checklistem (nie z propem który może być nieaktualny)
             if (lastChecklistRef.current === null) {
-              // Pierwsza inicjalizacja - zapisz aktualny stan bez wywoływania aktualizacji
+              // ✅ POPRAWKA: Pierwsza inicjalizacja - zapisz stan I ustaw realtimeTask
               lastChecklistRef.current = newChecklistStr;
-              console.log('🔷 Inicjalizacja listenera planu mieszań');
+              setRealtimeTask(taskData); // ⚡ Dodano: ustawiaj realtimeTask przy inicjalizacji
+              console.log('🔷 Inicjalizacja listenera planu mieszań z danymi real-time');
               return;
             }
             
@@ -181,6 +183,21 @@ const EnhancedMixingPlan = ({
             
             if (checklistChanged) {
               console.log('🔄 Wykryto zmianę w planie mieszań przez listener');
+              
+              // ✅ POPRAWKA: Walidacja timestampów - ignoruj starsze snapshoty
+              // Zapobiega cofaniu się zmian gdy Firestore wysyła stare dane z cache/replikacji
+              const currentUpdatedAt = taskData.updatedAt?.toMillis ? taskData.updatedAt.toMillis() : 0;
+              const lastKnownUpdatedAt = (realtimeTask?.updatedAt?.toMillis ? realtimeTask.updatedAt.toMillis() : task?.updatedAt?.toMillis ? task.updatedAt.toMillis() : 0);
+              
+              if (currentUpdatedAt > 0 && lastKnownUpdatedAt > 0 && currentUpdatedAt < lastKnownUpdatedAt) {
+                console.warn('⚠️ Pominięto starszy snapshot planu mieszań:', {
+                  current: new Date(currentUpdatedAt).toISOString(),
+                  lastKnown: new Date(lastKnownUpdatedAt).toISOString(),
+                  difference: `${(lastKnownUpdatedAt - currentUpdatedAt) / 1000}s`
+                });
+                return; // ⚡ Pomiń starsze snapshoty
+              }
+              
               lastChecklistRef.current = newChecklistStr;
               
               setIsTaskUpdating(true);
@@ -192,16 +209,20 @@ const EnhancedMixingPlan = ({
               // Plan mieszań zaktualizowany z kiosku lub z innej sesji
               showInfo('Plan mieszań został zaktualizowany automatycznie');
               
-              // ✅ Odłóż wywołanie onPlanUpdate aby uniknąć konfliktów
-              if (updateTimeoutRef.current) {
-                clearTimeout(updateTimeoutRef.current);
-              }
-              updateTimeoutRef.current = setTimeout(() => {
-                if (onPlanUpdate) {
-                  console.log('🔄 Wywołanie onPlanUpdate po wykryciu zmiany');
-                  onPlanUpdate();
-                }
-              }, 1500); // Opóźnienie 1.5s aby dać czas na zakończenie bieżących operacji
+              // ✅ POPRAWKA: Usunięto wywołanie onPlanUpdate - niepotrzebne odświeżanie całej strony
+              // Real-time listener już zapewnia synchronizację danych w czasie rzeczywistym
+              // Wywołanie fetchAllTaskData() powodowało konflikt i mogło cofać zmiany
+              
+              // ❌ USUNIĘTE - powodowało niepotrzebne pełne odświeżenie strony:
+              // if (updateTimeoutRef.current) {
+              //   clearTimeout(updateTimeoutRef.current);
+              // }
+              // updateTimeoutRef.current = setTimeout(() => {
+              //   if (onPlanUpdate) {
+              //     console.log('🔄 Wywołanie onPlanUpdate po wykryciu zmiany');
+              //     onPlanUpdate();
+              //   }
+              // }, 1500);
             }
           }
         }, (error) => {
@@ -232,8 +253,16 @@ const EnhancedMixingPlan = ({
             // Animacja aktualizacji
             setTimeout(() => setIsLinksUpdating(false), 800);
             
-            // Powiązania zaktualizowane
-            showInfo('Powiązania i dostępne ilości zostały zaktualizowane automatycznie');
+            // ✅ POPRAWKA: Nie wyświetlaj powiadomienia przy pierwszej inicjalizacji listenera
+            // Wyświetl tylko gdy rzeczywiście zmieniono powiązania (nie przy pierwszym załadowaniu)
+            if (linksListenerInitialized.current) {
+              console.log('🔄 Real-time aktualizacja powiązań wykryta');
+              // Nie wyświetlamy powiadomienia - użytkownik już widzi success po swojej akcji
+              // showInfo('Powiązania i dostępne ilości zostały zaktualizowane automatycznie');
+            } else {
+              linksListenerInitialized.current = true;
+              console.log('🔷 Inicjalizacja listenera powiązań');
+            }
           } catch (error) {
             console.error('Błąd podczas aktualizacji powiązań:', error);
             setIsLinksUpdating(false);
@@ -260,12 +289,16 @@ const EnhancedMixingPlan = ({
         unsubscribeLinks();
         // Odłączono listener powiązań
       }
-      // ✅ Wyczyść timeout onPlanUpdate
+      // ✅ Wyczyść timeout (na wszelki wypadek, jeśli był ustawiony)
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
       // Wyczyść debounced funkcję
       handleLinkIngredient.cancel();
+      
+      // ✅ Zresetuj stan inicjalizacji listenerów przy odmontowaniu
+      lastChecklistRef.current = null;
+      linksListenerInitialized.current = false;
     };
   }, [task?.id, showInfo]);
 
@@ -436,8 +469,8 @@ const EnhancedMixingPlan = ({
         currentUser.uid
       );
 
-      // Odśwież dane natychmiast - nie czekaj tylko na real-time listener
-      console.log('✅ Powiązanie utworzone, odświeżam dane...');
+      // ✅ Real-time listener automatycznie odświeży powiązania i dostępne ilości
+      console.log('✅ Powiązanie utworzone - real-time listener zaktualizuje dane');
       
       // Zamknij dialog
       setLinkDialogOpen(false);
@@ -447,14 +480,11 @@ const EnhancedMixingPlan = ({
       setMaxAvailableQuantity(0);
       setRequiredQuantity(0);
       
-      // Real-time listener automatycznie odświeży dane
-      
       showSuccess(`Składnik został powiązany z rezerwacją (${quantity} ${selectedReservation.unit || 'szt.'})`);
       
-      // Poinformuj komponent nadrzędny o aktualizacji
-      if (onPlanUpdate) {
-        onPlanUpdate();
-      }
+      // ✅ USUNIĘTO onPlanUpdate() - niepotrzebne pełne odświeżenie strony
+      // Real-time listener dla powiązań (linia 235) automatycznie wykryje zmianę i zaktualizuje dane
+      // bez resetowania pozycji scroll
     } catch (error) {
       console.error('Błąd podczas powiązania składnika:', error);
       showError('Nie udało się powiązać składnika z rezerwacją');
@@ -501,10 +531,8 @@ const EnhancedMixingPlan = ({
         setEditingIngredient(null);
         setEditQuantityValue('');
         
-        // Wywołaj callback dla odświeżenia danych
-        if (onPlanUpdate) {
-          onPlanUpdate();
-        }
+        // ✅ USUNIĘTO onPlanUpdate() - real-time listener zadania automatycznie
+        // wykryje zmianę w mixingPlanChecklist i zaktualizuje dane bez resetowania scroll
       }
     } catch (error) {
       console.error('Błąd podczas aktualizacji ilości:', error);
@@ -528,14 +556,12 @@ const EnhancedMixingPlan = ({
       // Odśwież dane natychmiast - nie czekaj tylko na real-time listener
       console.log('✅ Konkretne powiązanie usunięte, odświeżam dane...');
       
-      // Real-time listener automatycznie odświeży dane
+      // ✅ Real-time listener automatycznie odświeży powiązania i dostępne ilości
       
       showSuccess('Powiązanie zostało usunięte');
       
-      // Poinformuj komponent nadrzędny o aktualizacji
-      if (onPlanUpdate) {
-        onPlanUpdate();
-      }
+      // ✅ USUNIĘTO onPlanUpdate() - real-time listener dla powiązań automatycznie
+      // wykryje zmianę i zaktualizuje dane bez resetowania scroll
     } catch (error) {
       console.error('Błąd podczas usuwania konkretnego powiązania:', error);
       showError('Nie udało się usunąć powiązania');
@@ -547,17 +573,13 @@ const EnhancedMixingPlan = ({
     try {
       await unlinkIngredientFromReservation(task.id, ingredientId, currentUser.uid);
       
-      // Odśwież dane natychmiast - nie czekaj tylko na real-time listener
-      console.log('✅ Wszystkie powiązania składnika usunięte, odświeżam dane...');
-      
-      // Real-time listener automatycznie odświeży dane
+      // ✅ Real-time listener automatycznie odświeży powiązania i dostępne ilości
+      console.log('✅ Wszystkie powiązania składnika usunięte - real-time listener zaktualizuje dane');
       
       showSuccess('Wszystkie powiązania zostały usunięte');
       
-      // Poinformuj komponent nadrzędny o aktualizacji
-      if (onPlanUpdate) {
-        onPlanUpdate();
-      }
+      // ✅ USUNIĘTO onPlanUpdate() - real-time listener dla powiązań automatycznie
+      // wykryje zmianę i zaktualizuje dane bez resetowania scroll
     } catch (error) {
       console.error('Błąd podczas usuwania powiązań składnika:', error);
       showError('Nie udało się usunąć powiązań');
@@ -604,10 +626,9 @@ const EnhancedMixingPlan = ({
         setNewMixingIngredients([{ name: '', quantity: '', unit: 'kg' }]);
         setNewMixingPiecesCount('');
 
-        // Odśwież dane zadania
-        if (onPlanUpdate) {
-          onPlanUpdate();
-        }
+        // ✅ USUNIĘTO onPlanUpdate() - real-time listener zadania automatycznie
+        // wykryje zmianę w mixingPlanChecklist (nowe mieszanie) i zaktualizuje interfejs
+        // bez resetowania scroll position
       }
     } catch (error) {
       console.error('Błąd podczas dodawania mieszania:', error);
@@ -668,10 +689,9 @@ const EnhancedMixingPlan = ({
       if (result.success) {
         showSuccess(result.message);
 
-        // Odśwież dane zadania
-        if (onPlanUpdate) {
-          onPlanUpdate();
-        }
+        // ✅ USUNIĘTO onPlanUpdate() - real-time listener zadania automatycznie
+        // wykryje zmianę w mixingPlanChecklist (usunięte mieszanie) i zaktualizuje interfejs
+        // bez resetowania scroll position
       }
     } catch (error) {
       console.error('Błąd podczas usuwania mieszania:', error);
