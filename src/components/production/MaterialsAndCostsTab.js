@@ -273,11 +273,11 @@ const MaterialsAndCostsTab = ({
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <span>{consumedQuantity} {material.unit}</span>
                               {isExceeding && (
-                                <Tooltip title={t('materials.warnings.consumptionExcessTooltip', { percentage: excessPercentage.toFixed(1) })}>
+                                <Tooltip title={t('materials.warnings.consumptionExcessTooltip', { percentage: Number(excessPercentage || 0).toFixed(1) })}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     <WarningIcon sx={{ color: '#ff9800', fontSize: '16px' }} />
                                     <Chip 
-                                      label={`+${excessPercentage.toFixed(1)}%`}
+                                      label={`+${Number(excessPercentage || 0).toFixed(1)}%`}
                                       size="small"
                                       color="warning"
                                       sx={{ fontSize: '10px', height: '20px' }}
@@ -307,7 +307,7 @@ const MaterialsAndCostsTab = ({
                           // Pokaż cenę jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
                           const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
                           
-                          return hasAnyReservations ? `${unitPrice.toFixed(4)} €` : '—';
+                          return hasAnyReservations ? `${Number(unitPrice || 0).toFixed(4)} €` : '—';
                         })()}
                       </TableCell>
                       <TableCell>
@@ -325,7 +325,7 @@ const MaterialsAndCostsTab = ({
                           // Pokaż koszt jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
                           const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
                           
-                          return hasAnyReservations ? `${cost.toFixed(2)} €` : '—';
+                          return hasAnyReservations ? `${Number(cost || 0).toFixed(2)} €` : '—';
                         })()}
                       </TableCell>
                       <TableCell>
@@ -363,13 +363,20 @@ const MaterialsAndCostsTab = ({
                           }
                           
                           // Oblicz łączną sumę zarezerwowanych ilości
-                          const totalStandardReserved = standardReservations.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
-                          const totalPOReserved = poReservationsForMaterial.reduce((sum, reservation) => {
-                            const convertedQuantity = reservation.convertedQuantity || 0;
-                            const reservedQuantity = reservation.reservedQuantity || 0;
-                            return sum + (reservedQuantity - convertedQuantity);
-                          }, 0);
-                          const totalReserved = totalStandardReserved + totalPOReserved;
+                          // ✅ POPRAWKA: Walidacja tablic aby uniknąć błędu "toFixed is not a function"
+                          const totalStandardReserved = Array.isArray(standardReservations)
+                            ? standardReservations.reduce((sum, batch) => sum + (Number(batch.quantity) || 0), 0)
+                            : 0;
+                          
+                          const totalPOReserved = Array.isArray(poReservationsForMaterial)
+                            ? poReservationsForMaterial.reduce((sum, reservation) => {
+                                const convertedQuantity = Number(reservation.convertedQuantity) || 0;
+                                const reservedQuantity = Number(reservation.reservedQuantity) || 0;
+                                return sum + (reservedQuantity - convertedQuantity);
+                              }, 0)
+                            : 0;
+                          
+                          const totalReserved = Number(totalStandardReserved) + Number(totalPOReserved);
                           
                           return (
                             <Box>
