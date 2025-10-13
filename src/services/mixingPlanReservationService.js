@@ -240,6 +240,15 @@ export const getStandardReservationsForTask = async (taskId) => {
               totalConsumedFromBatch
             ));
             
+            // 🔍 DEBUG: Szczegółowe logi obliczania dostępnej ilości
+            console.log(`🔍 [DEBUG] Rezerwacja ${reservationId}:`);
+            console.log(`  - Zarezerwowano: ${reservedQuantityInBatch}`);
+            console.log(`  - Powiązano: ${totalLinkedQuantity}`);
+            console.log(`  - Skonsumowano: ${totalConsumedFromBatch}`);
+            console.log(`  - Dostępne: ${finalAvailableQuantity}`);
+            console.log(`  - Materiał: ${material?.name}`);
+            console.log(`  - Partia: ${batch.batchId}`);
+            
             
             // Użyj już pobranych szczegółów partii (brak zapytania w pętli!)
             const batchDetails = batchDetailsMap.get(batch.batchId);
@@ -285,6 +294,7 @@ export const getStandardReservationsForTask = async (taskId) => {
             };
             
             // Rezerwacja ${reservationId}: ${finalAvailableQuantity} finalna
+            console.log(`📋 [DEBUG] Dodaję rezerwację do listy: ${reservation.materialName} - ${finalAvailableQuantity} ${reservation.unit}`);
             reservations.push(reservation);
           }
         }

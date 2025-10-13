@@ -343,12 +343,16 @@ const EnhancedMixingPlan = ({
     // ✅ POPRAWKA: Bardziej elastyczne dopasowywanie nazw materiałów
     // Filtruj tylko rzeczywiste rezerwacje (nie wirtualne ze snapshotów) dla tego składnika
     // oraz wyklucz już powiązane rezerwacje
+    console.log(`🔍 [DEBUG] Filtrowanie rezerwacji dla składnika: ${ingredient.name}`);
+    console.log(`🔍 [DEBUG] Wszystkie rezerwacje (${standardReservations.length}):`, standardReservations.map(r => `${r.materialName}: ${r.availableQuantity}`));
+    
     const available = standardReservations.filter(res => {
       console.log(`🔍 Sprawdzam rezerwację - Nazwa materiału: "${res.materialName}", Składnik: "${ingredientName}", AvailableQty: ${res.availableQuantity}, ReservedQty: ${res.reservedQuantity}`);
       
-      // Sprawdź czy to rzeczywista rezerwacja (ma reservedQuantity > linkedQuantity)
+      // Sprawdź czy to rzeczywista rezerwacja
       // Wirtualne rezerwacje ze snapshotów mają reservedQuantity === linkedQuantity
-      const isRealReservation = res.reservedQuantity > res.linkedQuantity;
+      // POPRAWKA: Uwzględnij konsumpcję - jeśli dostępna ilość > 0, to rezerwacja jest rzeczywista
+      const isRealReservation = res.availableQuantity > 0 || res.reservedQuantity > res.linkedQuantity;
       
       // ✅ ELASTYCZNE DOPASOWYWANIE: Sprawdź różne warianty dopasowania nazw
       const materialNameLower = (res.materialName || '').toLowerCase().trim();
@@ -373,11 +377,19 @@ const EnhancedMixingPlan = ({
       const matchesIngredient = exactMatch || materialContainsIngredient || ingredientContainsMaterial || normalizedMatch;
       
       const hasAvailableQuantity = res.availableQuantity > 0;
-      const notAlreadyLinked = !linkedReservationIds.includes(res.id);
+      // Usunięto warunek notAlreadyLinked - rezerwacje z dostępną ilością powinny być widoczne
+      // nawet jeśli były już wcześniej powiązane (np. po częściowej konsumpcji)
       
-      console.log(`  ➜ IsReal: ${isRealReservation}, Matches: ${matchesIngredient} (exact: ${exactMatch}, contains: ${materialContainsIngredient}/${ingredientContainsMaterial}, normalized: ${normalizedMatch}), HasQty: ${hasAvailableQuantity}, NotLinked: ${notAlreadyLinked}`);
+      console.log(`  ➜ IsReal: ${isRealReservation}, Matches: ${matchesIngredient} (exact: ${exactMatch}, contains: ${materialContainsIngredient}/${ingredientContainsMaterial}, normalized: ${normalizedMatch}), HasQty: ${hasAvailableQuantity}`);
       
-      return matchesIngredient && hasAvailableQuantity && isRealReservation && notAlreadyLinked;
+      const shouldInclude = matchesIngredient && hasAvailableQuantity && isRealReservation;
+      if (!shouldInclude) {
+        console.log(`    ❌ Odrzucam rezerwację: ${res.materialName} (${res.availableQuantity}) - Matches: ${matchesIngredient}, HasQty: ${hasAvailableQuantity}, IsReal: ${isRealReservation}`);
+      } else {
+        console.log(`    ✅ Akceptuję rezerwację: ${res.materialName} (${res.availableQuantity})`);
+      }
+      
+      return shouldInclude;
     }).map(res => ({ ...res, type: 'standard' }));
     
     // Dostępne po filtrowaniu: ${available.length}
