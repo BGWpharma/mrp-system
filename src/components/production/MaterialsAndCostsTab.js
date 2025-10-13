@@ -22,7 +22,8 @@ import {
   IconButton,
   Checkbox,
   Alert,
-  Tooltip
+  Tooltip,
+  CircularProgress
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -57,6 +58,7 @@ const MaterialsAndCostsTab = ({
   includeInCosts,
   consumedIncludeInCosts,
   consumedBatchPrices,
+  deletingReservation,
   
   // Funkcje obliczeniowe
   calculateWeightedUnitPrice,
@@ -416,11 +418,12 @@ const MaterialsAndCostsTab = ({
                                     }
                                   }} 
                                   onClick={() => navigate(`/inventory/${materialId}/batches`)}
-                                  onDelete={(e) => {
+                                  onDelete={deletingReservation ? undefined : (e) => {
                                     e.stopPropagation(); // Zapobiega wywołaniu onClick
                                     handleDeleteSingleReservation(materialId, batch.batchId, batch.batchNumber);
                                   }}
-                                  deleteIcon={<CloseIcon />}
+                                  deleteIcon={deletingReservation ? <CircularProgress size={16} /> : <CloseIcon />}
+                                  disabled={deletingReservation}
                                 />
                               ))}
                               

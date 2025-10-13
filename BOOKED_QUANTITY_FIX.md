@@ -99,6 +99,15 @@ if (restoreReservation) {
 
 ## Pliki zmodyfikowane
 - `src/pages/Production/TaskDetailsPage.js` (linia ~5966-6019)
+  - Dodano atomową aktualizację bookedQuantity podczas konsumpcji
+  - Naprawiono kolejność operacji w transakcji Firebase
+  - Dodano stany `deletingConsumption`, `deletingReservation` i `consumingMaterials` dla wskaźników ładowania
+  - Dodano wskaźniki ładowania w operacjach:
+    - Konsumpcja materiałów - "Konsumowanie..." z CircularProgress
+    - Usuwanie konsumpcji - "Usuwanie..." z CircularProgress
+    - Usuwanie rezerwacji - CircularProgress w Chip
+- `src/components/production/MaterialsAndCostsTab.js`
+  - Dodano wskaźnik ładowania dla usuwania rezerwacji (CircularProgress w Chip)
 
 ## Pliki niezmienione (już zawierają poprawną logikę)
 - `src/services/inventory/reservationService.js`:

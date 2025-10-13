@@ -326,6 +326,7 @@ const TaskDetailsPage = () => {
   const [selectedBatchesToConsume, setSelectedBatchesToConsume] = useState({});
   const [consumeQuantities, setConsumeQuantities] = useState({});
   const [consumeErrors, setConsumeErrors] = useState({});
+  const [consumingMaterials, setConsumingMaterials] = useState(false); // Stan ładowania dla konsumpcji materiałów
 
   // Nowe stany dla korekty i usunięcia konsumpcji
   const [editConsumptionDialogOpen, setEditConsumptionDialogOpen] = useState(false);
@@ -335,6 +336,8 @@ const TaskDetailsPage = () => {
   const [consumedBatchPrices, setConsumedBatchPrices] = useState({});
   const [consumedIncludeInCosts, setConsumedIncludeInCosts] = useState({});
   const [restoreReservation, setRestoreReservation] = useState(true); // Domyślnie włączone
+  const [deletingConsumption, setDeletingConsumption] = useState(false); // Stan ładowania dla usuwania konsumpcji
+  const [deletingReservation, setDeletingReservation] = useState(false); // Stan ładowania dla usuwania rezerwacji
   const [fixingRecipeData, setFixingRecipeData] = useState(false);
   
   // Stan dla załączników z powiązanych PO
@@ -2652,7 +2655,7 @@ const TaskDetailsPage = () => {
   // Funkcja do usuwania pojedynczej rezerwacji partii
   const handleDeleteSingleReservation = async (materialId, batchId, batchNumber) => {
     try {
-      // ✅ Usunięto setLoading(true) - real-time listener zaktualizuje dane bez pełnego rerenderowania
+      setDeletingReservation(true);
       
       console.log('handleDeleteSingleReservation wywołane z:', { materialId, batchId, batchNumber, taskId: task.id });
       
@@ -2748,7 +2751,7 @@ const TaskDetailsPage = () => {
       console.error('Błąd podczas usuwania pojedynczej rezerwacji:', error);
       showError('Błąd podczas usuwania rezerwacji: ' + error.message);
     } finally {
-      setLoading(false);
+      setDeletingReservation(false);
     }
   };
 
@@ -5765,7 +5768,7 @@ const TaskDetailsPage = () => {
         return;
       }
 
-      // ✅ Usunięto setLoading(true) - real-time listener zaktualizuje dane bez pełnego rerenderowania
+      setConsumingMaterials(true);
 
       // Przygotuj dane do aktualizacji stanów magazynowych
       const consumptionData = {};
@@ -6185,8 +6188,9 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('Błąd podczas konsumpcji materiałów:', error);
       showError('Nie udało się skonsumować materiałów: ' + error.message);
+    } finally {
+      setConsumingMaterials(false);
     }
-    // ✅ Usunięto finally z setLoading(false) - brak spinnera, płynna aktualizacja przez real-time listener
   };
 
   // Funkcje obsługi korekty konsumpcji
@@ -6441,10 +6445,11 @@ const TaskDetailsPage = () => {
 
   const handleConfirmDeleteConsumption = async () => {
     try {
-      // ✅ Usunięto setLoading(true) - real-time listener zaktualizuje dane bez pełnego rerenderowania
+      setDeletingConsumption(true);
 
       if (!selectedConsumption) {
         showError('Nie wybrano konsumpcji do usunięcia');
+        setDeletingConsumption(false);
         return;
       }
 
@@ -6618,8 +6623,9 @@ const TaskDetailsPage = () => {
     } catch (error) {
       console.error('Błąd podczas usuwania konsumpcji:', error);
       showError('Nie udało się usunąć konsumpcji: ' + error.message);
+    } finally {
+      setDeletingConsumption(false);
     }
-    // ✅ Usunięto finally z setLoading(false) - brak spinnera, płynna aktualizacja przez real-time listener
   };
 
   // Funkcja do pobierania cen skonsumowanych partii i aktualizacji cen materiałów
@@ -7874,6 +7880,7 @@ const TaskDetailsPage = () => {
                 includeInCosts={includeInCosts}
                 consumedIncludeInCosts={consumedIncludeInCosts}
                 consumedBatchPrices={consumedBatchPrices}
+                deletingReservation={deletingReservation}
                 
                 // Funkcje obliczeniowe
                 calculateWeightedUnitPrice={calculateWeightedUnitPrice}
@@ -8704,16 +8711,17 @@ const TaskDetailsPage = () => {
               )}
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setConsumeMaterialsDialogOpen(false)}>
+              <Button onClick={() => setConsumeMaterialsDialogOpen(false)} disabled={consumingMaterials}>
                 Anuluj
               </Button>
               <Button 
                 onClick={handleConfirmConsumeMaterials} 
                 variant="contained" 
                 color="warning"
-                disabled={loading || consumedMaterials.length === 0}
+                disabled={consumingMaterials || consumedMaterials.length === 0}
+                startIcon={consumingMaterials ? <CircularProgress size={20} /> : null}
               >
-                {loading ? <CircularProgress size={24} /> : 'Konsumuj materiały'}
+                {consumingMaterials ? 'Konsumowanie...' : 'Konsumuj materiały'}
               </Button>
             </DialogActions>
           </Dialog>
@@ -8838,16 +8846,17 @@ const TaskDetailsPage = () => {
               />
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setDeleteConsumptionDialogOpen(false)}>
+              <Button onClick={() => setDeleteConsumptionDialogOpen(false)} disabled={deletingConsumption}>
                 Anuluj
               </Button>
               <Button 
                 onClick={handleConfirmDeleteConsumption} 
                 variant="contained" 
                 color="error"
-                disabled={loading}
+                disabled={deletingConsumption}
+                startIcon={deletingConsumption ? <CircularProgress size={20} /> : null}
               >
-                {loading ? <CircularProgress size={24} /> : 'Usuń konsumpcję'}
+                {deletingConsumption ? 'Usuwanie...' : 'Usuń konsumpcję'}
               </Button>
             </DialogActions>
           </Dialog>
