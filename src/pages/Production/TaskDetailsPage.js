@@ -5963,10 +5963,14 @@ const TaskDetailsPage = () => {
                 const reservationDoc = reservationSnapshot.docs[0];
                 const consumeQuantity = Number(batchData.quantity) || 0;
                 
-                // 🔒 ATOMOWA aktualizacja rezerwacji
+                // 🔒 ATOMOWA aktualizacja rezerwacji i bookedQuantity
                 await runTransaction(db, async (transaction) => {
                   const reservationRef = doc(db, 'inventoryTransactions', reservationDoc.id);
+                  const inventoryRef = doc(db, 'inventory', materialId);
+                  
+                  // ✅ WAŻNE: Wszystkie odczyty MUSZĄ być przed zapisami w transakcji Firebase
                   const freshReservationDoc = await transaction.get(reservationRef);
+                  const inventoryDoc = await transaction.get(inventoryRef);
                   
                   if (!freshReservationDoc.exists()) {
                     console.warn(`Rezerwacja ${reservationDoc.id} już nie istnieje`);
@@ -5986,6 +5990,7 @@ const TaskDetailsPage = () => {
                 newReservedQuantity
               });
               
+              // ✅ Teraz wykonujemy wszystkie zapisy po odczytach
               if (newReservedQuantity > 0) {
                     // Aktualizuj ilość rezerwacji
                     transaction.update(reservationRef, {
@@ -5997,6 +6002,21 @@ const TaskDetailsPage = () => {
                     // Usuń rezerwację jeśli ilość spadła do 0
                     transaction.delete(reservationRef);
                     console.log(`Usunięto rezerwację ${reservationDoc.id} (ilość spadła do 0)`);
+                  }
+                  
+                  // 🔧 KLUCZOWE: Aktualizuj bookedQuantity w pozycji magazynowej
+                  if (inventoryDoc.exists()) {
+                    const inventoryData = inventoryDoc.data();
+                    const currentBookedQuantity = Number(inventoryData.bookedQuantity) || 0;
+                    const newBookedQuantity = Math.max(0, currentBookedQuantity - consumeQuantity);
+                    
+                    transaction.update(inventoryRef, {
+                      bookedQuantity: newBookedQuantity,
+                      updatedAt: serverTimestamp(),
+                      updatedBy: currentUser.uid
+                    });
+                    
+                    console.log(`🔧 [BOOKED QUANTITY] ${inventoryData.name}: ${currentBookedQuantity} → ${newBookedQuantity} (-${consumeQuantity})`);
                   }
                 });
                 
