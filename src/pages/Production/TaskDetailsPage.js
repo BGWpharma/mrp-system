@@ -838,6 +838,12 @@ const TaskDetailsPage = () => {
         promises.push(fetchAwaitingOrdersForMaterials(taskData));
       }
       
+      // Odśwież rezerwacje PO przy zmianie materiałów lub przy pierwszym ładowaniu
+      if (taskData.id && (materialsChanged || !previousTask)) {
+        console.log('📊 [REAL-TIME] Odświeżam rezerwacje PO...');
+        promises.push(fetchPOReservations());
+      }
+      
       // ⚡ OPTYMALIZACJA: Odśwież historię tylko jeśli materiały lub konsumpcje się zmieniły
       // (Historia zależy głównie od tych danych)
       if (taskData.id && (materialsChanged || consumedChanged || !previousTask)) {
