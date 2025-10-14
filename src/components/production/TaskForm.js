@@ -61,7 +61,7 @@ import {
   getInventoryItemById
 } from '../../services/inventory';
 import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
-import { getOrderById } from '../../services/orderService';
+import { getOrderById, getAllOrders, updateOrder } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
@@ -90,7 +90,8 @@ const TaskForm = ({ taskId }) => {
     recipes: false,
     workstations: false,
     inventoryProducts: false,
-    purchaseOrders: false
+    purchaseOrders: false,
+    customerOrders: false
   });
   
   const [taskData, setTaskData] = useState({
@@ -131,6 +132,12 @@ const TaskForm = ({ taskId }) => {
   const [updatingRecipe, setUpdatingRecipe] = useState(false);
   const [availableRecipeVersions, setAvailableRecipeVersions] = useState([]);
   const [refreshingProductName, setRefreshingProductName] = useState(false);
+
+  // Stany dla powiązania z zamówieniem klienta
+  const [customerOrders, setCustomerOrders] = useState([]);
+  const [selectedCustomerOrder, setSelectedCustomerOrder] = useState(null);
+  const [selectedOrderItemId, setSelectedOrderItemId] = useState('');
+  const [originalOrderId, setOriginalOrderId] = useState(null); // Do śledzenia zmian powiązania
 
   // Funkcja do cache'owania danych w sessionStorage
   const getCachedData = useCallback((key) => {
@@ -237,6 +244,16 @@ const TaskForm = ({ taskId }) => {
     fetchCriticalData();
   }, [taskId]);
 
+  // Ustaw selectedCustomerOrder po załadowaniu zamówień
+  useEffect(() => {
+    if (taskData.orderId && customerOrders.length > 0 && !selectedCustomerOrder) {
+      const order = customerOrders.find(o => o.id === taskData.orderId);
+      if (order) {
+        setSelectedCustomerOrder(order);
+      }
+    }
+  }, [taskData.orderId, customerOrders, selectedCustomerOrder]);
+
   // Pobieranie danych wspomagających w tle
   const fetchSupportingDataInBackground = useCallback(async () => {
     try {
@@ -254,6 +271,9 @@ const TaskForm = ({ taskId }) => {
       }
       if (!dataLoaded.purchaseOrders) {
         promises.push(fetchPurchaseOrders());
+      }
+      if (!dataLoaded.customerOrders) {
+        promises.push(fetchCustomerOrders());
       }
       
       await Promise.allSettled(promises);
@@ -352,6 +372,27 @@ const TaskForm = ({ taskId }) => {
     }
   };
 
+  const fetchCustomerOrders = async () => {
+    if (dataLoaded.customerOrders) return;
+    
+    try {
+      const ordersData = await getAllOrders();
+      
+      // Filtrujemy tylko aktywne zamówienia (nie anulowane/zakończone)
+      const activeOrders = ordersData.filter(order => 
+        order.status !== 'Anulowane' && 
+        order.status !== 'Zrealizowane'
+      );
+      
+      console.log('Pobrano zamówienia klientów:', activeOrders);
+      setCustomerOrders(activeOrders);
+      setDataLoaded(prev => ({ ...prev, customerOrders: true }));
+    } catch (error) {
+      showError('Błąd podczas pobierania zamówień klientów: ' + error.message);
+      console.error('Error fetching customer orders:', error);
+    }
+  };
+
   const fetchTask = async () => {
     try {
       const task = await getTaskById(taskId);
@@ -386,6 +427,12 @@ const TaskForm = ({ taskId }) => {
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
       setTaskData(taskWithParsedDates);
+      
+      // Zapisz oryginalne orderId do śledzenia zmian
+      if (task.orderId) {
+        setOriginalOrderId(task.orderId);
+        setSelectedOrderItemId(task.orderItemId || '');
+      }
       
       // Pobierz dodatkowe dane tylko jeśli są potrzebne
       const additionalDataPromises = [];
@@ -481,6 +528,122 @@ const TaskForm = ({ taskId }) => {
   }, [dataLoaded]);
 
   // Funkcja do aktualizacji powiązanych zamówień klientów po zapisaniu ręcznych kosztów
+  // Funkcja do aktualizacji powiązania MO z CO
+  const updateOrderProductionTaskLink = async (taskId, oldOrderId, newOrderId, newOrderItemId) => {
+    try {
+      console.log('🔗 Aktualizacja powiązania MO z CO:', {
+        taskId,
+        oldOrderId,
+        newOrderId,
+        newOrderItemId
+      });
+
+      // 1. Jeśli było stare zamówienie, usuń productionTaskId z jego pozycji
+      if (oldOrderId && oldOrderId !== newOrderId) {
+        try {
+          const oldOrder = await getOrderById(oldOrderId);
+          if (oldOrder && oldOrder.items) {
+            const updatedItems = oldOrder.items.map(item => {
+              if (item.productionTaskId === taskId) {
+                const { productionTaskId, productionTaskNumber, productionStatus, ...itemWithoutTask } = item;
+                console.log(`Usunięto powiązanie MO ${taskId} z pozycji "${item.name}" w CO ${oldOrder.orderNumber}`);
+                return itemWithoutTask;
+              }
+              return item;
+            });
+
+            // Usuń także z tablicy productionTasks jeśli istnieje
+            const updatedProductionTasks = (oldOrder.productionTasks || []).filter(
+              task => task.id !== taskId
+            );
+
+            await updateOrder(oldOrderId, {
+              items: updatedItems,
+              productionTasks: updatedProductionTasks,
+              orderNumber: oldOrder.orderNumber,
+              orderDate: oldOrder.orderDate,
+              status: oldOrder.status,
+              customer: oldOrder.customer,
+              shippingCost: oldOrder.shippingCost,
+              totalValue: oldOrder.totalValue,
+              additionalCostsItems: oldOrder.additionalCostsItems,
+              linkedPurchaseOrders: oldOrder.linkedPurchaseOrders
+            }, currentUser?.uid || 'system');
+
+            console.log(`✅ Usunięto powiązanie z CO ${oldOrder.orderNumber}`);
+          }
+        } catch (error) {
+          // Jeśli zamówienie nie istnieje (zostało usunięte), po prostu logujemy i kontynuujemy
+          if (error.message && error.message.includes('nie istnieje')) {
+            console.warn(`⚠️ Stare zamówienie ${oldOrderId} już nie istnieje - pomijam usuwanie powiązania`);
+          } else {
+            console.error('Błąd podczas usuwania powiązania ze starego CO:', error);
+          }
+          // Nie przerywamy - to nie jest krytyczny błąd
+        }
+      }
+
+      // 2. Jeśli jest nowe zamówienie, dodaj productionTaskId do wybranej pozycji
+      if (newOrderId && newOrderItemId) {
+        try {
+          const newOrder = await getOrderById(newOrderId);
+          if (newOrder && newOrder.items) {
+            const itemIndex = newOrder.items.findIndex(item => item.id === newOrderItemId);
+            
+            if (itemIndex === -1) {
+              throw new Error(`Nie znaleziono pozycji ${newOrderItemId} w zamówieniu ${newOrder.orderNumber}`);
+            }
+
+            // Pobierz aktualne dane zadania dla moNumber
+            const task = await getTaskById(taskId);
+
+            const updatedItems = [...newOrder.items];
+            updatedItems[itemIndex] = {
+              ...updatedItems[itemIndex],
+              productionTaskId: taskId,
+              productionTaskNumber: task.moNumber,
+              productionStatus: task.status
+            };
+
+            // Dodaj także do productionTasks jeśli nie istnieje
+            const productionTasks = newOrder.productionTasks || [];
+            const taskExists = productionTasks.some(t => t.id === taskId);
+            const updatedProductionTasks = taskExists
+              ? productionTasks
+              : [...productionTasks, {
+                  id: taskId,
+                  moNumber: task.moNumber,
+                  status: task.status
+                }];
+
+            await updateOrder(newOrderId, {
+              items: updatedItems,
+              productionTasks: updatedProductionTasks,
+              orderNumber: newOrder.orderNumber,
+              orderDate: newOrder.orderDate,
+              status: newOrder.status,
+              customer: newOrder.customer,
+              shippingCost: newOrder.shippingCost,
+              totalValue: newOrder.totalValue,
+              additionalCostsItems: newOrder.additionalCostsItems,
+              linkedPurchaseOrders: newOrder.linkedPurchaseOrders
+            }, currentUser?.uid || 'system');
+
+            console.log(`✅ Dodano powiązanie z CO ${newOrder.orderNumber}, pozycja: ${updatedItems[itemIndex].name}`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas dodawania powiązania do nowego CO:', error);
+          throw error; // Ten błąd jest krytyczny
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji powiązania MO z CO:', error);
+      throw error;
+    }
+  };
+
   const updateRelatedCustomerOrders = async (taskId, totalMaterialCost, totalFullProductionCost) => {
     try {
       // Dynamicznie importuj potrzebne funkcje
@@ -582,6 +745,18 @@ const TaskForm = ({ taskId }) => {
           taskData.endDate : new Date(taskData.endDate)
       };
 
+      // Wyczyść customer z potencjalnych Timestamp'ów (mogą być z getAllOrders)
+      if (formattedData.customer && typeof formattedData.customer === 'object') {
+        const cleanCustomer = {};
+        // Kopiuj tylko pola tekstowe, pomijaj wszystko co jest obiektem lub datą
+        for (const [key, value] of Object.entries(formattedData.customer)) {
+          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) {
+            cleanCustomer[key] = value;
+          }
+        }
+        formattedData.customer = cleanCustomer;
+      }
+
       // Jeśli automatyczne aktualizacje kosztów są wyłączone i wprowadzono ręczne koszty,
       // zapisz je jako rzeczywiste koszty zadania
       if (taskData.disableAutomaticCostUpdates) {
@@ -606,6 +781,79 @@ const TaskForm = ({ taskId }) => {
         await updateTask(taskId, formattedData, currentUser.uid);
         savedTaskId = taskId;
         
+        // Sprawdź czy zmieniono powiązanie z zamówieniem klienta
+        const newOrderId = selectedCustomerOrder?.id || null;
+        const orderLinkChanged = originalOrderId !== newOrderId || 
+                                 (newOrderId && taskData.orderItemId !== selectedOrderItemId);
+        
+        if (orderLinkChanged) {
+          try {
+            console.log('🔄 Wykryto zmianę powiązania z CO');
+            await updateOrderProductionTaskLink(
+              taskId,
+              originalOrderId,
+              newOrderId,
+              selectedOrderItemId
+            );
+            
+            // Zaktualizuj pola w zadaniu - używamy update bezpośrednio zamiast updateTask
+            // aby uniknąć problemów z mergowaniem złych dat
+            try {
+              const { doc, updateDoc } = await import('firebase/firestore');
+              const { db } = await import('../../services/firebase/config');
+              
+              const orderUpdateData = {};
+              if (newOrderId && selectedOrderItemId) {
+                const selectedItem = selectedCustomerOrder.items.find(item => item.id === selectedOrderItemId);
+                orderUpdateData.orderId = newOrderId;
+                orderUpdateData.orderNumber = String(selectedCustomerOrder.orderNumber || '');
+                orderUpdateData.orderItemId = String(selectedOrderItemId);
+                
+                // Kopiuj tylko bezpieczne pola klienta (TYLKO stringi, bez dat i obiektów)
+                if (selectedCustomerOrder.customer) {
+                  const customer = selectedCustomerOrder.customer;
+                  orderUpdateData.customer = {
+                    id: String(customer.id || ''),
+                    name: String(customer.name || ''),
+                    email: String(customer.email || ''),
+                    phone: String(customer.phone || ''),
+                    address: String(customer.address || ''),
+                    shippingAddress: String(customer.shippingAddress || ''),
+                    vatEu: String(customer.vatEu || ''),
+                    billingAddress: String(customer.billingAddress || ''),
+                    orderAffix: String(customer.orderAffix || ''),
+                    notes: String(customer.notes || '')
+                  };
+                }
+                
+                console.log(`Zaktualizowano powiązanie MO ${taskId} z CO ${selectedCustomerOrder.orderNumber}, pozycja: ${selectedItem?.name}`);
+                console.log('Dane do aktualizacji zadania:', JSON.stringify(orderUpdateData, null, 2));
+              } else {
+                // Usuwamy powiązanie
+                orderUpdateData.orderId = null;
+                orderUpdateData.orderNumber = null;
+                orderUpdateData.orderItemId = null;
+                orderUpdateData.customer = null;
+                
+                console.log(`Usunięto powiązanie MO ${taskId} z zamówieniem klienta`);
+              }
+              
+              // Bezpośrednie wywołanie updateDoc, aby uniknąć problemów z updateTask
+              const taskRef = doc(db, 'productionTasks', taskId);
+              await updateDoc(taskRef, orderUpdateData);
+              
+              console.log('✅ Pomyślnie zaktualizowano pola powiązania w bazie danych');
+            } catch (updateError) {
+              console.error('Błąd podczas bezpośredniej aktualizacji pól powiązania:', updateError);
+              throw updateError;
+            }
+            showSuccess('Zadanie i powiązanie z zamówieniem zostały zaktualizowane');
+          } catch (error) {
+            console.error('Błąd podczas aktualizacji powiązania z CO:', error);
+            showWarning('Zadanie zapisane, ale nie udało się zaktualizować powiązania z zamówieniem: ' + error.message);
+          }
+        }
+        
         // Jeśli zapisano ręczne koszty, zaktualizuj powiązane zamówienia klientów
         if (taskData.disableAutomaticCostUpdates && 
             (taskData.manualTotalMaterialCost !== '' || taskData.manualTotalFullProductionCost !== '')) {
@@ -622,7 +870,9 @@ const TaskForm = ({ taskId }) => {
           }
         }
         
-        showSuccess('Zadanie zostało zaktualizowane');
+        if (!orderLinkChanged) {
+          showSuccess('Zadanie zostało zaktualizowane');
+        }
       } else {
         // Utworzenie nowego zadania
         const newTask = await createTask(formattedData, currentUser.uid);
@@ -1681,6 +1931,140 @@ const TaskForm = ({ taskId }) => {
               </Grid>
             </Paper>
             
+            {/* Sekcja powiązania z zamówieniem klienta - tylko w trybie edycji */}
+            {taskId && taskId !== 'new' && (
+              <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+                <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+                  Powiązanie z zamówieniem klienta (CO)
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <Typography variant="body2">
+                        <strong>Zmiana powiązania MO z CO:</strong> Możesz zmienić zamówienie klienta, do którego przypisane jest to zadanie produkcyjne. 
+                        System automatycznie zaktualizuje powiązania w obu zamówieniach (starym i nowym).
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <Autocomplete
+                      id="customer-order"
+                      options={customerOrders}
+                      getOptionLabel={(option) => {
+                        const customerName = option.customer?.name || 'Nieznany klient';
+                        const orderNumber = option.orderNumber || option.id;
+                        return `CO ${orderNumber} - ${customerName}`;
+                      }}
+                      value={selectedCustomerOrder}
+                      onOpen={() => {
+                        if (!dataLoaded.customerOrders) {
+                          fetchCustomerOrders();
+                        }
+                      }}
+                      loading={!dataLoaded.customerOrders}
+                      onChange={(event, newValue) => {
+                        setSelectedCustomerOrder(newValue);
+                        setSelectedOrderItemId(''); // Reset wyboru pozycji
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Zamówienie klienta"
+                          variant="outlined"
+                          helperText={
+                            originalOrderId && selectedCustomerOrder?.id !== originalOrderId
+                              ? `Zmiana z: CO ${taskData.orderNumber || originalOrderId}`
+                              : originalOrderId
+                                ? `Aktualne: CO ${taskData.orderNumber || originalOrderId}`
+                                : 'Brak powiązania z zamówieniem'
+                          }
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {!dataLoaded.customerOrders ? <CircularProgress color="inherit" size={20} /> : null}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <Box component="li" {...props}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                              CO {option.orderNumber}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Klient: {option.customer?.name || 'Nieznany'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Status: {option.status} | Pozycji: {option.items?.length || 0}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth variant="outlined" disabled={!selectedCustomerOrder}>
+                      <InputLabel>Pozycja z zamówienia</InputLabel>
+                      <Select
+                        value={selectedOrderItemId}
+                        onChange={(e) => setSelectedOrderItemId(e.target.value)}
+                        label="Pozycja z zamówienia"
+                      >
+                        <MenuItem value="">
+                          <em>-- Wybierz pozycję --</em>
+                        </MenuItem>
+                        {selectedCustomerOrder?.items?.map((item, index) => (
+                          <MenuItem key={item.id || index} value={item.id}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', py: 0.5 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                {item.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Ilość: {item.quantity} {item.unit || 'szt.'} 
+                                {item.productionTaskId && item.productionTaskId !== taskId && 
+                                  ` | Już powiązane z MO ${item.productionTaskNumber || item.productionTaskId}`
+                                }
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <FormHelperText>
+                        {!selectedCustomerOrder 
+                          ? 'Najpierw wybierz zamówienie klienta'
+                          : selectedOrderItemId
+                            ? 'Pozycja, z którą będzie powiązane to MO'
+                            : 'Wybierz pozycję z zamówienia'
+                        }
+                      </FormHelperText>
+                    </FormControl>
+                  </Grid>
+
+                  {selectedCustomerOrder && selectedOrderItemId && (
+                    <Grid item xs={12}>
+                      <Alert severity="success">
+                        <Typography variant="body2">
+                          <strong>Wybrano:</strong> Pozycja "{selectedCustomerOrder.items.find(i => i.id === selectedOrderItemId)?.name}" 
+                          z zamówienia CO {selectedCustomerOrder.orderNumber}
+                        </Typography>
+                        {originalOrderId && selectedCustomerOrder.id !== originalOrderId && (
+                          <Typography variant="body2" sx={{ mt: 1 }}>
+                            ⚠️ Po zapisaniu powiązanie zostanie przeniesione z CO {taskData.orderNumber} do CO {selectedCustomerOrder.orderNumber}
+                          </Typography>
+                        )}
+                      </Alert>
+                    </Grid>
+                  )}
+                </Grid>
+              </Paper>
+            )}
+
             {/* Sekcja harmonogramu */}
             <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
