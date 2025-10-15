@@ -9,6 +9,7 @@ import { InventoryListStateProvider } from './contexts/InventoryListStateContext
 import { TaskListStateProvider } from './contexts/TaskListStateContext';
 import { CmrListStateProvider } from './contexts/CmrListStateContext';
 import { RecipeListStateProvider } from './contexts/RecipeListStateContext';
+import { InvoiceListStateProvider } from './contexts/InvoiceListStateContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
 import { rtdb } from './services/firebase/config';
@@ -186,10 +187,11 @@ function App() {
               <TaskListStateProvider>
                 <CmrListStateProvider>
                   <RecipeListStateProvider>
-                    <SidebarProvider>
-                <div className="app-container">
-                  <Notifications />
-                  <Routes>
+                    <InvoiceListStateProvider>
+                      <SidebarProvider>
+                        <div className="app-container">
+                          <Notifications />
+                          <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     
@@ -352,12 +354,13 @@ function App() {
                     <Route path="/notifications/history" element={<PrivateLayout><NotificationsHistoryPage /></PrivateLayout>} />
                     
                     <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </div>
-                              </SidebarProvider>
-                    </RecipeListStateProvider>
-                  </CmrListStateProvider>
-                </TaskListStateProvider>
+                          </Routes>
+                        </div>
+                      </SidebarProvider>
+                    </InvoiceListStateProvider>
+                  </RecipeListStateProvider>
+                </CmrListStateProvider>
+              </TaskListStateProvider>
             </InventoryListStateProvider>
           </ColumnPreferencesProvider>
         </NotificationProvider>

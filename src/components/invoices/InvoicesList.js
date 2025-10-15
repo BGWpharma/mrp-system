@@ -63,29 +63,20 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { format } from 'date-fns';
+import { useInvoiceListState } from '../../contexts/InvoiceListStateContext';
 
 const InvoicesList = () => {
+  // Stan z kontekstu
+  const { state: listState, actions: listActions } = useInvoiceListState();
+  
   const [invoices, setInvoices] = useState([]);
   const [filteredInvoices, setFilteredInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [proformaAmounts, setProformaAmounts] = useState({});
-
-  // Filtry
-  const [filters, setFilters] = useState({
-    status: '',
-    customerId: '',
-    orderId: '',
-    fromDate: null,
-    toDate: null
-  });
 
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -100,6 +91,65 @@ const InvoicesList = () => {
     fetchCustomers();
     fetchOrders();
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Automatycznie zastosuj zapisane wyszukiwanie i filtry po załadowaniu faktur
+  useEffect(() => {
+    if (invoices.length === 0) return;
+
+    let results = [...invoices];
+
+    // Zastosuj wyszukiwanie
+    if (listState.searchTerm.trim()) {
+      const searchTermLower = listState.searchTerm.toLowerCase();
+      results = results.filter(invoice => 
+        (invoice.number && invoice.number.toLowerCase().includes(searchTermLower)) ||
+        (invoice.customer?.name && invoice.customer.name.toLowerCase().includes(searchTermLower))
+      );
+    }
+
+    // Zastosuj filtry
+    if (listState.filters.status) {
+      results = results.filter(invoice => invoice.status === listState.filters.status);
+    }
+
+    if (listState.filters.invoiceType) {
+      if (listState.filters.invoiceType === 'proforma') {
+        results = results.filter(invoice => invoice.isProforma === true);
+      } else if (listState.filters.invoiceType === 'invoice') {
+        results = results.filter(invoice => !invoice.isProforma);
+      }
+      // jeśli 'all' lub '', nie filtrujemy
+    }
+
+    if (listState.filters.customerId) {
+      results = results.filter(invoice => invoice.customer?.id === listState.filters.customerId);
+    }
+
+    if (listState.filters.orderId) {
+      results = results.filter(invoice => invoice.orderId === listState.filters.orderId);
+    }
+
+    if (listState.filters.fromDate) {
+      const fromDate = new Date(listState.filters.fromDate);
+      fromDate.setHours(0, 0, 0, 0);
+      results = results.filter(invoice => {
+        const invoiceDate = new Date(invoice.issueDate);
+        invoiceDate.setHours(0, 0, 0, 0);
+        return invoiceDate >= fromDate;
+      });
+    }
+
+    if (listState.filters.toDate) {
+      const toDate = new Date(listState.filters.toDate);
+      toDate.setHours(23, 59, 59, 999);
+      results = results.filter(invoice => {
+        const invoiceDate = new Date(invoice.issueDate);
+        return invoiceDate <= toDate;
+      });
+    }
+
+    setFilteredInvoices(results);
+  }, [invoices, listState.searchTerm, listState.filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nasłuchuj powrotu do karty/okna aby odświeżyć dane
   useEffect(() => {
@@ -133,7 +183,7 @@ const InvoicesList = () => {
     try {
       const fetchedInvoices = await getAllInvoices();
       setInvoices(fetchedInvoices);
-      setFilteredInvoices(fetchedInvoices);
+      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
       
       // Pobierz dostępne kwoty dla proform
       await fetchProformaAmounts(fetchedInvoices);
@@ -191,25 +241,12 @@ const InvoicesList = () => {
   };
 
   const handleSearch = () => {
-    if (!searchTerm.trim()) {
-      setFilteredInvoices(invoices);
-      return;
-    }
-
-    const searchTermLower = searchTerm.toLowerCase();
-    const results = invoices.filter(invoice => 
-      (invoice.number && invoice.number.toLowerCase().includes(searchTermLower)) ||
-      (invoice.customer?.name && invoice.customer.name.toLowerCase().includes(searchTermLower))
-    );
-    
-    setFilteredInvoices(results);
+    // Filtrowanie jest już obsługiwane przez useEffect
+    // Ta funkcja jest zachowana dla zgodności z UI (przycisk "Szukaj")
   };
 
   const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    if (!e.target.value.trim()) {
-      setFilteredInvoices(invoices);
-    }
+    listActions.setSearchTerm(e.target.value);
   };
 
   const handleSearchKeyPress = (e) => {
@@ -219,8 +256,7 @@ const InvoicesList = () => {
   };
 
   const clearSearch = () => {
-    setSearchTerm('');
-    setFilteredInvoices(invoices);
+    listActions.setSearchTerm('');
   };
 
   const handleAddInvoice = () => {
@@ -246,7 +282,7 @@ const InvoicesList = () => {
     try {
       await deleteInvoice(invoiceToDelete.id);
       setInvoices(invoices.filter(i => i.id !== invoiceToDelete.id));
-      setFilteredInvoices(filteredInvoices.filter(i => i.id !== invoiceToDelete.id));
+      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
       showSuccess(t('invoices.notifications.invoiceDeleted'));
     } catch (error) {
       showError(t('invoices.notifications.errors.deleteInvoice') + ': ' + error.message);
@@ -280,29 +316,24 @@ const InvoicesList = () => {
   };
 
   const toggleFilters = () => {
-    setFiltersExpanded(!filtersExpanded);
+    listActions.setFiltersExpanded(!listState.filtersExpanded);
   };
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters({
-      ...filters,
-      [name]: value
-    });
+    listActions.updateFilter(name, value);
   };
 
   const handleDateChange = (name, date) => {
-    setFilters({
-      ...filters,
-      [name]: date
-    });
+    listActions.updateFilter(name, date);
   };
 
   const applyFilters = async () => {
     setLoading(true);
     try {
-      const fetchedInvoices = await getAllInvoices(filters);
-      setFilteredInvoices(fetchedInvoices);
+      const fetchedInvoices = await getAllInvoices(listState.filters);
+      setInvoices(fetchedInvoices);
+      // setFilteredInvoices będzie ustawione automatycznie przez useEffect
     } catch (error) {
       showError(t('invoices.notifications.errors.filterInvoices') + ': ' + error.message);
     } finally {
@@ -311,14 +342,8 @@ const InvoicesList = () => {
   };
 
   const resetFilters = () => {
-    setFilters({
-      status: '',
-      customerId: '',
-      orderId: '',
-      fromDate: null,
-      toDate: null
-    });
-    setFilteredInvoices(invoices);
+    listActions.resetFilters();
+    // setFilteredInvoices będzie ustawione automatycznie przez useEffect
   };
 
   const formatDate = (date) => {
@@ -384,7 +409,7 @@ const InvoicesList = () => {
                   fullWidth
                   variant="outlined"
                   placeholder={t('invoices.searchInvoices')}
-                  value={searchTerm}
+                  value={listState.searchTerm}
                   onChange={handleSearchChange}
                   onKeyPress={handleSearchKeyPress}
                   InputProps={{
@@ -393,7 +418,7 @@ const InvoicesList = () => {
                         <SearchIcon />
                       </InputAdornment>
                     ),
-                    endAdornment: searchTerm && (
+                    endAdornment: listState.searchTerm && (
                       <InputAdornment position="end">
                         <IconButton size="small" onClick={clearSearch}>
                           <ClearIcon />
@@ -483,7 +508,7 @@ const InvoicesList = () => {
         </Grid>
 
         {/* Rozwijane filtry zaawansowane */}
-        <Collapse in={filtersExpanded}>
+        <Collapse in={listState.filtersExpanded}>
           <Divider sx={{ my: 2 }} />
           <Card variant="outlined" sx={{ mt: 2 }}>
             <CardContent>
@@ -493,7 +518,7 @@ const InvoicesList = () => {
                     <InputLabel>Status</InputLabel>
                     <Select
                       name="status"
-                      value={filters.status}
+                      value={listState.filters.status}
                       onChange={handleFilterChange}
                       label="Status"
                     >
@@ -510,10 +535,25 @@ const InvoicesList = () => {
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                   <FormControl fullWidth size="small">
+                    <InputLabel>Typ faktury</InputLabel>
+                    <Select
+                      name="invoiceType"
+                      value={listState.filters.invoiceType}
+                      onChange={handleFilterChange}
+                      label="Typ faktury"
+                    >
+                      <MenuItem value="">Wszystkie</MenuItem>
+                      <MenuItem value="invoice">Faktury</MenuItem>
+                      <MenuItem value="proforma">Proformy</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth size="small">
                     <InputLabel>{t('invoices.form.filters.client')}</InputLabel>
                     <Select
                       name="customerId"
-                      value={filters.customerId}
+                      value={listState.filters.customerId}
                       onChange={handleFilterChange}
                       label={t('invoices.form.filters.client')}
                       disabled={customersLoading}
@@ -532,7 +572,7 @@ const InvoicesList = () => {
                     <InputLabel>Zamówienie klienta</InputLabel>
                     <Select
                       name="orderId"
-                      value={filters.orderId}
+                      value={listState.filters.orderId}
                       onChange={handleFilterChange}
                       label="Zamówienie klienta"
                       disabled={ordersLoading}
@@ -550,7 +590,7 @@ const InvoicesList = () => {
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                     <DatePicker
                       label={t('invoices.form.filters.fromDate')}
-                      value={filters.fromDate}
+                      value={listState.filters.fromDate}
                       onChange={(date) => handleDateChange('fromDate', date)}
                       slotProps={{ 
                         textField: { 
@@ -565,7 +605,7 @@ const InvoicesList = () => {
                   <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                     <DatePicker
                       label={t('invoices.form.filters.toDate')}
-                      value={filters.toDate}
+                      value={listState.filters.toDate}
                       onChange={(date) => handleDateChange('toDate', date)}
                       slotProps={{ 
                         textField: { 
@@ -576,7 +616,7 @@ const InvoicesList = () => {
                     />
                   </LocalizationProvider>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={12} md={6}>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button 
                       variant="contained" 
@@ -589,6 +629,7 @@ const InvoicesList = () => {
                       variant="outlined" 
                       onClick={resetFilters}
                       color="inherit"
+                      fullWidth
                     >
                       {t('invoices.form.filters.resetFilters')}
                     </Button>
@@ -629,7 +670,7 @@ const InvoicesList = () => {
                     </TableRow>
                   ) : (
                     filteredInvoices
-                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                      .slice(listState.page * listState.rowsPerPage, listState.page * listState.rowsPerPage + listState.rowsPerPage)
                       .map((invoice) => (
                         <TableRow key={invoice.id}>
                           <TableCell>
@@ -841,12 +882,11 @@ const InvoicesList = () => {
             rowsPerPageOptions={[10, 25, 50, 100]}
             component="div"
             count={filteredInvoices.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={(event, newPage) => setPage(newPage)}
+            rowsPerPage={listState.rowsPerPage}
+            page={listState.page}
+            onPageChange={(event, newPage) => listActions.setPage(newPage)}
             onRowsPerPageChange={(event) => {
-              setRowsPerPage(parseInt(event.target.value, 10));
-              setPage(0);
+              listActions.setRowsPerPage(parseInt(event.target.value, 10));
             }}
             labelRowsPerPage={t('common.rowsPerPage') + ':'}
             labelDisplayedRows={({ from, to, count }) => 
