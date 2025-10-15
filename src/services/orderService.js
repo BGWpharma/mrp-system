@@ -2683,3 +2683,220 @@ export const getOrdersByProductionTaskId = async (productionTaskId) => {
     return [];
   }
 };
+
+/**
+ * Aktualizuje numer zamówienia klienta (CO) we wszystkich powiązanych dokumentach
+ * @param {string} orderId - ID zamówienia
+ * @param {string} newOrderNumber - Nowy numer CO
+ * @param {string} userId - ID użytkownika wykonującego zmianę
+ * @returns {Object} - Raport z aktualizacji
+ */
+export const updateCustomerOrderNumber = async (orderId, newOrderNumber, userId) => {
+  try {
+    console.log(`🔄 Rozpoczynam aktualizację numeru CO dla zamówienia ${orderId} na ${newOrderNumber}`);
+    
+    // Walidacja
+    if (!orderId || !newOrderNumber) {
+      throw new Error('ID zamówienia i nowy numer są wymagane');
+    }
+    
+    // Pobierz aktualne dane zamówienia
+    const orderDoc = await getDoc(doc(db, ORDERS_COLLECTION, orderId));
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie zostało znalezione');
+    }
+    
+    const oldOrderNumber = orderDoc.data().orderNumber;
+    if (oldOrderNumber === newOrderNumber) {
+      throw new Error('Nowy numer jest taki sam jak stary');
+    }
+    
+    // Sprawdź czy nowy numer już nie istnieje
+    const duplicateCheck = await getDocs(
+      query(
+        collection(db, ORDERS_COLLECTION),
+        where('orderNumber', '==', newOrderNumber)
+      )
+    );
+    
+    if (!duplicateCheck.empty) {
+      throw new Error(`Numer ${newOrderNumber} już istnieje w systemie`);
+    }
+    
+    const updateReport = {
+      success: true,
+      oldOrderNumber,
+      newOrderNumber,
+      updatedDocuments: {
+        order: false,
+        invoices: 0,
+        productionTasks: 0,
+        cmrDocuments: 0,
+        inventoryBatches: 0
+      },
+      errors: []
+    };
+    
+    // 1. Aktualizuj samo zamówienie
+    try {
+      await updateDoc(doc(db, ORDERS_COLLECTION, orderId), {
+        orderNumber: newOrderNumber,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId,
+        orderNumberHistory: {
+          previousNumber: oldOrderNumber,
+          changedAt: serverTimestamp(),
+          changedBy: userId
+        }
+      });
+      updateReport.updatedDocuments.order = true;
+      console.log(`✅ Zaktualizowano numer w zamówieniu`);
+    } catch (error) {
+      console.error('❌ Błąd aktualizacji zamówienia:', error);
+      updateReport.errors.push({ type: 'order', error: error.message });
+      throw error; // Krytyczny błąd - przerwij
+    }
+    
+    // 2. Aktualizuj faktury (Invoices)
+    try {
+      const invoicesQuery = query(
+        collection(db, 'invoices'),
+        where('orderId', '==', orderId)
+      );
+      const invoicesSnapshot = await getDocs(invoicesQuery);
+      
+      for (const invoiceDoc of invoicesSnapshot.docs) {
+        await updateDoc(doc(db, 'invoices', invoiceDoc.id), {
+          orderNumber: newOrderNumber,
+          updatedAt: serverTimestamp()
+        });
+        updateReport.updatedDocuments.invoices++;
+      }
+      console.log(`✅ Zaktualizowano ${updateReport.updatedDocuments.invoices} faktur`);
+    } catch (error) {
+      console.error('⚠️ Błąd aktualizacji faktur:', error);
+      updateReport.errors.push({ type: 'invoices', error: error.message });
+    }
+    
+    // 3. Aktualizuj zadania produkcyjne (Production Tasks)
+    try {
+      const tasksQuery = query(
+        collection(db, 'productionTasks'),
+        where('orderId', '==', orderId)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+      
+      for (const taskDoc of tasksSnapshot.docs) {
+        await updateDoc(doc(db, 'productionTasks', taskDoc.id), {
+          orderNumber: newOrderNumber,
+          updatedAt: serverTimestamp()
+        });
+        updateReport.updatedDocuments.productionTasks++;
+      }
+      console.log(`✅ Zaktualizowano ${updateReport.updatedDocuments.productionTasks} zadań produkcyjnych`);
+    } catch (error) {
+      console.error('⚠️ Błąd aktualizacji zadań produkcyjnych:', error);
+      updateReport.errors.push({ type: 'productionTasks', error: error.message });
+    }
+    
+    // 4. Aktualizuj dokumenty CMR (wyszukiwanie tekstowe)
+    try {
+      const cmrRef = collection(db, 'cmrDocuments');
+      const allCmrSnapshot = await getDocs(cmrRef);
+      
+      for (const cmrDoc of allCmrSnapshot.docs) {
+        const data = cmrDoc.data();
+        let needsUpdate = false;
+        const updates = {};
+        
+        // Sprawdź pola tekstowe i zamień stary numer na nowy
+        const fieldsToCheck = ['attachedDocuments', 'instructionsFromSender', 'notes', 'reservations', 'cmrNumber'];
+        
+        fieldsToCheck.forEach(field => {
+          if (data[field] && typeof data[field] === 'string' && 
+              data[field].includes(oldOrderNumber)) {
+            updates[field] = data[field].replace(
+              new RegExp(oldOrderNumber, 'g'), 
+              newOrderNumber
+            );
+            needsUpdate = true;
+          }
+        });
+        
+        if (needsUpdate) {
+          updates.updatedAt = serverTimestamp();
+          await updateDoc(doc(db, 'cmrDocuments', cmrDoc.id), updates);
+          updateReport.updatedDocuments.cmrDocuments++;
+        }
+      }
+      console.log(`✅ Zaktualizowano ${updateReport.updatedDocuments.cmrDocuments} dokumentów CMR`);
+    } catch (error) {
+      console.error('⚠️ Błąd aktualizacji CMR:', error);
+      updateReport.errors.push({ type: 'cmrDocuments', error: error.message });
+    }
+    
+    // 5. Aktualizuj partie magazynowe (Inventory Batches)
+    try {
+      const batchesQuery = query(
+        collection(db, 'inventoryBatches'),
+        where('sourceDetails.orderId', '==', orderId)
+      );
+      const batchesSnapshot = await getDocs(batchesQuery);
+      
+      for (const batchDoc of batchesSnapshot.docs) {
+        const data = batchDoc.data();
+        const updates = {
+          updatedAt: serverTimestamp()
+        };
+        
+        // Aktualizuj sourceDetails.orderNumber
+        if (data.sourceDetails) {
+          updates['sourceDetails.orderNumber'] = newOrderNumber;
+        }
+        
+        // Aktualizuj orderNumber jeśli istnieje
+        if (data.orderNumber) {
+          updates.orderNumber = newOrderNumber;
+        }
+        
+        // Aktualizuj notes jeśli zawiera stary numer
+        if (data.notes && data.notes.includes(oldOrderNumber)) {
+          updates.notes = data.notes.replace(
+            new RegExp(oldOrderNumber, 'g'),
+            newOrderNumber
+          );
+        }
+        
+        await updateDoc(doc(db, 'inventoryBatches', batchDoc.id), updates);
+        updateReport.updatedDocuments.inventoryBatches++;
+      }
+      console.log(`✅ Zaktualizowano ${updateReport.updatedDocuments.inventoryBatches} partii magazynowych`);
+    } catch (error) {
+      console.error('⚠️ Błąd aktualizacji partii magazynowych:', error);
+      updateReport.errors.push({ type: 'inventoryBatches', error: error.message });
+    }
+    
+    console.log('📊 Raport z aktualizacji:', updateReport);
+    return updateReport;
+    
+  } catch (error) {
+    console.error('❌ Błąd podczas aktualizacji numeru CO:', error);
+    throw error;
+  }
+};
+
+/**
+ * Waliduje format numeru CO
+ * @param {string} orderNumber - Numer do walidacji
+ * @returns {boolean}
+ */
+export const validateOrderNumberFormat = (orderNumber) => {
+  if (!orderNumber || typeof orderNumber !== 'string') {
+    return false;
+  }
+  
+  // Format: CO + cyfry, opcjonalnie z afiksem
+  // Przykłady: CO00001, CO-ABC-00001, CO00001-XYZ
+  const coPattern = /^CO[\w-]*\d+[\w-]*$/i;
+  return coPattern.test(orderNumber);
+};

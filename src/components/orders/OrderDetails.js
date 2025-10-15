@@ -61,7 +61,7 @@ import {
   OpenInNew as OpenInNewIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData } from '../../services/orderService';
+import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
@@ -328,6 +328,13 @@ const OrderDetails = () => {
   // State dla popover z listą faktur
   const [invoicePopoverAnchor, setInvoicePopoverAnchor] = useState(null);
   const [selectedInvoiceData, setSelectedInvoiceData] = useState(null);
+  
+  // State dla edycji numeru CO
+  const [isEditingOrderNumber, setIsEditingOrderNumber] = useState(false);
+  const [newOrderNumber, setNewOrderNumber] = useState('');
+  const [orderNumberError, setOrderNumberError] = useState('');
+  const [isUpdatingOrderNumber, setIsUpdatingOrderNumber] = useState(false);
+  const [updateOrderNumberDialogOpen, setUpdateOrderNumberDialogOpen] = useState(false);
 
   // 🚀 LAZY LOADING State Management
   const [activeSection, setActiveSection] = useState('basic'); // basic, production, documents, history
@@ -959,6 +966,78 @@ const OrderDetails = () => {
     }
   };
 
+  // Funkcje obsługi edycji numeru CO
+  const handleEditOrderNumberClick = () => {
+    setNewOrderNumber(order.orderNumber || '');
+    setIsEditingOrderNumber(true);
+    setOrderNumberError('');
+  };
+
+  const handleCancelEditOrderNumber = () => {
+    setIsEditingOrderNumber(false);
+    setNewOrderNumber('');
+    setOrderNumberError('');
+  };
+
+  const handleOrderNumberChange = (e) => {
+    const value = e.target.value.toUpperCase();
+    setNewOrderNumber(value);
+    
+    // Walidacja w czasie rzeczywistym
+    if (value && !validateOrderNumberFormat(value)) {
+      setOrderNumberError('Nieprawidłowy format numeru CO (np. CO00090)');
+    } else if (value === order.orderNumber) {
+      setOrderNumberError('Numer jest taki sam jak aktualny');
+    } else {
+      setOrderNumberError('');
+    }
+  };
+
+  const handleConfirmOrderNumberChange = () => {
+    if (orderNumberError || !newOrderNumber) {
+      return;
+    }
+    setUpdateOrderNumberDialogOpen(true);
+  };
+
+  const handleUpdateOrderNumber = async () => {
+    setIsUpdatingOrderNumber(true);
+    try {
+      const report = await updateCustomerOrderNumber(
+        order.id,
+        newOrderNumber,
+        currentUser.uid
+      );
+      
+      // Pokaż szczegółowy raport
+      const message = `✅ Zaktualizowano numer CO z ${report.oldOrderNumber} na ${report.newOrderNumber}
+      
+Zaktualizowane dokumenty:
+• Zamówienie: ${report.updatedDocuments.order ? 'Tak' : 'Nie'}
+• Faktury: ${report.updatedDocuments.invoices}
+• Zadania produkcyjne: ${report.updatedDocuments.productionTasks}
+• Dokumenty CMR: ${report.updatedDocuments.cmrDocuments}
+• Partie magazynowe: ${report.updatedDocuments.inventoryBatches}
+${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : ''}`;
+      
+      showSuccess(message);
+      
+      // Odśwież dane zamówienia
+      const updatedOrderData = await getOrderById(order.id);
+      setOrder(updatedOrderData);
+      invalidateCache(order.id);
+      
+      setIsEditingOrderNumber(false);
+      setNewOrderNumber('');
+      setUpdateOrderNumberDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd aktualizacji numeru CO:', error);
+      showError('Błąd: ' + error.message);
+    } finally {
+      setIsUpdatingOrderNumber(false);
+    }
+  };
+
   // Funkcja zwracająca nazwę użytkownika zamiast ID
   const getUserName = (userId) => {
     return userNames[userId] || userId || 'System';
@@ -1528,7 +1607,50 @@ const OrderDetails = () => {
             {t('orderDetails.actions.back')}
           </Button>
           <Typography variant="h5">
-            {t('orderDetails.orderNumber')} {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+            {isEditingOrderNumber ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TextField
+                  size="small"
+                  value={newOrderNumber}
+                  onChange={handleOrderNumberChange}
+                  error={!!orderNumberError}
+                  helperText={orderNumberError}
+                  placeholder="CO00090"
+                  autoFocus
+                  sx={{ minWidth: 200 }}
+                />
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleConfirmOrderNumberChange}
+                  disabled={!!orderNumberError || !newOrderNumber}
+                >
+                  Zapisz
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleCancelEditOrderNumber}
+                >
+                  Anuluj
+                </Button>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <span>
+                  {t('orderDetails.orderNumber')} {order.orderNumber || order.id.substring(0, 8).toUpperCase()}
+                </span>
+                <Tooltip title="Zmień numer CO">
+                  <IconButton
+                    size="small"
+                    onClick={handleEditOrderNumberClick}
+                    sx={{ ml: 1 }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            )}
           </Typography>
           <Box>
             <Button 
@@ -2763,6 +2885,59 @@ const OrderDetails = () => {
           <DialogActions>
             <Button onClick={handleDriveLinkDialogClose}>{t('orderDetails.dialogs.driveLink.cancel')}</Button>
             <Button onClick={handleDriveLinkSubmit} variant="contained">{t('orderDetails.dialogs.driveLink.add')}</Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog potwierdzenia zmiany numeru CO */}
+        <Dialog
+          open={updateOrderNumberDialogOpen}
+          onClose={() => !isUpdatingOrderNumber && setUpdateOrderNumberDialogOpen(false)}
+        >
+          <DialogTitle>⚠️ Potwierdź zmianę numeru CO</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              <strong>Zmiana numeru zamówienia z:</strong>
+              <br />
+              <Chip label={order?.orderNumber} color="error" sx={{ my: 1 }} />
+              <br />
+              <strong>na:</strong>
+              <br />
+              <Chip label={newOrderNumber} color="success" sx={{ my: 1 }} />
+              <br /><br />
+              Ta operacja zaktualizuje numer CO we wszystkich powiązanych dokumentach:
+              <ul>
+                <li>Fakturach</li>
+                <li>Zadaniach produkcyjnych (MO)</li>
+                <li>Dokumentach CMR</li>
+                <li>Partiach magazynowych</li>
+              </ul>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Ta operacja jest nieodwracalna. Upewnij się, że nowy numer jest poprawny.
+              </Alert>
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => setUpdateOrderNumberDialogOpen(false)}
+              disabled={isUpdatingOrderNumber}
+            >
+              Anuluj
+            </Button>
+            <Button 
+              onClick={handleUpdateOrderNumber} 
+              variant="contained"
+              color="primary"
+              disabled={isUpdatingOrderNumber}
+            >
+              {isUpdatingOrderNumber ? (
+                <>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  Aktualizuję...
+                </>
+              ) : (
+                'Potwierdź zmianę'
+              )}
+            </Button>
           </DialogActions>
         </Dialog>
 

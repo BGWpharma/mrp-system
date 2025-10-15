@@ -269,7 +269,8 @@
       "addDocument": "Add Document",
       "addPurchaseOrder": "Add Purchase Order",
       "generateLabel": "Generate Label",
-      "refreshProductionCosts": "Refresh production task data"
+      "refreshProductionCosts": "Refresh production task data",
+      "changeOrderNumber": "Change CO Number"
     },
     "statusHistory": {
       "title": "Status Change History",
@@ -328,7 +329,9 @@
       "invoicesLoadError": "Failed to load invoices related to order",
       "cmrDocumentsLoadError": "Failed to load CMR documents related to order",
       "emailSent": "Email sent",
-      "emailError": "Error sending email"
+      "emailError": "Error sending email",
+      "orderNumberUpdated": "Order number successfully updated",
+      "orderNumberUpdateError": "Error updating order number"
     },
     "dialogs": {
       "purchaseOrder": {
@@ -355,6 +358,23 @@
         "productLabel": "Product",
         "printLabel": "Print Label",
         "cancel": "Cancel"
+      },
+      "changeOrderNumber": {
+        "title": "Confirm CO Number Change",
+        "description": "This operation will update the CO number in all related documents (invoices, production tasks, CMR, inventory batches). This operation is irreversible.",
+        "changeFrom": "Changing order number from:",
+        "changeTo": "to:",
+        "affectedDocuments": "Updated documents:",
+        "order": "Order",
+        "invoices": "Invoices",
+        "productionTasks": "Production Tasks",
+        "cmrDocuments": "CMR Documents",
+        "inventoryBatches": "Inventory Batches",
+        "warnings": "Warnings",
+        "confirm": "Confirm Change",
+        "cancel": "Cancel",
+        "updating": "Updating...",
+        "warningMessage": "This operation is irreversible. Make sure the new number is correct."
       }
     }
   },

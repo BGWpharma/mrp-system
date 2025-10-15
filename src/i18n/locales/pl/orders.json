@@ -269,7 +269,8 @@
       "addDocument": "Dodaj dokument",
       "addPurchaseOrder": "Dodaj zamówienie zakupu",
       "generateLabel": "Generuj etykietę",
-      "refreshProductionCosts": "Odśwież dane zadań produkcyjnych"
+      "refreshProductionCosts": "Odśwież dane zadań produkcyjnych",
+      "changeOrderNumber": "Zmień numer CO"
     },
     "statusHistory": {
       "title": "Historia zmian statusu",
@@ -328,7 +329,9 @@
       "invoicesLoadError": "Nie udało się pobrać faktur powiązanych z zamówieniem",
       "cmrDocumentsLoadError": "Nie udało się pobrać dokumentów CMR powiązanych z zamówieniem",
       "emailSent": "Email został wysłany",
-      "emailError": "Błąd podczas wysyłania emaila"
+      "emailError": "Błąd podczas wysyłania emaila",
+      "orderNumberUpdated": "Numer zamówienia został pomyślnie zaktualizowany",
+      "orderNumberUpdateError": "Błąd podczas aktualizacji numeru zamówienia"
     },
     "dialogs": {
       "purchaseOrder": {
@@ -355,6 +358,23 @@
         "productLabel": "Produkt",
         "printLabel": "Drukuj etykietę",
         "cancel": "Anuluj"
+      },
+      "changeOrderNumber": {
+        "title": "Potwierdź zmianę numeru CO",
+        "description": "Ta operacja zaktualizuje numer CO we wszystkich powiązanych dokumentach (faktury, zadania produkcyjne, CMR, partie magazynowe). Operacja jest nieodwracalna.",
+        "changeFrom": "Zmiana numeru zamówienia z:",
+        "changeTo": "na:",
+        "affectedDocuments": "Zaktualizowane dokumenty:",
+        "order": "Zamówienie",
+        "invoices": "Faktury",
+        "productionTasks": "Zadania produkcyjne",
+        "cmrDocuments": "Dokumenty CMR",
+        "inventoryBatches": "Partie magazynowe",
+        "warnings": "Ostrzeżenia",
+        "confirm": "Potwierdź zmianę",
+        "cancel": "Anuluj",
+        "updating": "Aktualizuję...",
+        "warningMessage": "Ta operacja jest nieodwracalna. Upewnij się, że nowy numer jest poprawny."
       }
     }
   },
