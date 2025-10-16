@@ -32,7 +32,9 @@ import {
   DialogActions,
   Tooltip,
   Checkbox,
-  FormControlLabel
+  FormControlLabel,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -84,6 +86,9 @@ const TaskForm = ({ taskId }) => {
   const [workstations, setWorkstations] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [selectedPurchaseOrder, setSelectedPurchaseOrder] = useState(null);
+  
+  // Stan zakładek formularza
+  const [activeTab, setActiveTab] = useState(0);
   
   // Cache stany dla optymalizacji
   const [dataLoaded, setDataLoaded] = useState({
@@ -1614,6 +1619,25 @@ const TaskForm = ({ taskId }) => {
               </Alert>
             )}
             
+            {/* Zakładki formularza */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs 
+                value={activeTab} 
+                onChange={(e, newValue) => setActiveTab(newValue)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab label="Dane podstawowe" />
+                <Tab label="Harmonogram i produkcja" />
+                <Tab label="Koszty" />
+                <Tab label="Powiązania" />
+                <Tab label="Dodatkowe" />
+              </Tabs>
+            </Box>
+
+            {/* === ZAKŁADKA 1: DANE PODSTAWOWE === */}
+            {activeTab === 0 && (
+              <Box>
             {/* Sekcja podstawowych informacji */}
             <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
@@ -1933,7 +1957,12 @@ const TaskForm = ({ taskId }) => {
                 </Grid>
               </Grid>
             </Paper>
+              </Box>
+            )}
             
+            {/* === ZAKŁADKA 4: POWIĄZANIA === */}
+            {activeTab === 3 && (
+              <Box>
             {/* Sekcja powiązania z zamówieniem klienta - tylko w trybie edycji */}
             {taskId && taskId !== 'new' && (
               <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
@@ -2067,7 +2096,12 @@ const TaskForm = ({ taskId }) => {
                 </Grid>
               </Paper>
             )}
+              </Box>
+            )}
 
+            {/* === ZAKŁADKA 2: HARMONOGRAM I PRODUKCJA === */}
+            {activeTab === 1 && (
+              <Box>
             {/* Sekcja harmonogramu */}
             <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
@@ -2343,7 +2377,12 @@ const TaskForm = ({ taskId }) => {
                 </Grid>
               </Grid>
             </Paper>
+              </Box>
+            )}
 
+            {/* === ZAKŁADKA 5: DODATKOWE === */}
+            {activeTab === 4 && (
+              <Box>
             {/* Sekcja dodatkowych informacji */}
             <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
@@ -2365,7 +2404,12 @@ const TaskForm = ({ taskId }) => {
                 </Grid>
               </Grid>
             </Paper>
+              </Box>
+            )}
 
+            {/* === ZAKŁADKA 3: KOSZTY === */}
+            {activeTab === 2 && (
+              <Box>
             {/* Sekcja kosztów produkcji */}
             <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
@@ -2539,7 +2583,12 @@ const TaskForm = ({ taskId }) => {
                 )}
               </Grid>
             </Paper>
+              </Box>
+            )}
 
+            {/* === ZAKŁADKA 4: POWIĄZANIA (cd.) === */}
+            {activeTab === 3 && (
+              <Box>
             {/* Sekcja powiązanych zamówień zakupowych */}
             <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
@@ -2620,7 +2669,10 @@ const TaskForm = ({ taskId }) => {
                 </Grid>
               </Grid>
             </Paper>
+              </Box>
+            )}
 
+            {/* Przyciski formularza */}
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Button 
                 startIcon={<ArrowBackIcon />} 
