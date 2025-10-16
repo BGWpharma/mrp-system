@@ -105,6 +105,7 @@ const TaskForm = ({ taskId }) => {
     endDate: new Date(new Date().getTime() + 60 * 60 * 1000), // Domyślnie 1 godzina później
     estimatedDuration: '', // w minutach
     productionTimePerUnit: '', // czas produkcji na jednostkę w minutach
+    processingCostPerUnit: 0, // koszt procesowy/robocizny na jednostkę w EUR
     workingHoursPerDay: 16, // Godziny pracy zakładu dziennie (domyślnie 16h)
     priority: 'Normalny',
     status: 'Zaplanowane',
@@ -1097,14 +1098,16 @@ const TaskForm = ({ taskId }) => {
           productName: selectedRecipe.output.name,
           unit: selectedRecipe.output.unit || 'szt.',
           recipeVersion: selectedRecipe.version || 1,
-          recipeName: selectedRecipe.name || selectedRecipe.output.name
+          recipeName: selectedRecipe.name || selectedRecipe.output.name,
+          processingCostPerUnit: selectedRecipe.processingCostPerUnit || 0
         }));
       } else {
         // Jeśli nie ma output, ustaw tylko wersję i nazwę receptury
         setTaskData(prev => ({
           ...prev,
           recipeVersion: selectedRecipe.version || 1,
-          recipeName: selectedRecipe.name
+          recipeName: selectedRecipe.name,
+          processingCostPerUnit: selectedRecipe.processingCostPerUnit || 0
         }));
       }
       
@@ -2149,6 +2152,66 @@ const TaskForm = ({ taskId }) => {
                         ({((taskData.productionTimePerUnit * taskData.quantity) / 60).toFixed(2)} godzin)
                         {recipe && recipe.productionTimePerUnit && (
                           <span> | Czas z receptury wersja {taskData.recipeVersion || recipe.version || '?'}: {parseFloat(recipe.productionTimePerUnit).toFixed(2)} min/szt.</span>
+                        )}
+                      </Typography>
+                    </Alert>
+                  )}
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                    <TextField
+                      label="Koszt procesowy na jednostkę (EUR)"
+                      name="processingCostPerUnit"
+                      value={taskData.processingCostPerUnit}
+                      onChange={(e) => setTaskData({ ...taskData, processingCostPerUnit: e.target.value })}
+                      type="number"
+                      variant="outlined"
+                      InputProps={{ 
+                        inputProps: { min: 0, step: 0.01 },
+                        startAdornment: (<Box sx={{ color: 'text.secondary', mr: 1 }}>€</Box>)
+                      }}
+                      helperText="Koszt procesowy/robocizny dla 1 sztuki produktu"
+                      sx={{ flexGrow: 1 }}
+                    />
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={async () => {
+                        if (!taskData.recipeId) {
+                          showWarning('Najpierw wybierz recepturę');
+                          return;
+                        }
+                        try {
+                          const latestRecipe = await getRecipeById(taskData.recipeId);
+                          const newCost = parseFloat(latestRecipe.processingCostPerUnit) || 0;
+                          setTaskData(prev => ({ 
+                            ...prev, 
+                            processingCostPerUnit: newCost 
+                          }));
+                          showSuccess(`Zaktualizowano koszt procesowy: ${newCost.toFixed(2)} EUR/szt. (najnowsza wersja receptury)`);
+                        } catch (error) {
+                          console.error('Błąd podczas pobierania kosztu z receptury:', error);
+                          showError('Nie udało się pobrać kosztu z receptury');
+                        }
+                      }}
+                      startIcon={<RefreshIcon />}
+                      disabled={!taskData.recipeId}
+                      sx={{ 
+                        height: 56, 
+                        minWidth: 180,
+                        whiteSpace: 'nowrap'
+                      }}
+                      title={!taskData.recipeId ? "Najpierw wybierz recepturę" : "Zaciągnij koszt procesowy z najnowszej wersji receptury"}
+                    >
+                      Zaciągnij z receptury
+                    </Button>
+                  </Box>
+                  {taskData.processingCostPerUnit > 0 && taskData.quantity && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        Całkowity koszt procesowy: {(parseFloat(taskData.processingCostPerUnit) * parseFloat(taskData.quantity)).toFixed(2)} EUR
+                        {recipe && recipe.processingCostPerUnit && (
+                          <span> | Koszt z receptury: {parseFloat(recipe.processingCostPerUnit).toFixed(2)} EUR/szt.</span>
                         )}
                       </Typography>
                     </Alert>

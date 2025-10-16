@@ -11,7 +11,8 @@ import {
   EventNote as DateIcon,
   Receipt as ReceiptIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  Euro as EuroIcon
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/formatters';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -377,6 +378,23 @@ const TaskDetails = ({ task }) => {
                   <Typography variant="body1" component="span" sx={{ ml: 1 }}>
                     {parseFloat(task.productionTimePerUnit).toFixed(2)} {t('productionTimeInfo.minutesPerUnit')}
                   </Typography>
+                </Box>
+              )}
+              
+              {task.processingCostPerUnit > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                  <EuroIcon color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'medium' }}>
+                    Koszt procesowy na jednostkę:
+                  </Typography>
+                  <Typography variant="body1" component="span" sx={{ ml: 1 }}>
+                    {parseFloat(task.processingCostPerUnit).toFixed(2)} EUR/szt.
+                  </Typography>
+                  {task.quantity && (
+                    <Typography variant="body2" component="span" sx={{ ml: 2, color: 'text.secondary' }}>
+                      (Całkowity: {(parseFloat(task.processingCostPerUnit) * parseFloat(task.quantity)).toFixed(2)} EUR)
+                    </Typography>
+                  )}
                 </Box>
               )}
               

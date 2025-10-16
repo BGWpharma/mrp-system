@@ -52,7 +52,9 @@ import {
   Schedule as ExpiryIcon,
   Edit as EditIcon,
   Add as AddIcon,
-  Remove as RemoveIcon
+  Remove as RemoveIcon,
+  ArrowDownward as ArrowDownIcon,
+  ArrowUpward as ArrowUpIcon
 } from '@mui/icons-material';
 
 import { useTranslation } from '../../hooks/useTranslation';
@@ -122,6 +124,8 @@ const EnhancedMixingPlan = ({
   const linksListenerInitialized = useRef(false);
   // 🔒 POPRAWKA: useRef dla timera aby uniknąć memory leak przy odmontowaniu
   const updateTimerRef = useRef(null);
+  // Ref dla kontenera planu mieszań (przewijanie)
+  const mixingPlanContainerRef = useRef(null);
 
   // Oblicz statystyki powiązań i postępu
   const totalIngredients = task?.mixingPlanChecklist
@@ -683,6 +687,19 @@ const EnhancedMixingPlan = ({
     setMixingToRemove(null);
   };
 
+  // Funkcje przewijania
+  const scrollToBottom = () => {
+    if (mixingPlanContainerRef.current) {
+      mixingPlanContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  };
+
+  const scrollToTop = () => {
+    if (mixingPlanContainerRef.current) {
+      mixingPlanContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   // Renderuj chip rezerwacji (tylko standardowe)
   const renderReservationChip = (reservation) => {
     return (
@@ -876,7 +893,7 @@ const EnhancedMixingPlan = ({
   }
 
   return (
-    <Paper sx={{ p: 1.5, mb: 1.5 }}>
+    <Paper ref={mixingPlanContainerRef} sx={{ p: 1.5, mb: 1.5 }}>
       {/* Nagłówek z przyciskami */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -933,6 +950,16 @@ const EnhancedMixingPlan = ({
           >
             Odśwież
           </Button>
+
+          <Tooltip title="Przewiń na dół">
+            <IconButton
+              onClick={scrollToBottom}
+              size="small"
+              color="primary"
+            >
+              <ArrowDownIcon />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -1632,6 +1659,21 @@ const EnhancedMixingPlan = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Przycisk przewijania do góry na dole */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, pt: 2, borderTop: '1px solid', borderColor: borderColor }}>
+        <Tooltip title="Przewiń do góry">
+          <Button
+            onClick={scrollToTop}
+            startIcon={<ArrowUpIcon />}
+            size="small"
+            variant="outlined"
+            sx={{ fontSize: '0.75rem', py: 0.5, px: 2 }}
+          >
+            Przewiń do góry
+          </Button>
+        </Tooltip>
+      </Box>
     </Paper>
   );
 };

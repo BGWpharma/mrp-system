@@ -2354,6 +2354,18 @@ const TaskDetailsPage = () => {
         showSuccess('Produkcja została wstrzymana');
       }
       
+      // Automatycznie zaktualizuj koszty (w tym koszt procesowy)
+      try {
+        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+        await updateTaskCostsAutomatically(
+          id, 
+          currentUser.uid, 
+          'Automatyczna aktualizacja kosztów po zatrzymaniu produkcji'
+        );
+      } catch (costError) {
+        console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
+      }
+      
       // ✅ Real-time listener automatycznie odświeży dane zadania
     } catch (error) {
       console.error('Error stopping production:', error);
@@ -3479,6 +3491,18 @@ const TaskDetailsPage = () => {
                   <th>${report.unitMaterialCost ? `~${report.unitMaterialCost.toFixed(4)} €/${task.unit}` : '—'}</th>
                   <th colspan="2"></th>
                 </tr>
+                ${task.processingCostPerUnit > 0 ? `
+                <tr>
+                  <th colspan="4" style="text-align: right">Koszt procesowy na jednostkę:</th>
+                  <th>${parseFloat(task.processingCostPerUnit).toFixed(2)} €/${task.unit}</th>
+                  <th colspan="2"></th>
+                </tr>
+                <tr>
+                  <th colspan="4" style="text-align: right">Całkowity koszt procesowy:</th>
+                  <th>${(parseFloat(task.processingCostPerUnit) * parseFloat(task.quantity)).toFixed(2)} €</th>
+                  <th colspan="2"></th>
+                </tr>
+                ` : ''}
               </tbody>
             </table>
           </div>
@@ -3995,6 +4019,19 @@ const TaskDetailsPage = () => {
       
       // Odśwież dane historii produkcji
       await fetchProductionHistory();
+      
+      // Automatycznie zaktualizuj koszty (w tym koszt procesowy)
+      try {
+        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+        await updateTaskCostsAutomatically(
+          id, 
+          currentUser.uid, 
+          'Automatyczna aktualizacja kosztów po edycji sesji produkcyjnej'
+        );
+      } catch (costError) {
+        console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
+      }
+      
       // ✅ Real-time listener automatycznie odświeży dane zadania
       
       // Zresetuj stan edycji
@@ -4097,6 +4134,19 @@ const TaskDetailsPage = () => {
       
       // Odśwież dane historii produkcji
       await fetchProductionHistory();
+      
+      // Automatycznie zaktualizuj koszty (w tym koszt procesowy)
+      try {
+        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
+        await updateTaskCostsAutomatically(
+          id, 
+          currentUser.uid, 
+          'Automatyczna aktualizacja kosztów po dodaniu sesji produkcyjnej'
+        );
+      } catch (costError) {
+        console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
+      }
+      
       // ✅ Real-time listener automatycznie odświeży dane zadania
       
       // Zamknij dialog i resetuj formularz
@@ -5016,7 +5066,32 @@ const TaskDetailsPage = () => {
         });
       }
 
-      // ===== 3. OBLICZ KOSZTY NA JEDNOSTKĘ =====
+      // ===== 3. DODAJ KOSZT PROCESOWY (z precyzyjnymi obliczeniami) =====
+      // Używaj TYLKO kosztu zapisanego w MO (brak fallbacku do receptury)
+      // Stare MO bez tego pola miały koszty ręcznie wyliczane i są już opłacone
+      let processingCostPerUnit = 0;
+      if (task?.processingCostPerUnit !== undefined && task?.processingCostPerUnit !== null) {
+        processingCostPerUnit = fixFloatingPointPrecision(parseFloat(task.processingCostPerUnit) || 0);
+        console.log(`[UI-COSTS] Koszt procesowy zapisany w MO: ${processingCostPerUnit.toFixed(4)}€/szt`);
+      } else {
+        console.log(`[UI-COSTS] MO nie ma przypisanego kosztu procesowego - pomijam (stare MO miały koszty ręczne)`);
+      }
+
+      // Użyj rzeczywistej wyprodukowanej ilości zamiast planowanej
+      const completedQuantity = fixFloatingPointPrecision(parseFloat(task?.totalCompletedQuantity) || 0);
+      
+      // Oblicz koszt procesowy na podstawie rzeczywiście wyprodukowanej ilości
+      const totalProcessingCost = processingCostPerUnit > 0 && completedQuantity > 0
+        ? preciseMultiply(processingCostPerUnit, completedQuantity)
+        : 0;
+
+      // Dodaj koszt procesowy do obu rodzajów kosztów
+      totalMaterialCost = preciseAdd(totalMaterialCost, totalProcessingCost);
+      totalFullProductionCost = preciseAdd(totalFullProductionCost, totalProcessingCost);
+
+      console.log(`[UI-COSTS] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych = ${totalProcessingCost.toFixed(4)}€`);
+
+      // ===== 4. OBLICZ KOSZTY NA JEDNOSTKĘ =====
       const taskQuantity = fixFloatingPointPrecision(parseFloat(task?.quantity) || 1);
       const unitMaterialCost = taskQuantity > 0 ? preciseDivide(totalMaterialCost, taskQuantity) : 0;
       const unitFullProductionCost = taskQuantity > 0 ? preciseDivide(totalFullProductionCost, taskQuantity) : 0;

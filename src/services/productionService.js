@@ -5266,8 +5266,46 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       });
     }
 
-    // 3. OBLICZ KOSZTY NA JEDNOSTKĘ (z precyzyjnymi obliczeniami)
+    // 3. DODAJ KOSZT PROCESOWY (z precyzyjnymi obliczeniami)
+    // Używaj TYLKO kosztu zapisanego w MO (brak fallbacku do receptury)
+    // Stare MO bez tego pola miały koszty ręcznie wyliczane i są już opłacone
+    let processingCostPerUnit = 0;
+    if (task.processingCostPerUnit !== undefined && task.processingCostPerUnit !== null) {
+      processingCostPerUnit = fixFloatingPointPrecision(parseFloat(task.processingCostPerUnit) || 0);
+      console.log(`[AUTO] Koszt procesowy zapisany w MO: ${processingCostPerUnit.toFixed(4)}€/szt`);
+    } else {
+      console.log(`[AUTO] MO nie ma przypisanego kosztu procesowego - pomijam (stare MO miały koszty ręczne)`);
+    }
+
+    // Użyj rzeczywistej wyprodukowanej ilości zamiast planowanej
+    const completedQuantity = fixFloatingPointPrecision(parseFloat(task.totalCompletedQuantity) || 0);
     const taskQuantity = fixFloatingPointPrecision(parseFloat(task.quantity) || 1);
+
+    // Oblicz koszt procesowy na podstawie rzeczywiście wyprodukowanej ilości
+    const totalProcessingCost = processingCostPerUnit > 0 && completedQuantity > 0
+      ? preciseMultiply(processingCostPerUnit, completedQuantity)
+      : 0;
+
+    // Dodaj koszt procesowy do obu rodzajów kosztów
+    totalMaterialCost = preciseAdd(totalMaterialCost, totalProcessingCost);
+    totalFullProductionCost = preciseAdd(totalFullProductionCost, totalProcessingCost);
+
+    console.log(`[AUTO] Koszt procesowy: ${processingCostPerUnit.toFixed(4)}€/szt × ${completedQuantity} wyprodukowanych (z ${taskQuantity} planowanych) = ${totalProcessingCost.toFixed(4)}€`);
+
+    // ZABEZPIECZENIE: Nie nadpisuj kosztów zerami jeśli nie ma danych do obliczeń
+    const hasConsumedMaterials = task.consumedMaterials && task.consumedMaterials.length > 0;
+    const hasReservedMaterials = task.materialBatches && Object.keys(task.materialBatches).length > 0;
+    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || totalProcessingCost > 0;
+    
+    if (!hasDataForCalculation) {
+      console.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);
+      return { 
+        success: false, 
+        message: 'Brak danych do obliczenia kosztów - zadanie nie ma konsumpcji ani rezerwacji materiałów' 
+      };
+    }
+
+    // 4. OBLICZ KOSZTY NA JEDNOSTKĘ (z precyzyjnymi obliczeniami)
     const unitMaterialCost = taskQuantity > 0 ? preciseDivide(totalMaterialCost, taskQuantity) : 0;
     const unitFullProductionCost = taskQuantity > 0 ? preciseDivide(totalFullProductionCost, taskQuantity) : 0;
 
@@ -5277,7 +5315,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     const finalTotalFullProductionCost = fixFloatingPointPrecision(totalFullProductionCost);
     const finalUnitFullProductionCost = fixFloatingPointPrecision(unitFullProductionCost);
 
-    // 4. SPRAWDŹ CZY KOSZTY SIĘ RZECZYWIŚCIE ZMIENIŁY (zwiększona tolerancja)
+    // 5. SPRAWDŹ CZY KOSZTY SIĘ RZECZYWIŚCIE ZMIENIŁY (zwiększona tolerancja)
     const oldCosts = {
       totalMaterialCost: fixFloatingPointPrecision(parseFloat(task.totalMaterialCost) || 0),
       unitMaterialCost: fixFloatingPointPrecision(parseFloat(task.unitMaterialCost) || 0),
@@ -5309,7 +5347,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
 
     // Kontynuuj z aktualizacją...
 
-    // 5. WYKONAJ AKTUALIZACJĘ W BAZIE DANYCH
+    // 6. WYKONAJ AKTUALIZACJĘ W BAZIE DANYCH
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
     await updateDoc(taskRef, {
       totalMaterialCost: finalTotalMaterialCost,
