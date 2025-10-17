@@ -93,8 +93,8 @@ import {
 import COReportComponent from '../../../components/sales/co-reports/COReportComponent';
 import CustomerStatsComponent from '../../../components/sales/co-reports/CustomerStatsComponent';
 import StatusStatsComponent from '../../../components/sales/co-reports/StatusStatsComponent';
-import FinancialReportTab from '../../../components/sales/co-reports/FinancialReportTab';
 import { useTranslation } from '../../../hooks/useTranslation';
+import FinancialReportPage from '../../Analytics/FinancialReportPage';
 
 // Definicja okresów czasowych dla filtrowania
 const TIME_PERIODS = {
@@ -2190,6 +2190,13 @@ const COReportsPage = () => {
     );
   };
 
+  // Komponent zakładki "Raport finansowy"
+  const FinancialReportTab = () => (
+    <Box sx={{ mt: -4 }}>
+      <FinancialReportPage />
+    </Box>
+  );
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -2232,8 +2239,8 @@ const COReportsPage = () => {
             sx={{ fontSize: '1rem' }}
           />
           <Tab 
-            label="Raport Finansowy" 
-            icon={<LinkIcon />} 
+            label="Raport Finansowy"
+            icon={<AssessmentIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />

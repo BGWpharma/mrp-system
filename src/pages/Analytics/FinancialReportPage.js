@@ -14,6 +14,7 @@ import {
   Divider,
   Paper,
   Chip,
+  IconButton,
   Tooltip,
   Table,
   TableBody,
@@ -31,8 +32,10 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Assessment as AssessmentIcon,
+  AccountBalance as AccountBalanceIcon,
   ShoppingCart as ShoppingCartIcon,
   LocalShipping as LocalShippingIcon,
+  Receipt as ReceiptIcon,
   Factory as FactoryIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon
@@ -43,13 +46,13 @@ import {
   exportReportToCSV,
   getReportStatistics,
   getFilterOptions
-} from '../../../services/financialReportService';
-import { formatCurrency } from '../../../utils/formatUtils';
-import { useAuth } from '../../../contexts/AuthContext';
-import { useNotification } from '../../../hooks/useNotification';
-import { useTranslation } from '../../../hooks/useTranslation';
+} from '../../services/financialReportService';
+import { formatCurrency } from '../../utils/formatUtils';
+import { useAuth } from '../../hooks/useAuth';
+import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 
-const FinancialReportTab = () => {
+const FinancialReportPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation();
@@ -241,11 +244,16 @@ const FinancialReportTab = () => {
   
   return (
     <Box>
-      {/* Przyciski akcji */}
+      {/* Nagłówek */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="subtitle1" color="textSecondary">
-          Analiza łańcucha: PO → Partia → MO → CO → Faktura
-        </Typography>
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            📊 Raport Finansowy
+          </Typography>
+          <Typography variant="subtitle1" color="textSecondary">
+            Analiza łańcucha: PO → Partia → MO → CO → Faktura
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"
@@ -685,5 +693,5 @@ const FinancialReportTab = () => {
   );
 };
 
-export default FinancialReportTab;
+export default FinancialReportPage;
 
