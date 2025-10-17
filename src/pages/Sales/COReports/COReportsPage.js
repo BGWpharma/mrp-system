@@ -93,6 +93,7 @@ import {
 import COReportComponent from '../../../components/sales/co-reports/COReportComponent';
 import CustomerStatsComponent from '../../../components/sales/co-reports/CustomerStatsComponent';
 import StatusStatsComponent from '../../../components/sales/co-reports/StatusStatsComponent';
+import FinancialReportTab from '../../../components/sales/co-reports/FinancialReportTab';
 import { useTranslation } from '../../../hooks/useTranslation';
 
 // Definicja okresów czasowych dla filtrowania
@@ -2230,12 +2231,19 @@ const COReportsPage = () => {
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />
+          <Tab 
+            label="Raport Finansowy" 
+            icon={<LinkIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: '1rem' }}
+          />
         </Tabs>
       </Box>
       
       <Box sx={{ py: 3 }}>
         {selectedTab === 0 && <ProductionCostsTab />}
         {selectedTab === 1 && <OrdersReportTab />}
+        {selectedTab === 2 && <FinancialReportTab />}
       </Box>
     </Container>
   );

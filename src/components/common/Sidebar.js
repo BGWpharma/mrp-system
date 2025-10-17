@@ -26,6 +26,7 @@ import {
   ShoppingCart as OrdersIcon,
   People as CustomersIcon,
   Assessment as AnalyticsIcon,
+  Assessment as AssessmentIcon,
   ExpandLess,
   ExpandMore,
   CalendarMonth as CalendarIcon,
@@ -179,6 +180,7 @@ const Sidebar = ({ onToggle }) => {
       // Dashboard
       '/': 'dashboard-main',
       '/analytics': 'dashboard-analytics',
+      '/sales/co-reports': 'dashboard-financialReport',
       
       // Hall Data
       '/hall-data/conditions': 'hall-data-conditions',
@@ -382,6 +384,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: t('submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
         { text: t('submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
+        { text: t('submenu.dashboard.financialReport'), icon: <AssessmentIcon />, path: '/sales/co-reports' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 

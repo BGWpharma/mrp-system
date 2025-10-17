@@ -9,7 +9,8 @@
   "submenu": {
     "dashboard": {
       "main": "Main",
-      "analytics": "Analytics"
+      "analytics": "Analytics",
+      "financialReport": "Financial Report"
     },
     "hallData": {
       "environmentalConditions": "Environmental Conditions",
