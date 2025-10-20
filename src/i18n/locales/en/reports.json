@@ -6,7 +6,8 @@
     },
     "tabs": {
       "ordersReport": "Orders report",
-      "productionCosts": "Production costs"
+      "productionCosts": "Production costs",
+      "financialReport": "Financial Report"
     },
     "common": {
       "export": "Export",

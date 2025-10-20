@@ -21,6 +21,9 @@ import './services/logsCaptureService';
 // Inicjalizacja i18next
 import './i18n';
 
+// Localization wrapper
+import LocalizationWrapper from './components/common/LocalizationWrapper';
+
 // Pages
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
@@ -182,16 +185,17 @@ function App() {
     <Router>
       <AuthProvider>
         <NotificationProvider>
-          <ColumnPreferencesProvider>
-            <InventoryListStateProvider>
-              <TaskListStateProvider>
-                <CmrListStateProvider>
-                  <RecipeListStateProvider>
-                    <InvoiceListStateProvider>
-                      <SidebarProvider>
-                        <div className="app-container">
-                          <Notifications />
-                          <Routes>
+          <LocalizationWrapper>
+            <ColumnPreferencesProvider>
+              <InventoryListStateProvider>
+                <TaskListStateProvider>
+                  <CmrListStateProvider>
+                    <RecipeListStateProvider>
+                      <InvoiceListStateProvider>
+                        <SidebarProvider>
+                          <div className="app-container">
+                            <Notifications />
+                            <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     
@@ -363,6 +367,7 @@ function App() {
               </TaskListStateProvider>
             </InventoryListStateProvider>
           </ColumnPreferencesProvider>
+          </LocalizationWrapper>
         </NotificationProvider>
       </AuthProvider>
     </Router>

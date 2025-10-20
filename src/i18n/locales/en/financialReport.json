@@ -1,0 +1,92 @@
+{
+  "title": "Financial Report",
+  "subtitle": "Chain analysis: PO → Batch → MO → CO → Invoice",
+  "buttons": {
+    "generateReport": "Generate Report",
+    "exportCsv": "Export CSV"
+  },
+  "filters": {
+    "title": "Filters",
+    "dateFrom": "Date from",
+    "dateTo": "Date to",
+    "supplier": "Supplier",
+    "customer": "Customer",
+    "moStatus": "MO Status",
+    "searchLabel": "Search (PO, MO, CO, Invoice, Material, Customer...)",
+    "searchPlaceholder": "Enter search phrase..."
+  },
+  "statistics": {
+    "purchaseValue": {
+      "title": "Purchase Value",
+      "subtitle": "From {{count}} batches"
+    },
+    "productionCost": {
+      "title": "Production Cost",
+      "subtitle": "{{count}} MO orders"
+    },
+    "salesValue": {
+      "title": "Sales Value",
+      "subtitle": "{{count}} completed"
+    },
+    "margin": {
+      "title": "Margin"
+    }
+  },
+  "table": {
+    "title": "Results: {{count}} records",
+    "subtitle": "Showing {{from}}-{{to}} of {{total}}",
+    "headers": {
+      "po": "PO",
+      "supplier": "Supplier",
+      "batch": "Batch",
+      "material": "Material",
+      "quantity": "Quantity",
+      "batchPrice": "Batch Price",
+      "mo": "MO",
+      "product": "Product",
+      "productionCost": "Prod. Cost",
+      "co": "CO",
+      "customer": "Customer",
+      "salesValue": "Sales Value",
+      "invoice": "Invoice",
+      "margin": "Margin",
+      "status": "Status"
+    },
+    "tooltips": {
+      "basePrice": "Base: {{basePrice}} + Additional: {{additionalCost}}",
+      "openMoDetails": "Open MO details",
+      "completeChain": "Complete chain: PO → Batch → MO → CO → Invoice",
+      "incompleteChain": "Incomplete data chain"
+    },
+    "chips": {
+      "consumed": "Consumed",
+      "reserved": "Reserved"
+    },
+    "labels": {
+      "materials": "Mat",
+      "rowsPerPage": "Rows per page:",
+      "displayedRows": "{{from}}-{{to}} of {{count}}"
+    }
+  },
+  "messages": {
+    "reportGenerated": "Report generated: {{count}} records",
+    "reportGenerationError": "Failed to generate report",
+    "csvExported": "Report has been exported to CSV",
+    "csvExportError": "Failed to export report"
+  },
+  "empty": {
+    "title": "No data to display",
+    "description": "Set filters and click \"Generate Report\" to view data",
+    "button": "Generate Report"
+  },
+  "noResults": {
+    "title": "No results for the given search",
+    "description": "Try changing search criteria"
+  },
+  "statuses": {
+    "completed": "Completed",
+    "inProgress": "In Progress",
+    "paid": "Paid"
+  }
+}
+

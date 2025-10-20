@@ -6,7 +6,8 @@
     },
     "tabs": {
       "ordersReport": "Raport zamówień",
-      "productionCosts": "Koszty produkcji"
+      "productionCosts": "Koszty produkcji",
+      "financialReport": "Raport Finansowy"
     },
     "common": {
       "export": "Eksport",

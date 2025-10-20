@@ -1,0 +1,92 @@
+{
+  "title": "Raport Finansowy",
+  "subtitle": "Analiza łańcucha: PO → Partia → MO → CO → Faktura",
+  "buttons": {
+    "generateReport": "Generuj Raport",
+    "exportCsv": "Eksport CSV"
+  },
+  "filters": {
+    "title": "Filtry",
+    "dateFrom": "Data od",
+    "dateTo": "Data do",
+    "supplier": "Dostawca",
+    "customer": "Klient",
+    "moStatus": "Status MO",
+    "searchLabel": "Wyszukaj (PO, MO, CO, Faktura, Materiał, Klient...)",
+    "searchPlaceholder": "Wprowadź frazę do wyszukania..."
+  },
+  "statistics": {
+    "purchaseValue": {
+      "title": "Wartość Zakupów",
+      "subtitle": "Z {{count}} partii"
+    },
+    "productionCost": {
+      "title": "Koszt Produkcji",
+      "subtitle": "{{count}} zleceń MO"
+    },
+    "salesValue": {
+      "title": "Wartość Sprzedaży",
+      "subtitle": "{{count}} zrealizowanych"
+    },
+    "margin": {
+      "title": "Marża"
+    }
+  },
+  "table": {
+    "title": "Wyniki: {{count}} rekordów",
+    "subtitle": "Wyświetlanie {{from}}-{{to}} z {{total}}",
+    "headers": {
+      "po": "PO",
+      "supplier": "Dostawca",
+      "batch": "Partia",
+      "material": "Materiał",
+      "quantity": "Ilość",
+      "batchPrice": "Cena Partii",
+      "mo": "MO",
+      "product": "Produkt",
+      "productionCost": "Koszt Prod.",
+      "co": "CO",
+      "customer": "Klient",
+      "salesValue": "Wartość Sprz.",
+      "invoice": "Faktura",
+      "margin": "Marża",
+      "status": "Status"
+    },
+    "tooltips": {
+      "basePrice": "Baza: {{basePrice}} + Dodatkowo: {{additionalCost}}",
+      "openMoDetails": "Otwórz szczegóły MO",
+      "completeChain": "Pełny łańcuch: PO → Partia → MO → CO → Faktura",
+      "incompleteChain": "Niekompletny łańcuch danych"
+    },
+    "chips": {
+      "consumed": "Skonsumowano",
+      "reserved": "Zarezerwowano"
+    },
+    "labels": {
+      "materials": "Mat",
+      "rowsPerPage": "Wierszy na stronę:",
+      "displayedRows": "{{from}}-{{to}} z {{count}}"
+    }
+  },
+  "messages": {
+    "reportGenerated": "Wygenerowano raport: {{count}} rekordów",
+    "reportGenerationError": "Nie udało się wygenerować raportu",
+    "csvExported": "Raport został wyeksportowany do CSV",
+    "csvExportError": "Nie udało się wyeksportować raportu"
+  },
+  "empty": {
+    "title": "Brak danych do wyświetlenia",
+    "description": "Ustaw filtry i kliknij \"Generuj Raport\" aby zobaczyć dane",
+    "button": "Generuj Raport"
+  },
+  "noResults": {
+    "title": "Brak wyników dla podanego wyszukiwania",
+    "description": "Spróbuj zmienić kryteria wyszukiwania"
+  },
+  "statuses": {
+    "completed": "Zakończone",
+    "inProgress": "W trakcie",
+    "paid": "Opłacona"
+  }
+}
+

@@ -2,9 +2,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import CssBaseline from '@mui/material/CssBaseline';
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { pl } from 'date-fns/locale';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import App from './App';
@@ -18,9 +15,7 @@ root.render(
     <ThemeProvider>
       <AuthProvider>
         <CssBaseline />
-        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-          <App />
-        </LocalizationProvider>
+        <App />
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>

@@ -31,6 +31,7 @@ import interactionsPL from './locales/pl/interactions.json';
 import sidebarPL from './locales/pl/sidebar.json';
 import taskDetailsPL from './locales/pl/taskDetails.json';
 import analyticsPL from './locales/pl/analytics.json';
+import financialReportPL from './locales/pl/financialReport.json';
 
 // Angielskie tłumaczenia
 import commonEN from './locales/en/common.json';
@@ -59,6 +60,7 @@ import interactionsEN from './locales/en/interactions.json';
 import sidebarEN from './locales/en/sidebar.json';
 import taskDetailsEN from './locales/en/taskDetails.json';
 import analyticsEN from './locales/en/analytics.json';
+import financialReportEN from './locales/en/financialReport.json';
 
 // Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
@@ -88,7 +90,8 @@ const resources = {
     interactions: interactionsPL,
     sidebar: sidebarPL,
     taskDetails: taskDetailsPL,
-    analytics: analyticsPL
+    analytics: analyticsPL,
+    financialReport: financialReportPL
   },
   en: {
     common: commonEN,
@@ -116,7 +119,8 @@ const resources = {
     interactions: interactionsEN,
     sidebar: sidebarEN,
     taskDetails: taskDetailsEN,
-    analytics: analyticsEN
+    analytics: analyticsEN,
+    financialReport: financialReportEN
   }
 };
 
@@ -136,8 +140,8 @@ if (!i18n.isInitialized) {
     // Język domyślny
     fallbackLng: 'pl',
     
-    // Język początkowy (będzie wykrywany automatycznie)
-    lng: 'pl',
+    // Język początkowy będzie wykrywany automatycznie przez LanguageDetector z localStorage
+    // Nie ustawiamy 'lng' aby nie wymuszać języka i pozwolić na persystencję wyboru użytkownika
     
     // Namespace domyślny
     defaultNS: 'common',
@@ -150,7 +154,7 @@ if (!i18n.isInitialized) {
       'machines', 'purchaseOrders', 'cmr', 'forms',
       'calculator', 'priceLists', 'aiAssistant', 
       'environmentalConditions', 'expiryDates', 'stocktaking',
-      'interactions', 'sidebar', 'taskDetails', 'analytics'
+      'interactions', 'sidebar', 'taskDetails', 'analytics', 'financialReport'
     ],
     
     // Konfiguracja wykrywania języka

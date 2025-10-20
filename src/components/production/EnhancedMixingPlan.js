@@ -1660,8 +1660,18 @@ const EnhancedMixingPlan = ({
         </DialogActions>
       </Dialog>
 
-      {/* Przycisk przewijania do góry na dole */}
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, pt: 2, borderTop: '1px solid', borderColor: borderColor }}>
+      {/* Przyciski na dole planu */}
+      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2, pt: 2, borderTop: '1px solid', borderColor: borderColor }}>
+        <Button
+          startIcon={<AddIcon />}
+          onClick={() => setAddMixingDialogOpen(true)}
+          size="small"
+          variant="contained"
+          sx={{ fontSize: '0.75rem', py: 0.5, px: 2 }}
+        >
+          {t('mixingPlan.addMixing')}
+        </Button>
+        
         <Tooltip title="Przewiń do góry">
           <Button
             onClick={scrollToTop}

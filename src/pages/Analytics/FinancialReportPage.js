@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -38,7 +39,8 @@ import {
   Receipt as ReceiptIcon,
   Factory as FactoryIcon,
   CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 
 import {
@@ -53,9 +55,10 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const FinancialReportPage = () => {
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
-  const { t } = useTranslation();
+  const { t } = useTranslation('financialReport');
   
   // Stan danych
   const [reportData, setReportData] = useState([]);
@@ -94,10 +97,27 @@ const FinancialReportPage = () => {
     loadFilterOptions();
   }, []);
   
-  // Zastosuj filtry lokalne (searchTerm)
+  // Zastosuj wyszukiwanie gdy zmieni się searchTerm (bez reportData w dependency)
   useEffect(() => {
-    applyLocalFilters();
-  }, [reportData, filters.searchTerm]);
+    if (!filters.searchTerm) {
+      setFilteredData(reportData);
+      return;
+    }
+    
+    const searchLower = filters.searchTerm.toLowerCase();
+    const filtered = reportData.filter(row => 
+      (row.po_number || '').toLowerCase().includes(searchLower) ||
+      (row.po_supplier || '').toLowerCase().includes(searchLower) ||
+      (row.mo_number || '').toLowerCase().includes(searchLower) ||
+      (row.mo_product || '').toLowerCase().includes(searchLower) ||
+      (row.co_number || '').toLowerCase().includes(searchLower) ||
+      (row.co_customer || '').toLowerCase().includes(searchLower) ||
+      (row.invoice_number || '').toLowerCase().includes(searchLower) ||
+      (row.material_name || '').toLowerCase().includes(searchLower)
+    );
+    
+    setFilteredData(filtered);
+  }, [filters.searchTerm, reportData]); // reportData tutaj jest OK
   
   const loadFilterOptions = async () => {
     try {
@@ -126,40 +146,20 @@ const FinancialReportPage = () => {
       
       const data = await generateFinancialReport(backendFilters);
       setReportData(data);
+      setFilteredData(data); // ⚡ Bezpośrednio ustaw filteredData
       
       // Oblicz statystyki
       const stats = getReportStatistics(data);
       setStatistics(stats);
       
-      showSuccess(`Wygenerowano raport: ${data.length} rekordów`);
+      showSuccess(t('messages.reportGenerated', { count: data.length }));
     } catch (error) {
       console.error('Błąd podczas generowania raportu:', error);
-      setError('Nie udało się wygenerować raportu: ' + error.message);
-      showError('Nie udało się wygenerować raportu');
+      setError(t('messages.reportGenerationError') + ': ' + error.message);
+      showError(t('messages.reportGenerationError'));
     } finally {
       setLoading(false);
     }
-  };
-  
-  const applyLocalFilters = () => {
-    if (!filters.searchTerm) {
-      setFilteredData(reportData);
-      return;
-    }
-    
-    const searchLower = filters.searchTerm.toLowerCase();
-    const filtered = reportData.filter(row => 
-      (row.po_number || '').toLowerCase().includes(searchLower) ||
-      (row.po_supplier || '').toLowerCase().includes(searchLower) ||
-      (row.mo_number || '').toLowerCase().includes(searchLower) ||
-      (row.mo_product || '').toLowerCase().includes(searchLower) ||
-      (row.co_number || '').toLowerCase().includes(searchLower) ||
-      (row.co_customer || '').toLowerCase().includes(searchLower) ||
-      (row.invoice_number || '').toLowerCase().includes(searchLower) ||
-      (row.material_name || '').toLowerCase().includes(searchLower)
-    );
-    
-    setFilteredData(filtered);
   };
   
   const handleExportCSV = () => {
@@ -177,10 +177,10 @@ const FinancialReportPage = () => {
       link.click();
       document.body.removeChild(link);
       
-      showSuccess('Raport został wyeksportowany do CSV');
+      showSuccess(t('messages.csvExported'));
     } catch (error) {
       console.error('Błąd podczas eksportu CSV:', error);
-      showError('Nie udało się wyeksportować raportu');
+      showError(t('messages.csvExportError'));
     }
   };
   
@@ -219,6 +219,13 @@ const FinancialReportPage = () => {
     page * rowsPerPage + rowsPerPage
   );
   
+  console.log('📊 [RENDER] Dane do wyświetlenia:', {
+    filteredDataLength: filteredData.length,
+    paginatedDataLength: paginatedData.length,
+    page,
+    rowsPerPage
+  });
+  
   const StatCard = ({ title, value, icon: Icon, color = 'primary', subtitle }) => (
     <Card sx={{ height: '100%' }}>
       <CardContent>
@@ -248,10 +255,10 @@ const FinancialReportPage = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" gutterBottom>
-            📊 Raport Finansowy
+            📊 {t('title')}
           </Typography>
           <Typography variant="subtitle1" color="textSecondary">
-            Analiza łańcucha: PO → Partia → MO → CO → Faktura
+            {t('subtitle')}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -261,7 +268,7 @@ const FinancialReportPage = () => {
             onClick={handleGenerateReport}
             disabled={loading}
           >
-            Generuj Raport
+            {t('buttons.generateReport')}
           </Button>
           <Button
             variant="contained"
@@ -269,20 +276,20 @@ const FinancialReportPage = () => {
             onClick={handleExportCSV}
             disabled={!filteredData.length || loading}
           >
-            Eksport CSV
+            {t('buttons.exportCsv')}
           </Button>
         </Box>
       </Box>
       
       {/* Filtry */}
       <Card sx={{ mb: 3 }}>
-        <CardHeader title="Filtry" />
+        <CardHeader title={t('filters.title')} />
         <Divider />
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} md={3}>
               <TextField
-                label="Data od"
+                label={t('filters.dateFrom')}
                 type="date"
                 fullWidth
                 value={filters.dateFrom || ''}
@@ -292,7 +299,7 @@ const FinancialReportPage = () => {
             </Grid>
             <Grid item xs={12} md={3}>
               <TextField
-                label="Data do"
+                label={t('filters.dateTo')}
                 type="date"
                 fullWidth
                 value={filters.dateTo || ''}
@@ -309,7 +316,7 @@ const FinancialReportPage = () => {
                   setFilters({ ...filters, supplierId: newValue?.id || '' });
                 }}
                 renderInput={(params) => (
-                  <TextField {...params} label="Dostawca" />
+                  <TextField {...params} label={t('filters.supplier')} />
                 )}
               />
             </Grid>
@@ -322,14 +329,14 @@ const FinancialReportPage = () => {
                   setFilters({ ...filters, customerId: newValue?.id || '' });
                 }}
                 renderInput={(params) => (
-                  <TextField {...params} label="Klient" />
+                  <TextField {...params} label={t('filters.customer')} />
                 )}
               />
             </Grid>
             <Grid item xs={12} md={3}>
               <TextField
                 select
-                label="Status MO"
+                label={t('filters.moStatus')}
                 fullWidth
                 value={filters.status}
                 onChange={(e) => setFilters({ ...filters, status: e.target.value })}
@@ -343,11 +350,11 @@ const FinancialReportPage = () => {
             </Grid>
             <Grid item xs={12} md={9}>
               <TextField
-                label="Wyszukaj (PO, MO, CO, Faktura, Materiał, Klient...)"
+                label={t('filters.searchLabel')}
                 fullWidth
                 value={filters.searchTerm}
                 onChange={(e) => setFilters({ ...filters, searchTerm: e.target.value })}
-                placeholder="Wprowadź frazę do wyszukania..."
+                placeholder={t('filters.searchPlaceholder')}
               />
             </Grid>
           </Grid>
@@ -359,34 +366,34 @@ const FinancialReportPage = () => {
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12} md={3}>
             <StatCard
-              title="Wartość Zakupów"
+              title={t('statistics.purchaseValue.title')}
               value={formatCurrency(statistics.totalPurchaseValue)}
               icon={ShoppingCartIcon}
               color="info"
-              subtitle={`Z ${reportData.length} partii`}
+              subtitle={t('statistics.purchaseValue.subtitle', { count: reportData.length })}
             />
           </Grid>
           <Grid item xs={12} md={3}>
             <StatCard
-              title="Koszt Produkcji"
+              title={t('statistics.productionCost.title')}
               value={formatCurrency(statistics.totalProductionCost)}
               icon={FactoryIcon}
               color="warning"
-              subtitle={`${statistics.uniqueOrders} zleceń MO`}
+              subtitle={t('statistics.productionCost.subtitle', { count: statistics.uniqueOrders })}
             />
           </Grid>
           <Grid item xs={12} md={3}>
             <StatCard
-              title="Wartość Sprzedaży"
+              title={t('statistics.salesValue.title')}
               value={formatCurrency(statistics.totalSalesValue)}
               icon={LocalShippingIcon}
               color="success"
-              subtitle={`${statistics.completedOrders} zrealizowanych`}
+              subtitle={t('statistics.salesValue.subtitle', { count: statistics.completedOrders })}
             />
           </Grid>
           <Grid item xs={12} md={3}>
             <StatCard
-              title="Marża"
+              title={t('statistics.margin.title')}
               value={formatCurrency(statistics.totalMargin)}
               icon={statistics.totalMargin >= 0 ? TrendingUpIcon : TrendingDownIcon}
               color={statistics.totalMargin >= 0 ? 'success' : 'error'}
@@ -413,8 +420,12 @@ const FinancialReportPage = () => {
       {!loading && filteredData.length > 0 && (
         <Card>
           <CardHeader 
-            title={`Wyniki: ${filteredData.length} rekordów`}
-            subheader={`Wyświetlanie ${page * rowsPerPage + 1}-${Math.min((page + 1) * rowsPerPage, filteredData.length)} z ${filteredData.length}`}
+            title={t('table.title', { count: filteredData.length })}
+            subheader={t('table.subtitle', { 
+              from: page * rowsPerPage + 1, 
+              to: Math.min((page + 1) * rowsPerPage, filteredData.length), 
+              total: filteredData.length 
+            })}
           />
           <Divider />
           <TableContainer>
@@ -427,20 +438,20 @@ const FinancialReportPage = () => {
                       direction={orderBy === 'po_number' ? order : 'asc'}
                       onClick={() => handleRequestSort('po_number')}
                     >
-                      PO
+                      {t('table.headers.po')}
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>Dostawca</TableCell>
-                  <TableCell>Partia</TableCell>
-                  <TableCell>Materiał</TableCell>
-                  <TableCell align="right">Ilość</TableCell>
+                  <TableCell>{t('table.headers.supplier')}</TableCell>
+                  <TableCell>{t('table.headers.batch')}</TableCell>
+                  <TableCell>{t('table.headers.material')}</TableCell>
+                  <TableCell align="right">{t('table.headers.quantity')}</TableCell>
                   <TableCell align="right">
                     <TableSortLabel
                       active={orderBy === 'batch_final_unit_price'}
                       direction={orderBy === 'batch_final_unit_price' ? order : 'asc'}
                       onClick={() => handleRequestSort('batch_final_unit_price')}
                     >
-                      Cena Partii
+                      {t('table.headers.batchPrice')}
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
@@ -449,41 +460,41 @@ const FinancialReportPage = () => {
                       direction={orderBy === 'mo_number' ? order : 'asc'}
                       onClick={() => handleRequestSort('mo_number')}
                     >
-                      MO
+                      {t('table.headers.mo')}
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>Produkt</TableCell>
+                  <TableCell>{t('table.headers.product')}</TableCell>
                   <TableCell align="right">
                     <TableSortLabel
                       active={orderBy === 'mo_full_production_cost'}
                       direction={orderBy === 'mo_full_production_cost' ? order : 'asc'}
                       onClick={() => handleRequestSort('mo_full_production_cost')}
                     >
-                      Koszt Prod.
+                      {t('table.headers.productionCost')}
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>CO</TableCell>
-                  <TableCell>Klient</TableCell>
+                  <TableCell>{t('table.headers.co')}</TableCell>
+                  <TableCell>{t('table.headers.customer')}</TableCell>
                   <TableCell align="right">
                     <TableSortLabel
                       active={orderBy === 'co_total_sale_value'}
                       direction={orderBy === 'co_total_sale_value' ? order : 'asc'}
                       onClick={() => handleRequestSort('co_total_sale_value')}
                     >
-                      Wartość Sprz.
+                      {t('table.headers.salesValue')}
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>Faktura</TableCell>
+                  <TableCell>{t('table.headers.invoice')}</TableCell>
                   <TableCell align="right">
                     <TableSortLabel
                       active={orderBy === 'margin'}
                       direction={orderBy === 'margin' ? order : 'asc'}
                       onClick={() => handleRequestSort('margin')}
                     >
-                      Marża
+                      {t('table.headers.margin')}
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>{t('table.headers.status')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -516,7 +527,7 @@ const FinancialReportPage = () => {
                       </Typography>
                       {row.batch_source && (
                         <Chip 
-                          label={row.batch_source === 'consumed' ? 'Skonsumowano' : row.batch_source === 'reserved' ? 'Zarezerwowano' : row.batch_source}
+                          label={row.batch_source === 'consumed' ? t('table.chips.consumed') : row.batch_source === 'reserved' ? t('table.chips.reserved') : row.batch_source}
                           size="small"
                           color={row.batch_source === 'consumed' ? 'success' : 'default'}
                           sx={{ mt: 0.5 }}
@@ -547,7 +558,10 @@ const FinancialReportPage = () => {
                             {formatCurrency(row.batch_final_unit_price)}
                           </Typography>
                           {row.po_additional_costs_per_unit > 0 && (
-                            <Tooltip title={`Baza: ${formatCurrency(row.po_base_unit_price)} + Dodatkowo: ${formatCurrency(row.po_additional_costs_per_unit)}`}>
+                            <Tooltip title={t('table.tooltips.basePrice', { 
+                              basePrice: formatCurrency(row.po_base_unit_price), 
+                              additionalCost: formatCurrency(row.po_additional_costs_per_unit) 
+                            })}>
                               <Typography variant="caption" color="info.main">
                                 (+{formatCurrency(row.po_additional_costs_per_unit)})
                               </Typography>
@@ -557,17 +571,45 @@ const FinancialReportPage = () => {
                       ) : '-'}
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                        {row.mo_number || '-'}
-                      </Typography>
-                      <Chip 
-                        label={row.mo_status} 
-                        size="small" 
-                        color={
-                          row.mo_status === 'Zakończone' ? 'success' : 
-                          row.mo_status === 'W trakcie' ? 'warning' : 'default'
-                        }
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: 'bold',
+                              cursor: row.mo_id ? 'pointer' : 'default',
+                              color: row.mo_id ? 'primary.main' : 'text.primary',
+                              textDecoration: row.mo_id ? 'underline' : 'none',
+                              '&:hover': row.mo_id ? {
+                                color: 'primary.dark'
+                              } : {}
+                            }}
+                            onClick={() => row.mo_id && navigate(`/production/tasks/${row.mo_id}`)}
+                          >
+                            {row.mo_number || '-'}
+                          </Typography>
+                          <Chip 
+                            label={row.mo_status} 
+                            size="small" 
+                            color={
+                              row.mo_status === t('statuses.completed') ? 'success' : 
+                              row.mo_status === t('statuses.inProgress') ? 'warning' : 'default'
+                            }
+                            sx={{ mt: 0.5 }}
+                          />
+                        </Box>
+                        {row.mo_id && (
+                          <Tooltip title={t('table.tooltips.openMoDetails')}>
+                            <IconButton 
+                              size="small" 
+                              color="primary"
+                              onClick={() => navigate(`/production/tasks/${row.mo_id}`)}
+                            >
+                              <OpenInNewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
@@ -582,7 +624,7 @@ const FinancialReportPage = () => {
                         {formatCurrency(row.mo_full_production_cost)}
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
-                        Mat: {formatCurrency(row.mo_material_cost)}
+                        {t('table.labels.materials')}: {formatCurrency(row.mo_material_cost)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -609,7 +651,7 @@ const FinancialReportPage = () => {
                           label={row.invoice_payment_status} 
                           size="small"
                           color={
-                            row.invoice_payment_status === 'paid' || row.invoice_payment_status === 'Opłacona' ? 'success' : 'warning'
+                            row.invoice_payment_status === 'paid' || row.invoice_payment_status === t('statuses.paid') ? 'success' : 'warning'
                           }
                         />
                       )}
@@ -635,11 +677,11 @@ const FinancialReportPage = () => {
                     </TableCell>
                     <TableCell>
                       {row.is_complete_chain ? (
-                        <Tooltip title="Pełny łańcuch: PO → Partia → MO → CO → Faktura">
+                        <Tooltip title={t('table.tooltips.completeChain')}>
                           <CheckCircleIcon color="success" fontSize="small" />
                         </Tooltip>
                       ) : (
-                        <Tooltip title="Niekompletny łańcuch danych">
+                        <Tooltip title={t('table.tooltips.incompleteChain')}>
                           <WarningIcon color="warning" fontSize="small" />
                         </Tooltip>
                       )}
@@ -657,8 +699,8 @@ const FinancialReportPage = () => {
             rowsPerPage={rowsPerPage}
             onRowsPerPageChange={handleChangeRowsPerPage}
             rowsPerPageOptions={[10, 25, 50, 100]}
-            labelRowsPerPage="Wierszy na stronę:"
-            labelDisplayedRows={({ from, to, count }) => `${from}-${to} z ${count}`}
+            labelRowsPerPage={t('table.labels.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) => t('table.labels.displayedRows', { from, to, count })}
           />
         </Card>
       )}
@@ -668,13 +710,13 @@ const FinancialReportPage = () => {
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <AssessmentIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="textSecondary" gutterBottom>
-            Brak danych do wyświetlenia
+            {t('empty.title')}
           </Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Ustaw filtry i kliknij "Generuj Raport" aby zobaczyć dane
+            {t('empty.description')}
           </Typography>
           <Button variant="contained" onClick={handleGenerateReport} disabled={loading}>
-            Generuj Raport
+            {t('empty.button')}
           </Button>
         </Paper>
       )}
@@ -682,10 +724,10 @@ const FinancialReportPage = () => {
       {!loading && filteredData.length === 0 && reportData.length > 0 && (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="h6" color="textSecondary">
-            Brak wyników dla podanego wyszukiwania
+            {t('noResults.title')}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Spróbuj zmienić kryteria wyszukiwania
+            {t('noResults.description')}
           </Typography>
         </Paper>
       )}

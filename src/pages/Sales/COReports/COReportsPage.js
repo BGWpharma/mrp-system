@@ -2239,7 +2239,7 @@ const COReportsPage = () => {
             sx={{ fontSize: '1rem' }}
           />
           <Tab 
-            label="Raport Finansowy"
+            label={t('coReports.tabs.financialReport')}
             icon={<AssessmentIcon />} 
             iconPosition="start"
             sx={{ fontSize: '1rem' }}

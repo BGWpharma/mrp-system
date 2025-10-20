@@ -15,16 +15,115 @@ import { getOrderById } from './orderService';
 import { getInvoicesByOrderId } from './invoiceService';
 import { formatDateForInput } from '../utils/dateUtils';
 
+// ⚡ OPTYMALIZACJA: Flaga debugowania (wyłącz w produkcji dla 50-70% przyspieszenia)
+const DEBUG_MODE = false;
+
+// ⚡ Helper do warunkowego logowania
+const debugLog = (...args) => {
+  if (DEBUG_MODE) {
+    console.log(...args);
+  }
+};
+
+/**
+ * ⚡ OPTYMALIZACJA: Batch loading dla dokumentów Firestore
+ * Pobiera wiele dokumentów w jednym zapytaniu (max 10 za razem - limit Firestore dla 'in')
+ * @param {string} collectionName - Nazwa kolekcji
+ * @param {Array<string>} ids - Tablica ID dokumentów do pobrania
+ * @returns {Promise<Map>} - Mapa id -> document data
+ */
+const batchLoadDocuments = async (collectionName, ids) => {
+  const results = new Map();
+  
+  if (!ids || ids.length === 0) {
+    return results;
+  }
+  
+  // Firestore 'in' query ma limit 10 elementów, więc dzielimy na chunki
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 10) {
+    chunks.push(ids.slice(i, i + 10));
+  }
+  
+  // Pobierz wszystkie chunki równolegle
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const q = query(
+          collection(db, collectionName),
+          where('__name__', 'in', chunk)
+        );
+        const snapshot = await getDocs(q);
+        snapshot.docs.forEach(doc => {
+          results.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+      } catch (error) {
+        console.warn(`⚠️ Nie można pobrać batch z ${collectionName}:`, error.message);
+      }
+    })
+  );
+  
+  return results;
+};
+
+/**
+ * ⚡ OPTYMALIZACJA: Zbieranie wszystkich potrzebnych ID przed pobraniem
+ * @param {Array} tasks - Zadania produkcyjne
+ * @returns {Object} - Obiekt z tablicami ID: { batchIds, orderIds, poIds }
+ */
+const collectAllNeededIds = (tasks) => {
+  const batchIds = new Set();
+  const orderIds = new Set();
+  
+  for (const task of tasks) {
+    // Zbierz ID zamówień
+    if (task.orderId) {
+      orderIds.add(task.orderId);
+    }
+    
+    // Zbierz ID partii ze skonsumowanych materiałów
+    if (task.consumedMaterials) {
+      task.consumedMaterials.forEach(consumed => {
+        if (consumed.batchId) {
+          batchIds.add(consumed.batchId);
+        }
+      });
+    }
+    
+    // Zbierz ID partii z zarezerwowanych materiałów
+    if (task.materialBatches) {
+      Object.values(task.materialBatches).forEach(batches => {
+        if (Array.isArray(batches)) {
+          batches.forEach(batch => {
+            if (batch.batchId) {
+              batchIds.add(batch.batchId);
+            }
+          });
+        }
+      });
+    }
+  }
+  
+  return {
+    batchIds: Array.from(batchIds),
+    orderIds: Array.from(orderIds)
+  };
+};
+
 /**
  * Generuje kompleksowy raport finansowy dla analizy łańcucha PO → Batch → MO → CO → Invoice
  * @param {Object} filters - Filtry (dateFrom, dateTo, supplierId, customerId, status)
+ * @param {Function} onProgress - Callback do raportowania postępu (0-100)
  * @returns {Promise<Array>} - Tablica obiektów z danymi do raportu
  */
-export const generateFinancialReport = async (filters = {}) => {
+export const generateFinancialReport = async (filters = {}, onProgress = null) => {
   const reportData = [];
+  const startTime = Date.now();
   
   try {
     console.log('📊 [FINANCIAL_REPORT] Rozpoczynam generowanie raportu...', filters);
+    
+    if (onProgress) onProgress(5);
     
     // 1. Buduj zapytanie dla zadań produkcyjnych (punkt centralny łańcucha)
     let tasksQuery = collection(db, 'productionTasks');
@@ -65,231 +164,107 @@ export const generateFinancialReport = async (filters = {}) => {
     
     console.log(`✅ [FINANCIAL_REPORT] Znaleziono ${tasks.length} zadań produkcyjnych`);
     
-    // 2. Cache dla danych (unikanie wielokrotnego pobierania)
-    const ordersCache = new Map(); // Cache dla CO
-    const batchesCache = new Map(); // Cache dla partii
-    const poCache = new Map(); // Cache dla PO
-    const invoicesCache = new Map(); // Cache dla faktur
+    if (onProgress) onProgress(15);
     
-    // 3. Dla każdego MO zbierz dane z całego łańcucha
+    // ⚡ OPTYMALIZACJA: Zbierz wszystkie potrzebne ID z góry
+    debugLog('🔍 [OPTIMIZE] Zbieranie wszystkich ID do batch load...');
+    const { batchIds, orderIds } = collectAllNeededIds(tasks);
+    debugLog(`🔍 [OPTIMIZE] Znaleziono ${batchIds.length} partii, ${orderIds.length} zamówień`);
+    
+    if (onProgress) onProgress(20);
+    
+    // 2. ⚡ OPTYMALIZACJA: Batch load wszystkich partii i zamówień
+    debugLog('⚡ [OPTIMIZE] Batch loading partii...');
+    const batchesCache = await batchLoadDocuments('inventoryBatches', batchIds);
+    
+    if (onProgress) onProgress(40);
+    
+    debugLog('⚡ [OPTIMIZE] Loading zamówień...');
+    const ordersCache = new Map();
+    
+    // Pobierz zamówienia równolegle (używając istniejącej funkcji)
+    await Promise.all(
+      orderIds.map(async (orderId) => {
+        try {
+          const order = await getOrderById(orderId);
+          ordersCache.set(orderId, order);
+        } catch (error) {
+          debugLog(`⚠️ Nie można pobrać CO ${orderId}:`, error.message);
+        }
+      })
+    );
+    
+    if (onProgress) onProgress(60);
+    
+    // 3. ⚡ OPTYMALIZACJA: Zbierz wszystkie PO ID z partii
+    const poIds = new Set();
+    batchesCache.forEach(batch => {
+      const poId = batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId;
+      if (poId) {
+        poIds.add(poId);
+      }
+    });
+    
+    debugLog(`🔍 [OPTIMIZE] Znaleziono ${poIds.size} unikalnych PO`);
+    
+    // 4. ⚡ OPTYMALIZACJA: Batch load wszystkich PO
+    debugLog('⚡ [OPTIMIZE] Loading PO...');
+    const poCache = new Map();
+    await Promise.all(
+      Array.from(poIds).map(async (poId) => {
+        try {
+          const po = await getPurchaseOrderById(poId);
+          poCache.set(poId, po);
+        } catch (error) {
+          debugLog(`⚠️ Nie można pobrać PO ${poId}:`, error.message);
+        }
+      })
+    );
+    
+    if (onProgress) onProgress(70);
+    
+    // 5. Cache dla faktur (ładowane on-demand)
+    const invoicesCache = new Map();
+    
+    // 6. ⚡ OPTYMALIZACJA: Przetwarzaj zadania w chunkach równolegle
+    debugLog('⚡ [OPTIMIZE] Przetwarzanie zadań w chunkach...');
+    const CHUNK_SIZE = 10;
     let processedCount = 0;
     
-    for (const task of tasks) {
-      try {
-        // Pobierz CO (Customer Order) z cache
-        let customerOrder = null;
-        if (task.orderId) {
-          try {
-            if (ordersCache.has(task.orderId)) {
-              customerOrder = ordersCache.get(task.orderId);
-            } else {
-              customerOrder = await getOrderById(task.orderId);
-              ordersCache.set(task.orderId, customerOrder);
-            }
-          } catch (error) {
-            console.warn(`⚠️ Nie można pobrać CO ${task.orderId}:`, error.message);
-          }
+    for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
+      const chunk = tasks.slice(i, i + CHUNK_SIZE);
+      
+      // Przetwarzaj chunk równolegle
+      const chunkResults = await Promise.all(
+        chunk.map(task => processTask(task, {
+          ordersCache,
+          batchesCache,
+          poCache,
+          invoicesCache,
+          filters
+        }))
+      );
+      
+      // Dodaj wyniki (flat aby spłaszczyć tablice)
+      chunkResults.forEach(result => {
+        if (Array.isArray(result)) {
+          reportData.push(...result);
+          processedCount += result.length;
         }
-        
-        // Zastosuj filtr klienta (jeśli podano)
-        if (filters.customerId && customerOrder?.customer?.id !== filters.customerId) {
-          continue;
-        }
-        
-        // Znajdź pozycję CO powiązaną z MO
-        const coItem = customerOrder?.items?.find(item => item.productionTaskId === task.id);
-        
-        // Pobierz faktury dla CO z cache
-        let invoices = [];
-        if (customerOrder) {
-          try {
-            if (invoicesCache.has(customerOrder.id)) {
-              invoices = invoicesCache.get(customerOrder.id);
-            } else {
-              invoices = await getInvoicesByOrderId(customerOrder.id);
-              invoicesCache.set(customerOrder.id, invoices);
-            }
-          } catch (error) {
-            console.warn(`⚠️ Nie można pobrać faktur dla CO ${customerOrder.id}:`, error.message);
-          }
-        }
-        
-        // Główna faktura (pierwsza na liście)
-        const mainInvoice = invoices.length > 0 ? invoices[0] : null;
-        
-        // DEBUG: Sprawdź strukturę materiałów
-        console.log(`🔍 [DEBUG] MO ${task.moNumber}: ma ${task.materials?.length || 0} materiałów`);
-        
-        // Jeśli MO nie ma materiałów, utwórz pojedynczy rekord bez szczegółów partii
-        if (!task.materials || task.materials.length === 0) {
-          console.log(`⚠️ [DEBUG] MO ${task.moNumber}: BRAK materiałów`);
-          const reportRow = createReportRow({
-            task,
-            customerOrder,
-            coItem,
-            mainInvoice,
-            material: null,
-            batch: null,
-            purchaseOrder: null,
-            poItem: null
-          });
-          
-          reportData.push(reportRow);
-          processedCount++;
-          continue;
-        }
-        
-        // Zbierz informacje o materiałach i partiach
-        for (const material of task.materials || []) {
-          // Znajdź ID materiału (może być w inventoryItemId lub id)
-          const materialId = material.inventoryItemId || material.id;
-          
-          // 1. Pobierz skonsumowane materiały dla tego materiału
-          const consumedForMaterial = (task.consumedMaterials || []).filter(
-            consumed => consumed.materialId === materialId
-          );
-          
-          // 2. Pobierz zarezerwowane partie dla tego materiału
-          const reservedBatches = task.materialBatches?.[materialId] || [];
-          
-          console.log(`🔍 [DEBUG] Materiał ${material.name}: ${consumedForMaterial.length} skonsumowanych, ${reservedBatches.length} zarezerwowanych partii`);
-          
-          // 3. Zbierz wszystkie unikalne partie (zarówno skonsumowane jak i zarezerwowane)
-          const allBatches = new Map();
-          
-          // Dodaj skonsumowane partie (mają priorytet - rzeczywiste dane)
-          consumedForMaterial.forEach(consumed => {
-            if (consumed.batchId) {
-              allBatches.set(consumed.batchId, {
-                batchId: consumed.batchId,
-                quantity: consumed.quantity,
-                unitPrice: consumed.unitPrice,
-                source: 'consumed',
-                includeInCosts: consumed.includeInCosts
-              });
-            }
-          });
-          
-          // Dodaj zarezerwowane partie (tylko jeśli nie ma skonsumowanej)
-          reservedBatches.forEach(reserved => {
-            if (!allBatches.has(reserved.batchId)) {
-              allBatches.set(reserved.batchId, {
-                batchId: reserved.batchId,
-                batchNumber: reserved.batchNumber,
-                quantity: reserved.quantity,
-                source: 'reserved'
-              });
-            }
-          });
-          
-          // Jeśli materiał nie ma żadnych partii (ani skonsumowanych, ani zarezerwowanych)
-          if (allBatches.size === 0) {
-            console.log(`⚠️ [DEBUG] Materiał ${material.name}: BRAK partii`);
-            const reportRow = createReportRow({
-              task,
-              customerOrder,
-              coItem,
-              mainInvoice,
-              material,
-              batch: null,
-              purchaseOrder: null,
-              poItem: null,
-              batchSource: 'none'
-            });
-            
-            reportData.push(reportRow);
-            processedCount++;
-            continue;
-          }
-          
-          // 4. Dla każdej partii (skonsumowanej lub zarezerwowanej)
-          for (const [batchId, batchInfo] of allBatches) {
-            let batch = null;
-            let purchaseOrder = null;
-            let poItem = null;
-            
-            try {
-              // Pobierz partię z cache
-              if (batchesCache.has(batchId)) {
-                batch = batchesCache.get(batchId);
-              } else {
-                const batchDoc = await getDoc(doc(db, 'inventoryBatches', batchId));
-                if (batchDoc.exists()) {
-                  batch = { id: batchDoc.id, ...batchDoc.data() };
-                  batchesCache.set(batchId, batch);
-                }
-              }
-              
-              if (batch) {
-                // Pobierz PO dla partii z cache
-                const poId = batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId;
-                if (poId) {
-                  try {
-                    if (poCache.has(poId)) {
-                      purchaseOrder = poCache.get(poId);
-                    } else {
-                      purchaseOrder = await getPurchaseOrderById(poId);
-                      poCache.set(poId, purchaseOrder);
-                    }
-                    
-                    // Zastosuj filtr dostawcy (jeśli podano)
-                    if (filters.supplierId && purchaseOrder?.supplierId !== filters.supplierId) {
-                      continue;
-                    }
-                    
-                    // Znajdź pozycję PO odpowiadającą partii
-                    const itemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
-                    if (itemPoId && purchaseOrder.items) {
-                      poItem = purchaseOrder.items.find(item => item.id === itemPoId);
-                    }
-                  } catch (error) {
-                    console.warn(`⚠️ Nie można pobrać PO ${poId}:`, error.message);
-                  }
-                }
-              }
-            } catch (error) {
-              console.warn(`⚠️ Nie można pobrać partii ${batchId}:`, error.message);
-            }
-            
-            // Utwórz rekord raportu
-            const reportRow = createReportRow({
-              task,
-              customerOrder,
-              coItem,
-              mainInvoice,
-              material,
-              batch,
-              purchaseOrder,
-              poItem,
-              reservedQuantity: batchInfo.source === 'reserved' ? batchInfo.quantity : null,
-              consumedQuantity: batchInfo.source === 'consumed' ? batchInfo.quantity : null,
-              batchSource: batchInfo.source,
-              consumedUnitPrice: batchInfo.unitPrice,
-              includeInCosts: batchInfo.includeInCosts
-            });
-            
-            reportData.push(reportRow);
-            processedCount++;
-          }
-        }
-      } catch (error) {
-        console.error(`❌ Błąd podczas przetwarzania zadania ${task.id}:`, error);
+      });
+      
+      // Raportuj postęp
+      if (onProgress) {
+        const progress = 70 + Math.floor((i / tasks.length) * 25);
+        onProgress(Math.min(95, progress));
       }
     }
     
-    console.log(`✅ [FINANCIAL_REPORT] Wygenerowano ${reportData.length} rekordów z ${processedCount} operacji`);
+    const duration = Date.now() - startTime;
+    console.log(`✅ [FINANCIAL_REPORT] Wygenerowano ${reportData.length} rekordów z ${processedCount} operacji w ${duration}ms`);
     console.log(`📊 [FINANCIAL_REPORT] Cache stats: ${ordersCache.size} zamówień, ${batchesCache.size} partii, ${poCache.size} PO, ${invoicesCache.size} faktur`);
     
-    // Oblicz statystyki
-    const stats = getReportStatistics(reportData);
-    console.log('📊 [FINANCIAL_REPORT] Obliczono statystyki:', stats);
-    console.log('📊 [FINANCIAL_REPORT] Statystyki:', {
-      totalPurchaseValue: stats.totalPurchaseValue,
-      totalProductionCost: stats.totalProductionCost,
-      totalSalesValue: stats.totalSalesValue,
-      totalMargin: stats.totalMargin,
-      marginPercentage: stats.averageMarginPercentage
-    });
+    if (onProgress) onProgress(100);
     
     return reportData;
     
@@ -297,6 +272,182 @@ export const generateFinancialReport = async (filters = {}) => {
     console.error('❌ [FINANCIAL_REPORT] Błąd podczas generowania raportu:', error);
     throw error;
   }
+};
+
+/**
+ * ⚡ OPTYMALIZACJA: Przetwarza pojedyncze zadanie produkcyjne
+ * Wydzielona funkcja dla lepszego równoległego przetwarzania
+ * @private
+ */
+const processTask = async (task, { ordersCache, batchesCache, poCache, invoicesCache, filters }) => {
+  const results = [];
+  
+  try {
+    // Pobierz CO (Customer Order) z cache
+    let customerOrder = null;
+    if (task.orderId && ordersCache.has(task.orderId)) {
+      customerOrder = ordersCache.get(task.orderId);
+    }
+    
+    // Zastosuj filtr klienta (jeśli podano)
+    if (filters.customerId && customerOrder?.customer?.id !== filters.customerId) {
+      return results;
+    }
+    
+    // Znajdź pozycję CO powiązaną z MO
+    const coItem = customerOrder?.items?.find(item => item.productionTaskId === task.id);
+    
+    // Pobierz faktury dla CO z cache
+    let invoices = [];
+    if (customerOrder) {
+      try {
+        if (invoicesCache.has(customerOrder.id)) {
+          invoices = invoicesCache.get(customerOrder.id);
+        } else {
+          invoices = await getInvoicesByOrderId(customerOrder.id);
+          invoicesCache.set(customerOrder.id, invoices);
+        }
+      } catch (error) {
+        debugLog(`⚠️ Nie można pobrać faktur dla CO ${customerOrder.id}:`, error.message);
+      }
+    }
+    
+    // Główna faktura (pierwsza na liście)
+    const mainInvoice = invoices.length > 0 ? invoices[0] : null;
+    
+    debugLog(`🔍 [DEBUG] MO ${task.moNumber}: ma ${task.materials?.length || 0} materiałów`);
+    
+    // Jeśli MO nie ma materiałów, utwórz pojedynczy rekord bez szczegółów partii
+    if (!task.materials || task.materials.length === 0) {
+      debugLog(`⚠️ [DEBUG] MO ${task.moNumber}: BRAK materiałów`);
+      const reportRow = createReportRow({
+        task,
+        customerOrder,
+        coItem,
+        mainInvoice,
+        material: null,
+        batch: null,
+        purchaseOrder: null,
+        poItem: null
+      });
+      
+      results.push(reportRow);
+      return results;
+    }
+    
+    // Zbierz informacje o materiałach i partiach
+    for (const material of task.materials || []) {
+      // Znajdź ID materiału (może być w inventoryItemId lub id)
+      const materialId = material.inventoryItemId || material.id;
+      
+      // 1. Pobierz skonsumowane materiały dla tego materiału
+      const consumedForMaterial = (task.consumedMaterials || []).filter(
+        consumed => consumed.materialId === materialId
+      );
+      
+      // 2. Pobierz zarezerwowane partie dla tego materiału
+      const reservedBatches = task.materialBatches?.[materialId] || [];
+      
+      debugLog(`🔍 [DEBUG] Materiał ${material.name}: ${consumedForMaterial.length} skonsumowanych, ${reservedBatches.length} zarezerwowanych partii`);
+      
+      // 3. Zbierz wszystkie unikalne partie (zarówno skonsumowane jak i zarezerwowane)
+      const allBatches = new Map();
+      
+      // Dodaj skonsumowane partie (mają priorytet - rzeczywiste dane)
+      consumedForMaterial.forEach(consumed => {
+        if (consumed.batchId) {
+          allBatches.set(consumed.batchId, {
+            batchId: consumed.batchId,
+            quantity: consumed.quantity,
+            unitPrice: consumed.unitPrice,
+            source: 'consumed',
+            includeInCosts: consumed.includeInCosts
+          });
+        }
+      });
+      
+      // Dodaj zarezerwowane partie (tylko jeśli nie ma skonsumowanej)
+      reservedBatches.forEach(reserved => {
+        if (!allBatches.has(reserved.batchId)) {
+          allBatches.set(reserved.batchId, {
+            batchId: reserved.batchId,
+            batchNumber: reserved.batchNumber,
+            quantity: reserved.quantity,
+            source: 'reserved'
+          });
+        }
+      });
+      
+      // Jeśli materiał nie ma żadnych partii (ani skonsumowanych, ani zarezerwowanych)
+      if (allBatches.size === 0) {
+        debugLog(`⚠️ [DEBUG] Materiał ${material.name}: BRAK partii`);
+        const reportRow = createReportRow({
+          task,
+          customerOrder,
+          coItem,
+          mainInvoice,
+          material,
+          batch: null,
+          purchaseOrder: null,
+          poItem: null,
+          batchSource: 'none'
+        });
+        
+        results.push(reportRow);
+        continue;
+      }
+      
+      // 4. Dla każdej partii (skonsumowanej lub zarezerwowanej) - teraz z cache!
+      for (const [batchId, batchInfo] of allBatches) {
+        // ⚡ OPTYMALIZACJA: Pobierz z cache (już załadowane wcześniej)
+        const batch = batchesCache.get(batchId) || null;
+        let purchaseOrder = null;
+        let poItem = null;
+        
+        if (batch) {
+          // ⚡ OPTYMALIZACJA: Pobierz PO z cache (już załadowane wcześniej)
+          const poId = batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId;
+          if (poId) {
+            purchaseOrder = poCache.get(poId) || null;
+            
+            // Zastosuj filtr dostawcy (jeśli podano)
+            if (filters.supplierId && purchaseOrder?.supplierId !== filters.supplierId) {
+              continue;
+            }
+            
+            // Znajdź pozycję PO odpowiadającą partii
+            const itemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
+            if (itemPoId && purchaseOrder?.items) {
+              poItem = purchaseOrder.items.find(item => item.id === itemPoId);
+            }
+          }
+        }
+        
+        // Utwórz rekord raportu
+        const reportRow = createReportRow({
+          task,
+          customerOrder,
+          coItem,
+          mainInvoice,
+          material,
+          batch,
+          purchaseOrder,
+          poItem,
+          reservedQuantity: batchInfo.source === 'reserved' ? batchInfo.quantity : null,
+          consumedQuantity: batchInfo.source === 'consumed' ? batchInfo.quantity : null,
+          batchSource: batchInfo.source,
+          consumedUnitPrice: batchInfo.unitPrice,
+          includeInCosts: batchInfo.includeInCosts
+        });
+        
+        results.push(reportRow);
+      }
+    }
+  } catch (error) {
+    console.error(`❌ Błąd podczas przetwarzania zadania ${task.id}:`, error);
+  }
+  
+  return results;
 };
 
 /**
