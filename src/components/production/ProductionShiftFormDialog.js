@@ -15,8 +15,6 @@ import {
   Grid,
   Alert,
   Divider,
-  RadioGroup,
-  Radio,
   FormControlLabel,
   FormLabel,
   Checkbox,
@@ -31,8 +29,10 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
 import { getMONumbersForSelect } from '../../services/moService';
+import { addProductionSessionFromShiftReport, updateProductionSession, parseShiftTime } from '../../services/productionService';
+import { getAllWarehouses } from '../../services/inventory';
 import { db } from '../../services/firebase/config';
-import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
 
@@ -95,10 +95,12 @@ const ProductionShiftFormDialog = ({
     fillDate: new Date(),
     fillTime: '',
     shiftWorkers: [],
-    shiftType: '',
+    shiftStartTime: '',
+    shiftEndTime: '',
     product: '',
     moNumber: '',
     productionQuantity: '',
+    warehouseId: '', // Magazyn docelowy
     firstProduct: 'BRAK',
     secondProduct: 'BRAK',
     thirdProduct: 'BRAK',
@@ -118,6 +120,8 @@ const ProductionShiftFormDialog = ({
   const [submitted, setSubmitted] = useState(false);
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
+  const [warehouses, setWarehouses] = useState([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
 
   // Przygotuj dane wstępne na podstawie zadania produkcyjnego
   useEffect(() => {
@@ -149,6 +153,33 @@ const ProductionShiftFormDialog = ({
       };
 
       fetchMONumbers();
+    }
+  }, [open]);
+
+  // Pobierz magazyny przy otwieraniu dialogu
+  useEffect(() => {
+    if (open) {
+      const fetchWarehouses = async () => {
+        try {
+          setWarehousesLoading(true);
+          const warehousesList = await getAllWarehouses();
+          setWarehouses(warehousesList);
+          
+          // Ustaw pierwszy magazyn jako domyślny jeśli jeszcze nie wybrano
+          if (warehousesList.length > 0 && !formData.warehouseId) {
+            setFormData(prev => ({
+              ...prev,
+              warehouseId: warehousesList[0].id
+            }));
+          }
+        } catch (error) {
+          console.error('Błąd podczas pobierania magazynów:', error);
+        } finally {
+          setWarehousesLoading(false);
+        }
+      };
+
+      fetchWarehouses();
     }
   }, [open]);
 
@@ -230,8 +261,12 @@ const ProductionShiftFormDialog = ({
       errors.fillTime = 'Godzina wypełnienia jest wymagana';
     }
     
-    if (!formData.shiftType) {
-      errors.shiftType = 'Rodzaj zmiany jest wymagany';
+    if (!formData.shiftStartTime) {
+      errors.shiftStartTime = 'Godzina rozpoczęcia zmiany jest wymagana';
+    }
+    
+    if (!formData.shiftEndTime) {
+      errors.shiftEndTime = 'Godzina zakończenia zmiany jest wymagana';
     }
     
     if (!formData.product) {
@@ -250,6 +285,10 @@ const ProductionShiftFormDialog = ({
       errors.productionQuantity = 'Ilość zrobionego produktu jest wymagana';
     } else if (isNaN(formData.productionQuantity)) {
       errors.productionQuantity = 'Podaj wartość liczbową';
+    }
+    
+    if (!formData.warehouseId) {
+      errors.warehouseId = 'Wybierz magazyn docelowy';
     }
     
     // Walidacja produktów nadrukowanych
@@ -279,14 +318,6 @@ const ProductionShiftFormDialog = ({
       errors.finishedProductLoss = 'Podaj wartość liczbową';
     }
     
-    if (!formData.otherActivities) {
-      errors.otherActivities = 'Pozostałe czynności produkcyjne są wymagane';
-    }
-    
-    if (!formData.machineIssues) {
-      errors.machineIssues = 'Awarie maszyn są wymagane';
-    }
-    
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -306,10 +337,12 @@ const ProductionShiftFormDialog = ({
           fillDate: formData.fillDate,
           fillTime: formData.fillTime,
           shiftWorkers: formData.shiftWorkers,
-          shiftType: formData.shiftType,
+          shiftStartTime: formData.shiftStartTime,
+          shiftEndTime: formData.shiftEndTime,
           product: formData.product,
           moNumber: formData.moNumber,
           productionQuantity: formData.productionQuantity,
+          warehouseId: formData.warehouseId,
           firstProduct: formData.firstProduct,
           secondProduct: formData.secondProduct,
           thirdProduct: formData.thirdProduct,
@@ -323,11 +356,52 @@ const ProductionShiftFormDialog = ({
           finishedProductLoss: formData.finishedProductLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          addedToHistory: false // Flaga czy dodano do historii
         };
         
-        await addDoc(odpowiedziRef, odpowiedzData);
+        const docRef = await addDoc(odpowiedziRef, odpowiedzData);
+        const docId = docRef.id;
         console.log('Formularz zmiany produkcyjnej wysłany z danymi:', odpowiedzData);
+        
+        // ✅ Automatyczna synchronizacja z historią produkcji
+        if (formData.moNumber && formData.productionQuantity && 
+            formData.shiftStartTime && formData.shiftEndTime) {
+          try {
+            console.log('🔄 Rozpoczynam synchronizację z historią produkcji...');
+            console.log('➕ Dodawanie nowej sesji produkcyjnej');
+            
+            const result = await addProductionSessionFromShiftReport(
+              formData.moNumber,
+              {
+                shiftStartTime: formData.shiftStartTime,
+                shiftEndTime: formData.shiftEndTime,
+                quantity: parseFloat(formData.productionQuantity),
+                fillDate: formData.fillDate,
+                responsiblePerson: formData.responsiblePerson,
+                warehouseId: formData.warehouseId
+              },
+              currentUser.uid,
+              docId // ID raportu zmiany
+            );
+            
+            // Oznacz raport jako dodany do historii
+            await updateDoc(doc(db, 'Forms/ZmianaProdukcji/Odpowiedzi', docId), {
+              addedToHistory: true,
+              historyAddedAt: serverTimestamp(),
+              productionTaskId: result.taskId,
+              productionTaskName: result.taskName,
+              productionSessionId: result.sessionId,
+              productionSessionIndex: result.sessionIndex
+            });
+            
+            console.log('✅ Sesja produkcyjna automatycznie dodana do historii:', result);
+          } catch (historyError) {
+            console.error('⚠️ Błąd podczas synchronizacji z historią produkcji:', historyError);
+            // Raport został zapisany, ale historia nie - nie przerywaj procesu
+            alert('Raport został zapisany, ale wystąpił problem z synchronizacją historii produkcji: ' + historyError.message);
+          }
+        }
         
         setSubmitted(true);
         
@@ -356,10 +430,12 @@ const ProductionShiftFormDialog = ({
       fillDate: new Date(),
       fillTime: '',
       shiftWorkers: [],
-      shiftType: '',
+      shiftStartTime: '',
+      shiftEndTime: '',
       product: task?.productName || '',
       moNumber: task?.moNumber || '',
       productionQuantity: '',
+      warehouseId: warehouses.length > 0 ? warehouses[0].id : '',
       firstProduct: 'BRAK',
       secondProduct: 'BRAK',
       thirdProduct: 'BRAK',
@@ -594,22 +670,37 @@ const ProductionShiftFormDialog = ({
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <FormControl component="fieldset" required error={!!validationErrors.shiftType}>
-                <FormLabel component="legend">Rodzaj zmiany</FormLabel>
-                <RadioGroup
-                  name="shiftType"
-                  value={formData.shiftType}
-                  onChange={handleChange}
-                >
-                  <FormControlLabel value="zmiana 1 (6-14)" control={<Radio />} label="zmiana 1 (6-14)" />
-                  <FormControlLabel value="zmiana 2 (14-22)" control={<Radio />} label="zmiana 2 (14-22)" />
-                </RadioGroup>
-                {validationErrors.shiftType && (
-                  <Typography variant="caption" color="error">
-                    {validationErrors.shiftType}
-                  </Typography>
-                )}
-              </FormControl>
+              <TextField
+                required
+                fullWidth
+                type="time"
+                label="Godzina rozpoczęcia zmiany"
+                name="shiftStartTime"
+                value={formData.shiftStartTime}
+                onChange={handleChange}
+                error={!!validationErrors.shiftStartTime}
+                helperText={validationErrors.shiftStartTime}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                required
+                fullWidth
+                type="time"
+                label="Godzina zakończenia zmiany"
+                name="shiftEndTime"
+                value={formData.shiftEndTime}
+                onChange={handleChange}
+                error={!!validationErrors.shiftEndTime}
+                helperText={validationErrors.shiftEndTime}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
             </Grid>
             
             {/* Sekcja produkcji */}
@@ -695,6 +786,34 @@ const ProductionShiftFormDialog = ({
                 error={!!validationErrors.productionQuantity}
                 helperText={validationErrors.productionQuantity}
               />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl 
+                fullWidth 
+                required 
+                error={!!validationErrors.warehouseId}
+                disabled={warehousesLoading}
+              >
+                <InputLabel>Magazyn docelowy</InputLabel>
+                <Select
+                  name="warehouseId"
+                  value={formData.warehouseId}
+                  onChange={handleChange}
+                  label="Magazyn docelowy"
+                >
+                  {warehouses.map(warehouse => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {validationErrors.warehouseId && (
+                  <Typography color="error" variant="caption" sx={{ mt: 0.5, ml: 2 }}>
+                    {validationErrors.warehouseId}
+                  </Typography>
+                )}
+              </FormControl>
             </Grid>
             
 
@@ -947,6 +1066,8 @@ const ProductionShiftFormDialog = ({
                 name="machineIssues"
                 value={formData.machineIssues}
                 onChange={handleChange}
+                placeholder="Wpisujemy w przypadku awarii cały opis co się wydarzyło. Jeśli brak awarii - pole można pozostawić puste."
+                helperText="Pole opcjonalne - wypełnij tylko w przypadku awarii"
               />
             </Grid>
             
@@ -959,6 +1080,7 @@ const ProductionShiftFormDialog = ({
                 name="otherActivities"
                 value={formData.otherActivities}
                 onChange={handleChange}
+                helperText="Pole opcjonalne - wypełnij w razie potrzeby"
               />
             </Grid>
             

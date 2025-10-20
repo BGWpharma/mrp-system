@@ -30,12 +30,13 @@ import {
   InputAdornment,
   Grid,
   Link,
-  TablePagination
+  TablePagination,
+  Chip
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon, CheckCircle as CheckIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from '../../hooks/useTranslation';
 import { 
@@ -75,7 +76,6 @@ const FormsResponsesPage = () => {
   // Filtry dla tabeli zmian produkcyjnych
   const [shiftFilters, setShiftFilters] = useState({
     responsiblePerson: '',
-    shiftType: '',
     product: '',
     moNumber: ''
   });
@@ -266,12 +266,6 @@ const FormsResponsesPage = () => {
     // Filtrowanie lokalnie dla pól, które nie są obsługiwane przez service
     let filtered = [...shiftData];
     
-    if (shiftFilters.shiftType) {
-      filtered = filtered.filter(item => 
-        item.shiftType === shiftFilters.shiftType
-      );
-    }
-    
     if (shiftFilters.product) {
       filtered = filtered.filter(item => 
         item.product && item.product.toLowerCase().includes(shiftFilters.product.toLowerCase())
@@ -436,7 +430,8 @@ const FormsResponsesPage = () => {
       csvContent += "Data,Email,Osoba odpowiedzialna,Rodzaj zmiany,Produkt,Numer MO,Ilość produkcji,Pracownicy,Straty surowca,Inne czynności\n";
       data.forEach(row => {
         const workers = Array.isArray(row.shiftWorkers) ? row.shiftWorkers.join(', ') : '';
-        csvContent += `${formatCSVValue(formatDateTime(row.fillDate))},${formatCSVValue(row.email || '')},${formatCSVValue(row.responsiblePerson || '')},${formatCSVValue(row.shiftType || '')},${formatCSVValue(row.product || '')},${formatCSVValue(row.moNumber || '')},${formatCSVValue(row.productionQuantity || '')},${formatCSVValue(workers)},${formatCSVValue(row.rawMaterialLoss || '')},${formatCSVValue(row.otherActivities || '')}\n`;
+        const shiftInfo = row.shiftType || (row.shiftStartTime && row.shiftEndTime ? `${row.shiftStartTime} - ${row.shiftEndTime}` : '');
+        csvContent += `${formatCSVValue(formatDateTime(row.fillDate))},${formatCSVValue(row.email || '')},${formatCSVValue(row.responsiblePerson || '')},${formatCSVValue(shiftInfo)},${formatCSVValue(row.product || '')},${formatCSVValue(row.moNumber || '')},${formatCSVValue(row.productionQuantity || '')},${formatCSVValue(workers)},${formatCSVValue(row.rawMaterialLoss || '')},${formatCSVValue(row.otherActivities || '')}\n`;
       });
     }
     
@@ -547,7 +542,6 @@ const FormsResponsesPage = () => {
   const clearFilters = () => {
     setShiftFilters({
       responsiblePerson: '',
-      shiftType: '',
       product: '',
       moNumber: ''
     });
@@ -863,7 +857,6 @@ const FormsResponsesPage = () => {
   const ProductionShiftTable = () => {
     // Zbierz unikalne wartości dla filtrów
     const uniqueResponsiblePersons = [...new Set(productionShiftResponses.map(item => item.responsiblePerson))].filter(Boolean);
-    const uniqueShiftTypes = [...new Set(productionShiftResponses.map(item => item.shiftType))].filter(Boolean);
     const uniqueProducts = [...new Set(productionShiftResponses.map(item => item.product))].filter(Boolean);
     
     return (
@@ -920,24 +913,6 @@ const FormsResponsesPage = () => {
                     <MenuItem value="">{t('all')}</MenuItem>
                     {uniqueResponsiblePersons.map(person => (
                       <MenuItem key={person} value={person}>{person}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>{t('shiftType')}</InputLabel>
-                  <Select
-                    name="shiftType"
-                    value={shiftFilters.shiftType}
-                    onChange={handleFilterChange}
-                    label={t('shiftType')}
-                    displayEmpty
-                  >
-                    <MenuItem value="">{t('all')}</MenuItem>
-                    {uniqueShiftTypes.map(type => (
-                      <MenuItem key={type} value={type}>{type}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -1035,6 +1010,7 @@ const FormsResponsesPage = () => {
                   <TableCell>{t('finishedProductLoss')}</TableCell>
                   <TableCell>{t('otherActivities')}</TableCell>
                   <TableCell>{t('machineIssues')}</TableCell>
+                  <TableCell align="center">Status historii</TableCell>
                   <TableCell align="center">{t('actions')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -1045,7 +1021,9 @@ const FormsResponsesPage = () => {
                     <TableCell>{row.fillTime || '-'}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.responsiblePerson}</TableCell>
-                    <TableCell>{row.shiftType}</TableCell>
+                    <TableCell>
+                      {row.shiftType || (row.shiftStartTime && row.shiftEndTime ? `${row.shiftStartTime} - ${row.shiftEndTime}` : '-')}
+                    </TableCell>
                     <TableCell>{row.product}</TableCell>
                     <TableCell>{row.moNumber}</TableCell>
                     <TableCell align="right">{row.productionQuantity}</TableCell>
@@ -1063,6 +1041,25 @@ const FormsResponsesPage = () => {
                     <TableCell align="right">{row.finishedProductLoss || '-'}</TableCell>
                     <TableCell>{row.otherActivities}</TableCell>
                     <TableCell>{row.machineIssues}</TableCell>
+                    <TableCell align="center">
+                      {row.addedToHistory ? (
+                        <Tooltip title={`Dodano do historii${row.productionTaskName ? `: ${row.productionTaskName}` : ''}`}>
+                          <Chip 
+                            label="Dodano" 
+                            color="success" 
+                            size="small" 
+                            icon={<CheckIcon />}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Chip 
+                          label="Nie dodano" 
+                          color="default" 
+                          size="small"
+                          variant="outlined"
+                        />
+                      )}
+                    </TableCell>
                     <TableCell align="center">
                       <Tooltip title={t('editResponse')}>
                         <IconButton 

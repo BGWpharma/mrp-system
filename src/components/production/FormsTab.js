@@ -373,7 +373,9 @@ const FormsTab = ({
                               </TableCell>
                               <TableCell>{form.email || '-'}</TableCell>
                               <TableCell>{form.responsiblePerson || '-'}</TableCell>
-                              <TableCell>{form.shiftType || '-'}</TableCell>
+                              <TableCell>
+                                {form.shiftType || (form.shiftStartTime && form.shiftEndTime ? `${form.shiftStartTime} - ${form.shiftEndTime}` : '-')}
+                              </TableCell>
                               <TableCell>{form.productionQuantity || '-'}</TableCell>
                               <TableCell>
                                 {form.shiftWorkers && form.shiftWorkers.length > 0 ? form.shiftWorkers.join(', ') : '-'}

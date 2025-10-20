@@ -3817,10 +3817,18 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Jeśli zadanie ma powiązaną partię, zaktualizuj jej ilość
       if (task.inventoryBatchId && Math.abs(quantityDifference) > 0.001) {
         try {
+          // Sprawdź czy partia faktycznie istnieje
+          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
+          const batchCheckDoc = await getDoc(batchRef);
+          
+          if (!batchCheckDoc.exists()) {
+            console.warn(`⚠️ Partia ${task.inventoryBatchId} nie istnieje - pomijam aktualizację`);
+            throw new Error(`Partia magazynowa ${task.inventoryBatchId} nie istnieje w bazie danych`);
+          }
+          
           console.log(`Aktualizacja partii ${task.inventoryBatchId} o ${quantityDifference} z powodu korekty historii produkcji`);
           
           // Aktualizuj ilość w partii używając Firebase increment
-          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
           await updateDoc(batchRef, {
             quantity: increment(quantityDifference),
             initialQuantity: increment(quantityDifference),
@@ -3955,10 +3963,18 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       // Jeśli zadanie ma powiązaną partię i nie pomijamy aktualizacji partii, zaktualizuj jej ilość
       if (task.inventoryBatchId && addedQuantity > 0 && !skipBatchUpdate) {
         try {
+          // Sprawdź czy partia faktycznie istnieje
+          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
+          const batchCheckDoc = await getDoc(batchRef);
+          
+          if (!batchCheckDoc.exists()) {
+            console.warn(`⚠️ Partia ${task.inventoryBatchId} nie istnieje - pomijam aktualizację`);
+            throw new Error(`Partia magazynowa ${task.inventoryBatchId} nie istnieje w bazie danych`);
+          }
+          
           console.log(`Aktualizacja partii ${task.inventoryBatchId} o +${addedQuantity} z powodu dodania nowej sesji produkcyjnej`);
           
           // Aktualizuj ilość w partii używając Firebase increment
-          const batchRef = doc(db, 'inventoryBatches', task.inventoryBatchId);
           await updateDoc(batchRef, {
             quantity: increment(addedQuantity),
             initialQuantity: increment(addedQuantity),
@@ -4078,10 +4094,163 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         success: true,
         message: 'Sesja produkcyjna została dodana' + 
           (addedQuantity > 0 && task.inventoryBatchId ? ` (partia zaktualizowana o +${addedQuantity})` : ''),
-        sessionId
+        sessionId,
+        sessionIndex: productionSessions.length - 1
       };
     } catch (error) {
       console.error('Błąd podczas dodawania sesji produkcyjnej:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Pomocnicza funkcja do parsowania czasu zmiany
+   * @param {Date} date - Data
+   * @param {string} time - Czas w formacie "HH:MM"
+   * @returns {Date} - Obiekt Date
+   */
+  export function parseShiftTime(date, time) {
+    const [hours, minutes] = time.split(':').map(Number);
+    const result = new Date(date);
+    result.setHours(hours, minutes, 0, 0);
+    return result;
+  }
+
+  /**
+   * Dodaje sesję produkcyjną na podstawie raportu zmiany produkcji
+   * @param {string} moNumber - Numer MO (zadania produkcyjnego)
+   * @param {Object} shiftData - Dane ze zmiany produkcyjnej
+   * @param {string} userId - ID użytkownika dodającego
+   * @param {string} shiftReportId - ID raportu zmiany (opcjonalny)
+   * @returns {Promise<Object>} - Wynik operacji
+   */
+  export const addProductionSessionFromShiftReport = async (moNumber, shiftData, userId, shiftReportId = null) => {
+    try {
+      console.log('🔄 Rozpoczynam dodawanie sesji produkcyjnej z raportu zmiany:', { moNumber, shiftData });
+      
+      // 1. Znajdź zadanie produkcyjne po numerze MO
+      const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+      const q = query(tasksRef, where('moNumber', '==', moNumber));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        throw new Error(`Nie znaleziono zadania produkcyjnego o numerze MO: ${moNumber}`);
+      }
+      
+      const taskDoc = querySnapshot.docs[0];
+      const taskId = taskDoc.id;
+      const taskData = taskDoc.data();
+      
+      console.log('✅ Znaleziono zadanie produkcyjne:', taskId, taskData.name);
+      
+      // 2. Oblicz czas trwania zmiany w minutach
+      const startTime = parseShiftTime(shiftData.fillDate, shiftData.shiftStartTime);
+      const endTime = parseShiftTime(shiftData.fillDate, shiftData.shiftEndTime);
+      
+      // Jeśli koniec jest przed początkiem, oznacza że zmiana przeszła przez północ
+      if (endTime < startTime) {
+        endTime.setDate(endTime.getDate() + 1);
+      }
+      
+      const timeSpentMinutes = Math.round((endTime - startTime) / (1000 * 60));
+      
+      console.log('⏱️ Obliczono czas trwania zmiany:', {
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        timeSpentMinutes
+      });
+      
+      // 3. Przygotuj dane sesji
+      const sessionData = {
+        quantity: shiftData.quantity,
+        timeSpent: timeSpentMinutes,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        userId: userId,
+        shiftReportId: shiftReportId, // Link do raportu zmiany
+        addedFrom: 'shift-report', // Źródło dodania
+        responsiblePerson: shiftData.responsiblePerson
+      };
+      
+      console.log('📋 Dane sesji przygotowane:', sessionData);
+      
+      // 4. ✨ Sprawdź czy zadanie ma już partię magazynową (i czy faktycznie istnieje)
+      let hasInventoryBatch = false;
+      if (taskData.inventoryBatchId) {
+        // Sprawdź czy partia faktycznie istnieje w bazie
+        const batchRef = doc(db, 'inventoryBatches', taskData.inventoryBatchId);
+        const batchDoc = await getDoc(batchRef);
+        hasInventoryBatch = batchDoc.exists();
+        
+        if (!hasInventoryBatch) {
+          console.warn(`⚠️ Zadanie ma inventoryBatchId (${taskData.inventoryBatchId}), ale partia nie istnieje w bazie - zostanie utworzona nowa`);
+        }
+      }
+      
+      if (!hasInventoryBatch) {
+        console.log('⚠️ Zadanie nie ma jeszcze partii magazynowej - zostanie utworzona automatycznie');
+        
+        try {
+          await addTaskProductToInventory(taskId, userId, {
+            expiryDate: taskData.expiryDate ? 
+              (taskData.expiryDate.toDate ? taskData.expiryDate.toDate().toISOString() : taskData.expiryDate) 
+              : null,
+            lotNumber: taskData.lotNumber || (taskData.moNumber ? `SN${taskData.moNumber.replace('MO', '')}` : null),
+            finalQuantity: shiftData.quantity,
+            warehouseId: shiftData.warehouseId || taskData.warehouseId || null
+          });
+          
+          console.log('✅ Partia magazynowa została utworzona automatycznie');
+          
+          // Pobierz zaktualizowane dane zadania
+          const updatedTaskDoc = await getDoc(taskDoc.ref);
+          const updatedTaskData = updatedTaskDoc.data();
+          
+          // Dodaj sesję, ale pomiń aktualizację batcha (został już zaktualizowany przez addTaskProductToInventory)
+          const result = await addProductionSession(taskId, sessionData, true); // skipBatchUpdate = true
+          
+          return {
+            success: true,
+            message: 'Sesja produkcyjna i partia magazynowa zostały automatycznie utworzone na podstawie raportu zmiany',
+            taskId,
+            taskName: updatedTaskData.name,
+            batchCreated: true,
+            ...result
+          };
+          
+        } catch (inventoryError) {
+          console.error('❌ Błąd podczas tworzenia partii magazynowej:', inventoryError);
+          
+          console.log('⚠️ Dodaję sesję bez partii magazynowej');
+          const result = await addProductionSession(taskId, sessionData, false);
+          
+          return {
+            success: true,
+            message: 'Sesja produkcyjna została dodana, ale nie udało się utworzyć partii magazynowej: ' + inventoryError.message,
+            taskId,
+            taskName: taskData.name,
+            batchCreated: false,
+            batchError: inventoryError.message,
+            ...result
+          };
+        }
+      } else {
+        console.log('✅ Zadanie ma już partię magazynową - zostanie zaktualizowana');
+        // Dodaj sesję i zaktualizuj istniejący batch
+        const result = await addProductionSession(taskId, sessionData, false); // skipBatchUpdate = false
+        
+        return {
+          success: true,
+          message: 'Sesja produkcyjna została automatycznie dodana na podstawie raportu zmiany',
+          taskId,
+          taskName: taskData.name,
+          batchCreated: false,
+          ...result
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas dodawania sesji z raportu zmiany:', error);
       throw error;
     }
   };
