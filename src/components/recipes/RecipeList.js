@@ -20,6 +20,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Menu,
   Tabs,
   Tab,
   Alert,
@@ -54,10 +55,13 @@ import {
   ExpandMore as ExpandMoreIcon,
   Cached as CachedIcon,
   Download as DownloadIcon,
-  Sync as SyncIcon
+  Sync as SyncIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
-import { getInventoryItemByRecipeId } from '../../services/inventory';
+import { getInventoryItemByRecipeId, getBatchesForMultipleItems, getSupplierPrices } from '../../services/inventory';
+import { getPurchaseOrderById } from '../../services/purchaseOrderService';
+import { getSuppliersByIds } from '../../services/supplierService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -75,7 +79,7 @@ const RecipeList = () => {
   const [recipes, setRecipes] = useState([]);
   const [filteredRecipes, setFilteredRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   const { t } = useTranslation();
   const navigate = useNavigate();
   
@@ -118,6 +122,10 @@ const RecipeList = () => {
     lastRefreshed: null
   });
 
+  // Stan dla menu dropdown akcji
+  const [actionsMenuAnchor, setActionsMenuAnchor] = useState(null);
+  const isActionsMenuOpen = Boolean(actionsMenuAnchor);
+
   // Dodajemy stan dla stanowisk produkcyjnych
   const [workstations, setWorkstations] = useState([]);
   
@@ -127,6 +135,15 @@ const RecipeList = () => {
   // Stan dla synchronizacji CAS
   const [syncingCAS, setSyncingCAS] = useState(false);
   const [syncProgress, setSyncProgress] = useState(null);
+  
+  // Stan dla dialogu eksportu z dostawcami
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFilters, setExportFilters] = useState({
+    customerId: '',
+    notesFilter: null,
+    searchTerm: ''
+  });
+  const [exporting, setExporting] = useState(false);
   
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -279,6 +296,35 @@ const RecipeList = () => {
       showError(t('recipes.list.indexUpdateError'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Funkcje obsługi menu akcji
+  const handleActionsMenuOpen = (event) => {
+    setActionsMenuAnchor(event.currentTarget);
+  };
+
+  const handleActionsMenuClose = () => {
+    setActionsMenuAnchor(null);
+  };
+
+  const handleMenuAction = (action) => {
+    handleActionsMenuClose();
+    switch (action) {
+      case 'refreshIndex':
+        refreshSearchIndex();
+        break;
+      case 'exportCSV':
+        handleExportCSV();
+        break;
+      case 'exportWithSuppliers':
+        handleOpenExportDialog();
+        break;
+      case 'syncCAS':
+        handleSyncAllCAS();
+        break;
+      default:
+        break;
     }
   };
 
@@ -610,6 +656,359 @@ const RecipeList = () => {
     } catch (error) {
       console.error('Błąd podczas eksportu CSV:', error);
       showError(t('recipes.list.exportError'));
+    }
+  };
+
+  // Funkcja otwierająca dialog eksportu
+  const handleOpenExportDialog = () => {
+    // Ustaw domyślne filtry na podstawie aktualnych filtrów listy
+    setExportFilters({
+      customerId: selectedCustomerId || '',
+      notesFilter: notesFilter,
+      searchTerm: debouncedSearchTerm || ''
+    });
+    setExportDialogOpen(true);
+  };
+
+  // Funkcja zamykająca dialog eksportu
+  const handleCloseExportDialog = () => {
+    setExportDialogOpen(false);
+  };
+
+  // Funkcja obsługująca zmiany filtrów w dialogu
+  const handleExportFilterChange = (field, value) => {
+    setExportFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Funkcja eksportu receptur ze składnikami i dostawcami
+  const handleExportRecipesWithSuppliers = async () => {
+    try {
+      setExporting(true);
+      setExportDialogOpen(false);
+      showInfo('Przygotowywanie eksportu receptur z dostawcami...');
+
+      // Pobierz wszystkie receptury (z zastosowanymi filtrami z dialogu)
+      let allRecipes = [];
+      
+      try {
+        const allRecipesFromFirestore = await getAllRecipes();
+        allRecipes = allRecipesFromFirestore;
+        
+        // Zastosuj filtry z dialogu eksportu
+        if (exportFilters.customerId) {
+          allRecipes = allRecipes.filter(recipe => recipe.customerId === exportFilters.customerId);
+        }
+        
+        if (exportFilters.notesFilter !== null) {
+          allRecipes = allRecipes.filter(recipe => {
+            const hasRecipeNotes = recipe.notes && recipe.notes.trim() !== '';
+            return exportFilters.notesFilter ? hasRecipeNotes : !hasRecipeNotes;
+          });
+        }
+        
+        if (exportFilters.searchTerm && exportFilters.searchTerm.trim() !== '') {
+          const searchTermLower = exportFilters.searchTerm.toLowerCase().trim();
+          allRecipes = allRecipes.filter(recipe => 
+            (recipe.name && recipe.name.toLowerCase().includes(searchTermLower)) ||
+            (recipe.description && recipe.description.toLowerCase().includes(searchTermLower))
+          );
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania receptur:', error);
+        showError('Nie udało się pobrać receptur do eksportu');
+        setExporting(false);
+        return;
+      }
+
+      if (allRecipes.length === 0) {
+        showError('Brak receptur do eksportu');
+        setExporting(false);
+        return;
+      }
+
+      showInfo('Pobieranie danych o partiach i zamówieniach zakupu...');
+
+      // KROK 1: Zbierz wszystkie unikalne ID składników ze wszystkich receptur
+      const allIngredientIds = new Set();
+      allRecipes.forEach(recipe => {
+        (recipe.ingredients || []).forEach(ingredient => {
+          if (ingredient.id) {
+            allIngredientIds.add(ingredient.id);
+          }
+        });
+      });
+
+      console.log(`📦 Znaleziono ${allIngredientIds.size} unikalnych składników w recepturach`);
+
+      // KROK 2: Pobierz partie dla wszystkich składników (w partiach po 100)
+      let batchesMap = {};
+      if (allIngredientIds.size > 0) {
+        try {
+          const ingredientIdsArray = Array.from(allIngredientIds);
+          const batchSize = 100; // Limit walidacji
+          
+          // Podziel na partie po 100 elementów
+          for (let i = 0; i < ingredientIdsArray.length; i += batchSize) {
+            const batch = ingredientIdsArray.slice(i, i + batchSize);
+            
+            showInfo(`Pobieranie partii dla składników ${i + 1}-${Math.min(i + batchSize, ingredientIdsArray.length)}/${ingredientIdsArray.length}...`);
+            
+            const batchResults = await getBatchesForMultipleItems(batch);
+            
+            // Scal wyniki
+            batchesMap = { ...batchesMap, ...batchResults };
+          }
+          
+          const totalBatches = Object.values(batchesMap).reduce((sum, batches) => sum + batches.length, 0);
+          console.log(`📦 Pobrano ${totalBatches} partii dla ${allIngredientIds.size} składników`);
+        } catch (error) {
+          console.error('Błąd podczas pobierania partii:', error);
+          showError('Nie udało się pobrać partii magazynowych');
+        }
+      }
+
+      // KROK 3: Zbierz wszystkie unikalne ID zamówień zakupu z partii
+      const allPOIds = new Set();
+      Object.values(batchesMap).forEach(batches => {
+        batches.forEach(batch => {
+          const poId = batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId;
+          if (poId) {
+            allPOIds.add(poId);
+          }
+        });
+      });
+
+      console.log(`📑 Znaleziono ${allPOIds.size} unikalnych zamówień zakupu`);
+
+      // KROK 4: Pobierz wszystkie Purchase Orders
+      const purchaseOrdersMap = {};
+      if (allPOIds.size > 0) {
+        showInfo(`Pobieranie ${allPOIds.size} zamówień zakupu...`);
+        let loadedPOs = 0;
+        
+        for (const poId of allPOIds) {
+          try {
+            const po = await getPurchaseOrderById(poId);
+            if (po) {
+              purchaseOrdersMap[poId] = po;
+              loadedPOs++;
+              
+              // Informuj o postępie co 10 PO
+              if (loadedPOs % 10 === 0) {
+                showInfo(`Pobrano ${loadedPOs}/${allPOIds.size} zamówień zakupu...`);
+              }
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania PO ${poId}:`, error);
+          }
+        }
+        
+        console.log(`📑 Pobrano ${loadedPOs} zamówień zakupu`);
+      }
+
+      // KROK 4A: Pobierz ceny dostawców z pozycji magazynowych
+      const supplierPricesMap = {};
+      const allSupplierIds = new Set();
+      
+      if (allIngredientIds.size > 0) {
+        showInfo('Pobieranie cen dostawców z pozycji magazynowych...');
+        let processedItems = 0;
+        
+        for (const itemId of allIngredientIds) {
+          try {
+            const supplierPrices = await getSupplierPrices(itemId, { includeInactive: false });
+            if (supplierPrices && supplierPrices.length > 0) {
+              supplierPricesMap[itemId] = supplierPrices;
+              
+              // Zbierz unikalne ID dostawców
+              supplierPrices.forEach(sp => {
+                if (sp.supplierId) {
+                  allSupplierIds.add(sp.supplierId);
+                }
+              });
+            }
+            
+            processedItems++;
+            if (processedItems % 20 === 0) {
+              showInfo(`Pobrano ceny dla ${processedItems}/${allIngredientIds.size} składników...`);
+            }
+          } catch (error) {
+            console.error(`Błąd podczas pobierania cen dla składnika ${itemId}:`, error);
+          }
+        }
+        
+        console.log(`💰 Pobrano ceny dostawców dla ${Object.keys(supplierPricesMap).length} składników`);
+      }
+
+      // KROK 4B: Pobierz dane wszystkich dostawców
+      const suppliersMap = {};
+      if (allSupplierIds.size > 0) {
+        showInfo(`Pobieranie danych ${allSupplierIds.size} dostawców...`);
+        try {
+          const suppliers = await getSuppliersByIds(Array.from(allSupplierIds));
+          suppliers.forEach(supplier => {
+            suppliersMap[supplier.id] = supplier;
+          });
+          console.log(`👥 Pobrano dane ${suppliers.length} dostawców`);
+        } catch (error) {
+          console.error('Błąd podczas pobierania dostawców:', error);
+        }
+      }
+
+      showInfo('Generowanie eksportu...');
+
+      // KROK 5: Przygotuj dane CSV z dostawcami dla składników
+      const csvRows = [];
+      let processedRecipes = 0;
+
+      for (const recipe of allRecipes) {
+        processedRecipes++;
+        
+        // Znajdź klienta
+        const customer = customers.find(c => c.id === recipe.customerId);
+        
+        // Pobierz wszystkie składniki receptury
+        const ingredients = recipe.ingredients || [];
+        
+        if (ingredients.length === 0) {
+          // Jeśli receptura nie ma składników, dodaj jeden wiersz bez dostawcy
+          csvRows.push({
+            'Receptura (SKU)': recipe.name || '',
+            'Opis receptury': recipe.description || '',
+            'Klient': customer ? customer.name : '',
+            'Składnik': '-',
+            'Ilość składnika': '',
+            'Jednostka': '',
+            'Dostawcy (z pozycji mag.)': '-',
+            'Dostawcy (z PO)': '-'
+          });
+          continue;
+        }
+
+        // Dla każdego składnika znajdź dostawców
+        for (const ingredient of ingredients) {
+          let suppliersFromPOText = '-';
+          let suppliersFromInventoryText = '-';
+          
+          // A) Dostawcy z zamówień zakupu (PO)
+          if (ingredient.id && batchesMap[ingredient.id]) {
+            const ingredientBatches = batchesMap[ingredient.id];
+            
+            // Zbierz informacje o dostawcach z PO dla tego składnika
+            const supplierInfos = [];
+            const seenPOs = new Set(); // Unikalne PO dla tego składnika
+            
+            ingredientBatches.forEach(batch => {
+              const poId = batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId;
+              
+              if (poId && !seenPOs.has(poId) && purchaseOrdersMap[poId]) {
+                seenPOs.add(poId);
+                const po = purchaseOrdersMap[poId];
+                
+                // Znajdź pozycję w PO dla tej partii
+                const itemPoId = batch.purchaseOrderDetails?.itemPoId || batch.sourceDetails?.itemPoId;
+                const poItem = po.items?.find(item => item.id === itemPoId);
+                
+                const supplierName = po.supplier?.name || 'Nieznany dostawca';
+                const poNumber = po.number || poId;
+                const price = poItem?.unitPrice ? `${parseFloat(poItem.unitPrice).toFixed(2)} ${po.currency || 'PLN'}` : '';
+                
+                // Format: "Dostawca (PO: PO/2024/001, 12.50 PLN)"
+                let info = `${supplierName} (PO: ${poNumber}`;
+                if (price) {
+                  info += `, ${price}`;
+                }
+                info += ')';
+                
+                supplierInfos.push(info);
+              }
+            });
+            
+            if (supplierInfos.length > 0) {
+              suppliersFromPOText = supplierInfos.join('; ');
+            }
+          }
+          
+          // B) Dostawcy z pozycji magazynowej (inventorySupplierPrices)
+          if (ingredient.id && supplierPricesMap[ingredient.id]) {
+            const prices = supplierPricesMap[ingredient.id];
+            
+            const supplierDetails = prices.map(sp => {
+              const supplier = suppliersMap[sp.supplierId];
+              const supplierName = supplier ? supplier.name : sp.supplierId;
+              const price = sp.price ? `${sp.price.toFixed(2)} ${sp.currency || 'PLN'}` : '';
+              return price ? `${supplierName} (${price})` : supplierName;
+            });
+            
+            if (supplierDetails.length > 0) {
+              suppliersFromInventoryText = supplierDetails.join('; ');
+            }
+          }
+          
+          csvRows.push({
+            'Receptura (SKU)': recipe.name || '',
+            'Opis receptury': recipe.description || '',
+            'Klient': customer ? customer.name : '',
+            'Składnik': ingredient.name || '',
+            'Ilość składnika': ingredient.quantity || '',
+            'Jednostka': ingredient.unit || '',
+            'Dostawcy (z pozycji mag.)': suppliersFromInventoryText,
+            'Dostawcy (z PO)': suppliersFromPOText
+          });
+        }
+        
+        // Informuj użytkownika o postępie
+        if (processedRecipes % 10 === 0) {
+          showInfo(`Przetworzono ${processedRecipes}/${allRecipes.length} receptur...`);
+        }
+      }
+
+      // Utwórz nagłówki CSV
+      const headers = [
+        'Receptura (SKU)', 
+        'Opis receptury', 
+        'Klient', 
+        'Składnik', 
+        'Ilość składnika', 
+        'Jednostka', 
+        'Dostawcy (z pozycji mag.)',
+        'Dostawcy (z PO)'
+      ];
+      
+      // Utwórz zawartość CSV
+      const csvContent = [
+        headers.map(header => `"${header}"`).join(','),
+        ...csvRows.map(row => 
+          headers.map(header => `"${(row[header] || '').toString().replace(/"/g, '""')}"`).join(',')
+        )
+      ].join('\n');
+
+      // Dodaj BOM dla poprawnego kodowania polskich znaków w Excelu
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      
+      // Nazwa pliku z aktualną datą
+      const currentDate = new Date().toISOString().slice(0, 10);
+      const filename = `receptury_z_dostawcami_${currentDate}.csv`;
+      
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showSuccess(`Eksport zakończony! Wyeksportowano ${allRecipes.length} receptur z ${csvRows.length} wierszami.`);
+    } catch (error) {
+      console.error('Błąd podczas eksportu receptur z dostawcami:', error);
+      showError('Wystąpił błąd podczas eksportu');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -1088,48 +1487,62 @@ const RecipeList = () => {
           flexWrap: isMobile ? 'wrap' : 'nowrap',
           justifyContent: isMobile ? 'space-between' : 'flex-end'
         }}>
-          {/* Przycisk do odświeżania indeksu wyszukiwania */}
-          {!isMobile && (
-            <Tooltip title={t('recipes.list.refreshIndex')}>
-              <Button
-                variant="outlined"
-                startIcon={<CachedIcon />}
-                onClick={refreshSearchIndex}
+          {/* Menu akcji - grupuje przyciski w dropdown */}
+          <Tooltip title="Akcje">
+            <IconButton
+              onClick={handleActionsMenuOpen}
+              disabled={loading}
+              color="default"
+              sx={{ border: '1px solid rgba(0, 0, 0, 0.23)' }}
+            >
+              <MoreVertIcon />
+            </IconButton>
+          </Tooltip>
+          
+          <Menu
+            anchorEl={actionsMenuAnchor}
+            open={isActionsMenuOpen}
+            onClose={handleActionsMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            {!isMobile && (
+              <MenuItem 
+                onClick={() => handleMenuAction('refreshIndex')}
                 disabled={loading}
-                size={isMobile ? "small" : "medium"}
               >
+                <CachedIcon sx={{ mr: 1 }} />
                 {t('recipes.list.refreshIndex')}
-              </Button>
-            </Tooltip>
-          )}
-
-          {/* Przycisk eksportu CSV */}
-          <Tooltip title={t('recipes.list.exportCSV')}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={handleExportCSV}
+              </MenuItem>
+            )}
+            <MenuItem 
+              onClick={() => handleMenuAction('exportCSV')}
               disabled={loading || (tabValue === 0 ? filteredRecipes.length === 0 : (!expandedPanel || !customerRecipes[expandedPanel] || customerRecipes[expandedPanel].length === 0))}
-              size={isMobile ? "small" : "medium"}
-              color="secondary"
             >
-              {isMobile ? 'CSV' : t('recipes.list.exportCSV')}
-            </Button>
-          </Tooltip>
-
-          {/* Przycisk synchronizacji numerów CAS */}
-          <Tooltip title={t('recipes.list.syncCAS')}>
-            <Button
-              variant="outlined"
-              startIcon={syncingCAS ? <CircularProgress size={16} /> : <SyncIcon />}
-              onClick={handleSyncAllCAS}
+              <DownloadIcon sx={{ mr: 1 }} />
+              {t('recipes.list.exportCSV')}
+            </MenuItem>
+            <MenuItem 
+              onClick={() => handleMenuAction('exportWithSuppliers')}
+              disabled={loading || (tabValue === 0 ? filteredRecipes.length === 0 : (!expandedPanel || !customerRecipes[expandedPanel] || customerRecipes[expandedPanel].length === 0))}
+            >
+              <DownloadIcon sx={{ mr: 1 }} />
+              {t('recipes.list.exportWithSuppliers')}
+            </MenuItem>
+            <MenuItem 
+              onClick={() => handleMenuAction('syncCAS')}
               disabled={loading || syncingCAS}
-              size={isMobile ? "small" : "medium"}
-              color="warning"
             >
-              {isMobile ? 'CAS' : t('recipes.list.syncCAS')}
-            </Button>
-          </Tooltip>
+              {syncingCAS ? <CircularProgress size={16} sx={{ mr: 1 }} /> : <SyncIcon sx={{ mr: 1 }} />}
+              {t('recipes.list.syncCAS')}
+            </MenuItem>
+          </Menu>
           
           <Button
             variant="contained"
@@ -1355,6 +1768,87 @@ const RecipeList = () => {
           renderGroupedRecipes()
         )
       )}
+
+      {/* Dialog filtrowania eksportu z dostawcami */}
+      <Dialog 
+        open={exportDialogOpen} 
+        onClose={handleCloseExportDialog}
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>
+          {t('recipes.list.exportWithSuppliersTitle')}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {t('recipes.list.exportWithSuppliersDescription')}
+            </Typography>
+            
+            <TextField
+              label={t('recipes.list.searchPlaceholder')}
+              value={exportFilters.searchTerm}
+              onChange={(e) => handleExportFilterChange('searchTerm', e.target.value)}
+              variant="outlined"
+              size="small"
+              fullWidth
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ color: 'action.active', mr: 1 }} />
+              }}
+            />
+            
+            <FormControl size="small" fullWidth>
+              <InputLabel id="export-customer-filter-label">
+                {t('recipes.list.filters.customer')}
+              </InputLabel>
+              <Select
+                labelId="export-customer-filter-label"
+                value={exportFilters.customerId}
+                onChange={(e) => handleExportFilterChange('customerId', e.target.value)}
+                label={t('recipes.list.filters.customer')}
+                displayEmpty
+              >
+                <MenuItem value="">{t('recipes.list.filters.allCustomers')}</MenuItem>
+                {customers.map((customer) => (
+                  <MenuItem key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" fullWidth>
+              <InputLabel id="export-notes-filter-label">
+                {t('recipes.list.filters.notes')}
+              </InputLabel>
+              <Select
+                labelId="export-notes-filter-label"
+                value={exportFilters.notesFilter === null ? '' : exportFilters.notesFilter.toString()}
+                onChange={(e) => handleExportFilterChange('notesFilter', e.target.value === '' ? null : e.target.value === 'true')}
+                label={t('recipes.list.filters.notes')}
+                displayEmpty
+              >
+                <MenuItem value="">{t('recipes.list.filters.allRecipes')}</MenuItem>
+                <MenuItem value="true">{t('recipes.list.filters.withNotes')}</MenuItem>
+                <MenuItem value="false">{t('recipes.list.filters.withoutNotes')}</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseExportDialog} disabled={exporting}>
+            {t('common.cancel')}
+          </Button>
+          <Button 
+            onClick={handleExportRecipesWithSuppliers} 
+            variant="contained" 
+            disabled={exporting}
+            startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
+          >
+            {exporting ? t('recipes.list.exporting') : t('recipes.list.export')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog postępu synchronizacji CAS */}
       <Dialog 
