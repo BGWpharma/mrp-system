@@ -1647,6 +1647,22 @@ export const enrichBusinessDataWithAnalysis = (businessData) => {
     // Analiza tendencji i predykcji
     console.log('Analizuję tendencje i tworzę predykcje...');
     enrichedData.analysis.trendsAndPredictions = analyzeTrendsAndPredictions(businessData.data);
+    
+    // FAZA 3: Analiza łańcucha wartości (value chain)
+    console.log('Analizuję łańcuch wartości (PO → Batch → MO → CO → Invoice)...');
+    enrichedData.analysis.valueChain = analyzeValueChain(businessData);
+    
+    // FAZA 3: Analiza kompletności danych
+    console.log('Analizuję kompletność danych...');
+    enrichedData.analysis.dataCompleteness = analyzeDataCompleteness(businessData);
+    
+    // FAZA 3: Generuj insights o brakach w danych
+    if (enrichedData.analysis.dataCompleteness && !enrichedData.analysis.dataCompleteness.isEmpty) {
+      console.log('Generuję insights o kompletności danych...');
+      enrichedData.analysis.dataCompletenessInsights = generateDataCompletenessInsights(
+        enrichedData.analysis.dataCompleteness
+      );
+    }
   }
   
   return enrichedData;
@@ -1874,7 +1890,10 @@ export const prepareBusinessDataForAI = async (query = '') => {
       'counters', 'inventorySupplierPrices', 'inventoryTransactions', 
       'itemGroups', 'notifications', 'priceListItems', 'priceLists',
       'productionHistory', 'recipeVersions', 'settings', 'users',
-      'warehouses', 'workstations', 'inventoryBatches'
+      'warehouses', 'workstations', 'inventoryBatches',
+      // FAZA 1: Nowe kolekcje dla AI
+      'invoices', 'cmrDocuments', 'qualityTests', 
+      'stocktaking', 'inventorySupplierPriceHistory'
     ];
     
     additionalCollections.forEach(collectionName => {
@@ -1928,7 +1947,13 @@ export const prepareBusinessDataForAI = async (query = '') => {
         users: batchData.users || [],
         warehouses: batchData.warehouses || [],
         workstations: batchData.workstations || [],
-        inventoryBatches: batchData.inventoryBatches || []
+        inventoryBatches: batchData.inventoryBatches || [],
+        // FAZA 1: Nowe kolekcje dla analizy finansowej, logistycznej i jakościowej
+        invoices: batchData.invoices || [],
+        cmrDocuments: batchData.cmrDocuments || [],
+        qualityTests: batchData.qualityTests || [],
+        stocktaking: batchData.stocktaking || [],
+        inventorySupplierPriceHistory: batchData.inventorySupplierPriceHistory || []
       },
       summary: summaryData,
       timestamp: new Date().toISOString(),
@@ -1956,7 +1981,13 @@ export const prepareBusinessDataForAI = async (query = '') => {
         users: (batchData.users?.length || 0) > 0,
         warehouses: (batchData.warehouses?.length || 0) > 0,
         workstations: (batchData.workstations?.length || 0) > 0,
-        inventoryBatches: (batchData.inventoryBatches?.length || 0) > 0
+        inventoryBatches: (batchData.inventoryBatches?.length || 0) > 0,
+        // FAZA 1: Kompletność nowych kolekcji
+        invoices: (batchData.invoices?.length || 0) > 0,
+        cmrDocuments: (batchData.cmrDocuments?.length || 0) > 0,
+        qualityTests: (batchData.qualityTests?.length || 0) > 0,
+        stocktaking: (batchData.stocktaking?.length || 0) > 0,
+        inventorySupplierPriceHistory: (batchData.inventorySupplierPriceHistory?.length || 0) > 0
       },
       // Przekazujemy zapytanie użytkownika, aby móc lepiej dopasować odpowiedź
       query: query
@@ -2377,4 +2408,359 @@ export const getInventoryBatchByNumber = async (targetBatchNumber) => {
     console.error(`Błąd podczas pobierania partii magazynowej o numerze ${targetBatchNumber}:`, error);
     return null;
   }
+};
+
+/**
+ * FAZA 3: Analizuje łańcuch wartości (value chain) dla zamówień
+ * Śledzi ścieżkę: PO → Batch → MO → CO → Invoice
+ * @param {Object} businessData - Dane biznesowe
+ * @returns {Object} - Analiza łańcucha wartości
+ */
+export const analyzeValueChain = (businessData) => {
+  if (!businessData || !businessData.data) {
+    return { isEmpty: true };
+  }
+
+  const { 
+    orders = [], 
+    productionTasks = [], 
+    purchaseOrders = [],
+    materialBatches = [],
+    invoices = [],
+    qualityTests = []
+  } = businessData.data;
+
+  const valueChains = [];
+
+  // Dla każdego zamówienia klienta, znajdź pełną ścieżkę
+  orders.forEach(order => {
+    const chain = {
+      orderId: order.id,
+      orderNumber: order.number || order.orderNumber,
+      customerName: order.customer?.name || order.customerName,
+      orderValue: order.totalValue || order.total || 0,
+      
+      // Znajdź powiązane MO
+      productionTasks: productionTasks.filter(task => 
+        task.orderId === order.id || 
+        task.linkedOrderId === order.id ||
+        (task.orderNumber && task.orderNumber === order.number)
+      ),
+      
+      // Znajdź faktury
+      invoices: invoices.filter(inv => 
+        inv.orderId === order.id ||
+        (inv.orderNumber && inv.orderNumber === order.number)
+      ),
+      
+      // Oblicz kompletność łańcucha
+      hasProduction: false,
+      hasInvoice: false,
+      hasBatches: false,
+      hasQualityTests: false,
+      completenessScore: 0
+    };
+
+    // Znajdź partie i PO dla każdego MO
+    chain.productionTasks.forEach(task => {
+      chain.hasProduction = true;
+      
+      // Znajdź partie użyte w produkcji (przez consumedMaterials lub ingredients)
+      const usedBatches = materialBatches.filter(batch => {
+        if (task.consumedMaterials) {
+          return task.consumedMaterials.some(cm => cm.batchId === batch.id);
+        }
+        if (task.ingredients) {
+          return task.ingredients.some(ing => ing.batchNumber === batch.batchNumber);
+        }
+        return false;
+      });
+
+      if (usedBatches.length > 0) {
+        chain.hasBatches = true;
+        
+        // Znajdź PO dla każdej partii
+        task.linkedBatches = usedBatches.map(batch => ({
+          batchId: batch.id,
+          batchNumber: batch.batchNumber,
+          materialName: batch.name || batch.materialName,
+          purchaseOrder: purchaseOrders.find(po => 
+            po.id === batch.purchaseOrderId ||
+            (po.items && po.items.some(item => item.batchNumber === batch.batchNumber))
+          )
+        }));
+      }
+
+      // Znajdź testy jakościowe
+      const tests = qualityTests.filter(test => 
+        test.productionTaskId === task.id ||
+        test.moNumber === task.moNumber
+      );
+
+      if (tests.length > 0) {
+        chain.hasQualityTests = true;
+        task.qualityTests = tests;
+      }
+    });
+
+    chain.hasInvoice = chain.invoices.length > 0;
+
+    // Oblicz score kompletności
+    let score = 0;
+    if (chain.hasProduction) score += 0.25;
+    if (chain.hasBatches) score += 0.25;
+    if (chain.hasQualityTests) score += 0.25;
+    if (chain.hasInvoice) score += 0.25;
+    chain.completenessScore = score;
+
+    // Dodaj missing steps
+    chain.missingSteps = [];
+    if (!chain.hasProduction) chain.missingSteps.push('production');
+    if (!chain.hasBatches) chain.missingSteps.push('batches');
+    if (!chain.hasQualityTests) chain.missingSteps.push('qualityTests');
+    if (!chain.hasInvoice) chain.missingSteps.push('invoice');
+
+    valueChains.push(chain);
+  });
+
+  // Statystyki
+  const completeChains = valueChains.filter(c => c.completenessScore === 1.0);
+  const incompleteChains = valueChains.filter(c => c.completenessScore < 1.0);
+  const avgCompleteness = valueChains.length > 0 
+    ? valueChains.reduce((sum, c) => sum + c.completenessScore, 0) / valueChains.length 
+    : 0;
+
+  return {
+    totalOrders: orders.length,
+    valueChains,
+    statistics: {
+      completeChains: completeChains.length,
+      incompleteChains: incompleteChains.length,
+      avgCompleteness: Math.round(avgCompleteness * 100),
+      ordersWithoutProduction: valueChains.filter(c => !c.hasProduction).length,
+      ordersWithoutInvoice: valueChains.filter(c => !c.hasInvoice).length,
+      ordersWithoutQualityTests: valueChains.filter(c => !c.hasQualityTests).length
+    }
+  };
+};
+
+/**
+ * FAZA 3: Analizuje kompletność danych dla kluczowych dokumentów
+ * @param {Object} businessData - Dane biznesowe
+ * @returns {Object} - Analiza kompletności danych
+ */
+export const analyzeDataCompleteness = (businessData) => {
+  if (!businessData || !businessData.data) {
+    return { isEmpty: true };
+  }
+
+  const { 
+    productionTasks = [],
+    orders = [],
+    invoices = [],
+    qualityTests = [],
+    materialBatches = [],
+    purchaseOrders = [],
+    cmrDocuments = []
+  } = businessData.data;
+
+  const analysis = {
+    productionTasks: [],
+    orders: [],
+    overallScore: 0
+  };
+
+  // Analiza zadań produkcyjnych
+  productionTasks.forEach(task => {
+    const completeness = {
+      id: task.id,
+      moNumber: task.moNumber,
+      name: task.name || task.productName,
+      status: task.status,
+      
+      // Sprawdź powiązania
+      hasRecipe: !!(task.recipeId || task.recipe),
+      hasOrder: !!(task.orderId || task.linkedOrderId),
+      hasBatches: materialBatches.some(b => 
+        task.consumedMaterials?.some(cm => cm.batchId === b.id) ||
+        task.ingredients?.some(ing => ing.batchNumber === b.batchNumber)
+      ),
+      hasQualityTests: qualityTests.some(t => 
+        t.productionTaskId === task.id || t.moNumber === task.moNumber
+      ),
+      hasInvoice: false,
+      
+      missingData: [],
+      completenessScore: 0
+    };
+
+    // Sprawdź fakturę (przez zamówienie)
+    if (completeness.hasOrder) {
+      const relatedOrder = orders.find(o => 
+        o.id === task.orderId || o.id === task.linkedOrderId
+      );
+      if (relatedOrder) {
+        completeness.hasInvoice = invoices.some(inv => inv.orderId === relatedOrder.id);
+      }
+    }
+
+    // Oblicz score
+    let score = 0;
+    const totalChecks = 5;
+    
+    if (completeness.hasRecipe) score++; else completeness.missingData.push('recipe');
+    if (completeness.hasOrder) score++; else completeness.missingData.push('customerOrder');
+    if (completeness.hasBatches) score++; else completeness.missingData.push('materialBatches');
+    if (completeness.hasQualityTests) score++; else completeness.missingData.push('qualityTests');
+    if (completeness.hasInvoice) score++; else completeness.missingData.push('invoice');
+    
+    completeness.completenessScore = score / totalChecks;
+    analysis.productionTasks.push(completeness);
+  });
+
+  // Analiza zamówień klientów
+  orders.forEach(order => {
+    const completeness = {
+      id: order.id,
+      orderNumber: order.number || order.orderNumber,
+      customerName: order.customer?.name || order.customerName,
+      status: order.status,
+      
+      hasProduction: productionTasks.some(t => 
+        t.orderId === order.id || t.linkedOrderId === order.id
+      ),
+      hasInvoice: invoices.some(inv => inv.orderId === order.id),
+      hasCMR: cmrDocuments.some(cmr => 
+        cmr.linkedOrderIds?.includes(order.id) || cmr.linkedOrderId === order.id
+      ),
+      
+      missingData: [],
+      completenessScore: 0
+    };
+
+    // Oblicz score
+    let score = 0;
+    const totalChecks = 3;
+    
+    if (completeness.hasProduction) score++; else completeness.missingData.push('production');
+    if (completeness.hasInvoice) score++; else completeness.missingData.push('invoice');
+    if (completeness.hasCMR) score++; else completeness.missingData.push('cmr');
+    
+    completeness.completenessScore = score / totalChecks;
+    analysis.orders.push(completeness);
+  });
+
+  // Ogólne statystyki
+  const allCompleteness = [
+    ...analysis.productionTasks.map(t => t.completenessScore),
+    ...analysis.orders.map(o => o.completenessScore)
+  ];
+
+  analysis.overallScore = allCompleteness.length > 0
+    ? Math.round(allCompleteness.reduce((sum, s) => sum + s, 0) / allCompleteness.length * 100)
+    : 0;
+
+  analysis.statistics = {
+    totalProductionTasks: productionTasks.length,
+    productionTasksWithIssues: analysis.productionTasks.filter(t => t.completenessScore < 1.0).length,
+    totalOrders: orders.length,
+    ordersWithIssues: analysis.orders.filter(o => o.completenessScore < 1.0).length,
+    
+    // Szczegółowe braki
+    tasksWithoutQualityTests: analysis.productionTasks.filter(t => !t.hasQualityTests).length,
+    tasksWithoutBatches: analysis.productionTasks.filter(t => !t.hasBatches).length,
+    ordersWithoutInvoices: analysis.orders.filter(o => !o.hasInvoice).length,
+    ordersWithoutCMR: analysis.orders.filter(o => !o.hasCMR).length,
+    ordersWithoutProduction: analysis.orders.filter(o => !o.hasProduction).length
+  };
+
+  return analysis;
+};
+
+/**
+ * FAZA 3: Generuje insights i ostrzeżenia o brakujących danych
+ * @param {Object} completenessAnalysis - Analiza kompletności
+ * @returns {Array} - Lista insights/ostrzeżeń
+ */
+export const generateDataCompletenessInsights = (completenessAnalysis) => {
+  if (!completenessAnalysis || completenessAnalysis.isEmpty) {
+    return [];
+  }
+
+  const insights = [];
+  const stats = completenessAnalysis.statistics;
+
+  // Ostrzeżenia o brakujących testach jakościowych
+  if (stats.tasksWithoutQualityTests > 0) {
+    insights.push({
+      type: 'warning',
+      category: 'quality',
+      priority: 'high',
+      message: `⚠️ ${stats.tasksWithoutQualityTests} zadań produkcyjnych nie ma testów jakościowych`,
+      recommendation: 'Przeprowadź testy jakościowe dla zakończonych MO',
+      affectedCount: stats.tasksWithoutQualityTests,
+      query: 'Które MO nie mają testów jakościowych?'
+    });
+  }
+
+  // Ostrzeżenia o brakujących fakturach
+  if (stats.ordersWithoutInvoices > 0) {
+    insights.push({
+      type: 'warning',
+      category: 'finance',
+      priority: 'high',
+      message: `⚠️ ${stats.ordersWithoutInvoices} zamówień nie ma wystawionych faktur`,
+      recommendation: 'Wystaw faktury dla zrealizowanych zamówień',
+      affectedCount: stats.ordersWithoutInvoices,
+      query: 'Które zamówienia nie mają faktur?'
+    });
+  }
+
+  // Ostrzeżenia o brakujących CMR
+  if (stats.ordersWithoutCMR > 0) {
+    insights.push({
+      type: 'info',
+      category: 'logistics',
+      priority: 'medium',
+      message: `ℹ️ ${stats.ordersWithoutCMR} zamówień nie ma dokumentów CMR`,
+      recommendation: 'Dodaj dokumenty CMR dla wysłanych zamówień',
+      affectedCount: stats.ordersWithoutCMR,
+      query: 'Które zamówienia nie mają CMR?'
+    });
+  }
+
+  // Ostrzeżenia o zamówieniach bez produkcji
+  if (stats.ordersWithoutProduction > 0) {
+    insights.push({
+      type: 'info',
+      category: 'production',
+      priority: 'medium',
+      message: `ℹ️ ${stats.ordersWithoutProduction} zamówień nie ma powiązanych zadań produkcyjnych`,
+      recommendation: 'Utwórz zadania produkcyjne dla zamówień',
+      affectedCount: stats.ordersWithoutProduction,
+      query: 'Które zamówienia nie mają zadań produkcyjnych?'
+    });
+  }
+
+  // Ogólna ocena kompletności
+  if (completenessAnalysis.overallScore < 70) {
+    insights.push({
+      type: 'warning',
+      category: 'dataQuality',
+      priority: 'high',
+      message: `⚠️ Ogólna kompletność danych: ${completenessAnalysis.overallScore}% (poniżej 70%)`,
+      recommendation: 'Uzupełnij brakujące dane dla lepszej spójności systemu',
+      query: 'Pokaż wszystkie braki w danych'
+    });
+  } else if (completenessAnalysis.overallScore >= 90) {
+    insights.push({
+      type: 'success',
+      category: 'dataQuality',
+      priority: 'low',
+      message: `✅ Świetna kompletność danych: ${completenessAnalysis.overallScore}%`,
+      recommendation: 'Utrzymuj wysoki standard dokumentacji'
+    });
+  }
+
+  return insights;
 };

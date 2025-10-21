@@ -60,8 +60,17 @@ export class ContextOptimizer {
       production: /produkc|zadani|MO|zlecen|harmonogram/i.test(lowerQuery),
       suppliers: /dostawc|supplier|vendor/i.test(lowerQuery),
       analytics: /analiz|trend|statystyk|porówn|wykres/i.test(lowerQuery),
-      quality: /jakość|test|kontrola|certyfikat/i.test(lowerQuery),
-      costs: /koszt|cena|opłacalność|rentowność|finansow/i.test(lowerQuery)
+      quality: /jakość|test|kontrola|certyfikat|CoA/i.test(lowerQuery),
+      costs: /koszt|cena|opłacalność|rentowność|finansow/i.test(lowerQuery),
+      // FAZA 1: Nowe kategorie
+      invoices: /faktur|płatnoś|należnoś|invoice|termin płatności|zaległoś/i.test(lowerQuery),
+      transport: /cmr|transport|wysyłk|przewóz|logistyk|dostarcz/i.test(lowerQuery),
+      stocktaking: /inwentaryzac|rozbieżnoś|straty|nadwyżk|spis/i.test(lowerQuery),
+      priceHistory: /historia cen|zmiana cen|trend cenow/i.test(lowerQuery),
+      // FAZA 3: Kategorie łańcucha wartości i kompletności
+      valueChain: /łańcuch|ścieżk[aęi]|prześledz|od.*do|wartości|rentowność|marż[aąy]/i.test(lowerQuery),
+      dataQuality: /kompletność|brak|luk[aiy]|niekompletn|brakując|bez|nie ma/i.test(lowerQuery),
+      traceability: /pochodzenie|skąd|źródło|historia|traceability/i.test(lowerQuery)
     };
 
     // Wykryj specyficzne operacje
@@ -118,6 +127,12 @@ export class ContextOptimizer {
       purchaseOrders: 0.2,          // Zamówienia zakupu - kluczowe dla dostawców
       inventorySupplierPrices: 0.2, // Ceny od dostawców
       summary: 0.8, // Zawsze istotne podsumowanie
+      // FAZA 1: Nowe kolekcje
+      invoices: 0.2,
+      cmrDocuments: 0.2,
+      qualityTests: 0.2,
+      stocktaking: 0.2,
+      inventorySupplierPriceHistory: 0.1
     };
 
     // Zwiększ istotność na podstawie kategorii
@@ -131,6 +146,75 @@ export class ContextOptimizer {
         relevancy.purchaseOrders = 1.0;
         relevancy.inventorySupplierPrices = 1.0;
         console.log('[ContextOptimizer] Wykryto zapytanie o dostawców - dodaję purchaseOrders i inventorySupplierPrices');
+      }
+      
+      // FAZA 1: Zapytania o faktury wymagają zamówień i klientów
+      if (category === 'invoices') {
+        relevancy.invoices = 1.0;
+        relevancy.orders = 1.0;
+        relevancy.customers = 1.0;
+        console.log('[ContextOptimizer] Wykryto zapytanie o faktury - dodaję orders i customers');
+      }
+      
+      // FAZA 1: Zapytania o transport wymagają zamówień i CMR
+      if (category === 'transport') {
+        relevancy.cmrDocuments = 1.0;
+        relevancy.orders = 1.0;
+        relevancy.customers = 0.8;
+        console.log('[ContextOptimizer] Wykryto zapytanie o transport - dodaję cmrDocuments i orders');
+      }
+      
+      // FAZA 1: Zapytania o jakość wymagają testów i zadań produkcyjnych
+      if (category === 'quality') {
+        relevancy.qualityTests = 1.0;
+        relevancy.production = 0.8;
+        relevancy.inventory = 0.6;
+        console.log('[ContextOptimizer] Wykryto zapytanie o jakość - dodaję qualityTests i production');
+      }
+      
+      // FAZA 1: Zapytania o inwentaryzacje
+      if (category === 'stocktaking') {
+        relevancy.stocktaking = 1.0;
+        relevancy.inventory = 1.0;
+        console.log('[ContextOptimizer] Wykryto zapytanie o inwentaryzację - dodaję stocktaking i inventory');
+      }
+      
+      // FAZA 1: Zapytania o historię cen
+      if (category === 'priceHistory') {
+        relevancy.inventorySupplierPriceHistory = 1.0;
+        relevancy.suppliers = 0.8;
+        relevancy.inventory = 0.6;
+        console.log('[ContextOptimizer] Wykryto zapytanie o historię cen - dodaję inventorySupplierPriceHistory');
+      }
+      
+      // FAZA 3: Zapytania o łańcuch wartości
+      if (category === 'valueChain') {
+        relevancy.orders = 1.0;
+        relevancy.production = 1.0;
+        relevancy.invoices = 1.0;
+        relevancy.purchaseOrders = 0.9;
+        relevancy.inventory = 0.8;
+        console.log('[ContextOptimizer] Wykryto zapytanie o łańcuch wartości - dodaję pełny kontekst transakcji');
+      }
+      
+      // FAZA 3: Zapytania o kompletność/jakość danych
+      if (category === 'dataQuality') {
+        // Dla zapytań o braki potrzebujemy wszystkich danych
+        relevancy.orders = 1.0;
+        relevancy.production = 1.0;
+        relevancy.invoices = 1.0;
+        relevancy.qualityTests = 1.0;
+        relevancy.cmrDocuments = 0.8;
+        console.log('[ContextOptimizer] Wykryto zapytanie o kompletność danych - dodaję wszystkie kolekcje');
+      }
+      
+      // FAZA 3: Zapytania o traceability (śledzenie pochodzenia)
+      if (category === 'traceability') {
+        relevancy.purchaseOrders = 1.0;
+        relevancy.inventory = 1.0;
+        relevancy.production = 1.0;
+        relevancy.suppliers = 0.9;
+        console.log('[ContextOptimizer] Wykryto zapytanie o traceability - dodaję łańcuch dostaw');
       }
     });
 
@@ -482,6 +566,60 @@ export class ContextOptimizer {
         price: item.price,
         currency: item.currency,
         minQuantity: item.minQuantity
+      }),
+      // FAZA 1: Nowe simplifications
+      invoices: (item) => ({
+        id: item.id,
+        number: item.number,
+        customer: item.customer,
+        customerId: item.customerId,
+        orderId: item.orderId,
+        issueDate: item.issueDate,
+        dueDate: item.dueDate,
+        totalAmount: item.totalAmount,
+        paidAmount: item.paidAmount,
+        status: item.status,
+        paymentStatus: item.paymentStatus
+      }),
+      cmrDocuments: (item) => ({
+        id: item.id,
+        cmrNumber: item.cmrNumber,
+        status: item.status,
+        linkedOrderIds: item.linkedOrderIds || (item.linkedOrderId ? [item.linkedOrderId] : []),
+        sender: item.sender,
+        receiver: item.receiver,
+        carrier: item.carrier,
+        issueDate: item.issueDate,
+        deliveryDate: item.deliveryDate,
+        loadingDate: item.loadingDate
+      }),
+      qualityTests: (item) => ({
+        id: item.id,
+        testName: item.testName,
+        batchNumber: item.batchNumber,
+        productionTaskId: item.productionTaskId,
+        status: item.status,
+        testDate: item.testDate,
+        performedBy: item.performedBy,
+        resultsCount: item.results?.length || 0
+      }),
+      stocktaking: (item) => ({
+        id: item.id,
+        name: item.name,
+        warehouseId: item.warehouseId,
+        status: item.status,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        performedBy: item.performedBy
+      }),
+      inventorySupplierPriceHistory: (item) => ({
+        id: item.id,
+        inventoryId: item.inventoryId,
+        supplierId: item.supplierId,
+        price: item.price,
+        currency: item.currency,
+        effectiveDate: item.effectiveDate,
+        changeReason: item.changeReason
       })
     };
 
