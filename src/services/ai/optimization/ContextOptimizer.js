@@ -115,6 +115,8 @@ export class ContextOptimizer {
       production: 0.3,
       suppliers: 0.2,
       customers: 0.2,
+      purchaseOrders: 0.2,          // Zamówienia zakupu - kluczowe dla dostawców
+      inventorySupplierPrices: 0.2, // Ceny od dostawców
       summary: 0.8, // Zawsze istotne podsumowanie
     };
 
@@ -123,7 +125,21 @@ export class ContextOptimizer {
       if (relevancy.hasOwnProperty(category)) {
         relevancy[category] = 1.0; // Maksymalna istotność
       }
+      
+      // Specjalna reguła: zapytania o dostawców wymagają purchaseOrders!
+      if (category === 'suppliers') {
+        relevancy.purchaseOrders = 1.0;
+        relevancy.inventorySupplierPrices = 1.0;
+        console.log('[ContextOptimizer] Wykryto zapytanie o dostawców - dodaję purchaseOrders i inventorySupplierPrices');
+      }
     });
+
+    // Wykryj zapytania o komponenty receptur - mogą wymagać danych o dostawcach
+    if (queryAnalysis.categories.recipes && queryAnalysis.categories.suppliers) {
+      relevancy.purchaseOrders = 1.0;
+      relevancy.inventorySupplierPrices = 1.0;
+      console.log('[ContextOptimizer] Wykryto zapytanie o komponenty i dostawców - dodaję powiązane dane');
+    }
 
     // Specjalne reguły
     if (queryAnalysis.operations.count) {
@@ -446,6 +462,26 @@ export class ContextOptimizer {
         recipe: item.recipe || item.recipeId,
         quantity: item.quantity,
         moNumber: item.moNumber
+      }),
+      purchaseOrders: (item) => ({
+        id: item.id,
+        number: item.number || item.poNumber,
+        supplierId: item.supplierId,
+        supplierName: item.supplierName,
+        status: item.status,
+        orderDate: item.orderDate || item.createdAt,
+        deliveryDate: item.deliveryDate || item.expectedDeliveryDate,
+        totalValue: item.totalValue || item.totalGross,
+        items: item.items || [],  // ✅ KLUCZOWE! Zachowujemy items!
+        currency: item.currency
+      }),
+      inventorySupplierPrices: (item) => ({
+        id: item.id,
+        inventoryId: item.inventoryId,
+        supplierId: item.supplierId,
+        price: item.price,
+        currency: item.currency,
+        minQuantity: item.minQuantity
       })
     };
 

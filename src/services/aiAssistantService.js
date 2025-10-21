@@ -127,23 +127,55 @@ export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
       contextHash,
       async () => {
         // Wykonanie rzeczywistego zapytania API
+        // GPT-5 ma inne wymagania API niż poprzednie modele
+        const isGPT5 = modelConfig.model === 'gpt-5';
+        
+        const requestBody = {
+          model: modelConfig.model,
+          messages
+        };
+        
+        // GPT-5 wymaga innych parametrów:
+        if (isGPT5) {
+          // GPT-5 używa max_completion_tokens i nie wspiera niestandardowego temperature
+          // WAŻNE: max_completion_tokens obejmuje reasoning_tokens + output_tokens
+          // Musimy dać dużo więcej miejsca, bo GPT-5 używa dużo tokenów na wewnętrzne rozumowanie
+          requestBody.max_completion_tokens = 20000;  // Łączny limit (reasoning + output)
+          
+          // GPT-5 wymaga nowych parametrów kontrolujących generowanie odpowiedzi
+          requestBody.reasoning_effort = 'medium';  // low, medium, high - kontroluje czas rozumowania
+          requestBody.verbosity = 'high';           // low, medium, high - kontroluje długość odpowiedzi (zmienione na 'high' dla pełnych list)
+          
+          console.log('[GPT-5] Parametry zapytania:', {
+            max_completion_tokens: requestBody.max_completion_tokens,
+            reasoning_effort: requestBody.reasoning_effort,
+            verbosity: requestBody.verbosity,
+            note: 'max_completion_tokens includes reasoning_tokens + output_tokens'
+          });
+          
+          // GPT-5 przyjmuje tylko domyślną wartość temperature (1)
+          // Nie dodajemy parametru temperature dla GPT-5
+        } else {
+          // Inne modele używają standardowych parametrów
+          requestBody.max_tokens = modelConfig.maxTokens;
+          requestBody.temperature = modelConfig.temperature;
+        }
+        
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
           },
-          body: JSON.stringify({
-            model: modelConfig.model,
-            messages,
-            temperature: modelConfig.temperature,
-            max_tokens: modelConfig.maxTokens
-          })
+          body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
           const errorData = await response.json();
           const errorMessage = errorData.error?.message || 'Błąd podczas komunikacji z API OpenAI';
+          
+          console.error('[API Error] Status:', response.status, 'Message:', errorMessage);
+          console.error('[API Error] Full error data:', errorData);
           
           // Sprawdzamy, czy error dotyczy limitu zapytań lub pobierania
           if (response.status === 429) {
@@ -156,7 +188,54 @@ export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
         }
         
         const data = await response.json();
-        return data.choices[0].message.content;
+        
+        // DEBUGGING dla GPT-5
+        if (modelConfig.model === 'gpt-5') {
+          console.log('[GPT-5 DEBUG] Pełna odpowiedź API:', JSON.stringify(data, null, 2));
+          console.log('[GPT-5 DEBUG] data.choices:', data.choices);
+          if (data.choices && data.choices[0]) {
+            console.log('[GPT-5 DEBUG] data.choices[0]:', data.choices[0]);
+            console.log('[GPT-5 DEBUG] data.choices[0].message:', data.choices[0].message);
+            console.log('[GPT-5 DEBUG] data.choices[0].message.content:', data.choices[0].message.content);
+          }
+          
+          // Analiza użycia tokenów (ważne dla GPT-5!)
+          if (data.usage) {
+            console.log('[GPT-5 DEBUG] 📊 Użycie tokenów:', {
+              prompt_tokens: data.usage.prompt_tokens,
+              completion_tokens: data.usage.completion_tokens,
+              reasoning_tokens: data.usage.completion_tokens_details?.reasoning_tokens || 0,
+              output_tokens: (data.usage.completion_tokens - (data.usage.completion_tokens_details?.reasoning_tokens || 0)),
+              finish_reason: data.choices[0]?.finish_reason
+            });
+            
+            // Ostrzeżenie jeśli reasoning zjada wszystkie tokeny
+            const reasoningTokens = data.usage.completion_tokens_details?.reasoning_tokens || 0;
+            const outputTokens = data.usage.completion_tokens - reasoningTokens;
+            if (reasoningTokens > 0 && outputTokens < 100) {
+              console.warn('[GPT-5 WARNING] ⚠️ Reasoning tokens zajęły prawie cały limit!', {
+                reasoning: reasoningTokens,
+                output: outputTokens,
+                recommendation: 'Zwiększ max_completion_tokens lub zmniejsz reasoning_effort'
+              });
+            }
+          }
+        }
+        
+        // Sprawdź czy odpowiedź istnieje
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          console.error('[API Error] Brak struktury choices w odpowiedzi:', data);
+          throw new Error('API zwróciło odpowiedź w nieoczekiwanym formacie');
+        }
+        
+        const content = data.choices[0].message.content;
+        
+        if (!content || content.trim() === '') {
+          console.error('[API Error] Pusta zawartość w odpowiedzi. Pełna odpowiedź:', data);
+          throw new Error('API zwróciło pustą odpowiedź');
+        }
+        
+        return content;
       },
       cacheOptions
     );

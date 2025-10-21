@@ -76,6 +76,7 @@ import APIQuotaAlert from './APIQuotaAlert';
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
@@ -177,6 +178,7 @@ import APIQuotaAlert from './APIQuotaAlert';
         showError('Nie udało się pobrać wiadomości z wybranej konwersacji');
       } finally {
         setLoading(false);
+        setStatusMessage('');
       }
     };
 
@@ -285,6 +287,7 @@ import APIQuotaAlert from './APIQuotaAlert';
       // Wyczyść pole inputa i pokaż wskaźnik ładowania
       setInput('');
       setLoading(true);
+      setStatusMessage('Przygotowywanie zapytania...');
       
       console.log('Wysyłanie wiadomości:', currentInput);
 
@@ -293,12 +296,14 @@ import APIQuotaAlert from './APIQuotaAlert';
       if (!conversationId) {
         try {
           console.log('Tworzenie nowej konwersacji...');
+          setStatusMessage('Tworzenie nowej konwersacji...');
           conversationId = await createConversation(currentUser.uid);
           setCurrentConversationId(conversationId);
         } catch (error) {
           console.error('Błąd podczas tworzenia nowej konwersacji:', error);
           showError('Nie udało się utworzyć nowej konwersacji');
           setLoading(false);
+          setStatusMessage('');
           return;
         }
       }
@@ -308,6 +313,7 @@ import APIQuotaAlert from './APIQuotaAlert';
         
         // Dodaj wiadomość użytkownika do bazy danych
         console.log('Dodawanie wiadomości użytkownika do bazy danych...');
+        setStatusMessage('Zapisywanie wiadomości...');
         const userMessageId = await addMessageToConversation(conversationId, 'user', currentInput, attachments);
         console.log('ID wiadomości użytkownika:', userMessageId);
         
@@ -338,6 +344,13 @@ import APIQuotaAlert from './APIQuotaAlert';
         
         // Przetwórz zapytanie i uzyskaj odpowiedź asystenta
         console.log('Przetwarzanie zapytania przez AI...');
+        setStatusMessage('Pobieranie danych z bazy...');
+        
+        // Po chwili zmień na następny krok
+        setTimeout(() => {
+          setStatusMessage('GPT-5 przetwarza zapytanie... (to może potrwać ~20-60 sek)');
+        }, 2000);
+        
         const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid, attachments);
         console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
         
@@ -345,6 +358,7 @@ import APIQuotaAlert from './APIQuotaAlert';
           console.error('Otrzymano pustą odpowiedź od asystenta AI');
           showError('Nie otrzymano odpowiedzi od asystenta. Spróbuj ponownie później.');
           setLoading(false);
+          setStatusMessage('');
           return;
         }
         
@@ -354,6 +368,7 @@ import APIQuotaAlert from './APIQuotaAlert';
         
         // Dodaj odpowiedź asystenta do bazy danych
         console.log('Dodawanie odpowiedzi asystenta do bazy danych...');
+        setStatusMessage('Zapisywanie odpowiedzi...');
         const assistantMessageId = await addMessageToConversation(conversationId, 'assistant', aiResponse);
         console.log('ID wiadomości asystenta:', assistantMessageId);
         
@@ -366,6 +381,9 @@ import APIQuotaAlert from './APIQuotaAlert';
         };
         
         setMessages(prevMessages => [...prevMessages, assistantMessage]);
+        
+        // Wyczyść status message
+        setStatusMessage('');
         
         // Jeśli mamy wiadomość o opóźnieniu, uruchom drugi proces pobierania
         if (isDelayedResponse) {
@@ -433,6 +451,7 @@ import APIQuotaAlert from './APIQuotaAlert';
       }
     } finally {
       setLoading(false);
+      setStatusMessage('');
     }
   };
 
@@ -1227,12 +1246,38 @@ import APIQuotaAlert from './APIQuotaAlert';
             )}
             
             {loading && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 2, flex: '0 0 auto' }}>
-                <CircularProgress size={20} />
-                <Typography variant="body2" color="text.secondary">
-                  {t('aiAssistant.loading.replying')}
-                </Typography>
-              </Box>
+              <Card 
+                sx={{ 
+                  maxWidth: '90%',
+                  alignSelf: 'flex-start',
+                  backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                  flex: '0 0 auto'
+                }}
+              >
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                    <Avatar 
+                      sx={{ 
+                        width: 28, 
+                        height: 28,
+                        bgcolor: 'primary.main'
+                      }}
+                    >
+                      <BotIcon />
+                    </Avatar>
+                    <Typography variant="subtitle2">
+                      {t('aiAssistant.message.assistant')}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 4 }}>
+                    <CircularProgress size={16} />
+                    <Typography variant="body2" color="text.secondary">
+                      {statusMessage || t('aiAssistant.loading.replying')}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
             )}
             
             <div ref={messagesEndRef} />

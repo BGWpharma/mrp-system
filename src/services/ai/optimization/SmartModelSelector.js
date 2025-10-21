@@ -6,7 +6,8 @@
  */
 export class SmartModelSelector {
   
-  // Definicje kosztów i wydajności modeli (stan na 2024)
+  // Definicje kosztów i wydajności modeli (stan na 2024-2025)
+  // GPT-5 z wbudowaną inteligencją wyboru podmodelu
   static MODEL_SPECS = {
     'gpt-4o-mini': {
       costPer1kInputTokens: 0.00015,
@@ -14,31 +15,15 @@ export class SmartModelSelector {
       maxTokens: 128000,
       speed: 'very_fast',
       capabilities: ['simple_analysis', 'basic_qa', 'summarization'],
-      recommendedFor: ['simple', 'fast_response']
-    },
-    'gpt-3.5-turbo': {
-      costPer1kInputTokens: 0.0015,
-      costPer1kOutputTokens: 0.002,
-      maxTokens: 16385,
-      speed: 'fast',
-      capabilities: ['medium_analysis', 'reasoning', 'complex_qa'],
-      recommendedFor: ['medium', 'balanced']
-    },
-    'gpt-4o': {
-      costPer1kInputTokens: 0.005,
-      costPer1kOutputTokens: 0.015,
-      maxTokens: 128000,
-      speed: 'medium',
-      capabilities: ['complex_analysis', 'advanced_reasoning', 'expert_knowledge'],
-      recommendedFor: ['complex', 'high_accuracy']
+      recommendedFor: ['simple', 'fast_response', 'count_queries']
     },
     'gpt-5': {
-      costPer1kInputTokens: 0.01,
-      costPer1kOutputTokens: 0.03,
-      maxTokens: 200000,
-      speed: 'medium_fast',
-      capabilities: ['advanced_analysis', 'multimodal_reasoning', 'expert_knowledge', 'complex_problem_solving', 'creative_thinking'],
-      recommendedFor: ['complex', 'high_accuracy', 'advanced_analytics', 'creative_tasks']
+      costPer1kInputTokens: 0.008,
+      costPer1kOutputTokens: 0.024,
+      maxTokens: 1000000,
+      speed: 'fast',
+      capabilities: ['ultra_advanced_analysis', 'multimodal_reasoning', 'ultra_long_context', 'expert_knowledge', 'complex_problem_solving', 'creative_thinking', 'autonomous_tasks', 'self_optimization'],
+      recommendedFor: ['medium', 'complex', 'very_complex', 'ultra_long_lists', 'high_accuracy', 'advanced_analytics', 'creative_tasks', 'lists', 'analytical']
     }
   };
 
@@ -74,10 +59,16 @@ export class SmartModelSelector {
     };
 
     // Zaktualizuj complexity na podstawie analizy zapytania
-    if (queryAnalysis.isAnalytical) {
-      requirements.complexity = 'complex';
-    } else if (queryAnalysis.isSimpleCount) {
+    // Tylko bardzo proste zapytania używają gpt-4o-mini, reszta używa GPT-5
+    if (queryAnalysis.isSimpleCount && !queryAnalysis.isList) {
       requirements.complexity = 'simple';
+    } else if (queryAnalysis.isList && estimatedTokens.total > 50000) {
+      requirements.complexity = 'very_complex';
+      requirements.isVeryLongList = true;
+    } else {
+      // Wszystko inne używa GPT-5 (listy, analiza, standardowe zapytania)
+      requirements.complexity = 'complex';
+      requirements.isVeryLongList = queryAnalysis.isList;
     }
 
     console.log(`[SmartModelSelector] Wymagania:`, requirements);
@@ -106,11 +97,15 @@ export class SmartModelSelector {
     const isAnalytical = /analiz|trend|prognoz|porówn|optymalizuj|rekomend/i.test(lowerQuery);
     const isComplex = /dlaczego|jak można|w jaki sposób|przyczyn|mechanizm/i.test(lowerQuery);
     const requiresCreativity = /stwórz|napisz|przygotuj|zaprojektuj/i.test(lowerQuery);
+    const isList = /lista|listę|wylistuj|wszystkie|wszystkich|pokaż|wypisz|wypis|wymień|każd[aąy]/i.test(lowerQuery);
     
     // Szacuj złożoność odpowiedzi
-    let outputComplexity = 'short'; // short, medium, long
+    let outputComplexity = 'short'; // short, medium, long, very_long
     
-    if (isAnalytical || isComplex) {
+    if (isList) {
+      // Listy wymagają więcej miejsca (np. lista wszystkich receptur)
+      outputComplexity = 'very_long';
+    } else if (isAnalytical || isComplex) {
       outputComplexity = 'long';
     } else if (requiresCreativity || lowerQuery.includes('szczegół')) {
       outputComplexity = 'medium';
@@ -121,6 +116,7 @@ export class SmartModelSelector {
       isAnalytical,
       isComplex,
       requiresCreativity,
+      isList,
       outputComplexity,
       containsNumbers: /\d+/.test(query),
       isQuestion: query.includes('?'),
@@ -144,10 +140,13 @@ export class SmartModelSelector {
         outputTokens = 150;
         break;
       case 'medium':
-        outputTokens = 500;
+        outputTokens = 800; // Zwiększono z 500 do 800
         break;
       case 'long':
-        outputTokens = 1200;
+        outputTokens = 2500; // Zwiększono z 1200 do 2500
+        break;
+      case 'very_long':
+        outputTokens = 4000; // Dla list i bardzo długich odpowiedzi
         break;
     }
 
@@ -174,18 +173,26 @@ export class SmartModelSelector {
       let score = 0;
 
       // Ocena zgodności z complexity
+      // GPT-5 dla wszystkiego oprócz bardzo prostych zapytań
       if (requirements.complexity === 'simple' && spec.recommendedFor.includes('simple')) {
         score += 50;
-      } else if (requirements.complexity === 'medium' && spec.recommendedFor.includes('balanced')) {
-        score += 50;
-      } else if (requirements.complexity === 'complex' && spec.recommendedFor.includes('high_accuracy')) {
-        score += 50;
+      } else if (requirements.complexity === 'medium' && spec.recommendedFor.includes('medium')) {
+        score += 60;
+      } else if (requirements.complexity === 'complex' && spec.recommendedFor.includes('complex')) {
+        score += 60;
+      } else if (requirements.complexity === 'very_complex' && spec.recommendedFor.includes('very_complex')) {
+        score += 70;
+      }
+
+      // Specjalna ocena dla bardzo długich list (GPT-5)
+      if (requirements.isVeryLongList && spec.recommendedFor.includes('ultra_long_lists')) {
+        score += 40;
       }
 
       // Ocena prędkości
       if (requirements.speed === 'required') {
         if (spec.speed === 'very_fast') score += 30;
-        else if (spec.speed === 'fast') score += 20;
+        else if (spec.speed === 'fast') score += 25;
         else score -= 10;
       }
 
@@ -202,9 +209,12 @@ export class SmartModelSelector {
         score -= 100; // Dyskwalifikacja
       }
 
-      // Sprawdź limity tokenów
+      // Sprawdź limity tokenów - GPT-5 ma ogromny limit
       if (estimatedTokens.total > spec.maxTokens) {
         score -= 50;
+      } else if (estimatedTokens.total > 100000 && spec.maxTokens >= 1000000) {
+        // Bonus dla GPT-5 przy bardzo długich kontekstach
+        score += 30;
       }
 
       scores[model] = score;
@@ -226,6 +236,13 @@ export class SmartModelSelector {
    */
   static calculateEstimatedCost(model, estimatedTokens) {
     const spec = this.MODEL_SPECS[model];
+    
+    // Jeśli model nie istnieje w specyfikacji, zwróć 0
+    if (!spec) {
+      console.warn(`[SmartModelSelector] Model '${model}' nie znaleziony w MODEL_SPECS, nie można obliczyć kosztu`);
+      return 0;
+    }
+    
     const inputCost = (estimatedTokens.input / 1000) * spec.costPer1kInputTokens;
     const outputCost = (estimatedTokens.output / 1000) * spec.costPer1kOutputTokens;
     return inputCost + outputCost;
@@ -243,16 +260,30 @@ export class SmartModelSelector {
     
     // Dostosuj parametry na podstawie analizy
     let temperature = 0.7; // Default
-    let maxTokens = estimatedTokens.output + 100; // Buffer
+    let maxTokens = estimatedTokens.output + 200; // Buffer zwiększony z 100 do 200
     
     if (queryAnalysis.isSimpleCount) {
       temperature = 0.1; // Precyzja dla liczb
       maxTokens = Math.min(maxTokens, 300);
+    } else if (queryAnalysis.isList) {
+      temperature = 0.4; // Umiarkowana precyzja dla list
+      // GPT-5 wymaga dużo więcej tokenów z uwagi na reasoning_tokens
+      if (modelName === 'gpt-5') {
+        maxTokens = Math.min(maxTokens, 20000); // GPT-5: reasoning + output tokens
+      } else {
+        maxTokens = Math.min(maxTokens, 5000); // Inne modele
+      }
     } else if (queryAnalysis.isAnalytical) {
       temperature = 0.3; // Logiczna analiza
-      maxTokens = Math.min(maxTokens, 2000);
+      // GPT-5 potrzebuje więcej miejsca na reasoning
+      if (modelName === 'gpt-5') {
+        maxTokens = Math.min(maxTokens, 15000); // GPT-5: reasoning + output
+      } else {
+        maxTokens = Math.min(maxTokens, 4000); // Inne modele
+      }
     } else if (queryAnalysis.requiresCreativity) {
       temperature = 0.8; // Kreatywność
+      maxTokens = Math.min(maxTokens, 3000); // Dodano limit dla kreatywności
     }
 
     // Nie przekraczaj limitów modelu
@@ -280,25 +311,26 @@ export class SmartModelSelector {
     const reasons = [];
     
     if (modelName === 'gpt-4o-mini') {
-      reasons.push('optymalizacja kosztów');
+      reasons.push('maksymalna optymalizacja kosztów');
       if (queryAnalysis.isSimpleCount) {
         reasons.push('proste zapytanie ilościowe');
       }
-    } else if (modelName === 'gpt-3.5-turbo') {
-      reasons.push('zbalansowany stosunek jakości do ceny');
-    } else if (modelName === 'gpt-4o') {
-      reasons.push('wymaga zaawansowanej analizy');
-      if (queryAnalysis.isAnalytical) {
-        reasons.push('zapytanie analityczne');
-      }
+      reasons.push('wystarczająca jakość dla prostych zadań');
     } else if (modelName === 'gpt-5') {
-      reasons.push('najnowsza technologia AI');
+      reasons.push('GPT-5 z wbudowaną inteligencją wyboru podmodelu');
       if (queryAnalysis.isAnalytical) {
         reasons.push('zaawansowana analiza');
       }
       if (queryAnalysis.requiresCreativity) {
         reasons.push('zadania kreatywne');
       }
+      if (queryAnalysis.isList) {
+        reasons.push('generowanie kompleksowych list');
+      }
+      if (!queryAnalysis.isAnalytical && !queryAnalysis.requiresCreativity && !queryAnalysis.isList) {
+        reasons.push('uniwersalny model wysokiej jakości');
+      }
+      reasons.push('ultra-długi kontekst (do 1M tokenów)');
     }
 
     return reasons.join(', ');
