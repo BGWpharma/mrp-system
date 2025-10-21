@@ -874,20 +874,87 @@ const RecipeList = () => {
         const ingredients = recipe.ingredients || [];
         
         if (ingredients.length === 0) {
-          // Jeśli receptura nie ma składników, dodaj jeden wiersz bez dostawcy
+          // Przygotuj listę mikroelementów dla receptury bez składników
+          const micronutrientsList = (recipe.micronutrients || [])
+            .map(micro => {
+              const parts = [];
+              if (micro.code) parts.push(micro.code);
+              if (micro.name) parts.push(micro.name);
+              if (micro.quantity) parts.push(`${micro.quantity}${micro.unit || ''}`);
+              return parts.join(' - ');
+            })
+            .join('; ');
+          
+          // Dodaj wiersz z mikroelementami jeśli receptura ma mikroelementy
+          if (micronutrientsList) {
+            csvRows.push({
+              'Receptura (SKU)': recipe.name || '',
+              'Opis receptury': recipe.description || '',
+              'Klient': customer ? customer.name : '',
+              'Składnik': '--- MIKROELEMENTY ---',
+              'Ilość składnika': '',
+              'Jednostka': '',
+              'Dostawcy (z pozycji mag.)': '',
+              'Dostawcy (z PO)': '',
+              'Mikroelementy': micronutrientsList
+            });
+          } else {
+            // Jeśli receptura nie ma składników ani mikroelementów, dodaj jeden wiersz informacyjny
+            csvRows.push({
+              'Receptura (SKU)': recipe.name || '',
+              'Opis receptury': recipe.description || '',
+              'Klient': customer ? customer.name : '',
+              'Składnik': 'Brak składników',
+              'Ilość składnika': '',
+              'Jednostka': '',
+              'Dostawcy (z pozycji mag.)': '-',
+              'Dostawcy (z PO)': '-',
+              'Mikroelementy': '-'
+            });
+          }
+          
+          // Dodaj pusty wiersz po recepturze
+          csvRows.push({
+            'Receptura (SKU)': '',
+            'Opis receptury': '',
+            'Klient': '',
+            'Składnik': '',
+            'Ilość składnika': '',
+            'Jednostka': '',
+            'Dostawcy (z pozycji mag.)': '',
+            'Dostawcy (z PO)': '',
+            'Mikroelementy': ''
+          });
+          
+          continue;
+        }
+
+        // Przygotuj listę mikroelementów dla receptury
+        const micronutrientsList = (recipe.micronutrients || [])
+          .map(micro => {
+            const parts = [];
+            if (micro.code) parts.push(micro.code);
+            if (micro.name) parts.push(micro.name);
+            if (micro.quantity) parts.push(`${micro.quantity}${micro.unit || ''}`);
+            return parts.join(' - ');
+          })
+          .join('; ');
+        
+        // Dodaj wiersz z mikroelementami dla receptury
+        if (micronutrientsList) {
           csvRows.push({
             'Receptura (SKU)': recipe.name || '',
             'Opis receptury': recipe.description || '',
             'Klient': customer ? customer.name : '',
-            'Składnik': '-',
+            'Składnik': '--- MIKROELEMENTY ---',
             'Ilość składnika': '',
             'Jednostka': '',
-            'Dostawcy (z pozycji mag.)': '-',
-            'Dostawcy (z PO)': '-'
+            'Dostawcy (z pozycji mag.)': '',
+            'Dostawcy (z PO)': '',
+            'Mikroelementy': micronutrientsList
           });
-          continue;
         }
-
+        
         // Dla każdego składnika znajdź dostawców
         for (const ingredient of ingredients) {
           let suppliersFromPOText = '-';
@@ -956,9 +1023,23 @@ const RecipeList = () => {
             'Ilość składnika': ingredient.quantity || '',
             'Jednostka': ingredient.unit || '',
             'Dostawcy (z pozycji mag.)': suppliersFromInventoryText,
-            'Dostawcy (z PO)': suppliersFromPOText
+            'Dostawcy (z PO)': suppliersFromPOText,
+            'Mikroelementy': '-'
           });
         }
+        
+        // Dodaj pusty wiersz po każdej recepturze dla lepszej czytelności
+        csvRows.push({
+          'Receptura (SKU)': '',
+          'Opis receptury': '',
+          'Klient': '',
+          'Składnik': '',
+          'Ilość składnika': '',
+          'Jednostka': '',
+          'Dostawcy (z pozycji mag.)': '',
+          'Dostawcy (z PO)': '',
+          'Mikroelementy': ''
+        });
         
         // Informuj użytkownika o postępie
         if (processedRecipes % 10 === 0) {
@@ -975,7 +1056,8 @@ const RecipeList = () => {
         'Ilość składnika', 
         'Jednostka', 
         'Dostawcy (z pozycji mag.)',
-        'Dostawcy (z PO)'
+        'Dostawcy (z PO)',
+        'Mikroelementy'
       ];
       
       // Utwórz zawartość CSV
