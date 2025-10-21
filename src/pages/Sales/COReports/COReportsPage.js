@@ -96,6 +96,13 @@ import StatusStatsComponent from '../../../components/sales/co-reports/StatusSta
 import { useTranslation } from '../../../hooks/useTranslation';
 import FinancialReportPage from '../../Analytics/FinancialReportPage';
 
+// Komponent zakładki "Raport finansowy" - POZA głównym komponentem, żeby uniknąć unmount/remount
+const FinancialReportTab = () => (
+  <Box sx={{ mt: -4 }}>
+    <FinancialReportPage />
+  </Box>
+);
+
 // Definicja okresów czasowych dla filtrowania
 const TIME_PERIODS = {
   LAST_7_DAYS: 'last7days',
@@ -2190,13 +2197,6 @@ const COReportsPage = () => {
     );
   };
 
-  // Komponent zakładki "Raport finansowy"
-  const FinancialReportTab = () => (
-    <Box sx={{ mt: -4 }}>
-      <FinancialReportPage />
-    </Box>
-  );
-
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -2248,9 +2248,15 @@ const COReportsPage = () => {
       </Box>
       
       <Box sx={{ py: 3 }}>
-        {selectedTab === 0 && <ProductionCostsTab />}
-        {selectedTab === 1 && <OrdersReportTab />}
-        {selectedTab === 2 && <FinancialReportTab />}
+        <Box sx={{ display: selectedTab === 0 ? 'block' : 'none' }}>
+          <ProductionCostsTab />
+        </Box>
+        <Box sx={{ display: selectedTab === 1 ? 'block' : 'none' }}>
+          <OrdersReportTab />
+        </Box>
+        <Box sx={{ display: selectedTab === 2 ? 'block' : 'none' }}>
+          <FinancialReportTab />
+        </Box>
       </Box>
     </Container>
   );

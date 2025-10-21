@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -62,7 +62,6 @@ const FinancialReportPage = () => {
   
   // Stan danych
   const [reportData, setReportData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -97,15 +96,18 @@ const FinancialReportPage = () => {
     loadFilterOptions();
   }, []);
   
-  // Zastosuj wyszukiwanie gdy zmieni się searchTerm (bez reportData w dependency)
-  useEffect(() => {
+  // Oblicz filteredData używając useMemo (bez race condition)
+  const filteredData = useMemo(() => {
+    if (reportData.length === 0) {
+      return [];
+    }
+    
     if (!filters.searchTerm) {
-      setFilteredData(reportData);
-      return;
+      return reportData;
     }
     
     const searchLower = filters.searchTerm.toLowerCase();
-    const filtered = reportData.filter(row => 
+    return reportData.filter(row => 
       (row.po_number || '').toLowerCase().includes(searchLower) ||
       (row.po_supplier || '').toLowerCase().includes(searchLower) ||
       (row.mo_number || '').toLowerCase().includes(searchLower) ||
@@ -115,9 +117,7 @@ const FinancialReportPage = () => {
       (row.invoice_number || '').toLowerCase().includes(searchLower) ||
       (row.material_name || '').toLowerCase().includes(searchLower)
     );
-    
-    setFilteredData(filtered);
-  }, [filters.searchTerm, reportData]); // reportData tutaj jest OK
+  }, [reportData, filters.searchTerm]);
   
   const loadFilterOptions = async () => {
     try {
@@ -146,7 +146,6 @@ const FinancialReportPage = () => {
       
       const data = await generateFinancialReport(backendFilters);
       setReportData(data);
-      setFilteredData(data); // ⚡ Bezpośrednio ustaw filteredData
       
       // Oblicz statystyki
       const stats = getReportStatistics(data);
@@ -218,13 +217,6 @@ const FinancialReportPage = () => {
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
   );
-  
-  console.log('📊 [RENDER] Dane do wyświetlenia:', {
-    filteredDataLength: filteredData.length,
-    paginatedDataLength: paginatedData.length,
-    page,
-    rowsPerPage
-  });
   
   const StatCard = ({ title, value, icon: Icon, color = 'primary', subtitle }) => (
     <Card sx={{ height: '100%' }}>
