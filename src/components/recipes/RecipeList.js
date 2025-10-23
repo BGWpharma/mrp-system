@@ -59,12 +59,13 @@ import {
   MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
-import { getInventoryItemByRecipeId, getBatchesForMultipleItems, getSupplierPrices } from '../../services/inventory';
+import { getInventoryItemByRecipeId, getBatchesForMultipleItems, getSupplierPrices, getAllInventoryItems } from '../../services/inventory';
 import { getPurchaseOrderById } from '../../services/purchaseOrderService';
 import { getSuppliersByIds } from '../../services/supplierService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
 import searchService from '../../services/searchService';
 import { getAllWorkstations } from '../../services/workstationService';
@@ -82,6 +83,7 @@ const RecipeList = () => {
   const { showSuccess, showError, showInfo } = useNotification();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   
   // Użyj nowego hooka do buforowania danych klientów
   const { customers, loading: loadingCustomers, error: customersError, refreshCustomers } = useCustomersCache();
@@ -144,6 +146,14 @@ const RecipeList = () => {
     searchTerm: ''
   });
   const [exporting, setExporting] = useState(false);
+  
+  // Stan dla dialogu importu CSV
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState(null);
+  const [importWarnings, setImportWarnings] = useState([]);
   
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -316,6 +326,9 @@ const RecipeList = () => {
         break;
       case 'exportCSV':
         handleExportCSV();
+        break;
+      case 'importCSV':
+        handleOpenImportDialog();
         break;
       case 'exportWithSuppliers':
         handleOpenExportDialog();
@@ -591,6 +604,16 @@ const RecipeList = () => {
         return;
       }
 
+      // Pobierz wszystkie pozycje magazynowe do znalezienia jednostek składników
+      let allInventoryItems = [];
+      try {
+        console.log('📦 Pobieranie pozycji magazynowych dla jednostek składników...');
+        allInventoryItems = await getAllInventoryItems();
+        console.log('✅ Pobrano', allInventoryItems.length, 'pozycji magazynowych');
+      } catch (error) {
+        console.warn('⚠️ Nie udało się pobrać pozycji magazynowych, używam danych z receptur:', error);
+      }
+
       // Przygotuj dane dla CSV zgodnie z wymaganymi nagłówkami
       const csvData = allRecipes.map((recipe, index) => {
         // Znajdź klienta
@@ -609,30 +632,137 @@ const RecipeList = () => {
           timePerPiece = parseFloat(recipe.preparationTime);
         }
         
-        // Oblicz liczbę komponentów (składników + komponenty)
-        const ingredientsCount = recipe.ingredients ? recipe.ingredients.length : 0;
-        const componentsCount = recipe.components ? recipe.components.length : 0;
-        const totalComponents = ingredientsCount + componentsCount;
+        // Przygotuj listę składników z jednostkami z pozycji magazynowych
+        const ingredients = recipe.ingredients || [];
+        
+        const componentsListing = ingredients
+          .map(ing => {
+            // Spróbuj znaleźć pozycję magazynową po ID lub nazwie
+            const inventoryItem = allInventoryItems.find(item => 
+              item.id === ing.itemId || 
+              (item.name && ing.name && item.name.toLowerCase().trim() === ing.name.toLowerCase().trim())
+            );
+            
+            // Użyj nazwy z inventory jeśli jest dostępna, w przeciwnym razie z receptury
+            return inventoryItem?.name || ing.name || '';
+          })
+          .filter(name => name.trim() !== '')
+          .join('; ');
+        
+        const componentsAmount = ingredients
+          .map((ing, idx) => {
+            // Spróbuj znaleźć pozycję magazynową po ID lub nazwie
+            const inventoryItem = allInventoryItems.find(item => 
+              item.id === ing.itemId || 
+              (item.name && ing.name && item.name.toLowerCase().trim() === ing.name.toLowerCase().trim())
+            );
+            
+            // Użyj jednostki z inventory jeśli jest dostępna, w przeciwnym razie z receptury
+            const unit = inventoryItem?.unit || ing.unit || '';
+            const quantity = ing.quantity || '';
+            
+            // Debug log dla pierwszego składnika pierwszej receptury
+            if (index === 0 && idx === 0) {
+              console.log(`📊 Przykład składnika #${idx + 1} (receptura "${recipe.name}"):`, {
+                nazwa: ing.name,
+                itemId: ing.itemId,
+                znalezionoWInventory: !!inventoryItem,
+                jednostkaZInventory: inventoryItem?.unit,
+                jednostkaZReceptury: ing.unit,
+                użytaJednostka: unit,
+                ilość: quantity
+              });
+            }
+            
+            return `${quantity} ${unit}`.trim();
+          })
+          .filter(amount => amount !== '')
+          .join('; ');
+        
+        // Przygotuj listę składników odżywczych (mikro/makro)
+        const micronutrients = recipe.micronutrients || [];
+        const microMacroListing = micronutrients
+          .map(micro => micro.name || micro.code || '')
+          .filter(name => name.trim() !== '')
+          .join('; ');
+        
+        // Połącz amount i unit w jedną kolumnę (np. "100 mg")
+        const microMacroAmount = micronutrients
+          .map(micro => {
+            const quantity = micro.quantity || '';
+            const unit = micro.unit || '';
+            return `${quantity} ${unit}`.trim();
+          })
+          .filter(amount => amount !== '')
+          .join('; ');
+        
+        const microMacroType = micronutrients
+          .map(micro => micro.category || '')
+          .filter(type => type.trim() !== '')
+          .join('; ');
+        
+        // Pobierz certyfikacje (z domyślnymi wartościami false)
+        const certifications = recipe.certifications || {
+          eco: false,
+          halal: false,
+          kosher: false,
+          vegan: false,
+          vege: false
+        };
         
         return {
-          SKU: recipe.name || '',
-          description: recipe.description || '',
-          Client: customer ? customer.name : '',
-          Workstation: workstation ? workstation.name : '',
+          'SKU': recipe.name || '',
+          'description': recipe.description || '',
+          'Client': customer ? customer.name : '',
+          'Workstation': workstation ? workstation.name : '',
           'cost/piece': recipe.processingCostPerUnit ? recipe.processingCostPerUnit.toFixed(2) : '0.00',
           'time/piece': timePerPiece.toFixed(2),
-          'Amount of Components': totalComponents.toString()
+          'Components listing': componentsListing,
+          'Components amount': componentsAmount,
+          'Micro/macro elements listing': microMacroListing,
+          'Micro/macro amount': microMacroAmount,
+          'Micro/macro type': microMacroType,
+          '(Bool) EKO': certifications.eco ? 'TRUE' : 'FALSE',
+          '(Bool) HALAL': certifications.halal ? 'TRUE' : 'FALSE',
+          '(Bool) KOSHER': certifications.kosher ? 'TRUE' : 'FALSE',
+          '(Bool) VEGAN': certifications.vegan ? 'TRUE' : 'FALSE',
+          '(Bool) VEGETERIAN': certifications.vege ? 'TRUE' : 'FALSE',
+          'notes': recipe.notes || ''
         };
       });
 
+      console.log('✅ Przygotowano', csvData.length, 'receptur do eksportu CSV');
+
       // Utwórz nagłówki CSV
-      const headers = ['SKU', 'description', 'Client', 'Workstation', 'cost/piece', 'time/piece', 'Amount of Components'];
+      const headers = [
+        'SKU',
+        'description',
+        'Client',
+        'Workstation',
+        'cost/piece',
+        'time/piece',
+        'Components listing',
+        'Components amount',
+        'Micro/macro elements listing',
+        'Micro/macro amount',
+        'Micro/macro type',
+        '(Bool) EKO',
+        '(Bool) HALAL',
+        '(Bool) KOSHER',
+        '(Bool) VEGAN',
+        '(Bool) VEGETERIAN',
+        'notes'
+      ];
       
       // Utwórz zawartość CSV
       const csvContent = [
         headers.map(header => `"${header}"`).join(','),
         ...csvData.map(row => 
-          headers.map(header => `"${row[header] || ''}"`).join(',')
+          headers.map(header => {
+            // Escape podwójne cudzysłowy w wartościach
+            const value = String(row[header] || '').replace(/"/g, '""');
+            return `"${value}"`;
+          }).join(',')
         )
       ].join('\n');
 
@@ -1127,6 +1257,833 @@ const RecipeList = () => {
     }
   };
 
+  // Funkcja normalizująca nagłówki (obsługa literówek i różnych formatów)
+  const normalizeHeader = (header) => {
+    const normalized = header.toLowerCase().trim();
+    
+    // Mapowanie popularnych wariantów nagłówków
+    const headerMap = {
+      'sku': 'SKU',
+      'nazwa': 'SKU',
+      'name': 'SKU',
+      'description': 'description',
+      'opis': 'description',
+      'desc': 'description',
+      'client': 'Client',
+      'klient': 'Client',
+      'customer': 'Client',
+      'workstation': 'Workstation',
+      'stanowisko': 'Workstation',
+      'cost/piece': 'cost/piece',
+      'koszt': 'cost/piece',
+      'cost': 'cost/piece',
+      'time/piece': 'time/piece',
+      'czas': 'time/piece',
+      'time': 'time/piece',
+      'notes': 'notes',
+      'notatki': 'notes',
+      'uwagi': 'notes',
+      'note': 'notes',
+      'eco': '(Bool) EKO',
+      'eko': '(Bool) EKO',
+      'halal': '(Bool) HALAL',
+      'kosher': '(Bool) KOSHER',
+      'koszer': '(Bool) KOSHER',
+      'vegan': '(Bool) VEGAN',
+      'weganski': '(Bool) VEGAN',
+      'wegański': '(Bool) VEGAN',
+      'vegetarian': '(Bool) VEGETERIAN',
+      'vegeterian': '(Bool) VEGETERIAN',
+      'wegetarianski': '(Bool) VEGETERIAN',
+      'wegetariański': '(Bool) VEGETERIAN',
+      'vege': '(Bool) VEGETERIAN'
+    };
+    
+    return headerMap[normalized] || header;
+  };
+  
+  // Funkcja normalizująca wartości boolean (obsługa różnych formatów)
+  const parseBoolean = (value) => {
+    if (!value) return false;
+    const normalized = value.toString().toLowerCase().trim();
+    return normalized === 'true' || 
+           normalized === '1' || 
+           normalized === 'yes' || 
+           normalized === 'tak' || 
+           normalized === 'y' || 
+           normalized === 't';
+  };
+  
+  // Funkcja parsująca wartości liczbowe (obsługa przecinka i kropki jako separatora dziesiętnego)
+  const parseNumber = (value) => {
+    if (!value) return 0;
+    // Zamień przecinek na kropkę i usuń spacje
+    const normalized = value.toString().replace(',', '.').replace(/\s/g, '');
+    return parseFloat(normalized) || 0;
+  };
+
+  // Funkcja parsująca CSV do tablicy obiektów
+  const parseCSV = (csvText) => {
+    const lines = csvText.split('\n').filter(line => line.trim() !== '');
+    console.log('📄 Parsowanie CSV - liczba linii:', lines.length);
+    
+    if (lines.length < 2) {
+      throw new Error('Plik CSV jest pusty lub zawiera tylko nagłówki');
+    }
+
+    // Parsuj nagłówki i normalizuj je
+    const rawHeaders = lines[0].split(',').map(header => header.replace(/^"|"$/g, '').trim());
+    const headers = rawHeaders.map(normalizeHeader);
+    console.log('📋 Nagłówki oryginalne CSV:', rawHeaders);
+    console.log('📋 Nagłówki znormalizowane:', headers);
+    
+    // Sprawdź czy są nieznane nagłówki
+    const unknownHeaders = rawHeaders.filter((h, i) => headers[i] === h && !h.startsWith('(Bool)') && !['SKU', 'description', 'Client', 'Workstation', 'cost/piece', 'time/piece', 'Components listing', 'Components amount', 'Micro/macro elements listing', 'Micro/macro amount', 'Micro/macro type', 'notes'].includes(h));
+    if (unknownHeaders.length > 0) {
+      console.warn('⚠️ Nieznane nagłówki (zostaną zignorowane):', unknownHeaders);
+    }
+    
+    // Parsuj wiersze danych
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = [];
+      let currentValue = '';
+      let insideQuotes = false;
+      
+      for (let j = 0; j < lines[i].length; j++) {
+        const char = lines[i][j];
+        const nextChar = lines[i][j + 1];
+        
+        if (char === '"') {
+          if (insideQuotes && nextChar === '"') {
+            // Escaped quote
+            currentValue += '"';
+            j++; // Skip next quote
+          } else {
+            // Toggle quote state
+            insideQuotes = !insideQuotes;
+          }
+        } else if (char === ',' && !insideQuotes) {
+          values.push(currentValue.trim());
+          currentValue = '';
+        } else {
+          currentValue += char;
+        }
+      }
+      values.push(currentValue.trim()); // Push last value
+      
+      // Utwórz obiekt z wartości
+      const row = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      data.push(row);
+    }
+    
+    console.log('✅ Sparsowano', data.length, 'wierszy danych');
+    if (data.length > 0) {
+      console.log('📝 Przykładowy wiersz (pierwszy):', data[0]);
+    }
+    
+    return data;
+  };
+
+  // Funkcja otwierająca dialog importu
+  const handleOpenImportDialog = () => {
+    setImportDialogOpen(true);
+    setImportFile(null);
+    setImportPreview([]);
+    setImportError(null);
+    setImportWarnings([]);
+  };
+
+  // Funkcja zamykająca dialog importu
+  const handleCloseImportDialog = () => {
+    setImportDialogOpen(false);
+    setImportFile(null);
+    setImportPreview([]);
+    setImportError(null);
+    setImportWarnings([]);
+  };
+
+  // Funkcja obsługująca wybór pliku
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setImportError(null);
+    setImportPreview([]);
+    setImportWarnings([]);
+
+    try {
+      // Wczytaj plik
+      const text = await file.text();
+      
+      // Parsuj CSV
+      const csvData = parseCSV(text);
+      
+      // ⚠️ WAŻNE: Musimy załadować WSZYSTKIE receptury z bazy, nie tylko te z aktualnej strony
+      console.log('🔄 Ładowanie wszystkich receptur z bazy...');
+      const allRecipes = await getAllRecipes();
+      console.log('✅ Załadowano wszystkie receptury z bazy:', allRecipes.length);
+      
+      // Pobierz wszystkie pozycje magazynowe do walidacji składników
+      let allInventoryItems = [];
+      try {
+        console.log('📦 Pobieranie pozycji magazynowych do walidacji składników...');
+        allInventoryItems = await getAllInventoryItems();
+        console.log('✅ Pobrano', allInventoryItems.length, 'pozycji magazynowych');
+      } catch (error) {
+        console.warn('⚠️ Nie udało się pobrać pozycji magazynowych:', error);
+      }
+      
+      // Przygotuj podgląd aktualizacji i zbieraj ostrzeżenia
+      const preview = [];
+      const warnings = [];
+      
+      console.log('📊 Rozpoczęcie parsowania CSV:', csvData.length, 'wierszy');
+      console.log('📦 Dostępne receptury:', allRecipes.length);
+      console.log('📋 Dostępne SKU w bazie:', allRecipes.map(r => r.name).join(', '));
+      console.log('👥 Dostępni klienci:', customers.map(c => c.name).join(', '));
+      console.log('🏭 Dostępne stanowiska:', workstations.map(w => w.name).join(', '));
+      console.log('📦 Dostępne pozycje magazynowe:', allInventoryItems.length, 'pozycji');
+      
+      // Sprawdź duplikaty SKU w CSV
+      const skuCounts = {};
+      csvData.forEach(row => {
+        const sku = row['SKU'];
+        if (sku) {
+          skuCounts[sku] = (skuCounts[sku] || 0) + 1;
+        }
+      });
+      const duplicates = Object.entries(skuCounts).filter(([sku, count]) => count > 1);
+      if (duplicates.length > 0) {
+        duplicates.forEach(([sku, count]) => {
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: `SKU "${sku}" występuje ${count} razy w pliku CSV. Zostanie użyty tylko ostatni wiersz.`
+          });
+        });
+      }
+      
+      for (const row of csvData) {
+        const sku = row['SKU'];
+        console.log('\n🔍 Przetwarzanie wiersza CSV:', sku);
+        
+        if (!sku) {
+          console.log('⚠️ Pominięto wiersz bez SKU');
+          warnings.push({
+            sku: '(pusty)',
+            type: 'warning',
+            message: 'Wiersz bez SKU został pominięty.'
+          });
+          continue;
+        }
+        
+        // Znajdź istniejącą recepturę
+        const existingRecipe = allRecipes.find(r => r.name === sku);
+        
+        if (!existingRecipe) {
+          console.log('❌ Nie znaleziono receptury o SKU:', sku);
+          console.log('🔍 Szukanie podobnych SKU...');
+          const similarSkus = allRecipes.filter(r => 
+            r.name.toLowerCase().includes(sku.toLowerCase()) || 
+            sku.toLowerCase().includes(r.name.toLowerCase())
+          );
+          let warningMessage = `Receptura o SKU "${sku}" nie istnieje w bazie danych. Import modyfikuje tylko istniejące receptury.`;
+          if (similarSkus.length > 0) {
+            console.log('📝 Znaleziono podobne SKU:', similarSkus.map(r => r.name));
+            warningMessage += ` Podobne SKU: ${similarSkus.map(r => r.name).join(', ')}.`;
+          }
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: warningMessage
+          });
+          preview.push({
+            sku: sku,
+            status: 'new',
+            message: 'Nowa receptura (zostanie pominięta - tylko aktualizacje są obsługiwane)',
+            changes: []
+          });
+          continue;
+        }
+        
+        console.log('✅ Znaleziono recepturę:', sku, 'ID:', existingRecipe.id);
+        
+        // Wykryj zmiany
+        const changes = [];
+        
+        // Sprawdź opis (z usunięciem białych znaków na początku/końcu)
+        const csvDesc = (row['description'] || '').trim();
+        const dbDesc = (existingRecipe.description || '').trim();
+        console.log('📝 Porównanie opisu:');
+        console.log('  CSV:', csvDesc);
+        console.log('  DB:', dbDesc);
+        if (csvDesc !== dbDesc) {
+          changes.push({
+            field: 'Opis',
+            oldValue: dbDesc,
+            newValue: csvDesc
+          });
+        }
+        
+        // Sprawdź klienta (z trimowaniem, case-insensitive)
+        const csvClient = (row['Client'] || '').trim();
+        const newCustomer = customers.find(c => c.name.trim().toLowerCase() === csvClient.toLowerCase());
+        const oldCustomer = customers.find(c => c.id === existingRecipe.customerId);
+        console.log('👤 Porównanie klienta:');
+        console.log('  CSV:', csvClient, '→', newCustomer?.id || 'brak');
+        console.log('  DB:', oldCustomer?.name || 'brak', '→', existingRecipe.customerId || 'brak');
+        
+        if (!newCustomer && csvClient) {
+          console.warn('⚠️ Nie znaleziono klienta o nazwie:', csvClient);
+          console.log('💡 Dostępni klienci:', customers.map(c => c.name).join(', '));
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: `Nieznany klient: "${csvClient}". Klient nie zostanie zaktualizowany.`
+          });
+        }
+        if ((newCustomer?.id || '') !== (existingRecipe.customerId || '')) {
+          console.log('  ✏️ ZMIANA wykryta!');
+          changes.push({
+            field: 'Klient',
+            oldValue: oldCustomer?.name || '',
+            newValue: csvClient
+          });
+        }
+        
+        // Sprawdź stanowisko (z trimowaniem, case-insensitive)
+        const csvWorkstation = (row['Workstation'] || '').trim();
+        const newWorkstation = workstations.find(w => w.name.trim().toLowerCase() === csvWorkstation.toLowerCase());
+        const oldWorkstation = workstations.find(w => w.id === existingRecipe.defaultWorkstationId);
+        console.log('🏭 Porównanie stanowiska:');
+        console.log('  CSV:', csvWorkstation, '→', newWorkstation?.id || 'brak');
+        console.log('  DB:', oldWorkstation?.name || 'brak', '→', existingRecipe.defaultWorkstationId || 'brak');
+        
+        if (!newWorkstation && csvWorkstation) {
+          console.warn('⚠️ Nie znaleziono stanowiska o nazwie:', csvWorkstation);
+          console.log('💡 Dostępne stanowiska:', workstations.map(w => w.name).join(', '));
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: `Nieznane stanowisko: "${csvWorkstation}". Stanowisko nie zostanie zaktualizowane.`
+          });
+        }
+        if ((newWorkstation?.id || '') !== (existingRecipe.defaultWorkstationId || '')) {
+          console.log('  ✏️ ZMIANA wykryta!');
+          changes.push({
+            field: 'Stanowisko',
+            oldValue: oldWorkstation?.name || '',
+            newValue: csvWorkstation
+          });
+        }
+        
+        // Sprawdź koszt (z obsługą przecinka jako separatora dziesiętnego)
+        const rawCost = row['cost/piece'];
+        const newCost = parseNumber(rawCost);
+        const oldCost = parseFloat(existingRecipe.processingCostPerUnit) || 0;
+        console.log('💰 Porównanie kosztu:');
+        console.log('  CSV:', newCost, '(z:', rawCost, ')');
+        console.log('  DB:', oldCost);
+        console.log('  Różnica:', Math.abs(newCost - oldCost));
+        
+        if (rawCost && isNaN(newCost)) {
+          warnings.push({
+            sku: sku,
+            type: 'error',
+            message: `Nieprawidłowy format kosztu: "${rawCost}". Użyj liczby, np. "12.50" lub "12,50".`
+          });
+        }
+        if (Math.abs(newCost - oldCost) > 0.001) {
+          console.log('  ✏️ ZMIANA wykryta!');
+          changes.push({
+            field: 'Koszt/szt.',
+            oldValue: oldCost.toFixed(2),
+            newValue: newCost.toFixed(2)
+          });
+        }
+        
+        // Sprawdź czas (z obsługą przecinka jako separatora dziesiętnego)
+        const rawTime = row['time/piece'];
+        const newTime = parseNumber(rawTime);
+        const oldTime = parseFloat(existingRecipe.productionTimePerUnit) || 0;
+        console.log('⏱️ Porównanie czasu:');
+        console.log('  CSV:', newTime, '(z:', rawTime, ')');
+        console.log('  DB:', oldTime);
+        console.log('  Różnica:', Math.abs(newTime - oldTime));
+        
+        if (rawTime && isNaN(newTime)) {
+          warnings.push({
+            sku: sku,
+            type: 'error',
+            message: `Nieprawidłowy format czasu: "${rawTime}". Użyj liczby, np. "15" lub "15,5".`
+          });
+        }
+        if (Math.abs(newTime - oldTime) > 0.001) {
+          console.log('  ✏️ ZMIANA wykryta!');
+          changes.push({
+            field: 'Czas/szt.',
+            oldValue: oldTime.toFixed(2),
+            newValue: newTime.toFixed(2)
+          });
+        }
+        
+        // Informacyjne logowanie Components amount (jednostki są dozwolone, np. "3 szt.")
+        const csvComponentsAmount = (row['Components amount'] || '').split(';').map(s => s.trim()).filter(s => s !== '');
+        console.log('📦 Składniki receptury (Components amount):', csvComponentsAmount.length, 'wartości');
+        csvComponentsAmount.forEach((amount, idx) => {
+          if (amount) {
+            // Ekstrauj liczbę (może zawierać jednostkę jak "3 szt." - to jest OK)
+            const parsed = parseNumber(amount);
+            console.log(`  Składnik ${idx + 1}: "${amount}" → ekstrahowana liczba: ${parsed}`);
+            
+            // Ostrzegaj tylko jeśli w ogóle nie da się wyekstrahować liczby
+            if (amount && isNaN(parsed)) {
+              warnings.push({
+                sku: sku,
+                type: 'warning',
+                message: `Nie można wyekstrahować liczby ze składnika ${idx + 1} (Components amount): "${amount}". Sprawdź format.`
+              });
+            }
+          }
+        });
+        
+        // Porównaj składniki receptury (ingredients) z bazy danych
+        const csvComponentsListing = (row['Components listing'] || '').split(';').map(s => s.trim()).filter(s => s !== '');
+        const oldIngredients = existingRecipe.ingredients || [];
+        
+        console.log('🥫 Porównanie składników receptury (Components):');
+        console.log('  CSV listing:', csvComponentsListing);
+        console.log('  CSV amounts:', csvComponentsAmount);
+        console.log('  DB ingredients:', oldIngredients.length, 'składników');
+        
+        // Sprawdź czy liczba składników się zmieniła
+        if (csvComponentsListing.length !== oldIngredients.length) {
+          console.log('  ✏️ ZMIANA: różna liczba składników receptury');
+          changes.push({
+            field: 'Liczba składników',
+            oldValue: `${oldIngredients.length} składników`,
+            newValue: `${csvComponentsListing.length} składników`
+          });
+        }
+        
+        // Porównaj każdy składnik pozycyjnie
+        for (let i = 0; i < Math.max(csvComponentsListing.length, oldIngredients.length); i++) {
+          const csvName = csvComponentsListing[i] || '';
+          const csvAmountStr = csvComponentsAmount[i] || '';
+          const oldIng = oldIngredients[i];
+          
+          // Waliduj czy składnik istnieje w magazynie (tylko dla nowych/zmienionych)
+          if (csvName && allInventoryItems.length > 0) {
+            const inventoryItem = allInventoryItems.find(item => 
+              item.name && csvName && item.name.toLowerCase().trim() === csvName.toLowerCase().trim()
+            );
+            
+            if (!inventoryItem) {
+              console.warn(`  ⚠️ Składnik "${csvName}" nie istnieje w magazynie`);
+              warnings.push({
+                sku: sku,
+                type: 'warning',
+                message: `Składnik "${csvName}" nie istnieje jako pozycja magazynowa. Może to powodować problemy z obliczeniami kosztów.`
+              });
+            } else {
+              console.log(`  ✅ Składnik "${csvName}" znaleziony w magazynie (ID: ${inventoryItem.id})`);
+            }
+          }
+          
+          if (!oldIng && csvName) {
+            // Dodano składnik
+            console.log(`  ➕ DODANO składnik ${i + 1}:`, csvName, csvAmountStr);
+            changes.push({
+              field: `Składnik ${i + 1}`,
+              oldValue: '-',
+              newValue: `${csvName} (${csvAmountStr})`
+            });
+          } else if (oldIng && !csvName) {
+            // Usunięto składnik
+            console.log(`  ❌ USUNIĘTO składnik ${i + 1}:`, oldIng.name);
+            changes.push({
+              field: `Składnik ${i + 1}`,
+              oldValue: `${oldIng.name} (${oldIng.quantity} ${oldIng.unit || ''})`,
+              newValue: '-'
+            });
+          } else if (oldIng && csvName) {
+            // Porównaj nazwę
+            if (csvName.toLowerCase().trim() !== (oldIng.name || '').toLowerCase().trim()) {
+              console.log(`  ✏️ ZMIANA nazwy składnika ${i + 1}:`, oldIng.name, '→', csvName);
+              changes.push({
+                field: `Składnik ${i + 1} - nazwa`,
+                oldValue: oldIng.name || '',
+                newValue: csvName
+              });
+            }
+            
+            // Porównaj ilość (ekstrahuj liczbę z CSV)
+            const csvQuantity = parseNumber(csvAmountStr);
+            const oldQuantity = parseFloat(oldIng.quantity) || 0;
+            
+            console.log(`  📊 Składnik ${i + 1} (${csvName}): CSV=${csvQuantity} vs DB=${oldQuantity}, różnica=${Math.abs(csvQuantity - oldQuantity)}`);
+            
+            if (Math.abs(csvQuantity - oldQuantity) > 0.001) {
+              console.log(`  ✏️ ZMIANA ilości składnika ${i + 1} (${csvName}):`, oldQuantity, '→', csvQuantity);
+              changes.push({
+                field: `Składnik ${i + 1} - ilość (${csvName})`,
+                oldValue: `${oldQuantity} ${oldIng.unit || ''}`,
+                newValue: csvAmountStr
+              });
+            }
+          }
+        }
+        
+        // Sprawdź składniki odżywcze (micro/macro)
+        const csvMicroListing = (row['Micro/macro elements listing'] || '').split(';').map(s => s.trim());
+        const csvMicroAmountWithUnit = (row['Micro/macro amount'] || '').split(';').map(s => s.trim());
+        const csvMicroType = (row['Micro/macro type'] || '').split(';').map(s => s.trim());
+        
+        console.log('📊 Parsowanie składników odżywczych z CSV:');
+        console.log('  Nazwy:', csvMicroListing);
+        console.log('  Ilości (z jednostkami):', csvMicroAmountWithUnit);
+        console.log('  Typy:', csvMicroType);
+        
+        // Zbuduj tablicę składników odżywczych z CSV
+        // Teraz "Micro/macro amount" zawiera zarówno ilość jak i jednostkę (np. "100 mg")
+        const newMicronutrients = [];
+        const maxLength = Math.max(csvMicroListing.length, csvMicroAmountWithUnit.length, csvMicroType.length);
+        
+        for (let i = 0; i < maxLength; i++) {
+          // Dodaj składnik tylko jeśli ma nazwę lub ilość
+          if (csvMicroListing[i] || csvMicroAmountWithUnit[i]) {
+            const amountWithUnit = csvMicroAmountWithUnit[i] || '';
+            
+            // Ekstrahuj ilość (liczbę) i jednostkę z wartości typu "100 mg"
+            let quantity = '';
+            let unit = '';
+            
+            if (amountWithUnit) {
+              // Parsuj liczbę z początku stringa
+              const parsedNumber = parseNumber(amountWithUnit);
+              quantity = parsedNumber.toString();
+              
+              // Ekstrahuj jednostkę (wszystko po liczbie)
+              const numberStr = amountWithUnit.match(/^[\d.,\s]+/)?.[0] || '';
+              unit = amountWithUnit.substring(numberStr.length).trim();
+              
+              // Debug log dla pierwszego składnika
+              if (i === 0) {
+                console.log(`  📊 Przykład parsowania "${amountWithUnit}":`, {
+                  ilość: quantity,
+                  jednostka: unit
+                });
+              }
+            }
+            
+            newMicronutrients.push({
+              name: csvMicroListing[i] || '',
+              quantity: quantity,
+              unit: unit,
+              category: csvMicroType[i] || ''
+            });
+          }
+        }
+        
+        console.log('✅ Zbudowano', newMicronutrients.length, 'składników odżywczych z CSV');
+        
+        // Walidacja składników odżywczych
+        if (csvMicroListing.length !== csvMicroAmountWithUnit.length || 
+            csvMicroListing.length !== csvMicroType.length) {
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: `Niezgodne długości list składników odżywczych (nazwy: ${csvMicroListing.length}, ilości: ${csvMicroAmountWithUnit.length}, typy: ${csvMicroType.length}). Niektóre składniki mogą być niepełne.`
+          });
+        }
+        
+        // Sprawdź poprawność wartości liczbowych w składnikach
+        csvMicroAmountWithUnit.forEach((amountWithUnit, idx) => {
+          if (amountWithUnit && isNaN(parseNumber(amountWithUnit))) {
+            warnings.push({
+              sku: sku,
+              type: 'warning',
+              message: `Nie można wyekstrahować liczby ze składnika odżywczego ${idx + 1}: "${amountWithUnit}". Sprawdź format.`
+            });
+          }
+        });
+        
+        const oldMicronutrients = existingRecipe.micronutrients || [];
+        
+        console.log('🧬 Porównanie składników odżywczych:');
+        console.log('  CSV (', newMicronutrients.length, 'składników):', newMicronutrients);
+        console.log('  DB (', oldMicronutrients.length, 'składników):', oldMicronutrients);
+        
+        // Porównaj składniki odżywcze (inteligentne porównywanie)
+        let micronutrientsChanged = false;
+        const microChanges = [];
+        
+        // Sprawdź czy liczba się różni
+        if (newMicronutrients.length !== oldMicronutrients.length) {
+          micronutrientsChanged = true;
+          console.log('  ✏️ ZMIANA: różna liczba składników odżywczych');
+          microChanges.push(`Liczba: ${oldMicronutrients.length} → ${newMicronutrients.length}`);
+        }
+        
+        // Porównaj składniki odżywcze (pozycyjnie - zgodnie z kolejnością)
+        const maxMicroLength = Math.max(newMicronutrients.length, oldMicronutrients.length);
+        for (let i = 0; i < maxMicroLength; i++) {
+          const newM = newMicronutrients[i];
+          const oldM = oldMicronutrients[i];
+          
+          if (!newM && oldM) {
+            // Usunięto składnik
+            micronutrientsChanged = true;
+            console.log(`  ❌ USUNIĘTO składnik ${i + 1}:`, oldM);
+            microChanges.push(`Usunięto: ${oldM.name}`);
+          } else if (newM && !oldM) {
+            // Dodano składnik
+            micronutrientsChanged = true;
+            console.log(`  ➕ DODANO składnik ${i + 1}:`, newM);
+            microChanges.push(`Dodano: ${newM.name}`);
+          } else if (newM && oldM) {
+            // Porównaj istniejące składniki
+            const changes = [];
+            
+            console.log(`  🔍 Porównanie składnika ${i + 1}:`);
+            console.log(`    Nazwa CSV: "${newM.name}" vs DB: "${oldM.name}"`);
+            console.log(`    Ilość CSV: "${newM.quantity}" vs DB: "${oldM.quantity}"`);
+            console.log(`    Jednostka CSV: "${newM.unit}" vs DB: "${oldM.unit}"`);
+            console.log(`    Kategoria CSV: "${newM.category}" vs DB: "${oldM.category}"`);
+            
+            if ((newM.name || '').trim().toLowerCase() !== (oldM.name || '').trim().toLowerCase()) {
+              changes.push(`nazwa: "${oldM.name}" → "${newM.name}"`);
+              console.log(`    ✏️ Zmiana nazwy wykryta`);
+            }
+            
+            const newQty = parseNumber(newM.quantity);
+            const oldQty = parseNumber(oldM.quantity);
+            console.log(`    Ilość po parsowaniu: CSV=${newQty} vs DB=${oldQty}, różnica=${Math.abs(newQty - oldQty)}`);
+            if (Math.abs(newQty - oldQty) > 0.001) {
+              changes.push(`ilość: ${oldQty} → ${newQty}`);
+              console.log(`    ✏️ Zmiana ilości wykryta`);
+            }
+            
+            const newUnit = (newM.unit || '').trim();
+            const oldUnit = (oldM.unit || '').trim();
+            console.log(`    Jednostka po trim: CSV="${newUnit}" (${newUnit.length} znaków) vs DB="${oldUnit}" (${oldUnit.length} znaków)`);
+            console.log(`    Porównanie === : ${newUnit === oldUnit}`);
+            if (newUnit !== oldUnit) {
+              changes.push(`jednostka: "${oldUnit}" → "${newUnit}"`);
+              console.log(`    ✏️ Zmiana jednostki wykryta!`);
+            }
+            
+            const newCat = (newM.category || '').trim();
+            const oldCat = (oldM.category || '').trim();
+            if (newCat !== oldCat) {
+              changes.push(`kategoria: "${oldCat}" → "${newCat}"`);
+              console.log(`    ✏️ Zmiana kategorii wykryta`);
+            }
+            
+            if (changes.length > 0) {
+              micronutrientsChanged = true;
+              console.log(`  ✏️ ZMIANA w składniku ${i + 1} (${oldM.name}):`, changes.join(', '));
+              microChanges.push(`${oldM.name}: ${changes.join(', ')}`);
+            } else {
+              console.log(`  ✅ Składnik ${i + 1} (${oldM.name}) - bez zmian`);
+            }
+          }
+        }
+        
+        if (micronutrientsChanged) {
+          changes.push({
+            field: 'Składniki odżywcze',
+            oldValue: `${oldMicronutrients.length} składników`,
+            newValue: `${newMicronutrients.length} składników${microChanges.length > 0 ? ' (' + microChanges.slice(0, 3).join('; ') + (microChanges.length > 3 ? '...' : '') + ')' : ''}`
+          });
+        }
+        
+        // Sprawdź certyfikacje (z obsługą różnych formatów TRUE/FALSE, Yes/No, 1/0, Tak/Nie)
+        const oldCerts = existingRecipe.certifications || {};
+        
+        // Waliduj wartości certyfikacji
+        const certFields = [
+          { key: 'eco', csvKey: '(Bool) EKO' },
+          { key: 'halal', csvKey: '(Bool) HALAL' },
+          { key: 'kosher', csvKey: '(Bool) KOSHER' },
+          { key: 'vegan', csvKey: '(Bool) VEGAN' },
+          { key: 'vege', csvKey: '(Bool) VEGETERIAN' }
+        ];
+        
+        const newCerts = {};
+        certFields.forEach(({ key, csvKey }) => {
+          const rawValue = row[csvKey];
+          if (rawValue && !['TRUE', 'FALSE', '1', '0', 'TAK', 'NIE', 'YES', 'NO', 'T', 'F', ''].includes(rawValue.toUpperCase().trim())) {
+            warnings.push({
+              sku: sku,
+              type: 'warning',
+              message: `Niepoprawna wartość certyfikacji ${key.toUpperCase()}: "${rawValue}". Oczekiwano TRUE/FALSE, 1/0, Tak/Nie. Użyto FALSE.`
+            });
+          }
+          newCerts[key] = parseBoolean(rawValue);
+        });
+        
+        console.log('🏅 Porównanie certyfikacji:');
+        console.log('  CSV:', newCerts);
+        console.log('  DB:', oldCerts);
+        
+        Object.keys(newCerts).forEach(cert => {
+          if ((oldCerts[cert] || false) !== newCerts[cert]) {
+            console.log(`  ✏️ ZMIANA w certyfikacji ${cert}:`, oldCerts[cert] || false, '→', newCerts[cert]);
+            changes.push({
+              field: `Certyfikacja ${cert.toUpperCase()}`,
+              oldValue: oldCerts[cert] ? 'TAK' : 'NIE',
+              newValue: newCerts[cert] ? 'TAK' : 'NIE'
+            });
+          }
+        });
+        
+        // Sprawdź notatki (z usunięciem białych znaków)
+        const csvNotes = (row['notes'] || '').trim();
+        const dbNotes = (existingRecipe.notes || '').trim();
+        console.log('📋 Porównanie notatek:');
+        console.log('  CSV:', csvNotes || '(puste)');
+        console.log('  DB:', dbNotes || '(puste)');
+        if (csvNotes !== dbNotes) {
+          console.log('  ✏️ ZMIANA wykryta!');
+          changes.push({
+            field: 'Notatki',
+            oldValue: dbNotes,
+            newValue: csvNotes
+          });
+        }
+        
+        if (changes.length > 0) {
+          console.log('✅ Znaleziono', changes.length, 'zmian(y) dla:', sku);
+          
+          // Zbuduj zaktualizowaną tablicę składników z CSV
+          const newIngredients = csvComponentsListing.map((name, idx) => {
+            const amountStr = csvComponentsAmount[idx] || '';
+            const quantity = parseNumber(amountStr);
+            
+            // Spróbuj znaleźć pozycję magazynową dla tego składnika
+            const inventoryItem = allInventoryItems.find(item => 
+              item.name && name && item.name.toLowerCase().trim() === name.toLowerCase().trim()
+            );
+            
+            // Zachowaj ID i itemId jeśli składnik już istniał
+            const existingIngredient = oldIngredients[idx];
+            
+            return {
+              name: name,
+              quantity: quantity.toString(),
+              unit: inventoryItem?.unit || existingIngredient?.unit || '',
+              itemId: inventoryItem?.id || existingIngredient?.itemId || '',
+              id: existingIngredient?.id || `ingredient-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`
+            };
+          });
+          
+          console.log('📦 Zaktualizowane składniki do zapisu:', newIngredients);
+          
+          preview.push({
+            sku: sku,
+            recipeId: existingRecipe.id,
+            status: 'update',
+            message: `${changes.length} zmian(y)`,
+            changes: changes,
+            updateData: {
+              ...existingRecipe, // Zachowaj wszystkie istniejące pola
+              description: csvDesc,
+              customerId: newCustomer?.id || '',
+              defaultWorkstationId: newWorkstation?.id || '',
+              processingCostPerUnit: newCost,
+              productionTimePerUnit: newTime,
+              certifications: newCerts,
+              notes: csvNotes,
+              ingredients: newIngredients,
+              micronutrients: newMicronutrients.map((micro, idx) => ({
+                ...micro,
+                id: existingRecipe.micronutrients?.[idx]?.id || `imported-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`
+              }))
+            }
+          });
+        } else {
+          console.log('⚪ Brak zmian dla:', sku);
+          preview.push({
+            sku: sku,
+            status: 'unchanged',
+            message: 'Brak zmian',
+            changes: []
+          });
+        }
+      }
+      
+      console.log('\n📊 PODSUMOWANIE IMPORTU:');
+      console.log('  Przetworzono wierszy:', csvData.length);
+      console.log('  Do aktualizacji:', preview.filter(p => p.status === 'update').length);
+      console.log('  Bez zmian:', preview.filter(p => p.status === 'unchanged').length);
+      console.log('  Nowych (pominiętych):', preview.filter(p => p.status === 'new').length);
+      
+      setImportPreview(preview);
+      setImportWarnings(warnings);
+      
+      console.log('\n⚠️ OSTRZEŻENIA:', warnings.length);
+      warnings.forEach(w => console.log(`  [${w.type}] ${w.sku}: ${w.message}`));
+      
+      if (preview.filter(p => p.status === 'update').length === 0) {
+        console.warn('⚠️ Nie znaleziono żadnych zmian do zastosowania!');
+        setImportError('Nie znaleziono żadnych zmian do zastosowania');
+      }
+      
+      // Jeśli są błędy krytyczne, ustaw błąd importu
+      const criticalErrors = warnings.filter(w => w.type === 'error');
+      if (criticalErrors.length > 0) {
+        setImportError(`Znaleziono ${criticalErrors.length} błędów w danych. Sprawdź ostrzeżenia poniżej.`);
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas parsowania CSV:', error);
+      setImportError('Błąd podczas parsowania pliku: ' + error.message);
+    }
+  };
+
+  // Funkcja zatwierdzająca import
+  const handleConfirmImport = async () => {
+    setImporting(true);
+    
+    try {
+      const { updateRecipe } = await import('../../services/recipeService');
+      
+      // Filtruj tylko te receptury, które mają zmiany
+      const recipesToUpdate = importPreview.filter(p => p.status === 'update');
+      
+      let updatedCount = 0;
+      let errorCount = 0;
+      
+      for (const item of recipesToUpdate) {
+        try {
+          await updateRecipe(item.recipeId, item.updateData, currentUser.uid);
+          updatedCount++;
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji receptury ${item.sku}:`, error);
+          errorCount++;
+        }
+      }
+      
+      showSuccess(`Import zakończony! Zaktualizowano ${updatedCount} receptur. Błędy: ${errorCount}`);
+      
+      // Zamknij dialog i odśwież listę
+      handleCloseImportDialog();
+      await fetchRecipes();
+      
+    } catch (error) {
+      console.error('Błąd podczas importu:', error);
+      showError('Wystąpił błąd podczas importu: ' + error.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // Renderowanie tabeli receptur
   const renderRecipesTable = (recipesToRender) => {
     // Dla urządzeń mobilnych wyświetlamy karty zamiast tabeli
@@ -1611,6 +2568,13 @@ const RecipeList = () => {
               {t('recipes.list.exportCSV')}
             </MenuItem>
             <MenuItem 
+              onClick={() => handleMenuAction('importCSV')}
+              disabled={loading}
+            >
+              <DownloadIcon sx={{ mr: 1, transform: 'rotate(180deg)' }} />
+              Import CSV
+            </MenuItem>
+            <MenuItem 
               onClick={() => handleMenuAction('exportWithSuppliers')}
               disabled={loading || (tabValue === 0 ? filteredRecipes.length === 0 : (!expandedPanel || !customerRecipes[expandedPanel] || customerRecipes[expandedPanel].length === 0))}
             >
@@ -1928,6 +2892,161 @@ const RecipeList = () => {
             startIcon={exporting ? <CircularProgress size={16} /> : <DownloadIcon />}
           >
             {exporting ? t('recipes.list.exporting') : t('recipes.list.export')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog importu CSV */}
+      <Dialog 
+        open={importDialogOpen} 
+        onClose={handleCloseImportDialog}
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          Import receptur z CSV
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Alert severity="info">
+              <Typography variant="body2" gutterBottom>
+                <strong>Format pliku CSV:</strong>
+              </Typography>
+              <Typography variant="body2" component="div">
+                • <strong>Wymagane kolumny:</strong> SKU, description, Client, Workstation, cost/piece, time/piece<br/>
+                • <strong>Składniki odżywcze:</strong> Micro/macro elements listing, Micro/macro amount, Micro/macro type (rozdzielone średnikami ";")<br/>
+                  <em>Przykład: "Witamina C; Białko; Węglowodany" | "500 mg; 20 g; 30 g" | "Witaminy; Makroelementy; Makroelementy"</em><br/>
+                  <em>Uwaga: Kolumna "Micro/macro amount" zawiera ilość + jednostkę (np. "100 mg")</em><br/>
+                • <strong>Certyfikacje:</strong> (Bool) EKO, (Bool) HALAL, (Bool) KOSHER, (Bool) VEGAN, (Bool) VEGETERIAN (wartości: TRUE/FALSE, 1/0, Tak/Nie)<br/>
+                • <strong>Opcjonalne:</strong> notes, Components listing, Components amount
+              </Typography>
+            </Alert>
+            
+            <Button
+              variant="outlined"
+              component="label"
+              fullWidth
+            >
+              Wybierz plik CSV
+              <input
+                type="file"
+                hidden
+                accept=".csv"
+                onChange={handleFileSelect}
+              />
+            </Button>
+            
+            {importFile && (
+              <Alert severity="success">
+                Wczytano plik: {importFile.name}
+              </Alert>
+            )}
+            
+            {importError && (
+              <Alert severity="error">
+                {importError}
+              </Alert>
+            )}
+            
+            {importWarnings.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity={importWarnings.some(w => w.type === 'error') ? 'error' : 'warning'}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {importWarnings.some(w => w.type === 'error') 
+                      ? `Znaleziono ${importWarnings.filter(w => w.type === 'error').length} błędów walidacji:`
+                      : `Znaleziono ${importWarnings.length} ostrzeżeń:`
+                    }
+                  </Typography>
+                  <Box component="ul" sx={{ margin: 0, paddingLeft: 2, maxHeight: 200, overflow: 'auto' }}>
+                    {importWarnings.map((warning, idx) => (
+                      <li key={idx}>
+                        <Typography variant="body2">
+                          <strong>{warning.sku}:</strong> {warning.message}
+                        </Typography>
+                      </li>
+                    ))}
+                  </Box>
+                </Alert>
+              </Box>
+            )}
+            
+            {importPreview.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Podgląd zmian ({importPreview.filter(p => p.status === 'update').length} receptur do aktualizacji):
+                </Typography>
+                
+                <Box sx={{ maxHeight: 400, overflow: 'auto', mt: 2 }}>
+                  {importPreview.map((item, index) => (
+                    <Box 
+                      key={index}
+                      sx={{ 
+                        mb: 2, 
+                        p: 2, 
+                        border: '1px solid',
+                        borderColor: item.status === 'update' ? 'primary.main' : 
+                                   item.status === 'new' ? 'warning.main' : 'divider',
+                        borderRadius: 1,
+                        bgcolor: item.status === 'update' ? 'primary.50' : 
+                               item.status === 'new' ? 'warning.50' : 'background.paper'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {item.sku}
+                        </Typography>
+                        <Chip 
+                          label={item.message} 
+                          size="small"
+                          color={item.status === 'update' ? 'primary' : 
+                                item.status === 'new' ? 'warning' : 'default'}
+                        />
+                      </Box>
+                      
+                      {item.changes.length > 0 && (
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Pole</TableCell>
+                                <TableCell>Wartość bieżąca</TableCell>
+                                <TableCell>Nowa wartość</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {item.changes.map((change, idx) => (
+                                <TableRow key={idx}>
+                                  <TableCell>{change.field}</TableCell>
+                                  <TableCell sx={{ color: 'error.main' }}>
+                                    {change.oldValue || '-'}
+                                  </TableCell>
+                                  <TableCell sx={{ color: 'success.main' }}>
+                                    {change.newValue || '-'}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseImportDialog} disabled={importing}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmImport} 
+            variant="contained" 
+            disabled={importing || importPreview.filter(p => p.status === 'update').length === 0}
+            startIcon={importing ? <CircularProgress size={16} /> : <DownloadIcon sx={{ transform: 'rotate(180deg)' }} />}
+          >
+            {importing ? 'Importowanie...' : `Zatwierdź import (${importPreview.filter(p => p.status === 'update').length} receptur)`}
           </Button>
         </DialogActions>
       </Dialog>
