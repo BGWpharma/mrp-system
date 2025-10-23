@@ -2138,7 +2138,7 @@ const InvoiceForm = ({ invoiceId }) => {
                       onClick={() => handleToggleOrderItem(index)}
                       sx={{ cursor: 'pointer' }}
                     >
-                      {item.price?.toFixed(2)} {invoice.currency || 'EUR'}
+                      {item.price?.toFixed(4)} {invoice.currency || 'EUR'}
                     </TableCell>
                     <TableCell 
                       align="right"

@@ -2032,7 +2032,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                       const quantity = parseFloat(item.quantity) || 1;
                       const unitCost = totalWithAdditional / quantity;
                       
-                      return formatCurrency(unitCost);
+                      return formatCurrency(unitCost, 'EUR', 4, true);
                     })()}
                   </TableCell>
                   <TableCell align="right">

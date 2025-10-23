@@ -752,7 +752,7 @@ const InvoiceDetails = () => {
                     <TableCell>{item.cnCode || '-'}</TableCell>
                     <TableCell align="right">{quantity}</TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell align="right">{price.toFixed(2)} {invoice.currency}</TableCell>
+                    <TableCell align="right">{price.toFixed(4)} {invoice.currency}</TableCell>
                     <TableCell align="right">{vatRate}%</TableCell>
                     <TableCell align="right">{netValue.toFixed(2)} {invoice.currency}</TableCell>
                     <TableCell align="right">{grossValue.toFixed(2)} {invoice.currency}</TableCell>

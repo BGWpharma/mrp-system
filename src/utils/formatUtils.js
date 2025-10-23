@@ -3,13 +3,14 @@
  * @param {number} value - wartość do sformatowania
  * @param {string} currency - symbol waluty (domyślnie EUR)
  * @param {number} precision - liczba miejsc po przecinku (domyślnie 2)
+ * @param {boolean} forceDecimals - czy wymuszać wyświetlanie wszystkich miejsc dziesiętnych (domyślnie false)
  * @returns {string} sformatowana wartość walutowa
  */
-export const formatCurrency = (value, currency = 'EUR', precision = 2) => {
+export const formatCurrency = (value, currency = 'EUR', precision = 2, forceDecimals = false) => {
   const formatter = new Intl.NumberFormat('pl-PL', {
     style: 'currency',
     currency,
-    minimumFractionDigits: 0,
+    minimumFractionDigits: forceDecimals ? precision : 0,
     maximumFractionDigits: precision
   });
   

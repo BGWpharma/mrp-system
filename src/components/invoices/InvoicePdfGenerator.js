@@ -31,6 +31,18 @@ class InvoicePdfGenerator {
   }
 
   /**
+   * Formatuje cenę jednostkową z 4 miejscami po przecinku
+   */
+  formatUnitPrice(amount, currency = null) {
+    if (amount === undefined || amount === null || isNaN(amount)) return '0,0000';
+    const usedCurrency = currency || this.invoice.currency || 'EUR';
+    
+    // Formatuj liczbę z separatorami tysięcy i przecinkiem dziesiętnym - 4 miejsca
+    const formattedNumber = this.formatNumberWithSeparators(amount, 4);
+    return `${formattedNumber} ${usedCurrency}`;
+  }
+
+  /**
    * Formatuje liczbę z separatorami tysięcy i przecinkiem dziesiętnym
    */
   formatNumberWithSeparators(value, precision = 2) {
@@ -424,7 +436,7 @@ class InvoicePdfGenerator {
         description: fullDescription,
         cnCode: item.cnCode || '-',
         quantity: `${this.formatNumberWithSeparators(quantity, quantity % 1 === 0 ? 0 : 2)} ${this.translateUnit(item.unit)}`,
-        unitPrice: this.formatCurrency(price),
+        unitPrice: this.formatUnitPrice(price),
         vat: vatDisplay,
         netValue: this.formatCurrency(netValue),
         grossValue: this.formatCurrency(grossValue)

@@ -401,9 +401,9 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
           ...item,
           orderItemId: orderItemId, // Dodaj ID pozycji zamówienia
           description: item.description || '', // Kopiuj opis z pozycji CO
-          price: finalPrice,
-          netValue: parseFloat(item.quantity || 0) * finalPrice,
-          totalPrice: parseFloat(item.quantity || 0) * finalPrice
+          price: parseFloat(finalPrice.toFixed(4)), // Zaokrąglij do 4 miejsc przed zapisem
+          netValue: parseFloat(item.quantity || 0) * parseFloat(finalPrice.toFixed(4)),
+          totalPrice: parseFloat(item.quantity || 0) * parseFloat(finalPrice.toFixed(4))
         };
       });
     };

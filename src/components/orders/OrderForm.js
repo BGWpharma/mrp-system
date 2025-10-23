@@ -2464,13 +2464,13 @@ const OrderForm = ({ orderId }) => {
   };
 
   // Funkcja pomocnicza do formatowania kwoty waluty
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount, currency = 'EUR', precision = 2, forceDecimals = false) => {
     if (amount === undefined || amount === null) return '';
     return new Intl.NumberFormat('pl-PL', { 
       style: 'currency', 
-      currency: 'EUR',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2 
+      currency: currency,
+      minimumFractionDigits: forceDecimals ? precision : 0,
+      maximumFractionDigits: precision 
     }).format(amount);
   };
 
@@ -3116,7 +3116,7 @@ const OrderForm = ({ orderId }) => {
                             const quantity = parseFloat(item.quantity) || 1;
                             const unitCost = totalWithAdditional / quantity;
                             
-                            return formatCurrency(unitCost);
+                            return formatCurrency(unitCost, 'EUR', 4, true);
                           })()}
                         </Box>
                       </TableCell>

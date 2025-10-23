@@ -338,7 +338,7 @@ const InvoiceCsvExport = ({ invoices, customers }) => {
             item.description || '-',
             item.quantity || '-',
             item.unit || '-',
-            item.price ? item.price.toFixed(2) : '-',
+            item.price ? item.price.toFixed(4) : '-',
             typeof item.vat === 'number' ? item.vat + '%' : (item.vat || '-'),
             netValue.toFixed(2),
             grossValue.toFixed(2)
@@ -635,7 +635,7 @@ const InvoiceCsvExport = ({ invoices, customers }) => {
                                 <TableCell>{item.description || '-'}</TableCell>
                                 <TableCell align="right">{item.quantity || '-'}</TableCell>
                                 <TableCell>{item.unit || '-'}</TableCell>
-                                <TableCell align="right">{item.price ? item.price.toFixed(2) : '-'}</TableCell>
+                                <TableCell align="right">{item.price ? item.price.toFixed(4) : '-'}</TableCell>
                                 <TableCell align="right">{typeof item.vat === 'number' ? item.vat + '%' : (item.vat || '-')}</TableCell>
                                 <TableCell align="right">{netValue.toFixed(2)}</TableCell>
                                 <TableCell align="right">{grossValue.toFixed(2)}</TableCell>
