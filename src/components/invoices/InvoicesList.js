@@ -25,7 +25,8 @@ import {
   Select,
   MenuItem,
   Divider,
-  TablePagination
+  TablePagination,
+  TableSortLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -85,6 +86,9 @@ const InvoicesList = () => {
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  // Pobierz stan sortowania z kontekstu
+  const tableSort = listState.tableSort;
 
   useEffect(() => {
     fetchInvoices();
@@ -148,8 +152,49 @@ const InvoicesList = () => {
       });
     }
 
+    // Zastosuj sortowanie
+    if (tableSort && tableSort.field) {
+      results.sort((a, b) => {
+        let aValue = a[tableSort.field];
+        let bValue = b[tableSort.field];
+
+        // Obsługa zagnieżdżonych pól (np. customer.name)
+        if (tableSort.field === 'customer') {
+          aValue = a.customer?.name || '';
+          bValue = b.customer?.name || '';
+        }
+
+        // Obsługa dat
+        if (tableSort.field === 'issueDate' || tableSort.field === 'dueDate') {
+          aValue = aValue ? new Date(aValue).getTime() : 0;
+          bValue = bValue ? new Date(bValue).getTime() : 0;
+        }
+
+        // Obsługa liczb
+        if (tableSort.field === 'total') {
+          aValue = parseFloat(aValue) || 0;
+          bValue = parseFloat(bValue) || 0;
+        }
+
+        // Obsługa stringów (number, status)
+        if (tableSort.field === 'number' || tableSort.field === 'status') {
+          aValue = (aValue || '').toString().toLowerCase();
+          bValue = (bValue || '').toString().toLowerCase();
+        }
+
+        // Porównanie
+        if (aValue < bValue) {
+          return tableSort.order === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return tableSort.order === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
     setFilteredInvoices(results);
-  }, [invoices, listState.searchTerm, listState.filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [invoices, listState.searchTerm, listState.filters, tableSort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Nasłuchuj powrotu do karty/okna aby odświeżyć dane
   useEffect(() => {
@@ -394,6 +439,32 @@ const InvoicesList = () => {
         size="small"
         variant="outlined"
       />
+    );
+  };
+
+  // Funkcja obsługująca kliknięcie w nagłówek kolumny (sortowanie)
+  const handleRequestSort = (property) => {
+    const isAsc = tableSort.field === property && tableSort.order === 'asc';
+    const newOrder = isAsc ? 'desc' : 'asc';
+    listActions.setTableSort({ field: property, order: newOrder });
+  };
+
+  // Komponent dla nagłówka kolumny z sortowaniem
+  const SortableTableCell = ({ id, label, disableSorting = false }) => {
+    return (
+      <TableCell>
+        {disableSorting ? (
+          label
+        ) : (
+          <TableSortLabel
+            active={tableSort.field === id}
+            direction={tableSort.field === id ? tableSort.order : 'asc'}
+            onClick={() => handleRequestSort(id)}
+          >
+            {label}
+          </TableSortLabel>
+        )}
+      </TableCell>
     );
   };
 
@@ -651,13 +722,13 @@ const InvoicesList = () => {
             <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>{t('invoices.table.invoiceNumber')}</TableCell>
-                    <TableCell>{t('invoices.table.client')}</TableCell>
-                    <TableCell>{t('invoices.table.issueDate')}</TableCell>
-                    <TableCell>{t('invoices.table.dueDate')}</TableCell>
-                    <TableCell>{t('invoices.table.amountAndToPay')}</TableCell>
-                    <TableCell>{t('invoices.table.availableAmount')}</TableCell>
-                    <TableCell>{t('invoices.table.status')}</TableCell>
+                    <SortableTableCell id="number" label={t('invoices.table.invoiceNumber')} />
+                    <SortableTableCell id="customer" label={t('invoices.table.client')} />
+                    <SortableTableCell id="issueDate" label={t('invoices.table.issueDate')} />
+                    <SortableTableCell id="dueDate" label={t('invoices.table.dueDate')} />
+                    <SortableTableCell id="total" label={t('invoices.table.amountAndToPay')} />
+                    <SortableTableCell id="availableAmount" label={t('invoices.table.availableAmount')} disableSorting />
+                    <SortableTableCell id="status" label={t('invoices.table.status')} />
                     <TableCell align="right">{t('invoices.table.actions')}</TableCell>
                   </TableRow>
                 </TableHead>

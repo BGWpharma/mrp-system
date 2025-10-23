@@ -20,6 +20,10 @@ const initialState = {
     fromDate: null,
     toDate: null
   },
+  tableSort: {
+    field: 'issueDate',
+    order: 'desc'
+  },
   lastUpdated: Date.now()
 };
 
@@ -32,6 +36,7 @@ const actionTypes = {
   SET_FILTERS: 'SET_FILTERS',
   UPDATE_FILTER: 'UPDATE_FILTER',
   RESET_FILTERS: 'RESET_FILTERS',
+  SET_TABLE_SORT: 'SET_TABLE_SORT',
   RESET_STATE: 'RESET_STATE',
   LOAD_STATE: 'LOAD_STATE'
 };
@@ -93,6 +98,14 @@ const invoiceListStateReducer = (state, action) => {
           ...state, 
           filters: initialState.filters,
           page: 0,
+          lastUpdated: Date.now()
+        };
+      
+      case actionTypes.SET_TABLE_SORT:
+        return { 
+          ...state, 
+          tableSort: action.payload,
+          page: 0, // Reset strony przy zmianie sortowania
           lastUpdated: Date.now()
         };
       
@@ -184,6 +197,7 @@ export const InvoiceListStateProvider = ({ children }) => {
     setFilters: (filters) => dispatch({ type: actionTypes.SET_FILTERS, payload: filters }),
     updateFilter: (name, value) => dispatch({ type: actionTypes.UPDATE_FILTER, payload: { name, value } }),
     resetFilters: () => dispatch({ type: actionTypes.RESET_FILTERS }),
+    setTableSort: (tableSort) => dispatch({ type: actionTypes.SET_TABLE_SORT, payload: tableSort }),
     resetState: () => dispatch({ type: actionTypes.RESET_STATE })
   };
 
