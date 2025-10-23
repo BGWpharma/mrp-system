@@ -12,6 +12,14 @@
   "noCustomer": "None - general recipe",
   "customerHelpText": "Optional - assign recipe to specific customer",
   "description": "Description",
+  "certifications": {
+    "title": "Certifications",
+    "halal": "Halal",
+    "eco": "Eco",
+    "vege": "Vegetarian",
+    "vegan": "Vegan",
+    "kosher": "Kosher"
+  },
   "processingCost": "Processing cost per {{unit}} (EUR)",
   "productionTime": "Production time per {{unit}} (min.)",
   "defaultWorkstation": "Default production workstation",

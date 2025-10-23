@@ -12,6 +12,14 @@
   "noCustomer": "Brak - receptura ogólna",
   "customerHelpText": "Opcjonalnie - przypisz recepturę do konkretnego klienta",
   "description": "Opis",
+  "certifications": {
+    "title": "Certyfikacje",
+    "halal": "Halal",
+    "eco": "Eco",
+    "vege": "Wegetariański",
+    "vegan": "Wegański",
+    "kosher": "Koszer"
+  },
   "processingCost": "Koszt procesowy na {{unit}} (EUR)",
   "productionTime": "Czas produkcji na {{unit}} (min.)",
   "defaultWorkstation": "Domyślne stanowisko produkcyjne",

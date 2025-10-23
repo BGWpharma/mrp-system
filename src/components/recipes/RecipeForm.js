@@ -33,7 +33,10 @@ import {
   FormHelperText,
   Tooltip,
   Alert,
-  Grid
+  Grid,
+  FormControlLabel,
+  Checkbox,
+  FormGroup
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -96,7 +99,14 @@ const RecipeForm = ({ recipeId }) => {
     productionTimePerUnit: 0,
     defaultWorkstationId: '',
     nutritionalBasis: '1 caps', // Nowe pole dla podstawy składników odżywczych
-    density: '' // Nowe pole dla gęstości produktu
+    density: '', // Nowe pole dla gęstości produktu
+    certifications: {
+      halal: false,
+      eco: false,
+      vege: false,
+      vegan: false,
+      kosher: false
+    }
   });
 
   // Dodajemy stan dla składników z magazynu
@@ -325,9 +335,19 @@ const RecipeForm = ({ recipeId }) => {
             id: micronutrient.id || `existing-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
           }));
           
+          // Upewnij się, że certifications istnieje z domyślnymi wartościami
+          const certifications = recipe.certifications || {
+            halal: false,
+            eco: false,
+            vege: false,
+            vegan: false,
+            kosher: false
+          };
+          
           const recipeWithMicronutrients = {
             ...recipe,
-            micronutrients: micronutrientsWithIds
+            micronutrients: micronutrientsWithIds,
+            certifications: certifications
           };
           
           setRecipeData(recipeWithMicronutrients);
@@ -480,6 +500,16 @@ const RecipeForm = ({ recipeId }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setRecipeData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCertificationChange = (certName) => (e) => {
+    setRecipeData(prev => ({
+      ...prev,
+      certifications: {
+        ...prev.certifications,
+        [certName]: e.target.checked
+      }
+    }));
   };
 
   const handleCostInputChange = (e) => {
@@ -1444,6 +1474,89 @@ const RecipeForm = ({ recipeId }) => {
               value="szt." 
             />
           </Grid>
+        </Box>
+      </Paper>
+
+      {/* Sekcja certyfikacji */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden' 
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <ScienceIcon color="primary" />
+          <Typography variant="h6" fontWeight="500">{t('recipes.certifications.title')}</Typography>
+        </Box>
+        
+        <Box sx={{ p: 3 }}>
+          <FormGroup row sx={{ gap: 3 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={recipeData.certifications?.halal || false}
+                  onChange={handleCertificationChange('halal')}
+                  color="primary"
+                />
+              }
+              label={t('recipes.certifications.halal')}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={recipeData.certifications?.eco || false}
+                  onChange={handleCertificationChange('eco')}
+                  color="primary"
+                />
+              }
+              label={t('recipes.certifications.eco')}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={recipeData.certifications?.vege || false}
+                  onChange={handleCertificationChange('vege')}
+                  color="primary"
+                />
+              }
+              label={t('recipes.certifications.vege')}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={recipeData.certifications?.vegan || false}
+                  onChange={handleCertificationChange('vegan')}
+                  color="primary"
+                />
+              }
+              label={t('recipes.certifications.vegan')}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={recipeData.certifications?.kosher || false}
+                  onChange={handleCertificationChange('kosher')}
+                  color="primary"
+                />
+              }
+              label={t('recipes.certifications.kosher')}
+            />
+          </FormGroup>
         </Box>
       </Paper>
 

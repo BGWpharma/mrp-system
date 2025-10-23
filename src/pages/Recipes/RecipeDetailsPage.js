@@ -590,6 +590,57 @@ const RecipeDetailsPage = () => {
                     ) : t('recipes.details.noPriceLists')}
                   </Typography>
                 </Grid>
+                
+                {/* Sekcja certyfikacji */}
+                {recipe.certifications && Object.values(recipe.certifications).some(val => val === true) && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                      {t('recipes.certifications.title')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {recipe.certifications.halal && (
+                        <Chip 
+                          label={t('recipes.certifications.halal')} 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                        />
+                      )}
+                      {recipe.certifications.eco && (
+                        <Chip 
+                          label={t('recipes.certifications.eco')} 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                        />
+                      )}
+                      {recipe.certifications.vege && (
+                        <Chip 
+                          label={t('recipes.certifications.vege')} 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                        />
+                      )}
+                      {recipe.certifications.vegan && (
+                        <Chip 
+                          label={t('recipes.certifications.vegan')} 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                        />
+                      )}
+                      {recipe.certifications.kosher && (
+                        <Chip 
+                          label={t('recipes.certifications.kosher')} 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                        />
+                      )}
+                    </Box>
+                  </Grid>
+                )}
               </Grid>
             </Grid>
 
