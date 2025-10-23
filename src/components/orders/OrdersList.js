@@ -390,10 +390,6 @@ const OrdersList = () => {
     navigate(`/orders/edit/${orderId}`);
   };
 
-  const handleViewOrderDetails = (orderId) => {
-    navigate(`/orders/${orderId}`);
-  };
-
   const handleDeleteOrderClick = (order) => {
     setOrderToDelete(order);
   };
@@ -1899,7 +1895,10 @@ const OrdersList = () => {
                             <Tooltip title={t('orders.actions.details')}>
                               <IconButton
                                 size="small"
-                                onClick={() => handleViewOrderDetails(order.id)}
+                                component={RouterLink}
+                                to={`/orders/${order.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 color="primary"
                               >
                                 <EventNoteIcon fontSize="small" />
