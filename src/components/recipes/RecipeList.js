@@ -1322,6 +1322,72 @@ const RecipeList = () => {
     return parseFloat(normalized) || 0;
   };
 
+  // Funkcja obliczająca odległość Levenshteina (fuzzy matching)
+  const levenshteinDistance = (str1, str2) => {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+    
+    const matrix = [];
+    
+    for (let i = 0; i <= s2.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= s1.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= s2.length; i++) {
+      for (let j = 1; j <= s1.length; j++) {
+        if (s2.charAt(i - 1) === s1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substytucja
+            matrix[i][j - 1] + 1,     // wstawienie
+            matrix[i - 1][j] + 1      // usunięcie
+          );
+        }
+      }
+    }
+    
+    return matrix[s2.length][s1.length];
+  };
+
+  // Funkcja znajdująca najbardziej podobny składnik w magazynie
+  const findBestMatch = (targetName, inventoryItems, threshold = 0.75) => {
+    if (!targetName || !inventoryItems || inventoryItems.length === 0) {
+      return null;
+    }
+    
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    inventoryItems.forEach(item => {
+      if (!item.name) return;
+      
+      const itemName = item.name.toLowerCase().trim();
+      const targetNameLower = targetName.toLowerCase().trim();
+      
+      // Oblicz odległość Levenshteina
+      const distance = levenshteinDistance(targetNameLower, itemName);
+      const maxLength = Math.max(targetNameLower.length, itemName.length);
+      const similarity = 1 - (distance / maxLength);
+      
+      // Jeśli podobieństwo jest większe niż threshold, rozważ to jako dopasowanie
+      if (similarity > bestScore && similarity >= threshold) {
+        bestScore = similarity;
+        bestMatch = {
+          item: item,
+          similarity: similarity,
+          distance: distance
+        };
+      }
+    });
+    
+    return bestMatch;
+  };
+
   // Funkcja parsująca CSV do tablicy obiektów
   const parseCSV = (csvText) => {
     const lines = csvText.split('\n').filter(line => line.trim() !== '');
@@ -1516,6 +1582,9 @@ const RecipeList = () => {
         // Wykryj zmiany
         const changes = [];
         
+        // Tablica do śledzenia auto-korekcji składników
+        const ingredientCorrections = [];
+        
         // Sprawdź opis (z usunięciem białych znaków na początku/końcu)
         const csvDesc = (row['description'] || '').trim();
         const dbDesc = (existingRecipe.description || '').trim();
@@ -1673,7 +1742,7 @@ const RecipeList = () => {
         
         // Porównaj każdy składnik pozycyjnie
         for (let i = 0; i < Math.max(csvComponentsListing.length, oldIngredients.length); i++) {
-          const csvName = csvComponentsListing[i] || '';
+          let csvName = csvComponentsListing[i] || '';
           const csvAmountStr = csvComponentsAmount[i] || '';
           const oldIng = oldIngredients[i];
           
@@ -1685,11 +1754,49 @@ const RecipeList = () => {
             
             if (!inventoryItem) {
               console.warn(`  ⚠️ Składnik "${csvName}" nie istnieje w magazynie`);
-              warnings.push({
-                sku: sku,
-                type: 'warning',
-                message: `Składnik "${csvName}" nie istnieje jako pozycja magazynowa. Może to powodować problemy z obliczeniami kosztów.`
-              });
+              
+              // Spróbuj znaleźć podobny składnik
+              const bestMatch = findBestMatch(csvName, allInventoryItems, 0.75);
+              
+              if (bestMatch) {
+                // Znaleziono podobny składnik - auto-korekcja
+                const correctedName = bestMatch.item.name;
+                const similarity = (bestMatch.similarity * 100).toFixed(0);
+                
+                // Zapisz oryginalną nazwę przed korektą
+                const originalName = csvName;
+                
+                console.log(`  🔧 AUTO-KOREKCJA: "${originalName}" → "${correctedName}" (podobieństwo: ${similarity}%)`);
+                
+                // Zaktualizuj nazwę składnika w CSV
+                csvComponentsListing[i] = correctedName;
+                csvName = correctedName;
+                
+                // Dodaj informację o korekcji
+                ingredientCorrections.push({
+                  index: i + 1,
+                  originalName: originalName,
+                  correctedName: correctedName,
+                  similarity: similarity
+                });
+                
+                warnings.push({
+                  sku: sku,
+                  type: 'corrected',
+                  message: `Składnik "${originalName}" został automatycznie poprawiony na "${correctedName}" (podobieństwo: ${similarity}%).`
+                });
+                
+                console.log(`  ✅ Składnik "${correctedName}" znaleziony w magazynie (ID: ${bestMatch.item.id})`);
+              } else {
+                // Nie znaleziono podobnego składnika - BŁĄD KRYTYCZNY
+                console.error(`  ❌ BŁĄD: Nie można znaleźć podobnego składnika dla "${csvName}"`);
+                
+                warnings.push({
+                  sku: sku,
+                  type: 'error',
+                  message: `Składnik "${csvName}" nie istnieje jako pozycja magazynowa i nie znaleziono podobnego składnika. Import nie może być zatwierdzony.`
+                });
+              }
             } else {
               console.log(`  ✅ Składnik "${csvName}" znaleziony w magazynie (ID: ${inventoryItem.id})`);
             }
@@ -1698,10 +1805,19 @@ const RecipeList = () => {
           if (!oldIng && csvName) {
             // Dodano składnik
             console.log(`  ➕ DODANO składnik ${i + 1}:`, csvName, csvAmountStr);
+            
+            // Sprawdź czy ma numer CAS z magazynu
+            const inventoryItemForNewIng = allInventoryItems.find(item => 
+              item.name && csvName && item.name.toLowerCase().trim() === csvName.toLowerCase().trim()
+            );
+            const casNumberInfo = inventoryItemForNewIng?.casNumber 
+              ? ` [CAS: ${inventoryItemForNewIng.casNumber}]` 
+              : '';
+            
             changes.push({
               field: `Składnik ${i + 1}`,
               oldValue: '-',
-              newValue: `${csvName} (${csvAmountStr})`
+              newValue: `${csvName} (${csvAmountStr})${casNumberInfo}`
             });
           } else if (oldIng && !csvName) {
             // Usunięto składnik
@@ -1735,6 +1851,27 @@ const RecipeList = () => {
                 oldValue: `${oldQuantity} ${oldIng.unit || ''}`,
                 newValue: csvAmountStr
               });
+            }
+            
+            // Porównaj numer CAS - sprawdź czy zmienił się w pozycji magazynowej
+            if (csvName && allInventoryItems.length > 0) {
+              const inventoryItem = allInventoryItems.find(item => 
+                item.name && csvName && item.name.toLowerCase().trim() === csvName.toLowerCase().trim()
+              );
+              
+              if (inventoryItem && inventoryItem.casNumber) {
+                const newCasNumber = inventoryItem.casNumber.trim();
+                const oldCasNumber = (oldIng.casNumber || '').trim();
+                
+                if (newCasNumber && newCasNumber !== oldCasNumber) {
+                  console.log(`  🔬 ZMIANA numeru CAS dla składnika ${i + 1} (${csvName}):`, oldCasNumber || '(brak)', '→', newCasNumber);
+                  changes.push({
+                    field: `Składnik ${i + 1} - numer CAS (${csvName})`,
+                    oldValue: oldCasNumber || '(brak)',
+                    newValue: newCasNumber
+                  });
+                }
+              }
             }
           }
         }
@@ -1974,12 +2111,25 @@ const RecipeList = () => {
             // Zachowaj ID i itemId jeśli składnik już istniał
             const existingIngredient = oldIngredients[idx];
             
+            // Pobierz numer CAS z pozycji magazynowej (jeśli istnieje)
+            const casNumber = inventoryItem?.casNumber || existingIngredient?.casNumber || '';
+            
+            // Loguj informacje o numerze CAS
+            if (inventoryItem?.casNumber) {
+              console.log(`  🔬 Składnik "${name}" - pobrano numer CAS z magazynu: ${inventoryItem.casNumber}`);
+            } else if (existingIngredient?.casNumber) {
+              console.log(`  🔬 Składnik "${name}" - zachowano istniejący numer CAS: ${existingIngredient.casNumber}`);
+            } else {
+              console.log(`  ⚠️ Składnik "${name}" - brak numeru CAS`);
+            }
+            
             return {
               name: name,
               quantity: quantity.toString(),
               unit: inventoryItem?.unit || existingIngredient?.unit || '',
               itemId: inventoryItem?.id || existingIngredient?.itemId || '',
-              id: existingIngredient?.id || `ingredient-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`
+              id: existingIngredient?.id || `ingredient-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
+              casNumber: casNumber  // Dodaj numer CAS z pozycji magazynowej
             };
           });
           
@@ -1991,6 +2141,7 @@ const RecipeList = () => {
             status: 'update',
             message: `${changes.length} zmian(y)`,
             changes: changes,
+            ingredientCorrections: ingredientCorrections,
             updateData: {
               ...existingRecipe, // Zachowaj wszystkie istniejące pola
               description: csvDesc,
@@ -2018,14 +2169,43 @@ const RecipeList = () => {
         }
       }
       
+      // Oblicz statystyki numerów CAS
+      let casUpdatesCount = 0;
+      let casAddedCount = 0;
+      preview.forEach(item => {
+        if (item.changes) {
+          item.changes.forEach(change => {
+            if (change.field && change.field.includes('numer CAS')) {
+              if (change.oldValue === '(brak)' || change.oldValue === '-') {
+                casAddedCount++;
+              } else {
+                casUpdatesCount++;
+              }
+            }
+          });
+        }
+      });
+      
       console.log('\n📊 PODSUMOWANIE IMPORTU:');
       console.log('  Przetworzono wierszy:', csvData.length);
       console.log('  Do aktualizacji:', preview.filter(p => p.status === 'update').length);
       console.log('  Bez zmian:', preview.filter(p => p.status === 'unchanged').length);
       console.log('  Nowych (pominiętych):', preview.filter(p => p.status === 'new').length);
+      if (casAddedCount > 0 || casUpdatesCount > 0) {
+        console.log('  🔬 Numery CAS:');
+        if (casAddedCount > 0) console.log('    - Dodano:', casAddedCount);
+        if (casUpdatesCount > 0) console.log('    - Zaktualizowano:', casUpdatesCount);
+      }
       
       setImportPreview(preview);
-      setImportWarnings(warnings);
+      
+      // Sortuj ostrzeżenia: najpierw błędy (error), potem korekcje (corrected), na końcu ostrzeżenia (warning)
+      const sortedWarnings = warnings.sort((a, b) => {
+        const order = { error: 0, corrected: 1, warning: 2 };
+        return (order[a.type] || 3) - (order[b.type] || 3);
+      });
+      
+      setImportWarnings(sortedWarnings);
       
       console.log('\n⚠️ OSTRZEŻENIA:', warnings.length);
       warnings.forEach(w => console.log(`  [${w.type}] ${w.sku}: ${w.message}`));
@@ -2060,6 +2240,18 @@ const RecipeList = () => {
       let updatedCount = 0;
       let errorCount = 0;
       
+      // Zlicz numery CAS
+      let totalCasUpdates = 0;
+      recipesToUpdate.forEach(item => {
+        if (item.changes) {
+          item.changes.forEach(change => {
+            if (change.field && change.field.includes('numer CAS')) {
+              totalCasUpdates++;
+            }
+          });
+        }
+      });
+      
       for (const item of recipesToUpdate) {
         try {
           await updateRecipe(item.recipeId, item.updateData, currentUser.uid);
@@ -2070,7 +2262,8 @@ const RecipeList = () => {
         }
       }
       
-      showSuccess(`Import zakończony! Zaktualizowano ${updatedCount} receptur. Błędy: ${errorCount}`);
+      const casInfo = totalCasUpdates > 0 ? ` Zaktualizowano ${totalCasUpdates} numerów CAS.` : '';
+      showSuccess(`Import zakończony! Zaktualizowano ${updatedCount} receptur.${casInfo} Błędy: ${errorCount}`);
       
       // Zamknij dialog i odśwież listę
       handleCloseImportDialog();
@@ -2954,13 +3147,22 @@ const RecipeList = () => {
                   <Typography variant="subtitle2" gutterBottom>
                     {importWarnings.some(w => w.type === 'error') 
                       ? `Znaleziono ${importWarnings.filter(w => w.type === 'error').length} błędów walidacji:`
-                      : `Znaleziono ${importWarnings.length} ostrzeżeń:`
+                      : importWarnings.some(w => w.type === 'corrected')
+                        ? `Znaleziono ${importWarnings.filter(w => w.type === 'corrected').length} auto-korekcji i ${importWarnings.filter(w => w.type === 'warning').length} ostrzeżeń:`
+                        : `Znaleziono ${importWarnings.length} ostrzeżeń:`
                     }
                   </Typography>
                   <Box component="ul" sx={{ margin: 0, paddingLeft: 2, maxHeight: 200, overflow: 'auto' }}>
                     {importWarnings.map((warning, idx) => (
                       <li key={idx}>
-                        <Typography variant="body2">
+                        <Typography 
+                          variant="body2"
+                          sx={{ 
+                            color: warning.type === 'error' ? 'error.main' : 
+                                   warning.type === 'corrected' ? 'info.main' : 
+                                   'warning.main'
+                          }}
+                        >
                           <strong>{warning.sku}:</strong> {warning.message}
                         </Typography>
                       </li>
@@ -3029,6 +3231,52 @@ const RecipeList = () => {
                           </Table>
                         </TableContainer>
                       )}
+                      
+                      {item.ingredientCorrections && item.ingredientCorrections.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Alert severity="info" sx={{ mb: 1 }}>
+                            <Typography variant="subtitle2" gutterBottom>
+                              <strong>Auto-korekcja składników:</strong> {item.ingredientCorrections.length} składnik(ów) został automatycznie poprawiony:
+                            </Typography>
+                          </Alert>
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Składnik</TableCell>
+                                  <TableCell>Wartość bieżąca</TableCell>
+                                  <TableCell>Nowa wartość</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {item.ingredientCorrections.map((correction, idx) => (
+                                  <TableRow key={idx} sx={{ backgroundColor: 'info.lighter' }}>
+                                    <TableCell>Składnik {correction.index} - nazwa</TableCell>
+                                    <TableCell sx={{ 
+                                      color: 'warning.main',
+                                      textDecoration: 'line-through'
+                                    }}>
+                                      {correction.originalName}
+                                    </TableCell>
+                                    <TableCell sx={{ 
+                                      color: 'info.dark',
+                                      fontWeight: 'bold'
+                                    }}>
+                                      {correction.correctedName}
+                                      <Chip 
+                                        label={`${correction.similarity}%`} 
+                                        size="small" 
+                                        color="info"
+                                        sx={{ ml: 1, height: 20 }}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </Box>
+                      )}
                     </Box>
                   ))}
                 </Box>
@@ -3040,14 +3288,28 @@ const RecipeList = () => {
           <Button onClick={handleCloseImportDialog} disabled={importing}>
             Anuluj
           </Button>
-          <Button 
-            onClick={handleConfirmImport} 
-            variant="contained" 
-            disabled={importing || importPreview.filter(p => p.status === 'update').length === 0}
-            startIcon={importing ? <CircularProgress size={16} /> : <DownloadIcon sx={{ transform: 'rotate(180deg)' }} />}
+          <Tooltip 
+            title={
+              importWarnings.some(w => w.type === 'error') 
+                ? 'Import został zablokowany ze względu na błędy krytyczne. Napraw błędy lub usuń problematyczne składniki z pliku CSV.' 
+                : ''
+            }
           >
-            {importing ? 'Importowanie...' : `Zatwierdź import (${importPreview.filter(p => p.status === 'update').length} receptur)`}
-          </Button>
+            <span>
+              <Button 
+                onClick={handleConfirmImport} 
+                variant="contained" 
+                disabled={
+                  importing || 
+                  importPreview.filter(p => p.status === 'update').length === 0 ||
+                  importWarnings.some(w => w.type === 'error')
+                }
+                startIcon={importing ? <CircularProgress size={16} /> : <DownloadIcon sx={{ transform: 'rotate(180deg)' }} />}
+              >
+                {importing ? 'Importowanie...' : `Zatwierdź import (${importPreview.filter(p => p.status === 'update').length} receptur)`}
+              </Button>
+            </span>
+          </Tooltip>
         </DialogActions>
       </Dialog>
 
