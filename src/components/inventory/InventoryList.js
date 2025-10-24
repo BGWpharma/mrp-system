@@ -1290,7 +1290,11 @@ const InventoryList = () => {
           (Number(item.quantity) || 0).toFixed(2) + ' ' + (item.unit || 'pcs.'),
           bookedQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
           availableQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
-          fixPolishChars(item.warehouseName || '')
+          fixPolishChars(item.warehouseName || ''),
+          item.boxesPerPallet || '',
+          item.itemsPerBox || '',
+          item.weight ? item.weight + ' kg' : '',
+          fixPolishChars(item.description || '')
         ];
       });
 
@@ -1300,10 +1304,14 @@ const InventoryList = () => {
         'SKU',
         'CAS Number',
         'Barcode',
-        'Total Quantity',
-        'Reserved Quantity',
-        'Available Quantity',
-        'Location'
+        'Total Qty',
+        'Reserved Qty',
+        'Available Qty',
+        'Location',
+        'Cardboard/Pallet',
+        'Pcs/Cardboard',
+        'Weight (kg)',
+        'Description'
       ];
 
       // Generuj tabelę
@@ -1311,9 +1319,9 @@ const InventoryList = () => {
         startY: 105,
         head: [tableHeaders],
         body: tableData,
-        headStyles: { fillColor: [66, 139, 202], font: 'helvetica' },
+        headStyles: { fillColor: [66, 139, 202], font: 'helvetica', fontSize: 7 },
         alternateRowStyles: { fillColor: [241, 245, 249] },
-        styles: { font: 'helvetica', fontSize: 8, cellPadding: 2 },
+        styles: { font: 'helvetica', fontSize: 6.5, cellPadding: 1.5 },
         margin: { top: 105 },
         tableLineWidth: 0.1,
         tableLineColor: [0, 0, 0]
@@ -1379,7 +1387,10 @@ const InventoryList = () => {
           location: item.warehouseName || '',
           minStockLevel: item.minStockLevel || '',
           maxStockLevel: item.maxStockLevel || '',
-          unitPrice: item.unitPrice || ''
+          cardboardPerPallet: item.boxesPerPallet || '',
+          pcsPerCardboard: item.itemsPerBox || '',
+          grossWeight: item.weight || '',
+          description: item.description || ''
         };
       });
 
@@ -1396,7 +1407,10 @@ const InventoryList = () => {
         { label: 'Location', key: 'location' },
         { label: 'Min Stock Level', key: 'minStockLevel' },
         { label: 'Max Stock Level', key: 'maxStockLevel' },
-        { label: 'Unit Price', key: 'unitPrice' }
+        { label: 'Cardboard Per Pallet', key: 'cardboardPerPallet' },
+        { label: 'Pcs Per Cardboard', key: 'pcsPerCardboard' },
+        { label: 'Gross Weight (kg)', key: 'grossWeight' },
+        { label: 'Description', key: 'description' }
       ];
 
       // Generuj CSV
