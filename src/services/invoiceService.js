@@ -32,12 +32,15 @@ export const getAllInvoices = async (filters = null) => {
       const conditions = [];
       
       if (filters.status && filters.status !== 'all') {
-        // Jeśli filtrujemy po statusie płatności 'unpaid', używamy pola paymentStatus
-        if (filters.status === 'unpaid') {
-          conditions.push(where('paymentStatus', '==', 'unpaid'));
-        } else {
+        // Statusy płatności (paid, unpaid, partially_paid, overdue) są obliczane dynamicznie,
+        // więc nie można ich filtrować w Firestore - filtrowanie po stronie klienta
+        const paymentStatuses = ['paid', 'unpaid', 'partially_paid', 'overdue'];
+        
+        if (!paymentStatuses.includes(filters.status)) {
+          // Filtruj tylko statusy faktur (draft, issued, cancelled) w Firestore
           conditions.push(where('status', '==', filters.status));
         }
+        // Dla statusów płatności nie dodajemy warunku - filtrowanie odbywa się po stronie klienta
       }
       
       if (filters.customerId) {

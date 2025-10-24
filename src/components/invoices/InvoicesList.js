@@ -113,7 +113,68 @@ const InvoicesList = () => {
 
     // Zastosuj filtry
     if (listState.filters.status) {
-      results = results.filter(invoice => invoice.status === listState.filters.status);
+      const filterStatus = listState.filters.status;
+      
+      // Statusy płatności wymagają dynamicznego obliczenia
+      const paymentStatuses = ['paid', 'unpaid', 'partially_paid', 'overdue'];
+      
+      if (paymentStatuses.includes(filterStatus)) {
+        // Filtruj po statusie płatności
+        results = results.filter(invoice => {
+          const totalPaid = parseFloat(invoice.totalPaid || 0);
+          
+          // Oblicz przedpłaty z proform
+          let advancePayments = 0;
+          if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
+            advancePayments = invoice.proformAllocation.reduce((sum, allocation) => sum + (allocation.amount || 0), 0);
+          } else {
+            advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
+          }
+          
+          const invoiceTotal = parseFloat(invoice.total || 0);
+          const totalSettled = totalPaid + advancePayments;
+          
+          let calculatedStatus;
+          // Sprawdź czy jest wymagana przedpłata
+          const requiredAdvancePercentage = invoice.requiredAdvancePaymentPercentage || 0;
+          if (requiredAdvancePercentage > 0) {
+            const requiredAdvanceAmount = calculateRequiredAdvancePayment(invoiceTotal, requiredAdvancePercentage);
+            
+            // Używamy tolerancji 0.01 dla porównań płatności
+            if (preciseCompare(totalSettled, requiredAdvanceAmount, 0.01) >= 0) {
+              calculatedStatus = 'paid';
+            } else if (totalSettled > 0) {
+              calculatedStatus = 'partially_paid';
+            } else {
+              calculatedStatus = 'unpaid';
+            }
+          } else {
+            // Standardowa logika z tolerancją dla błędów precyzji
+            if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
+              calculatedStatus = 'paid';
+            } else if (totalSettled > 0) {
+              calculatedStatus = 'partially_paid';
+            } else {
+              calculatedStatus = 'unpaid';
+            }
+          }
+          
+          // Sprawdź czy przeterminowana (tylko dla nieopłaconych/częściowo opłaconych)
+          if (filterStatus === 'overdue') {
+            if (calculatedStatus !== 'paid' && invoice.dueDate) {
+              const dueDate = new Date(invoice.dueDate);
+              const now = new Date();
+              return now > dueDate;
+            }
+            return false;
+          }
+          
+          return calculatedStatus === filterStatus;
+        });
+      } else {
+        // Filtruj po statusie faktury (draft, issued, cancelled)
+        results = results.filter(invoice => invoice.status === filterStatus);
+      }
     }
 
     if (listState.filters.invoiceType) {
