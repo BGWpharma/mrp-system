@@ -61,6 +61,7 @@ import {
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
 import { getInventoryItemByRecipeId, getAllInventoryItems } from '../../services/inventory';
 import { exportRecipesToCSV, exportRecipesWithSuppliers } from '../../services/recipeExportService';
+import { getNutritionalComponents } from '../../services/nutritionalComponentsService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -597,8 +598,8 @@ const RecipeList = () => {
 
   // Funkcja eksportu receptur ze składnikami i dostawcami
   const handleExportRecipesWithSuppliers = async () => {
-    setExporting(true);
-    setExportDialogOpen(false);
+      setExporting(true);
+      setExportDialogOpen(false);
     
     await exportRecipesWithSuppliers({
       customers,
@@ -675,6 +676,8 @@ const RecipeList = () => {
       'notatki': 'notes',
       'uwagi': 'notes',
       'note': 'notes',
+      'micro/macro code': 'Micro/macro code',
+      'kod': 'Micro/macro code',
       'eco': '(Bool) EKO',
       'eko': '(Bool) EKO',
       'halal': '(Bool) HALAL',
@@ -795,7 +798,7 @@ const RecipeList = () => {
     console.log('📋 Nagłówki znormalizowane:', headers);
     
     // Sprawdź czy są nieznane nagłówki
-    const unknownHeaders = rawHeaders.filter((h, i) => headers[i] === h && !h.startsWith('(Bool)') && !['SKU', 'description', 'Client', 'Workstation', 'cost/piece', 'time/piece', 'Components listing', 'Components amount', 'Micro/macro elements listing', 'Micro/macro amount', 'Micro/macro type', 'notes'].includes(h));
+    const unknownHeaders = rawHeaders.filter((h, i) => headers[i] === h && !h.startsWith('(Bool)') && !['SKU', 'description', 'Client', 'Workstation', 'cost/piece', 'time/piece', 'Components listing', 'Components amount', 'Micro/macro code', 'Micro/macro elements listing', 'Micro/macro amount', 'Micro/macro type', 'notes'].includes(h));
     if (unknownHeaders.length > 0) {
       console.warn('⚠️ Nieznane nagłówki (zostaną zignorowane):', unknownHeaders);
     }
@@ -893,6 +896,16 @@ const RecipeList = () => {
         console.log('✅ Pobrano', allInventoryItems.length, 'pozycji magazynowych');
       } catch (error) {
         console.warn('⚠️ Nie udało się pobrać pozycji magazynowych:', error);
+      }
+      
+      // Pobierz wszystkie składniki odżywcze do uzupełnienia kodów mikroelementów
+      let allNutritionalComponents = [];
+      try {
+        console.log('🧬 Pobieranie składników odżywczych do uzupełnienia kodów...');
+        allNutritionalComponents = await getNutritionalComponents();
+        console.log('✅ Pobrano', allNutritionalComponents.length, 'składników odżywczych');
+      } catch (error) {
+        console.warn('⚠️ Nie udało się pobrać składników odżywczych:', error);
       }
       
       // Przygotuj podgląd aktualizacji i zbieraj ostrzeżenia
@@ -1268,11 +1281,13 @@ const RecipeList = () => {
         }
         
         // Sprawdź składniki odżywcze (micro/macro)
+        const csvMicroCode = (row['Micro/macro code'] || '').split(';').map(s => s.trim());
         const csvMicroListing = (row['Micro/macro elements listing'] || '').split(';').map(s => s.trim());
         const csvMicroAmountWithUnit = (row['Micro/macro amount'] || '').split(';').map(s => s.trim());
         const csvMicroType = (row['Micro/macro type'] || '').split(';').map(s => s.trim());
         
         console.log('📊 Parsowanie składników odżywczych z CSV:');
+        console.log('  Kody:', csvMicroCode);
         console.log('  Nazwy:', csvMicroListing);
         console.log('  Ilości (z jednostkami):', csvMicroAmountWithUnit);
         console.log('  Typy:', csvMicroType);
@@ -1280,11 +1295,11 @@ const RecipeList = () => {
         // Zbuduj tablicę składników odżywczych z CSV
         // Teraz "Micro/macro amount" zawiera zarówno ilość jak i jednostkę (np. "100 mg")
         const newMicronutrients = [];
-        const maxLength = Math.max(csvMicroListing.length, csvMicroAmountWithUnit.length, csvMicroType.length);
+        const maxLength = Math.max(csvMicroCode.length, csvMicroListing.length, csvMicroAmountWithUnit.length, csvMicroType.length);
         
         for (let i = 0; i < maxLength; i++) {
-          // Dodaj składnik tylko jeśli ma nazwę lub ilość
-          if (csvMicroListing[i] || csvMicroAmountWithUnit[i]) {
+          // Dodaj składnik tylko jeśli ma kod, nazwę lub ilość
+          if (csvMicroCode[i] || csvMicroListing[i] || csvMicroAmountWithUnit[i]) {
             const amountWithUnit = csvMicroAmountWithUnit[i] || '';
             
             // Ekstrahuj ilość (liczbę) i jednostkę z wartości typu "100 mg"
@@ -1309,8 +1324,30 @@ const RecipeList = () => {
               }
             }
             
+            // Uzupełnij kod z bazy danych jeśli brakuje w CSV
+            let finalCode = csvMicroCode[i] || '';
+            const microName = csvMicroListing[i] || '';
+            
+            // Jeśli brak kodu w CSV ale jest nazwa, spróbuj znaleźć w bazie
+            if (!finalCode && microName && allNutritionalComponents.length > 0) {
+              const dbComponent = allNutritionalComponents.find(comp => 
+                comp.name && microName && 
+                comp.name.toLowerCase().trim() === microName.toLowerCase().trim()
+              );
+              
+              if (dbComponent && dbComponent.code) {
+                finalCode = dbComponent.code;
+                
+                // Debug log dla pierwszego mikroelementu
+                if (i === 0) {
+                  console.log(`  🧬 Uzupełniono kod z bazy dla "${microName}": ${dbComponent.code}`);
+                }
+              }
+            }
+            
             newMicronutrients.push({
-              name: csvMicroListing[i] || '',
+              code: finalCode,
+              name: microName,
               quantity: quantity,
               unit: unit,
               category: csvMicroType[i] || ''
@@ -1321,12 +1358,13 @@ const RecipeList = () => {
         console.log('✅ Zbudowano', newMicronutrients.length, 'składników odżywczych z CSV');
         
         // Walidacja składników odżywczych
-        if (csvMicroListing.length !== csvMicroAmountWithUnit.length || 
+        if (csvMicroCode.length !== csvMicroListing.length || 
+            csvMicroListing.length !== csvMicroAmountWithUnit.length || 
             csvMicroListing.length !== csvMicroType.length) {
           warnings.push({
             sku: sku,
             type: 'warning',
-            message: `Niezgodne długości list składników odżywczych (nazwy: ${csvMicroListing.length}, ilości: ${csvMicroAmountWithUnit.length}, typy: ${csvMicroType.length}). Niektóre składniki mogą być niepełne.`
+            message: `Niezgodne długości list składników odżywczych (kody: ${csvMicroCode.length}, nazwy: ${csvMicroListing.length}, ilości: ${csvMicroAmountWithUnit.length}, typy: ${csvMicroType.length}). Niektóre składniki mogą być niepełne.`
           });
         }
         
@@ -1379,10 +1417,16 @@ const RecipeList = () => {
             const changes = [];
             
             console.log(`  🔍 Porównanie składnika ${i + 1}:`);
+            console.log(`    Kod CSV: "${newM.code}" vs DB: "${oldM.code}"`);
             console.log(`    Nazwa CSV: "${newM.name}" vs DB: "${oldM.name}"`);
             console.log(`    Ilość CSV: "${newM.quantity}" vs DB: "${oldM.quantity}"`);
             console.log(`    Jednostka CSV: "${newM.unit}" vs DB: "${oldM.unit}"`);
             console.log(`    Kategoria CSV: "${newM.category}" vs DB: "${oldM.category}"`);
+            
+            if ((newM.code || '').trim().toLowerCase() !== (oldM.code || '').trim().toLowerCase()) {
+              changes.push(`kod: "${oldM.code}" → "${newM.code}"`);
+              console.log(`    ✏️ Zmiana kodu wykryta`);
+            }
             
             if ((newM.name || '').trim().toLowerCase() !== (oldM.name || '').trim().toLowerCase()) {
               changes.push(`nazwa: "${oldM.name}" → "${newM.name}"`);
@@ -2498,8 +2542,11 @@ const RecipeList = () => {
               </Typography>
               <Typography variant="body2" component="div">
                 • <strong>Wymagane kolumny:</strong> SKU, description, Client, Workstation, cost/piece, time/piece<br/>
-                • <strong>Składniki odżywcze:</strong> Micro/macro elements listing, Micro/macro amount, Micro/macro type (rozdzielone średnikami ";")<br/>
-                  <em>Przykład: "Witamina C; Białko; Węglowodany" | "500 mg; 20 g; 30 g" | "Witaminy; Makroelementy; Makroelementy"</em><br/>
+                • <strong>Składniki odżywcze:</strong> Micro/macro code, Micro/macro elements listing, Micro/macro amount, Micro/macro type (rozdzielone średnikami ";")<br/>
+                  <em>Przykład kodów: "E300; P; C"</em><br/>
+                  <em>Przykład nazw: "Witamina C; Białko; Węglowodany"</em><br/>
+                  <em>Przykład ilości: "500 mg; 20 g; 30 g"</em><br/>
+                  <em>Przykład typów: "Witaminy; Makroelementy; Makroelementy"</em><br/>
                   <em>Uwaga: Kolumna "Micro/macro amount" zawiera ilość + jednostkę (np. "100 mg")</em><br/>
                 • <strong>Certyfikacje:</strong> (Bool) EKO, (Bool) HALAL, (Bool) KOSHER, (Bool) VEGAN, (Bool) VEGETERIAN (wartości: TRUE/FALSE, 1/0, Tak/Nie)<br/>
                 • <strong>Opcjonalne:</strong> notes, Components listing, Components amount

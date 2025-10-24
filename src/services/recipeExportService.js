@@ -4,6 +4,7 @@ import { getAllRecipes } from './recipeService';
 import { getAllInventoryItems, getBatchesForMultipleItems, getSupplierPrices } from './inventory';
 import { getPurchaseOrderById } from './purchaseOrderService';
 import { getSuppliersByIds } from './supplierService';
+import { getNutritionalComponents } from './nutritionalComponentsService';
 
 /**
  * Eksportuje receptury do formatu CSV
@@ -82,6 +83,16 @@ export const exportRecipesToCSV = async ({
       console.warn('⚠️ Nie udało się pobrać pozycji magazynowych, używam danych z receptur:', error);
     }
 
+    // Pobierz wszystkie składniki odżywcze do znalezienia kodów mikroelementów
+    let allNutritionalComponents = [];
+    try {
+      console.log('🧬 Pobieranie składników odżywczych dla kodów mikroelementów...');
+      allNutritionalComponents = await getNutritionalComponents();
+      console.log('✅ Pobrano', allNutritionalComponents.length, 'składników odżywczych');
+    } catch (error) {
+      console.warn('⚠️ Nie udało się pobrać składników odżywczych, używam danych z receptur:', error);
+    }
+
     // Przygotuj dane dla CSV zgodnie z wymaganymi nagłówkami
     const csvData = allRecipes.map((recipe, index) => {
       // Znajdź klienta
@@ -149,8 +160,42 @@ export const exportRecipesToCSV = async ({
       
       // Przygotuj listę składników odżywczych (mikro/makro)
       const micronutrients = recipe.micronutrients || [];
+      
+      // Eksport kodów składników odżywczych - uzupełnij z bazy danych jeśli brakuje
+      const microMacroCode = micronutrients
+        .map(micro => {
+          // Jeśli mikro ma już kod, użyj go
+          if (micro.code && micro.code.trim() !== '') {
+            return micro.code;
+          }
+          
+          // Jeśli brak kodu, spróbuj znaleźć w bazie po nazwie
+          if (micro.name && allNutritionalComponents.length > 0) {
+            const dbComponent = allNutritionalComponents.find(comp => 
+              comp.name && micro.name && 
+              comp.name.toLowerCase().trim() === micro.name.toLowerCase().trim()
+            );
+            
+            if (dbComponent && dbComponent.code) {
+              // Debug log dla pierwszego mikroelementu pierwszej receptury
+              if (index === 0 && micronutrients.indexOf(micro) === 0) {
+                console.log(`🧬 Przykład uzupełnienia kodu mikroelementu (receptura "${recipe.name}"):`, {
+                  nazwa: micro.name,
+                  kodZReceptury: micro.code || '(brak)',
+                  kodZBazy: dbComponent.code,
+                  użytyKod: dbComponent.code
+                });
+              }
+              return dbComponent.code;
+            }
+          }
+          
+          return '';
+        })
+        .join('; ');
+      
       const microMacroListing = micronutrients
-        .map(micro => micro.name || micro.code || '')
+        .map(micro => micro.name || '')
         .filter(name => name.trim() !== '')
         .join('; ');
       
@@ -187,6 +232,7 @@ export const exportRecipesToCSV = async ({
         'time/piece': timePerPiece.toFixed(2),
         'Components listing': componentsListing,
         'Components amount': componentsAmount,
+        'Micro/macro code': microMacroCode,
         'Micro/macro elements listing': microMacroListing,
         'Micro/macro amount': microMacroAmount,
         'Micro/macro type': microMacroType,
@@ -211,6 +257,7 @@ export const exportRecipesToCSV = async ({
       'time/piece',
       'Components listing',
       'Components amount',
+      'Micro/macro code',
       'Micro/macro elements listing',
       'Micro/macro amount',
       'Micro/macro type',
