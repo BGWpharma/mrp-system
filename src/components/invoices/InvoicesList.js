@@ -444,7 +444,7 @@ const InvoicesList = () => {
 
   // Funkcja obsługująca kliknięcie w nagłówek kolumny (sortowanie)
   const handleRequestSort = (property) => {
-    const isAsc = tableSort.field === property && tableSort.order === 'asc';
+    const isAsc = tableSort?.field === property && tableSort?.order === 'asc';
     const newOrder = isAsc ? 'desc' : 'asc';
     listActions.setTableSort({ field: property, order: newOrder });
   };
@@ -457,8 +457,8 @@ const InvoicesList = () => {
           label
         ) : (
           <TableSortLabel
-            active={tableSort.field === id}
-            direction={tableSort.field === id ? tableSort.order : 'asc'}
+            active={tableSort?.field === id}
+            direction={tableSort?.field === id ? tableSort?.order : 'asc'}
             onClick={() => handleRequestSort(id)}
           >
             {label}

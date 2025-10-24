@@ -117,7 +117,9 @@ const invoiceListStateReducer = (state, action) => {
       
       case actionTypes.LOAD_STATE:
         return { 
+          ...initialState,
           ...action.payload,
+          tableSort: action.payload.tableSort || initialState.tableSort,
           lastUpdated: Date.now()
         };
       
