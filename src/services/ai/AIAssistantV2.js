@@ -3,6 +3,8 @@
 import { QueryParser } from './parser/QueryParser.js';
 import { QueryExecutor } from './data/QueryExecutor.js';
 import { ResponseGenerator } from './response/ResponseGenerator.js';
+import { SemanticCache } from './cache/SemanticCache.js';
+import { MetricsCollector } from './monitoring/MetricsCollector.js';
 
 /**
  * Nowy system asystenta AI - wersja 2.0
@@ -13,7 +15,7 @@ export class AIAssistantV2 {
   /**
    * Główna metoda przetwarzająca zapytanie użytkownika
    * @param {string} query - Zapytanie użytkownika
-   * @param {Object} options - Opcje dodatkowe
+   * @param {Object} options - Opcje dodatkowe (bypassCache, userId, context, etc.)
    * @returns {Promise<Object>} - Wynik przetwarzania
    */
   static async processQuery(query, options = {}) {
@@ -21,6 +23,37 @@ export class AIAssistantV2 {
     
     try {
       console.log('[AIAssistantV2] Przetwarzanie zapytania:', query);
+
+      // Krok 0: Sprawdź cache (jeśli nie jest wyłączony)
+      if (!options.bypassCache) {
+        const cachedResult = await SemanticCache.get(query);
+        if (cachedResult) {
+          const processingTime = performance.now() - startTime;
+          console.log(`[AIAssistantV2] 🎯 Użyto cache! Czas: ${processingTime.toFixed(2)}ms`);
+          
+          const result = {
+            ...cachedResult,
+            processingTime,
+            fromCache: true,
+            method: 'v2_cached'
+          };
+
+          // Zapisz metryki cache hit
+          MetricsCollector.recordQuery({
+            query,
+            intent: cachedResult.intent,
+            confidence: cachedResult.confidence,
+            processingTime,
+            method: 'v2_cached',
+            success: true,
+            fromCache: true,
+            dataPoints: cachedResult.metadata?.dataPoints,
+            userId: options.userId
+          });
+          
+          return result;
+        }
+      }
 
       // Krok 1: Analiza zapytania
       const analysisResult = QueryParser.analyzeQuery(query);
@@ -57,7 +90,7 @@ export class AIAssistantV2 {
 
       console.log(`[AIAssistantV2] Zapytanie przetworzone w ${processingTime.toFixed(2)}ms`);
 
-      return {
+      const result = {
         success: true,
         response,
         confidence: analysisResult.confidence,
@@ -72,6 +105,29 @@ export class AIAssistantV2 {
           optimization: this.getOptimizationInfo(analysisResult.intent, queryResult)
         }
       };
+
+      // Zapisz do cache (async, nie blokuj odpowiedzi)
+      if (!options.bypassCache) {
+        SemanticCache.set(query, result).catch(err => {
+          console.error('[AIAssistantV2] Błąd zapisu do cache:', err);
+        });
+      }
+
+      // Zapisz metryki
+      MetricsCollector.recordQuery({
+        query,
+        intent: analysisResult.intent,
+        confidence: analysisResult.confidence,
+        processingTime,
+        method: result.method,
+        success: true,
+        fromCache: false,
+        dataPoints: this.calculateDataPoints(queryResult),
+        collections: QueryParser.getRequiredCollections(analysisResult.intent),
+        userId: options.userId
+      });
+
+      return result;
 
     } catch (error) {
       console.error('[AIAssistantV2] Błąd podczas przetwarzania:', error);
@@ -256,18 +312,60 @@ export class AIAssistantV2 {
    * @returns {Object} - Statystyki wydajności
    */
   static getPerformanceStats() {
-    // TODO: Implementacja zbierania statystyk
+    const cacheStats = SemanticCache.getStats();
+    
     return {
-      totalQueries: 0,
-      averageProcessingTime: 0,
+      totalQueries: cacheStats.total,
+      cacheHitRate: cacheStats.hitRate,
+      cacheSimilarity: cacheStats.avgSimilarity,
+      cacheSize: cacheStats.cacheSize,
+      averageProcessingTime: 0, // TODO: Implementacja zbierania średniego czasu
       successRate: 0,
       mostCommonIntents: [],
       optimizationImpact: {
-        speedImprovement: '95%', // W porównaniu do starnego systemu
+        speedImprovement: '95%', // W porównaniu do starego systemu
         costReduction: '80%', // Redukcja kosztów API
-        accuracyIncrease: '15%' // Zwiększenie dokładności
+        accuracyIncrease: '15%', // Zwiększenie dokładności
+        cacheImpact: cacheStats.hitRate // Wpływ cache
       }
     };
+  }
+
+  /**
+   * Czyści cache systemu
+   */
+  static clearCache() {
+    SemanticCache.clear();
+    console.log('[AIAssistantV2] Cache został wyczyszczony');
+  }
+
+  /**
+   * Resetuje statystyki cache
+   */
+  static resetCacheStats() {
+    SemanticCache.resetStats();
+    console.log('[AIAssistantV2] Statystyki cache zostały zresetowane');
+  }
+
+  /**
+   * Pobiera szczegółowe metryki z określonego okresu
+   */
+  static getDetailedMetrics(timeRange = '24h') {
+    return MetricsCollector.getStats(timeRange);
+  }
+
+  /**
+   * Generuje raport wydajności
+   */
+  static generatePerformanceReport(timeRange = '24h') {
+    return MetricsCollector.generateReport(timeRange);
+  }
+
+  /**
+   * Eksportuje metryki do CSV
+   */
+  static exportMetricsCSV(timeRange = '24h') {
+    return MetricsCollector.exportToCSV(timeRange);
   }
 
   /**

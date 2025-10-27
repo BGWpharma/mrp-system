@@ -65,7 +65,8 @@ import {
   TableChart as CsvIcon,
   Clear as ClearIcon,
   Assignment as CoAIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Upload as UploadIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, getInventoryItemsOptimized, clearInventoryItemsCache, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
@@ -149,6 +150,14 @@ const InventoryList = () => {
   const [allReservations, setAllReservations] = useState([]);
   const [filteredAllReservations, setFilteredAllReservations] = useState([]);
   const [loadingAllReservations, setLoadingAllReservations] = useState(false);
+  
+  // Stany dla dialogu importu CSV
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState(null);
+  const [importWarnings, setImportWarnings] = useState([]);
   
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
@@ -1428,6 +1437,388 @@ const InventoryList = () => {
     }
   };
 
+  // Funkcja parsująca CSV do tablicy obiektów
+  const parseCSV = (csvText) => {
+    const lines = csvText.split('\n').filter(line => line.trim() !== '');
+    console.log('📄 Parsowanie CSV - liczba linii:', lines.length);
+    
+    if (lines.length < 2) {
+      throw new Error('Plik CSV jest pusty lub zawiera tylko nagłówki');
+    }
+
+    // Parsuj nagłówki
+    const rawHeaders = lines[0].split(',').map(header => header.replace(/^"|"$/g, '').trim());
+    console.log('📋 Nagłówki CSV:', rawHeaders);
+    
+    // Parsuj wiersze danych
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = [];
+      let currentValue = '';
+      let insideQuotes = false;
+      
+      for (let j = 0; j < lines[i].length; j++) {
+        const char = lines[i][j];
+        const nextChar = lines[i][j + 1];
+        
+        if (char === '"') {
+          if (insideQuotes && nextChar === '"') {
+            // Escaped quote
+            currentValue += '"';
+            j++; // Skip next quote
+          } else {
+            // Toggle quote state
+            insideQuotes = !insideQuotes;
+          }
+        } else if (char === ',' && !insideQuotes) {
+          values.push(currentValue.trim());
+          currentValue = '';
+        } else {
+          currentValue += char;
+        }
+      }
+      values.push(currentValue.trim()); // Push last value
+      
+      // Utwórz obiekt z wartości
+      const row = {};
+      rawHeaders.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      data.push(row);
+    }
+    
+    console.log('✅ Sparsowano', data.length, 'wierszy danych');
+    if (data.length > 0) {
+      console.log('📝 Przykładowy wiersz (pierwszy):', data[0]);
+    }
+    
+    return data;
+  };
+
+  // Funkcja otwierająca dialog importu
+  const handleOpenImportDialog = () => {
+    setImportDialogOpen(true);
+    setImportFile(null);
+    setImportPreview([]);
+    setImportError(null);
+    setImportWarnings([]);
+  };
+
+  // Funkcja zamykająca dialog importu
+  const handleCloseImportDialog = () => {
+    setImportDialogOpen(false);
+    setImportFile(null);
+    setImportPreview([]);
+    setImportError(null);
+    setImportWarnings([]);
+  };
+
+  // Funkcja obsługująca wybór pliku
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setImportError(null);
+    setImportPreview([]);
+    setImportWarnings([]);
+
+    try {
+      // Wczytaj plik
+      const text = await file.text();
+      
+      // Parsuj CSV
+      const csvData = parseCSV(text);
+      
+      // Załaduj wszystkie pozycje magazynowe z bazy
+      console.log('🔄 Ładowanie wszystkich pozycji magazynowych z bazy...');
+      const allItemsData = await getAllInventoryItems();
+      const allItems = Array.isArray(allItemsData.items) ? allItemsData.items : allItemsData;
+      console.log('✅ Załadowano wszystkie pozycje magazynowe z bazy:', allItems.length);
+      
+      // Załaduj wszystkie magazyny
+      const warehousesList = await getAllWarehouses();
+      console.log('📦 Załadowano magazyny:', warehousesList.length);
+      
+      // Przygotuj podgląd aktualizacji i zbieraj ostrzeżenia
+      const preview = [];
+      const warnings = [];
+      
+      console.log('📊 Rozpoczęcie parsowania CSV:', csvData.length, 'wierszy');
+      console.log('📦 Dostępne pozycje:', allItems.length);
+      
+      // Sprawdź duplikaty SKU w CSV
+      const skuCounts = {};
+      csvData.forEach(row => {
+        const sku = row['SKU'];
+        if (sku) {
+          skuCounts[sku] = (skuCounts[sku] || 0) + 1;
+        }
+      });
+      const duplicates = Object.entries(skuCounts).filter(([sku, count]) => count > 1);
+      if (duplicates.length > 0) {
+        duplicates.forEach(([sku, count]) => {
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: `SKU "${sku}" występuje ${count} razy w pliku CSV. Zostanie użyty tylko ostatni wiersz.`
+          });
+        });
+      }
+      
+      for (const row of csvData) {
+        const sku = row['SKU'];
+        console.log('\n🔍 Przetwarzanie wiersza CSV:', sku);
+        
+        if (!sku) {
+          console.log('⚠️ Pominięto wiersz bez SKU');
+          warnings.push({
+            sku: '(pusty)',
+            type: 'warning',
+            message: 'Wiersz bez SKU został pominięty.'
+          });
+          continue;
+        }
+        
+        // Znajdź istniejącą pozycję magazynową
+        const existingItem = allItems.find(i => i.name === sku);
+        
+        if (!existingItem) {
+          console.log('❌ Nie znaleziono pozycji o SKU:', sku);
+          warnings.push({
+            sku: sku,
+            type: 'warning',
+            message: `Pozycja o SKU "${sku}" nie istnieje w bazie danych. Import modyfikuje tylko istniejące pozycje.`
+          });
+          preview.push({
+            sku: sku,
+            status: 'new',
+            message: 'Nowa pozycja (zostanie pominięta - tylko aktualizacje są obsługiwane)',
+            changes: []
+          });
+          continue;
+        }
+        
+        console.log('✅ Znaleziono pozycję:', sku, 'ID:', existingItem.id);
+        
+        // Wykryj zmiany
+        const changes = [];
+        const updateData = {
+          // Nazwa (SKU) jest wymagana przez walidator, wysyłamy istniejącą wartość
+          name: existingItem.name
+        };
+        
+        // Sprawdź kategorię
+        const csvCategory = (row['Category'] || '').trim();
+        const dbCategory = (existingItem.category || '').trim();
+        if (csvCategory && csvCategory !== dbCategory) {
+          changes.push({
+            field: 'Kategoria',
+            oldValue: dbCategory,
+            newValue: csvCategory
+          });
+          updateData.category = csvCategory;
+        }
+        
+        // Sprawdź numer CAS
+        const csvCasNumber = (row['CAS Number'] || '').trim();
+        const dbCasNumber = (existingItem.casNumber || '').trim();
+        if (csvCasNumber !== dbCasNumber) {
+          changes.push({
+            field: 'Numer CAS',
+            oldValue: dbCasNumber,
+            newValue: csvCasNumber
+          });
+          updateData.casNumber = csvCasNumber;
+        }
+        
+        // Sprawdź kod kreskowy
+        const csvBarcode = (row['Barcode'] || '').trim();
+        const dbBarcode = (existingItem.barcode || '').trim();
+        if (csvBarcode !== dbBarcode) {
+          changes.push({
+            field: 'Kod kreskowy',
+            oldValue: dbBarcode,
+            newValue: csvBarcode
+          });
+          updateData.barcode = csvBarcode;
+        }
+        
+        // Sprawdź jednostkę
+        const csvUnit = (row['Unit'] || '').trim();
+        const dbUnit = (existingItem.unit || '').trim();
+        if (csvUnit && csvUnit !== dbUnit) {
+          changes.push({
+            field: 'Jednostka',
+            oldValue: dbUnit,
+            newValue: csvUnit
+          });
+          updateData.unit = csvUnit;
+        }
+        
+        // Sprawdź lokalizację/magazyn
+        const csvLocation = (row['Location'] || '').trim();
+        const dbLocationName = (existingItem.warehouseName || '').trim();
+        if (csvLocation !== dbLocationName) {
+          const newWarehouse = warehousesList.find(w => w.name.trim().toLowerCase() === csvLocation.toLowerCase());
+          if (newWarehouse) {
+            changes.push({
+              field: 'Lokalizacja',
+              oldValue: dbLocationName,
+              newValue: csvLocation
+            });
+            updateData.warehouseName = csvLocation;
+          } else if (csvLocation) {
+            warnings.push({
+              sku: sku,
+              type: 'warning',
+              message: `Nieznany magazyn: "${csvLocation}". Lokalizacja nie zostanie zaktualizowana.`
+            });
+          }
+        }
+        
+        // Sprawdź minimalny stan magazynowy
+        const csvMinStock = (row['Min Stock Level'] || '').trim();
+        const dbMinStock = (existingItem.minStockLevel || '').toString().trim();
+        if (csvMinStock && csvMinStock !== dbMinStock) {
+          changes.push({
+            field: 'Min. stan magazynowy',
+            oldValue: dbMinStock,
+            newValue: csvMinStock
+          });
+          updateData.minStockLevel = csvMinStock;
+        }
+        
+        // Sprawdź maksymalny stan magazynowy
+        const csvMaxStock = (row['Max Stock Level'] || '').trim();
+        const dbMaxStock = (existingItem.maxStockLevel || '').toString().trim();
+        if (csvMaxStock && csvMaxStock !== dbMaxStock) {
+          changes.push({
+            field: 'Max. stan magazynowy',
+            oldValue: dbMaxStock,
+            newValue: csvMaxStock
+          });
+          updateData.maxStockLevel = csvMaxStock;
+        }
+        
+        // Sprawdź kartony na palecie
+        const csvCardboardPerPallet = (row['Cardboard Per Pallet'] || '').trim();
+        const dbCardboardPerPallet = (existingItem.boxesPerPallet || '').toString().trim();
+        if (csvCardboardPerPallet && csvCardboardPerPallet !== dbCardboardPerPallet) {
+          changes.push({
+            field: 'Kartony na palecie',
+            oldValue: dbCardboardPerPallet,
+            newValue: csvCardboardPerPallet
+          });
+          updateData.boxesPerPallet = csvCardboardPerPallet;
+        }
+        
+        // Sprawdź sztuki na karton
+        const csvPcsPerCardboard = (row['Pcs Per Cardboard'] || '').trim();
+        const dbPcsPerCardboard = (existingItem.itemsPerBox || '').toString().trim();
+        if (csvPcsPerCardboard && csvPcsPerCardboard !== dbPcsPerCardboard) {
+          changes.push({
+            field: 'Sztuki na karton',
+            oldValue: dbPcsPerCardboard,
+            newValue: csvPcsPerCardboard
+          });
+          updateData.itemsPerBox = csvPcsPerCardboard;
+        }
+        
+        // Sprawdź wagę brutto
+        const csvWeight = (row['Gross Weight (kg)'] || '').trim();
+        const dbWeight = (existingItem.weight || '').toString().trim();
+        if (csvWeight && csvWeight !== dbWeight) {
+          changes.push({
+            field: 'Waga brutto (kg)',
+            oldValue: dbWeight,
+            newValue: csvWeight
+          });
+          updateData.weight = csvWeight;
+        }
+        
+        // Sprawdź opis
+        const csvDesc = (row['Description'] || '').trim();
+        const dbDesc = (existingItem.description || '').trim();
+        if (csvDesc !== dbDesc) {
+          changes.push({
+            field: 'Opis',
+            oldValue: dbDesc,
+            newValue: csvDesc
+          });
+          updateData.description = csvDesc;
+        }
+        
+        // Dodaj do podglądu
+        if (changes.length > 0) {
+          preview.push({
+            sku: sku,
+            itemId: existingItem.id,
+            status: 'update',
+            message: `${changes.length} zmian(a) wykryta(ych)`,
+            changes: changes,
+            updateData: updateData
+          });
+        } else {
+          preview.push({
+            sku: sku,
+            status: 'no-change',
+            message: 'Brak zmian',
+            changes: []
+          });
+        }
+      }
+      
+      setImportPreview(preview);
+      setImportWarnings(warnings);
+      
+      if (preview.filter(p => p.status === 'update').length === 0) {
+        setImportError('Nie znaleziono żadnych zmian do zaimportowania.');
+      }
+      
+    } catch (error) {
+      console.error('Błąd podczas parsowania pliku:', error);
+      setImportError(error.message);
+    }
+  };
+
+  // Funkcja wykonująca import
+  const handleConfirmImport = async () => {
+    setImporting(true);
+    
+    try {
+      const { updateInventoryItem } = await import('../../services/inventory/inventoryItemsService');
+      
+      // Filtruj tylko te pozycje, które mają zmiany
+      const itemsToUpdate = importPreview.filter(p => p.status === 'update');
+      
+      let updatedCount = 0;
+      let errorCount = 0;
+      
+      for (const item of itemsToUpdate) {
+        try {
+          await updateInventoryItem(item.itemId, item.updateData, currentUser.uid);
+          updatedCount++;
+        } catch (error) {
+          console.error(`Błąd podczas aktualizacji pozycji ${item.sku}:`, error);
+          errorCount++;
+        }
+      }
+      
+      showSuccess(`Import zakończony! Zaktualizowano ${updatedCount} pozycji. Błędy: ${errorCount}`);
+      
+      // Zamknij dialog i odśwież listę
+      handleCloseImportDialog();
+      await fetchInventoryItems(tableSort.field, tableSort.order);
+      
+    } catch (error) {
+      console.error('Błąd podczas importu:', error);
+      showError('Wystąpił błąd podczas importu: ' + error.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // Funkcja do obsługi generatora CoA
   const handleCoAGenerator = () => {
     setCoaDialogOpen(true);
@@ -1484,6 +1875,9 @@ const InventoryList = () => {
         break;
       case 'csv':
         generateCsvReport();
+        break;
+      case 'import':
+        handleOpenImportDialog();
         break;
       case 'coa':
         handleCoAGenerator();
@@ -1597,6 +1991,12 @@ const InventoryList = () => {
               <CsvIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>{t('inventory.states.csvReport')}</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleMenuItemClick('import')}>
+            <ListItemIcon>
+              <UploadIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Import CSV</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => handleMenuItemClick('coa')}>
             <ListItemIcon>
@@ -3020,6 +3420,196 @@ const InventoryList = () => {
         onClose={handleCloseCoADialog}
         onGenerate={handleCoAGenerated}
       />
+
+      {/* Dialog importu CSV */}
+      <Dialog 
+        open={importDialogOpen} 
+        onClose={handleCloseImportDialog}
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          Import pozycji magazynowych z CSV
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'info.light', 
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'info.main'
+              }}
+            >
+              <Typography variant="body2" gutterBottom fontWeight="bold">
+                Format pliku CSV:
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ fontSize: '0.875rem' }}>
+                • <strong>Wymagana kolumna:</strong> SKU (identyfikator pozycji)<br/>
+                • <strong>Opcjonalne kolumny:</strong> Category, CAS Number, Barcode, Unit, Location, Min Stock Level, Max Stock Level, Cardboard Per Pallet, Pcs Per Cardboard, Gross Weight (kg), Description<br/>
+                • <strong>Uwaga:</strong> Import aktualizuje tylko istniejące pozycje. Nowe pozycje nie będą tworzone.<br/>
+                • <strong>Uwaga:</strong> Kolumny Total Quantity, Reserved Quantity, Available Quantity są ignorowane (ilości zarządzane są przez transakcje).
+              </Typography>
+            </Box>
+            
+            <Button
+              variant="outlined"
+              component="label"
+              fullWidth
+              startIcon={<UploadIcon />}
+            >
+              Wybierz plik CSV
+              <input
+                type="file"
+                hidden
+                accept=".csv"
+                onChange={handleFileSelect}
+              />
+            </Button>
+            
+            {importFile && (
+              <Box 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: 'success.light', 
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'success.main'
+                }}
+              >
+                <Typography variant="body2">
+                  ✓ Wczytano plik: <strong>{importFile.name}</strong>
+                </Typography>
+              </Box>
+            )}
+            
+            {importError && (
+              <Box 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: 'error.light', 
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'error.main'
+                }}
+              >
+                <Typography variant="body2" color="error.dark">
+                  {importError}
+                </Typography>
+              </Box>
+            )}
+            
+            {importWarnings.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'warning.light', 
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'warning.main'
+                  }}
+                >
+                  <Typography variant="subtitle2" gutterBottom fontWeight="bold">
+                    Znaleziono {importWarnings.length} ostrzeżeń:
+                  </Typography>
+                  <Box component="ul" sx={{ margin: 0, paddingLeft: 2, maxHeight: 200, overflow: 'auto' }}>
+                    {importWarnings.map((warning, idx) => (
+                      <li key={idx}>
+                        <Typography variant="body2">
+                          <strong>{warning.sku}:</strong> {warning.message}
+                        </Typography>
+                      </li>
+                    ))}
+                  </Box>
+                </Box>
+              </Box>
+            )}
+            
+            {importPreview.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom fontWeight="bold">
+                  Podgląd zmian ({importPreview.filter(p => p.status === 'update').length} pozycji do aktualizacji):
+                </Typography>
+                
+                <Box sx={{ maxHeight: 400, overflow: 'auto', mt: 2 }}>
+                  {importPreview.map((item, index) => (
+                    <Box 
+                      key={index}
+                      sx={{ 
+                        mb: 2, 
+                        p: 2, 
+                        border: '1px solid',
+                        borderColor: item.status === 'update' ? 'primary.main' : 
+                                   item.status === 'new' ? 'warning.main' : 'divider',
+                        borderRadius: 1,
+                        bgcolor: item.status === 'update' ? 'primary.light' : 
+                               item.status === 'new' ? 'warning.light' : 'background.paper'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {item.sku}
+                        </Typography>
+                        <Chip 
+                          label={item.message} 
+                          size="small"
+                          color={item.status === 'update' ? 'primary' : 
+                                item.status === 'new' ? 'warning' : 'default'}
+                        />
+                      </Box>
+                      
+                      {item.changes.length > 0 && (
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Pole</TableCell>
+                                <TableCell>Wartość bieżąca</TableCell>
+                                <TableCell>Nowa wartość</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {item.changes.map((change, idx) => (
+                                <TableRow key={idx}>
+                                  <TableCell>{change.field}</TableCell>
+                                  <TableCell sx={{ color: 'error.main' }}>
+                                    {change.oldValue || '-'}
+                                  </TableCell>
+                                  <TableCell sx={{ color: 'success.main' }}>
+                                    {change.newValue || '-'}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseImportDialog} disabled={importing}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleConfirmImport} 
+            variant="contained" 
+            disabled={
+              importing || 
+              importPreview.filter(p => p.status === 'update').length === 0
+            }
+            startIcon={importing ? <CircularProgress size={16} /> : <UploadIcon />}
+          >
+            {importing ? 'Importowanie...' : `Zatwierdź import (${importPreview.filter(p => p.status === 'update').length} pozycji)`}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </div>
   );
