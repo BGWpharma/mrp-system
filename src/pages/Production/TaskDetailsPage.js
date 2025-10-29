@@ -5066,6 +5066,82 @@ const TaskDetailsPage = () => {
         });
       }
 
+      // ===== 2.5. KOSZTY REZERWACJI Z ZAMÓWIEŃ ZAKUPOWYCH (PO) =====
+      const poCostDetails = {};
+      
+      try {
+        if (poReservations && poReservations.length > 0) {
+          console.log(`[UI-COSTS] Przetwarzanie ${poReservations.length} rezerwacji PO`);
+          
+          // Filtruj aktywne rezerwacje PO (pending lub delivered ale nie w pełni przekształcone)
+          const activePOReservations = poReservations.filter(reservation => {
+            if (reservation.status === 'pending') return true;
+            if (reservation.status === 'delivered') {
+              const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
+              const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
+              return convertedQuantity < reservedQuantity;
+            }
+            return false;
+          });
+          
+          console.log(`[UI-COSTS] Znaleziono ${activePOReservations.length} aktywnych rezerwacji PO`);
+          
+          // Oblicz koszt każdej rezerwacji PO
+          activePOReservations.forEach(reservation => {
+            const materialId = reservation.materialId;
+            const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
+            
+            // Oblicz dostępną (nie przekonwertowaną) ilość
+            const reservedQuantity = fixFloatingPointPrecision(parseFloat(reservation.reservedQuantity || 0));
+            const convertedQuantity = fixFloatingPointPrecision(parseFloat(reservation.convertedQuantity || 0));
+            const availableQuantity = Math.max(0, preciseSubtract(reservedQuantity, convertedQuantity));
+            
+            if (availableQuantity > 0) {
+              const unitPrice = fixFloatingPointPrecision(parseFloat(reservation.unitPrice || 0));
+              const materialCost = preciseMultiply(availableQuantity, unitPrice);
+              
+              console.log(`[UI-COSTS] Rezerwacja PO ${reservation.poNumber} (${reservation.materialName}): ilość=${availableQuantity}, cena=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
+              
+              // Sprawdź czy materiał ma być wliczany do kosztów
+              const shouldIncludeInCosts = material ? 
+                (includeInCosts[material.id] !== false) : 
+                true; // Domyślnie wliczamy jeśli nie znaleziono materiału w liście
+              
+              console.log(`[UI-COSTS] Rezerwacja PO ${reservation.poNumber} - includeInCosts: ${shouldIncludeInCosts}`);
+              
+              if (shouldIncludeInCosts) {
+                totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
+              }
+              
+              // Zawsze dodaj do pełnego kosztu produkcji
+              totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
+              
+              // Zapisz szczegóły do poCostDetails
+              if (!poCostDetails[materialId]) {
+                poCostDetails[materialId] = {
+                  material: material || { name: reservation.materialName },
+                  totalCost: 0,
+                  reservations: []
+                };
+              }
+              
+              poCostDetails[materialId].totalCost = preciseAdd(poCostDetails[materialId].totalCost, materialCost);
+              poCostDetails[materialId].reservations.push({
+                poNumber: reservation.poNumber,
+                quantity: availableQuantity,
+                unitPrice,
+                cost: materialCost
+              });
+            }
+          });
+        } else {
+          console.log(`[UI-COSTS] Brak rezerwacji PO dla zadania`);
+        }
+      } catch (error) {
+        console.error(`❌ [UI-COSTS] Błąd podczas obliczania kosztów rezerwacji PO:`, error);
+        // Nie przerywamy procesu - kontynuujemy z pozostałymi kosztami
+      }
+
       // ===== 3. DODAJ KOSZT PROCESOWY (z precyzyjnymi obliczeniami) =====
       // Używaj TYLKO kosztu zapisanego w MO (brak fallbacku do receptury)
       // Stare MO bez tego pola miały koszty ręcznie wyliczane i są już opłacone
@@ -5110,6 +5186,12 @@ const TaskDetailsPage = () => {
           ),
           details: reservedCostDetails
         },
+        poReservations: {
+          totalCost: fixFloatingPointPrecision(
+            Object.values(poCostDetails).reduce((sum, item) => preciseAdd(sum, item.totalCost || 0), 0)
+          ),
+          details: poCostDetails
+        },
         totalMaterialCost: fixFloatingPointPrecision(totalMaterialCost),
         unitMaterialCost: fixFloatingPointPrecision(unitMaterialCost),
         totalFullProductionCost: fixFloatingPointPrecision(totalFullProductionCost),
@@ -5122,7 +5204,8 @@ const TaskDetailsPage = () => {
         totalFullProductionCost: finalResults.totalFullProductionCost,
         unitFullProductionCost: finalResults.unitFullProductionCost,
         consumedCost: finalResults.consumed.totalCost,
-        reservedCost: finalResults.reserved.totalCost
+        reservedCost: finalResults.reserved.totalCost,
+        poCost: finalResults.poReservations.totalCost
       });
 
       return finalResults;
@@ -5133,6 +5216,7 @@ const TaskDetailsPage = () => {
       return {
         consumed: { totalCost: 0, details: {} },
         reserved: { totalCost: 0, details: {} },
+        poReservations: { totalCost: 0, details: {} },
         totalMaterialCost: 0,
         unitMaterialCost: 0,
         totalFullProductionCost: 0,
