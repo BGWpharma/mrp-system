@@ -36,7 +36,6 @@ import {
     getInventoryBatch
   } from './inventory';
   import { updateIngredientConsumption } from './mixingPlanReservationService';
-  import { getPOReservationsForTask } from './poReservationService';
   
   const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
   
@@ -5436,64 +5435,54 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       });
     }
 
-    // 2.5. KOSZTY REZERWACJI Z ZAMÓWIEŃ ZAKUPOWYCH (PO) (z precyzyjnymi obliczeniami)
-    try {
+    // 2A. KOSZTY REZERWACJI Z ZAMÓWIEŃ ZAKUPOWYCH (PO)
+    if (task.poReservationIds && task.poReservationIds.length > 0) {
+      console.log(`[AUTO] Przetwarzam ${task.poReservationIds.length} rezerwacji PO`);
+      
+      const { getPOReservationsForTask } = await import('./poReservationService');
       const poReservations = await getPOReservationsForTask(taskId);
       
-      if (poReservations && poReservations.length > 0) {
-        console.log(`[AUTO] Przetwarzanie ${poReservations.length} rezerwacji PO`);
+      // Uwzględnij tylko rezerwacje pending i delivered (nie converted - bo te są już w materialBatches)
+      const activePoReservations = poReservations.filter(r => 
+        r.status === 'pending' || r.status === 'delivered'
+      );
+      
+      for (const poRes of activePoReservations) {
+        const materialId = poRes.materialId;
+        const material = task.materials.find(m => (m.inventoryItemId || m.id) === materialId);
         
-        // Filtruj aktywne rezerwacje PO (pending lub delivered ale nie w pełni przekształcone)
-        const activePOReservations = poReservations.filter(reservation => {
-          if (reservation.status === 'pending') return true;
-          if (reservation.status === 'delivered') {
-            const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
-            const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
-            return convertedQuantity < reservedQuantity;
-          }
-          return false;
-        });
+        if (!material) {
+          console.warn(`[AUTO] Nie znaleziono materiału ${materialId} dla rezerwacji PO ${poRes.id}`);
+          continue;
+        }
         
-        console.log(`[AUTO] Znaleziono ${activePOReservations.length} aktywnych rezerwacji PO`);
+        // Oblicz koszt rezerwacji PO
+        const reservedQuantity = fixFloatingPointPrecision(parseFloat(poRes.reservedQuantity) || 0);
+        const unitPrice = fixFloatingPointPrecision(parseFloat(poRes.unitPrice) || 0);
+        const convertedQuantity = fixFloatingPointPrecision(parseFloat(poRes.convertedQuantity) || 0);
         
-        // Oblicz koszt każdej rezerwacji PO
-        activePOReservations.forEach(reservation => {
-          const materialId = reservation.materialId;
-          const material = task.materials ? task.materials.find(m => (m.inventoryItemId || m.id) === materialId) : null;
+        // Odejmij ilość już przekonwertowaną na standardowe rezerwacje
+        const effectiveQuantity = Math.max(0, preciseSubtract(reservedQuantity, convertedQuantity));
+        
+        if (effectiveQuantity > 0 && unitPrice > 0) {
+          const poCost = preciseMultiply(effectiveQuantity, unitPrice);
           
-          // Oblicz dostępną (nie przekonwertowaną) ilość
-          const reservedQuantity = fixFloatingPointPrecision(parseFloat(reservation.reservedQuantity || 0));
-          const convertedQuantity = fixFloatingPointPrecision(parseFloat(reservation.convertedQuantity || 0));
-          const availableQuantity = Math.max(0, preciseSubtract(reservedQuantity, convertedQuantity));
+          console.log(`[AUTO] Rezerwacja PO ${poRes.poNumber}: ${material.name}, ilość=${effectiveQuantity}, cena=${unitPrice}€, koszt=${poCost.toFixed(4)}€`);
           
-          if (availableQuantity > 0) {
-            const unitPrice = fixFloatingPointPrecision(parseFloat(reservation.unitPrice || 0));
-            const materialCost = preciseMultiply(availableQuantity, unitPrice);
-            
-            console.log(`[AUTO] Rezerwacja PO ${reservation.poNumber} (${reservation.materialName}): ilość=${availableQuantity}, cena=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
-            
-            // Sprawdź czy materiał ma być wliczany do kosztów
-            // Dla rezerwacji PO używamy tej samej logiki co dla zwykłych materiałów
-            const shouldIncludeInCosts = material ? 
-              (task.materialInCosts ? task.materialInCosts[material.id] !== false : true) : 
-              true; // Domyślnie wliczamy jeśli nie znaleziono materiału w liście
-            
-            console.log(`[AUTO] Rezerwacja PO ${reservation.poNumber} - includeInCosts: ${shouldIncludeInCosts}`);
-            
-            if (shouldIncludeInCosts) {
-              totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
-            }
-            
-            // Zawsze dodaj do pełnego kosztu produkcji
-            totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
+          // Sprawdź czy materiał ma być wliczany do kosztów
+          const shouldIncludeInCosts = task.materialInCosts ? 
+            task.materialInCosts[material.id] !== false : true;
+          
+          if (shouldIncludeInCosts) {
+            totalMaterialCost = preciseAdd(totalMaterialCost, poCost);
           }
-        });
-      } else {
-        console.log(`[AUTO] Brak rezerwacji PO dla zadania ${taskId}`);
+          
+          // Zawsze dodaj do pełnego kosztu produkcji
+          totalFullProductionCost = preciseAdd(totalFullProductionCost, poCost);
+        }
       }
-    } catch (error) {
-      console.error(`[AUTO] Błąd podczas obliczania kosztów rezerwacji PO:`, error);
-      // Nie przerywamy procesu - kontynuujemy z pozostałymi kosztami
+      
+      console.log(`[AUTO] Przetworzono ${activePoReservations.length} aktywnych rezerwacji PO`);
     }
 
     // 3. DODAJ KOSZT PROCESOWY (z precyzyjnymi obliczeniami)
@@ -5525,8 +5514,7 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     // ZABEZPIECZENIE: Nie nadpisuj kosztów zerami jeśli nie ma danych do obliczeń
     const hasConsumedMaterials = task.consumedMaterials && task.consumedMaterials.length > 0;
     const hasReservedMaterials = task.materialBatches && Object.keys(task.materialBatches).length > 0;
-    const hasPOReservations = task.poReservationIds && task.poReservationIds.length > 0;
-    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || hasPOReservations || totalProcessingCost > 0;
+    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || totalProcessingCost > 0;
     
     if (!hasDataForCalculation) {
       console.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);

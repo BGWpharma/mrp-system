@@ -5066,80 +5066,83 @@ const TaskDetailsPage = () => {
         });
       }
 
-      // ===== 2.5. KOSZTY REZERWACJI Z ZAMÓWIEŃ ZAKUPOWYCH (PO) =====
-      const poCostDetails = {};
+      // ===== 2A. KOSZTY REZERWACJI Z ZAMÓWIEŃ ZAKUPOWYCH (PO) =====
+      const poReservationsCostDetails = {};
       
-      try {
-        if (poReservations && poReservations.length > 0) {
-          console.log(`[UI-COSTS] Przetwarzanie ${poReservations.length} rezerwacji PO`);
+      if (task?.poReservationIds && task.poReservationIds.length > 0) {
+        console.log(`[UI-COSTS] Przetwarzam ${task.poReservationIds.length} rezerwacji PO`);
+        
+        const { getPOReservationsForTask } = await import('../../services/poReservationService');
+        const poReservations = await getPOReservationsForTask(task.id);
+        
+        // Uwzględnij tylko rezerwacje pending i delivered (nie converted - bo te są już w materialBatches)
+        const activePoReservations = poReservations.filter(r => 
+          r.status === 'pending' || r.status === 'delivered'
+        );
+        
+        for (const poRes of activePoReservations) {
+          const materialId = poRes.materialId;
+          const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
           
-          // Filtruj aktywne rezerwacje PO (pending lub delivered ale nie w pełni przekształcone)
-          const activePOReservations = poReservations.filter(reservation => {
-            if (reservation.status === 'pending') return true;
-            if (reservation.status === 'delivered') {
-              const convertedQuantity = parseFloat(reservation.convertedQuantity || 0);
-              const reservedQuantity = parseFloat(reservation.reservedQuantity || 0);
-              return convertedQuantity < reservedQuantity;
-            }
-            return false;
-          });
+          if (!material) {
+            console.warn(`[UI-COSTS] Nie znaleziono materiału ${materialId} dla rezerwacji PO ${poRes.id}`);
+            continue;
+          }
           
-          console.log(`[UI-COSTS] Znaleziono ${activePOReservations.length} aktywnych rezerwacji PO`);
+          // Oblicz koszt rezerwacji PO
+          const reservedQuantity = fixFloatingPointPrecision(parseFloat(poRes.reservedQuantity) || 0);
+          const unitPrice = fixFloatingPointPrecision(parseFloat(poRes.unitPrice) || 0);
+          const convertedQuantity = fixFloatingPointPrecision(parseFloat(poRes.convertedQuantity) || 0);
           
-          // Oblicz koszt każdej rezerwacji PO
-          activePOReservations.forEach(reservation => {
-            const materialId = reservation.materialId;
-            const material = materials.find(m => (m.inventoryItemId || m.id) === materialId);
+          // Odejmij ilość już przekonwertowaną na standardowe rezerwacje
+          const effectiveQuantity = Math.max(0, preciseSubtract(reservedQuantity, convertedQuantity));
+          
+          if (effectiveQuantity > 0 && unitPrice > 0) {
+            const poCost = preciseMultiply(effectiveQuantity, unitPrice);
             
-            // Oblicz dostępną (nie przekonwertowaną) ilość
-            const reservedQuantity = fixFloatingPointPrecision(parseFloat(reservation.reservedQuantity || 0));
-            const convertedQuantity = fixFloatingPointPrecision(parseFloat(reservation.convertedQuantity || 0));
-            const availableQuantity = Math.max(0, preciseSubtract(reservedQuantity, convertedQuantity));
+            console.log(`[UI-COSTS] Rezerwacja PO ${poRes.poNumber}: ${material.name}, ilość=${effectiveQuantity}, cena=${unitPrice}€, koszt=${poCost.toFixed(4)}€`);
             
-            if (availableQuantity > 0) {
-              const unitPrice = fixFloatingPointPrecision(parseFloat(reservation.unitPrice || 0));
-              const materialCost = preciseMultiply(availableQuantity, unitPrice);
-              
-              console.log(`[UI-COSTS] Rezerwacja PO ${reservation.poNumber} (${reservation.materialName}): ilość=${availableQuantity}, cena=${unitPrice}€, koszt=${materialCost.toFixed(4)}€`);
-              
-              // Sprawdź czy materiał ma być wliczany do kosztów
-              const shouldIncludeInCosts = material ? 
-                (includeInCosts[material.id] !== false) : 
-                true; // Domyślnie wliczamy jeśli nie znaleziono materiału w liście
-              
-              console.log(`[UI-COSTS] Rezerwacja PO ${reservation.poNumber} - includeInCosts: ${shouldIncludeInCosts}`);
-              
-              if (shouldIncludeInCosts) {
-                totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
-              }
-              
-              // Zawsze dodaj do pełnego kosztu produkcji
-              totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
-              
-              // Zapisz szczegóły do poCostDetails
-              if (!poCostDetails[materialId]) {
-                poCostDetails[materialId] = {
-                  material: material || { name: reservation.materialName },
-                  totalCost: 0,
-                  reservations: []
-                };
-              }
-              
-              poCostDetails[materialId].totalCost = preciseAdd(poCostDetails[materialId].totalCost, materialCost);
-              poCostDetails[materialId].reservations.push({
-                poNumber: reservation.poNumber,
-                quantity: availableQuantity,
-                unitPrice,
-                cost: materialCost
-              });
+            // Dodaj do szczegółów
+            if (!poReservationsCostDetails[materialId]) {
+              poReservationsCostDetails[materialId] = {
+                material,
+                quantity: 0,
+                cost: 0,
+                reservations: []
+              };
             }
-          });
-        } else {
-          console.log(`[UI-COSTS] Brak rezerwacji PO dla zadania`);
+            
+            poReservationsCostDetails[materialId].quantity = preciseAdd(
+              poReservationsCostDetails[materialId].quantity,
+              effectiveQuantity
+            );
+            poReservationsCostDetails[materialId].cost = preciseAdd(
+              poReservationsCostDetails[materialId].cost,
+              poCost
+            );
+            poReservationsCostDetails[materialId].reservations.push({
+              poNumber: poRes.poNumber,
+              quantity: effectiveQuantity,
+              unitPrice,
+              cost: poCost,
+              status: poRes.status
+            });
+            
+            // Sprawdź czy materiał ma być wliczony do kosztów
+            const shouldIncludeInCosts = includeInCosts[material.id] !== false;
+            
+            console.log(`[UI-COSTS] Rezerwacja PO dla ${material.name} w kosztach: ${shouldIncludeInCosts}`);
+            
+            if (shouldIncludeInCosts) {
+              totalMaterialCost = preciseAdd(totalMaterialCost, poCost);
+            }
+            
+            // Zawsze dodaj do pełnego kosztu produkcji
+            totalFullProductionCost = preciseAdd(totalFullProductionCost, poCost);
+          }
         }
-      } catch (error) {
-        console.error(`❌ [UI-COSTS] Błąd podczas obliczania kosztów rezerwacji PO:`, error);
-        // Nie przerywamy procesu - kontynuujemy z pozostałymi kosztami
+        
+        console.log(`[UI-COSTS] Przetworzono ${activePoReservations.length} aktywnych rezerwacji PO`);
       }
 
       // ===== 3. DODAJ KOSZT PROCESOWY (z precyzyjnymi obliczeniami) =====
@@ -5188,9 +5191,9 @@ const TaskDetailsPage = () => {
         },
         poReservations: {
           totalCost: fixFloatingPointPrecision(
-            Object.values(poCostDetails).reduce((sum, item) => preciseAdd(sum, item.totalCost || 0), 0)
+            Object.values(poReservationsCostDetails).reduce((sum, item) => preciseAdd(sum, item.cost || 0), 0)
           ),
-          details: poCostDetails
+          details: poReservationsCostDetails
         },
         totalMaterialCost: fixFloatingPointPrecision(totalMaterialCost),
         unitMaterialCost: fixFloatingPointPrecision(unitMaterialCost),
@@ -5205,7 +5208,7 @@ const TaskDetailsPage = () => {
         unitFullProductionCost: finalResults.unitFullProductionCost,
         consumedCost: finalResults.consumed.totalCost,
         reservedCost: finalResults.reserved.totalCost,
-        poCost: finalResults.poReservations.totalCost
+        poReservationsCost: finalResults.poReservations.totalCost
       });
 
       return finalResults;
