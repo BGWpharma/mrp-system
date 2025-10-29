@@ -1147,6 +1147,17 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji partii
     }
     
+    // Aktualizuj ceny w rezerwacjach PO
+    console.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam aktualizację cen w rezerwacjach PO');
+    try {
+      const { updatePOReservationsPricesOnPOChange } = await import('./poReservationService');
+      const poResUpdateResult = await updatePOReservationsPricesOnPOChange(purchaseOrderId, newPoData, userId || 'system');
+      console.log('✅ [PO_UPDATE_DEBUG] Pomyślnie zaktualizowano ceny w rezerwacjach PO:', poResUpdateResult);
+    } catch (error) {
+      console.error('❌ [PO_UPDATE_DEBUG] Błąd podczas aktualizacji cen w rezerwacjach PO:', error);
+      // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji rezerwacji
+    }
+    
     // WYŁĄCZONA STARA LOGIKA: Nowa funkcja updateBatchPricesOnAnySave już obsługuje wszystkie przypadki
     // Stara funkcja updateBatchBasePricesOnUnitPriceChange powodowała konflikty przy dopasowywaniu partii
     if (false && hasItemsUpdate) {

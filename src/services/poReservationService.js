@@ -934,6 +934,125 @@ export const refreshLinkedBatchesQuantities = async (batchId = null) => {
     console.error('Błąd podczas odświeżania ilości w powiązanych partiach:', error);
     throw error;
   }
+};
+
+/**
+ * Aktualizuje ceny w rezerwacjach PO po zmianie cen w zamówieniu zakupowym
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {Object} poData - Dane zamówienia zakupowego z nowymi cenami
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik aktualizacji
+ */
+export const updatePOReservationsPricesOnPOChange = async (purchaseOrderId, poData, userId = 'system') => {
+  try {
+    console.log(`🔄 [PO_RES_PRICE_UPDATE] Aktualizacja cen w rezerwacjach PO dla zamówienia ${purchaseOrderId}`);
+    
+    // Pobierz wszystkie rezerwacje dla tego PO
+    const q = query(
+      collection(db, PO_RESERVATIONS_COLLECTION),
+      where('poId', '==', purchaseOrderId),
+      where('status', 'in', ['pending', 'delivered']) // Nie aktualizuj converted
+    );
+    
+    const snapshot = await getDocs(q);
+    const reservations = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`📋 [PO_RES_PRICE_UPDATE] Znaleziono ${reservations.length} rezerwacji do aktualizacji`);
+    
+    if (reservations.length === 0) {
+      return { success: true, updated: 0, message: 'Brak rezerwacji do aktualizacji' };
+    }
+    
+    let updatedCount = 0;
+    let errorCount = 0;
+    const affectedTaskIds = new Set();
+    
+    // Dla każdej rezerwacji
+    for (const reservation of reservations) {
+      try {
+        // Znajdź odpowiednią pozycję w PO
+        const poItem = poData.items?.find(item => item.id === reservation.poItemId);
+        
+        if (!poItem) {
+          console.warn(`⚠️ [PO_RES_PRICE_UPDATE] Nie znaleziono pozycji ${reservation.poItemId} w PO`);
+          errorCount++;
+          continue;
+        }
+        
+        const newUnitPrice = parseFloat(poItem.unitPrice || 0);
+        const oldUnitPrice = parseFloat(reservation.unitPrice || 0);
+        
+        // Sprawdź czy cena się zmieniła (tolerancja 0.0001)
+        if (Math.abs(newUnitPrice - oldUnitPrice) < 0.0001) {
+          console.log(`✓ [PO_RES_PRICE_UPDATE] Rezerwacja ${reservation.id}: cena bez zmian (${oldUnitPrice}€)`);
+          continue;
+        }
+        
+        // Aktualizuj cenę w rezerwacji
+        const reservationRef = doc(db, PO_RESERVATIONS_COLLECTION, reservation.id);
+        await updateDoc(reservationRef, {
+          unitPrice: newUnitPrice,
+          currency: poData.currency || reservation.currency || 'EUR',
+          updatedAt: serverTimestamp(),
+          updatedBy: userId,
+          priceUpdatedFrom: oldUnitPrice,
+          priceUpdatedAt: serverTimestamp()
+        });
+        
+        console.log(`✅ [PO_RES_PRICE_UPDATE] Zaktualizowano cenę rezerwacji ${reservation.id}: ${oldUnitPrice}€ → ${newUnitPrice}€`);
+        updatedCount++;
+        
+        // Zapisz zadanie do aktualizacji kosztów
+        affectedTaskIds.add(reservation.taskId);
+        
+      } catch (error) {
+        console.error(`❌ [PO_RES_PRICE_UPDATE] Błąd aktualizacji rezerwacji ${reservation.id}:`, error);
+        errorCount++;
+      }
+    }
+    
+    console.log(`📊 [PO_RES_PRICE_UPDATE] Zaktualizowano ${updatedCount} rezerwacji, ${errorCount} błędów`);
+    
+    // Aktualizuj koszty w zadaniach które mają zaktualizowane rezerwacje
+    if (affectedTaskIds.size > 0) {
+      console.log(`🔄 [PO_RES_PRICE_UPDATE] Aktualizacja kosztów w ${affectedTaskIds.size} zadaniach...`);
+      
+      const { updateTaskCostsAutomatically } = await import('./productionService');
+      const taskUpdatePromises = Array.from(affectedTaskIds).map(taskId =>
+        updateTaskCostsAutomatically(taskId, userId, 'Automatyczna aktualizacja po zmianie cen w rezerwacjach PO')
+      );
+      
+      const taskResults = await Promise.allSettled(taskUpdatePromises);
+      
+      const taskSuccessCount = taskResults.filter(r => r.status === 'fulfilled').length;
+      const taskErrorCount = taskResults.filter(r => r.status === 'rejected').length;
+      
+      console.log(`✅ [PO_RES_PRICE_UPDATE] Zaktualizowano koszty: ${taskSuccessCount} zadań pomyślnie, ${taskErrorCount} błędów`);
+      
+      return {
+        success: true,
+        updated: updatedCount,
+        errors: errorCount,
+        affectedTasks: affectedTaskIds.size,
+        tasksUpdated: taskSuccessCount,
+        tasksErrors: taskErrorCount
+      };
+    }
+    
+    return {
+      success: true,
+      updated: updatedCount,
+      errors: errorCount,
+      affectedTasks: 0
+    };
+    
+  } catch (error) {
+    console.error('❌ [PO_RES_PRICE_UPDATE] Błąd podczas aktualizacji cen w rezerwacjach PO:', error);
+    throw error;
+  }
 }; 
 
 export default {
@@ -946,5 +1065,6 @@ export default {
   getAvailablePOItems,
   getPOReservationStats,
   syncPOReservationsWithBatches,
-  refreshLinkedBatchesQuantities
+  refreshLinkedBatchesQuantities,
+  updatePOReservationsPricesOnPOChange
 }; 
