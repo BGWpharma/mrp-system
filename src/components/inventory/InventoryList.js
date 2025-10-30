@@ -64,7 +64,6 @@ import {
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
   Clear as ClearIcon,
-  Assignment as CoAIcon,
   Refresh as RefreshIcon,
   Upload as UploadIcon
 } from '@mui/icons-material';
@@ -76,7 +75,6 @@ import { exportToCSV } from '../../utils/exportUtils';
 import { useAuth } from '../../hooks/useAuth';
 import LabelDialog from './LabelDialog';
 import EditReservationDialog from './EditReservationDialog';
-import CoAGeneratorDialog from './CoAGeneratorDialog';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, getDocs, addDoc, deleteDoc, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
@@ -128,7 +126,6 @@ const InventoryList = () => {
   const [warehouseItems, setWarehouseItems] = useState([]);
   const [warehouseItemsLoading, setWarehouseItemsLoading] = useState(false);
   const [batchesDialogOpen, setBatchesDialogOpen] = useState(false);
-  const [coaDialogOpen, setCoaDialogOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [warehouseItemsTotalCount, setWarehouseItemsTotalCount] = useState(0);
   const [warehouseItemsTotalPages, setWarehouseItemsTotalPages] = useState(1);
@@ -1819,22 +1816,6 @@ const InventoryList = () => {
     }
   };
 
-  // Funkcja do obsługi generatora CoA
-  const handleCoAGenerator = () => {
-    setCoaDialogOpen(true);
-  };
-
-  // Funkcja do zamknięcia dialogu CoA
-  const handleCloseCoADialog = () => {
-    setCoaDialogOpen(false);
-  };
-
-  // Funkcja do obsługi wygenerowania CoA
-  const handleCoAGenerated = (markdownContent) => {
-    showSuccess('Certyfikat CoA został wygenerowany');
-    console.log('Generated CoA content:', markdownContent);
-  };
-
   const handleMoreMenuOpen = (event) => {
     setMenuAnchorEl(event.currentTarget);
   };
@@ -1878,9 +1859,6 @@ const InventoryList = () => {
         break;
       case 'import':
         handleOpenImportDialog();
-        break;
-      case 'coa':
-        handleCoAGenerator();
         break;
       case 'refresh':
         handleRefreshList();
@@ -1997,12 +1975,6 @@ const InventoryList = () => {
               <UploadIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>Import CSV</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleMenuItemClick('coa')}>
-            <ListItemIcon>
-              <CoAIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>{t('inventory.states.coaGenerator')}</ListItemText>
           </MenuItem>
           <MenuItem component={RouterLink} to="/inventory/expiry-dates" onClick={handleMoreMenuClose}>
             <ListItemIcon>
@@ -3413,13 +3385,6 @@ const InventoryList = () => {
           <Button onClick={handleCloseBatchesDialog}>{t('common.close')}</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Dialog generatora CoA */}
-      <CoAGeneratorDialog
-        open={coaDialogOpen}
-        onClose={handleCloseCoADialog}
-        onGenerate={handleCoAGenerated}
-      />
 
       {/* Dialog importu CSV */}
       <Dialog 

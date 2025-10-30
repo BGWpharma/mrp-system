@@ -35,7 +35,6 @@ import {
   Store as WarehouseIcon,
   List as ListIcon,
   BarChart as ReportsIcon,
-  FormatListNumbered as ForecastIcon,
   AssessmentOutlined as QualityReportsIcon,
   Receipt as InvoicesIcon,
   Add as AddIcon,
@@ -196,7 +195,6 @@ const Sidebar = ({ onToggle }) => {
       // Production
       '/production/forms': 'production-forms',
       '/production/calculator': 'production-calculator',
-      '/production/forecast': 'production-forecast',
       '/production': 'production-tasks',
       '/recipes': 'production-recipes',
       '/production/timeline': 'production-timeline',
@@ -420,7 +418,6 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: t('submenu.production.forms'), icon: <ListAltIcon />, path: '/production/forms' },
         { text: t('submenu.production.calculator'), icon: <CalculateIcon />, path: '/production/calculator' },
-        { text: t('submenu.production.forecast'), icon: <ForecastIcon />, path: '/production/forecast' },
         { text: t('submenu.production.productionTasks'), icon: <ListIcon />, path: '/production' },
         { text: t('submenu.production.recipes'), icon: <RecipesIcon />, path: '/recipes' },
         { text: t('submenu.production.timeline'), icon: <AnalyticsIcon />, path: '/production/timeline' },

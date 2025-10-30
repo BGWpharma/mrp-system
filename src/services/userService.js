@@ -517,7 +517,6 @@ export const getAvailableSidebarTabs = () => {
       children: [
         { id: 'production-forms', name: 'Formularze', path: '/production/forms' },
         { id: 'production-calculator', name: 'Kalkulator', path: '/production/calculator' },
-        { id: 'production-forecast', name: 'Prognoza', path: '/production/forecast' },
         { id: 'production-tasks', name: 'Zadania produkcyjne', path: '/production' },
         { id: 'production-recipes', name: 'Receptury', path: '/recipes' },
         { id: 'production-timeline', name: 'Harmonogram', path: '/production/timeline' }

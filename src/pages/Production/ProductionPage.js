@@ -5,7 +5,6 @@ import {
   FormatListBulleted as ListIcon,
   Timeline as TimelineIcon,
   Assessment as ReportIcon,
-  TrendingUp as ForecastIcon,
   ViewModule as GridIcon,
   ViewList as ViewListIcon,
   Description as FormsIcon,
@@ -17,7 +16,6 @@ import {
 import TaskList from '../../components/production/TaskList';
 import ProductionTimeline from '../../components/production/ProductionTimeline';
 import ProductionReportPage from './ProductionReportPage';
-import ForecastPage from './ForecastPage';
 import FormsPage from './FormsPage';
 import WorkstationsPage from './WorkstationsPage';
 import CalculatorPage from './CalculatorPage';
@@ -87,9 +85,8 @@ const ProductionPage = () => {
     { icon: <TimelineIcon />, label: t('production.taskList.tabs.timeline'), value: 1 },
     { icon: <ReportIcon />, label: t('production.taskList.tabs.moReport'), value: 2 },
     { icon: <FormsIcon />, label: t('production.taskList.tabs.forms'), value: 3 },
-    { icon: <ForecastIcon />, label: t('production.taskList.tabs.forecast'), value: 4 },
-    { icon: <CalculateIcon />, label: t('production.taskList.tabs.calculator'), value: 5 },
-    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 6 }
+    { icon: <CalculateIcon />, label: t('production.taskList.tabs.calculator'), value: 4 },
+    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 5 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki
@@ -99,9 +96,8 @@ const ProductionPage = () => {
       case 1: return <ProductionTimeline />;
       case 2: return <ProductionReportPage />;
       case 3: return <FormsPage />;
-      case 4: return <ForecastPage />;
-      case 5: return <CalculatorPage />;
-      case 6: return <WorkstationsPage />;
+      case 4: return <CalculatorPage />;
+      case 5: return <WorkstationsPage />;
       default: return <TaskList />;
     }
   };
