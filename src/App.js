@@ -42,6 +42,7 @@ import ProductionTimelinePage from './pages/Production/ProductionTimelinePage';
 import TaskDetailsPage from './pages/Production/TaskDetailsPage';
 import EditTaskPage from './pages/Production/EditTaskPage';
 import ConsumptionPage from './pages/Production/ConsumptionPage';
+import ForecastPage from './pages/Production/ForecastPage';
 import ReportsPage from './pages/Production/ReportsPage';
 import CreateFromOrderPage from './pages/Production/CreateFromOrderPage';
 import WorkstationsPage from './pages/Production/WorkstationsPage';
@@ -236,6 +237,7 @@ function App() {
                     <Route path="/production/new-task" element={<PrivateLayout><NewTaskPage /></PrivateLayout>} />
                     <Route path="/production/timeline" element={<PrivateLayout><ProductionTimelinePage /></PrivateLayout>} />
                     <Route path="/production/calculator" element={<PrivateLayout><CalculatorPage /></PrivateLayout>} />
+                    <Route path="/production/forecast" element={<PrivateLayout><ForecastPage /></PrivateLayout>} />
                     <Route path="/production/forms" element={<PrivateLayout><FormsPage /></PrivateLayout>} />
                     <Route path="/production/forms/completed-mo" element={<PrivateLayout><CompletedMOFormPage /></PrivateLayout>} />
                     <Route path="/production/forms/production-control" element={<PrivateLayout><ProductionControlFormPage /></PrivateLayout>} />

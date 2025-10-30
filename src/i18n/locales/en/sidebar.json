@@ -27,6 +27,7 @@
     "production": {
       "forms": "Forms",
       "calculator": "Calculator",
+      "forecast": "Demand Forecast",
       "productionTasks": "Production Tasks",
       "recipes": "Recipes",
       "timeline": "Timeline"

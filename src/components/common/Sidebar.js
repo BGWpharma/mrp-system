@@ -47,7 +47,8 @@ import {
   Calculate as CalculateIcon,
   Factory as FactoryIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
-  BugReport as BugReportIcon
+  BugReport as BugReportIcon,
+  TrendingUp as ForecastIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -416,6 +417,7 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: t('submenu.production.calculator'), icon: <CalculateIcon />, path: '/production/calculator' },
+        { text: t('submenu.production.forecast'), icon: <ForecastIcon />, path: '/production/forecast' },
         { text: t('submenu.production.productionTasks'), icon: <ListIcon />, path: '/production' },
         { text: t('submenu.production.recipes'), icon: <RecipesIcon />, path: '/recipes' },
         { text: t('submenu.production.timeline'), icon: <AnalyticsIcon />, path: '/production/timeline' },
