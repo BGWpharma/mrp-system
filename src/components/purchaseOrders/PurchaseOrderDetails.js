@@ -51,6 +51,7 @@ import {
   translatePaymentStatus
 } from '../../services/purchaseOrderService';
 import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventory';
+import { getPOReservationsForItem } from '../../services/poReservationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { db } from '../../services/firebase/config';
@@ -100,6 +101,10 @@ const PurchaseOrderDetails = ({ orderId }) => {
   // Stan dla dialogu migracji CoA
   const [coaMigrationDialogOpen, setCoaMigrationDialogOpen] = useState(false);
   
+  // Stan dla rezerwacji PO
+  const [poReservationsByItem, setPOReservationsByItem] = useState({});
+  const [loadingReservations, setLoadingReservations] = useState(false);
+  
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
       try {
@@ -116,6 +121,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
         
         // Pobierz powiązane LOTy
         await fetchRelatedBatches(orderId);
+        
+        // Pobierz rezerwacje PO
+        if (data.items && data.items.length > 0) {
+          await loadPOReservations(orderId, data.items);
+        }
         
         // Pobierz odpowiedzi formularzy rozładunku dla tego PO
         if (data && data.number) {
@@ -200,6 +210,35 @@ const PurchaseOrderDetails = ({ orderId }) => {
         (itemId === undefined)
       );
     });
+  };
+  
+  // Funkcja do pobierania rezerwacji dla pozycji
+  const getReservationsByItemId = (itemId) => {
+    return poReservationsByItem[itemId] || [];
+  };
+
+  // Funkcja do ładowania rezerwacji PO
+  const loadPOReservations = async (poId, items) => {
+    try {
+      setLoadingReservations(true);
+      const reservationsByItem = {};
+      
+      // Pobierz rezerwacje dla każdej pozycji
+      for (const item of items) {
+        if (item.id) {
+          const reservations = await getPOReservationsForItem(poId, item.id);
+          if (reservations.length > 0) {
+            reservationsByItem[item.id] = reservations;
+          }
+        }
+      }
+      
+      setPOReservationsByItem(reservationsByItem);
+    } catch (error) {
+      console.error('Błąd podczas ładowania rezerwacji PO:', error);
+    } finally {
+      setLoadingReservations(false);
+    }
   };
   
   const refreshBatches = async () => {
@@ -1516,8 +1555,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             <TableCell>
                               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                 {item.name}
-                                {/* Dodaj przycisk rozwijania, jeśli istnieją LOTy dla tego produktu */}
-                                {getBatchesByItemId(item.id).length > 0 && (
+                                {/* Dodaj przycisk rozwijania, jeśli istnieją LOTy lub rezerwacje dla tego produktu */}
+                                {(getBatchesByItemId(item.id).length > 0 || getReservationsByItemId(item.id).length > 0) && (
                                   <IconButton
                                     size="small"
                                     onClick={() => toggleItemExpansion(item.id)}
@@ -1669,6 +1708,111 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                     ) : (
                                       <Typography variant="body2" color="text.secondary">
                                         {t('purchaseOrders.details.batches.noBatchesAssigned')}
+                                      </Typography>
+                                    )}
+                                    
+                                    {/* Rezerwacje PO */}
+                                    <Divider sx={{ my: 2 }} />
+                                    
+                                    <Typography variant="subtitle2" gutterBottom component="div" sx={{ mt: 2 }}>
+                                      Rezerwacje PO
+                                      <Chip 
+                                        label={getReservationsByItemId(item.id).length} 
+                                        size="small" 
+                                        color="primary" 
+                                        sx={{ ml: 1 }} 
+                                      />
+                                    </Typography>
+                                    
+                                    {getReservationsByItemId(item.id).length > 0 ? (
+                                      <List dense>
+                                        {getReservationsByItemId(item.id).map((reservation) => {
+                                          // Określ kolor statusu
+                                          const statusColors = {
+                                            'pending': 'warning',
+                                            'delivered': 'success',
+                                            'converted': 'info'
+                                          };
+                                          
+                                          return (
+                                            <ListItem 
+                                              key={reservation.id} 
+                                              sx={{ 
+                                                bgcolor: 'background.paper', 
+                                                mb: 0.5, 
+                                                borderRadius: 1,
+                                                cursor: 'pointer',
+                                                '&:hover': { bgcolor: 'action.hover' },
+                                                border: '1px solid',
+                                                borderColor: 'divider'
+                                              }}
+                                              component={Link}
+                                              to={`/production/tasks/${reservation.taskId}`}
+                                            >
+                                              <ListItemIcon>
+                                                <AssignmentIcon color="primary" />
+                                              </ListItemIcon>
+                                              <ListItemText
+                                                primary={
+                                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Typography variant="body2" fontWeight="medium">
+                                                      {reservation.taskNumber}
+                                                    </Typography>
+                                                    <Chip 
+                                                      label={
+                                                        reservation.status === 'pending' ? 'Oczekująca' :
+                                                        reservation.status === 'delivered' ? 'Dostarczona' :
+                                                        reservation.status === 'converted' ? 'Przekonwertowana' :
+                                                        reservation.status
+                                                      }
+                                                      size="small"
+                                                      color={statusColors[reservation.status] || 'default'}
+                                                    />
+                                                  </Box>
+                                                }
+                                                secondary={
+                                                  <React.Fragment>
+                                                    <Typography component="span" variant="body2" color="text.primary" display="block">
+                                                      {reservation.taskName}
+                                                    </Typography>
+                                                    <Typography component="span" variant="body2" color="text.secondary" display="block">
+                                                      Zarezerwowano: {reservation.reservedQuantity} {item.unit}
+                                                      {' • '}
+                                                      Cena: {formatCurrency(reservation.unitPrice, reservation.currency || purchaseOrder.currency)}
+                                                      {' • '}
+                                                      Wartość: {formatCurrency(reservation.reservedQuantity * reservation.unitPrice, reservation.currency || purchaseOrder.currency)}
+                                                    </Typography>
+                                                    {reservation.reservedAt && (
+                                                      <Typography component="span" variant="body2" display="block" color="text.secondary">
+                                                        Data rezerwacji: {new Date(reservation.reservedAt).toLocaleDateString('pl-PL')}
+                                                      </Typography>
+                                                    )}
+                                                    {reservation.deliveredQuantity > 0 && (
+                                                      <Typography component="span" variant="body2" display="block" color="success.main">
+                                                        Dostarczone: {reservation.deliveredQuantity} {item.unit}
+                                                      </Typography>
+                                                    )}
+                                                  </React.Fragment>
+                                                }
+                                              />
+                                              <Button
+                                                size="small"
+                                                variant="outlined"
+                                                color="primary"
+                                                sx={{ ml: 1 }}
+                                                component={Link}
+                                                to={`/production/tasks/${reservation.taskId}`}
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                Zobacz MO
+                                              </Button>
+                                            </ListItem>
+                                          );
+                                        })}
+                                      </List>
+                                    ) : (
+                                      <Typography variant="body2" color="text.secondary">
+                                        Brak rezerwacji PO dla tej pozycji
                                       </Typography>
                                     )}
                                   </Box>
@@ -1872,6 +2016,97 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             onClick={() => handleBatchClick(batch.id, batch.itemId)}
                           >
                             {t('purchaseOrders.details.table.details')}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
+          
+          {/* Sekcja rezerwacji PO - Podsumowanie */}
+          {Object.values(poReservationsByItem).flat().length > 0 && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Rezerwacje z tego zamówienia
+                <Chip 
+                  label={Object.values(poReservationsByItem).flat().length} 
+                  size="small" 
+                  color="primary" 
+                  sx={{ ml: 1 }} 
+                />
+              </Typography>
+              
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Nr MO</TableCell>
+                      <TableCell>Nazwa zadania</TableCell>
+                      <TableCell>Materiał</TableCell>
+                      <TableCell align="right">Ilość</TableCell>
+                      <TableCell align="right">Wartość</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Data rezerwacji</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {Object.values(poReservationsByItem).flat().map((reservation) => (
+                      <TableRow 
+                        key={reservation.id} 
+                        hover
+                        sx={{ 
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                        onClick={() => navigate(`/production/tasks/${reservation.taskId}`)}
+                      >
+                        <TableCell sx={{ fontWeight: 'medium' }}>
+                          {reservation.taskNumber}
+                        </TableCell>
+                        <TableCell>{reservation.taskName}</TableCell>
+                        <TableCell>{reservation.materialName}</TableCell>
+                        <TableCell align="right">
+                          {reservation.reservedQuantity} {reservation.unit}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatCurrency(reservation.reservedQuantity * reservation.unitPrice, reservation.currency || purchaseOrder.currency)}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={
+                              reservation.status === 'pending' ? 'Oczekująca' :
+                              reservation.status === 'delivered' ? 'Dostarczona' :
+                              reservation.status === 'converted' ? 'Przekonwertowana' :
+                              reservation.status
+                            }
+                            size="small"
+                            color={
+                              reservation.status === 'pending' ? 'warning' :
+                              reservation.status === 'delivered' ? 'success' :
+                              'info'
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {reservation.reservedAt ? 
+                            new Date(reservation.reservedAt).toLocaleDateString('pl-PL') : 
+                            '-'
+                          }
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/production/tasks/${reservation.taskId}`);
+                            }}
+                          >
+                            Szczegóły
                           </Button>
                         </TableCell>
                       </TableRow>

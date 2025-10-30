@@ -218,10 +218,39 @@ export const getPOReservationsForItem = async (poId, poItemId) => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      reservedAt: doc.data().reservedAt?.toDate?.()?.toISOString() || doc.data().reservedAt,
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt,
+      deliveredAt: doc.data().deliveredAt?.toDate?.()?.toISOString() || doc.data().deliveredAt
     }));
   } catch (error) {
     console.error('Błąd podczas pobierania rezerwacji dla pozycji PO:', error);
+    return [];
+  }
+};
+
+/**
+ * Pobiera wszystkie rezerwacje dla zamówienia zakupowego
+ * @param {string} poId - ID zamówienia zakupowego
+ * @returns {Promise<Array>} - Lista rezerwacji dla PO
+ */
+export const getPOReservationsForPurchaseOrder = async (poId) => {
+  try {
+    const q = query(
+      collection(db, PO_RESERVATIONS_COLLECTION),
+      where('poId', '==', poId),
+      orderBy('reservedAt', 'desc')
+    );
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      reservedAt: doc.data().reservedAt?.toDate?.()?.toISOString() || doc.data().reservedAt,
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || doc.data().updatedAt
+    }));
+  } catch (error) {
+    console.error('Błąd podczas pobierania rezerwacji dla PO:', error);
     return [];
   }
 };
@@ -1059,6 +1088,7 @@ export default {
   createPOReservation,
   getPOReservationsForTask,
   getPOReservationsForItem,
+  getPOReservationsForPurchaseOrder,
   cancelPOReservation,
   updatePOReservationsOnDelivery,
   convertPOReservationToStandard,
