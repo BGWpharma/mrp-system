@@ -82,6 +82,11 @@ import { useInventoryListState } from '../../contexts/InventoryListStateContext'
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 import { useTranslation } from '../../hooks/useTranslation';
 
+// Importy komponentów dla zakładek
+import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
+import SuppliersPage from '../../pages/SuppliersPage';
+import StocktakingPage from '../../pages/Inventory/StocktakingPage';
+
 // Definicje stałych
 const INVENTORY_TRANSACTIONS_COLLECTION = 'inventoryTransactions';
 
@@ -130,18 +135,6 @@ const InventoryList = () => {
   const [warehouseItemsTotalCount, setWarehouseItemsTotalCount] = useState(0);
   const [warehouseItemsTotalPages, setWarehouseItemsTotalPages] = useState(1);
   const warehouseSearchTermRef = useRef(null);
-  const [groups, setGroups] = useState([]);
-  const [groupsLoading, setGroupsLoading] = useState(false);
-  const [groupFormData, setGroupFormData] = useState({
-    name: '',
-    description: '',
-    items: []
-  });
-  const [openGroupDialog, setOpenGroupDialog] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [groupItems, setGroupItems] = useState([]);
-  const [groupDialogMode, setGroupDialogMode] = useState('add');
-  const [savingGroup, setSavingGroup] = useState(false);
   
   // Dodaję stany dla zakładki Rezerwacje
   const [allReservations, setAllReservations] = useState([]);
@@ -714,10 +707,6 @@ const InventoryList = () => {
   // Obsługa przełączania zakładek
   const handleTabChange = (event, newValue) => {
     listActions.setCurrentTab(newValue);
-    if (newValue === 2) {
-      // Jeśli wybrano zakładkę "Grupy", pobierz je
-      fetchGroups();
-    }
   };
   
   // Zarządzanie lokalizacjami - nowe funkcje
@@ -942,33 +931,6 @@ const InventoryList = () => {
     }
   };
 
-  // Dodaję funkcję do pobierania grup
-  const fetchGroups = async () => {
-    setGroupsLoading(true);
-    try {
-      // Pobieramy kolekcję grup z Firestore
-      const groupsCollection = collection(db, 'itemGroups');
-      const groupsSnapshot = await getDocs(groupsCollection);
-      const groupsList = groupsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setGroups(groupsList);
-    } catch (error) {
-      console.error('Błąd podczas pobierania grup:', error);
-      showError('Nie udało się pobrać grup');
-    } finally {
-      setGroupsLoading(false);
-    }
-  };
-
-  // Dodaję useEffect do pobierania grup przy montowaniu komponentu
-  useEffect(() => {
-    if (currentTab === 2) {
-      fetchGroups();
-    }
-  }, [currentTab]);
-
   // Funkcja do pobierania pozycji z wybranego magazynu
   const fetchWarehouseItems = async (warehouseId, newSortField = null, newSortOrder = null) => {
     setWarehouseItemsLoading(true);
@@ -1040,121 +1002,6 @@ const InventoryList = () => {
       setSelectedItem(null);
       setSelectedItemBatches([]);
     }, 300);
-  };
-
-  // Funkcja do otwierania dialogu tworzenia/edycji grupy
-  const handleOpenGroupDialog = (mode, group = null) => {
-    setGroupDialogMode(mode);
-    
-    if (mode === 'edit' && group) {
-      setSelectedGroup(group);
-      setGroupFormData({
-        name: group.name,
-        description: group.description || '',
-        items: group.items || []
-      });
-      
-      // Pobierz pozycje należące do grupy
-      const groupItemIds = group.items || [];
-      const itemsInGroup = inventoryItems.filter(item => groupItemIds.includes(item.id));
-      setGroupItems(itemsInGroup);
-    } else {
-      setSelectedGroup(null);
-      setGroupFormData({
-        name: '',
-        description: '',
-        items: []
-      });
-      setGroupItems([]);
-    }
-    
-    setOpenGroupDialog(true);
-  };
-
-  // Funkcja do zamykania dialogu grupy
-  const handleCloseGroupDialog = () => {
-    setOpenGroupDialog(false);
-    setGroupFormData({
-      name: '',
-      description: '',
-      items: []
-    });
-    setGroupItems([]);
-  };
-
-  // Funkcja do zapisywania grupy
-  const handleSubmitGroup = async () => {
-    if (!groupFormData.name) {
-      showError('Nazwa grupy jest wymagana');
-      return;
-    }
-    
-    setSavingGroup(true);
-    
-    try {
-      const groupData = {
-        ...groupFormData,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid
-      };
-      
-      if (groupDialogMode === 'add') {
-        // Dodajemy nową grupę
-        const groupsCollection = collection(db, 'itemGroups');
-        await addDoc(groupsCollection, {
-          ...groupData,
-          createdAt: serverTimestamp(),
-          createdBy: currentUser.uid
-        });
-        showSuccess('Grupa została utworzona');
-      } else {
-        // Aktualizujemy istniejącą grupę
-        const groupRef = doc(db, 'itemGroups', selectedGroup.id);
-        await updateDoc(groupRef, groupData);
-        showSuccess('Grupa została zaktualizowana');
-      }
-      
-      handleCloseGroupDialog();
-      fetchGroups();
-    } catch (error) {
-      console.error('Błąd podczas zapisywania grupy:', error);
-      showError('Nie udało się zapisać grupy');
-    } finally {
-      setSavingGroup(false);
-    }
-  };
-
-  // Funkcja do usuwania grupy
-  const handleDeleteGroup = async (groupId) => {
-    if (!window.confirm('Czy na pewno chcesz usunąć tę grupę? Pozycje nie zostaną usunięte.')) {
-      return;
-    }
-    
-    try {
-      const groupRef = doc(db, 'itemGroups', groupId);
-      await deleteDoc(groupRef);
-      showSuccess('Grupa została usunięta');
-      fetchGroups();
-    } catch (error) {
-      console.error('Błąd podczas usuwania grupy:', error);
-      showError('Nie udało się usunąć grupy');
-    }
-  };
-
-  // Funkcja do dodawania pozycji do grupy
-  const handleAddItemToGroup = (item) => {
-    if (!groupFormData.items.includes(item.id)) {
-      const updatedItems = [...groupFormData.items, item.id];
-      setGroupFormData(prev => ({ ...prev, items: updatedItems }));
-      setGroupItems(prev => [...prev, item]);
-    }
-  };
-
-  // Funkcja do usuwania pozycji z grupy
-  const handleRemoveItemFromGroup = (itemId) => {
-    const updatedItems = groupFormData.items.filter(id => id !== itemId);
-    setGroupFormData(prev => ({ ...prev, items: updatedItems }));
-    setGroupItems(prev => prev.filter(item => item.id !== itemId));
   };
 
   // Dodane funkcje do obsługi menu zarządzania kolumnami
@@ -1987,7 +1834,7 @@ const InventoryList = () => {
         </Menu>
       </Box>
 
-      {/* Dodaję zakładkę "Grupy" */}
+      {/* Zakładki komponentu Stany */}
       <Tabs
         value={currentTab}
         onChange={handleTabChange}
@@ -1995,7 +1842,9 @@ const InventoryList = () => {
       >
         <Tab label={t('inventory.states.tabs.states')} />
         <Tab label={t('inventory.states.tabs.locations')} />
-        <Tab label={t('inventory.states.tabs.groups')} />
+        <Tab label={t('inventory.states.tabs.expiryDates')} />
+        <Tab label={t('inventory.states.tabs.suppliers')} />
+        <Tab label={t('inventory.states.tabs.stocktaking')} />
         <Tab label={t('inventory.states.tabs.reservations')} />
       </Tabs>
 
@@ -2756,73 +2605,29 @@ const InventoryList = () => {
         </>
       )}
 
-      {/* Zakładka Grupy */}
+      {/* Zakładka Daty ważności */}
       {currentTab === 2 && (
-        <>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-            <Button 
-              variant="contained" 
-              color="primary" 
-              onClick={() => handleOpenGroupDialog('add')}
-              startIcon={<AddIcon />}
-            >
-              {t('inventory.states.groups.newGroup')}
-            </Button>
-          </Box>
-
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('inventory.states.groups.groupName')}</TableCell>
-                  <TableCell>{t('common.description')}</TableCell>
-                  <TableCell>{t('inventory.states.groups.itemCount')}</TableCell>
-                  <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {groupsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <CircularProgress />
-                    </TableCell>
-                  </TableRow>
-                ) : groups.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      {t('inventory.states.groups.noGroups')}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  groups.map((group) => (
-                    <TableRow key={group.id}>
-                      <TableCell>{group.name}</TableCell>
-                      <TableCell>{group.description || '-'}</TableCell>
-                      <TableCell>{group.items?.length || 0}</TableCell>
-                      <TableCell align="right">
-                        <IconButton 
-                          color="primary" 
-                          onClick={() => handleOpenGroupDialog('edit', group)}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton 
-                          color="error" 
-                          onClick={() => handleDeleteGroup(group.id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </>
+        <Box sx={{ mt: -3 }}>
+          <ExpiryDatesPage embedded={true} />
+        </Box>
       )}
 
+      {/* Zakładka Dostawcy */}
       {currentTab === 3 && (
+        <Box sx={{ mt: -3 }}>
+          <SuppliersPage embedded={true} />
+        </Box>
+      )}
+
+      {/* Zakładka Inwentaryzacja */}
+      {currentTab === 4 && (
+        <Box sx={{ mt: -3 }}>
+          <StocktakingPage embedded={true} />
+        </Box>
+      )}
+
+      {/* Zakładka Rezerwacje */}
+      {currentTab === 5 && (
         <>
           <Box sx={{ mb: 3 }}>
             <Typography variant="h6" component="h2" gutterBottom>
@@ -2954,126 +2759,6 @@ const InventoryList = () => {
           </TableContainer>
         </>
       )}
-
-      {/* Dialog do dodawania/edycji grup */}
-      <Dialog open={openGroupDialog} onClose={handleCloseGroupDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {groupDialogMode === 'add' ? t('inventory.states.groups.newGroup') : t('inventory.states.groups.editGroup')}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label={t('inventory.states.groups.groupName')}
-                  name="name"
-                  value={groupFormData.name}
-                  onChange={(e) => setGroupFormData(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label={t('inventory.states.groups.descriptionOptional')}
-                  name="description"
-                  value={groupFormData.description}
-                  onChange={(e) => setGroupFormData(prev => ({ ...prev, description: e.target.value }))}
-                  multiline
-                  rows={2}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  {t('inventory.states.groups.itemsInGroup', { count: groupItems.length })}
-                </Typography>
-                {groupItems.length > 0 ? (
-                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>{t('inventory.states.table.sku')}</TableCell>
-                          <TableCell>{t('inventory.states.table.category')}</TableCell>
-                          <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {groupItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell>{item.category || '-'}</TableCell>
-                            <TableCell align="right">
-                              <IconButton 
-                                size="small" 
-                                color="error" 
-                                onClick={() => handleRemoveItemFromGroup(item.id)}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 1, mb: 2, border: 1, borderColor: 'divider' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('inventory.states.groups.noItemsInGroup')}
-                    </Typography>
-                  </Box>
-                )}
-                
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  {t('inventory.states.groups.availableItems')}
-                </Typography>
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>{t('inventory.states.table.sku')}</TableCell>
-                        <TableCell>{t('inventory.states.table.category')}</TableCell>
-                        <TableCell align="right">{t('inventory.states.table.actions')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {inventoryItems
-                        .filter(item => !groupFormData.items.includes(item.id))
-                        .map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell>{item.category || '-'}</TableCell>
-                            <TableCell align="right">
-                              <IconButton 
-                                size="small" 
-                                color="primary" 
-                                onClick={() => handleAddItemToGroup(item)}
-                              >
-                                <AddIcon />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Grid>
-            </Grid>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseGroupDialog}>{t('common.cancel')}</Button>
-          <Button 
-            onClick={handleSubmitGroup} 
-            variant="contained" 
-            color="primary"
-            disabled={savingGroup || !groupFormData.name}
-          >
-            {savingGroup ? <CircularProgress size={24} /> : t('common.save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Dialog z rezerwacjami */}
       <Dialog

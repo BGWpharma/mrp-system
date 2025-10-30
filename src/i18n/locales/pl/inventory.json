@@ -17,7 +17,9 @@
     "tabs": {
       "states": "Stany",
       "locations": "Lokalizacje",
-      "groups": "Grupy",
+      "expiryDates": "Daty ważności",
+      "suppliers": "Dostawcy",
+      "stocktaking": "Inwentaryzacja",
       "reservations": "Rezerwacje"
     },
     "table": {

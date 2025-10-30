@@ -17,7 +17,9 @@
     "tabs": {
       "states": "States",
       "locations": "Locations",
-      "groups": "Groups",
+      "expiryDates": "Expiry Dates",
+      "suppliers": "Suppliers",
+      "stocktaking": "Stocktaking",
       "reservations": "Reservations"
     },
     "table": {

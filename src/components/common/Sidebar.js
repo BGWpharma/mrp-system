@@ -404,7 +404,6 @@ const Sidebar = ({ onToggle }) => {
         { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
         { text: t('submenu.sales.customers'), icon: <CustomersIcon />, path: '/customers' },
         { text: t('submenu.sales.priceLists'), icon: <ListAltIcon />, path: '/sales/price-lists' },
-        { text: t('submenu.sales.newProductionTask'), icon: <AddIcon />, path: '/production/create-from-order' },
         { text: t('submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
         { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
@@ -416,7 +415,6 @@ const Sidebar = ({ onToggle }) => {
       path: '/production',
       hasSubmenu: true,
       children: [
-        { text: t('submenu.production.forms'), icon: <ListAltIcon />, path: '/production/forms' },
         { text: t('submenu.production.calculator'), icon: <CalculateIcon />, path: '/production/calculator' },
         { text: t('submenu.production.productionTasks'), icon: <ListIcon />, path: '/production' },
         { text: t('submenu.production.recipes'), icon: <RecipesIcon />, path: '/recipes' },
@@ -432,11 +430,8 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: t('submenu.inventory.cmr'), icon: <ShippingIcon />, path: '/inventory/cmr' },
-        { text: t('submenu.inventory.suppliers'), icon: <SuppliersIcon />, path: '/suppliers' },
         { text: t('submenu.inventory.forms'), icon: <ListAltIcon />, path: '/inventory/forms' },
-        { text: t('submenu.inventory.stocktaking'), icon: <QualityReportsIcon />, path: '/inventory/stocktaking' },
         { text: t('submenu.inventory.status'), icon: <WarehouseIcon />, path: '/inventory' },
-        { text: t('submenu.inventory.expiryDates'), icon: <CalendarIcon />, path: '/inventory/expiry-dates', badge: expiringItemsCount > 0 ? expiringItemsCount : null },
         { text: t('submenu.inventory.componentOrders'), icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     }
