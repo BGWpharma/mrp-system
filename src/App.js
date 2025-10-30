@@ -10,6 +10,7 @@ import { TaskListStateProvider } from './contexts/TaskListStateContext';
 import { CmrListStateProvider } from './contexts/CmrListStateContext';
 import { RecipeListStateProvider } from './contexts/RecipeListStateContext';
 import { InvoiceListStateProvider } from './contexts/InvoiceListStateContext';
+import { OrderListStateProvider } from './contexts/OrderListStateContext';
 import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
 import { rtdb } from './services/firebase/config';
@@ -192,10 +193,11 @@ function App() {
                   <CmrListStateProvider>
                     <RecipeListStateProvider>
                       <InvoiceListStateProvider>
-                        <SidebarProvider>
-                          <div className="app-container">
-                            <Notifications />
-                            <Routes>
+                        <OrderListStateProvider>
+                          <SidebarProvider>
+                            <div className="app-container">
+                              <Notifications />
+                              <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     
@@ -360,7 +362,8 @@ function App() {
                     <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
                         </div>
-                      </SidebarProvider>
+                        </SidebarProvider>
+                      </OrderListStateProvider>
                     </InvoiceListStateProvider>
                   </RecipeListStateProvider>
                 </CmrListStateProvider>

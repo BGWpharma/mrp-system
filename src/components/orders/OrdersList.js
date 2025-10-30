@@ -73,43 +73,26 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+import { useOrderListState } from '../../contexts/OrderListStateContext';
 
 const OrdersList = () => {
   const { t } = useTranslation('orders');
+  
+  // Użyj kontekstu dla zarządzania stanem listy
+  const { state, actions } = useOrderListState();
+  
+  // Lokalne stany (nie zapisywane w kontekście)
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Modyfikacja stanów dla paginacji serwerowej
-  const [page, setPage] = useState(1); // Zmiana z 0 na 1 (index od 1)
-  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  
-  // Stan dla debounce wyszukiwania
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
-  
-  // Stan dla sortowania
-  const [orderBy, setOrderBy] = useState('orderDate');
-  const [orderDirection, setOrderDirection] = useState('desc');
-  
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    status: 'all',
-    fromDate: '',
-    toDate: '',
-    customerId: ''
-  });
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [statusChangeInfo, setStatusChangeInfo] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [customersLoading, setCustomersLoading] = useState(false);
-  // Dodajemy flagę, aby śledzić czy komponent jest już zamontowany
   const [isInitialized, setIsInitialized] = useState(false);
-  
-  // Stan dla dialogu zmiany statusu (podobnie jak w PO)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [orderToUpdateStatus, setOrderToUpdateStatus] = useState(null);
   const [newStatus, setNewStatus] = useState('');
@@ -133,7 +116,7 @@ const OrdersList = () => {
     }
     
     const timeoutId = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
+      actions.setDebouncedSearchTerm(state.searchTerm);
     }, 500); // 500ms opóźnienia
     
     setSearchTimeout(timeoutId);
@@ -143,7 +126,7 @@ const OrdersList = () => {
         clearTimeout(searchTimeout);
       }
     };
-  }, [searchTerm]);
+  }, [state.searchTerm]);
   
   // Efekt odpowiedzialny za pobieranie zamówień przy zmianach parametrów
   useEffect(() => {
@@ -151,7 +134,7 @@ const OrdersList = () => {
     if (isInitialized) {
       fetchOrders();
     }
-  }, [page, rowsPerPage, orderBy, orderDirection, debouncedSearchTerm, isInitialized]);
+  }, [state.page, state.rowsPerPage, state.orderBy, state.orderDirection, state.debouncedSearchTerm, isInitialized]);
 
   // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań produkcyjnych
   useEffect(() => {
@@ -274,16 +257,16 @@ const OrdersList = () => {
       
       // Przygotowanie filtrów dla funkcji z paginacją
       const paginationFilters = {
-        ...filters,
-        searchTerm: debouncedSearchTerm
+        ...state.filters,
+        searchTerm: state.debouncedSearchTerm
       };
       
       // Wywołanie funkcji paginacji serwerowej
       const result = await getOrdersWithPagination(
-        page,
-        rowsPerPage,
-        orderBy,
-        orderDirection,
+        state.page,
+        state.rowsPerPage,
+        state.orderBy,
+        state.orderDirection,
         paginationFilters
       );
       
@@ -316,16 +299,15 @@ const OrdersList = () => {
   };
 
   const applyFilters = async () => {
-    setPage(1); // Reset do pierwszej strony przy zmianie filtrów
+    actions.setPage(1); // Reset do pierwszej strony przy zmianie filtrów
     fetchOrders();
   };
 
   useEffect(() => {
     if (location.state?.customerId) {
-      setFilters(prev => ({
-        ...prev,
+      actions.setFilters({
         customerId: location.state.customerId
-      }));
+      });
       
       if (location.state?.customerName) {
         showSuccess(t('orders.notifications.customerOrdersFilter', { customerName: location.state.customerName }));
@@ -348,38 +330,28 @@ const OrdersList = () => {
   }, [orders]);
 
   const resetFilters = () => {
-    setFilters({
-      status: 'all',
-      fromDate: '',
-      toDate: '',
-      customerId: ''
-    });
-    setSearchTerm('');
-    setDebouncedSearchTerm('');
-    setPage(1);
+    actions.resetFilters();
     fetchOrders();
   };
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     // Dla pól typu date (fromDate, toDate) zapewniamy poprawny format
-    setFilters(prev => ({
-      ...prev,
+    actions.setFilters({
       [name]: value
-    }));
+    });
   };
 
   const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
+    actions.setSearchTerm(e.target.value);
   };
 
   const handleChangePage = (event, newPage) => {
-    setPage(newPage + 1); // Dodanie +1, ponieważ MUI TablePagination używa indeksowania od 0, a nasza funkcja od 1
+    actions.setPage(newPage + 1); // Dodanie +1, ponieważ MUI TablePagination używa indeksowania od 0, a nasza funkcja od 1
   };
 
   const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(1); // Reset strony na pierwszą
+    actions.setRowsPerPage(parseInt(event.target.value, 10));
   };
 
   const handleAddOrder = () => {
@@ -513,11 +485,10 @@ const OrdersList = () => {
   // Nawigacja do listy zamówień filtrowanej po kliencie
   const handleViewCustomerOrders = (customerId, customerName) => {
     // Ustawiam filtry i przechodzę do listy zamówień
-    setFilters(prev => ({
-      ...prev,
+    actions.setFilters({
       customerId: customerId
-    }));
-            showSuccess(t('orders.notifications.customerOrdersFilter', { customerName }));
+    });
+    showSuccess(t('orders.notifications.customerOrdersFilter', { customerName }));
     applyFilters();
   };
 
@@ -997,10 +968,10 @@ const OrdersList = () => {
 
   // Obsługa sortowania kolumn
   const handleSort = (column) => {
-    const isAsc = orderBy === column && orderDirection === 'asc';
-    setOrderDirection(isAsc ? 'desc' : 'asc');
-    setOrderBy(column);
-    setPage(1); // Reset do pierwszej strony
+    const isAsc = state.orderBy === column && state.orderDirection === 'asc';
+    actions.setOrderDirection(isAsc ? 'desc' : 'asc');
+    actions.setOrderBy(column);
+    actions.setPage(1); // Reset do pierwszej strony
   };
 
   // Funkcja do odświeżania wartości przed eksportem
@@ -1019,9 +990,9 @@ const OrdersList = () => {
         const allOrdersResult = await getOrdersWithPagination(
           1, // pierwsza strona
           totalItems, // wszystkie elementy
-          orderBy,
-          orderDirection,
-          { ...filters, searchTerm: debouncedSearchTerm }
+          state.orderBy,
+          state.orderDirection,
+          { ...state.filters, searchTerm: state.debouncedSearchTerm }
         );
         ordersToRefresh = allOrdersResult.data;
       }
@@ -1339,9 +1310,9 @@ const OrdersList = () => {
         const allOrdersResult = await getOrdersWithPagination(
           1, // pierwsza strona
           totalItems, // wszystkie elementy
-          orderBy,
-          orderDirection,
-          { ...filters, searchTerm: debouncedSearchTerm }
+          state.orderBy,
+          state.orderDirection,
+          { ...state.filters, searchTerm: state.debouncedSearchTerm }
         );
         exportOrders = allOrdersResult.data;
       }
@@ -1567,7 +1538,7 @@ const OrdersList = () => {
             placeholder={t('orders.searchOrders')}
             variant="outlined"
             size="small"
-            value={searchTerm}
+            value={state.searchTerm}
             onChange={handleSearchChange}
             InputProps={{
               startAdornment: (
@@ -1575,9 +1546,9 @@ const OrdersList = () => {
                   <SearchIcon />
                 </InputAdornment>
               ),
-              endAdornment: searchTerm && (
+              endAdornment: state.searchTerm && (
                 <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearchTerm('')}>
+                  <IconButton size="small" onClick={() => actions.setSearchTerm('')}>
                     <ClearIcon />
                   </IconButton>
                 </InputAdornment>
@@ -1597,10 +1568,10 @@ const OrdersList = () => {
               {loading ? t('orders.exporting') : t('orders.exportCsv')}
             </Button>
             <Button 
-              variant={showFilters ? "contained" : "outlined"} 
+              variant={state.showFilters ? "contained" : "outlined"} 
               startIcon={<FilterListIcon />}
-              onClick={() => setShowFilters(!showFilters)}
-              color={showFilters ? "primary" : "inherit"}
+              onClick={() => actions.setShowFilters(!state.showFilters)}
+              color={state.showFilters ? "primary" : "inherit"}
             >
               {t('orders.filtersToggle')}
             </Button>
@@ -1616,7 +1587,7 @@ const OrdersList = () => {
           </Box>
         </Box>
 
-        <Collapse in={showFilters}>
+        <Collapse in={state.showFilters}>
           <Card variant="outlined" sx={{ mb: 2 }}>
             <CardContent>
               <Grid container spacing={2} alignItems="center">
@@ -1625,7 +1596,7 @@ const OrdersList = () => {
                     <InputLabel>{t('orders.filters.status')}</InputLabel>
                     <Select
                       name="status"
-                      value={filters.status}
+                      value={state.filters.status}
                       onChange={handleFilterChange}
                       label={t('orders.filters.status')}
                     >
@@ -1643,12 +1614,12 @@ const OrdersList = () => {
                     label={t('orders.filters.fromDate')}
                     type="date"
                     name="fromDate"
-                    value={filters.fromDate}
+                    value={state.filters.fromDate}
                     onChange={handleFilterChange}
                     size="small"
                     fullWidth
                     InputLabelProps={{ shrink: true }}
-                    inputProps={{ max: filters.toDate || undefined }}
+                    inputProps={{ max: state.filters.toDate || undefined }}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
@@ -1656,12 +1627,12 @@ const OrdersList = () => {
                     label={t('orders.filters.toDate')}
                     type="date"
                     name="toDate"
-                    value={filters.toDate}
+                    value={state.filters.toDate}
                     onChange={handleFilterChange}
                     size="small"
                     fullWidth
                     InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: filters.fromDate || undefined }}
+                    inputProps={{ min: state.filters.fromDate || undefined }}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
@@ -1669,7 +1640,7 @@ const OrdersList = () => {
                     <InputLabel>{t('orders.filters.customer')}</InputLabel>
                     <Select
                       name="customerId"
-                      value={filters.customerId}
+                      value={state.filters.customerId}
                       onChange={handleFilterChange}
                       label={t('orders.filters.customer')}
                       disabled={customersLoading}
@@ -1723,10 +1694,10 @@ const OrdersList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('orders.table.number')} 
-                        {orderBy === 'orderNumber' && (
+                        {state.orderBy === 'orderNumber' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: state.orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s'
                             }} 
                           />
@@ -1739,10 +1710,10 @@ const OrdersList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('orders.table.customer')}
-                        {orderBy === 'customer.name' && (
+                        {state.orderBy === 'customer.name' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: state.orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s'
                             }} 
                           />
@@ -1756,10 +1727,10 @@ const OrdersList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('orders.table.date')}
-                        {orderBy === 'orderDate' && (
+                        {state.orderBy === 'orderDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: state.orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s'
                             }} 
                           />
@@ -1772,10 +1743,10 @@ const OrdersList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {t('orders.table.deliveryDeadline')}
-                        {orderBy === 'expectedDeliveryDate' && (
+                        {state.orderBy === 'expectedDeliveryDate' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: state.orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s'
                             }} 
                           />
@@ -1789,10 +1760,10 @@ const OrdersList = () => {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                         {t('orders.table.value')}
-                        {orderBy === 'totalValue' && (
+                        {state.orderBy === 'totalValue' && (
                           <ArrowDropDownIcon 
                             sx={{ 
-                              transform: orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
+                              transform: state.orderDirection === 'asc' ? 'rotate(180deg)' : 'none',
                               transition: 'transform 0.2s'
                             }} 
                           />
@@ -2338,8 +2309,8 @@ const OrdersList = () => {
               rowsPerPageOptions={[5, 10, 25, 50]}
               component="div"
               count={totalItems}
-              rowsPerPage={rowsPerPage}
-              page={page - 1} // Odejmujemy 1, bo MUI TablePagination używa indeksowania od 0
+              rowsPerPage={state.rowsPerPage}
+              page={state.page - 1} // Odejmujemy 1, bo MUI TablePagination używa indeksowania od 0
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               labelRowsPerPage={t('orders.pagination.rowsPerPage')}
