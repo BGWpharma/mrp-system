@@ -1903,6 +1903,105 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
 };
 
 /**
+ * Oblicza kwoty zaliczek (proform) dla pozycji zamówienia
+ * @param {string} orderId - ID zamówienia
+ * @param {Array} [preloadedInvoices] - Opcjonalna lista już pobranych faktur (optymalizacja)
+ * @param {Object} [preloadedOrderData] - Opcjonalne dane zamówienia już pobrane (optymalizacja)
+ * @returns {Promise<Object>} Obiekt z kwotami proform dla każdej pozycji
+ */
+export const getProformaAmountsByOrderItems = async (orderId, preloadedInvoices = null, preloadedOrderData = null) => {
+  try {
+    // OPTYMALIZACJA: Użyj już pobranych faktur jeśli dostępne
+    const invoices = preloadedInvoices || await getInvoicesByOrderId(orderId);
+    const proformaAmounts = {};
+    
+    // OPTYMALIZACJA: Użyj już pobranych danych zamówienia jeśli dostępne
+    let orderData = preloadedOrderData;
+    if (!orderData) {
+      try {
+        const orderDoc = await getDoc(doc(db, 'orders', orderId));
+        if (orderDoc.exists()) {
+          orderData = orderDoc.data();
+        }
+      } catch (error) {
+        console.warn('Nie można pobrać danych zamówienia dla lepszego dopasowania pozycji:', error);
+      }
+    }
+    
+    invoices.forEach((invoice, invoiceIndex) => {
+      // Uwzględniaj TYLKO proformy
+      if (!invoice.isProforma) {
+        console.log(`[PROFORMA_AMOUNTS_DEBUG] Pomijam fakturę ${invoice.number} - nie jest proformą`);
+        return;
+      }
+      
+      if (invoice.items && Array.isArray(invoice.items)) {
+        invoice.items.forEach((invoiceItem, itemIndex) => {
+          let itemId = invoiceItem.orderItemId;
+          
+          if (!itemId) {
+            // Spróbuj dopasować pozycję do zamówienia na podstawie nazwy i ceny
+            if (orderData && orderData.items) {
+              const matchingOrderItem = orderData.items.find((orderItem, orderIndex) => {
+                const nameMatch = orderItem.name === invoiceItem.name;
+                const priceMatch = Math.abs(parseFloat(orderItem.price || 0) - parseFloat(invoiceItem.price || 0)) < 0.01;
+                
+                return nameMatch && priceMatch;
+              });
+              
+              if (matchingOrderItem) {
+                const orderIndex = orderData.items.indexOf(matchingOrderItem);
+                itemId = matchingOrderItem.id || `${orderId}_item_${orderIndex}`;
+                console.log(`[PROFORMA_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (proforma ${invoice.number}, ilość: ${invoiceItem.quantity}, cena: ${invoiceItem.price}) przez nazwę i cenę do pozycji zamówienia: ${itemId}`);
+              } else {
+                // Fallback - spróbuj dopasować tylko po nazwie
+                const matchingByNameOnly = orderData.items.find((orderItem) => {
+                  return orderItem.name === invoiceItem.name;
+                });
+                
+                if (matchingByNameOnly) {
+                  const orderIndex = orderData.items.indexOf(matchingByNameOnly);
+                  itemId = matchingByNameOnly.id || `${orderId}_item_${orderIndex}`;
+                  console.log(`[PROFORMA_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (proforma ${invoice.number}) tylko po nazwie do pozycji zamówienia: ${itemId}`);
+                } else {
+                  // Ostateczny fallback - używaj indeksu pozycji w fakturze
+                  itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
+                  console.log(`[PROFORMA_AMOUNTS_DEBUG] Nie udało się dopasować pozycji "${invoiceItem.name}" (proforma ${invoice.number}, cena: ${invoiceItem.price}), używam fallback: ${itemId}`);
+                }
+              }
+            } else {
+              itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
+              console.log(`[PROFORMA_AMOUNTS_DEBUG] Brak danych zamówienia, używam fallback dla "${invoiceItem.name}": ${itemId}`);
+            }
+          }
+          
+          if (!proformaAmounts[itemId]) {
+            proformaAmounts[itemId] = {
+              totalProforma: 0,
+              proformas: []
+            };
+          }
+          
+          const itemValue = parseFloat(invoiceItem.netValue || invoiceItem.totalPrice || 0);
+          proformaAmounts[itemId].totalProforma += itemValue;
+          proformaAmounts[itemId].proformas.push({
+            proformaId: invoice.id,
+            proformaNumber: invoice.number,
+            itemValue: itemValue,
+            quantity: parseFloat(invoiceItem.quantity || 0)
+          });
+        });
+      }
+    });
+    
+    return proformaAmounts;
+  } catch (error) {
+    console.error('Błąd podczas obliczania kwot proform:', error);
+    return {};
+  }
+};
+
+/**
  * Migruje istniejące faktury dodając orderItemId do pozycji
  * @param {string} orderId - ID zamówienia
  * @returns {Promise<void>}

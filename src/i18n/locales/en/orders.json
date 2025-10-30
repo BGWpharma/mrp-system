@@ -164,6 +164,8 @@
       "price": "Price",
       "value": "Value",
       "invoicedAmount": "Invoiced Amount",
+      "proformaAmount": "Advance Payment",
+      "etm": "ETM",
       "priceList": "Price List",
       "productionStatus": "Production Status",
       "productionCost": "Production Cost",

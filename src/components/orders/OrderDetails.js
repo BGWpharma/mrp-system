@@ -73,7 +73,7 @@ import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
-import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, migrateInvoiceItemsOrderIds } from '../../services/invoiceService';
+import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds } from '../../services/invoiceService';
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -223,7 +223,9 @@ const verifyProductionTasks = async (orderToVerify) => {
         task.moNumber !== taskDoc.moNumber ||
         task.name !== taskDoc.name ||
         task.productName !== taskDoc.productName ||
-        task.quantity !== taskDoc.quantity;
+        task.quantity !== taskDoc.quantity ||
+        task.endDate !== taskDoc.endDate ||
+        task.completionDate !== taskDoc.completionDate;
       
       if (needsUpdate) {
         console.log(`[SYNC] Wykryto nieaktualne dane zadania ${task.id}, synchronizuję z bazą danych`);
@@ -240,6 +242,9 @@ const verifyProductionTasks = async (orderToVerify) => {
           productName: taskDoc.productName,
           quantity: taskDoc.quantity,
           unit: taskDoc.unit,
+          endDate: taskDoc.endDate,
+          completionDate: taskDoc.completionDate,
+          productionSessions: taskDoc.productionSessions,
           updatedAt: new Date().toISOString()
         };
         
@@ -291,13 +296,13 @@ const verifyProductionTasks = async (orderToVerify) => {
         productionTasks: verifiedTasks
       };
       
-      return { order: updatedOrder, removedCount: tasksToRemove.length, updatedCount: verifiedTasks.length };
+      return { order: updatedOrder, removedCount: tasksToRemove.length, updatedCount: verifiedTasks.length, fullTasksMap: taskDocsMap };
     }
     
-    return { order: orderToVerify, removedCount: 0, updatedCount: 0 };
+    return { order: orderToVerify, removedCount: 0, updatedCount: 0, fullTasksMap: taskDocsMap };
   } catch (error) {
     console.error('Błąd podczas weryfikacji zadań produkcyjnych:', error);
-    return { order: orderToVerify, removedCount: 0 };
+    return { order: orderToVerify, removedCount: 0, fullTasksMap: {} };
   }
 };
 
@@ -324,6 +329,8 @@ const OrderDetails = () => {
   const [cmrDocuments, setCmrDocuments] = useState([]);
   const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
   const [invoicedAmounts, setInvoicedAmounts] = useState({});
+  const [proformaAmounts, setProformaAmounts] = useState({});
+  const [fullProductionTasks, setFullProductionTasks] = useState({});
   
   // State dla popover z listą faktur
   const [invoicePopoverAnchor, setInvoicePopoverAnchor] = useState(null);
@@ -452,13 +459,19 @@ const OrderDetails = () => {
         const orderData = await getOrderById(orderId);
         
         // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
-        const { order: verifiedOrder, removedCount } = await verifyProductionTasks(orderData);
+        const { order: verifiedOrder, removedCount, fullTasksMap } = await verifyProductionTasks(orderData);
         
         if (removedCount > 0) {
           showInfo(t('orderDetails.notifications.productionTasksRemoved', { count: removedCount }));
         }
         
         setOrder(verifiedOrder);
+        
+        // Zapisz pełne dane zadań (z datami) już teraz
+        if (fullTasksMap && Object.keys(fullTasksMap).length > 0) {
+          setFullProductionTasks(fullTasksMap);
+          console.log('✅ OrderDetails - pobrano pełne dane zadań podczas weryfikacji');
+        }
         
         // 🚀 OPTYMALIZACJA: Równoległe pobieranie z cache (TYLKO KRYTYCZNE DANE)
         console.log('🚀 OrderDetails - rozpoczynam optymalne pobieranie danych...');
@@ -483,6 +496,12 @@ const OrderDetails = () => {
         // 2. Pobierz TYLKO zafakturowane kwoty (bez pełnych danych faktur) - potrzebne do tabeli produktów
         const invoicedAmountsPromise = getInvoicedAmountsByOrderItems(orderId, null, verifiedOrder);
         fetchPromises.push(invoicedAmountsPromise);
+        
+        // 2b. Pobierz kwoty proform (zaliczek) - potrzebne do tabeli produktów
+        const proformaAmountsPromise = getProformaAmountsByOrderItems(orderId, null, verifiedOrder);
+        fetchPromises.push(proformaAmountsPromise);
+        
+        // 2c. Pełne dane zadań produkcyjnych (z datami) zostały już pobrane podczas weryfikacji
         
         // 3. Faktury i CMR będą ładowane lazy loading przy scrollu - NIE pobieramy ich teraz!
         
@@ -510,6 +529,15 @@ const OrderDetails = () => {
             console.log('✅ OrderDetails - pobrano zafakturowane kwoty (bez pełnych danych faktur)');
           } else {
             console.error('Błąd podczas pobierania zafakturowanych kwot:', invoicedAmountsResult.reason);
+          }
+          
+          // Pobierz kwoty proform (zaliczek)
+          const proformaAmountsResult = results[resultIndex++];
+          if (proformaAmountsResult.status === 'fulfilled') {
+            setProformaAmounts(proformaAmountsResult.value);
+            console.log('✅ OrderDetails - pobrano kwoty proform (zaliczek)');
+          } else {
+            console.error('Błąd podczas pobierania kwot proform:', proformaAmountsResult.reason);
           }
           
           console.log('🎉 OrderDetails - zakończono pobieranie podstawowych danych (faktury i CMR będą lazy loaded)');
@@ -1080,6 +1108,8 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         'Cena jednostkowa',
         'Wartość pozycji',
         'Zafakturowana kwota',
+        'Zaliczka',
+        'ETM',
         'Koszt produkcji',
         'Zysk',
         'Ostatni CMR',
@@ -1100,6 +1130,32 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         const invoicedData = invoicedAmounts[itemId];
         const invoicedAmount = invoicedData && invoicedData.totalInvoiced > 0 ? invoicedData.totalInvoiced : 0;
         
+        // Pobierz kwotę zaliczki (proformy)
+        const proformaData = proformaAmounts[itemId];
+        const proformaAmount = proformaData && proformaData.totalProforma > 0 ? proformaData.totalProforma : 0;
+        
+        // Pobierz datę ETM (Estimated Time to Manufacture)
+        const completionInfo = getTaskCompletionDate(item);
+        let etmDate = '-';
+        if (completionInfo && completionInfo.date) {
+          try {
+            let dateObj;
+            if (completionInfo.date?.toDate && typeof completionInfo.date.toDate === 'function') {
+              dateObj = completionInfo.date.toDate();
+            } else if (typeof completionInfo.date === 'string') {
+              dateObj = new Date(completionInfo.date);
+            } else if (completionInfo.date instanceof Date) {
+              dateObj = completionInfo.date;
+            }
+            
+            if (dateObj && !isNaN(dateObj.getTime())) {
+              etmDate = formatDate(dateObj, false);
+            }
+          } catch (error) {
+            console.error('Błąd formatowania daty ETM w CSV:', error);
+          }
+        }
+        
         // Oblicz koszt produkcji
         const productionCost = parseFloat(item.productionCost) || 0;
         
@@ -1115,6 +1171,8 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
           formatCSVValue(formatCurrency(item.price).replace(/\s/g, '')),
           formatCSVValue(formatCurrency(itemTotalValue).replace(/\s/g, '')),
           formatCSVValue(formatCurrency(invoicedAmount).replace(/\s/g, '')),
+          formatCSVValue(formatCurrency(proformaAmount).replace(/\s/g, '')),
+          formatCSVValue(etmDate),
           formatCSVValue(formatCurrency(productionCost).replace(/\s/g, '')),
           formatCSVValue(formatCurrency(profit).replace(/\s/g, '')),
           formatCSVValue(lastCmr),
@@ -1487,6 +1545,95 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     return totalSettled;
   };
 
+  // Funkcja obliczająca sumę zaliczek (proform)
+  const calculateProformaTotal = () => {
+    if (!invoices || invoices.length === 0) {
+      return 0;
+    }
+
+    let totalProforma = 0;
+
+    invoices.forEach(invoice => {
+      // Wliczamy tylko proformy
+      if (!invoice.isProforma) {
+        return;
+      }
+
+      // Suma zapłacona w proformie
+      const totalPaid = parseFloat(invoice.totalPaid || 0);
+      totalProforma += totalPaid;
+    });
+
+    return totalProforma;
+  };
+
+  // Funkcja pomocnicza do pobierania daty ETM (Estimated Time to Manufacture)
+  const getTaskCompletionDate = (item) => {
+    // Znajdź ID zadania dla pozycji
+    let taskId = null;
+    
+    // 1. Po productionTaskId (priorytet)
+    if (item.productionTaskId) {
+      taskId = item.productionTaskId;
+    }
+    // 2. Po orderItemId w uproszczonych kopiach (fallback)
+    else if (order?.productionTasks) {
+      const taskFromOrder = order.productionTasks.find(t => t.orderItemId === item.id);
+      if (taskFromOrder) {
+        taskId = taskFromOrder.id;
+      }
+    }
+    
+    if (!taskId) {
+      return null;
+    }
+    
+    // Pobierz pełne dane zadania z mapy
+    const task = fullProductionTasks[taskId];
+    
+    if (!task) {
+      return null;
+    }
+    
+    // Jeśli zadanie jest zakończone, zwróć rzeczywistą datę
+    if (task.status === 'Zakończone') {
+      // Priorytet 1: Ostatnia sesja produkcyjna (najbardziej dokładna)
+      if (task.productionSessions && task.productionSessions.length > 0) {
+        const lastSession = task.productionSessions[task.productionSessions.length - 1];
+        if (lastSession.endDate) {
+          return {
+            date: lastSession.endDate,
+            isActual: true,
+            status: task.status,
+            source: 'productionSession'
+          };
+        }
+      }
+      
+      // Priorytet 2: completionDate
+      if (task.completionDate) {
+        return {
+          date: task.completionDate,
+          isActual: true,
+          status: task.status,
+          source: 'completionDate'
+        };
+      }
+    }
+    
+    // W pozostałych przypadkach zwróć planowaną datę zakończenia
+    if (task.endDate) {
+      return {
+        date: task.endDate,
+        isActual: false,
+        status: task.status,
+        source: 'plannedEndDate'
+      };
+    }
+    
+    return null;
+  };
+
   const getProductionStatus = (item, productionTasks) => {
     // Sprawdź, czy element ma bezpośrednio przypisane zadanie produkcyjne
     if (item.productionTaskId && item.productionStatus) {
@@ -1720,24 +1867,49 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                   {formatCurrency(calculateOrderTotalValue())}
                 </Typography>
                 
-                {/* Kwota rozliczona */}
+                {/* Kwoty rozliczone i zaliczki */}
                 <Box sx={{ mt: 2, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" align="right" color="text.secondary">
-                    Kwota rozliczona:
-                  </Typography>
-                  <Typography variant="h6" align="right" color="success.main" sx={{ fontWeight: 'medium' }}>
-                    {formatCurrency(calculateSettledAmount())}
-                  </Typography>
-                  <Typography variant="body2" align="right" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {(() => {
-                      const totalValue = calculateOrderTotalValue();
-                      const settledAmount = calculateSettledAmount();
-                      const remainingAmount = totalValue - settledAmount;
-                      const percentage = totalValue > 0 ? ((settledAmount / totalValue) * 100).toFixed(1) : 0;
-                      
-                      return `${percentage}% • Pozostało: ${formatCurrency(remainingAmount)}`;
-                    })()}
-                  </Typography>
+                  {/* Faktury */}
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" align="right" color="text.secondary">
+                      FK:
+                    </Typography>
+                    <Typography variant="h6" align="right" color="success.main" sx={{ fontWeight: 'medium' }}>
+                      {formatCurrency(calculateSettledAmount())}
+                    </Typography>
+                    <Typography variant="body2" align="right" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {(() => {
+                        const totalValue = calculateOrderTotalValue();
+                        const settledAmount = calculateSettledAmount();
+                        const remainingAmount = totalValue - settledAmount;
+                        const percentage = totalValue > 0 ? ((settledAmount / totalValue) * 100).toFixed(1) : 0;
+                        
+                        return `${percentage}% • Pozostało: ${formatCurrency(remainingAmount)}`;
+                      })()}
+                    </Typography>
+                  </Box>
+                  
+                  {/* Separator */}
+                  <Divider sx={{ my: 1.5 }} />
+                  
+                  {/* Zaliczki (Proformy) */}
+                  <Box>
+                    <Typography variant="subtitle2" align="right" color="text.secondary">
+                      Zaliczki:
+                    </Typography>
+                    <Typography variant="h6" align="right" color="info.main" sx={{ fontWeight: 'medium' }}>
+                      {formatCurrency(calculateProformaTotal())}
+                    </Typography>
+                    <Typography variant="body2" align="right" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {(() => {
+                        const totalValue = calculateOrderTotalValue();
+                        const proformaTotal = calculateProformaTotal();
+                        const percentage = totalValue > 0 ? ((proformaTotal / totalValue) * 100).toFixed(1) : 0;
+                        
+                        return `${percentage}% wartości zamówienia`;
+                      })()}
+                    </Typography>
+                  </Box>
                 </Box>
                 
                 <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -1854,7 +2026,8 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.price')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.value')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.invoicedAmount')}</TableCell>
-                <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.priceList')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.proformaAmount')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="center">{t('orderDetails.table.etm')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.productionStatus')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">
                   {t('orderDetails.table.productionCost')}
@@ -1954,22 +2127,103 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                       }
                     })()}
                   </TableCell>
-                  <TableCell>
-                    {item.fromPriceList ? (
-                                    <Chip 
-                label={t('orderDetails.priceListLabels.yes')}
-                size="small"
-                color="success"
-                variant="outlined"
-              />
-            ) : (
-              <Chip 
-                label={t('orderDetails.priceListLabels.no')}
-                size="small"
-                color="default"
-                variant="outlined"
-              />
-                    )}
+                  <TableCell align="right">
+                    {(() => {
+                      const itemId = item.id || `${orderId}_item_${index}`;
+                      const proformaData = proformaAmounts[itemId];
+                      
+                      if (proformaData && proformaData.totalProforma > 0) {
+                        return (
+                          <Tooltip title={`Kliknij, aby zobaczyć szczegóły (${proformaData.proformas.length} ${proformaData.proformas.length === 1 ? 'proforma' : 'proform'})`}>
+                            <Typography 
+                              sx={{ 
+                                fontWeight: 'medium',
+                                color: 'info.main',
+                                cursor: 'pointer',
+                                '&:hover': {
+                                  textDecoration: 'underline',
+                                  color: 'info.dark'
+                                }
+                              }}
+                              onClick={(e) => {
+                                setInvoicePopoverAnchor(e.currentTarget);
+                                setSelectedInvoiceData({
+                                  itemName: item.name,
+                                  invoices: proformaData.proformas.map(p => ({
+                                    invoiceId: p.proformaId,
+                                    invoiceNumber: p.proformaNumber,
+                                    itemValue: p.itemValue,
+                                    quantity: p.quantity
+                                  })),
+                                  totalInvoiced: proformaData.totalProforma,
+                                  isProforma: true
+                                });
+                              }}
+                            >
+                              {formatCurrency(proformaData.totalProforma)}
+                            </Typography>
+                          </Tooltip>
+                        );
+                      } else {
+                        return (
+                          <Typography variant="body2" color="text.secondary">
+                            0,00 €
+                          </Typography>
+                        );
+                      }
+                    })()}
+                  </TableCell>
+                  <TableCell align="center">
+                    {(() => {
+                      const completionInfo = getTaskCompletionDate(item);
+                      
+                      if (!completionInfo) {
+                        return (
+                          <Typography variant="body2" color="text.secondary">
+                            -
+                          </Typography>
+                        );
+                      }
+                      
+                      const dateToDisplay = completionInfo.date;
+                      let formattedDate = '-';
+                      
+                      try {
+                        // Obsługa różnych formatów daty
+                        let dateObj;
+                        if (dateToDisplay?.toDate && typeof dateToDisplay.toDate === 'function') {
+                          // Firestore Timestamp
+                          dateObj = dateToDisplay.toDate();
+                        } else if (typeof dateToDisplay === 'string') {
+                          dateObj = new Date(dateToDisplay);
+                        } else if (dateToDisplay instanceof Date) {
+                          dateObj = dateToDisplay;
+                        }
+                        
+                        if (dateObj && !isNaN(dateObj.getTime())) {
+                          // Format: "16 gru 2025" (bez godziny)
+                          formattedDate = formatDate(dateObj, false);
+                        }
+                      } catch (error) {
+                        console.error('Błąd formatowania daty ETM:', error);
+                      }
+                      
+                      return (
+                        <Tooltip title={completionInfo.isActual ? 
+                          'Rzeczywista data zakończenia produkcji' : 
+                          'Planowana data zakończenia produkcji'}>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: completionInfo.isActual ? 'bold' : 'normal',
+                              color: completionInfo.isActual ? 'success.main' : 'text.primary'
+                            }}
+                          >
+                            {formattedDate}
+                          </Typography>
+                        </Tooltip>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     {getProductionStatus(item, order.productionTasks)}
@@ -2178,7 +2432,66 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                   })()}
                 </TableCell>
                 <TableCell align="right">
-                  {/* Lista cenowa - nie sumujemy */}
+                  {/* Suma kwot z proform */}
+                  {(() => {
+                    let totalProforma = 0;
+                    const proformasMap = new Map();
+                    
+                    order.items?.forEach((item, index) => {
+                      const itemId = item.id || `${orderId}_item_${index}`;
+                      const proformaData = proformaAmounts[itemId];
+                      if (proformaData && proformaData.totalProforma > 0) {
+                        totalProforma += proformaData.totalProforma;
+                        proformaData.proformas.forEach(pf => {
+                          if (proformasMap.has(pf.proformaId)) {
+                            const existing = proformasMap.get(pf.proformaId);
+                            existing.itemValue += pf.itemValue;
+                            existing.quantity += pf.quantity;
+                          } else {
+                            proformasMap.set(pf.proformaId, { 
+                              invoiceId: pf.proformaId,
+                              invoiceNumber: pf.proformaNumber,
+                              itemValue: pf.itemValue,
+                              quantity: pf.quantity
+                            });
+                          }
+                        });
+                      }
+                    });
+                    
+                    const allProformas = Array.from(proformasMap.values());
+                    
+                    if (totalProforma > 0) {
+                      return (
+                        <Tooltip title="Kliknij, aby zobaczyć wszystkie proformy">
+                          <Typography
+                            sx={{ 
+                              cursor: 'pointer',
+                              '&:hover': {
+                                textDecoration: 'underline',
+                              }
+                            }}
+                            onClick={(e) => {
+                              setInvoicePopoverAnchor(e.currentTarget);
+                              setSelectedInvoiceData({
+                                itemName: 'Wszystkie pozycje zamówienia',
+                                invoices: allProformas,
+                                totalInvoiced: totalProforma,
+                                isProforma: true
+                              });
+                            }}
+                          >
+                            {formatCurrency(totalProforma)}
+                          </Typography>
+                        </Tooltip>
+                      );
+                    }
+                    
+                    return formatCurrency(totalProforma);
+                  })()}
+                </TableCell>
+                <TableCell align="center">
+                  {/* ETM - nie sumujemy */}
                   -
                 </TableCell>
                 <TableCell align="right">

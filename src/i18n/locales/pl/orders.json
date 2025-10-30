@@ -164,6 +164,8 @@
       "price": "Cena",
       "value": "Wartość",
       "invoicedAmount": "Zafakturowana kwota",
+      "proformaAmount": "Zaliczka",
+      "etm": "ETM",
       "priceList": "Lista cenowa",
       "productionStatus": "Status produkcji",
       "productionCost": "Koszt produkcji",
