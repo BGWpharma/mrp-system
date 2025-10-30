@@ -31,7 +31,9 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Tooltip,
+  Chip
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -58,7 +60,8 @@ import {
   updateMultipleProformasUsage,
   removeMultipleProformasUsage,
   syncProformaNumberInLinkedInvoices,
-  calculateTotalUnitCost
+  calculateTotalUnitCost,
+  getProformaAmountsByOrderItems
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -106,6 +109,7 @@ const InvoiceForm = ({ invoiceId }) => {
   const [orderItemsDialogOpen, setOrderItemsDialogOpen] = useState(false);
   const [availableOrderItems, setAvailableOrderItems] = useState([]);
   const [selectedOrderItems, setSelectedOrderItems] = useState([]);
+  const [proformasByOrderItems, setProformasByOrderItems] = useState({}); // Informacje o proformach dla pozycji
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -439,7 +443,19 @@ const InvoiceForm = ({ invoiceId }) => {
   };
 
   // Funkcje do obsługi wyboru pozycji z zamówienia
-  const handleOpenOrderItemsDialog = (orderItems) => {
+  const handleOpenOrderItemsDialog = async (orderItems) => {
+    // Pobierz informacje o istniejących proformach dla tego zamówienia
+    let existingProformas = {};
+    if (selectedOrderId && invoice.isProforma) {
+      try {
+        existingProformas = await getProformaAmountsByOrderItems(selectedOrderId);
+        setProformasByOrderItems(existingProformas);
+        console.log('Pobrano informacje o proformach:', existingProformas);
+      } catch (error) {
+        console.error('Błąd podczas pobierania informacji o proformach:', error);
+      }
+    }
+
     // Przygotuj pozycje z obliconymi cenami (jak w oryginalnej logice)
     const mappedItems = (orderItems || []).map(item => {
       let finalPrice;
@@ -459,11 +475,18 @@ const InvoiceForm = ({ invoiceId }) => {
         }
       }
 
+      // Sprawdź czy ta pozycja ma już wystawioną proformę
+      const itemId = item.id;
+      const hasProforma = existingProformas[itemId] && existingProformas[itemId].totalProforma > 0;
+      const proformaInfo = existingProformas[itemId] || null;
+
       return {
         ...item,
         price: finalPrice,
         netValue: parseFloat(item.quantity || 0) * finalPrice,
-        selected: false // Domyślnie nie zaznaczone
+        selected: false, // Domyślnie nie zaznaczone
+        hasProforma: hasProforma, // Czy ma już proformę
+        proformaInfo: proformaInfo // Informacje o istniejącej proformie
       };
     });
     
@@ -493,6 +516,26 @@ const InvoiceForm = ({ invoiceId }) => {
     if (selectedItems.length === 0) {
       showError('Wybierz przynajmniej jedną pozycję do dodania');
       return;
+    }
+    
+    // WALIDACJA: Sprawdź czy wybrane pozycje mają już wystawione proformy
+    if (invoice.isProforma) {
+      const itemsWithProforma = selectedItems.filter(item => item.hasProforma);
+      
+      if (itemsWithProforma.length > 0) {
+        const itemNames = itemsWithProforma.map(item => item.name).join(', ');
+        const proformaNumbers = itemsWithProforma
+          .flatMap(item => item.proformaInfo?.proformas || [])
+          .map(pf => pf.proformaNumber)
+          .filter((value, index, self) => self.indexOf(value) === index) // unikalne numery
+          .join(', ');
+        
+        showError(
+          `Nie można dodać pozycji: ${itemNames}. ` +
+          `${itemsWithProforma.length === 1 ? 'Ta pozycja ma' : 'Te pozycje mają'} już wystawioną proformę: ${proformaNumbers}.`
+        );
+        return;
+      }
     }
     
     // Dodaj wybrane pozycje do faktury
@@ -2087,10 +2130,12 @@ const InvoiceForm = ({ invoiceId }) => {
                 {availableOrderItems.map((item, index) => (
                   <TableRow 
                     key={index}
-                    hover
+                    hover={!item.hasProforma}
                     sx={{ 
-                      '&:hover': { backgroundColor: 'action.hover' },
-                      backgroundColor: item.selected ? 'action.selected' : 'inherit'
+                      '&:hover': { backgroundColor: item.hasProforma ? 'inherit' : 'action.hover' },
+                      backgroundColor: item.selected ? 'action.selected' : 
+                                      item.hasProforma ? 'error.light' : 
+                                      'inherit'
                     }}
                   >
                     <TableCell padding="checkbox">
@@ -2100,50 +2145,65 @@ const InvoiceForm = ({ invoiceId }) => {
                           e.stopPropagation();
                           handleToggleOrderItem(index);
                         }}
+                        disabled={invoice.isProforma && item.hasProforma}
                       />
                     </TableCell>
                     <TableCell 
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
-                      {item.name}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {item.name}
+                        {item.hasProforma && (
+                          <Tooltip title={`Pozycja ma już wystawioną proformę: ${
+                            item.proformaInfo.proformas.map(pf => pf.proformaNumber).join(', ')
+                          }`}>
+                            <Chip 
+                              label="Ma proformę" 
+                              color="error" 
+                              size="small"
+                              sx={{ fontSize: '0.7rem' }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell 
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
                       {item.description || '-'}
                     </TableCell>
                     <TableCell 
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
                       {item.cnCode || '-'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
                       {item.quantity}
                     </TableCell>
                     <TableCell 
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
                       {item.unit || 'szt.'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
                       {item.price?.toFixed(4)} {invoice.currency || 'EUR'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => handleToggleOrderItem(index)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
+                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
                     >
                       {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
                     </TableCell>
