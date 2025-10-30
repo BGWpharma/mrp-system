@@ -9,7 +9,6 @@ import {
   ViewList as ViewListIcon,
   Description as FormsIcon,
   Business as BusinessIcon,
-  Calculate as CalculateIcon,
   AdminPanelSettings as AdminIcon,
   Menu as MenuIcon
 } from '@mui/icons-material';
@@ -18,7 +17,6 @@ import ProductionTimeline from '../../components/production/ProductionTimeline';
 import ProductionReportPage from './ProductionReportPage';
 import FormsPage from './FormsPage';
 import WorkstationsPage from './WorkstationsPage';
-import CalculatorPage from './CalculatorPage';
 import { initializeMissingCostFields } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -85,8 +83,7 @@ const ProductionPage = () => {
     { icon: <TimelineIcon />, label: t('production.taskList.tabs.timeline'), value: 1 },
     { icon: <ReportIcon />, label: t('production.taskList.tabs.moReport'), value: 2 },
     { icon: <FormsIcon />, label: t('production.taskList.tabs.forms'), value: 3 },
-    { icon: <CalculateIcon />, label: t('production.taskList.tabs.calculator'), value: 4 },
-    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 5 }
+    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 4 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki
@@ -96,8 +93,7 @@ const ProductionPage = () => {
       case 1: return <ProductionTimeline />;
       case 2: return <ProductionReportPage />;
       case 3: return <FormsPage />;
-      case 4: return <CalculatorPage />;
-      case 5: return <WorkstationsPage />;
+      case 4: return <WorkstationsPage />;
       default: return <TaskList />;
     }
   };
