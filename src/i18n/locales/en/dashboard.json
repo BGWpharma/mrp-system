@@ -16,6 +16,7 @@
   "cancel": "Cancel",
   "noAnnouncements": "No announcements. Click the edit icon to add an announcement.",
   "lastUpdate": "Last updated: {{date}}{{author}}",
+  "lastUpdated": "Last updated",
   "by": " by {{name}}",
   "cards": {
     "recipes": {

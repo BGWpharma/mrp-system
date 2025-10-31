@@ -179,7 +179,6 @@ const Sidebar = ({ onToggle }) => {
     const pathToIdMap = {
       // Dashboard
       '/': 'dashboard-main',
-      '/analytics': 'dashboard-analytics',
       
       // Hall Data
       '/hall-data/conditions': 'hall-data-conditions',
@@ -266,7 +265,7 @@ const Sidebar = ({ onToggle }) => {
       setOpenSubmenu(t('sales'));
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders') || location.pathname.startsWith('/suppliers')) {
       setOpenSubmenu(t('inventory'));
-    } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
+    } else if (location.pathname === '/') {
       setOpenSubmenu(t('dashboard'));
     } else if (location.pathname.startsWith('/hall-data')) {
       setOpenSubmenu(t('hallData'));
@@ -324,7 +323,7 @@ const Sidebar = ({ onToggle }) => {
   const isMenuActive = (menuPath) => {
     // Specjalne przypadki dla głównych sekcji
     if (menuPath === '/') {
-      return location.pathname === '/' || location.pathname.startsWith('/analytics');
+      return location.pathname === '/';
     } else if (menuPath === '/sales') {
       // Sales obejmuje wszystkie ścieżki związane ze sprzedażą
       return location.pathname.startsWith('/customers') || 
@@ -381,7 +380,6 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: t('submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
-        { text: t('submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 

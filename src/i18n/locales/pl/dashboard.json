@@ -16,6 +16,7 @@
   "cancel": "Anuluj",
   "noAnnouncements": "Brak ogłoszeń. Kliknij ikonę edycji, aby dodać ogłoszenie.",
   "lastUpdate": "Ostatnia aktualizacja: {{date}}{{author}}",
+  "lastUpdated": "Ostatnia aktualizacja",
   "by": " przez {{name}}",
   "cards": {
     "recipes": {

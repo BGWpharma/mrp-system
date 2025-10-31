@@ -95,9 +95,6 @@ import SupplierFormPage from './pages/SupplierFormPage';
 import CustomersList from './components/customers/CustomersList';
 import CustomerDetail from './components/customers/CustomerDetail';
 
-// Analytics
-import AnalyticsDashboard from './pages/Analytics/Dashboard';
-
 // AI Assistant
 import AIAssistantPage from './pages/AIAssistant/AIAssistantPage';
 
@@ -324,9 +321,6 @@ function App() {
                     {/* Customers Routes */}
                     <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
                     <Route path="/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
-                    
-                    {/* Analytics Routes */}
-                    <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboard /></PrivateLayout>} />
                     
                     {/* AI Assistant Routes */}
                     <Route path="/ai-assistant" element={<PrivateLayout><AIAssistantPage /></PrivateLayout>} />
