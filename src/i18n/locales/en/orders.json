@@ -53,6 +53,7 @@
       "reserved": "Reserved",
       "price": "Price",
       "value": "Value",
+      "productionCost": "Production Cost",
       "mo": "MO",
       "linkedPurchaseOrders": "Linked Purchase Orders:",
       "refreshPOData": "Refresh PO Data",

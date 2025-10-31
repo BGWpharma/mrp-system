@@ -53,6 +53,7 @@
       "reserved": "Zarezerwowane",
       "price": "Cena",
       "value": "Wartość",
+      "productionCost": "Koszt produkcji",
       "mo": "MO",
       "linkedPurchaseOrders": "Powiązane zamówienia zakupu:",
       "refreshPOData": "Odśwież dane PO",

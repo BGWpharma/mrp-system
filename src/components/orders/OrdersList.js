@@ -1971,6 +1971,7 @@ const OrdersList = () => {
                                             <TableCell align="right">{t('orders.expandedDetails.reserved')}</TableCell>
                                             <TableCell align="right">{t('orders.expandedDetails.price')}</TableCell>
                                             <TableCell align="right">{t('orders.expandedDetails.value')}</TableCell>
+                                            <TableCell align="right">{t('orders.expandedDetails.productionCost')}</TableCell>
                                             <TableCell>{t('orders.expandedDetails.mo')}</TableCell>
                                           </TableRow>
                                         </TableHead>
@@ -2054,6 +2055,15 @@ const OrdersList = () => {
                                               </TableCell>
                                               <TableCell align="right">
                                                 {formatCurrency((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
+                                              </TableCell>
+                                              <TableCell align="right">
+                                                {item.productionTaskId && item.productionCost !== undefined ? (
+                                                  <Typography>
+                                                    {formatCurrency(item.productionCost)}
+                                                  </Typography>
+                                                ) : (
+                                                  <Typography variant="body2" color="text.secondary">-</Typography>
+                                                )}
                                               </TableCell>
                                               <TableCell>
                                                 {(() => {
