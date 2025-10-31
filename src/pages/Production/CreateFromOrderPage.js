@@ -147,6 +147,12 @@ const CreateFromOrderPage = () => {
         
         // Pobierz wszystkie stanowiska produkcyjne
         await fetchWorkstations();
+        
+        // Jeśli orderId zostało przekazane przez location.state, pobierz szczegóły zamówienia
+        if (location.state?.orderId) {
+          console.log('[CREATE-FROM-ORDER] Automatyczne ładowanie zamówienia z location.state:', location.state.orderId);
+          await fetchOrderDetails(location.state.orderId);
+        }
       } catch (error) {
         showError(t('createFromOrder.alerts.loadingDataError', { error: error.message }));
         console.error('Error loading initial data:', error);

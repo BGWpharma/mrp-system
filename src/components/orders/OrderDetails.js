@@ -1656,7 +1656,20 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     
     // Tradycyjne sprawdzenie, jeśli nie ma bezpośredniego przypisania
     if (!productionTasks || !Array.isArray(productionTasks) || productionTasks.length === 0) {
-      return <Chip label={t('orderDetails.productionStatus.noTasks')} size="small" color="default" />;
+      return (
+        <Tooltip title="Kliknij, aby utworzyć zadanie produkcyjne">
+          <Chip 
+            label={t('orderDetails.productionStatus.noTasks')} 
+            size="small" 
+            color="default"
+            clickable
+            onClick={() => navigate('/production/create-from-order', {
+              state: { orderId: orderId }
+            })}
+            sx={{ cursor: 'pointer' }}
+          />
+        </Tooltip>
+      );
     }
 
     // Znajdź zadania produkcyjne dla tego elementu
@@ -1666,7 +1679,20 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     );
 
     if (tasksForItem.length === 0) {
-      return <Chip label={t('orderDetails.productionStatus.noTasks')} size="small" color="default" />;
+      return (
+        <Tooltip title="Kliknij, aby utworzyć zadanie produkcyjne">
+          <Chip 
+            label={t('orderDetails.productionStatus.noTasks')} 
+            size="small" 
+            color="default"
+            clickable
+            onClick={() => navigate('/production/create-from-order', {
+              state: { orderId: orderId }
+            })}
+            sx={{ cursor: 'pointer' }}
+          />
+        </Tooltip>
+      );
     }
 
     // Określ ogólny status na podstawie wszystkich zadań
@@ -2052,7 +2078,16 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
             <TableBody>
               {order.items && order.items.map((item, index) => (
                 <TableRow key={index} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
-                  <TableCell>{item.name}</TableCell>
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2">{item.name}</Typography>
+                      {item.description && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                          {item.description}
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
                   <TableCell align="right">{item.quantity} {item.unit}</TableCell>
                   <TableCell align="right">
                     {item.shippedQuantity ? (
@@ -2067,15 +2102,15 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                                 key={cmrIndex} 
                                 variant="caption" 
                                 color="text.secondary"
-                                sx={{ display: 'block', lineHeight: 1.2 }}
+                                sx={{ display: 'block', lineHeight: 1.1, fontSize: '0.6rem' }}
                               >
-                                CMR: {cmrEntry.cmrNumber} ({cmrEntry.quantity} {cmrEntry.unit})
+                                {cmrEntry.cmrNumber} ({cmrEntry.quantity})
                               </Typography>
                             ))}
                           </Box>
                         ) : item.lastCmrNumber ? (
-                          <Typography variant="caption" color="text.secondary">
-                            CMR: {item.lastCmrNumber}
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                            {item.lastCmrNumber}
                           </Typography>
                         ) : null}
                       </Box>
