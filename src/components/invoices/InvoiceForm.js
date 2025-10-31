@@ -541,6 +541,7 @@ const InvoiceForm = ({ invoiceId }) => {
     // Dodaj wybrane pozycje do faktury
     const newItems = selectedItems.map(item => ({
       id: item.id || '',
+      orderItemId: item.id, // Zachowaj referencję do pozycji w CO dla poprawnego śledzenia zafakturowanych kwot
       name: item.name,
       description: item.description || '',
       quantity: item.quantity,
