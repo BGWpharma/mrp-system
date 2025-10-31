@@ -32,6 +32,7 @@ import sidebarPL from './locales/pl/sidebar.json';
 import taskDetailsPL from './locales/pl/taskDetails.json';
 import analyticsPL from './locales/pl/analytics.json';
 import financialReportPL from './locales/pl/financialReport.json';
+import cashflowPL from './locales/pl/cashflow.json';
 
 // Angielskie tłumaczenia
 import commonEN from './locales/en/common.json';
@@ -61,6 +62,7 @@ import sidebarEN from './locales/en/sidebar.json';
 import taskDetailsEN from './locales/en/taskDetails.json';
 import analyticsEN from './locales/en/analytics.json';
 import financialReportEN from './locales/en/financialReport.json';
+import cashflowEN from './locales/en/cashflow.json';
 
 // Konfiguracja zasobów tłumaczeń z namespace'ami
 const resources = {
@@ -91,7 +93,8 @@ const resources = {
     sidebar: sidebarPL,
     taskDetails: taskDetailsPL,
     analytics: analyticsPL,
-    financialReport: financialReportPL
+    financialReport: financialReportPL,
+    cashflow: cashflowPL
   },
   en: {
     common: commonEN,
@@ -120,7 +123,8 @@ const resources = {
     sidebar: sidebarEN,
     taskDetails: taskDetailsEN,
     analytics: analyticsEN,
-    financialReport: financialReportEN
+    financialReport: financialReportEN,
+    cashflow: cashflowEN
   }
 };
 
@@ -154,7 +158,7 @@ if (!i18n.isInitialized) {
       'machines', 'purchaseOrders', 'cmr', 'forms',
       'calculator', 'priceLists', 'aiAssistant', 
       'environmentalConditions', 'expiryDates', 'stocktaking',
-      'interactions', 'sidebar', 'taskDetails', 'analytics', 'financialReport'
+      'interactions', 'sidebar', 'taskDetails', 'analytics', 'financialReport', 'cashflow'
     ],
     
     // Konfiguracja wykrywania języka

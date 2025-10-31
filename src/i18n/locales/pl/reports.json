@@ -7,7 +7,8 @@
     "tabs": {
       "ordersReport": "Raport zamówień",
       "productionCosts": "Koszty produkcji",
-      "financialReport": "Raport Finansowy"
+      "financialReport": "Raport Finansowy",
+      "cashflow": "Cashflow"
     },
     "common": {
       "export": "Eksport",

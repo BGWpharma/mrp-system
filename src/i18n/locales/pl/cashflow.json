@@ -1,0 +1,117 @@
+{
+  "cashflow": {
+    "title": "Cashflow",
+    "subtitle": "Analiza przepływów pieniężnych z zamówień klientów",
+    "loading": "Ładowanie danych cashflow...",
+    "noData": "Brak danych cashflow dla wybranych filtrów",
+    "error": "Wystąpił błąd podczas ładowania danych cashflow",
+    "refresh": "Odśwież dane",
+    "export": "Eksportuj",
+    "exportCSV": "Eksportuj do CSV",
+    "exportPDF": "Eksportuj do PDF",
+    
+    "filters": {
+      "title": "Filtry",
+      "dateFrom": "Data od",
+      "dateTo": "Data do",
+      "customer": "Klient",
+      "allCustomers": "Wszyscy klienci",
+      "paymentStatus": "Status płatności",
+      "allStatuses": "Wszystkie statusy",
+      "apply": "Zastosuj filtry",
+      "reset": "Resetuj filtry"
+    },
+    
+    "summary": {
+      "totalOrders": "Liczba zamówień",
+      "orderValue": "Wartość zamówień",
+      "proformaValue": "Wartość proform (zaliczki)",
+      "invoicedValue": "Wartość faktur",
+      "totalPaid": "Razem wpłacono",
+      "totalRemaining": "Oczekiwane wpłaty",
+      "paymentRate": "Wskaźnik spłat",
+      "avgOrderValue": "Średnia wartość zamówienia",
+      "avgPaymentTime": "Średni czas płatności",
+      "days": "dni"
+    },
+    
+    "chart": {
+      "title": "Oś czasu cashflow",
+      "cumulativePaid": "Skumulowane wpłaty",
+      "cumulativeExpected": "Skumulowane wpłaty + oczekiwane",
+      "dailyPaid": "Dzienna wpłata",
+      "dailyExpected": "Dzienna oczekiwana",
+      "date": "Data",
+      "amount": "Kwota"
+    },
+    
+    "table": {
+      "orderNumber": "Nr zamówienia",
+      "orderDate": "Data zamówienia",
+      "customer": "Klient",
+      "orderValue": "Wartość",
+      "proformas": "Proformy",
+      "invoices": "Faktury",
+      "paid": "Wpłacono",
+      "remaining": "Do zapłaty",
+      "status": "Status",
+      "nextPayment": "Następna płatność",
+      "actions": "Akcje",
+      "showDetails": "Pokaż szczegóły",
+      "hideDetails": "Ukryj szczegóły",
+      "viewOrder": "Zobacz zamówienie",
+      "count": "szt.",
+      "noOrders": "Brak zamówień spełniających kryteria",
+      "clickForDetails": "Kliknij aby zobaczyć szczegóły"
+    },
+    
+    "remaining": {
+      "title": "Szczegóły pozostałych płatności",
+      "noPayments": "Brak oczekiwanych płatności dla tego zamówienia",
+      "orderValue": "Wartość zamówienia",
+      "paid": "Wpłacono",
+      "total": "Razem do zapłaty",
+      "overdue": "W tym przeterminowane",
+      "overdueWarning": "Uwaga! To zamówienie ma {{count}} przeterminowaną płatność | Uwaga! To zamówienie ma {{count}} przeterminowane płatności | Uwaga! To zamówienie ma {{count}} przeterminowanych płatności",
+      "overduePayments": "Przeterminowane płatności",
+      "upcomingPayments": "Nadchodzące płatności",
+      "document": "Dokument",
+      "dueDate": "Termin płatności",
+      "amount": "Kwota",
+      "method": "Metoda",
+      "status": "Status",
+      "close": "Zamknij"
+    },
+    
+    "timeline": {
+      "title": "Oś czasu płatności",
+      "paymentHistory": "Historia płatności",
+      "expectedPayments": "Oczekiwane płatności",
+      "noPayments": "Brak płatności dla tego zamówienia",
+      "proforma": "Proforma",
+      "invoice": "Faktura",
+      "payment": "Płatność",
+      "confirmed": "Potwierdzona",
+      "expected": "Oczekiwana",
+      "overdue": "Przeterminowana",
+      "method": "Metoda",
+      "reference": "Referencja",
+      "description": "Opis"
+    },
+    
+    "status": {
+      "paid": "Opłacone",
+      "partially_paid": "Częściowo opłacone",
+      "pending": "Oczekujące",
+      "not_invoiced": "Nie zafakturowane",
+      "overdue": "Przeterminowane"
+    },
+    
+    "notifications": {
+      "exportSuccess": "Dane zostały wyeksportowane",
+      "exportError": "Błąd podczas eksportowania danych",
+      "loadError": "Błąd podczas ładowania danych cashflow"
+    }
+  }
+}
+

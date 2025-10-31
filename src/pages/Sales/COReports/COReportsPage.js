@@ -52,7 +52,8 @@ import {
   MonetizationOn as MoneyIcon,
   Link as LinkIcon,
   Clear as ClearIcon,
-  GridOn as ExcelIcon
+  GridOn as ExcelIcon,
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -95,6 +96,7 @@ import CustomerStatsComponent from '../../../components/sales/co-reports/Custome
 import StatusStatsComponent from '../../../components/sales/co-reports/StatusStatsComponent';
 import { useTranslation } from '../../../hooks/useTranslation';
 import FinancialReportPage from '../../Analytics/FinancialReportPage';
+import CashflowTab from './CashflowTab';
 
 // Komponent zakładki "Raport finansowy" - POZA głównym komponentem, żeby uniknąć unmount/remount
 const FinancialReportTab = () => (
@@ -2244,6 +2246,12 @@ const COReportsPage = () => {
             iconPosition="start"
             sx={{ fontSize: '1rem' }}
           />
+          <Tab 
+            label={t('coReports.tabs.cashflow')}
+            icon={<AccountBalanceIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: '1rem' }}
+          />
         </Tabs>
       </Box>
       
@@ -2256,6 +2264,9 @@ const COReportsPage = () => {
         </Box>
         <Box sx={{ display: selectedTab === 2 ? 'block' : 'none' }}>
           <FinancialReportTab />
+        </Box>
+        <Box sx={{ display: selectedTab === 3 ? 'block' : 'none' }}>
+          <CashflowTab />
         </Box>
       </Box>
     </Container>

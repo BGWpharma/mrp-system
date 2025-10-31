@@ -1,0 +1,117 @@
+{
+  "cashflow": {
+    "title": "Cashflow",
+    "subtitle": "Cash flow analysis from customer orders",
+    "loading": "Loading cashflow data...",
+    "noData": "No cashflow data for selected filters",
+    "error": "An error occurred while loading cashflow data",
+    "refresh": "Refresh data",
+    "export": "Export",
+    "exportCSV": "Export to CSV",
+    "exportPDF": "Export to PDF",
+    
+    "filters": {
+      "title": "Filters",
+      "dateFrom": "Date from",
+      "dateTo": "Date to",
+      "customer": "Customer",
+      "allCustomers": "All customers",
+      "paymentStatus": "Payment status",
+      "allStatuses": "All statuses",
+      "apply": "Apply filters",
+      "reset": "Reset filters"
+    },
+    
+    "summary": {
+      "totalOrders": "Total orders",
+      "orderValue": "Orders value",
+      "proformaValue": "Proforma value (advances)",
+      "invoicedValue": "Invoiced value",
+      "totalPaid": "Total paid",
+      "totalRemaining": "Expected payments",
+      "paymentRate": "Payment rate",
+      "avgOrderValue": "Average order value",
+      "avgPaymentTime": "Average payment time",
+      "days": "days"
+    },
+    
+    "chart": {
+      "title": "Cashflow timeline",
+      "cumulativePaid": "Cumulative paid",
+      "cumulativeExpected": "Cumulative paid + expected",
+      "dailyPaid": "Daily paid",
+      "dailyExpected": "Daily expected",
+      "date": "Date",
+      "amount": "Amount"
+    },
+    
+    "table": {
+      "orderNumber": "Order number",
+      "orderDate": "Order date",
+      "customer": "Customer",
+      "orderValue": "Value",
+      "proformas": "Proformas",
+      "invoices": "Invoices",
+      "paid": "Paid",
+      "remaining": "Remaining",
+      "status": "Status",
+      "nextPayment": "Next payment",
+      "actions": "Actions",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
+      "viewOrder": "View order",
+      "count": "pcs",
+      "noOrders": "No orders matching the criteria",
+      "clickForDetails": "Click to see details"
+    },
+    
+    "remaining": {
+      "title": "Remaining payments details",
+      "noPayments": "No expected payments for this order",
+      "orderValue": "Order value",
+      "paid": "Paid",
+      "total": "Total remaining",
+      "overdue": "Including overdue",
+      "overdueWarning": "Warning! This order has {{count}} overdue payment",
+      "overduePayments": "Overdue payments",
+      "upcomingPayments": "Upcoming payments",
+      "document": "Document",
+      "dueDate": "Due date",
+      "amount": "Amount",
+      "method": "Method",
+      "status": "Status",
+      "close": "Close"
+    },
+    
+    "timeline": {
+      "title": "Payment timeline",
+      "paymentHistory": "Payment history",
+      "expectedPayments": "Expected payments",
+      "noPayments": "No payments for this order",
+      "proforma": "Proforma",
+      "invoice": "Invoice",
+      "payment": "Payment",
+      "confirmed": "Confirmed",
+      "expected": "Expected",
+      "overdue": "Overdue",
+      "method": "Method",
+      "reference": "Reference",
+      "description": "Description"
+    },
+    
+    "status": {
+      "paid": "Paid",
+      "partially_paid": "Partially paid",
+      "pending": "Pending",
+      "not_invoiced": "Not invoiced",
+      "overdue": "Overdue"
+    },
+    
+    "notifications": {
+      "exportSuccess": "Data exported successfully",
+      "exportError": "Error while exporting data",
+      "loadError": "Error while loading cashflow data"
+    }
+  }
+}
+
