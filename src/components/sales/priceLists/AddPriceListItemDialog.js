@@ -10,7 +10,9 @@ import {
   Grid,
   Autocomplete,
   Box,
-  MenuItem
+  MenuItem,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 
 import { 
@@ -18,6 +20,7 @@ import {
   DEFAULT_PRICE_LIST_ITEM 
 } from '../../../services/priceListService';
 import { getAllRecipes } from '../../../services/recipeService';
+import { getInventoryItemsByCategory } from '../../../services/inventory';
 import { UNIT_OPTIONS } from '../../../config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
@@ -26,9 +29,12 @@ import { useTranslation } from '../../../hooks/useTranslation';
 const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => {
   const [formData, setFormData] = useState({ ...DEFAULT_PRICE_LIST_ITEM, isRecipe: true });
   const [recipes, setRecipes] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState(null);
+  const [itemType, setItemType] = useState('recipe'); // 'recipe' lub 'service'
   const [loading, setLoading] = useState(false);
-  const [fetchingRecipes, setFetchingRecipes] = useState(false);
+  const [fetchingData, setFetchingData] = useState(false);
   
   const { currentUser } = useAuth();
   const { showNotification } = useNotification();
@@ -36,29 +42,38 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
   
   useEffect(() => {
     if (open) {
-      fetchRecipes();
+      fetchData();
       resetForm();
     }
   }, [open]);
   
 
   
-  const fetchRecipes = async () => {
+  const fetchData = async () => {
     try {
-      setFetchingRecipes(true);
-      const data = await getAllRecipes();
-      setRecipes(data);
+      setFetchingData(true);
+      const [recipesData, servicesData] = await Promise.all([
+        getAllRecipes(),
+        getInventoryItemsByCategory('Inne') // Pobierz tylko usługi z kategorii "Inne"
+      ]);
+      
+      setRecipes(recipesData);
+      // servicesData może być obiektem z polem items lub bezpośrednio tablicą
+      const itemsArray = servicesData?.items || servicesData || [];
+      setInventoryItems(itemsArray);
     } catch (error) {
-      console.error('Błąd podczas pobierania receptur:', error);
-      showNotification(t('priceLists.dialogs.add.fetchRecipesError'), 'error');
+      console.error('Błąd podczas pobierania danych:', error);
+      showNotification(t('priceLists.dialogs.add.fetchRecipesError') || 'Błąd podczas pobierania danych', 'error');
     } finally {
-      setFetchingRecipes(false);
+      setFetchingData(false);
     }
   };
   
   const resetForm = () => {
     setFormData({ ...DEFAULT_PRICE_LIST_ITEM, isRecipe: true });
     setSelectedRecipe(null);
+    setSelectedInventoryItem(null);
+    setItemType('recipe');
   };
   
   const handleInputChange = (e) => {
@@ -78,7 +93,20 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
     }
   };
   
-
+  const handleItemTypeChange = (_, newType) => {
+    if (newType !== null) {
+      setItemType(newType);
+      // Resetuj wybrane pozycje
+      setSelectedRecipe(null);
+      setSelectedInventoryItem(null);
+      // Resetuj formData
+      setFormData({
+        ...DEFAULT_PRICE_LIST_ITEM,
+        isRecipe: newType === 'recipe',
+        itemType: newType
+      });
+    }
+  };
   
   const handleRecipeChange = (_, recipe) => {
     setSelectedRecipe(recipe);
@@ -88,7 +116,8 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
         productId: recipe.id,
         productName: recipe.name,
         unit: recipe.yield?.unit || 'szt.',
-        isRecipe: true
+        isRecipe: true,
+        itemType: 'recipe'
       });
     } else {
       setFormData({
@@ -96,7 +125,31 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
         productId: '',
         productName: '',
         unit: 'szt.',
-        isRecipe: true
+        isRecipe: true,
+        itemType: 'recipe'
+      });
+    }
+  };
+  
+  const handleInventoryItemChange = (_, item) => {
+    setSelectedInventoryItem(item);
+    if (item) {
+      setFormData({
+        ...formData,
+        productId: item.id,
+        productName: item.name,
+        unit: item.unit || 'szt.',
+        isRecipe: false,
+        itemType: 'service'
+      });
+    } else {
+      setFormData({
+        ...formData,
+        productId: '',
+        productName: '',
+        unit: 'szt.',
+        isRecipe: false,
+        itemType: 'service'
       });
     }
   };
@@ -105,28 +158,36 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
     e.preventDefault();
     
     if (!formData.productId) {
-      showNotification(t('priceLists.dialogs.add.selectRecipe'), 'error');
+      const errorMsg = itemType === 'recipe' 
+        ? t('priceLists.dialogs.add.selectRecipe') || 'Wybierz recepturę'
+        : 'Wybierz pozycję z magazynu';
+      showNotification(errorMsg, 'error');
       return;
     }
     
     if (typeof formData.price !== 'number' || formData.price < 0) {
-      showNotification(t('priceLists.dialogs.add.priceValidation'), 'error');
+      showNotification(t('priceLists.dialogs.add.priceValidation') || 'Wprowadź poprawną cenę', 'error');
       return;
     }
     
     if (typeof formData.minQuantity !== 'number' || formData.minQuantity <= 0) {
-      showNotification(t('priceLists.dialogs.add.minQuantityValidation'), 'error');
+      showNotification(t('priceLists.dialogs.add.minQuantityValidation') || 'Wprowadź poprawną minimalną ilość', 'error');
       return;
     }
     
     try {
       setLoading(true);
       const itemId = await addPriceListItem(priceListId, formData, currentUser.uid);
-      showNotification(t('priceLists.dialogs.add.recipeAdded'), 'success');
+      const successMsg = itemType === 'recipe'
+        ? t('priceLists.dialogs.add.recipeAdded') || 'Receptura dodana do listy cenowej'
+        : 'Pozycja dodana do listy cenowej';
+      showNotification(successMsg, 'success');
       onItemAdded({ id: itemId, ...formData });
+      onClose();
+      resetForm();
     } catch (error) {
       console.error('Błąd podczas dodawania elementu do listy cenowej:', error);
-      showNotification(error.message || t('priceLists.dialogs.add.addError'), 'error');
+      showNotification(error.message || t('priceLists.dialogs.add.addError') || 'Błąd podczas dodawania', 'error');
     } finally {
       setLoading(false);
     }
@@ -134,32 +195,78 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
   
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{t('priceLists.dialogs.add.title')}</DialogTitle>
+      <DialogTitle>{t('priceLists.dialogs.add.title') || 'Dodaj pozycję do listy cenowej'}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <Grid container spacing={3}>
+            {/* Wybór typu pozycji */}
             <Grid item xs={12}>
-              <Autocomplete
-                options={recipes}
-                getOptionLabel={(option) => option.name}
-                value={selectedRecipe}
-                onChange={handleRecipeChange}
-                loading={fetchingRecipes}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label={t('priceLists.dialogs.add.recipe')}
-                    required
-                    fullWidth
-                  />
-                )}
-              />
+              <Box sx={{ mb: 2 }}>
+                <ToggleButtonGroup
+                  value={itemType}
+                  exclusive
+                  onChange={handleItemTypeChange}
+                  aria-label="typ pozycji"
+                  fullWidth
+                >
+                  <ToggleButton value="recipe" aria-label="receptura">
+                    Receptura
+                  </ToggleButton>
+                  <ToggleButton value="service" aria-label="usługa">
+                    Usługa
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
             </Grid>
+            
+            {/* Autocomplete dla receptur */}
+            {itemType === 'recipe' && (
+              <Grid item xs={12}>
+                <Autocomplete
+                  options={recipes}
+                  getOptionLabel={(option) => option.name}
+                  value={selectedRecipe}
+                  onChange={handleRecipeChange}
+                  loading={fetchingData}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label={t('priceLists.dialogs.add.recipe') || 'Receptura'}
+                      required
+                      fullWidth
+                    />
+                  )}
+                />
+              </Grid>
+            )}
+            
+            {/* Autocomplete dla usług */}
+            {itemType === 'service' && (
+              <Grid item xs={12}>
+                <Autocomplete
+                  options={inventoryItems}
+                  getOptionLabel={(option) => option.name}
+                  value={selectedInventoryItem}
+                  onChange={handleInventoryItemChange}
+                  loading={fetchingData}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Usługa"
+                      required
+                      fullWidth
+                      helperText="Wybierz usługę z kategorii 'Inne'"
+                    />
+                  )}
+                />
+              </Grid>
+            )}
+            
             
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label={t('priceLists.dialogs.add.price')}
+                label={t('priceLists.dialogs.add.price') || 'Cena'}
                 name="price"
                 type="number"
                 value={formData.price}
@@ -167,7 +274,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
                 required
                 inputProps={{ 
                   min: 0, 
-                  step: 'any'  // Zamiast 0.01, używamy 'any' aby umożliwić dowolną precyzję
+                  step: 'any'
                 }}
               />
             </Grid>
@@ -175,7 +282,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label={t('priceLists.dialogs.add.minQuantity')}
+                label={t('priceLists.dialogs.add.minQuantity') || 'Minimalna ilość'}
                 name="minQuantity"
                 type="number"
                 value={formData.minQuantity}
@@ -191,7 +298,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label={t('priceLists.dialogs.add.unit')}
+                label={t('priceLists.dialogs.add.unit') || 'Jednostka'}
                 name="unit"
                 select
                 value={formData.unit}
@@ -208,7 +315,7 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label={t('priceLists.dialogs.add.notes')}
+                label={t('priceLists.dialogs.add.notes') || 'Notatki'}
                 name="notes"
                 value={formData.notes || ''}
                 onChange={handleInputChange}
@@ -220,15 +327,15 @@ const AddPriceListItemDialog = ({ open, onClose, priceListId, onItemAdded }) => 
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} color="secondary">
-            {t('priceLists.dialogs.add.cancel')}
+            {t('priceLists.dialogs.add.cancel') || 'Anuluj'}
           </Button>
           <Button 
             type="submit" 
             color="primary" 
             variant="contained"
-            disabled={loading}
+            disabled={loading || fetchingData}
           >
-            {t('priceLists.dialogs.add.add')}
+            {loading ? 'Dodawanie...' : t('priceLists.dialogs.add.add') || 'Dodaj'}
           </Button>
         </DialogActions>
       </form>

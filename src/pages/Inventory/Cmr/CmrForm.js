@@ -403,7 +403,8 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     weight: '',
     volume: '',
     notes: '',
-    linkedBatches: []
+    linkedBatches: [],
+    palletsCount: 0
   };
   
   const emptyFormData = {
@@ -852,12 +853,21 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
             boxesPerPallet: inventoryData.boxesPerPallet
           });
 
-          // Zastąp wagę w pozycji
+          // Oblicz ilość palet
+          const palletData = calculatePalletWeights({
+            quantity: quantity,
+            unitWeight: inventoryData.weight,
+            itemsPerBox: inventoryData.itemsPerBox,
+            boxesPerPallet: inventoryData.boxesPerPallet
+          });
+
+          // Zastąp wagę i ilość palet w pozycji
           setFormData(prev => {
             const updatedItems = [...prev.items];
             updatedItems[itemIndex] = {
               ...updatedItems[itemIndex],
-              weight: weightData.totalWeight.toString()
+              weight: weightData.totalWeight.toString(),
+              palletsCount: palletData.palletsCount
             };
             
             // Przelicz podsumowanie wagi po automatycznej zmianie
@@ -866,7 +876,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
             return { ...prev, items: updatedItems };
           });
 
-          showMessage(`Automatycznie obliczono wagę: ${weightData.totalWeight} kg`, 'success');
+          showMessage(`Automatycznie obliczono wagę: ${weightData.totalWeight} kg i ilość palet: ${palletData.palletsCount}`, 'success');
         }
       }
     } catch (error) {
@@ -1190,6 +1200,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       volume: orderItem.volume || '',
       notes: `Importowano z zamówienia ${orderItem.orderNumber}`,
       linkedBatches: [],
+      palletsCount: 0,
       orderItemId: orderItem.id,
       orderId: orderItem.orderId,
       orderNumber: orderItem.orderNumber,
@@ -2643,7 +2654,26 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       </Box>
                     </Grid>
                     
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={12} sm={6} md={2}>
+                      <TextField
+                        label="Ilość palet"
+                        value={item.palletsCount || 0}
+                        disabled
+                        fullWidth
+                        type="number"
+                        InputProps={{
+                          readOnly: true,
+                        }}
+                        helperText="Obliczone automatycznie"
+                        sx={{
+                          '& .MuiInputBase-input.Mui-disabled': {
+                            WebkitTextFillColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+                          }
+                        }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sm={6} md={2}>
                       <TextField
                         label="Objętość (m³)"
                         value={item.volume}

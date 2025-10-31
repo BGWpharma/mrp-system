@@ -811,6 +811,42 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
               await updateLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, userId);
               console.log(`Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrData.cmrNumber}`);
             }
+            
+            // Dodaj usługi transportowe na podstawie palet
+            console.log('🚚 Dodawanie usług transportowych na podstawie palet z CMR...');
+            try {
+              const transportResult = await addTransportServicesToOrders(
+                cmrId,
+                cmrData.items,
+                ordersToUpdate,
+                userId
+              );
+              console.log('✅ Rezultat dodawania usług transportowych:', transportResult);
+              
+              if (transportResult.success && transportResult.results) {
+                const successfulUpdates = transportResult.results.filter(r => r.success);
+                const failedUpdates = transportResult.results.filter(r => !r.success);
+                
+                if (successfulUpdates.length > 0) {
+                  console.log(`✅ Pomyślnie dodano usługi transportowe do ${successfulUpdates.length} zamówień`);
+                  successfulUpdates.forEach(result => {
+                    if (result.palletsCount > 0) {
+                      console.log(`   📦 ${result.orderNumber}: ${result.palletsCount} palet, wartość: ${result.totalServiceValue}`);
+                    }
+                  });
+                }
+                
+                if (failedUpdates.length > 0) {
+                  console.warn(`⚠️ Nie udało się dodać usług transportowych do ${failedUpdates.length} zamówień`);
+                  failedUpdates.forEach(result => {
+                    console.warn(`   ❌ ${result.orderNumber || result.orderId}: ${result.message}`);
+                  });
+                }
+              }
+            } catch (transportError) {
+              console.error('❌ Błąd podczas dodawania usług transportowych:', transportError);
+              // Nie przerywamy procesu - usługi transportowe to dodatek
+            }
           }
         }
       } catch (orderUpdateError) {
@@ -1882,6 +1918,213 @@ export const cleanNegativeCmrHistoryEntries = async (userId = 'system') => {
     
   } catch (error) {
     console.error('❌ Błąd podczas oczyszczania ujemnych wpisów:', error);
+    throw error;
+  }
+};
+
+/**
+ * Dodaje lub aktualizuje usługi transportowe w zamówieniach na podstawie palet z CMR
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {Array} cmrItems - Pozycje CMR
+ * @param {Array} linkedOrderIds - Lista ID powiązanych zamówień
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<object>} - Wynik operacji
+ */
+export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderIds, userId) => {
+  try {
+    console.log(`🚚 Rozpoczynam dodawanie usług transportowych dla CMR ${cmrId}`);
+    
+    if (!linkedOrderIds || linkedOrderIds.length === 0) {
+      console.log('Brak powiązanych zamówień - pomijam dodawanie usług transportowych');
+      return { success: true, message: 'Brak powiązanych zamówień', ordersUpdated: [] };
+    }
+    
+    const results = [];
+    
+    // Import potrzebnych serwisów
+    const { getOrderById, updateOrder } = await import('./orderService');
+    
+    for (const orderId of linkedOrderIds) {
+      try {
+        // Pobierz zamówienie
+        const order = await getOrderById(orderId);
+        
+        if (!order) {
+          console.warn(`⚠️ Nie znaleziono zamówienia ${orderId}`);
+          results.push({ orderId, success: false, message: 'Zamówienie nie istnieje' });
+          continue;
+        }
+        
+        // Zsumuj palety dla tego zamówienia
+        const palletsCount = cmrItems
+          .filter(item => item.orderId === orderId && item.orderItemId)
+          .reduce((sum, item) => sum + (parseFloat(item.palletsCount) || 0), 0);
+        
+        console.log(`📊 Zamówienie ${order.orderNumber}: ${palletsCount} palet`);
+        
+        if (palletsCount === 0) {
+          console.log(`⏭️ Brak palet dla zamówienia ${order.orderNumber} - pomijam`);
+          results.push({ orderId, orderNumber: order.orderNumber, success: true, message: 'Brak palet', palletsCount: 0 });
+          continue;
+        }
+        
+        // NOWA LOGIKA: Najpierw sprawdź listę cenową klienta
+        let transportService = null;
+        let servicePrice = 0;
+        let fromPriceList = false;
+        
+        if (order.customer && order.customer.id) {
+          try {
+            console.log(`🔍 Szukam usługi transportowej w liście cenowej klienta ${order.customer.name}...`);
+            
+            // Pobierz pozycje z listy cenowej klienta
+            const { getPriceListItems, getPriceListsByCustomerId } = await import('./priceListService');
+            const { getInventoryItemById } = await import('./inventory');
+            
+            const priceLists = await getPriceListsByCustomerId(order.customer.id);
+            
+            // Przeszukaj wszystkie listy cenowe klienta
+            for (const priceList of priceLists) {
+              if (!priceList.isActive) continue; // Pomiń nieaktywne listy
+              
+              const priceListItems = await getPriceListItems(priceList.id);
+              
+              // Znajdź usługę transportową w liście cenowej (zawierającą "TRANSPORT" w nazwie)
+              const transportItem = priceListItems.find(item => 
+                item.productName && 
+                item.productName.toUpperCase().includes('TRANSPORT') &&
+                !item.isRecipe // Upewnij się że to nie receptura
+              );
+              
+              if (transportItem && transportItem.productId) {
+                console.log(`✅ Znaleziono usługę transportową w liście cenowej: ${transportItem.productName}, cena: ${transportItem.price}`);
+                
+                // Pobierz pełne dane usługi z magazynu
+                try {
+                  transportService = await getInventoryItemById(transportItem.productId);
+                  servicePrice = transportItem.price || 0;
+                  fromPriceList = true;
+                  
+                  console.log(`💰 Użyto usługi "${transportService.name}" z listy cenowej, cena: ${servicePrice}`);
+                  break; // Znaleziono usługę, przerwij pętlę
+                } catch (error) {
+                  console.warn(`⚠️ Nie można pobrać szczegółów usługi ${transportItem.productId}:`, error);
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Błąd podczas szukania usługi w liście cenowej:', error);
+          }
+        }
+        
+        // FALLBACK: Jeśli nie znaleziono w liście cenowej, szukaj w magazynie
+        if (!transportService) {
+          console.log(`🔍 Nie znaleziono usługi transportowej w liście cenowej - szukam w magazynie...`);
+          
+          const { getInventoryItemsByCategory } = await import('./inventory');
+          const servicesData = await getInventoryItemsByCategory('Inne');
+          const services = servicesData?.items || servicesData || [];
+          
+          // Znajdź usługę transportową w magazynie
+          transportService = services.find(s => 
+            s.name && s.name.toUpperCase().includes('TRANSPORT')
+          );
+          
+          if (!transportService) {
+            console.warn(`⚠️ Nie znaleziono usługi transportowej ani w liście cenowej, ani w magazynie`);
+            results.push({ orderId, orderNumber: order.orderNumber, success: false, message: 'Brak usługi transportowej w systemie' });
+            continue;
+          }
+          
+          console.log(`✅ Znaleziono usługę transportową w magazynie: ${transportService.name}`);
+          
+          // Użyj standardowej ceny z usługi
+          servicePrice = transportService.standardPrice || 0;
+          fromPriceList = false;
+          console.log(`💰 Użyto standardowej ceny: ${servicePrice}`);
+        }
+        
+        // Sprawdź czy zamówienie już ma usługę transportową
+        const updatedItems = [...(order.items || [])];
+        const existingServiceIndex = updatedItems.findIndex(item => 
+          item.serviceId === transportService.id && item.itemType === 'service'
+        );
+        
+        if (existingServiceIndex !== -1) {
+          // Aktualizuj istniejącą usługę
+          const existingService = updatedItems[existingServiceIndex];
+          const newQuantity = (parseFloat(existingService.quantity) || 0) + palletsCount;
+          
+          updatedItems[existingServiceIndex] = {
+            ...existingService,
+            quantity: newQuantity,
+            totalPrice: newQuantity * servicePrice
+          };
+          
+          console.log(`🔄 Zaktualizowano usługę transportową: ${existingService.quantity} → ${newQuantity} palet`);
+        } else {
+          // Dodaj nową usługę
+          const newService = {
+            id: `service-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: transportService.name,
+            serviceId: transportService.id,
+            itemType: 'service',
+            quantity: palletsCount,
+            unit: transportService.unit || 'szt.',
+            price: servicePrice,
+            totalPrice: palletsCount * servicePrice,
+            fromPriceList: fromPriceList,
+            notes: `Automatycznie dodane z CMR - ${palletsCount} palet`,
+            addedFromCmr: true,
+            cmrId: cmrId
+          };
+          
+          updatedItems.push(newService);
+          console.log(`✨ Dodano nową usługę transportową: ${palletsCount} palet po ${servicePrice}`);
+        }
+        
+        // Przelicz wartość zamówienia
+        const newTotalValue = updatedItems.reduce((sum, item) => 
+          sum + (parseFloat(item.totalPrice) || 0), 0
+        );
+        
+        // Zaktualizuj zamówienie
+        await updateOrder(orderId, {
+          items: updatedItems,
+          totalValue: newTotalValue
+        }, userId);
+        
+        results.push({
+          orderId,
+          orderNumber: order.orderNumber,
+          success: true,
+          message: `Dodano/zaktualizowano usługę transportową: ${palletsCount} palet`,
+          palletsCount,
+          servicePrice,
+          totalServiceValue: palletsCount * servicePrice
+        });
+        
+        console.log(`✅ Zaktualizowano zamówienie ${order.orderNumber}`);
+        
+      } catch (orderError) {
+        console.error(`Błąd podczas przetwarzania zamówienia ${orderId}:`, orderError);
+        results.push({
+          orderId,
+          success: false,
+          message: orderError.message,
+          error: orderError
+        });
+      }
+    }
+    
+    return {
+      success: true,
+      message: `Przetworzono ${results.length} zamówień`,
+      results
+    };
+    
+  } catch (error) {
+    console.error('Błąd podczas dodawania usług transportowych:', error);
     throw error;
   }
 };
