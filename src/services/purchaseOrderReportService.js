@@ -5,7 +5,8 @@ import {
   orderBy, 
   getDocs,
   doc,
-  getDoc
+  getDoc,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase/config';
 import { exportToCSV, exportToExcel, formatDateForExport, formatCurrencyForExport } from '../utils/exportUtils';
@@ -40,7 +41,7 @@ const safeConvertDate = (dateField) => {
 };
 
 /**
- * Pobiera Purchase Orders z wybranego okresu i pozycji magazynowej
+ * Pobiera Purchase Orders z wybranego okresu oczekiwanych dostaw i pozycji magazynowej
  */
 export const getPurchaseOrdersForReport = async (filters) => {
   const { dateFrom, dateTo, itemId } = filters;
@@ -48,19 +49,25 @@ export const getPurchaseOrdersForReport = async (filters) => {
   try {
     let q = query(
       collection(db, PURCHASE_ORDERS_COLLECTION),
-      orderBy('orderDate', 'desc')
+      orderBy('expectedDeliveryDate', 'desc')
     );
 
-    // Filtrowanie po dacie
+    // Filtrowanie po oczekiwanej dacie dostawy - normalizujemy daty i konwertujemy na Firestore Timestamp
     if (dateFrom) {
-      q = query(q, where('orderDate', '>=', dateFrom));
+      const startDate = new Date(dateFrom);
+      startDate.setHours(0, 0, 0, 0); // Początek dnia
+      const startTimestamp = Timestamp.fromDate(startDate);
+      q = query(q, where('expectedDeliveryDate', '>=', startTimestamp));
+      console.log('📅 Filtr expectedDeliveryDate od:', startDate, '-> Timestamp:', startTimestamp);
     }
     
     if (dateTo) {
-      // Dodaj jeden dzień do dateTo, żeby uwzględnić cały dzień
+      // Ustaw na koniec dnia, żeby uwzględnić cały dzień dateTo
       const endDate = new Date(dateTo);
-      endDate.setDate(endDate.getDate() + 1);
-      q = query(q, where('orderDate', '<', endDate));
+      endDate.setHours(23, 59, 59, 999); // Koniec dnia
+      const endTimestamp = Timestamp.fromDate(endDate);
+      q = query(q, where('expectedDeliveryDate', '<=', endTimestamp));
+      console.log('📅 Filtr expectedDeliveryDate do:', endDate, '-> Timestamp:', endTimestamp);
     }
 
     // Nie filtrujemy na poziomie query po pozycji magazynowej,
@@ -107,23 +114,23 @@ export const getPurchaseOrdersForReport = async (filters) => {
 
     return purchaseOrders;
   } catch (error) {
-    console.error('Błąd podczas pobierania danych dla raportu:', error);
+    console.error('Błąd podczas pobierania danych dla importu:', error);
     throw error;
   }
 };
 
 /**
- * Generuje raport CSV z Purchase Orders
+ * Generuje import CSV z Purchase Orders
  */
 export const generatePurchaseOrderReport = async (filters) => {
   try {
-    console.log('Generowanie raportu PO z filtrami:', filters);
+    console.log('Generowanie importu PO z filtrami:', filters);
     
     // Pobierz dane
     const purchaseOrders = await getPurchaseOrdersForReport(filters);
     
     if (!purchaseOrders || purchaseOrders.length === 0) {
-      throw new Error('Brak danych do wygenerowania raportu w wybranym okresie');
+      throw new Error('Brak danych do wygenerowania importu w wybranym okresie');
     }
 
     console.log(`Znaleziono ${purchaseOrders.length} zamówień zakupowych`);
@@ -350,13 +357,13 @@ export const generatePurchaseOrderReport = async (filters) => {
     // Eksportuj jeden plik Excel z arkuszami
     const success = exportToExcel(
       worksheets,
-      `PO_Raport_${dateRange}${itemSuffix}`
+      `PO_Import_${dateRange}${itemSuffix}`
     );
 
     if (success) {
       return {
         success: true,
-        message: `Wygenerowano raport Excel z 4 arkuszami: Podsumowanie PO (${totalPOs} zamówień), Pozycje (${totalItems} pozycji), Podsumowanie pozycji (${itemsSummaryData.length} pozycji), Podsumowanie dostawców (${summaryData.length} dostawców)`,
+        message: `Wygenerowano import Excel z 4 arkuszami: Podsumowanie PO (${totalPOs} zamówień), Pozycje (${totalItems} pozycji), Podsumowanie pozycji (${itemsSummaryData.length} pozycji), Podsumowanie dostawców (${summaryData.length} dostawców)`,
         stats: {
           totalPOs,
           totalItems,
@@ -371,7 +378,7 @@ export const generatePurchaseOrderReport = async (filters) => {
     }
 
   } catch (error) {
-    console.error('Błąd podczas generowania raportu:', error);
+    console.error('Błąd podczas generowania importu:', error);
     throw error;
   }
 };

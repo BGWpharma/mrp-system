@@ -3558,6 +3558,8 @@ export const getPurchaseOrdersOptimized = async ({
         createdAt: order.createdAt?.toDate ? order.createdAt.toDate() : order.createdAt,
         updatedAt: order.updatedAt?.toDate ? order.updatedAt.toDate() : order.updatedAt,
         dueDate: order.dueDate?.toDate ? order.dueDate.toDate() : order.dueDate,
+        orderDate: order.orderDate?.toDate ? order.orderDate.toDate() : order.orderDate,
+        expectedDeliveryDate: order.expectedDeliveryDate?.toDate ? order.expectedDeliveryDate.toDate() : order.expectedDeliveryDate,
       }));
 
       // Zaktualizuj cache

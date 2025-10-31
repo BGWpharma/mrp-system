@@ -82,11 +82,11 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
         itemName: selectedItem?.name || 'Wszystkie pozycje'
       });
       
-      showSuccess('Raport został wygenerowany i pobrany');
+      showSuccess('Import został wygenerowany i pobrany');
       onClose();
     } catch (error) {
-      console.error('Błąd podczas generowania raportu:', error);
-      showError('Błąd podczas generowania raportu');
+      console.error('Błąd podczas generowania importu:', error);
+      showError('Błąd podczas generowania importu');
     } finally {
       setGenerating(false);
     }
@@ -102,7 +102,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Raport Purchase Orders
+          Import Purchase Orders
         </DialogTitle>
         
         <DialogContent>
@@ -111,18 +111,18 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
             {/* Zakres dat */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Zakres dat
+                Zakres oczekiwanych dat dostawy
               </Typography>
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <DatePicker
-                  label="Data od"
+                  label="Oczekiwana dostawa od"
                   value={dateFrom}
                   onChange={(newValue) => setDateFrom(newValue)}
                   renderInput={(params) => <TextField {...params} fullWidth />}
                   disabled={generating}
                 />
                 <DatePicker
-                  label="Data do"
+                  label="Oczekiwana dostawa do"
                   value={dateTo}
                   onChange={(newValue) => setDateTo(newValue)}
                   renderInput={(params) => <TextField {...params} fullWidth />}
@@ -188,16 +188,16 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
             {/* Podsumowanie */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                Podsumowanie raportu
+                Podsumowanie importu
               </Typography>
               <Typography variant="body2" color="textSecondary">
-                <strong>Okres:</strong> {dateFrom ? format(dateFrom, 'dd.MM.yyyy') : '---'} - {dateTo ? format(dateTo, 'dd.MM.yyyy') : '---'}
+                <strong>Oczekiwana dostawa:</strong> {dateFrom ? format(dateFrom, 'dd.MM.yyyy') : '---'} - {dateTo ? format(dateTo, 'dd.MM.yyyy') : '---'}
               </Typography>
               <Typography variant="body2" color="textSecondary">
                 <strong>Pozycja:</strong> {selectedItem?.name || 'Wszystkie pozycje'}
               </Typography>
               <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                Raport Excel będzie zawierał 4 arkusze: Podsumowanie PO, Pozycje szczegółowe, Podsumowanie pozycji i Statystyki dostawców.
+                Plik Excel będzie zawierał 4 arkusze: Podsumowanie PO, Pozycje szczegółowe, Podsumowanie pozycji i Statystyki dostawców.
               </Typography>
             </Box>
           </Box>
@@ -217,7 +217,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
             disabled={generating || loading}
             startIcon={generating ? <CircularProgress size={16} /> : null}
           >
-            {generating ? 'Generowanie...' : 'Generuj raport'}
+            {generating ? 'Generowanie...' : 'Generuj import'}
           </Button>
         </DialogActions>
       </Dialog>

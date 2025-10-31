@@ -46,6 +46,13 @@
         { "fieldPath": "createdBy", "order": "ASCENDING" },
         { "fieldPath": "transactionDate", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "purchaseOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "expectedDeliveryDate", "order": "DESCENDING" }
+      ]
     }
   ]
 } 

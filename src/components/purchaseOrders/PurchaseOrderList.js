@@ -313,14 +313,14 @@ const PurchaseOrderList = () => {
     }
   };
 
-  // Funkcja generowania raportu CSV
+  // Funkcja generowania importu CSV
   const handleGenerateReport = async (filters) => {
     try {
       const result = await generatePurchaseOrderReport(filters);
       showSuccess(result.message);
     } catch (error) {
-      console.error('Błąd podczas generowania raportu:', error);
-      showError(error.message || 'Błąd podczas generowania raportu');
+      console.error('Błąd podczas generowania importu:', error);
+      showError(error.message || 'Błąd podczas generowania importu');
     }
   };
   
@@ -739,7 +739,7 @@ const PurchaseOrderList = () => {
             onClick={() => setReportDialogOpen(true)}
             size="small"
           >
-            Raport
+            Import
           </Button>
         </Box>
         
