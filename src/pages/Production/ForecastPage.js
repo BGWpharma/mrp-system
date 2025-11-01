@@ -59,7 +59,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
 import { format, addDays, parseISO } from 'date-fns';
-import { getTasksByDateRangeOptimized, generateMaterialsAndLotsReport } from '../../services/productionService';
+import { getTasksByDateRangeOptimized } from '../../services/productionService';
 import { getAllInventoryItems } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -220,8 +220,24 @@ const ForecastPage = () => {
           // Wyciągnij ilość materiału na jednostkę produktu
           const materialQuantityPerUnit = correctMaterialQuantity(material, taskQuantity);
           
-          // Oblicz całkowitą potrzebną ilość
-          const requiredQuantity = materialQuantityPerUnit * taskQuantity;
+          // Oblicz całkowitą wymaganą ilość dla zadania
+          const totalRequiredForTask = materialQuantityPerUnit * taskQuantity;
+          
+          // Pobierz ilość już skonsumowaną dla tego materiału w tym zadaniu
+          let consumedQuantity = 0;
+          if (task.consumedMaterials && Array.isArray(task.consumedMaterials)) {
+            const consumedMaterial = task.consumedMaterials.find(
+              cm => (cm.materialId === materialId || cm.inventoryItemId === materialId)
+            );
+            if (consumedMaterial) {
+              consumedQuantity = parseFloat(consumedMaterial.quantity) || 0;
+              console.log(`📊 Materiał ${material.name} w zadaniu ${task.moNumber || task.name}: wymagane=${totalRequiredForTask}, skonsumowane=${consumedQuantity}`);
+            }
+          }
+          
+          // Oblicz pozostałą potrzebną ilość (wymagana - już skonsumowana)
+          // Używamy Math.max aby uniknąć wartości ujemnych
+          const requiredQuantity = Math.max(0, totalRequiredForTask - consumedQuantity);
           
           // Dodaj lub zaktualizuj materiał w wymaganiach
           if (!materialRequirements[materialId]) {
@@ -229,10 +245,11 @@ const ForecastPage = () => {
             
             materialRequirements[materialId] = {
               id: materialId,
-              name: material.name,
-              category: material.category || (inventoryItem?.category || 'Inne'),
-              unit: material.unit || (inventoryItem?.unit || 'szt.'),
+              name: inventoryItem?.name || material.name, // Priorytet dla nazwy z magazynu
+              category: inventoryItem?.category || material.category || 'Inne', // Priorytet dla kategorii z magazynu
+              unit: inventoryItem?.unit || material.unit || 'szt.', // Priorytet dla jednostki z magazynu
               requiredQuantity: 0,
+              consumedQuantity: 0, // Dodaj pole do śledzenia całkowitej skonsumowanej ilości
               availableQuantity: inventoryItem ? parseFloat(inventoryItem.quantity) || 0 : 0,
               tasks: [], // Lista zadań, w których materiał jest używany
               perUnitQuantity: materialQuantityPerUnit, // Zapamiętaj ilość na jednostkę
@@ -240,7 +257,11 @@ const ForecastPage = () => {
             };
           }
           
+          // Dodaj pozostałą wymaganą ilość (pomijając już skonsumowane)
           materialRequirements[materialId].requiredQuantity += requiredQuantity;
+          
+          // Śledź całkowitą ilość skonsumowaną we wszystkich zadaniach
+          materialRequirements[materialId].consumedQuantity += consumedQuantity;
           
           // Dodaj to zadanie do listy zadań, gdzie materiał jest używany
           if (!materialRequirements[materialId].tasks.includes(task.id)) {
@@ -393,7 +414,7 @@ const ForecastPage = () => {
     fetchData();
   };
   
-  // Generowanie raportu
+  // Generowanie raportu CSV
   const handleGenerateReport = async () => {
     try {
       if (forecastData.length === 0) {
@@ -401,13 +422,119 @@ const ForecastPage = () => {
         return;
       }
       
-      const reportUrl = await generateMaterialsAndLotsReport(forecastData, startDate, endDate);
-      if (reportUrl) {
-        showSuccess('Raport został wygenerowany pomyślnie');
-      }
+      // Przygotuj nagłówki CSV
+      const headers = [
+        'ID materiału',
+        'Nazwa materiału',
+        'Kategoria',
+        'Jednostka',
+        'Ilość wymagana (pozostała)',
+        'Ilość już skonsumowana',
+        'Ilość dostępna',
+        'Bilans',
+        'Oczekujące dostawy (suma)',
+        'Bilans po dostawach',
+        'Status',
+        'Cena jednostkowa',
+        'Koszt całkowity',
+        'Dostawca',
+        'Domyślny dostawca',
+        'Liczba zadań'
+      ];
+      
+      // Funkcja pomocnicza do określenia statusu
+      const getStatus = (item) => {
+        const balanceWithDeliveries = item.balanceWithFutureDeliveries || 0;
+        const balance = item.balance || 0;
+        
+        if (balanceWithDeliveries < 0) {
+          return '❌ NIEDOBÓR (po dostawach)';
+        }
+        if (balance < 0) {
+          return '⚠️ Wymaga zamówienia';
+        }
+        if (balance === 0) {
+          return '✓ Wystarczająco';
+        }
+        return '✓ Nadmiar';
+      };
+      
+      // Przygotuj wiersze danych
+      const rows = forecastData.map(item => {
+        return [
+          item.id || '',
+          item.name || '',
+          item.category || '',
+          item.unit || 'szt.',
+          item.requiredQuantity || 0,
+          item.consumedQuantity || 0,
+          item.availableQuantity || 0,
+          item.balance || 0,
+          item.futureDeliveriesTotal || 0,
+          item.balanceWithFutureDeliveries || 0,
+          getStatus(item),
+          item.price || 0,
+          item.cost || 0,
+          item.supplier || '',
+          item.isDefaultSupplier ? 'TAK' : 'NIE',
+          (item.tasks && item.tasks.length) || 0
+        ];
+      });
+      
+      // Dodaj informacje o zakresie dat na początku
+      const dateRangeInfo = [
+        ['RAPORT PROGNOZY ZAPOTRZEBOWANIA MATERIAŁÓW'],
+        ['Okres:', `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`],
+        ['Data wygenerowania:', formatDateDisplay(new Date())],
+        [''],
+        ['STATYSTYKI:'],
+        ['Łączna liczba materiałów:', forecastData.length],
+        ['Materiały z niedoborem:', forecastData.filter(item => item.balance < 0).length],
+        ['Materiały z niedoborem po dostawach:', forecastData.filter(item => item.balanceWithFutureDeliveries < 0).length],
+        ['Łączny koszt materiałów:', forecastData.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2) + ' PLN'],
+        [''],
+        ['SZCZEGÓŁOWE DANE:'],
+        []
+      ];
+      
+      // Połącz wszystkie wiersze
+      const allRows = [...dateRangeInfo, headers, ...rows];
+      
+      // Konwertuj do formatu CSV
+      const csvContent = allRows.map(row => {
+        return row.map(cell => {
+          // Obsłuż wartości zawierające przecinki, cudzysłowy lub nowe linie
+          const cellValue = String(cell);
+          if (cellValue.includes(',') || cellValue.includes('"') || cellValue.includes('\n')) {
+            return `"${cellValue.replace(/"/g, '""')}"`;
+          }
+          return cellValue;
+        }).join(',');
+      }).join('\n');
+      
+      // Dodaj BOM dla poprawnego wyświetlania polskich znaków w Excel
+      const BOM = '\uFEFF';
+      const csvWithBOM = BOM + csvContent;
+      
+      // Utwórz blob i pobierz plik
+      const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      // Nazwa pliku z datą
+      const fileName = `prognoza_zapotrzebowania_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showSuccess('Raport CSV został wygenerowany i pobrany pomyślnie');
     } catch (error) {
       console.error('Błąd podczas generowania raportu:', error);
-      showError('Nie udało się wygenerować raportu');
+      showError('Nie udało się wygenerować raportu: ' + error.message);
     }
   };
   
@@ -541,6 +668,9 @@ const ForecastPage = () => {
           break;
         case 'requiredQuantity':
           comparison = a.requiredQuantity - b.requiredQuantity;
+          break;
+        case 'consumedQuantity':
+          comparison = (a.consumedQuantity || 0) - (b.consumedQuantity || 0);
           break;
         case 'balance':
           comparison = a.balance - b.balance;
@@ -1164,6 +1294,23 @@ const ForecastPage = () => {
                         <TableCell 
                           align="right" 
                           width="10%" 
+                          onClick={() => handleSortChange('consumedQuantity')} 
+                          sx={{ 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
+                          Skonsumowano {renderSortIcon('consumedQuantity')}
+                        </TableCell>
+                        <TableCell 
+                          align="right" 
+                          width="10%" 
                           onClick={() => handleSortChange('balance')} 
                           sx={{ 
                             cursor: 'pointer', 
@@ -1296,6 +1443,7 @@ const ForecastPage = () => {
                             <TableCell><Skeleton variant="text" width={80} /></TableCell>
                             <TableCell><Skeleton variant="text" width={80} /></TableCell>
                             <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
                             <TableCell><Skeleton variant="text" width={60} /></TableCell>
                             <TableCell><Skeleton variant="text" width={60} /></TableCell>
                             <TableCell><Skeleton variant="circular" width={24} height={24} /></TableCell>
@@ -1357,8 +1505,25 @@ const ForecastPage = () => {
                                 </TableCell>
                                 <TableCell align="right">
                                   {item.requiredQuantity === 0 ? '-' : (
-                                    <Tooltip title={`Ilość wymagana: ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
+                                    <Tooltip title={`Ilość wymagana (pozostała): ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
                                       <span>{formatNumber(item.requiredQuantity)} {item.unit}</span>
+                                    </Tooltip>
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {(item.consumedQuantity || 0) === 0 ? (
+                                    <Typography color="text.secondary">0 {item.unit}</Typography>
+                                  ) : (
+                                    <Tooltip title={`Już skonsumowano w zadaniach: ${formatNumber(item.consumedQuantity)} ${item.unit}`}>
+                                      <Typography 
+                                        sx={{ 
+                                          fontWeight: 'medium', 
+                                          color: 'info.main',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        {formatNumber(item.consumedQuantity)} {item.unit}
+                                      </Typography>
                                     </Tooltip>
                                   )}
                                 </TableCell>
@@ -1614,17 +1779,27 @@ const ForecastPage = () => {
               </Typography>
               
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={4}>
+                <Grid item xs={6} md={3}>
                   <Typography variant="body2" color="text.secondary">Dostępna ilość:</Typography>
-                  <Typography variant="body1">{formatNumber(selectedMaterial.availableQuantity)} {selectedMaterial.unit}</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                    {formatNumber(selectedMaterial.availableQuantity)} {selectedMaterial.unit}
+                  </Typography>
                 </Grid>
-                <Grid item xs={4}>
-                  <Typography variant="body2" color="text.secondary">Potrzebna ilość:</Typography>
-                  <Typography variant="body1">{formatNumber(selectedMaterial.requiredQuantity)} {selectedMaterial.unit}</Typography>
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="text.secondary">Potrzebna ilość (pozostała):</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                    {formatNumber(selectedMaterial.requiredQuantity)} {selectedMaterial.unit}
+                  </Typography>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="text.secondary">Już skonsumowano:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium', color: 'info.main' }}>
+                    {formatNumber(selectedMaterial.consumedQuantity || 0)} {selectedMaterial.unit}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} md={3}>
                   <Typography variant="body2" color="text.secondary">Bilans:</Typography>
-                  <Typography variant="body1" color={selectedMaterial.balance < 0 ? 'error.main' : 'success.main'}>
+                  <Typography variant="body1" sx={{ fontWeight: 'medium' }} color={selectedMaterial.balance < 0 ? 'error.main' : 'success.main'}>
                     {formatNumber(selectedMaterial.balance)} {selectedMaterial.unit}
                   </Typography>
                 </Grid>
