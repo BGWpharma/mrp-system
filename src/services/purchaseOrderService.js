@@ -1013,6 +1013,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       globalDiscount, // Rabat globalny w procentach
       currency,
       status,
+      paymentStatus: PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID, // Domyślny status płatności
       targetWarehouseId,
       orderDate: safeConvertToDate(orderDate) || new Date(),
       expectedDeliveryDate: safeConvertToDate(expectedDeliveryDate),

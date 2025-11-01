@@ -333,7 +333,9 @@ const ForecastPage = () => {
                     poId: po.id,
                     status: po.status,
                     quantity: item.quantityRemaining,
-                    expectedDeliveryDate: item.expectedDeliveryDate || po.expectedDeliveryDate
+                    expectedDeliveryDate: item.expectedDeliveryDate || po.expectedDeliveryDate,
+                    supplierName: po.supplierName || 'Brak dostawcy',
+                    supplierId: po.supplierId
                   });
                 }
               }
@@ -1544,7 +1546,8 @@ const ForecastPage = () => {
                                         const formattedDate = delivery.expectedDeliveryDate && delivery.expectedDeliveryDate !== '' 
                                           ? formatDateDisplay(new Date(delivery.expectedDeliveryDate))
                                           : 'brak daty';
-                                        return `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${formattedDate || 'brak daty'})`;
+                                        const supplier = delivery.supplierName ? ` | ${delivery.supplierName}` : '';
+                                        return `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit} (${formattedDate || 'brak daty'})${supplier}`;
                                       }).join('\n') : 'Brak szczegółów'
                                     }>
                                       <Typography sx={{ cursor: 'pointer', fontWeight: 'medium', color: 'primary.main' }}>
@@ -1815,6 +1818,7 @@ const ForecastPage = () => {
                       <TableHead>
                         <TableRow>
                           <TableCell>Numer PO</TableCell>
+                          <TableCell>Dostawca</TableCell>
                           <TableCell>Status</TableCell>
                           <TableCell align="right">Ilość</TableCell>
                           <TableCell align="right">Data dostawy</TableCell>
@@ -1834,6 +1838,11 @@ const ForecastPage = () => {
                                 onClick={() => navigate(`/purchase-orders/${delivery.poId}`)}
                               >
                                 {delivery.poNumber}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" color="text.secondary">
+                                {delivery.supplierName || 'Brak dostawcy'}
                               </Typography>
                             </TableCell>
                             <TableCell>{delivery.status}</TableCell>

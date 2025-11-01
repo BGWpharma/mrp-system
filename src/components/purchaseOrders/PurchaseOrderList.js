@@ -739,7 +739,7 @@ const PurchaseOrderList = () => {
             onClick={() => setReportDialogOpen(true)}
             size="small"
           >
-            Import
+            Eksport
           </Button>
         </Box>
         

@@ -775,6 +775,19 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
     for (const docRef of querySnapshot.docs) {
       const poData = docRef.data();
       
+      // Pobierz dane dostawcy jeśli istnieje
+      let supplierName = null;
+      if (poData.supplierId) {
+        try {
+          const supplierDoc = await getDoc(doc(db, 'suppliers', poData.supplierId));
+          if (supplierDoc.exists()) {
+            supplierName = supplierDoc.data().name;
+          }
+        } catch (error) {
+          console.warn(`Nie można pobrać dostawcy ${poData.supplierId}:`, error);
+        }
+      }
+      
       if (poData.items && Array.isArray(poData.items)) {
         const matchingItems = poData.items.filter(item => 
           item.inventoryItemId === validatedItemId
@@ -792,7 +805,7 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
               quantityOrdered,
               quantityReceived,
               quantityRemaining,
-              expectedDeliveryDate: item.plannedDeliveryDate || poData.expectedDeliveryDate,
+              expectedDeliveryDate: convertTimestampToDate(item.plannedDeliveryDate || poData.expectedDeliveryDate),
               poNumber: poData.number || 'Brak numeru'
             };
           });
@@ -805,8 +818,10 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
               id: docRef.id,
               number: poData.number,
               status: poData.status,
-              expectedDeliveryDate: poData.expectedDeliveryDate,
-              orderDate: poData.orderDate,
+              expectedDeliveryDate: convertTimestampToDate(poData.expectedDeliveryDate),
+              orderDate: convertTimestampToDate(poData.orderDate),
+              supplierId: poData.supplierId,
+              supplierName: supplierName,
               items: relevantItems
             });
           }

@@ -142,7 +142,7 @@ export const generatePurchaseOrderReport = async (filters) => {
       orderDate: po.orderDate ? formatDateForExport(po.orderDate) : '',
       expectedDeliveryDate: po.expectedDeliveryDate ? formatDateForExport(po.expectedDeliveryDate) : '',
       status: po.status || '',
-      paymentStatus: po.paymentStatus || '',
+      paymentStatus: po.paymentStatus || 'unpaid',
       currency: po.currency || 'EUR',
       totalValue: po.totalValue || 0,
       totalGross: po.totalGross || 0,
