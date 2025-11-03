@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -1891,17 +1891,23 @@ const ForecastPage = () => {
                           return (
                             <TableRow key={taskId}>
                               <TableCell>
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
+                                <Link
+                                  to={`/production/tasks/${taskId}`}
+                                  style={{ 
                                     cursor: 'pointer', 
                                     textDecoration: 'underline',
-                                    color: 'primary.main'
+                                    color: 'inherit'
                                   }}
-                                  onClick={() => navigate(`/production/tasks/${taskId}`)}
                                 >
-                                  {task.name}
-                                </Typography>
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      color: 'primary.main'
+                                    }}
+                                  >
+                                    {task.name}
+                                  </Typography>
+                                </Link>
                               </TableCell>
                               <TableCell>
                                 <Typography variant="body2" color="text.secondary">

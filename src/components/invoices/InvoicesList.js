@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -26,7 +26,8 @@ import {
   MenuItem,
   Divider,
   TablePagination,
-  TableSortLabel
+  TableSortLabel,
+  Link
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -368,15 +369,6 @@ const InvoicesList = () => {
   const handleAddInvoice = () => {
     navigate('/invoices/new');
   };
-
-  const handleViewInvoice = (invoiceId) => {
-    navigate(`/invoices/${invoiceId}`);
-  };
-
-  const handleEditInvoice = (invoiceId) => {
-    navigate(`/invoices/${invoiceId}/edit`);
-  };
-
   const handleDeleteClick = (invoice) => {
     setInvoiceToDelete(invoice);
     setDeleteDialogOpen(true);
@@ -807,9 +799,18 @@ const InvoicesList = () => {
                         <TableRow key={invoice.id}>
                           <TableCell>
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
-                              <Typography variant="body2" sx={{ lineHeight: 1.2 }}>
+                              <Link
+                                component={RouterLink}
+                                to={`/invoices/${invoice.id}`}
+                                variant="body2"
+                                sx={{ 
+                                  lineHeight: 1.2,
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                              >
                                 {invoice.number}
-                              </Typography>
+                              </Link>
                               {invoice.isProforma && (
                                 <Chip 
                                   label={t('invoices.proforma')} 
@@ -972,15 +973,17 @@ const InvoicesList = () => {
                           <TableCell align="right">
                             <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                               <IconButton 
+                                component={RouterLink}
+                                to={`/invoices/${invoice.id}`}
                                 size="small" 
-                                onClick={() => handleViewInvoice(invoice.id)}
                                 title={t('invoices.tooltips.viewInvoice')}
                               >
                                 <ViewIcon fontSize="small" />
                               </IconButton>
                               <IconButton 
+                                component={RouterLink}
+                                to={`/invoices/${invoice.id}/edit`}
                                 size="small" 
-                                onClick={() => handleEditInvoice(invoice.id)}
                                 title={t('invoices.tooltips.editInvoice')}
                               >
                                 <EditIcon fontSize="small" />

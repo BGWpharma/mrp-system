@@ -771,22 +771,13 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
     const querySnapshot = await getDocs(q);
     const purchaseOrders = [];
     
-    // Przefiltruj zamówienia, które zawierają szukany produkt
+    // ⚡ OPTYMALIZACJA: Najpierw zbierz wszystkie unikalne ID dostawców
+    const uniqueSupplierIds = new Set();
+    const posWithMatchingItems = [];
+    
+    // Pierwsza iteracja: znajdź pasujące PO i zbierz ID dostawców
     for (const docRef of querySnapshot.docs) {
       const poData = docRef.data();
-      
-      // Pobierz dane dostawcy jeśli istnieje
-      let supplierName = null;
-      if (poData.supplierId) {
-        try {
-          const supplierDoc = await getDoc(doc(db, 'suppliers', poData.supplierId));
-          if (supplierDoc.exists()) {
-            supplierName = supplierDoc.data().name;
-          }
-        } catch (error) {
-          console.warn(`Nie można pobrać dostawcy ${poData.supplierId}:`, error);
-        }
-      }
       
       if (poData.items && Array.isArray(poData.items)) {
         const matchingItems = poData.items.filter(item => 
@@ -794,38 +785,68 @@ export const getAwaitingOrdersForInventoryItem = async (inventoryItemId) => {
         );
         
         if (matchingItems.length > 0) {
-          // Oblicz pozostałą ilość do dostarczenia dla każdego pasującego elementu
-          const orderedItems = matchingItems.map(item => {
-            const quantityOrdered = parseFloat(item.quantity) || 0;
-            const quantityReceived = parseFloat(item.received) || 0;
-            const quantityRemaining = Math.max(0, quantityOrdered - quantityReceived);
-            
-            return {
-              ...item,
-              quantityOrdered,
-              quantityReceived,
-              quantityRemaining,
-              expectedDeliveryDate: convertTimestampToDate(item.plannedDeliveryDate || poData.expectedDeliveryDate),
-              poNumber: poData.number || 'Brak numeru'
-            };
-          });
-          
-          // Dodaj tylko te pozycje, które mają niezerową pozostałą ilość do dostarczenia
-          const relevantItems = orderedItems.filter(item => item.quantityRemaining > 0);
-          
-          if (relevantItems.length > 0) {
-            purchaseOrders.push({
-              id: docRef.id,
-              number: poData.number,
-              status: poData.status,
-              expectedDeliveryDate: convertTimestampToDate(poData.expectedDeliveryDate),
-              orderDate: convertTimestampToDate(poData.orderDate),
-              supplierId: poData.supplierId,
-              supplierName: supplierName,
-              items: relevantItems
-            });
+          posWithMatchingItems.push({ docRef, poData, matchingItems });
+          if (poData.supplierId) {
+            uniqueSupplierIds.add(poData.supplierId);
           }
         }
+      }
+    }
+    
+    // ⚡ OPTYMALIZACJA: Pobierz wszystkich dostawców równolegle
+    const supplierNamesMap = {};
+    if (uniqueSupplierIds.size > 0) {
+      const supplierPromises = Array.from(uniqueSupplierIds).map(async (supplierId) => {
+        try {
+          const supplierDoc = await getDoc(doc(db, 'suppliers', supplierId));
+          return {
+            supplierId,
+            name: supplierDoc.exists() ? supplierDoc.data().name : null
+          };
+        } catch (error) {
+          console.warn(`Nie można pobrać dostawcy ${supplierId}:`, error);
+          return { supplierId, name: null };
+        }
+      });
+      
+      const supplierResults = await Promise.all(supplierPromises);
+      supplierResults.forEach(({ supplierId, name }) => {
+        supplierNamesMap[supplierId] = name;
+      });
+    }
+    
+    // Druga iteracja: utwórz obiekty purchaseOrders z nazwami dostawców
+    for (const { docRef, poData, matchingItems } of posWithMatchingItems) {
+      // Oblicz pozostałą ilość do dostarczenia dla każdego pasującego elementu
+      const orderedItems = matchingItems.map(item => {
+        const quantityOrdered = parseFloat(item.quantity) || 0;
+        const quantityReceived = parseFloat(item.received) || 0;
+        const quantityRemaining = Math.max(0, quantityOrdered - quantityReceived);
+        
+        return {
+          ...item,
+          quantityOrdered,
+          quantityReceived,
+          quantityRemaining,
+          expectedDeliveryDate: convertTimestampToDate(item.plannedDeliveryDate || poData.expectedDeliveryDate),
+          poNumber: poData.number || 'Brak numeru'
+        };
+      });
+      
+      // Dodaj tylko te pozycje, które mają niezerową pozostałą ilość do dostarczenia
+      const relevantItems = orderedItems.filter(item => item.quantityRemaining > 0);
+      
+      if (relevantItems.length > 0) {
+        purchaseOrders.push({
+          id: docRef.id,
+          number: poData.number,
+          status: poData.status,
+          expectedDeliveryDate: convertTimestampToDate(poData.expectedDeliveryDate),
+          orderDate: convertTimestampToDate(poData.orderDate),
+          supplierId: poData.supplierId,
+          supplierName: poData.supplierId ? supplierNamesMap[poData.supplierId] : null,
+          items: relevantItems
+        });
       }
     }
     

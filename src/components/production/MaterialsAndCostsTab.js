@@ -400,31 +400,40 @@ const MaterialsAndCostsTab = ({
                               
                               {/* Standardowe rezerwacje magazynowe */}
                               {standardReservations.map((batch, index) => (
-                                <Chip 
+                                <Box
                                   key={`standard-${index}`}
-                                  size="small" 
-                                  label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} 
-                                  color="info" 
-                                  variant="outlined" 
-                                  sx={{ 
-                                    mr: 0.5, 
-                                    mb: 0.5, 
-                                    cursor: 'pointer',
-                                    '& .MuiChip-deleteIcon': {
-                                      fontSize: '16px',
-                                      '&:hover': {
-                                        color: 'error.main'
-                                      }
-                                    }
-                                  }} 
-                                  onClick={() => navigate(`/inventory/${materialId}/batches`)}
-                                  onDelete={deletingReservation ? undefined : (e) => {
-                                    e.stopPropagation(); // Zapobiega wywołaniu onClick
-                                    handleDeleteSingleReservation(materialId, batch.batchId, batch.batchNumber);
+                                  component={Link}
+                                  to={`/inventory/${materialId}/batches`}
+                                  sx={{
+                                    display: 'inline-block',
+                                    textDecoration: 'none',
+                                    mr: 0.5,
+                                    mb: 0.5
                                   }}
-                                  deleteIcon={deletingReservation ? <CircularProgress size={16} /> : <CloseIcon />}
-                                  disabled={deletingReservation}
-                                />
+                                >
+                                  <Chip 
+                                    size="small" 
+                                    label={`${batch.batchNumber} (${batch.quantity} ${material.unit})`} 
+                                    color="info" 
+                                    variant="outlined" 
+                                    sx={{ 
+                                      cursor: 'pointer',
+                                      '& .MuiChip-deleteIcon': {
+                                        fontSize: '16px',
+                                        '&:hover': {
+                                          color: 'error.main'
+                                        }
+                                      }
+                                    }} 
+                                    onDelete={deletingReservation ? undefined : (e) => {
+                                      e.preventDefault(); // Zapobiega nawigacji przy usuwaniu
+                                      e.stopPropagation();
+                                      handleDeleteSingleReservation(materialId, batch.batchId, batch.batchNumber);
+                                    }}
+                                    deleteIcon={deletingReservation ? <CircularProgress size={16} /> : <CloseIcon />}
+                                    disabled={deletingReservation}
+                                  />
+                                </Box>
                               ))}
                               
                               {/* Rezerwacje z PO - tylko te które nie zostały w pełni przekształcone */}
@@ -585,12 +594,16 @@ const MaterialsAndCostsTab = ({
                         <TableCell>{material ? material.name : 'Nieznany materiał'}</TableCell>
                         <TableCell>
                           <Chip 
+                            component={Link}
+                            to={`/inventory/${materialId}/batches`}
                             size="small" 
                             label={`${batchNumber} (${consumed.quantity} ${material ? material.unit : ''})`} 
                             color="info" 
                             variant="outlined" 
-                            sx={{ cursor: 'pointer' }} 
-                            onClick={() => navigate(`/inventory/${materialId}/batches`)} 
+                            sx={{ 
+                              cursor: 'pointer',
+                              textDecoration: 'none'
+                            }} 
                           />
                         </TableCell>
                         <TableCell>{consumed.quantity} {material ? material.unit : ''}</TableCell>
