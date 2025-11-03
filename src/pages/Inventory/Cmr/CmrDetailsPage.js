@@ -2223,6 +2223,8 @@ const CmrDetailsPage = () => {
                           <TableRow>
                             <TableCell>Lp.</TableCell>
                             <TableCell>{t('details.items.description')}</TableCell>
+                            <TableCell>Zamówienie</TableCell>
+                            <TableCell>Pozycja CO</TableCell>
                             <TableCell>{t('details.items.quantity')}</TableCell>
                             <TableCell>{t('details.items.unit')}</TableCell>
                             <TableCell>{t('details.items.weight')}</TableCell>
@@ -2238,10 +2240,31 @@ const CmrDetailsPage = () => {
                               detail.itemId === (item.id || item.description)
                             );
                             
+                            // Znajdź powiązane zamówienie
+                            const linkedOrder = item.orderId ? linkedOrders.find(o => o.id === item.orderId) : null;
+                            
+                            // Znajdź pozycję zamówienia
+                            const orderItem = linkedOrder && item.orderItemId ? 
+                              linkedOrder.items?.find(oi => oi.id === item.orderItemId) : null;
+                            
                             return (
                             <TableRow key={item.id || index}>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell>{item.description}</TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                                  {item.orderNumber || linkedOrder?.orderNumber || 
+                                    <em style={{ color: '#999' }}>Brak przypisania</em>
+                                  }
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                                  {item.orderItemName || orderItem?.name || (item.originalOrderItem?.name) || 
+                                    <em style={{ color: '#999' }}>-</em>
+                                  }
+                                </Typography>
+                              </TableCell>
                               <TableCell>{item.quantity}</TableCell>
                               <TableCell>{item.unit}</TableCell>
                               <TableCell>{item.weight}</TableCell>
