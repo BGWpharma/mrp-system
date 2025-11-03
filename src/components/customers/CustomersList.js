@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -281,7 +281,8 @@ const CustomersList = () => {
                             <Tooltip title={t('customers.actions.details')}>
                               <IconButton 
                                 color="primary"
-                                onClick={() => navigate(`/customers/${customer.id}`)}
+                                component={RouterLink}
+                                to={`/customers/${customer.id}`}
                               >
                                 <InfoIcon />
                               </IconButton>

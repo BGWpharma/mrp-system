@@ -38,7 +38,7 @@ import {
   ListItemIcon,
   ListItemText
 } from '@mui/material';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
 import { useAuth } from '../../../hooks/useAuth';
@@ -1917,15 +1917,18 @@ const CmrDetailsPage = () => {
                     <Grid item xs={12} key={order.id}>
                       <Paper
                         variant="outlined"
+                        component={RouterLink}
+                        to={`/orders/${order.id}`}
                         sx={{ 
                           p: 2,
                           cursor: 'pointer',
+                          textDecoration: 'none',
+                          display: 'block',
                           '&:hover': {
                             backgroundColor: 'action.hover',
                             borderColor: 'primary.main'
                           }
                         }}
-                        onClick={() => navigate(`/orders/${order.id}`)}
                       >
                         <Grid container spacing={2} alignItems="center">
                           <Grid item xs={12} sm={6}>

@@ -36,7 +36,7 @@ import {
   FileCopy as FileCopyIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { getAllContacts, searchContacts, deleteContact } from '../../services/crmService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -287,9 +287,10 @@ const ContactsPage = () => {
                       <TableCell align="right">
                         <Tooltip title="Edytuj">
                           <IconButton 
+                            component={RouterLink}
+                            to={`/crm/contacts/${contact.id}/edit`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/crm/contacts/${contact.id}/edit`);
                             }}
                           >
                             <EditIcon />

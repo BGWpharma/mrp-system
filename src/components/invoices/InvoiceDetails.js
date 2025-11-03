@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -585,13 +585,17 @@ const InvoiceDetails = () => {
                     ) : (
                       relatedInvoices.map((relInvoice) => (
                         <Box 
-                          key={relInvoice.id} 
+                          key={relInvoice.id}
+                          component={RouterLink}
+                          to={`/invoices/${relInvoice.id}`}
                           sx={{ 
                             mb: 1, 
                             p: 1, 
                             bgcolor: relInvoice.isProforma ? 'warning.light' : 'info.light', 
                             borderRadius: 1,
                             cursor: 'pointer',
+                            textDecoration: 'none',
+                            display: 'block',
                             transition: 'all 0.2s ease-in-out',
                             '&:hover': {
                               bgcolor: relInvoice.isProforma ? 'warning.main' : 'info.main',
@@ -599,7 +603,6 @@ const InvoiceDetails = () => {
                               boxShadow: 2
                             }
                           }}
-                          onClick={() => navigate(`/invoices/${relInvoice.id}`)}
                         >
                           <Link
                             component="div"

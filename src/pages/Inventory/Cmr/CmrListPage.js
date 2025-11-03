@@ -35,7 +35,7 @@ import {
   Fade,
   Tooltip
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
 import enUS from 'date-fns/locale/en-US';
@@ -334,14 +334,6 @@ const CmrListPage = () => {
   
   const handleCreateCmr = () => {
     navigate('/inventory/cmr/new');
-  };
-  
-  const handleEditCmr = (id) => {
-    navigate(`/inventory/cmr/${id}/edit`);
-  };
-  
-  const handleViewCmr = (id) => {
-    navigate(`/inventory/cmr/${id}`);
   };
   
   const handleDeleteClick = (document) => {
@@ -927,7 +919,8 @@ const CmrListPage = () => {
                       <TableCell>
                         <IconButton
                           size="small"
-                          onClick={() => handleViewCmr(cmr.id)}
+                          component={RouterLink}
+                          to={`/inventory/cmr/${cmr.id}`}
                           title={translate('cmr.actions.view')}
                         >
                           <VisibilityIcon fontSize="small" />
@@ -936,7 +929,8 @@ const CmrListPage = () => {
                         {cmr.status !== CMR_STATUSES.COMPLETED && cmr.status !== CMR_STATUSES.CANCELED && (
                           <IconButton
                             size="small"
-                            onClick={() => handleEditCmr(cmr.id)}
+                            component={RouterLink}
+                            to={`/inventory/cmr/${cmr.id}/edit`}
                             title={translate('cmr.actions.edit')}
                           >
                             <EditIcon fontSize="small" />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
   Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
@@ -147,10 +147,20 @@ const SuppliersList = () => {
                     }
                   </TableCell>
                   <TableCell>
-                    <IconButton color="primary" onClick={() => navigate(`/suppliers/${supplier.id}/view`)} title={t('suppliers.actions.view')}>
+                    <IconButton 
+                      color="primary" 
+                      component={RouterLink}
+                      to={`/suppliers/${supplier.id}/view`} 
+                      title={t('suppliers.actions.view')}
+                    >
                       <ViewIcon />
                     </IconButton>
-                    <IconButton color="secondary" onClick={() => navigate(`/suppliers/${supplier.id}/edit`)} title={t('suppliers.actions.edit')}>
+                    <IconButton 
+                      color="secondary" 
+                      component={RouterLink}
+                      to={`/suppliers/${supplier.id}/edit`} 
+                      title={t('suppliers.actions.edit')}
+                    >
                       <EditIcon />
                     </IconButton>
                     <IconButton color="error" onClick={() => handleDeleteClick(supplier)} title={t('suppliers.actions.delete')}>

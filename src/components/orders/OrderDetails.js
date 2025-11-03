@@ -1686,9 +1686,9 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
             size="small" 
             color="default"
             clickable
-            onClick={() => navigate('/production/create-from-order', {
-              state: { orderId: orderId }
-            })}
+            component={RouterLink}
+            to="/production/create-from-order"
+            state={{ orderId: orderId }}
             sx={{ cursor: 'pointer' }}
           />
         </Tooltip>
@@ -1718,7 +1718,8 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
             size="small"
             color={statusColor}
             clickable
-            onClick={() => navigate(`/production/tasks/${task.id}`)}
+            component={RouterLink}
+            to={`/production/tasks/${task.id}`}
             sx={{ cursor: 'pointer' }}
           />
         </Tooltip>

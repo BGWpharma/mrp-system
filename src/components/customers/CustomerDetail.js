@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -476,7 +476,8 @@ const CustomerDetail = () => {
                             <Button
                               size="small"
                               variant="outlined"
-                              onClick={() => navigate(`/orders/${order.id}`)}
+                              component={RouterLink}
+                              to={`/orders/${order.id}`}
                             >
                               {t('customers.details.details')}
                             </Button>
