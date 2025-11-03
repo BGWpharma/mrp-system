@@ -328,12 +328,27 @@ const ForecastPage = () => {
               // Dodaj informacje o wszystkich przyszłych dostawach
               for (const po of purchaseOrders) {
                 for (const item of po.items) {
+                  // ⚠️ WAŻNE: Najpierw bierz datę z pozycji PO, jeśli nie ma to z całego PO
+                  const deliveryDate = item.expectedDeliveryDate || po.expectedDeliveryDate;
+                  
+                  // 🔥 FILTROWANIE: Uwzględniaj tylko dostawy w zakresie prognozy (do endDate)
+                  if (deliveryDate) {
+                    const deliveryDateObj = new Date(deliveryDate);
+                    const endDateObj = new Date(endDate);
+                    
+                    // Pomijaj dostawy planowane po zakończeniu okresu prognozy
+                    if (deliveryDateObj > endDateObj) {
+                      console.log(`⏭️ Pomijam PO ${po.number} dla materiału ${materialId} - dostawa planowana na ${formatDateDisplay(deliveryDateObj)} (poza zakresem do ${formatDateDisplay(endDateObj)})`);
+                      continue; // Pomijaj tę pozycję
+                    }
+                  }
+                  
                   materialRequirements[materialId].futureDeliveries.push({
                     poNumber: po.number || 'Brak numeru',
                     poId: po.id,
                     status: po.status,
                     quantity: item.quantityRemaining,
-                    expectedDeliveryDate: item.expectedDeliveryDate || po.expectedDeliveryDate,
+                    expectedDeliveryDate: deliveryDate,
                     supplierName: po.supplierName || 'Brak dostawcy',
                     supplierId: po.supplierId
                   });
@@ -435,6 +450,8 @@ const ForecastPage = () => {
         'Ilość dostępna',
         'Bilans',
         'Oczekujące dostawy (suma)',
+        'ETA (najbliższa dostawa)',
+        'Szczegóły dostaw',
         'Bilans po dostawach',
         'Status',
         'Cena jednostkowa',
@@ -463,6 +480,18 @@ const ForecastPage = () => {
       
       // Przygotuj wiersze danych
       const rows = forecastData.map(item => {
+        // Przygotuj ETA i szczegóły dostaw
+        const eta = item.futureDeliveries && item.futureDeliveries.length > 0 && item.futureDeliveries[0].expectedDeliveryDate
+          ? formatDateDisplay(new Date(item.futureDeliveries[0].expectedDeliveryDate))
+          : '—';
+        
+        const deliveryDetails = item.futureDeliveries && item.futureDeliveries.length > 0
+          ? item.futureDeliveries.map(d => {
+              const date = d.expectedDeliveryDate ? formatDateDisplay(new Date(d.expectedDeliveryDate)) : 'brak daty';
+              return `${d.poNumber}: ${d.quantity} ${item.unit} (${date})`;
+            }).join('; ')
+          : 'Brak';
+        
         return [
           item.id || '',
           item.name || '',
@@ -473,6 +502,8 @@ const ForecastPage = () => {
           item.availableQuantity || 0,
           item.balance || 0,
           item.futureDeliveriesTotal || 0,
+          eta,
+          deliveryDetails,
           item.balanceWithFutureDeliveries || 0,
           getStatus(item),
           item.price || 0,
@@ -1278,7 +1309,7 @@ const ForecastPage = () => {
                         </TableCell>
                         <TableCell 
                           align="right" 
-                          width="10%" 
+                          width="12%" 
                           onClick={() => handleSortChange('requiredQuantity')} 
                           sx={{ 
                             cursor: 'pointer', 
@@ -1291,24 +1322,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Potrzebna ilość {renderSortIcon('requiredQuantity')}
-                        </TableCell>
-                        <TableCell 
-                          align="right" 
-                          width="10%" 
-                          onClick={() => handleSortChange('consumedQuantity')} 
-                          sx={{ 
-                            cursor: 'pointer', 
-                            fontWeight: 'bold',
-                            position: 'sticky',
-                            top: 0,
-                            bgcolor: (theme) => theme.palette.mode === 'dark' 
-                              ? '#1e293b' 
-                              : '#f5f5f5',
-                            zIndex: 1
-                          }}
-                        >
-                          Skonsumowano {renderSortIcon('consumedQuantity')}
+                          Potrzebna / Skonsumowano {renderSortIcon('requiredQuantity')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1341,6 +1355,21 @@ const ForecastPage = () => {
                           }}
                         >
                           Oczekiwane dostawy
+                        </TableCell>
+                        <TableCell 
+                          align="center" 
+                          width="8%" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
+                          ETA
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1445,7 +1474,7 @@ const ForecastPage = () => {
                             <TableCell><Skeleton variant="text" width={80} /></TableCell>
                             <TableCell><Skeleton variant="text" width={80} /></TableCell>
                             <TableCell><Skeleton variant="text" width={80} /></TableCell>
-                            <TableCell><Skeleton variant="text" width={80} /></TableCell>
+                            <TableCell><Skeleton variant="text" width={90} /></TableCell>
                             <TableCell><Skeleton variant="text" width={60} /></TableCell>
                             <TableCell><Skeleton variant="text" width={60} /></TableCell>
                             <TableCell><Skeleton variant="circular" width={24} height={24} /></TableCell>
@@ -1506,28 +1535,34 @@ const ForecastPage = () => {
                                   {formatNumber(item.availableQuantity)} {item.unit}
                                 </TableCell>
                                 <TableCell align="right">
-                                  {item.requiredQuantity === 0 ? '-' : (
-                                    <Tooltip title={`Ilość wymagana (pozostała): ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
-                                      <span>{formatNumber(item.requiredQuantity)} {item.unit}</span>
-                                    </Tooltip>
-                                  )}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {(item.consumedQuantity || 0) === 0 ? (
-                                    <Typography color="text.secondary">0 {item.unit}</Typography>
-                                  ) : (
-                                    <Tooltip title={`Już skonsumowano w zadaniach: ${formatNumber(item.consumedQuantity)} ${item.unit}`}>
-                                      <Typography 
-                                        sx={{ 
-                                          fontWeight: 'medium', 
-                                          color: 'info.main',
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        {formatNumber(item.consumedQuantity)} {item.unit}
+                                  <Box>
+                                    {item.requiredQuantity === 0 ? (
+                                      <Typography variant="body2" color="text.secondary">
+                                        —
                                       </Typography>
-                                    </Tooltip>
-                                  )}
+                                    ) : (
+                                      <Tooltip title={`Ilość wymagana (pozostała): ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
+                                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                          {formatNumber(item.requiredQuantity)} {item.unit}
+                                        </Typography>
+                                      </Tooltip>
+                                    )}
+                                    {(item.consumedQuantity || 0) > 0 && (
+                                      <Tooltip title={`Już skonsumowano w zadaniach: ${formatNumber(item.consumedQuantity)} ${item.unit}`}>
+                                        <Typography 
+                                          variant="caption" 
+                                          sx={{ 
+                                            color: 'info.main',
+                                            cursor: 'pointer',
+                                            display: 'block',
+                                            fontSize: '0.7rem'
+                                          }}
+                                        >
+                                          / {formatNumber(item.consumedQuantity)} {item.unit}
+                                        </Typography>
+                                      </Tooltip>
+                                    )}
+                                  </Box>
                                 </TableCell>
                                 <TableCell align="right">
                                   <Typography 
@@ -1556,6 +1591,42 @@ const ForecastPage = () => {
                                     </Tooltip>
                                   ) : (
                                     <Typography color="text.secondary">0 {item.unit}</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell align="center">
+                                  {item.futureDeliveries && item.futureDeliveries.length > 0 ? (
+                                    <Tooltip title={
+                                      item.futureDeliveries.length > 1 
+                                        ? `Najbliższa dostawa: ${item.futureDeliveries[0].poNumber}\n\nWszystkie dostawy:\n${item.futureDeliveries.map(d => 
+                                            `${d.poNumber}: ${formatDateDisplay(new Date(d.expectedDeliveryDate)) || 'brak daty'}`
+                                          ).join('\n')}`
+                                        : `${item.futureDeliveries[0].poNumber}`
+                                    }>
+                                      <Box sx={{ cursor: 'pointer' }}>
+                                        <Typography 
+                                          variant="body2" 
+                                          sx={{ 
+                                            fontWeight: 'medium',
+                                            color: 'primary.main'
+                                          }}
+                                        >
+                                          {item.futureDeliveries[0].expectedDeliveryDate 
+                                            ? formatDateDisplay(new Date(item.futureDeliveries[0].expectedDeliveryDate))
+                                            : 'Brak daty'}
+                                        </Typography>
+                                        {item.futureDeliveries.length > 1 && (
+                                          <Typography 
+                                            variant="caption" 
+                                            color="text.secondary"
+                                            sx={{ fontSize: '0.7rem' }}
+                                          >
+                                            +{item.futureDeliveries.length - 1} więcej
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Tooltip>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">—</Typography>
                                   )}
                                 </TableCell>
                                 <TableCell align="right">
