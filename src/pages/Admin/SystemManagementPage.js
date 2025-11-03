@@ -22,12 +22,26 @@ import {
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
   CleaningServices as CleaningIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  LocalShipping as LocalShippingIcon
 } from '@mui/icons-material';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
+} from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { migrateAIMessageLimits, migrateNutritionalComponents, cleanupOrphanedProductionHistory } from '../../services/migrationService';
 import { cleanNegativeCmrHistoryEntries } from '../../services/cmrService';
+import { checkCmrItemsForMigration, migrateCmrItemsWithPalletInfo } from '../../services/cmrMigrationService';
 import APIKeySettings from '../../components/common/APIKeySettings';
 import CounterEditor from '../../components/admin/CounterEditor';
 import FormOptionsManager from '../../components/admin/FormOptionsManager';
@@ -58,6 +72,12 @@ const SystemManagementPage = () => {
   // Stany dla czyszczenia ujemnych wpisów CMR
   const [cmrCleanupLoading, setCmrCleanupLoading] = useState(false);
   const [cmrCleanupResults, setCmrCleanupResults] = useState(null);
+  
+  // Stany dla migracji pozycji CMR
+  const [cmrMigrationLoading, setCmrMigrationLoading] = useState(false);
+  const [cmrMigrationCheck, setCmrMigrationCheck] = useState(null);
+  const [cmrMigrationResults, setCmrMigrationResults] = useState(null);
+  const [showMigrationDialog, setShowMigrationDialog] = useState(false);
   
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
@@ -214,6 +234,65 @@ const SystemManagementPage = () => {
     }
   };
 
+  // Funkcja do sprawdzenia pozycji CMR do migracji
+  const handleCheckCmrMigration = async () => {
+    try {
+      setCmrMigrationLoading(true);
+      setCmrMigrationCheck(null);
+      setCmrMigrationResults(null);
+      
+      showNotification('Sprawdzam pozycje CMR...', 'info');
+      
+      const results = await checkCmrItemsForMigration();
+      
+      if (results.success) {
+        setCmrMigrationCheck(results);
+        if (results.needsMigration > 0) {
+          setShowMigrationDialog(true);
+          showNotification(`Znaleziono ${results.needsMigration} pozycji CMR do zaktualizowania`, 'info');
+        } else {
+          showSuccess('Wszystkie pozycje CMR mają już informacje o paletach!');
+        }
+      } else {
+        showError(`Błąd podczas sprawdzania: ${results.error || 'Nieznany błąd'}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas sprawdzania pozycji CMR:', error);
+      showError('Wystąpił błąd podczas sprawdzania pozycji CMR. Sprawdź konsolę.');
+    } finally {
+      setCmrMigrationLoading(false);
+    }
+  };
+
+  // Funkcja do wykonania migracji pozycji CMR
+  const handleExecuteCmrMigration = async () => {
+    try {
+      setShowMigrationDialog(false);
+      setCmrMigrationLoading(true);
+      
+      showNotification('Rozpoczynam migrację pozycji CMR...', 'info');
+      
+      const results = await migrateCmrItemsWithPalletInfo();
+      
+      if (results.success) {
+        setCmrMigrationResults(results);
+        showSuccess(`Migracja zakończona: zaktualizowano ${results.updated} pozycji CMR`);
+      } else {
+        showError(`Błąd podczas migracji: ${results.error || 'Nieznany błąd'}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas migracji pozycji CMR:', error);
+      showError('Wystąpił błąd podczas migracji pozycji CMR. Sprawdź konsolę.');
+    } finally {
+      setCmrMigrationLoading(false);
+    }
+  };
+
+  // Funkcja do zamknięcia dialogu
+  const handleCloseMigrationDialog = () => {
+    setShowMigrationDialog(false);
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -289,6 +368,67 @@ const SystemManagementPage = () => {
               disabled={cmrCleanupLoading}
             >
               {cmrCleanupLoading ? 'Oczyszczanie...' : 'Wyczyść ujemne wpisy CMR'}
+            </Button>
+          </CardActions>
+        </Card>
+
+        {/* NOWA SEKCJA: Migracja informacji o paletach w CMR */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              📦 Migracja informacji o paletach w CMR
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              To narzędzie zaktualizuje stare pozycje CMR, dodając informacje o ilościach palet i kartonów.
+              Obecnie przy zapisywaniu CMR system automatycznie oblicza i zapisuje te informacje, ale stare CMR ich nie zawierają.
+              Migracja wykorzysta dane z powiązanych partii magazynowych do obliczenia brakujących informacji.
+            </Typography>
+            
+            {cmrMigrationResults && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="success">
+                  Migracja pozycji CMR zakończona pomyślnie!
+                </Alert>
+                <List dense>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Wszystkie pozycje CMR: ${cmrMigrationResults.total}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Zaktualizowano: ${cmrMigrationResults.updated} pozycji`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Pominięto: ${cmrMigrationResults.skipped} pozycji`} 
+                    />
+                  </ListItem>
+                  {cmrMigrationResults.errors > 0 && (
+                    <ListItem>
+                      <ListItemText 
+                        primary={`Błędy: ${cmrMigrationResults.errors}`}
+                        secondary="Sprawdź konsolę dla szczegółów"
+                      />
+                    </ListItem>
+                  )}
+                </List>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Szczegóły operacji zostały wyświetlone w konsoli przeglądarki (F12).
+                </Alert>
+              </Box>
+            )}
+          </CardContent>
+          <CardActions>
+            <Button 
+              startIcon={cmrMigrationLoading ? <CircularProgress size={20} /> : <LocalShippingIcon />}
+              variant="contained" 
+              color="primary"
+              onClick={handleCheckCmrMigration}
+              disabled={cmrMigrationLoading}
+            >
+              {cmrMigrationLoading ? 'Sprawdzanie...' : 'Sprawdź CMR do migracji'}
             </Button>
           </CardActions>
         </Card>
@@ -539,6 +679,123 @@ const SystemManagementPage = () => {
           </CardContent>
         </Card>
       </Paper>
+
+      {/* Dialog potwierdzenia migracji CMR */}
+      <Dialog 
+        open={showMigrationDialog} 
+        onClose={handleCloseMigrationDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <LocalShippingIcon sx={{ mr: 1 }} />
+            Potwierdzenie migracji pozycji CMR
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {cmrMigrationCheck && (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Znaleziono pozycje CMR wymagające aktualizacji. Poniżej znajduje się podsumowanie.
+              </Alert>
+              
+              <Typography variant="h6" gutterBottom>
+                Podsumowanie:
+              </Typography>
+              <List>
+                <ListItem>
+                  <ListItemText 
+                    primary="Wszystkie pozycje CMR"
+                    secondary={cmrMigrationCheck.total}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText 
+                    primary="Wymaga aktualizacji (brak informacji o paletach)"
+                    secondary={cmrMigrationCheck.needsMigration}
+                    secondaryTypographyProps={{ 
+                      sx: { fontWeight: 'bold', color: 'primary.main' }
+                    }}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText 
+                    primary="Ma już informacje o paletach"
+                    secondary={cmrMigrationCheck.hasInfo}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText 
+                    primary="Brak powiązanych partii (nie można zaktualizować)"
+                    secondary={cmrMigrationCheck.noBatches}
+                  />
+                </ListItem>
+              </List>
+
+              {cmrMigrationCheck.itemsToMigrate && cmrMigrationCheck.itemsToMigrate.length > 0 && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    Przykładowe pozycje do aktualizacji:
+                  </Typography>
+                  <TableContainer sx={{ maxHeight: 300 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Opis</TableCell>
+                          <TableCell align="right">Ilość</TableCell>
+                          <TableCell align="right">Partie</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {cmrMigrationCheck.itemsToMigrate.slice(0, 10).map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.description}</TableCell>
+                            <TableCell align="right">{item.quantity}</TableCell>
+                            <TableCell align="right">{item.linkedBatchesCount}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {cmrMigrationCheck.itemsToMigrate.length > 10 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      ... i {cmrMigrationCheck.itemsToMigrate.length - 10} więcej pozycji
+                    </Typography>
+                  )}
+                </>
+              )}
+
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Uwaga:</strong> Ta operacja zaktualizuje {cmrMigrationCheck.needsMigration} pozycji CMR w bazie danych.
+                  Dla każdej pozycji zostaną obliczone i zapisane informacje o:
+                </Typography>
+                <ul style={{ marginTop: 8, marginBottom: 0 }}>
+                  <li>Liczbie palet (palletsCount)</li>
+                  <li>Szczegółach palet (pallets)</li>
+                  <li>Liczbie kartonów (boxesCount)</li>
+                  <li>Szczegółach kartonów (boxes)</li>
+                </ul>
+              </Alert>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseMigrationDialog} color="inherit">
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleExecuteCmrMigration} 
+            variant="contained" 
+            color="primary"
+            startIcon={<LocalShippingIcon />}
+          >
+            Zatwierdź i wykonaj migrację
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -155,6 +155,7 @@ const OrderForm = ({ orderId }) => {
   const [driveLink, setDriveLink] = useState('');
   const [refreshingPOs, setRefreshingPOs] = useState(false); // Dodana zmienna stanu dla odświeżania zamówień zakupu
   const [refreshingPTs, setRefreshingPTs] = useState(false); // Dodana zmienna stanu dla odświeżania danych kosztów produkcji
+  const [recalculatingTransport, setRecalculatingTransport] = useState(false); // Stan dla przeliczania usługi transportowej z CMR
 
   // Dodatkowe zmienne stanu dla obsługi dodatkowych kosztów
   const [additionalCostsItems, setAdditionalCostsItems] = useState([]);
@@ -870,6 +871,42 @@ const OrderForm = ({ orderId }) => {
       console.error('Error adding customer:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Funkcja do przeliczania usługi transportowej na podstawie CMR
+  const handleRecalculateTransportService = async () => {
+    if (!orderId) {
+      showError('Zapisz zamówienie przed przeliczeniem usługi transportowej');
+      return;
+    }
+    
+    try {
+      setRecalculatingTransport(true);
+      
+      const { recalculateTransportServiceForOrder } = await import('../../services/cmrService');
+      const result = await recalculateTransportServiceForOrder(orderId, currentUser.uid);
+      
+      if (result.success) {
+        if (result.action === 'none') {
+          showInfo('Brak powiązanych CMR z paletami dla tego zamówienia');
+        } else {
+          showSuccess(
+            `Usługa transportowa ${result.action === 'added' ? 'dodana' : 'zaktualizowana'}: ${result.palletsCount} palet z ${result.cmrCount} CMR`
+          );
+        }
+        
+        // Odśwież dane zamówienia
+        if (orderId) {
+          const updatedOrder = await getOrderById(orderId);
+          setOrderData(updatedOrder);
+        }
+      }
+    } catch (error) {
+      console.error('Błąd podczas przeliczania usługi transportowej:', error);
+      showError('Nie udało się przeliczyć usługi transportowej: ' + error.message);
+    } finally {
+      setRecalculatingTransport(false);
     }
   };
 
@@ -2722,15 +2759,31 @@ const OrderForm = ({ orderId }) => {
           <Typography variant="h5">
             {orderId ? t('orderForm.title.edit') : t('orderForm.title.new')}
           </Typography>
-          <Button 
-            type="submit" 
-            variant="contained" 
-            color="primary"
-            disabled={saving}
-            startIcon={<SaveIcon />}
-          >
-            {saving ? t('orderForm.buttons.saving') : t('orderForm.buttons.save')}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {/* Przycisk do przeliczania usługi transportowej z CMR */}
+            {orderId && (
+              <Tooltip title="Przelicz ilość palet w usłudze transportowej na podstawie wszystkich powiązanych CMR">
+                <Button 
+                  variant="outlined"
+                  color="secondary"
+                  disabled={recalculatingTransport || saving}
+                  startIcon={recalculatingTransport ? <CircularProgress size={20} /> : <LocalShippingIcon />}
+                  onClick={handleRecalculateTransportService}
+                >
+                  {recalculatingTransport ? 'Przeliczam...' : 'Przelicz transport z CMR'}
+                </Button>
+              </Tooltip>
+            )}
+            <Button 
+              type="submit" 
+              variant="contained" 
+              color="primary"
+              disabled={saving}
+              startIcon={<SaveIcon />}
+            >
+              {saving ? t('orderForm.buttons.saving') : t('orderForm.buttons.save')}
+            </Button>
+          </Box>
         </Box>
 
         {orderData.orderNumber && (
