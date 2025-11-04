@@ -52,6 +52,11 @@ import {
   let productionTasksCacheTimestamp = null;
   const TASKS_CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minut
 
+  // Cache dla wzbogacania zadań o numery PO
+  const enrichmentCache = new Map(); // taskId -> poNumbers[]
+  let enrichmentCacheTimestamp = null;
+  const ENRICHMENT_CACHE_TTL = 5 * 60 * 1000; // 5 minut
+
   // Debounce dla aktualizacji kosztów
   const costUpdateTimeouts = new Map();
   
@@ -799,6 +804,244 @@ import {
     }
   };
   
+  /**
+   * Wzbogaca zadania o numery powiązanych Purchase Orders (PO)
+   * Obsługuje zarówno bezpośrednie rezerwacje PO jak i pośrednie powiązania przez partie magazynowe
+   * Używa cache'a aby zredukować liczbę zapytań do bazy danych
+   * @param {Array} tasks - Lista zadań do wzbogacenia
+   * @param {boolean} forceRefresh - Wymusza odświeżenie cache (domyślnie false)
+   * @returns {Promise<Array>} - Zadania wzbogacone o pole poNumbers[]
+   */
+  export const enrichTasksWithAllPONumbers = async (tasks, forceRefresh = false) => {
+    if (!tasks || tasks.length === 0) {
+      return tasks;
+    }
+    
+    try {
+      const now = Date.now();
+      
+      // Sprawdź czy cache jest aktualny i nie wymuszono odświeżenia
+      if (!forceRefresh && enrichmentCacheTimestamp && (now - enrichmentCacheTimestamp) < ENRICHMENT_CACHE_TTL) {
+        console.log(`🎯 Używam cache dla wzbogacania PO (cache age: ${((now - enrichmentCacheTimestamp) / 1000).toFixed(0)}s)`);
+        
+        // Zwróć zadania z danymi z cache
+        const cachedTasks = tasks.map(task => ({
+          ...task,
+          poNumbers: enrichmentCache.get(task.id) || [],
+          _enrichedWithPO: enrichmentCache.has(task.id)
+        }));
+        
+        const tasksWithPO = cachedTasks.filter(t => t.poNumbers.length > 0).length;
+        console.log(`✅ Wzbogacono ${cachedTasks.length} zadań z cache. Zadań z powiązaniami PO: ${tasksWithPO}`);
+        
+        return cachedTasks;
+      }
+      
+      console.log(`🔍 Wzbogacanie ${tasks.length} zadań o numery PO...`);
+      const enrichStartTime = performance.now();
+      
+      const poNumbersMap = new Map(); // task.id -> Set(poNumbers)
+      
+      // ========================================
+      // CZĘŚĆ 1: Bezpośrednie rezerwacje PO
+      // ========================================
+      const allReservationIds = new Set();
+      tasks.forEach(task => {
+        if (task.poReservationIds && task.poReservationIds.length > 0) {
+          task.poReservationIds.forEach(id => allReservationIds.add(id));
+          poNumbersMap.set(task.id, new Set());
+        }
+      });
+      
+      // Pobierz rezerwacje PO w paczkach po 10 (limit Firestore 'in')
+      if (allReservationIds.size > 0) {
+        const reservationIdsArray = Array.from(allReservationIds);
+        const chunks = [];
+        for (let i = 0; i < reservationIdsArray.length; i += 10) {
+          chunks.push(reservationIdsArray.slice(i, i + 10));
+        }
+        
+        for (const chunk of chunks) {
+          const reservationsQuery = query(
+            collection(db, 'poReservations'),
+            where('__name__', 'in', chunk)
+          );
+          
+          const snapshot = await getDocs(reservationsQuery);
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const taskId = data.taskId;
+            
+            if (data.poNumber && poNumbersMap.has(taskId)) {
+              poNumbersMap.get(taskId).add(data.poNumber);
+            }
+          });
+        }
+      }
+      
+      // ========================================
+      // CZĘŚĆ 2: Pośrednie powiązania przez partie
+      // ========================================
+      const allBatchIds = new Set();
+      const taskBatchMap = new Map(); // batchId -> Set(taskIds)
+      
+      tasks.forEach(task => {
+        if (!poNumbersMap.has(task.id)) {
+          poNumbersMap.set(task.id, new Set());
+        }
+        
+        // Zbierz batch IDs z materialBatches
+        if (task.materialBatches) {
+          Object.values(task.materialBatches).forEach(batches => {
+            if (Array.isArray(batches)) {
+              batches.forEach(batch => {
+                if (batch.batchId) {
+                  allBatchIds.add(batch.batchId);
+                  
+                  if (!taskBatchMap.has(batch.batchId)) {
+                    taskBatchMap.set(batch.batchId, new Set());
+                  }
+                  taskBatchMap.get(batch.batchId).add(task.id);
+                }
+              });
+            }
+          });
+        }
+        
+        // Zbierz batch IDs z consumedMaterials
+        if (task.consumedMaterials && Array.isArray(task.consumedMaterials)) {
+          task.consumedMaterials.forEach(consumed => {
+            if (consumed.batchId) {
+              allBatchIds.add(consumed.batchId);
+              
+              if (!taskBatchMap.has(consumed.batchId)) {
+                taskBatchMap.set(consumed.batchId, new Set());
+              }
+              taskBatchMap.get(consumed.batchId).add(task.id);
+            }
+          });
+        }
+      });
+      
+      // Pobierz partie w paczkach po 10
+      const batchPOIds = new Set(); // Zbiór ID zamówień zakupowych znalezionych w partiach
+      if (allBatchIds.size > 0) {
+        const batchIdsArray = Array.from(allBatchIds);
+        const batchChunks = [];
+        for (let i = 0; i < batchIdsArray.length; i += 10) {
+          batchChunks.push(batchIdsArray.slice(i, i + 10));
+        }
+        
+        for (const chunk of batchChunks) {
+          const batchesQuery = query(
+            collection(db, 'inventoryBatches'),
+            where('__name__', 'in', chunk)
+          );
+          
+          const snapshot = await getDocs(batchesQuery);
+          snapshot.forEach(doc => {
+            const batchData = doc.data();
+            const batchId = doc.id;
+            
+            // Wyciągnij ID PO (obsługa zarówno nowego jak i starego formatu)
+            let poId = batchData.purchaseOrderDetails?.id || 
+                       batchData.sourceDetails?.orderId;
+            
+            if (poId && taskBatchMap.has(batchId)) {
+              batchPOIds.add(poId);
+              // Zapamiętaj które taski używają tej partii z tym PO
+              const taskIds = taskBatchMap.get(batchId);
+              taskIds.forEach(taskId => {
+                if (!poNumbersMap.has(taskId)) {
+                  poNumbersMap.set(taskId, new Set());
+                }
+                // Dodaj znacznik do późniejszego pobrania numeru
+                poNumbersMap.get(taskId).add(`_poId:${poId}`);
+              });
+            }
+          });
+        }
+      }
+      
+      // ========================================
+      // CZĘŚĆ 3: Pobierz numery PO dla znalezionych ID
+      // ========================================
+      const poIdToNumberMap = new Map();
+      if (batchPOIds.size > 0) {
+        const poIdsArray = Array.from(batchPOIds);
+        const poChunks = [];
+        for (let i = 0; i < poIdsArray.length; i += 10) {
+          poChunks.push(poIdsArray.slice(i, i + 10));
+        }
+        
+        for (const chunk of poChunks) {
+          const poQuery = query(
+            collection(db, 'purchaseOrders'),
+            where('__name__', 'in', chunk)
+          );
+          
+          const snapshot = await getDocs(poQuery);
+          snapshot.forEach(doc => {
+            const poData = doc.data();
+            if (poData.number) {
+              poIdToNumberMap.set(doc.id, poData.number);
+            }
+          });
+        }
+      }
+      
+      // Zastąp _poId: numerami PO
+      poNumbersMap.forEach((poNumbers, taskId) => {
+        const cleanedNumbers = new Set();
+        poNumbers.forEach(entry => {
+          if (entry.startsWith('_poId:')) {
+            const poId = entry.replace('_poId:', '');
+            const poNumber = poIdToNumberMap.get(poId);
+            if (poNumber) {
+              cleanedNumbers.add(poNumber);
+            }
+          } else {
+            cleanedNumbers.add(entry);
+          }
+        });
+        poNumbersMap.set(taskId, cleanedNumbers);
+      });
+      
+      // ========================================
+      // CZĘŚĆ 4: Wzbogać taski i zaktualizuj cache
+      // ========================================
+      const enrichedTasks = tasks.map(task => {
+        const poNumbers = Array.from(poNumbersMap.get(task.id) || []);
+        
+        // Zaktualizuj cache dla tego zadania
+        if (poNumbers.length > 0) {
+          enrichmentCache.set(task.id, poNumbers);
+        }
+        
+        return {
+          ...task,
+          poNumbers: poNumbers,
+          _enrichedWithPO: poNumbers.length > 0
+        };
+      });
+      
+      // Zaktualizuj timestamp cache
+      enrichmentCacheTimestamp = Date.now();
+      
+      const enrichEndTime = performance.now();
+      const tasksWithPO = enrichedTasks.filter(t => t.poNumbers.length > 0).length;
+      console.log(`✅ Wzbogacono ${enrichedTasks.length} zadań w ${(enrichEndTime - enrichStartTime).toFixed(0)}ms. Zadań z powiązaniami PO: ${tasksWithPO}`);
+      console.log(`💾 Cache zapisany, ważny przez ${ENRICHMENT_CACHE_TTL / 1000}s`);
+      
+      return enrichedTasks;
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas wzbogacania zadań o numery PO:', error);
+      // Zwróć zadania bez wzbogacenia
+      return tasks;
+    }
+  };
+  
   // Pobieranie zadań produkcyjnych na dany okres - ZOPTYMALIZOWANA WERSJA
   export const getTasksByDateRangeOptimizedNew = async (startDate, endDate, maxResults = 1000) => {
   try {
@@ -852,6 +1095,10 @@ import {
       }
       
       console.log(`Pobrano ${tasks.length} zadań z optymalizacją serwerową`);
+      
+      // UWAGA: Wzbogacanie o numery PO jest teraz wykonywane ON-DEMAND w komponencie
+      // aby przyspieszyć pierwsze ładowanie timeline. Zobacz ProductionTimeline.js
+      
       return tasks;
       
     } catch (error) {

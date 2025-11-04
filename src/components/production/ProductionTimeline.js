@@ -91,7 +91,8 @@ import {
   updateTask,
   getTasksByDateRangeOptimizedNew,
   getAllTasks,
-  getProductionHistory
+  getProductionHistory,
+  enrichTasksWithAllPONumbers
 } from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { getAllCustomers } from '../../services/customerService';
@@ -516,9 +517,14 @@ const ProductionTimeline = React.memo(({
     productName: '',
     moNumber: '',
     orderNumber: '',
+    poNumber: '',
     startDate: null,
     endDate: null
   });
+  
+  // Stan dla wzbogacania zadań o numery PO (lazy loading)
+  const [tasksEnrichedWithPO, setTasksEnrichedWithPO] = useState(false);
+  const [enrichmentInProgress, setEnrichmentInProgress] = useState(false);
   
   // Stan dla trybu edycji
   const [editMode, setEditMode] = useState(false);
@@ -633,6 +639,10 @@ const ProductionTimeline = React.memo(({
       }
       
       setTasks(data);
+      
+      // Zresetuj stan wzbogacenia przy nowym ładowaniu zadań
+      // (nowe zadania mogą być inne lub z innego zakresu dat)
+      setTasksEnrichedWithPO(false);
     } catch (error) {
       console.error('Błąd podczas pobierania zadań:', error);
       showError(t('production.timeline.messages.loadingError') + ': ' + error.message);
@@ -907,6 +917,22 @@ const ProductionTimeline = React.memo(({
       if (advancedFilters.orderNumber) {
         const orderNumber = (task.orderNumber || '').toLowerCase();
         if (!orderNumber.includes(advancedFilters.orderNumber.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Filtr według numeru PO
+      if (advancedFilters.poNumber) {
+        const poNumber = advancedFilters.poNumber.toLowerCase();
+        // Sprawdź czy zadanie ma powiązane numery PO
+        if (!task.poNumbers || task.poNumbers.length === 0) {
+          return false;
+        }
+        // Sprawdź czy którykolwiek z numerów PO pasuje do filtra
+        const hasMatchingPO = task.poNumbers.some(pn => 
+          pn.toLowerCase().includes(poNumber)
+        );
+        if (!hasMatchingPO) {
           return false;
         }
       }
@@ -1566,9 +1592,38 @@ const ProductionTimeline = React.memo(({
     }
   };
 
+  // Funkcja do wzbogacania zadań o numery PO (lazy loading)
+  const enrichTasksWithPO = useCallback(async () => {
+    if (enrichmentInProgress || tasksEnrichedWithPO || !tasks || tasks.length === 0) {
+      return; // Już wzbogacone lub w trakcie
+    }
+    
+    console.log('🔄 Rozpoczynam wzbogacanie zadań o numery PO...');
+    setEnrichmentInProgress(true);
+    
+    try {
+      const enrichedTasks = await enrichTasksWithAllPONumbers(tasks);
+      setTasks(enrichedTasks);
+      setTasksEnrichedWithPO(true);
+      console.log('✅ Zadania wzbogacone o numery PO');
+    } catch (error) {
+      console.error('❌ Błąd podczas wzbogacania zadań:', error);
+      showError('Błąd podczas ładowania powiązań z zamówieniami zakupowymi');
+    } finally {
+      setEnrichmentInProgress(false);
+    }
+  }, [tasks, tasksEnrichedWithPO, enrichmentInProgress, showError]);
+
   // Obsługa menu filtrów
   const handleFilterMenuClick = (event) => {
     setFilterMenuAnchor(event.currentTarget);
+    
+    // Pre-fetch: Wzbogać zadania gdy użytkownik otwiera dialog filtrów
+    // (ale tylko jeśli jeszcze nie wzbogacone i nie trwa wzbogacanie)
+    if (!tasksEnrichedWithPO && !enrichmentInProgress && tasks.length > 0) {
+      console.log('🎯 Pre-fetching: Wzbogacam zadania o numery PO w tle...');
+      enrichTasksWithPO();
+    }
   };
 
   const handleFilterMenuClose = () => {
@@ -1598,6 +1653,12 @@ const ProductionTimeline = React.memo(({
         console.warn(`Błąd przy sprawdzaniu daty dla pola ${field}:`, error);
         return; // Nie zapisuj nieprawidłowej daty
       }
+    }
+    
+    // Jeśli użytkownik wprowadza filtr PO, wzbogać zadania o numery PO
+    if (field === 'poNumber' && value && !tasksEnrichedWithPO && !enrichmentInProgress) {
+      console.log('🎯 Wykryto wprowadzanie filtru PO, wzbogacam zadania...');
+      enrichTasksWithPO();
     }
     
     setAdvancedFilters(prev => ({
@@ -2586,14 +2647,14 @@ const ProductionTimeline = React.memo(({
           </Tooltip>
           
           <Button
-            className={`timeline-filter-button ${(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) ? 'active' : ''}`}
+            className={`timeline-filter-button ${(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.poNumber) ? 'active' : ''}`}
             variant="outlined"
             size="small"
             onClick={handleFilterMenuClick}
             startIcon={<FilterListIcon />}
-            color={(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) ? 'primary' : 'inherit'}
+            color={(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.poNumber) ? 'primary' : 'inherit'}
           >
-            {t('production.timeline.filters')} {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber) && '✓'}
+            {t('production.timeline.filters')} {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.poNumber) && '✓'}
           </Button>
           
           <TimelineExport 
@@ -3202,6 +3263,18 @@ const ProductionTimeline = React.memo(({
                 />
               </Grid>
               
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label={t('production.timeline.advancedFilters.poNumber')}
+                  placeholder="Wpisz numer PO..."
+                  value={advancedFilters.poNumber}
+                  onChange={(e) => handleAdvancedFilterChange('poNumber', e.target.value)}
+                  variant="outlined"
+                  size="small"
+                />
+              </Grid>
+              
               {/* Sekcja filtrowania po datach */}
               <Grid item xs={12}>
                 <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 'bold', color: 'primary.main' }}>
@@ -3245,7 +3318,7 @@ const ProductionTimeline = React.memo(({
             </Grid>
             
             {/* Podgląd aktywnych filtrów */}
-            {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.startDate || advancedFilters.endDate) && (
+            {(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.poNumber || advancedFilters.startDate || advancedFilters.endDate) && (
               <Box sx={{ 
                 mt: 2, 
                 p: 2, 
@@ -3273,6 +3346,13 @@ const ProductionTimeline = React.memo(({
                 {advancedFilters.orderNumber && (
                   <Chip 
                     label={`Zamówienie: ${advancedFilters.orderNumber}`} 
+                    size="small" 
+                    sx={{ mr: 1, mb: 1 }} 
+                  />
+                )}
+                {advancedFilters.poNumber && (
+                  <Chip 
+                    label={`PO: ${advancedFilters.poNumber}`} 
                     size="small" 
                     sx={{ mr: 1, mb: 1 }} 
                   />

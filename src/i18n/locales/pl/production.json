@@ -466,6 +466,7 @@
       "productName": "Nazwa produktu",
       "moNumber": "Numer MO",
       "orderNumber": "Numer zamówienia",
+      "poNumber": "Numer PO",
       "startDate": "Data rozpoczęcia od",
       "endDate": "Data rozpoczęcia do",
       "apply": "Zastosuj filtry",
