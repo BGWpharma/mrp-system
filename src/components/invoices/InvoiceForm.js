@@ -61,7 +61,8 @@ import {
   removeMultipleProformasUsage,
   syncProformaNumberInLinkedInvoices,
   calculateTotalUnitCost,
-  getProformaAmountsByOrderItems
+  getProformaAmountsByOrderItems,
+  getInvoicedAmountsByOrderItems
 } from '../../services/invoiceService';
 import { getAllCustomers, getCustomerById } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
@@ -110,6 +111,7 @@ const InvoiceForm = ({ invoiceId }) => {
   const [availableOrderItems, setAvailableOrderItems] = useState([]);
   const [selectedOrderItems, setSelectedOrderItems] = useState([]);
   const [proformasByOrderItems, setProformasByOrderItems] = useState({}); // Informacje o proformach dla pozycji
+  const [showAllProformas, setShowAllProformas] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -456,8 +458,23 @@ const InvoiceForm = ({ invoiceId }) => {
       }
     }
 
+    // Pobierz informacje o zafakturowanych ilościach dla tego zamówienia (dla zwykłych faktur)
+    let invoicedAmounts = {};
+    if (selectedOrderId && !invoice.isProforma) {
+      try {
+        // Pobierz wszystkie faktury dla tego zamówienia
+        const relatedInvoices = await getInvoicesByOrderId(selectedOrderId);
+        // Filtruj faktury inne niż obecna (jeśli edytujemy)
+        const filteredInvoices = relatedInvoices.filter(inv => inv.id !== invoiceId);
+        invoicedAmounts = await getInvoicedAmountsByOrderItems(selectedOrderId, filteredInvoices, selectedOrder);
+        console.log('Pobrano informacje o zafakturowanych ilościach:', invoicedAmounts);
+      } catch (error) {
+        console.error('Błąd podczas pobierania informacji o zafakturowanych ilościach:', error);
+      }
+    }
+
     // Przygotuj pozycje z obliconymi cenami (jak w oryginalnej logice)
-    const mappedItems = (orderItems || []).map(item => {
+    const mappedItems = (orderItems || []).map((item, index) => {
       let finalPrice;
       
       // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
@@ -475,18 +492,46 @@ const InvoiceForm = ({ invoiceId }) => {
         }
       }
 
-      // Sprawdź czy ta pozycja ma już wystawioną proformę
+      // Sprawdź czy ta pozycja ma już wystawioną proformę (dla proform)
       const itemId = item.id;
       const hasProforma = existingProformas[itemId] && existingProformas[itemId].totalProforma > 0;
       const proformaInfo = existingProformas[itemId] || null;
 
+      // Oblicz pozostałą ilość i wartość do zafakturowania (dla zwykłych faktur)
+      let remainingQuantity = parseFloat(item.quantity || 0);
+      let remainingValue = parseFloat(item.quantity || 0) * finalPrice;
+      let invoicedInfo = null;
+      
+      if (!invoice.isProforma && invoicedAmounts[itemId]) {
+        const invoicedData = invoicedAmounts[itemId];
+        const totalInvoicedQuantity = invoicedData.invoices.reduce((sum, inv) => sum + inv.quantity, 0);
+        const totalInvoicedValue = invoicedData.totalInvoiced;
+        
+        // Oblicz pozostałą ilość i wartość
+        remainingQuantity = Math.max(0, parseFloat(item.quantity || 0) - totalInvoicedQuantity);
+        remainingValue = Math.max(0, (parseFloat(item.quantity || 0) * finalPrice) - totalInvoicedValue);
+        
+        invoicedInfo = {
+          totalInvoicedQuantity: totalInvoicedQuantity,
+          totalInvoicedValue: totalInvoicedValue,
+          invoices: invoicedData.invoices
+        };
+        
+        console.log(`Pozycja ${item.name}: Zamówienie: ${item.quantity}, Zafakturowano: ${totalInvoicedQuantity}, Pozostało: ${remainingQuantity}`);
+      }
+
       return {
         ...item,
         price: finalPrice,
-        netValue: parseFloat(item.quantity || 0) * finalPrice,
+        quantity: remainingQuantity, // Ustaw pozostałą ilość
+        netValue: remainingValue, // Ustaw pozostałą wartość
+        originalQuantity: parseFloat(item.quantity || 0), // Zachowaj oryginalną ilość z zamówienia
+        originalValue: parseFloat(item.quantity || 0) * finalPrice, // Zachowaj oryginalną wartość
         selected: false, // Domyślnie nie zaznaczone
-        hasProforma: hasProforma, // Czy ma już proformę
-        proformaInfo: proformaInfo // Informacje o istniejącej proformie
+        hasProforma: hasProforma, // Czy ma już proformę (dla proform)
+        proformaInfo: proformaInfo, // Informacje o istniejącej proformie (dla proform)
+        invoicedInfo: invoicedInfo, // Informacje o zafakturowanych ilościach (dla zwykłych faktur)
+        isFullyInvoiced: !invoice.isProforma && remainingQuantity <= 0 // Czy pozycja jest w pełni zafakturowana
       };
     });
     
@@ -518,6 +563,20 @@ const InvoiceForm = ({ invoiceId }) => {
       return;
     }
     
+    // WALIDACJA: Sprawdź czy wybrane pozycje są w pełni zafakturowane
+    if (!invoice.isProforma) {
+      const fullyInvoicedItems = selectedItems.filter(item => item.isFullyInvoiced);
+      
+      if (fullyInvoicedItems.length > 0) {
+        const itemNames = fullyInvoicedItems.map(item => item.name).join(', ');
+        showError(
+          `Nie można dodać pozycji: ${itemNames}. ` +
+          `${fullyInvoicedItems.length === 1 ? 'Ta pozycja jest' : 'Te pozycje są'} już w pełni zafakturowane.`
+        );
+        return;
+      }
+    }
+    
     // WALIDACJA: Sprawdź czy wybrane pozycje mają już wystawione proformy
     if (invoice.isProforma) {
       const itemsWithProforma = selectedItems.filter(item => item.hasProforma);
@@ -538,16 +597,16 @@ const InvoiceForm = ({ invoiceId }) => {
       }
     }
     
-    // Dodaj wybrane pozycje do faktury
+    // Dodaj wybrane pozycje do faktury z pozostałymi ilościami
     const newItems = selectedItems.map(item => ({
       id: item.id || '',
       orderItemId: item.id, // Zachowaj referencję do pozycji w CO dla poprawnego śledzenia zafakturowanych kwot
       name: item.name,
       description: item.description || '',
-      quantity: item.quantity,
+      quantity: item.quantity, // To jest już pozostała ilość!
       unit: item.unit || 'szt.',
       price: item.price,
-      netValue: item.netValue,
+      netValue: item.netValue, // To jest już pozostała wartość!
       vat: item.vat || 0,
       cnCode: item.cnCode || ''
     }));
@@ -1134,6 +1193,47 @@ const InvoiceForm = ({ invoiceId }) => {
       }));
     }
   }, [selectedOrder]);
+
+  /**
+   * Filtruje proformy aby pokazać tylko te, które zawierają pozycje z obecnej faktury
+   * @param {Array} proformas - Lista wszystkich dostępnych proform
+   * @param {Array} invoiceItems - Pozycje obecnej faktury
+   * @returns {Array} Przefiltrowana lista proform
+   */
+  const getFilteredProformas = (proformas, invoiceItems) => {
+    if (showAllProformas || !invoiceItems || invoiceItems.length === 0) {
+      return proformas;
+    }
+    
+    return proformas.filter(proforma => {
+      // Sprawdź czy proforma ma jakiekolwiek pozycje
+      if (!proforma.items || proforma.items.length === 0) {
+        return false;
+      }
+      
+      // Sprawdź czy którakolwiek pozycja proformy pasuje do pozycji faktury
+      return proforma.items.some(proformaItem => {
+        return invoiceItems.some(invoiceItem => {
+          // Dopasuj po orderItemId jeśli dostępne
+          if (proformaItem.orderItemId && invoiceItem.orderItemId) {
+            return proformaItem.orderItemId === invoiceItem.orderItemId;
+          }
+          
+          // Dopasuj po ID pozycji
+          if (proformaItem.id && invoiceItem.id && proformaItem.id === invoiceItem.id) {
+            return true;
+          }
+          
+          // Dopasuj po nazwie produktu (fallback)
+          if (proformaItem.name && invoiceItem.name) {
+            return proformaItem.name.trim().toLowerCase() === invoiceItem.name.trim().toLowerCase();
+          }
+          
+          return false;
+        });
+      });
+    });
+  };
 
   if (loading) {
     return (
@@ -1754,78 +1854,152 @@ const InvoiceForm = ({ invoiceId }) => {
             {/* Dodanie pola dla rozliczonych zaliczek/przedpłat - ukryte dla proform */}
             {!invoice.isProforma && availableProformas.length > 0 && (
               <Box sx={{ mt: 2, mb: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  {t('invoices.form.fields.proformaSettlement')}
-                </Typography>
+                {/* Nagłówek z checkboxem */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="subtitle1">
+                    {t('invoices.form.fields.proformaSettlement')}
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={showAllProformas}
+                        onChange={(e) => setShowAllProformas(e.target.checked)}
+                        size="small"
+                      />
+                    }
+                    label="Pokaż wszystkie proformy"
+                  />
+                </Box>
                 
-                {availableProformas.map((proforma) => {
-                  const allocation = (invoice.proformAllocation || []).find(a => a.proformaId === proforma.id);
-                  const allocatedAmount = allocation ? allocation.amount : 0;
+                {/* Informacja o filtrowaniu */}
+                {!showAllProformas && invoice.items && invoice.items.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontStyle: 'italic' }}>
+                    Wyświetlane są tylko proformy zawierające pozycje z tej faktury. 
+                    Zaznacz checkbox powyżej, aby wyświetlić wszystkie dostępne proformy.
+                  </Typography>
+                )}
+                
+                {/* Przefiltrowana lista proform */}
+                {(() => {
+                  const filteredProformas = getFilteredProformas(availableProformas, invoice.items);
                   
-                  return (
-                    <Card key={proforma.id} variant="outlined" sx={{ mb: 2, p: 2 }}>
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={5}>
-                          <Typography variant="body1" fontWeight="bold">
-                            📋 {t('invoices.form.toggleButtons.proforma')} {proforma.number}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {t('invoices.form.fields.issueDate')}: {proforma.issueDate ? 
-                              (proforma.issueDate.seconds ? 
-                                new Date(proforma.issueDate.seconds * 1000).toLocaleDateString() 
-                                : new Date(proforma.issueDate).toLocaleDateString()
-                              ) : t('common.noDate')}
-                          </Typography>
-                        </Grid>
-                        
-                        <Grid item xs={12} md={3}>
-                          <Typography variant="body2">
-                            <strong>{t('invoices.form.fields.available')}:</strong> {proforma.amountInfo.available.toFixed(2)} {proforma.currency || 'EUR'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {t('invoices.form.fields.from')} {proforma.amountInfo.total.toFixed(2)} {proforma.currency || 'EUR'} 
-                            ({t('invoices.form.fields.used')}: {proforma.amountInfo.used.toFixed(2)})
-                          </Typography>
-                        </Grid>
-                        
-                        <Grid item xs={12} md={4}>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            label={t('invoices.form.fields.amountToSettle')}
-                            type="number"
-                            value={allocatedAmount}
-                            onChange={(e) => {
-                              const amount = parseFloat(e.target.value) || 0;
-                              handleProformaAllocationChange(proforma.id, amount, proforma.number);
-                            }}
-                            InputProps={{
-                              endAdornment: <Typography variant="caption">{invoice.currency || 'EUR'}</Typography>,
-                              inputProps: { 
-                                min: 0, 
-                                step: 0.01,
-                                max: proforma.amountInfo.available + 0.01
+                  // Pokaż komunikat jeśli brak pasujących proform
+                  if (filteredProformas.length === 0 && !showAllProformas) {
+                    return (
+                      <Typography variant="body2" color="warning.main" sx={{ p: 2, bgcolor: 'warning.lighter', borderRadius: 1 }}>
+                        Brak proform zawierających pozycje z tej faktury. 
+                        Zaznacz "Pokaż wszystkie proformy" aby wyświetlić wszystkie dostępne proformy.
+                      </Typography>
+                    );
+                  }
+                  
+                  return filteredProformas.map((proforma) => {
+                    const allocation = (invoice.proformAllocation || []).find(a => a.proformaId === proforma.id);
+                    const allocatedAmount = allocation ? allocation.amount : 0;
+                    
+                    return (
+                      <Card key={proforma.id} variant="outlined" sx={{ mb: 2, p: 2 }}>
+                        <Grid container spacing={2} alignItems="center">
+                          <Grid item xs={12} md={5}>
+                            <Typography variant="body1" fontWeight="bold">
+                              📋 {t('invoices.form.toggleButtons.proforma')} {proforma.number}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {t('invoices.form.fields.issueDate')}: {proforma.issueDate ? 
+                                (proforma.issueDate.seconds ? 
+                                  new Date(proforma.issueDate.seconds * 1000).toLocaleDateString() 
+                                  : new Date(proforma.issueDate).toLocaleDateString()
+                                ) : t('common.noDate')}
+                            </Typography>
+                            {/* Pokaż wspólne pozycje */}
+                            {!showAllProformas && proforma.items && invoice.items && (
+                              (() => {
+                                // Znajdź wspólne pozycje
+                                const commonItems = proforma.items.filter(pItem => 
+                                  invoice.items.some(iItem => 
+                                    (pItem.orderItemId && iItem.orderItemId && pItem.orderItemId === iItem.orderItemId) ||
+                                    (pItem.id && iItem.id && pItem.id === iItem.id) ||
+                                    (pItem.name && iItem.name && pItem.name.trim().toLowerCase() === iItem.name.trim().toLowerCase())
+                                  )
+                                );
+                                
+                                if (commonItems.length === 0) return null;
+                                
+                                // Pobierz nazwy produktów
+                                const itemNames = commonItems.map(item => item.name).join(', ');
+                                const isLongList = itemNames.length > 60;
+                                
+                                return (
+                                  <Box sx={{ mt: 1, p: 1, bgcolor: 'primary.lighter', borderRadius: 1 }}>
+                                    <Typography variant="caption" fontWeight="bold" color="primary.main" sx={{ display: 'block' }}>
+                                      Wspólne pozycje ({commonItems.length}):
+                                    </Typography>
+                                    {isLongList ? (
+                                      <Tooltip title={itemNames} arrow placement="top">
+                                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', cursor: 'help' }}>
+                                          {itemNames.substring(0, 60)}... <strong>(najedź aby zobaczyć wszystkie)</strong>
+                                        </Typography>
+                                      </Tooltip>
+                                    ) : (
+                                      <Typography variant="caption" color="primary.main" sx={{ display: 'block' }}>
+                                        {itemNames}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                );
+                              })()
+                            )}
+                          </Grid>
+                          
+                          <Grid item xs={12} md={3}>
+                            <Typography variant="body2">
+                              <strong>{t('invoices.form.fields.available')}:</strong> {proforma.amountInfo.available.toFixed(2)} {proforma.currency || 'EUR'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {t('invoices.form.fields.from')} {proforma.amountInfo.total.toFixed(2)} {proforma.currency || 'EUR'} 
+                              ({t('invoices.form.fields.used')}: {proforma.amountInfo.used.toFixed(2)})
+                            </Typography>
+                          </Grid>
+                          
+                          <Grid item xs={12} md={4}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label={t('invoices.form.fields.amountToSettle')}
+                              type="number"
+                              value={allocatedAmount}
+                              onChange={(e) => {
+                                const amount = parseFloat(e.target.value) || 0;
+                                handleProformaAllocationChange(proforma.id, amount, proforma.number);
+                              }}
+                              InputProps={{
+                                endAdornment: <Typography variant="caption">{invoice.currency || 'EUR'}</Typography>,
+                                inputProps: { 
+                                  min: 0, 
+                                  step: 0.01,
+                                  max: proforma.amountInfo.available + 0.01
+                                }
+                              }}
+                              error={allocatedAmount > (proforma.amountInfo.available + 0.01)}
+                              helperText={
+                                allocatedAmount > (proforma.amountInfo.available + 0.01)
+                                  ? `${t('invoices.form.fields.exceedsAvailable')} (${proforma.amountInfo.available.toFixed(2)})`
+                                  : null
                               }
-                            }}
-                            error={allocatedAmount > (proforma.amountInfo.available + 0.01)}
-                            helperText={
-                              allocatedAmount > (proforma.amountInfo.available + 0.01)
-                                ? `${t('invoices.form.fields.exceedsAvailable')} (${proforma.amountInfo.available.toFixed(2)})`
-                                : null
-                            }
-                            disabled={proforma.amountInfo.available <= 0}
-                          />
+                              disabled={proforma.amountInfo.available <= 0}
+                            />
+                          </Grid>
                         </Grid>
-                      </Grid>
-                      
-                      {proforma.amountInfo.available <= 0 && (
-                        <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
-                          ⚠️ {t('invoices.form.fields.proformaFullyUsed')}
-                        </Typography>
-                      )}
-                    </Card>
-                  );
-                })}
+                        
+                        {proforma.amountInfo.available <= 0 && (
+                          <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+                            ⚠️ {t('invoices.form.fields.proformaFullyUsed')}
+                          </Typography>
+                        )}
+                      </Card>
+                    );
+                  });
+                })()}
                 
                 {/* Podsumowanie rozliczenia */}
                 {(invoice.proformAllocation || []).length > 0 && (
@@ -2125,18 +2299,23 @@ const InvoiceForm = ({ invoiceId }) => {
                   <TableCell>{t('invoices.form.fields.unit')}</TableCell>
                   <TableCell align="right">{t('common.price')}</TableCell>
                   <TableCell align="right">{t('invoices.form.fields.netValue')}</TableCell>
+                  {!invoice.isProforma && <TableCell align="right">Zafakturowano</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {availableOrderItems.map((item, index) => (
                   <TableRow 
                     key={index}
-                    hover={!item.hasProforma}
+                    hover={!item.hasProforma && !item.isFullyInvoiced}
                     sx={{ 
-                      '&:hover': { backgroundColor: item.hasProforma ? 'inherit' : 'action.hover' },
+                      '&:hover': { 
+                        backgroundColor: (item.hasProforma || item.isFullyInvoiced) ? 'inherit' : 'action.hover' 
+                      },
                       backgroundColor: item.selected ? 'action.selected' : 
-                                      item.hasProforma ? 'error.light' : 
-                                      'inherit'
+                                      item.hasProforma ? 'error.light' :
+                                      item.isFullyInvoiced ? 'grey.200' :
+                                      'inherit',
+                      opacity: item.isFullyInvoiced ? 0.6 : 1
                     }}
                   >
                     <TableCell padding="checkbox">
@@ -2146,12 +2325,12 @@ const InvoiceForm = ({ invoiceId }) => {
                           e.stopPropagation();
                           handleToggleOrderItem(index);
                         }}
-                        disabled={invoice.isProforma && item.hasProforma}
+                        disabled={(invoice.isProforma && item.hasProforma) || item.isFullyInvoiced}
                       />
                     </TableCell>
                     <TableCell 
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {item.name}
@@ -2167,47 +2346,101 @@ const InvoiceForm = ({ invoiceId }) => {
                             />
                           </Tooltip>
                         )}
+                        {item.isFullyInvoiced && (
+                          <Tooltip title={`Pozycja została w pełni zafakturowana (${
+                            item.invoicedInfo?.invoices.map(inv => inv.invoiceNumber).join(', ')
+                          })`}>
+                            <Chip 
+                              label="W pełni zafakturowane" 
+                              color="default" 
+                              size="small"
+                              sx={{ fontSize: '0.7rem' }}
+                            />
+                          </Tooltip>
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell 
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       {item.description || '-'}
                     </TableCell>
                     <TableCell 
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       {item.cnCode || '-'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       {item.quantity}
                     </TableCell>
                     <TableCell 
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       {item.unit || 'szt.'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       {item.price?.toFixed(4)} {invoice.currency || 'EUR'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => !item.hasProforma && handleToggleOrderItem(index)}
-                      sx={{ cursor: item.hasProforma ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
+                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
                     >
                       {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
                     </TableCell>
+                    {!invoice.isProforma && (
+                      <TableCell align="right">
+                        {item.invoicedInfo ? (
+                          <Tooltip
+                            title={
+                              <Box>
+                                <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                                  Zamówienie: {item.originalQuantity} {item.unit || 'szt.'} = {item.originalValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                </Typography>
+                                <Typography variant="caption" sx={{ display: 'block' }}>
+                                  Zafakturowano: {item.invoicedInfo.totalInvoicedQuantity} {item.unit || 'szt.'} = {item.invoicedInfo.totalInvoicedValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                </Typography>
+                                <Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}>
+                                  Pozostało: {item.quantity} {item.unit || 'szt.'} = {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                </Typography>
+                                <Divider sx={{ my: 1, borderColor: 'white' }} />
+                                {item.invoicedInfo.invoices.map((inv, idx) => (
+                                  <Typography key={idx} variant="caption" sx={{ display: 'block' }}>
+                                    • {inv.invoiceNumber}: {inv.quantity} {item.unit || 'szt.'} = {inv.itemValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            }
+                            arrow
+                            placement="left"
+                          >
+                            <Box sx={{ cursor: 'help' }}>
+                              <Typography variant="caption" sx={{ display: 'block', color: 'success.dark', fontWeight: 'bold' }}>
+                                {item.invoicedInfo.totalInvoicedQuantity} {item.unit || 'szt.'}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block', color: 'success.dark' }}>
+                                {item.invoicedInfo.totalInvoicedValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                              </Typography>
+                            </Box>
+                          </Tooltip>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            -
+                          </Typography>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
