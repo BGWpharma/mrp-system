@@ -31,14 +31,16 @@ import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { getAllCustomers } from '../../../services/customerService';
 import {
-  generateCashflowReport,
-  calculateCashflowStatistics,
-  prepareCashflowChartData,
-  exportCashflowToCSV
+  generateCashflowReportWithExpenses,
+  calculateCashflowStatisticsWithExpenses,
+  prepareCashflowChartDataWithExpenses,
+  exportCashflowToCSV,
+  exportDetailedCashflowToCSV
 } from '../../../services/cashflowService';
 import CashflowSummaryCards from '../../../components/sales/co-reports/CashflowSummaryCards';
 import CashflowChart from '../../../components/sales/co-reports/CashflowChart';
 import CashflowTable from '../../../components/sales/co-reports/CashflowTable';
+import ExpenseTimeline from '../../../components/sales/co-reports/ExpenseTimeline';
 
 /**
  * Główny komponent zakładki Cashflow w raporcie CO
@@ -50,7 +52,7 @@ const CashflowTab = () => {
 
   // Stan danych
   const [loading, setLoading] = useState(false);
-  const [cashflowData, setCashflowData] = useState([]);
+  const [cashflowData, setCashflowData] = useState({ orders: [], globalExpenses: null });
   const [statistics, setStatistics] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -91,22 +93,23 @@ const CashflowTab = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🔄 Pobieranie danych cashflow z filtrami:', filters);
+      console.log('🔄 Pobieranie danych cashflow z wydatkami z filtrami:', filters);
 
-      // Generuj raport
-      const data = await generateCashflowReport(filters);
+      // Generuj raport z wydatkami
+      const data = await generateCashflowReportWithExpenses(filters);
       setCashflowData(data);
 
-      // Oblicz statystyki
-      const stats = calculateCashflowStatistics(data);
+      // Oblicz statystyki z wydatkami
+      const stats = calculateCashflowStatisticsWithExpenses(data);
       setStatistics(stats);
 
-      // Przygotuj dane dla wykresu
-      const chart = prepareCashflowChartData(data);
+      // Przygotuj dane dla wykresu z wydatkami
+      const chart = prepareCashflowChartDataWithExpenses(data);
       setChartData(chart);
 
-      console.log('✅ Dane cashflow załadowane:', {
-        orders: data.length,
+      console.log('✅ Dane cashflow z wydatkami załadowane:', {
+        orders: data.orders?.length || 0,
+        expenses: data.globalExpenses?.totalPOCount || 0,
         stats
       });
     } catch (error) {
@@ -141,8 +144,21 @@ const CashflowTab = () => {
   const handleExport = () => {
     try {
       const filename = `cashflow_${filters.dateFrom?.toISOString().split('T')[0]}_${filters.dateTo?.toISOString().split('T')[0]}.csv`;
-      exportCashflowToCSV(cashflowData, filename);
+      // Przekaż pełne dane z globalExpenses i statystyki
+      exportCashflowToCSV(cashflowData, statistics, filename);
       showSuccess(t('cashflow.notifications.exportSuccess'));
+    } catch (error) {
+      console.error('Błąd podczas eksportowania:', error);
+      showError(t('cashflow.notifications.exportError'));
+    }
+  };
+
+  const handleExportDetailed = () => {
+    try {
+      const filename = `cashflow_detailed_${filters.dateFrom?.toISOString().split('T')[0]}_${filters.dateTo?.toISOString().split('T')[0]}.csv`;
+      // Eksportuj szczegółowy raport z timeline
+      exportDetailedCashflowToCSV(cashflowData, statistics, filename);
+      showSuccess('Szczegółowy raport został wyeksportowany');
     } catch (error) {
       console.error('Błąd podczas eksportowania:', error);
       showError(t('cashflow.notifications.exportError'));
@@ -166,7 +182,7 @@ const CashflowTab = () => {
             {t('cashflow.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('cashflow.subtitle')}
+            {t('cashflow.subtitle')} + wydatki z PO
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -187,9 +203,18 @@ const CashflowTab = () => {
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={handleExport}
-            disabled={loading || cashflowData.length === 0}
+            disabled={loading || !cashflowData.orders || cashflowData.orders.length === 0}
           >
-            {t('cashflow.exportCSV')}
+            Eksport CSV
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportDetailed}
+            disabled={loading || !cashflowData.orders || cashflowData.orders.length === 0}
+            sx={{ ml: 1 }}
+          >
+            Eksport Szczegółowy
           </Button>
         </Box>
       </Box>
@@ -280,17 +305,18 @@ const CashflowTab = () => {
       )}
 
       {/* Dane */}
-      {!loading && !error && cashflowData.length === 0 && (
+      {!loading && !error && (!cashflowData.orders || cashflowData.orders.length === 0) && (
         <Alert severity="info" sx={{ mb: 3 }}>
           {t('cashflow.noData')}
         </Alert>
       )}
 
-      {!loading && !error && cashflowData.length > 0 && (
+      {!loading && !error && cashflowData.orders && cashflowData.orders.length > 0 && (
         <>
           {/* Karty podsumowujące */}
           <CashflowSummaryCards 
-            statistics={statistics} 
+            statistics={statistics}
+            globalExpenses={cashflowData.globalExpenses}
             currency="EUR" 
           />
 
@@ -304,11 +330,28 @@ const CashflowTab = () => {
 
           <Divider sx={{ my: 3 }} />
 
-          {/* Tabela */}
+          {/* Tabela zamówień */}
           <CashflowTable 
-            data={cashflowData} 
+            data={cashflowData.orders} 
             currency="EUR" 
           />
+          
+          <Divider sx={{ my: 3 }} />
+
+          {/* Sekcja globalnych wydatków */}
+          {cashflowData.globalExpenses && cashflowData.globalExpenses.totalPOCount > 0 && (
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                💸 Wydatki w okresie ({filters.dateFrom?.toLocaleDateString()} - {filters.dateTo?.toLocaleDateString()})
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Wszystkie zamówienia zakupu z datami dostaw w wybranym okresie
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <ExpenseTimeline expenses={cashflowData.globalExpenses} currency="EUR" />
+              </Box>
+            </Paper>
+          )}
         </>
       )}
     </Box>

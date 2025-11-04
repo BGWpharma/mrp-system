@@ -16,15 +16,19 @@ import {
   Schedule as ScheduleIcon,
   TrendingUp as TrendingUpIcon,
   Assessment as AssessmentIcon,
-  Timer as TimerIcon
+  Timer as TimerIcon,
+  ShoppingBasket as ShoppingBasketIcon,
+  AttachMoney as AttachMoneyIcon,
+  Percent as PercentIcon
 } from '@mui/icons-material';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający karty podsumowujące dla cashflow
+ * Z GLOBALNYMI WYDATKAMI
  */
-const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
+const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) => {
   const { t } = useTranslation('cashflow');
 
   if (!statistics) {
@@ -47,14 +51,6 @@ const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
       format: 'currency'
     },
     {
-      title: t('cashflow.summary.proformaValue'),
-      value: statistics.totalProformaValue,
-      icon: <DescriptionIcon />,
-      color: 'warning',
-      format: 'currency',
-      tooltip: 'Suma wartości wszystkich proform (zaliczek)'
-    },
-    {
       title: t('cashflow.summary.totalPaid'),
       value: statistics.totalPaid,
       icon: <AccountBalanceIcon />,
@@ -65,8 +61,57 @@ const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
       title: t('cashflow.summary.totalRemaining'),
       value: statistics.totalRemaining,
       icon: <ScheduleIcon />,
-      color: 'error',
+      color: 'warning',
       format: 'currency'
+    },
+    // GLOBALNE WYDATKI
+    {
+      title: 'Wydatki (PO w okresie)',
+      value: statistics.totalExpenses || 0,
+      icon: <ShoppingBasketIcon />,
+      color: 'error',
+      format: 'currency',
+      tooltip: 'Wartość wszystkich PO z datami dostaw w wybranym okresie'
+    },
+    {
+      title: 'Zapłacono za PO',
+      value: statistics.totalExpensesPaid || 0,
+      icon: <AttachMoneyIcon />,
+      color: 'error',
+      format: 'currency',
+      tooltip: 'Zapłacone faktury za zamówienia zakupu'
+    },
+    {
+      title: 'Cashflow netto (okres)',
+      value: statistics.netCashflow || 0,
+      icon: <AccountBalanceIcon />,
+      color: (statistics.netCashflow || 0) >= 0 ? 'success' : 'error',
+      format: 'currency',
+      tooltip: 'Rzeczywisty przepływ gotówki: wpłacono za CO - zapłacono za PO'
+    },
+    {
+      title: 'Zysk netto (okres)',
+      value: statistics.netProfit || 0,
+      icon: <TrendingUpIcon />,
+      color: (statistics.netProfit || 0) >= 0 ? 'success' : 'error',
+      format: 'currency',
+      tooltip: 'Wartość zamówień CO - wartość PO w okresie'
+    },
+    {
+      title: 'Marża okresu',
+      value: parseFloat(statistics.profitMargin || 0),
+      icon: <PercentIcon />,
+      color: parseFloat(statistics.profitMargin || 0) >= 0 ? 'success' : 'error',
+      format: 'percentage',
+      tooltip: 'Marża z całego okresu'
+    },
+    {
+      title: 'Liczba PO w okresie',
+      value: statistics.totalPOCount || 0,
+      icon: <ShoppingBasketIcon />,
+      color: 'secondary',
+      format: 'number',
+      tooltip: 'Liczba zamówień zakupu z datami dostaw w okresie'
     },
     {
       title: t('cashflow.summary.paymentRate'),
@@ -75,13 +120,6 @@ const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
       color: 'success',
       format: 'percentage',
       tooltip: 'Procent zamówień w pełni opłaconych'
-    },
-    {
-      title: t('cashflow.summary.avgOrderValue'),
-      value: statistics.avgOrderValue,
-      icon: <ReceiptIcon />,
-      color: 'secondary',
-      format: 'currency'
     },
     {
       title: t('cashflow.summary.avgPaymentTime'),
@@ -112,7 +150,7 @@ const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
   return (
     <Grid container spacing={2} sx={{ mb: 3 }}>
       {cards.map((card, index) => (
-        <Grid item xs={12} sm={6} md={3} key={index}>
+        <Grid item xs={12} sm={6} md={3} lg={2} key={index}>
           <Tooltip title={card.tooltip || ''} arrow>
             <Card 
               elevation={2}
@@ -125,29 +163,29 @@ const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
                 }
               }}
             >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <CardContent sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                   <Box
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: 48,
-                      height: 48,
+                      width: 40,
+                      height: 40,
                       borderRadius: 2,
                       bgcolor: `${card.color}.light`,
                       color: `${card.color}.dark`,
-                      mr: 2
+                      mr: 1.5
                     }}
                   >
-                    {card.icon}
+                    {React.cloneElement(card.icon, { sx: { fontSize: 20 } })}
                   </Box>
                   <Typography 
-                    variant="body2" 
+                    variant="caption" 
                     color="text.secondary"
                     sx={{ 
                       flex: 1,
-                      fontSize: '0.875rem',
+                      fontSize: '0.75rem',
                       lineHeight: 1.2
                     }}
                   >
@@ -155,12 +193,12 @@ const CashflowSummaryCards = ({ statistics, currency = 'EUR' }) => {
                   </Typography>
                 </Box>
                 <Typography 
-                  variant="h5" 
+                  variant="h6" 
                   component="div" 
                   fontWeight="bold"
                   color={`${card.color}.main`}
                   sx={{
-                    fontSize: { xs: '1.25rem', sm: '1.5rem' }
+                    fontSize: { xs: '1rem', sm: '1.15rem' }
                   }}
                 >
                   {formatValue(card.value, card.format)}

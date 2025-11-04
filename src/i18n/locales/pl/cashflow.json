@@ -7,7 +7,8 @@
     "error": "Wystąpił błąd podczas ładowania danych cashflow",
     "refresh": "Odśwież dane",
     "export": "Eksportuj",
-    "exportCSV": "Eksportuj do CSV",
+    "exportCSV": "Eksport CSV",
+    "exportDetailed": "Eksport Szczegółowy",
     "exportPDF": "Eksportuj do PDF",
     
     "filters": {
@@ -32,7 +33,13 @@
       "paymentRate": "Wskaźnik spłat",
       "avgOrderValue": "Średnia wartość zamówienia",
       "avgPaymentTime": "Średni czas płatności",
-      "days": "dni"
+      "days": "dni",
+      "totalExpenses": "Wydatki (PO)",
+      "totalExpensesPaid": "Zapłacono za PO",
+      "expectedProfit": "Zysk oczekiwany",
+      "grossProfit": "Cashflow netto",
+      "avgProfitMargin": "Średnia marża",
+      "linkedPOCount": "Powiązane PO"
     },
     
     "chart": {
@@ -42,7 +49,10 @@
       "dailyPaid": "Dzienna wpłata",
       "dailyExpected": "Dzienna oczekiwana",
       "date": "Data",
-      "amount": "Kwota"
+      "amount": "Kwota",
+      "revenue": "Przychody",
+      "expenses": "Wydatki",
+      "netCashflow": "Cashflow netto"
     },
     
     "table": {
@@ -62,7 +72,42 @@
       "viewOrder": "Zobacz zamówienie",
       "count": "szt.",
       "noOrders": "Brak zamówień spełniających kryteria",
-      "clickForDetails": "Kliknij aby zobaczyć szczegóły"
+      "clickForDetails": "Kliknij aby zobaczyć szczegóły",
+      "expenses": "Wydatki",
+      "profit": "Zysk",
+      "profitMargin": "Marża",
+      "revenue": "Przychód"
+    },
+    
+    "expenses": {
+      "title": "Wydatki (Zamówienia Zakupu)",
+      "noExpenses": "Brak powiązanych wydatków",
+      "linkedPO": "Powiązane PO",
+      "deliveryDate": "Data dostawy",
+      "poNumber": "Nr PO",
+      "supplier": "Dostawca",
+      "item": "Pozycja",
+      "value": "Wartość",
+      "status": "Status",
+      "paid": "Zapłacone",
+      "unpaid": "Niezapłacone",
+      "overdue": "Przeterminowane",
+      "wholePO": "Całe PO",
+      "totalExpenses": "Suma wydatków",
+      "expensesPaid": "Zapłacono",
+      "expensesRemaining": "Do zapłaty"
+    },
+    
+    "profitability": {
+      "title": "Rentowność",
+      "revenue": "Przychód (CO)",
+      "expenses": "Wydatki (PO)",
+      "expectedProfit": "Zysk oczekiwany",
+      "margin": "Marża",
+      "paid": "Wpłacono",
+      "expensesPaid": "Zapłacono za PO",
+      "netCashflow": "Cashflow netto (rzeczywisty)",
+      "linkedPOCount": "Powiązanych PO"
     },
     
     "remaining": {
@@ -108,10 +153,30 @@
     },
     
     "notifications": {
-      "exportSuccess": "Dane zostały wyeksportowane",
+      "exportSuccess": "Raport CSV został wyeksportowany",
+      "exportDetailedSuccess": "Szczegółowy raport CSV został wyeksportowany",
       "exportError": "Błąd podczas eksportowania danych",
       "loadError": "Błąd podczas ładowania danych cashflow"
+    },
+    
+    "csvExport": {
+      "periodSummary": "Podsumowanie okresu",
+      "customerOrders": "Zamówienia klientów (CO)",
+      "expensesPO": "Wydatki - Purchase Orders",
+      "orderCount": "Liczba zamówień",
+      "orderValue": "Wartość zamówień",
+      "paidAmount": "Wpłacono",
+      "expectedPayments": "Oczekiwane wpłaty",
+      "expenseCount": "Liczba PO",
+      "expenseValue": "Wartość PO",
+      "expensesPaid": "Zapłacono za PO",
+      "expensesRemaining": "Pozostało do zapłaty",
+      "netCashflow": "Cashflow netto okresu",
+      "netProfit": "Zysk netto okresu",
+      "profitMargin": "Marża okresu",
+      "detailedReport": "Raport szczegółowy",
+      "paymentTimeline": "Timeline płatności",
+      "expensesSummary": "Podsumowanie wydatków"
     }
   }
 }
-

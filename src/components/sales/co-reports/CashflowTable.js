@@ -15,8 +15,7 @@ import {
   Collapse,
   Box,
   Typography,
-  Tooltip,
-  Button
+  Tooltip
 } from '@mui/material';
 import {
   KeyboardArrowDown as ExpandMoreIcon,
@@ -32,6 +31,7 @@ import RemainingPaymentsDialog from './RemainingPaymentsDialog';
 
 /**
  * Komponent tabeli cashflow z listą zamówień
+ * BEZ kolumn per-order (wydatki są globalne)
  */
 const CashflowTable = ({ data, currency = 'EUR' }) => {
   const { t } = useTranslation('cashflow');
@@ -188,6 +188,7 @@ const CashflowTable = ({ data, currency = 'EUR' }) => {
           <TableBody>
             {paginatedData.map((row) => {
               const isExpanded = expandedRows.has(row.orderId);
+              
               return (
                 <React.Fragment key={row.orderId}>
                   <TableRow hover sx={{ '& > *': { borderBottom: 'unset' } }}>
@@ -302,6 +303,7 @@ const CashflowTable = ({ data, currency = 'EUR' }) => {
                     <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={12}>
                       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                         <Box sx={{ margin: 1 }}>
+                          {/* Timeline płatności */}
                           <PaymentTimeline orderData={row} />
                         </Box>
                       </Collapse>
@@ -337,4 +339,3 @@ const CashflowTable = ({ data, currency = 'EUR' }) => {
 };
 
 export default CashflowTable;
-

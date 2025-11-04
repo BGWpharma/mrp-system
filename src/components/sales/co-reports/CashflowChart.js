@@ -9,8 +9,6 @@ import {
 import {
   LineChart,
   Line,
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -23,6 +21,7 @@ import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający wykres cashflow w czasie
+ * ROZSZERZONY O WYDATKI
  */
 const CashflowChart = ({ chartData, currency = 'EUR' }) => {
   const theme = useTheme();
@@ -45,14 +44,23 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
       day: 'numeric' 
     }),
     fullDate: new Date(item.date).toLocaleDateString('pl-PL'),
-    paid: item.cumulativePaid,
-    expected: item.cumulativeExpected,
-    dailyPaid: item.dailyPaid,
-    dailyExpected: item.dailyExpected
+    // Przychody
+    revenuePaid: item.cumulativeRevenuePaid || 0,
+    revenueTotal: item.cumulativeRevenueTotal || 0,
+    // Wydatki
+    expensePaid: item.cumulativeExpensePaid || 0,
+    expenseTotal: item.cumulativeExpenseTotal || 0,
+    // Netto
+    netPaid: item.netPaid || 0,
+    netTotal: item.netTotal || 0,
+    // Dzienne
+    dailyRevenue: item.dailyRevenue || 0,
+    dailyExpense: item.dailyExpense || 0
   }));
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
+      const data = payload[0]?.payload;
       return (
         <Paper 
           sx={{ 
@@ -61,37 +69,54 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
             boxShadow: 3
           }}
         >
-          <Typography variant="subtitle2" gutterBottom>
-            {payload[0]?.payload?.fullDate}
+          <Typography variant="subtitle2" gutterBottom fontWeight="bold">
+            {data?.fullDate}
           </Typography>
-          {payload.map((entry, index) => (
-            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  bgcolor: entry.color
-                }}
-              />
-              <Typography variant="body2" color="text.secondary">
+          
+          <Typography variant="caption" display="block" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
+            Przychody:
+          </Typography>
+          {payload.filter(p => p.dataKey.includes('revenue')).map((entry, index) => (
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: entry.color }} />
+              <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
                 {entry.name}:
               </Typography>
-              <Typography variant="body2" fontWeight="bold">
+              <Typography variant="body2" fontWeight="bold" fontSize="0.75rem">
                 {formatCurrency(entry.value, currency)}
               </Typography>
             </Box>
           ))}
-          {payload[0]?.payload?.dailyPaid > 0 && (
-            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
-              Dzienna wpłata: {formatCurrency(payload[0].payload.dailyPaid, currency)}
-            </Typography>
-          )}
-          {payload[0]?.payload?.dailyExpected > 0 && (
-            <Typography variant="caption" display="block" color="text.secondary">
-              Dzienna oczekiwana: {formatCurrency(payload[0].payload.dailyExpected, currency)}
-            </Typography>
-          )}
+          
+          <Typography variant="caption" display="block" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
+            Wydatki:
+          </Typography>
+          {payload.filter(p => p.dataKey.includes('expense')).map((entry, index) => (
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: entry.color }} />
+              <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+                {entry.name}:
+              </Typography>
+              <Typography variant="body2" fontWeight="bold" fontSize="0.75rem">
+                {formatCurrency(entry.value, currency)}
+              </Typography>
+            </Box>
+          ))}
+          
+          <Typography variant="caption" display="block" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
+            Cashflow netto:
+          </Typography>
+          {payload.filter(p => p.dataKey.includes('net')).map((entry, index) => (
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: entry.color }} />
+              <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+                {entry.name}:
+              </Typography>
+              <Typography variant="body2" fontWeight="bold" fontSize="0.75rem">
+                {formatCurrency(entry.value, currency)}
+              </Typography>
+            </Box>
+          ))}
         </Paper>
       );
     }
@@ -101,24 +126,14 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Typography variant="h6" gutterBottom>
-        {t('cashflow.chart.title')}
+        {t('cashflow.chart.title')} - Przychody vs Wydatki
       </Typography>
       <Box sx={{ width: '100%', height: 400, mt: 2 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
+          <LineChart
             data={formattedData}
             margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
           >
-            <defs>
-              <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.8}/>
-                <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0.1}/>
-              </linearGradient>
-              <linearGradient id="colorExpected" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={theme.palette.warning.main} stopOpacity={0.8}/>
-                <stop offset="95%" stopColor={theme.palette.warning.main} stopOpacity={0.1}/>
-              </linearGradient>
-            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
             <XAxis 
               dataKey="date" 
@@ -132,54 +147,97 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend 
-              wrapperStyle={{ paddingTop: '20px' }}
-              formatter={(value) => {
-                if (value === 'paid') return t('cashflow.chart.cumulativePaid');
-                if (value === 'expected') return t('cashflow.chart.cumulativeExpected');
-                return value;
-              }}
+              wrapperStyle={{ paddingTop: '20px', fontSize: '0.75rem' }}
             />
-            <Area
+            
+            {/* Przychody - zapłacone */}
+            <Line
               type="monotone"
-              dataKey="paid"
+              dataKey="revenuePaid"
               stroke={theme.palette.success.main}
               strokeWidth={3}
-              fillOpacity={1}
-              fill="url(#colorPaid)"
-              name="paid"
+              name="Przychód (zapłacone)"
+              dot={false}
             />
-            <Area
+            
+            {/* Przychody - z oczekiwanymi */}
+            <Line
               type="monotone"
-              dataKey="expected"
-              stroke={theme.palette.warning.main}
+              dataKey="revenueTotal"
+              stroke={theme.palette.success.light}
               strokeWidth={2}
               strokeDasharray="5 5"
-              fillOpacity={1}
-              fill="url(#colorExpected)"
-              name="expected"
+              name="Przychód (z oczekiwanymi)"
+              dot={false}
             />
-          </AreaChart>
+            
+            {/* Wydatki - zapłacone */}
+            <Line
+              type="monotone"
+              dataKey="expensePaid"
+              stroke={theme.palette.error.main}
+              strokeWidth={3}
+              name="Wydatki (zapłacone)"
+              dot={false}
+            />
+            
+            {/* Wydatki - z oczekiwanymi */}
+            <Line
+              type="monotone"
+              dataKey="expenseTotal"
+              stroke={theme.palette.error.light}
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              name="Wydatki (z oczekiwanymi)"
+              dot={false}
+            />
+            
+            {/* Cashflow netto - zapłacone */}
+            <Line
+              type="monotone"
+              dataKey="netPaid"
+              stroke={theme.palette.primary.main}
+              strokeWidth={3}
+              name="Cashflow netto (zapłacone)"
+              dot={false}
+            />
+            
+            {/* Cashflow netto - z oczekiwanymi */}
+            <Line
+              type="monotone"
+              dataKey="netTotal"
+              stroke={theme.palette.primary.light}
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              name="Cashflow netto (z oczekiwanymi)"
+              dot={false}
+            />
+          </LineChart>
         </ResponsiveContainer>
       </Box>
-      <Box sx={{ mt: 2, display: 'flex', gap: 3, justifyContent: 'center' }}>
+      
+      {/* Legenda */}
+      <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 20, height: 3, bgcolor: 'success.main' }} />
-          <Typography variant="caption" color="text.secondary">
-            {t('cashflow.chart.cumulativePaid')}
-          </Typography>
+          <Typography variant="caption" color="text.secondary">Przychód zapłacony</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box 
-            sx={{ 
-              width: 20, 
-              height: 3, 
-              bgcolor: 'warning.main',
-              backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 5px, white 5px, white 7px)'
-            }} 
-          />
-          <Typography variant="caption" color="text.secondary">
-            {t('cashflow.chart.cumulativeExpected')}
-          </Typography>
+          <Box sx={{ width: 20, height: 3, bgcolor: 'error.main' }} />
+          <Typography variant="caption" color="text.secondary">Wydatki zapłacone</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 20, height: 3, bgcolor: 'primary.main' }} />
+          <Typography variant="caption" color="text.secondary">Cashflow netto</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ 
+            width: 20, 
+            height: 3, 
+            bgcolor: 'text.secondary',
+            backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 3px, white 3px, white 5px)'
+          }} />
+          <Typography variant="caption" color="text.secondary">Z oczekiwanymi</Typography>
         </Box>
       </Box>
     </Paper>
@@ -187,4 +245,3 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
 };
 
 export default CashflowChart;
-

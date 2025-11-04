@@ -474,67 +474,356 @@ export const prepareCashflowChartData = (cashflowData, startDate, endDate) => {
 };
 
 /**
- * Eksportuje dane cashflow do CSV
- * @param {Array} cashflowData - Dane cashflow
- * @param {Function} t - Funkcja tłumaczenia
+ * Eksportuje dane cashflow do CSV z globalnymi wydatkami
+ * 
+ * Struktura eksportu:
+ * - SEKCJA 1: Podsumowanie okresu (jeśli przekazano statistics)
+ *   - Podstawowe metryki: liczba zamówień, wartość, wpłacono, oczekiwane
+ *   - Wydatki PO: liczba, wartość, zapłacono, pozostało
+ *   - Cashflow: netto, zysk, marża
+ * 
+ * - SEKCJA 2: Zamówienia klientów (CO)
+ *   - Lista wszystkich zamówień z podstawowymi danymi
+ *   - Proformy, faktury, płatności
+ * 
+ * - SEKCJA 3: Wydatki - Purchase Orders w okresie
+ *   - Lista wszystkich PO w zakresie dat
+ *   - Szczegóły pozycji, daty dostawy, statusy
+ *   - Podsumowanie wydatków
+ * 
+ * @param {Object} cashflowDataWithExpenses - Obiekt z {orders, globalExpenses} LUB sama tablica orders (backward compatibility)
+ * @param {Object} statistics - Statystyki (opcjonalnie)
+ * @param {string} filename - Nazwa pliku (opcjonalnie)
  */
-export const exportCashflowToCSV = (cashflowData, t) => {
-  if (!cashflowData || cashflowData.length === 0) {
-    throw new Error(t ? t('cashflow.export.noData') : 'Brak danych do eksportu');
+export const exportCashflowToCSV = (cashflowDataWithExpenses, statistics = null, filename = null) => {
+  // Backward compatibility - jeśli przekazano samą tablicę
+  let orders = [];
+  let globalExpenses = null;
+  
+  if (Array.isArray(cashflowDataWithExpenses)) {
+    orders = cashflowDataWithExpenses;
+  } else if (cashflowDataWithExpenses && typeof cashflowDataWithExpenses === 'object') {
+    orders = cashflowDataWithExpenses.orders || [];
+    globalExpenses = cashflowDataWithExpenses.globalExpenses || null;
   }
   
-  // Przygotuj nagłówki
-  const headers = [
+  if (!orders || orders.length === 0) {
+    throw new Error('Brak danych do eksportu');
+  }
+  
+  const csvSections = [];
+  
+  // ========================================
+  // SEKCJA 1: PODSUMOWANIE OKRESU
+  // ========================================
+  if (statistics) {
+    csvSections.push('PODSUMOWANIE OKRESU');
+    csvSections.push('');
+    csvSections.push('Metryka,Wartość');
+    csvSections.push(`"Liczba zamówień","${statistics.totalOrders || 0}"`);
+    csvSections.push(`"Wartość zamówień (EUR)","${(statistics.totalOrderValue || 0).toFixed(2)}"`);
+    csvSections.push(`"Wpłacono (EUR)","${(statistics.totalPaid || 0).toFixed(2)}"`);
+    csvSections.push(`"Oczekiwane wpłaty (EUR)","${(statistics.totalRemaining || 0).toFixed(2)}"`);
+    csvSections.push('');
+    
+    if (globalExpenses) {
+      csvSections.push(`"Wydatki - liczba PO","${statistics.totalPOCount || 0}"`);
+      csvSections.push(`"Wydatki - wartość PO (EUR)","${(statistics.totalExpenses || 0).toFixed(2)}"`);
+      csvSections.push(`"Wydatki - zapłacono (EUR)","${(statistics.totalExpensesPaid || 0).toFixed(2)}"`);
+      csvSections.push(`"Wydatki - pozostało (EUR)","${(statistics.totalExpensesRemaining || 0).toFixed(2)}"`);
+      csvSections.push('');
+      csvSections.push(`"Cashflow netto okresu (EUR)","${(statistics.netCashflow || 0).toFixed(2)}"`);
+      csvSections.push(`"Zysk netto okresu (EUR)","${(statistics.netProfit || 0).toFixed(2)}"`);
+      csvSections.push(`"Marża okresu (%)","${statistics.profitMargin || 0}"`);
+    }
+    
+    csvSections.push('');
+    csvSections.push(`"Wskaźnik spłat (%)","${(statistics.paymentRate || 0).toFixed(2)}"`);
+    csvSections.push(`"Średni czas płatności (dni)","${statistics.avgPaymentTime || 0}"`);
+    csvSections.push('');
+    csvSections.push('');
+  }
+  
+  // ========================================
+  // SEKCJA 2: ZAMÓWIENIA KLIENTÓW (CO)
+  // ========================================
+  csvSections.push('ZAMÓWIENIA KLIENTÓW (CO)');
+  csvSections.push('');
+  
+  const ordersHeaders = [
     'Nr Zamówienia',
     'Data Zamówienia',
     'Klient',
-    'Wartość Zamówienia',
+    'Wartość Zamówienia (EUR)',
     'Proformy (ilość)',
-    'Proformy (wartość)',
-    'Proformy (wpłacono)',
+    'Proformy (wartość EUR)',
+    'Proformy (wpłacono EUR)',
     'Faktury (ilość)',
-    'Faktury (wartość)',
-    'Wpłacono',
-    'Do Zapłaty',
+    'Faktury (wartość EUR)',
+    'Wpłacono (EUR)',
+    'Do Zapłaty (EUR)',
     'Status Płatności',
     'Pierwsza Płatność',
     'Ostatnia Płatność',
-    'Następna Płatność',
-    'Waluta'
+    'Następna Płatność'
   ];
   
-  // Przygotuj wiersze
-  const rows = cashflowData.map(item => [
-    item.orderNumber,
-    item.orderDate ? new Date(item.orderDate).toLocaleDateString('pl-PL') : '',
-    item.customer?.name || '',
-    item.orderValue.toFixed(2),
-    item.proformas.length,
-    item.totalProforma.toFixed(2),
-    item.totalProformaPaid.toFixed(2),
-    item.finalInvoices.length,
-    item.totalInvoiced.toFixed(2),
-    item.totalPaid.toFixed(2),
-    item.totalRemaining.toFixed(2),
-    getPaymentStatusLabel(item.paymentStatus),
-    item.firstPaymentDate ? new Date(item.firstPaymentDate).toLocaleDateString('pl-PL') : '',
-    item.lastPaymentDate ? new Date(item.lastPaymentDate).toLocaleDateString('pl-PL') : '',
-    item.nextPaymentDate ? new Date(item.nextPaymentDate).toLocaleDateString('pl-PL') : '',
-    item.currency
-  ]);
+  csvSections.push(ordersHeaders.join(','));
+  
+  orders.forEach(item => {
+    const row = [
+      item.orderNumber,
+      item.orderDate ? new Date(item.orderDate).toLocaleDateString('pl-PL') : '',
+      item.customer?.name || '',
+      item.orderValue.toFixed(2),
+      item.proformas.length,
+      item.totalProforma.toFixed(2),
+      item.totalProformaPaid.toFixed(2),
+      item.finalInvoices.length,
+      item.totalInvoiced.toFixed(2),
+      item.totalPaid.toFixed(2),
+      item.totalRemaining.toFixed(2),
+      getPaymentStatusLabel(item.paymentStatus),
+      item.firstPaymentDate ? new Date(item.firstPaymentDate).toLocaleDateString('pl-PL') : '',
+      item.lastPaymentDate ? new Date(item.lastPaymentDate).toLocaleDateString('pl-PL') : '',
+      item.nextPaymentDate ? new Date(item.nextPaymentDate).toLocaleDateString('pl-PL') : ''
+    ];
+    csvSections.push(row.map(cell => `"${cell}"`).join(','));
+  });
+  
+  csvSections.push('');
+  csvSections.push('');
+  
+  // ========================================
+  // SEKCJA 3: WYDATKI - PURCHASE ORDERS W OKRESIE
+  // ========================================
+  if (globalExpenses && globalExpenses.expenseTimeline && globalExpenses.expenseTimeline.length > 0) {
+    csvSections.push('WYDATKI - PURCHASE ORDERS W OKRESIE');
+    csvSections.push('');
+    
+    const expensesHeaders = [
+      'Data Dostawy',
+      'Nr PO',
+      'Dostawca',
+      'Pozycja',
+      'Wartość (EUR)',
+      'Status Płatności',
+      'Przeterminowane'
+    ];
+    
+    csvSections.push(expensesHeaders.join(','));
+    
+    globalExpenses.expenseTimeline.forEach(expense => {
+      const row = [
+        expense.date ? new Date(expense.date).toLocaleDateString('pl-PL') : '',
+        expense.poNumber || '',
+        expense.supplier || '',
+        expense.itemName || 'Całe PO',
+        expense.amount.toFixed(2),
+        expense.isPaid ? 'Zapłacone' : 'Niezapłacone',
+        expense.isOverdue ? 'TAK' : 'NIE'
+      ];
+      csvSections.push(row.map(cell => `"${cell}"`).join(','));
+    });
+    
+    csvSections.push('');
+    csvSections.push('');
+    
+    // Podsumowanie wydatków
+    csvSections.push('PODSUMOWANIE WYDATKÓW');
+    csvSections.push('');
+    csvSections.push(`"Liczba PO w okresie","${globalExpenses.totalPOCount || 0}"`);
+    csvSections.push(`"Łączna wartość (EUR)","${(globalExpenses.totalExpenseValue || 0).toFixed(2)}"`);
+    csvSections.push(`"Zapłacono (EUR)","${(globalExpenses.totalExpensePaid || 0).toFixed(2)}"`);
+    csvSections.push(`"Pozostało do zapłaty (EUR)","${(globalExpenses.totalExpenseRemaining || 0).toFixed(2)}"`);
+  }
   
   // Utwórz zawartość CSV
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-  ].join('\n');
+  const csvContent = csvSections.join('\n');
   
   // Pobierz plik
   const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  const filename = `cashflow_report_${new Date().toISOString().split('T')[0]}.csv`;
-  link.download = filename;
+  link.download = filename || `cashflow_report_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+};
+
+/**
+ * Eksportuje ROZSZERZONY raport cashflow do CSV ze szczegółami timeline
+ * 
+ * Struktura eksportu (rozszerzony):
+ * - SEKCJA 1: Podsumowanie okresu
+ *   - Data wygenerowania raportu
+ *   - Wszystkie metryki finansowe
+ * 
+ * - SEKCJA 2: Szczegóły zamówień z timeline płatności
+ *   - Każde zamówienie z pełną historią płatności
+ *   - Szczegóły każdej transakcji: data, typ, dokument, kwota, status, metoda
+ *   - Podsumowanie dla każdego zamówienia
+ * 
+ * - SEKCJA 3: Wydatki - Purchase Orders (pogrupowane)
+ *   - PO pogrupowane z wszystkimi pozycjami
+ *   - Szczegółowa timeline dostaw dla każdego PO
+ *   - Podsumowanie dla każdego PO i całościowe
+ * 
+ * Ten format jest bardziej szczegółowy niż standardowy eksport i zawiera pełną historię transakcji.
+ * 
+ * @param {Object} cashflowDataWithExpenses - Obiekt z {orders, globalExpenses}
+ * @param {Object} statistics - Statystyki
+ * @param {string} filename - Nazwa pliku
+ */
+export const exportDetailedCashflowToCSV = (cashflowDataWithExpenses, statistics = null, filename = null) => {
+  let orders = [];
+  let globalExpenses = null;
+  
+  if (Array.isArray(cashflowDataWithExpenses)) {
+    orders = cashflowDataWithExpenses;
+  } else if (cashflowDataWithExpenses && typeof cashflowDataWithExpenses === 'object') {
+    orders = cashflowDataWithExpenses.orders || [];
+    globalExpenses = cashflowDataWithExpenses.globalExpenses || null;
+  }
+  
+  if (!orders || orders.length === 0) {
+    throw new Error('Brak danych do eksportu');
+  }
+  
+  const csvSections = [];
+  
+  // ========================================
+  // SEKCJA 1: PODSUMOWANIE OKRESU
+  // ========================================
+  if (statistics) {
+    csvSections.push('RAPORT CASHFLOW - SZCZEGÓŁOWY');
+    csvSections.push(`"Data wygenerowania","${new Date().toLocaleString('pl-PL')}"`);
+    csvSections.push('');
+    csvSections.push('PODSUMOWANIE OKRESU');
+    csvSections.push('');
+    csvSections.push('Metryka,Wartość');
+    csvSections.push(`"Liczba zamówień","${statistics.totalOrders || 0}"`);
+    csvSections.push(`"Wartość zamówień (EUR)","${(statistics.totalOrderValue || 0).toFixed(2)}"`);
+    csvSections.push(`"Wpłacono (EUR)","${(statistics.totalPaid || 0).toFixed(2)}"`);
+    csvSections.push(`"Oczekiwane wpłaty (EUR)","${(statistics.totalRemaining || 0).toFixed(2)}"`);
+    
+    if (globalExpenses) {
+      csvSections.push('');
+      csvSections.push(`"Wydatki - liczba PO","${statistics.totalPOCount || 0}"`);
+      csvSections.push(`"Wydatki - wartość PO (EUR)","${(statistics.totalExpenses || 0).toFixed(2)}"`);
+      csvSections.push(`"Wydatki - zapłacono (EUR)","${(statistics.totalExpensesPaid || 0).toFixed(2)}"`);
+      csvSections.push(`"Wydatki - pozostało (EUR)","${(statistics.totalExpensesRemaining || 0).toFixed(2)}"`);
+      csvSections.push('');
+      csvSections.push(`"Cashflow netto okresu (EUR)","${(statistics.netCashflow || 0).toFixed(2)}"`);
+      csvSections.push(`"Zysk netto okresu (EUR)","${(statistics.netProfit || 0).toFixed(2)}"`);
+      csvSections.push(`"Marża okresu (%)","${statistics.profitMargin || 0}"`);
+    }
+    
+    csvSections.push('');
+    csvSections.push('');
+  }
+  
+  // ========================================
+  // SEKCJA 2: SZCZEGÓŁY ZAMÓWIEŃ Z TIMELINE
+  // ========================================
+  csvSections.push('SZCZEGÓŁY ZAMÓWIEŃ KLIENTÓW - TIMELINE PŁATNOŚCI');
+  csvSections.push('');
+  
+  orders.forEach((order, orderIndex) => {
+    // Nagłówek zamówienia
+    csvSections.push(`"=== ZAMÓWIENIE ${orderIndex + 1}: ${order.orderNumber} ==="`);
+    csvSections.push(`"Klient","${order.customer?.name || ''}"`);
+    csvSections.push(`"Data zamówienia","${order.orderDate ? new Date(order.orderDate).toLocaleDateString('pl-PL') : ''}"`);
+    csvSections.push(`"Wartość (EUR)","${order.orderValue.toFixed(2)}"`);
+    csvSections.push(`"Status płatności","${getPaymentStatusLabel(order.paymentStatus)}"`);
+    csvSections.push('');
+    
+    // Timeline płatności
+    if (order.paymentTimeline && order.paymentTimeline.length > 0) {
+      csvSections.push('Data,Typ,Dokument,Kwota (EUR),Status,Metoda,Opis');
+      
+      order.paymentTimeline.forEach(payment => {
+        const row = [
+          payment.date ? new Date(payment.date).toLocaleDateString('pl-PL') : '',
+          payment.type === 'proforma' ? 'Proforma' : 'Faktura',
+          payment.documentNumber || '',
+          payment.amount.toFixed(2),
+          payment.status === 'confirmed' ? 'Zapłacono' : 'Oczekiwane',
+          payment.method || '',
+          payment.description || ''
+        ];
+        csvSections.push(row.map(cell => `"${cell}"`).join(','));
+      });
+    }
+    
+    csvSections.push('');
+    csvSections.push(`"Razem wpłacono (EUR)","${order.totalPaid.toFixed(2)}"`);
+    csvSections.push(`"Pozostało do zapłaty (EUR)","${order.totalRemaining.toFixed(2)}"`);
+    csvSections.push('');
+    csvSections.push('');
+  });
+  
+  // ========================================
+  // SEKCJA 3: WYDATKI - PURCHASE ORDERS
+  // ========================================
+  if (globalExpenses && globalExpenses.expenseTimeline && globalExpenses.expenseTimeline.length > 0) {
+    csvSections.push('WYDATKI - PURCHASE ORDERS W OKRESIE (SZCZEGÓŁOWO)');
+    csvSections.push('');
+    
+    // Grupuj po PO
+    const expensesByPO = {};
+    globalExpenses.expenseTimeline.forEach(expense => {
+      if (!expensesByPO[expense.poNumber]) {
+        expensesByPO[expense.poNumber] = {
+          poNumber: expense.poNumber,
+          supplier: expense.supplier,
+          isPaid: expense.isPaid,
+          items: []
+        };
+      }
+      expensesByPO[expense.poNumber].items.push(expense);
+    });
+    
+    Object.values(expensesByPO).forEach((po, poIndex) => {
+      csvSections.push(`"=== PO ${poIndex + 1}: ${po.poNumber} ==="`);
+      csvSections.push(`"Dostawca","${po.supplier}"`);
+      csvSections.push(`"Status płatności","${po.isPaid ? 'Zapłacone' : 'Niezapłacone'}"`);
+      csvSections.push('');
+      csvSections.push('Data Dostawy,Pozycja,Wartość (EUR),Przeterminowane');
+      
+      let poTotal = 0;
+      po.items.forEach(item => {
+        poTotal += item.amount;
+        const row = [
+          item.date ? new Date(item.date).toLocaleDateString('pl-PL') : '',
+          item.itemName || 'Całe PO',
+          item.amount.toFixed(2),
+          item.isOverdue ? 'TAK' : 'NIE'
+        ];
+        csvSections.push(row.map(cell => `"${cell}"`).join(','));
+      });
+      
+      csvSections.push('');
+      csvSections.push(`"Razem PO (EUR)","${poTotal.toFixed(2)}"`);
+      csvSections.push('');
+      csvSections.push('');
+    });
+    
+    // Podsumowanie wydatków
+    csvSections.push('PODSUMOWANIE WYDATKÓW');
+    csvSections.push('');
+    csvSections.push(`"Liczba PO w okresie","${globalExpenses.totalPOCount || 0}"`);
+    csvSections.push(`"Łączna wartość (EUR)","${(globalExpenses.totalExpenseValue || 0).toFixed(2)}"`);
+    csvSections.push(`"Zapłacono (EUR)","${(globalExpenses.totalExpensePaid || 0).toFixed(2)}"`);
+    csvSections.push(`"Pozostało do zapłaty (EUR)","${(globalExpenses.totalExpenseRemaining || 0).toFixed(2)}"`);
+  }
+  
+  // Utwórz zawartość CSV
+  const csvContent = csvSections.join('\n');
+  
+  // Pobierz plik
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename || `cashflow_detailed_${new Date().toISOString().split('T')[0]}.csv`;
   link.click();
 };
 
@@ -550,4 +839,390 @@ const getPaymentStatusLabel = (status) => {
     not_invoiced: 'Nie zafakturowane'
   };
   return labels[status] || status;
+};
+
+/**
+ * Pobiera wszystkie Purchase Orders w zakresie dat (według dat dostaw)
+ * @param {Date} dateFrom - Data początkowa
+ * @param {Date} dateTo - Data końcowa
+ * @returns {Promise<Array>} - Lista PO z datami dostaw w zakresie
+ */
+const getAllPurchaseOrdersInDateRange = async (dateFrom, dateTo) => {
+  try {
+    // Pobierz WSZYSTKIE Purchase Orders
+    const poQuery = query(collection(db, 'purchaseOrders'));
+    const poSnapshot = await getDocs(poQuery);
+    
+    const purchaseOrders = [];
+    
+    for (const docSnap of poSnapshot.docs) {
+      const poData = docSnap.data();
+      const po = {
+        id: docSnap.id,
+        ...poData
+      };
+      
+      // Sprawdź czy PO ma jakiekolwiek pozycje z datą dostawy w zakresie
+      // lub ogólną datę dostawy w zakresie
+      let hasDeliveryInRange = false;
+      
+      // Sprawdź ogólną datę dostawy PO
+      if (po.expectedDeliveryDate) {
+        let deliveryDate = po.expectedDeliveryDate;
+        if (deliveryDate && typeof deliveryDate.toDate === 'function') {
+          deliveryDate = deliveryDate.toDate();
+        }
+        const deliveryTimestamp = new Date(deliveryDate).getTime();
+        const fromTimestamp = new Date(dateFrom).getTime();
+        const toTimestamp = new Date(dateTo).getTime();
+        
+        if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
+          hasDeliveryInRange = true;
+        }
+      }
+      
+      // Sprawdź daty dostaw z pozycji
+      if (po.items && Array.isArray(po.items)) {
+        for (const item of po.items) {
+          if (item.plannedDeliveryDate) {
+            let deliveryDate = item.plannedDeliveryDate;
+            if (deliveryDate && typeof deliveryDate.toDate === 'function') {
+              deliveryDate = deliveryDate.toDate();
+            }
+            const deliveryTimestamp = new Date(deliveryDate).getTime();
+            const fromTimestamp = new Date(dateFrom).getTime();
+            const toTimestamp = new Date(dateTo).getTime();
+            
+            if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
+              hasDeliveryInRange = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (hasDeliveryInRange) {
+        purchaseOrders.push(po);
+      }
+    }
+    
+    console.log(`📦 Znaleziono ${purchaseOrders.length} PO z datami dostaw w zakresie ${dateFrom?.toLocaleDateString()} - ${dateTo?.toLocaleDateString()}`);
+    return purchaseOrders;
+  } catch (error) {
+    console.error('❌ Błąd podczas pobierania PO:', error);
+    return [];
+  }
+};
+
+/**
+ * Generuje globalny timeline wydatków z WSZYSTKICH PO w zakresie dat
+ * @param {Date} dateFrom - Data początkowa
+ * @param {Date} dateTo - Data końcowa
+ * @returns {Object} - Dane o wszystkich wydatkach w okresie
+ */
+export const generateGlobalExpenseTimeline = async (dateFrom, dateTo) => {
+  try {
+    const expenseTimeline = [];
+    let totalExpenseValue = 0;
+    let totalExpensePaid = 0;
+    let totalExpenseRemaining = 0;
+
+    // Pobierz wszystkie PO w zakresie dat
+    const purchaseOrders = await getAllPurchaseOrdersInDateRange(dateFrom, dateTo);
+
+    // Dla każdego PO
+    for (const po of purchaseOrders) {
+      const poValue = parseFloat(po.totalGross || po.totalValue || 0);
+      totalExpenseValue += poValue;
+
+      // Oblicz zapłacone/pozostałe na podstawie paymentStatus
+      const paidAmount = parseFloat(po.paidAmount || 0);
+      
+      if (po.paymentStatus === 'paid') {
+        totalExpensePaid += poValue;
+      } else if (po.paymentStatus === 'partially_paid') {
+        totalExpensePaid += paidAmount;
+        totalExpenseRemaining += (poValue - paidAmount);
+      } else {
+        totalExpenseRemaining += poValue;
+      }
+
+      // Użyj dat dostawy z pozycji (bardziej szczegółowo)
+      if (po.items && po.items.length > 0) {
+        po.items.forEach((item, index) => {
+          const itemValue = parseFloat(item.totalPrice || 0);
+          
+          // Priorytet: data z pozycji, potem ogólna data PO
+          let deliveryDate = item.plannedDeliveryDate || po.expectedDeliveryDate;
+          
+          // Konwertuj Firestore Timestamp jeśli potrzeba
+          if (deliveryDate && typeof deliveryDate.toDate === 'function') {
+            deliveryDate = deliveryDate.toDate();
+          }
+          
+          // Dodaj tylko jeśli data jest w zakresie
+          if (deliveryDate) {
+            const deliveryTimestamp = new Date(deliveryDate).getTime();
+            const fromTimestamp = dateFrom ? new Date(dateFrom).getTime() : 0;
+            const toTimestamp = dateTo ? new Date(dateTo).getTime() : Infinity;
+            
+            if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
+              expenseTimeline.push({
+                date: new Date(deliveryDate),
+                poNumber: po.number,
+                poId: po.id,
+                itemName: item.name,
+                itemIndex: index,
+                amount: itemValue,
+                currency: po.currency || 'EUR',
+                status: po.paymentStatus || 'unpaid',
+                type: 'purchase_item',
+                supplier: po.supplier?.name || 'Nieznany',
+                isPaid: po.paymentStatus === 'paid',
+                isOverdue: deliveryDate && new Date(deliveryDate) < new Date() && po.paymentStatus !== 'paid'
+              });
+            }
+          }
+        });
+      } else {
+        // Użyj ogólnej daty PO (jeśli brak pozycji)
+        let deliveryDate = po.expectedDeliveryDate;
+        
+        if (deliveryDate && typeof deliveryDate.toDate === 'function') {
+          deliveryDate = deliveryDate.toDate();
+        }
+        
+        if (deliveryDate) {
+          const deliveryTimestamp = new Date(deliveryDate).getTime();
+          const fromTimestamp = dateFrom ? new Date(dateFrom).getTime() : 0;
+          const toTimestamp = dateTo ? new Date(dateTo).getTime() : Infinity;
+          
+          if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
+            expenseTimeline.push({
+              date: new Date(deliveryDate),
+              poNumber: po.number,
+              poId: po.id,
+              itemName: null,
+              amount: poValue,
+              currency: po.currency || 'EUR',
+              status: po.paymentStatus || 'unpaid',
+              type: 'purchase_order',
+              supplier: po.supplier?.name || 'Nieznany',
+              isPaid: po.paymentStatus === 'paid',
+              isOverdue: deliveryDate && new Date(deliveryDate) < new Date() && po.paymentStatus !== 'paid'
+            });
+          }
+        }
+      }
+    }
+
+    // Sortuj chronologicznie
+    expenseTimeline.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date();
+      const dateB = b.date ? new Date(b.date) : new Date();
+      return dateA - dateB;
+    });
+
+    return {
+      expenseTimeline,
+      totalExpenseValue,
+      totalExpensePaid,
+      totalExpenseRemaining,
+      totalPOCount: purchaseOrders.length
+    };
+  } catch (error) {
+    console.error('❌ Błąd podczas generowania globalnego timeline wydatków:', error);
+    return {
+      expenseTimeline: [],
+      totalExpenseValue: 0,
+      totalExpensePaid: 0,
+      totalExpenseRemaining: 0,
+      totalPOCount: 0
+    };
+  }
+};
+
+/**
+ * Rozszerza dane cashflow o GLOBALNE wydatki z wszystkich PO
+ * @param {Object} filters - Filtry raportu (jak w generateCashflowReport)
+ * @returns {Promise<Object>} - Dane cashflow z globalnymi wydatkami
+ */
+export const generateCashflowReportWithExpenses = async (filters = {}) => {
+  try {
+    console.log('🔄 Generowanie raportu cashflow z globalnymi wydatkami...', filters);
+    
+    // Pobierz podstawowe dane cashflow (przychody z CO)
+    const cashflowData = await generateCashflowReport(filters);
+
+    // Pobierz WSZYSTKIE wydatki w zakresie dat (niezależnie od CO)
+    const globalExpenses = await generateGlobalExpenseTimeline(
+      filters.dateFrom,
+      filters.dateTo
+    );
+
+    console.log(`✅ Wygenerowano raport cashflow: ${cashflowData.length} zamówień, ${globalExpenses.totalPOCount} PO z wydatkami`);
+    
+    return {
+      orders: cashflowData,
+      globalExpenses
+    };
+  } catch (error) {
+    console.error('❌ Błąd podczas generowania raportu cashflow z wydatkami:', error);
+    throw error;
+  }
+};
+
+/**
+ * Przygotowuje dane dla wykresu cashflow z wydatkami (przychody vs wydatki)
+ * @param {Object} cashflowDataWithExpenses - Obiekt z orders i globalExpenses
+ * @returns {Array} - Dane dla wykresu
+ */
+export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) => {
+  if (!cashflowDataWithExpenses || !cashflowDataWithExpenses.orders) {
+    return [];
+  }
+  
+  const { orders, globalExpenses } = cashflowDataWithExpenses;
+  
+  // Zbierz wszystkie płatności (przychody) i wydatki
+  const allTransactions = [];
+  
+  // Przychody z zamówień
+  orders.forEach(order => {
+    order.paymentTimeline.forEach(payment => {
+      const paymentDate = new Date(payment.date);
+      
+      allTransactions.push({
+        date: paymentDate,
+        type: 'revenue',
+        amount: payment.amount,
+        status: payment.status,
+        orderNumber: order.orderNumber
+      });
+    });
+  });
+  
+  // Wydatki z globalnego timeline
+  if (globalExpenses && globalExpenses.expenseTimeline) {
+    globalExpenses.expenseTimeline.forEach(expense => {
+      const expenseDate = new Date(expense.date);
+      
+      allTransactions.push({
+        date: expenseDate,
+        type: 'expense',
+        amount: expense.amount,
+        status: expense.isPaid ? 'confirmed' : 'expected',
+        poNumber: expense.poNumber
+      });
+    });
+  }
+  
+  // Sortuj po dacie
+  allTransactions.sort((a, b) => a.date - b.date);
+  
+  // Oblicz skumulowane wartości
+  let cumulativeRevenuePaid = 0;
+  let cumulativeRevenueExpected = 0;
+  let cumulativeExpensePaid = 0;
+  let cumulativeExpenseExpected = 0;
+  
+  const dateMap = new Map();
+  
+  allTransactions.forEach(transaction => {
+    const dateKey = transaction.date.toISOString().split('T')[0];
+    
+    if (transaction.type === 'revenue') {
+      if (transaction.status === 'confirmed') {
+        cumulativeRevenuePaid += transaction.amount;
+      } else {
+        cumulativeRevenueExpected += transaction.amount;
+      }
+    } else if (transaction.type === 'expense') {
+      if (transaction.status === 'confirmed') {
+        cumulativeExpensePaid += transaction.amount;
+      } else {
+        cumulativeExpenseExpected += transaction.amount;
+      }
+    }
+    
+    // Utwórz lub zaktualizuj wpis dla daty
+    if (!dateMap.has(dateKey)) {
+      dateMap.set(dateKey, {
+        date: dateKey,
+        cumulativeRevenuePaid,
+        cumulativeRevenueTotal: cumulativeRevenuePaid + cumulativeRevenueExpected,
+        cumulativeExpensePaid,
+        cumulativeExpenseTotal: cumulativeExpensePaid + cumulativeExpenseExpected,
+        netPaid: cumulativeRevenuePaid - cumulativeExpensePaid,
+        netTotal: (cumulativeRevenuePaid + cumulativeRevenueExpected) - (cumulativeExpensePaid + cumulativeExpenseExpected),
+        dailyRevenue: 0,
+        dailyExpense: 0
+      });
+    }
+    
+    const dayData = dateMap.get(dateKey);
+    dayData.cumulativeRevenuePaid = cumulativeRevenuePaid;
+    dayData.cumulativeRevenueTotal = cumulativeRevenuePaid + cumulativeRevenueExpected;
+    dayData.cumulativeExpensePaid = cumulativeExpensePaid;
+    dayData.cumulativeExpenseTotal = cumulativeExpensePaid + cumulativeExpenseExpected;
+    dayData.netPaid = cumulativeRevenuePaid - cumulativeExpensePaid;
+    dayData.netTotal = (cumulativeRevenuePaid + cumulativeRevenueExpected) - (cumulativeExpensePaid + cumulativeExpenseExpected);
+    
+    // Zlicz dzienny przychód/wydatek
+    if (transaction.type === 'revenue' && transaction.status === 'confirmed') {
+      dayData.dailyRevenue += transaction.amount;
+    } else if (transaction.type === 'expense' && transaction.status === 'confirmed') {
+      dayData.dailyExpense += transaction.amount;
+    }
+  });
+  
+  // Konwertuj mapę na tablicę i sortuj
+  return Array.from(dateMap.values()).sort((a, b) => 
+    new Date(a.date) - new Date(b.date)
+  );
+};
+
+/**
+ * Rozszerzone statystyki cashflow z globalnymi wydatkami
+ */
+export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses) => {
+  if (!cashflowDataWithExpenses || !cashflowDataWithExpenses.orders) {
+    return {
+      totalOrders: 0,
+      totalOrderValue: 0,
+      totalPaid: 0,
+      totalRemaining: 0,
+      totalExpenses: 0,
+      totalExpensesPaid: 0,
+      totalExpensesRemaining: 0,
+      netProfit: 0,
+      netCashflow: 0,
+      totalPOCount: 0,
+      profitMargin: 0
+    };
+  }
+  
+  const { orders, globalExpenses } = cashflowDataWithExpenses;
+  const baseStats = calculateCashflowStatistics(orders);
+  
+  const totalExpenses = globalExpenses?.totalExpenseValue || 0;
+  const totalExpensesPaid = globalExpenses?.totalExpensePaid || 0;
+  const totalExpensesRemaining = globalExpenses?.totalExpenseRemaining || 0;
+  
+  // Zysk netto okresu = suma przychodów - suma wydatków
+  const netProfit = baseStats.totalOrderValue - totalExpenses;
+  const netCashflow = baseStats.totalPaid - totalExpensesPaid;
+  
+  return {
+    ...baseStats,
+    totalExpenses,
+    totalExpensesPaid,
+    totalExpensesRemaining,
+    netProfit,
+    netCashflow,
+    totalPOCount: globalExpenses?.totalPOCount || 0,
+    profitMargin: baseStats.totalOrderValue > 0 
+      ? ((netProfit / baseStats.totalOrderValue) * 100).toFixed(2)
+      : 0
+  };
 };
