@@ -1956,8 +1956,14 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
         }
         
         // Zsumuj palety dla tego zamówienia
+        // Priorytet: orderId, fallback: orderNumber (dla starszych danych)
         const palletsCount = cmrItems
-          .filter(item => item.orderId === orderId && item.orderItemId)
+          .filter(item => {
+            const belongsToOrder = 
+              (item.orderId && item.orderId === orderId) ||
+              (!item.orderId && item.orderNumber && item.orderNumber === order.orderNumber);
+            return belongsToOrder && item.orderItemId;
+          })
           .reduce((sum, item) => sum + (parseFloat(item.palletsCount) || 0), 0);
         
         console.log(`📊 Zamówienie ${order.orderNumber}: ${palletsCount} palet`);
@@ -2175,62 +2181,65 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
      
      console.log(`📋 [RECALCULATE] Znaleziono ${cmrDocuments.length} dokumentów CMR powiązanych z zamówieniem`);
      
-     // KROK 2: Pobierz wszystkie pozycje tych CMR
-     const cmrIds = cmrDocuments.map(doc => doc.id);
-     console.log(`📋 [RECALCULATE] ID dokumentów CMR:`, cmrIds);
-     
-     // Pobierz pozycje CMR dla tych dokumentów
-     const cmrItemsRef = collection(db, CMR_ITEMS_COLLECTION);
-     const q = query(cmrItemsRef, where('cmrId', 'in', cmrIds));
-     const cmrItemsSnapshot = await getDocs(q);
-     
-     console.log(`🔍 [RECALCULATE] Znaleziono ${cmrItemsSnapshot.docs.length} pozycji w ${cmrDocuments.length} dokumentach CMR`);
-     
-     // KROK 3: Zsumuj palety TYLKO z pozycji należących do tego zamówienia
+     // KROK 2: Użyj już pobranych pozycji CMR (bez limitu Firestore!)
+     // getCmrDocumentsByOrderId już pobiera pozycje dla każdego dokumentu
      let totalPallets = 0;
      const itemsWithPallets = [];
      const itemsWithoutPallets = [];
      const itemsFromOtherOrders = [];
      
-     cmrItemsSnapshot.docs.forEach(doc => {
-       const item = doc.data();
-       const palletsCount = parseFloat(item.palletsCount) || 0;
+     cmrDocuments.forEach(cmrDoc => {
+       console.log(`📋 [RECALCULATE] Przetwarzam CMR ${cmrDoc.cmrNumber} z ${(cmrDoc.items || []).length} pozycjami`);
        
-       console.log(`   📦 [RECALCULATE] Pozycja CMR:`, {
-         description: item.description,
-         palletsCount: palletsCount,
-         cmrId: item.cmrId,
-         orderId: item.orderId,
-         targetOrderId: orderId
-       });
-       
-       // KLUCZOWE: Sprawdź czy pozycja należy do tego zamówienia
-       if (item.orderId !== orderId) {
-         itemsFromOtherOrders.push({
+       (cmrDoc.items || []).forEach(item => {
+         const palletsCount = parseFloat(item.palletsCount) || 0;
+         
+         console.log(`   📦 [RECALCULATE] Pozycja CMR:`, {
            description: item.description,
            palletsCount: palletsCount,
            cmrId: item.cmrId,
-           orderId: item.orderId
+           orderId: item.orderId,
+           orderNumber: item.orderNumber,
+           targetOrderId: orderId,
+           targetOrderNumber: order.orderNumber
          });
-         console.log(`      ⏭️ [RECALCULATE] Pominięto - pozycja należy do innego zamówienia: ${item.orderId}`);
-         return;
-       }
-       
-       if (palletsCount > 0) {
-         totalPallets += palletsCount;
-         itemsWithPallets.push({
-           description: item.description,
-           palletsCount: palletsCount,
-           cmrId: item.cmrId
-         });
-         console.log(`      ✅ [RECALCULATE] Dodano ${palletsCount} palet (suma: ${totalPallets})`);
-       } else {
-         itemsWithoutPallets.push({
-           description: item.description,
-           cmrId: item.cmrId
-         });
-         console.log(`      ⏭️ [RECALCULATE] Pozycja bez palet`);
-       }
+         
+         // KLUCZOWE: Sprawdź czy pozycja należy do tego zamówienia
+         // Priorytet: orderId, fallback: orderNumber (dla starszych danych)
+         const belongsToThisOrder = 
+           (item.orderId && item.orderId === orderId) ||
+           (!item.orderId && item.orderNumber && item.orderNumber === order.orderNumber);
+         
+         if (!belongsToThisOrder) {
+           itemsFromOtherOrders.push({
+             description: item.description,
+             palletsCount: palletsCount,
+             cmrId: item.cmrId,
+             orderId: item.orderId,
+             orderNumber: item.orderNumber
+           });
+           console.log(`      ⏭️ [RECALCULATE] Pominięto - pozycja należy do innego zamówienia: orderId=${item.orderId}, orderNumber=${item.orderNumber}`);
+           return;
+         }
+         
+         console.log(`      ✓ [RECALCULATE] Pozycja należy do zamówienia (dopasowano przez ${item.orderId ? 'orderId' : 'orderNumber'})`);
+         
+         if (palletsCount > 0) {
+           totalPallets += palletsCount;
+           itemsWithPallets.push({
+             description: item.description,
+             palletsCount: palletsCount,
+             cmrId: item.cmrId
+           });
+           console.log(`      ✅ [RECALCULATE] Dodano ${palletsCount} palet (suma: ${totalPallets})`);
+         } else {
+           itemsWithoutPallets.push({
+             description: item.description,
+             cmrId: item.cmrId
+           });
+           console.log(`      ⏭️ [RECALCULATE] Pozycja bez palet`);
+         }
+       });
      });
      
      if (itemsWithoutPallets.length > 0) {
@@ -2331,7 +2340,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
      if (existingServiceIndex !== -1) {
        // ZASTĄP (nie dodawaj!) ilość
        // Przygotuj notatki (dodaj notatki z listy cenowej jeśli są)
-       let serviceNotes = `Przeliczone z ${cmrIds.size} CMR - ${totalPallets} palet`;
+       let serviceNotes = `Przeliczone z ${cmrDocuments.length} CMR - ${totalPallets} palet`;
        if (transportService.priceListNotes) {
          serviceNotes = `${transportService.priceListNotes}\n${serviceNotes}`;
        }
@@ -2348,7 +2357,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
        action = 'added';
        
        // Przygotuj notatki (dodaj notatki z listy cenowej jeśli są)
-       let serviceNotes = `Przeliczone z ${cmrIds.size} CMR - ${totalPallets} palet`;
+       let serviceNotes = `Przeliczone z ${cmrDocuments.length} CMR - ${totalPallets} palet`;
        if (transportService.priceListNotes) {
          serviceNotes = `${transportService.priceListNotes}\n${serviceNotes}`;
        }
