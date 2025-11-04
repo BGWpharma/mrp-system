@@ -44,6 +44,10 @@ import {
   getTaskById,
   updateTaskStatus
 } from '../../services/productionService';
+import { 
+  checkOrderQuantitySync, 
+  syncTaskQuantityToOrder 
+} from '../../services/productionOrderSyncService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { format } from 'date-fns';
@@ -70,6 +74,9 @@ const ConsumptionPage = () => {
   const [restoreReservation, setRestoreReservation] = useState(true);
   const [validationResults, setValidationResults] = useState(null);
   const [validationDetailsOpen, setValidationDetailsOpen] = useState(false);
+  const [quantitySyncData, setQuantitySyncData] = useState(null);
+  const [showQuantitySyncDialog, setShowQuantitySyncDialog] = useState(false);
+  const [syncingQuantity, setSyncingQuantity] = useState(false);
   
   // Pobieranie danych zadania
   useEffect(() => {
@@ -922,11 +929,50 @@ const ConsumptionPage = () => {
       // Odśwież dane zadania
       await fetchTaskData();
       
+      // Sprawdź czy trzeba zsynchronizować ilość z zamówieniem
+      try {
+        const syncData = await checkOrderQuantitySync(taskId);
+        if (syncData) {
+          setQuantitySyncData(syncData);
+          setShowQuantitySyncDialog(true);
+        }
+      } catch (error) {
+        console.error('Błąd podczas sprawdzania synchronizacji:', error);
+        // Nie przerywaj procesu, tylko pokaż ostrzeżenie w konsoli
+      }
+      
     } catch (error) {
       console.error('Błąd podczas zatwierdzania zadania:', error);
       showError('Nie udało się zatwierdzić zadania: ' + error.message);
     } finally {
       setConfirmLoading(false);
+    }
+  };
+
+  const handleSyncQuantity = async (shouldSync) => {
+    if (!shouldSync || !quantitySyncData) {
+      setShowQuantitySyncDialog(false);
+      setQuantitySyncData(null);
+      return;
+    }
+    
+    try {
+      setSyncingQuantity(true);
+      
+      const result = await syncTaskQuantityToOrder(taskId, currentUser.uid);
+      
+      if (result.success) {
+        showSuccess(result.message);
+      }
+      
+      setShowQuantitySyncDialog(false);
+      setQuantitySyncData(null);
+      
+    } catch (error) {
+      console.error('Błąd podczas synchronizacji ilości:', error);
+      showError('Nie udało się zaktualizować ilości w zamówieniu: ' + error.message);
+    } finally {
+      setSyncingQuantity(false);
     }
   };
   
@@ -1487,6 +1533,76 @@ const ConsumptionPage = () => {
         <DialogActions>
           <Button onClick={() => setValidationDetailsOpen(false)}>
             Zamknij
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog synchronizacji ilości z zamówieniem */}
+      <Dialog
+        open={showQuantitySyncDialog}
+        onClose={() => !syncingQuantity && handleSyncQuantity(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Synchronizacja ilości z zamówieniem
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Wyprodukowana ilość różni się od ilości w zamówieniu. Czy chcesz zaktualizować zamówienie?
+          </DialogContentText>
+          
+          {quantitySyncData && (
+            <Box sx={{ 
+              mt: 2, 
+              p: 2, 
+              bgcolor: 'background.default',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1 
+            }}>
+              <Typography variant="body2" gutterBottom>
+                <strong>Zadanie:</strong> {quantitySyncData.taskNumber}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Zamówienie:</strong> {quantitySyncData.orderNumber}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Pozycja:</strong> {quantitySyncData.orderItemName}
+              </Typography>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="body2" gutterBottom>
+                <strong>Aktualna ilość w CO:</strong> {quantitySyncData.currentOrderQuantity} {quantitySyncData.unit}
+              </Typography>
+              <Typography variant="body2" gutterBottom color="primary">
+                <strong>Wyprodukowana ilość:</strong> {quantitySyncData.producedQuantity} {quantitySyncData.unit}
+              </Typography>
+              <Typography 
+                variant="body2" 
+                gutterBottom
+                color={quantitySyncData.difference >= 0 ? 'success.main' : 'error.main'}
+              >
+                <strong>Różnica:</strong> {quantitySyncData.difference > 0 ? '+' : ''}{quantitySyncData.difference} {quantitySyncData.unit}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => handleSyncQuantity(false)} 
+            disabled={syncingQuantity}
+            color="inherit"
+          >
+            Nie, zostaw bez zmian
+          </Button>
+          <Button 
+            onClick={() => handleSyncQuantity(true)} 
+            disabled={syncingQuantity}
+            variant="contained"
+            color="primary"
+            autoFocus
+          >
+            {syncingQuantity ? 'Aktualizowanie...' : 'Tak, zaktualizuj zamówienie'}
           </Button>
         </DialogActions>
       </Dialog>
