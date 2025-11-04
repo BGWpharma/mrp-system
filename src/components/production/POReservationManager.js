@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -719,14 +720,29 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
                 <TableRow key={reservation.id}>
                   <TableCell>{reservation.materialName}</TableCell>
                   <TableCell>
-                    <Tooltip title={`Pozycja w PO: ${reservation.poItemId}`}>
+                    <Box
+                      component={Link}
+                      to={`/purchase-orders/${reservation.poId}`}
+                      sx={{
+                        display: 'inline-block',
+                        textDecoration: 'none'
+                      }}
+                    >
                       <Chip
                         label={reservation.poNumber}
                         size="small"
                         color="primary"
                         variant="outlined"
+                        clickable
+                        title={`Pozycja w PO: ${reservation.poItemId}`}
+                        sx={{
+                          cursor: 'pointer',
+                          '&:hover': {
+                            opacity: 0.8
+                          }
+                        }}
                       />
-                    </Tooltip>
+                    </Box>
                   </TableCell>
                   <TableCell>
                     {reservation.reservedQuantity} {reservation.unit}

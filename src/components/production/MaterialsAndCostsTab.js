@@ -456,15 +456,32 @@ const MaterialsAndCostsTab = ({
                                 ].filter(Boolean).join('\n');
                                 
                                 return (
-                                  <Chip 
+                                  <Box
                                     key={`po-${index}`}
-                                    size="small" 
-                                    label={`PO: ${reservation.poNumber} (${availableQuantity} ${material.unit}${isDelivered ? ' ✓' : ''})`} 
-                                    color={chipColor} 
-                                    variant="outlined" 
-                                    sx={{ mr: 0.5, mb: 0.5 }}
-                                    title={tooltipText}
-                                  />
+                                    component={Link}
+                                    to={`/purchase-orders/${reservation.poId}`}
+                                    sx={{
+                                      display: 'inline-block',
+                                      textDecoration: 'none',
+                                      mr: 0.5,
+                                      mb: 0.5
+                                    }}
+                                  >
+                                    <Chip 
+                                      size="small" 
+                                      label={`PO: ${reservation.poNumber} (${availableQuantity} ${material.unit}${isDelivered ? ' ✓' : ''})`} 
+                                      color={chipColor} 
+                                      variant="outlined" 
+                                      clickable
+                                      title={tooltipText}
+                                      sx={{ 
+                                        cursor: 'pointer',
+                                        '&:hover': {
+                                          opacity: 0.8
+                                        }
+                                      }}
+                                    />
+                                  </Box>
                                 );
                               })}
                             </Box>
