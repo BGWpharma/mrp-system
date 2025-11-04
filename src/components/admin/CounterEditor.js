@@ -92,6 +92,47 @@ const CounterEditor = () => {
     });
   };
   
+  // Obsługa zmiany wartości miesięcznego licznika faktur
+  const handleMonthlyInvoiceCounterChange = (counterKey, value) => {
+    const numberValue = parseInt(value, 10);
+    
+    if (isNaN(numberValue) || numberValue < 1) {
+      // Wartość musi być liczbą całkowitą większą od 0
+      return;
+    }
+    
+    setCounterData({
+      ...counterData,
+      monthlyInvoiceCounters: {
+        ...counterData.monthlyInvoiceCounters,
+        [counterKey]: numberValue
+      }
+    });
+  };
+  
+  // Pobierz klucz licznika dla bieżącego miesiąca
+  const getCurrentMonthKey = (invoiceType) => {
+    const now = new Date();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const year = now.getFullYear().toString();
+    return `${invoiceType}_${month}_${year}`;
+  };
+  
+  // Pobierz wartość licznika dla bieżącego miesiąca
+  const getCurrentMonthCounterValue = (invoiceType) => {
+    const key = getCurrentMonthKey(invoiceType);
+    return counterData?.monthlyInvoiceCounters?.[key] || 1;
+  };
+  
+  // Formatuj klucz licznika do wyświetlenia
+  const formatCounterKey = (key) => {
+    const parts = key.split('_');
+    if (parts.length === 3) {
+      return `${parts[0]} (${parts[1]}/${parts[2]})`;
+    }
+    return key;
+  };
+  
   // Obsługa zmiany wartości licznika klienta
   const handleCustomerCounterChange = (customerId, value) => {
     const numberValue = parseInt(value, 10);
@@ -159,7 +200,8 @@ const CounterEditor = () => {
         PO: 1,
         CO: 1,
         LOT: 1,
-        customerCounters: {}
+        customerCounters: {},
+        monthlyInvoiceCounters: {}
       };
       
       await updateCounters(counterId, defaultCounters);
@@ -260,6 +302,71 @@ const CounterEditor = () => {
                 />
               </Grid>
             </Grid>
+            
+            <Divider sx={{ my: 2 }} />
+            
+            {/* Sekcja liczników faktur */}
+            <Typography variant="subtitle1" gutterBottom sx={{ mt: 2, fontWeight: 'bold' }}>
+              Miesięczne liczniki faktur (bieżący miesiąc)
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Liczniki faktur resetują się automatycznie co miesiąc. Poniżej możesz edytować liczniki dla bieżącego miesiąca.
+            </Typography>
+            
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Faktury sprzedaży (FS)"
+                  fullWidth
+                  value={getCurrentMonthCounterValue('FS')}
+                  onChange={(e) => handleMonthlyInvoiceCounterChange(getCurrentMonthKey('FS'), e.target.value)}
+                  type="number"
+                  InputProps={{ inputProps: { min: 1 } }}
+                  helperText={`Format: FS/${getCurrentMonthCounterValue('FS')}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${new Date().getFullYear()}`}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Faktury proforma (FPF)"
+                  fullWidth
+                  value={getCurrentMonthCounterValue('FPF')}
+                  onChange={(e) => handleMonthlyInvoiceCounterChange(getCurrentMonthKey('FPF'), e.target.value)}
+                  type="number"
+                  InputProps={{ inputProps: { min: 1 } }}
+                  helperText={`Format: FPF/${getCurrentMonthCounterValue('FPF')}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${new Date().getFullYear()}`}
+                />
+              </Grid>
+            </Grid>
+            
+            {/* Accordion z historycznymi licznikami faktur */}
+            {counterData.monthlyInvoiceCounters && Object.keys(counterData.monthlyInvoiceCounters).length > 2 && (
+              <Accordion sx={{ mb: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography>
+                    Historia liczników faktur ({Object.keys(counterData.monthlyInvoiceCounters).length})
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Grid container spacing={2}>
+                    {Object.entries(counterData.monthlyInvoiceCounters || {})
+                      .sort(([keyA], [keyB]) => keyB.localeCompare(keyA)) // Sortuj od najnowszych
+                      .map(([key, value]) => (
+                        <Grid item xs={12} sm={6} md={4} key={key}>
+                          <TextField
+                            label={formatCounterKey(key)}
+                            value={value}
+                            onChange={(e) => handleMonthlyInvoiceCounterChange(key, e.target.value)}
+                            type="number"
+                            InputProps={{ inputProps: { min: 1 } }}
+                            fullWidth
+                            size="small"
+                          />
+                        </Grid>
+                      ))}
+                  </Grid>
+                </AccordionDetails>
+              </Accordion>
+            )}
             
             <Divider sx={{ my: 2 }} />
             

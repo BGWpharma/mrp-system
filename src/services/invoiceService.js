@@ -16,6 +16,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from './firebase/config';
 import { formatDateForInput } from '../utils/dateUtils';
 import { preciseCompare, preciseIsLessOrEqual } from '../utils/mathUtils';
+import { generateFSNumber, generateFPFNumber } from '../utils/numberGenerators';
 
 const INVOICES_COLLECTION = 'invoices';
 const INVOICE_ITEMS_COLLECTION = 'invoiceItems';
@@ -216,13 +217,13 @@ export const getInvoicesByOrderId = async (orderId) => {
  */
 export const createInvoice = async (invoiceData, userId) => {
   try {
-    // Walidacja danych faktury
-    await validateInvoiceData(invoiceData);
-    
-    // Generowanie numeru faktury, jeśli nie został podany
-    if (!invoiceData.number) {
+    // Generowanie numeru faktury, jeśli nie został podany (PRZED walidacją)
+    if (!invoiceData.number || invoiceData.number.trim() === '') {
       invoiceData.number = await generateInvoiceNumber(invoiceData.isProforma);
     }
+    
+    // Walidacja danych faktury (teraz już z numerem)
+    await validateInvoiceData(invoiceData);
     
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
     const linkedPurchaseOrders = invoiceData.linkedPurchaseOrders || [];
@@ -902,44 +903,15 @@ export const calculateInvoiceTotalGross = (items) => {
  * Generuje numer faktury
  * Format: FPF/kolejny numer/MM/RRRR lub FS/kolejny numer/MM/RRRR
  * Numeracja odnawia się co miesiąc
+ * Używa systemu liczników z numberGenerators.js
  */
 export const generateInvoiceNumber = async (isProforma = false) => {
   try {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const prefix = isProforma ? 'FPF' : 'FS';
-    
-    // Pobierz wszystkie faktury z bieżącego miesiąca i roku o danym typie
-    const invoicesQuery = query(
-      collection(db, INVOICES_COLLECTION),
-      where('number', '>=', `${prefix}/`),
-      where('number', '<', `${prefix}/\uf8ff`)
-    );
-    
-    const querySnapshot = await getDocs(invoicesQuery);
-    
-    // Filtruj faktury z bieżącego miesiąca i roku
-    const currentMonthInvoices = [];
-    querySnapshot.forEach((doc) => {
-      const invoiceNumber = doc.data().number;
-      if (invoiceNumber) {
-        // Sprawdź format: PREFIX/NUMER/MM/RRRR
-        const parts = invoiceNumber.split('/');
-        if (parts.length === 4 && parts[0] === prefix) {
-          const invoiceMonth = parts[2];
-          const invoiceYear = parts[3];
-          if (invoiceMonth === month && invoiceYear === year.toString()) {
-            currentMonthInvoices.push(invoiceNumber);
-          }
-        }
-      }
-    });
-    
-    // Numer faktury to liczba istniejących faktur + 1
-    const invoiceNumber = (currentMonthInvoices.length + 1).toString();
-    
-    return `${prefix}/${invoiceNumber}/${month}/${year}`;
+    if (isProforma) {
+      return await generateFPFNumber();
+    } else {
+      return await generateFSNumber();
+    }
   } catch (error) {
     console.error('Błąd podczas generowania numeru faktury:', error);
     throw error;
