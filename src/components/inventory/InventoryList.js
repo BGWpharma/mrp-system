@@ -61,13 +61,16 @@ import {
   DeleteForever as DeleteForeverIcon,
   ViewColumn as ViewColumnIcon,
   ArrowDropUp as ArrowDropUpIcon,
-  PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
   Clear as ClearIcon,
   Refresh as RefreshIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Layers as LayersIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, getInventoryItemsOptimized, clearInventoryItemsCache, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
+import { getBatchesWithFilters } from '../../services/inventory/batchService';
+import { convertTimestampToDate, isDefaultDate } from '../../services/inventory/utils/formatters';
+import { exportToExcel } from '../../utils/exportUtils';
 import { useNotification } from '../../hooks/useNotification';
 import { formatDate, formatQuantity } from '../../utils/formatters';
 import { toast } from 'react-hot-toast';
@@ -1037,173 +1040,6 @@ const InventoryList = () => {
     fetchInventoryItems(tableSort.field, tableSort.order);
   };
 
-  // Funkcja do generowania raportu PDF ze stanów magazynowych
-  const generatePdfReport = async () => {
-    try {
-      setMainTableLoading(true);
-      showSuccess('Generowanie raportu PDF...');
-
-      // Pobierz wszystkie pozycje magazynowe do raportu (bez paginacji)
-      const allItems = await getAllInventoryItems(
-        selectedWarehouse || null, 
-        null, 
-        null, 
-        debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
-        debouncedSearchCategory.trim() !== '' ? debouncedSearchCategory : null,
-        tableSort.field,
-        tableSort.order
-      );
-
-      // Importuj jsPDF i autoTable
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
-
-      // Utwórz dokument PDF
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      // Funkcja do poprawiania polskich znaków
-      const fixPolishChars = (text) => {
-        if (!text) return '';
-        return text.toString()
-          .replace(/ą/g, 'a')
-          .replace(/ć/g, 'c')
-          .replace(/ę/g, 'e')
-          .replace(/ł/g, 'l')
-          .replace(/ń/g, 'n')
-          .replace(/ó/g, 'o')
-          .replace(/ś/g, 's')
-          .replace(/ź/g, 'z')
-          .replace(/ż/g, 'z')
-          .replace(/Ą/g, 'A')
-          .replace(/Ć/g, 'C')
-          .replace(/Ę/g, 'E')
-          .replace(/Ł/g, 'L')
-          .replace(/Ń/g, 'N')
-          .replace(/Ó/g, 'O')
-          .replace(/Ś/g, 'S')
-          .replace(/Ź/g, 'Z')
-          .replace(/Ż/g, 'Z');
-      };
-
-      // Nagłówek
-      doc.setFontSize(18);
-      doc.text('Inventory Stock Report', 14, 20);
-
-      // Data wygenerowania
-      const currentDate = new Date();
-      const formattedDate = `${currentDate.getDate()}.${currentDate.getMonth() + 1}.${currentDate.getFullYear()}`;
-      doc.setFontSize(12);
-      doc.text(`Generated: ${formattedDate}`, 14, 30);
-
-      // Filtr magazynu
-      if (selectedWarehouse) {
-        const warehouseName = warehouses.find(w => w.id === selectedWarehouse)?.name || selectedWarehouse;
-        doc.text(`Warehouse: ${fixPolishChars(warehouseName)}`, 14, 38);
-      } else {
-        doc.text('Warehouse: All', 14, 38);
-      }
-
-      // Filtr wyszukiwania
-      if (debouncedSearchTerm) {
-        doc.text(`SKU Filter: ${fixPolishChars(debouncedSearchTerm)}`, 14, 46);
-      }
-      if (debouncedSearchCategory) {
-        doc.text(`Category: ${fixPolishChars(debouncedSearchCategory)}`, 14, 54);
-      }
-
-      // Podsumowanie ilościowe
-      const itemsToShow = Array.isArray(allItems.items) ? allItems.items : allItems;
-      const totalItems = itemsToShow.length;
-      const totalQuantity = itemsToShow.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-      const totalReserved = itemsToShow.reduce((sum, item) => sum + (Number(item.bookedQuantity) || 0), 0);
-      const totalAvailable = totalQuantity - totalReserved;
-
-      doc.setFontSize(14);
-      doc.text('Summary', 14, 65);
-      doc.setFontSize(10);
-      doc.text(`Total items: ${totalItems}`, 14, 73);
-      doc.text(`Total quantity: ${totalQuantity.toFixed(2)}`, 14, 80);
-      doc.text(`Reserved quantity: ${totalReserved.toFixed(2)}`, 14, 87);
-      doc.text(`Available quantity: ${totalAvailable.toFixed(2)}`, 14, 94);
-
-      // Przygotuj dane tabeli
-      const tableData = itemsToShow.map(item => {
-        const bookedQuantity = Number(item.bookedQuantity) || 0;
-        const availableQuantity = Number(item.quantity) - bookedQuantity;
-        
-        return [
-          fixPolishChars(item.category || ''),
-          fixPolishChars(item.name || ''), // Przenosimy name do kolumny SKU
-          fixPolishChars(item.casNumber || ''),
-          fixPolishChars(item.barcode || ''),
-          (Number(item.quantity) || 0).toFixed(2) + ' ' + (item.unit || 'pcs.'),
-          bookedQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
-          availableQuantity.toFixed(2) + ' ' + (item.unit || 'pcs.'),
-          fixPolishChars(item.warehouseName || ''),
-          item.boxesPerPallet || '',
-          item.itemsPerBox || '',
-          item.weight ? item.weight + ' kg' : '',
-          fixPolishChars(item.description || '')
-        ];
-      });
-
-      // Nagłówki tabeli
-      const tableHeaders = [
-        'Category',
-        'SKU',
-        'CAS Number',
-        'Barcode',
-        'Total Qty',
-        'Reserved Qty',
-        'Available Qty',
-        'Location',
-        'Cardboard/Pallet',
-        'Pcs/Cardboard',
-        'Weight (kg)',
-        'Description'
-      ];
-
-      // Generuj tabelę
-      autoTable(doc, {
-        startY: 105,
-        head: [tableHeaders],
-        body: tableData,
-        headStyles: { fillColor: [66, 139, 202], font: 'helvetica', fontSize: 7 },
-        alternateRowStyles: { fillColor: [241, 245, 249] },
-        styles: { font: 'helvetica', fontSize: 6.5, cellPadding: 1.5 },
-        margin: { top: 105 },
-        tableLineWidth: 0.1,
-        tableLineColor: [0, 0, 0]
-      });
-
-      // Stopka
-      const pageCount = doc.internal.getNumberOfPages();
-      for(let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(10);
-        doc.text(
-          `Page ${i} of ${pageCount}`,
-          doc.internal.pageSize.width / 2,
-          doc.internal.pageSize.height - 10,
-          { align: 'center' }
-        );
-      }
-
-      // Zapisz plik
-      doc.save(`Inventory_Stock_Report_${formattedDate.replace(/\./g, '_')}.pdf`);
-      showSuccess('Raport PDF został wygenerowany');
-    } catch (error) {
-      console.error('Błąd podczas generowania raportu PDF:', error);
-      showError('Błąd podczas generowania raportu PDF: ' + error.message);
-    } finally {
-      setMainTableLoading(false);
-    }
-  };
-
   // Funkcja do generowania raportu CSV ze stanów magazynowych
   const generateCsvReport = async () => {
     try {
@@ -1276,6 +1112,216 @@ const InventoryList = () => {
     } catch (error) {
       console.error('Błąd podczas generowania raportu CSV:', error);
       showError('Błąd podczas generowania raportu CSV: ' + error.message);
+    } finally {
+      setMainTableLoading(false);
+    }
+  };
+
+  // Funkcja do generowania eksportu partii CSV z dwoma arkuszami
+  const generateBatchesExportCSV = async () => {
+    try {
+      setMainTableLoading(true);
+      showSuccess('Generowanie eksportu partii...');
+
+      // Pobierz wszystkie partie z magazynu
+      const filterParams = selectedWarehouse ? { warehouseId: selectedWarehouse } : {};
+      const allBatches = await getBatchesWithFilters(filterParams);
+
+      if (!allBatches || allBatches.length === 0) {
+        showError('Brak partii do wyeksportowania');
+        setMainTableLoading(false);
+        return;
+      }
+
+      // Pobierz pozycje magazynowe
+      const allItems = await getAllInventoryItems(
+        selectedWarehouse || null,
+        null,
+        null,
+        null,
+        null,
+        'name',
+        'asc'
+      );
+
+      const itemsArray = Array.isArray(allItems.items) ? allItems.items : allItems;
+      
+      // Stwórz mapę pozycji dla szybkiego dostępu
+      const itemsMap = {};
+      itemsArray.forEach(item => {
+        itemsMap[item.id] = item;
+      });
+
+      // ARKUSZ 1: Wszystkie partie z cenami
+      const batchesData = allBatches.map(batch => {
+        const item = itemsMap[batch.itemId];
+        const batchValue = (batch.quantity || 0) * (batch.unitPrice || 0);
+        
+        return {
+          itemName: item?.name || 'Nieznana pozycja',
+          itemCategory: item?.category || '',
+          batchNumber: batch.batchNumber || batch.lotNumber || '-',
+          warehouseName: batch.warehouseName || warehouses.find(w => w.id === batch.warehouseId)?.name || '',
+          quantity: (batch.quantity || 0).toFixed(4),
+          unit: item?.unit || batch.unit || 'szt.',
+          availableQuantity: Math.max(0, (batch.quantity || 0) - (batch.bookedQuantity || 0)).toFixed(4),
+          unitPrice: batch.unitPrice ? (batch.unitPrice).toFixed(4) : '-',
+          batchValue: batchValue.toFixed(2),
+          baseUnitPrice: batch.baseUnitPrice ? (batch.baseUnitPrice).toFixed(4) : '-',
+          additionalCostPerUnit: batch.additionalCostPerUnit ? (batch.additionalCostPerUnit).toFixed(4) : '-',
+          expiryDate: batch.expiryDate && !isDefaultDate(convertTimestampToDate(batch.expiryDate)) 
+            ? convertTimestampToDate(batch.expiryDate)?.toLocaleDateString('pl-PL') 
+            : '-',
+          notes: batch.notes || '',
+          // Wartości numeryczne do obliczeń sum
+          _quantityNum: batch.quantity || 0,
+          _batchValueNum: batchValue
+        };
+      }).sort((a, b) => {
+        // Sortowanie według nazwy pozycji, potem według numeru partii
+        const nameCompare = a.itemName.localeCompare(b.itemName);
+        if (nameCompare !== 0) return nameCompare;
+        return a.batchNumber.localeCompare(b.batchNumber);
+      });
+
+      // Oblicz sumy
+      const totalQuantity = batchesData.reduce((sum, batch) => sum + batch._quantityNum, 0);
+      const totalValue = batchesData.reduce((sum, batch) => sum + batch._batchValueNum, 0);
+
+      // Dodaj wiersz z sumami
+      batchesData.push({
+        itemName: '--- SUMA ---',
+        itemCategory: '',
+        batchNumber: '',
+        warehouseName: '',
+        quantity: totalQuantity.toFixed(4),
+        unit: '',
+        availableQuantity: '',
+        unitPrice: '',
+        batchValue: totalValue.toFixed(2),
+        baseUnitPrice: '',
+        additionalCostPerUnit: '',
+        expiryDate: '',
+        notes: ''
+      });
+
+      const batchesHeaders = [
+        { label: 'Nazwa pozycji', key: 'itemName' },
+        { label: 'Kategoria', key: 'itemCategory' },
+        { label: 'Numer partii/LOT', key: 'batchNumber' },
+        { label: 'Magazyn', key: 'warehouseName' },
+        { label: 'Ilość', key: 'quantity' },
+        { label: 'Jednostka', key: 'unit' },
+        { label: 'Ilość dostępna', key: 'availableQuantity' },
+        { label: 'Cena jednostkowa (EUR)', key: 'unitPrice' },
+        { label: 'Łączna wartość (ilość × cena) (EUR)', key: 'batchValue' },
+        { label: 'Cena bazowa (EUR)', key: 'baseUnitPrice' },
+        { label: 'Koszty dodatkowe/j. (EUR)', key: 'additionalCostPerUnit' },
+        { label: 'Data ważności', key: 'expiryDate' },
+        { label: 'Notatki', key: 'notes' }
+      ];
+
+      // ARKUSZ 2: Pozycje magazynowe z sumą wartości partii
+      const itemValuesMap = {};
+      
+      allBatches.forEach(batch => {
+        const itemId = batch.itemId;
+        const batchValue = (batch.quantity || 0) * (batch.unitPrice || 0);
+        
+        if (!itemValuesMap[itemId]) {
+          const item = itemsMap[itemId];
+          itemValuesMap[itemId] = {
+            itemName: item?.name || 'Nieznana pozycja',
+            itemCategory: item?.category || '',
+            warehouseName: item?.warehouseName || '',
+            totalQuantity: 0,
+            totalReservedQuantity: 0,
+            totalAvailableQuantity: 0,
+            batchesCount: 0,
+            totalValue: 0,
+            unit: item?.unit || 'szt.'
+          };
+        }
+        
+        itemValuesMap[itemId].totalQuantity += (batch.quantity || 0);
+        itemValuesMap[itemId].totalReservedQuantity += (batch.bookedQuantity || 0);
+        itemValuesMap[itemId].totalValue += batchValue;
+        itemValuesMap[itemId].batchesCount += 1;
+      });
+
+      const itemValuesData = Object.values(itemValuesMap).map(item => {
+        item.totalAvailableQuantity = Math.max(0, item.totalQuantity - item.totalReservedQuantity);
+        return {
+          ...item,
+          totalQuantity: item.totalQuantity.toFixed(4),
+          totalAvailableQuantity: item.totalAvailableQuantity.toFixed(4),
+          totalValue: item.totalValue.toFixed(2),
+          averageUnitPrice: item.totalQuantity > 0 
+            ? (item.totalValue / item.totalQuantity).toFixed(4) 
+            : '0.0000',
+          // Wartości numeryczne do obliczeń sum
+          _totalQuantityNum: item.totalQuantity,
+          _totalAvailableQuantityNum: item.totalAvailableQuantity,
+          _totalValueNum: item.totalValue
+        };
+      }).sort((a, b) => a.itemName.localeCompare(b.itemName));
+
+      // Oblicz sumy dla arkusza 2
+      const sumTotalQuantity = itemValuesData.reduce((sum, item) => sum + item._totalQuantityNum, 0);
+      const sumTotalAvailable = itemValuesData.reduce((sum, item) => sum + item._totalAvailableQuantityNum, 0);
+      const sumTotalValue = itemValuesData.reduce((sum, item) => sum + item._totalValueNum, 0);
+
+      // Dodaj wiersz z sumami do arkusza 2
+      itemValuesData.push({
+        itemName: '--- SUMA ---',
+        itemCategory: '',
+        totalQuantity: sumTotalQuantity.toFixed(4),
+        unit: '',
+        totalAvailableQuantity: sumTotalAvailable.toFixed(4),
+        batchesCount: '',
+        totalValue: sumTotalValue.toFixed(2),
+        averageUnitPrice: ''
+      });
+
+      const itemValuesHeaders = [
+        { label: 'Nazwa pozycji', key: 'itemName' },
+        { label: 'Kategoria', key: 'itemCategory' },
+        { label: 'Suma ilości', key: 'totalQuantity' },
+        { label: 'Jednostka', key: 'unit' },
+        { label: 'Suma dostępnej', key: 'totalAvailableQuantity' },
+        { label: 'Liczba partii', key: 'batchesCount' },
+        { label: 'Suma wartości partii (EUR)', key: 'totalValue' },
+        { label: 'Średnia cena jednostkowa (EUR)', key: 'averageUnitPrice' }
+      ];
+
+      // Utwórz arkusze dla Excel
+      const worksheets = [
+        {
+          name: 'Partie magazynowe',
+          data: batchesData,
+          headers: batchesHeaders
+        },
+        {
+          name: 'Wartości pozycji',
+          data: itemValuesData,
+          headers: itemValuesHeaders
+        }
+      ];
+
+      // Wyeksportuj do Excel
+      const success = exportToExcel(
+        worksheets, 
+        `Export_Partii_${new Date().toISOString().slice(0, 10)}`
+      );
+
+      if (success) {
+        showSuccess(`Wyeksportowano ${batchesData.length} partii i ${itemValuesData.length} pozycji`);
+      } else {
+        showError('Błąd podczas generowania eksportu partii');
+      }
+    } catch (error) {
+      console.error('Błąd podczas generowania eksportu partii:', error);
+      showError('Błąd podczas generowania eksportu partii: ' + error.message);
     } finally {
       setMainTableLoading(false);
     }
@@ -1698,11 +1744,11 @@ const InventoryList = () => {
   const handleMenuItemClick = (action) => {
     handleMoreMenuClose();
     switch (action) {
-      case 'pdf':
-        generatePdfReport();
-        break;
       case 'csv':
         generateCsvReport();
+        break;
+      case 'batches':
+        generateBatchesExportCSV();
         break;
       case 'import':
         handleOpenImportDialog();
@@ -1805,17 +1851,17 @@ const InventoryList = () => {
             </ListItemIcon>
             <ListItemText>Odśwież listę</ListItemText>
           </MenuItem>
-          <MenuItem onClick={() => handleMenuItemClick('pdf')}>
-            <ListItemIcon>
-              <PdfIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>{t('inventory.states.pdfReport')}</ListItemText>
-          </MenuItem>
           <MenuItem onClick={() => handleMenuItemClick('csv')}>
             <ListItemIcon>
               <CsvIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>{t('inventory.states.csvReport')}</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleMenuItemClick('batches')}>
+            <ListItemIcon>
+              <LayersIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Export partii CSV</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => handleMenuItemClick('import')}>
             <ListItemIcon>
