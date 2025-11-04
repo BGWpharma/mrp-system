@@ -34,8 +34,7 @@ import {
   generateCashflowReportWithExpenses,
   calculateCashflowStatisticsWithExpenses,
   prepareCashflowChartDataWithExpenses,
-  exportCashflowToCSV,
-  exportDetailedCashflowToCSV
+  exportCashflowRevenueAndCostsToCSV
 } from '../../../services/cashflowService';
 import CashflowSummaryCards from '../../../components/sales/co-reports/CashflowSummaryCards';
 import CashflowChart from '../../../components/sales/co-reports/CashflowChart';
@@ -141,27 +140,14 @@ const CashflowTab = () => {
     fetchCashflowData();
   };
 
-  const handleExport = () => {
+  const handleExportRevenueAndCosts = () => {
     try {
-      const filename = `cashflow_${filters.dateFrom?.toISOString().split('T')[0]}_${filters.dateTo?.toISOString().split('T')[0]}.csv`;
-      // Przekaż pełne dane z globalExpenses i statystyki
-      exportCashflowToCSV(cashflowData, statistics, filename);
-      showSuccess(t('cashflow.notifications.exportSuccess'));
+      const filename = `przychody_koszty_${filters.dateFrom?.toISOString().split('T')[0]}_${filters.dateTo?.toISOString().split('T')[0]}.csv`;
+      exportCashflowRevenueAndCostsToCSV(cashflowData, statistics, filters, filename);
+      showSuccess('Zestawienie przychodów i kosztów zostało wyeksportowane');
     } catch (error) {
       console.error('Błąd podczas eksportowania:', error);
-      showError(t('cashflow.notifications.exportError'));
-    }
-  };
-
-  const handleExportDetailed = () => {
-    try {
-      const filename = `cashflow_detailed_${filters.dateFrom?.toISOString().split('T')[0]}_${filters.dateTo?.toISOString().split('T')[0]}.csv`;
-      // Eksportuj szczegółowy raport z timeline
-      exportDetailedCashflowToCSV(cashflowData, statistics, filename);
-      showSuccess('Szczegółowy raport został wyeksportowany');
-    } catch (error) {
-      console.error('Błąd podczas eksportowania:', error);
-      showError(t('cashflow.notifications.exportError'));
+      showError('Błąd podczas eksportowania zestawienia');
     }
   };
 
@@ -200,21 +186,12 @@ const CashflowTab = () => {
             </IconButton>
           </Tooltip>
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<DownloadIcon />}
-            onClick={handleExport}
+            onClick={handleExportRevenueAndCosts}
             disabled={loading || !cashflowData.orders || cashflowData.orders.length === 0}
           >
-            Eksport CSV
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportDetailed}
-            disabled={loading || !cashflowData.orders || cashflowData.orders.length === 0}
-            sx={{ ml: 1 }}
-          >
-            Eksport Szczegółowy
+            Eksport CSV - Przychody i Koszty
           </Button>
         </Box>
       </Box>

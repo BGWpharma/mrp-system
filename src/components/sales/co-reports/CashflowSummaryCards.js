@@ -18,8 +18,7 @@ import {
   Assessment as AssessmentIcon,
   Timer as TimerIcon,
   ShoppingBasket as ShoppingBasketIcon,
-  AttachMoney as AttachMoneyIcon,
-  Percent as PercentIcon
+  AttachMoney as AttachMoneyIcon
 } from '@mui/icons-material';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -96,14 +95,6 @@ const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) 
       color: (statistics.netProfit || 0) >= 0 ? 'success' : 'error',
       format: 'currency',
       tooltip: 'Wartość zamówień CO - wartość PO w okresie'
-    },
-    {
-      title: 'Marża okresu',
-      value: parseFloat(statistics.profitMargin || 0),
-      icon: <PercentIcon />,
-      color: parseFloat(statistics.profitMargin || 0) >= 0 ? 'success' : 'error',
-      format: 'percentage',
-      tooltip: 'Marża z całego okresu'
     },
     {
       title: 'Liczba PO w okresie',

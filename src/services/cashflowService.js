@@ -237,7 +237,7 @@ export const generateCashflowReport = async (filters = {}) => {
           
           const totalInvoiced = finalInvoices.reduce((sum, i) => sum + parseFloat(i.total || 0), 0);
           
-          const orderValue = parseFloat(order.total || order.totalGross || 0);
+          const orderValue = parseFloat(order.totalValue || order.total || order.totalGross || 0);
           const paymentStatus = calculatePaymentStatus(orderValue, totalPaid, totalExpected);
           
           // Znajdź daty pierwszej i ostatniej płatności
@@ -1225,4 +1225,220 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
       ? ((netProfit / baseStats.totalOrderValue) * 100).toFixed(2)
       : 0
   };
+};
+
+/**
+ * Eksportuje zestawienie przychodów i kosztów do CSV
+ * 
+ * Format eksportu:
+ * - SEKCJA 1: Podsumowanie okresu (statystyki ogólne)
+ * - SEKCJA 2: Przychody (zamówienia klientów w okresie)
+ * - SEKCJA 3: Koszty (zamówienia zakupu w okresie)
+ * - SEKCJA 4: Zestawienie (łączne przychody vs koszty)
+ * 
+ * @param {Object} cashflowDataWithExpenses - Obiekt z {orders, globalExpenses}
+ * @param {Object} statistics - Statystyki
+ * @param {Object} filters - Filtry (zawiera dateFrom, dateTo)
+ * @param {string} filename - Nazwa pliku
+ */
+export const exportCashflowRevenueAndCostsToCSV = (
+  cashflowDataWithExpenses,
+  statistics = null,
+  filters = {},
+  filename = null
+) => {
+  let orders = [];
+  let globalExpenses = null;
+
+  if (Array.isArray(cashflowDataWithExpenses)) {
+    orders = cashflowDataWithExpenses;
+  } else if (cashflowDataWithExpenses && typeof cashflowDataWithExpenses === 'object') {
+    orders = cashflowDataWithExpenses.orders || [];
+    globalExpenses = cashflowDataWithExpenses.globalExpenses || null;
+  }
+
+  if (!orders || orders.length === 0) {
+    throw new Error('Brak danych do eksportu');
+  }
+
+  const csvSections = [];
+
+  // ========================================
+  // NAGŁÓWEK
+  // ========================================
+  csvSections.push('ZESTAWIENIE PRZYCHODÓW I KOSZTÓW');
+  csvSections.push(`"Okres","${filters.dateFrom?.toLocaleDateString('pl-PL') || ''} - ${filters.dateTo?.toLocaleDateString('pl-PL') || ''}"`);
+  csvSections.push(`"Data wygenerowania","${new Date().toLocaleString('pl-PL')}"`);
+  csvSections.push('');
+  csvSections.push('');
+
+  // ========================================
+  // SEKCJA 1: PODSUMOWANIE OKRESU
+  // ========================================
+  if (statistics) {
+    csvSections.push('=== PODSUMOWANIE OKRESU ===');
+    csvSections.push('');
+    csvSections.push('Kategoria,Wartość (EUR)');
+    csvSections.push(`"PRZYCHODY - Wartość zamówień","${(statistics.totalOrderValue || 0).toFixed(2)}"`);
+    csvSections.push(`"PRZYCHODY - Wpłacono","${(statistics.totalPaid || 0).toFixed(2)}"`);
+    csvSections.push(`"PRZYCHODY - Oczekiwane","${(statistics.totalRemaining || 0).toFixed(2)}"`);
+    csvSections.push('');
+    csvSections.push(`"KOSZTY - Wartość zamówień zakupu","${(statistics.totalExpenses || 0).toFixed(2)}"`);
+    csvSections.push(`"KOSZTY - Zapłacono","${(statistics.totalExpensesPaid || 0).toFixed(2)}"`);
+    csvSections.push(`"KOSZTY - Pozostało","${(statistics.totalExpensesRemaining || 0).toFixed(2)}"`);
+    csvSections.push('');
+    csvSections.push(`"BILANS - Cashflow netto (wpłacono - zapłacono)","${(statistics.netCashflow || 0).toFixed(2)}"`);
+    csvSections.push(`"BILANS - Zysk netto (przychody - koszty)","${(statistics.netProfit || 0).toFixed(2)}"`);
+    csvSections.push(`"BILANS - Marża (%)","${statistics.profitMargin || 0}"`);
+    csvSections.push('');
+    csvSections.push('');
+  }
+
+  // ========================================
+  // SEKCJA 2: PRZYCHODY - ZAMÓWIENIA KLIENTÓW
+  // ========================================
+  csvSections.push('=== PRZYCHODY - ZAMÓWIENIA KLIENTÓW ===');
+  csvSections.push('');
+  csvSections.push('Data,Nr Zamówienia,Klient,Wartość (EUR),Wpłacono (EUR),Do zapłaty (EUR),Status');
+
+  let totalRevenueValue = 0;
+  let totalRevenuePaid = 0;
+  let totalRevenueRemaining = 0;
+
+  // Grupuj przychody po datach
+  const revenueByDate = new Map();
+  
+  orders.forEach(order => {
+    const orderDate = order.orderDate ? new Date(order.orderDate) : null;
+    const dateKey = orderDate ? orderDate.toISOString().split('T')[0] : 'Brak daty';
+    
+    if (!revenueByDate.has(dateKey)) {
+      revenueByDate.set(dateKey, []);
+    }
+    
+    revenueByDate.get(dateKey).push({
+      date: orderDate,
+      orderNumber: order.orderNumber,
+      customer: order.customer?.name || 'Nieznany',
+      value: order.orderValue,
+      paid: order.totalPaid,
+      remaining: order.totalRemaining,
+      status: getPaymentStatusLabel(order.paymentStatus)
+    });
+    
+    totalRevenueValue += order.orderValue;
+    totalRevenuePaid += order.totalPaid;
+    totalRevenueRemaining += order.totalRemaining;
+  });
+
+  // Sortuj po datach i wypisz
+  const sortedRevenues = Array.from(revenueByDate.entries())
+    .sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+  sortedRevenues.forEach(([dateKey, items]) => {
+    items.forEach(item => {
+      const row = [
+        item.date ? item.date.toLocaleDateString('pl-PL') : 'Brak daty',
+        item.orderNumber,
+        item.customer,
+        item.value.toFixed(2),
+        item.paid.toFixed(2),
+        item.remaining.toFixed(2),
+        item.status
+      ];
+      csvSections.push(row.map(cell => `"${cell}"`).join(','));
+    });
+  });
+
+  csvSections.push('');
+  csvSections.push(`"SUMA PRZYCHODÓW","","","${totalRevenueValue.toFixed(2)}","${totalRevenuePaid.toFixed(2)}","${totalRevenueRemaining.toFixed(2)}",""`);
+  csvSections.push('');
+  csvSections.push('');
+
+  // ========================================
+  // SEKCJA 3: KOSZTY - ZAMÓWIENIA ZAKUPU
+  // ========================================
+  if (globalExpenses && globalExpenses.expenseTimeline && globalExpenses.expenseTimeline.length > 0) {
+    csvSections.push('=== KOSZTY - ZAMÓWIENIA ZAKUPU ===');
+    csvSections.push('');
+    csvSections.push('Data Dostawy,Nr PO,Dostawca,Pozycja,Wartość (EUR),Status,Przeterminowane');
+
+    let totalExpenseValue = 0;
+
+    // Grupuj wydatki po datach
+    const expensesByDate = new Map();
+    
+    globalExpenses.expenseTimeline.forEach(expense => {
+      const expenseDate = expense.date ? new Date(expense.date) : null;
+      const dateKey = expenseDate ? expenseDate.toISOString().split('T')[0] : 'Brak daty';
+      
+      if (!expensesByDate.has(dateKey)) {
+        expensesByDate.set(dateKey, []);
+      }
+      
+      expensesByDate.get(dateKey).push({
+        date: expenseDate,
+        poNumber: expense.poNumber || '',
+        supplier: expense.supplier || 'Nieznany',
+        itemName: expense.itemName || 'Całe PO',
+        amount: expense.amount,
+        isPaid: expense.isPaid ? 'Zapłacone' : 'Niezapłacone',
+        isOverdue: expense.isOverdue ? 'TAK' : 'NIE'
+      });
+      
+      totalExpenseValue += expense.amount;
+    });
+
+    // Sortuj po datach i wypisz
+    const sortedExpenses = Array.from(expensesByDate.entries())
+      .sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+    sortedExpenses.forEach(([dateKey, items]) => {
+      items.forEach(item => {
+        const row = [
+          item.date ? item.date.toLocaleDateString('pl-PL') : 'Brak daty',
+          item.poNumber,
+          item.supplier,
+          item.itemName,
+          item.amount.toFixed(2),
+          item.isPaid,
+          item.isOverdue
+        ];
+        csvSections.push(row.map(cell => `"${cell}"`).join(','));
+      });
+    });
+
+    csvSections.push('');
+    csvSections.push(`"SUMA KOSZTÓW","","","","${totalExpenseValue.toFixed(2)}","",""`);
+    csvSections.push('');
+    csvSections.push('');
+  }
+
+  // ========================================
+  // SEKCJA 4: ZESTAWIENIE KOŃCOWE
+  // ========================================
+  csvSections.push('=== ZESTAWIENIE KOŃCOWE ===');
+  csvSections.push('');
+  csvSections.push('Kategoria,Wartość (EUR)');
+  csvSections.push(`"Przychody - Wartość zamówień","${totalRevenueValue.toFixed(2)}"`);
+  csvSections.push(`"Przychody - Wpłacono","${totalRevenuePaid.toFixed(2)}"`);
+  csvSections.push('');
+  
+  if (globalExpenses) {
+    csvSections.push(`"Koszty - Wartość zamówień zakupu","${(globalExpenses.totalExpenseValue || 0).toFixed(2)}"`);
+    csvSections.push(`"Koszty - Zapłacono","${(globalExpenses.totalExpensePaid || 0).toFixed(2)}"`);
+    csvSections.push('');
+    csvSections.push(`"WYNIK - Różnica (przychody - koszty)","${(totalRevenueValue - (globalExpenses.totalExpenseValue || 0)).toFixed(2)}"`);
+    csvSections.push(`"CASHFLOW - Różnica (wpłacono - zapłacono)","${(totalRevenuePaid - (globalExpenses.totalExpensePaid || 0)).toFixed(2)}"`);
+  }
+
+  // Utwórz zawartość CSV
+  const csvContent = csvSections.join('\n');
+
+  // Pobierz plik
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename || `przychody_koszty_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
 };
