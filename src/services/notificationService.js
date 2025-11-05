@@ -42,7 +42,11 @@ const notificationsCache = {
   notifications: {},
   lastFetched: {},
   // Czas ważności cache w milisekundach (5 minut)
-  cacheExpiration: 5 * 60 * 1000
+  cacheExpiration: 5 * 60 * 1000,
+  // Cache dla Realtime Database
+  rtdbUnreadCount: {},
+  rtdbNotifications: {},
+  rtdbLastFetched: {}
 };
 
 /**
@@ -607,6 +611,19 @@ export const markRealtimeNotificationAsRead = async (notificationId, userId) => 
   try {
     const notificationRef = ref(rtdb, `${REALTIME_NOTIFICATIONS_PATH}/${notificationId}/read/${userId}`);
     await set(notificationRef, true);
+    
+    // Invaliduj cache - usuń dane z cache aby wymusić ponowne pobranie
+    delete notificationsCache.rtdbUnreadCount[userId];
+    delete notificationsCache.rtdbLastFetched[`rtdb-unreadCount-${userId}`];
+    
+    // Invaliduj cache dla wszystkich wariantów listy powiadomień tego użytkownika
+    Object.keys(notificationsCache.rtdbNotifications).forEach(key => {
+      if (key.startsWith(`rtdb-notifications-${userId}`)) {
+        delete notificationsCache.rtdbNotifications[key];
+        delete notificationsCache.rtdbLastFetched[key];
+      }
+    });
+    
     return true;
   } catch (error) {
     console.error('Błąd podczas oznaczania powiadomienia jako przeczytane:', error);
@@ -678,6 +695,18 @@ export const markAllRealtimeNotificationsAsRead = async (userId) => {
     
     // console.log(`[RTDB] Po aktualizacji pozostało ${remainingUnread} nieprzeczytanych powiadomień`);
     
+    // Invaliduj cache - usuń dane z cache aby wymusić ponowne pobranie
+    delete notificationsCache.rtdbUnreadCount[userId];
+    delete notificationsCache.rtdbLastFetched[`rtdb-unreadCount-${userId}`];
+    
+    // Invaliduj cache dla wszystkich wariantów listy powiadomień tego użytkownika
+    Object.keys(notificationsCache.rtdbNotifications).forEach(key => {
+      if (key.startsWith(`rtdb-notifications-${userId}`)) {
+        delete notificationsCache.rtdbNotifications[key];
+        delete notificationsCache.rtdbLastFetched[key];
+      }
+    });
+    
     return true;
   } catch (error) {
     console.error('Błąd podczas oznaczania wszystkich powiadomień jako przeczytane:', error);
@@ -732,7 +761,7 @@ export const subscribeToUserNotifications = (userId, callback) => {
 };
 
 /**
- * Pobiera powiadomienia dla użytkownika z Realtime Database
+ * Pobiera powiadomienia dla użytkownika z Realtime Database z wykorzystaniem cache
  * 
  * @param {string} userId - ID użytkownika
  * @param {boolean} onlyUnread - Czy pobierać tylko nieprzeczytane powiadomienia
@@ -741,6 +770,20 @@ export const subscribeToUserNotifications = (userId, callback) => {
  */
 export const getRealtimeUserNotifications = async (userId, onlyUnread = false, limitCount = 20) => {
   try {
+    // Sprawdź czy dane są w cache i czy cache jest ważny
+    const now = Date.now();
+    const cacheKey = `rtdb-notifications-${userId}-${onlyUnread}-${limitCount}`;
+    const lastFetched = notificationsCache.rtdbLastFetched[cacheKey] || 0;
+    
+    // Jeśli cache jest ważny, zwróć wartość z cache
+    if (
+      now - lastFetched < notificationsCache.cacheExpiration && 
+      notificationsCache.rtdbNotifications[cacheKey]
+    ) {
+      console.log('[RTDB Cache] Użyto cache dla listy powiadomień');
+      return notificationsCache.rtdbNotifications[cacheKey];
+    }
+    
     // console.log(`[RTDB] Pobieranie powiadomień dla użytkownika ${userId} (onlyUnread: ${onlyUnread}, limit: ${limitCount})`);
     const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
     
@@ -751,6 +794,9 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
       
       if (!snapshot.exists()) {
         // console.log('[RTDB] Brak danych w węźle powiadomień');
+        // Zapisz pustą listę w cache
+        notificationsCache.rtdbNotifications[cacheKey] = [];
+        notificationsCache.rtdbLastFetched[cacheKey] = now;
         return [];
       }
       
@@ -804,26 +850,47 @@ export const getRealtimeUserNotifications = async (userId, onlyUnread = false, l
       const limitedNotifications = notifications.slice(0, limitCount);
       // console.log(`[RTDB] Zwracanie ${limitedNotifications.length} powiadomień po zastosowaniu limitu ${limitCount}`);
       
+      // Zapisz dane w cache
+      notificationsCache.rtdbNotifications[cacheKey] = limitedNotifications;
+      notificationsCache.rtdbLastFetched[cacheKey] = now;
+      
       return limitedNotifications;
     } catch (networkError) {
       console.warn('[RTDB] Błąd sieci podczas pobierania powiadomień:', networkError);
-      // console.log('[RTDB] Działanie w trybie offline - zwracamy pustą listę');
-      return [];
+      // console.log('[RTDB] Działanie w trybie offline - zwracamy dane z cache lub pustą listę');
+      // W przypadku błędu sieci, zwróć dane z cache jeśli istnieją
+      return notificationsCache.rtdbNotifications[cacheKey] || [];
     }
   } catch (error) {
     console.error('[RTDB] Błąd podczas pobierania powiadomień z Realtime Database:', error);
-    return [];
+    // W przypadku błędu, zwróć dane z cache jeśli istnieją
+    const cacheKey = `rtdb-notifications-${userId}-${onlyUnread}-${limitCount}`;
+    return notificationsCache.rtdbNotifications[cacheKey] || [];
   }
 };
 
 /**
- * Pobiera liczbę nieprzeczytanych powiadomień dla użytkownika z Realtime Database
+ * Pobiera liczbę nieprzeczytanych powiadomień dla użytkownika z Realtime Database z wykorzystaniem cache
  * 
  * @param {string} userId - ID użytkownika
  * @returns {Promise<number>} - Liczba nieprzeczytanych powiadomień
  */
 export const getUnreadRealtimeNotificationsCount = async (userId) => {
   try {
+    // Sprawdź czy dane są w cache i czy cache jest ważny
+    const now = Date.now();
+    const cacheKey = `rtdb-unreadCount-${userId}`;
+    const lastFetched = notificationsCache.rtdbLastFetched[cacheKey] || 0;
+    
+    // Jeśli cache jest ważny, zwróć wartość z cache
+    if (
+      now - lastFetched < notificationsCache.cacheExpiration && 
+      notificationsCache.rtdbUnreadCount[userId] !== undefined
+    ) {
+      console.log('[RTDB Cache] Użyto cache dla liczby nieprzeczytanych powiadomień');
+      return notificationsCache.rtdbUnreadCount[userId];
+    }
+    
     // console.log(`[RTDB] Pobieranie liczby nieprzeczytanych powiadomień dla użytkownika ${userId}`);
     const notificationsRef = ref(rtdb, REALTIME_NOTIFICATIONS_PATH);
     
@@ -834,6 +901,9 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
       
       if (!snapshot.exists()) {
         // console.log(`[RTDB] Brak danych w węźle powiadomień`);
+        // Zapisz w cache
+        notificationsCache.rtdbUnreadCount[userId] = 0;
+        notificationsCache.rtdbLastFetched[cacheKey] = now;
         return 0;
       }
       
@@ -863,16 +933,22 @@ export const getUnreadRealtimeNotificationsCount = async (userId) => {
       
       // console.log(`[RTDB] Znaleziono ${userNotificationsCount} powiadomień dla użytkownika ${userId}, z czego ${count} nieprzeczytanych`);
       // console.log(`[RTDB] Łączna liczba nieprzeczytanych powiadomień dla użytkownika ${userId}: ${count}`);
+      
+      // Zapisz w cache
+      notificationsCache.rtdbUnreadCount[userId] = count;
+      notificationsCache.rtdbLastFetched[cacheKey] = now;
+      
       return count;
     } catch (networkError) {
-      // Obsługa błędu offline - zwróć 0 lub dane z pamięci podręcznej
+      // Obsługa błędu offline - zwróć dane z cache lub 0
       console.warn('[RTDB] Błąd sieci podczas pobierania nieprzeczytanych powiadomień:', networkError.message);
-      // console.log('[RTDB] Działanie w trybie offline - zwracanie 0 jako liczby nieprzeczytanych powiadomień');
-      return 0;
+      // console.log('[RTDB] Działanie w trybie offline - zwracamy dane z cache lub 0');
+      return notificationsCache.rtdbUnreadCount[userId] || 0;
     }
   } catch (error) {
     console.error('[RTDB] Błąd podczas pobierania liczby nieprzeczytanych powiadomień z Realtime Database:', error);
-    return 0;
+    // W przypadku błędu, zwróć dane z cache jeśli istnieją
+    return notificationsCache.rtdbUnreadCount[userId] || 0;
   }
 };
 
@@ -981,4 +1057,58 @@ export const createRealtimeCheckboxNotification = async (userIds, checkboxText, 
     console.error('Błąd podczas tworzenia powiadomienia o zaznaczeniu checkboxa:', error);
     throw error;
   }
+};
+
+/**
+ * Czyści cache powiadomień dla konkretnego użytkownika (zarówno Firestore jak i Realtime Database)
+ * Przydatne gdy chcemy wymusić świeże pobranie danych
+ * 
+ * @param {string} userId - ID użytkownika, dla którego wyczyścić cache
+ */
+export const clearNotificationsCache = (userId) => {
+  // Wyczyść cache Firestore
+  delete notificationsCache.unreadCount[userId];
+  
+  Object.keys(notificationsCache.notifications).forEach(key => {
+    if (key.startsWith(`notifications-${userId}`)) {
+      delete notificationsCache.notifications[key];
+    }
+  });
+  
+  Object.keys(notificationsCache.lastFetched).forEach(key => {
+    if (key.startsWith(`notifications-${userId}`) || key === `unreadCount-${userId}`) {
+      delete notificationsCache.lastFetched[key];
+    }
+  });
+  
+  // Wyczyść cache Realtime Database
+  delete notificationsCache.rtdbUnreadCount[userId];
+  
+  Object.keys(notificationsCache.rtdbNotifications).forEach(key => {
+    if (key.startsWith(`rtdb-notifications-${userId}`)) {
+      delete notificationsCache.rtdbNotifications[key];
+    }
+  });
+  
+  Object.keys(notificationsCache.rtdbLastFetched).forEach(key => {
+    if (key.startsWith(`rtdb-notifications-${userId}`) || key === `rtdb-unreadCount-${userId}`) {
+      delete notificationsCache.rtdbLastFetched[key];
+    }
+  });
+  
+  console.log(`[Cache] Wyczyszczono cache powiadomień dla użytkownika ${userId}`);
+};
+
+/**
+ * Czyści cały cache powiadomień dla wszystkich użytkowników
+ */
+export const clearAllNotificationsCache = () => {
+  notificationsCache.unreadCount = {};
+  notificationsCache.notifications = {};
+  notificationsCache.lastFetched = {};
+  notificationsCache.rtdbUnreadCount = {};
+  notificationsCache.rtdbNotifications = {};
+  notificationsCache.rtdbLastFetched = {};
+  
+  console.log('[Cache] Wyczyszczono cały cache powiadomień');
 }; 

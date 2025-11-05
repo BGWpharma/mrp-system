@@ -83,11 +83,17 @@ const NotificationsMenu = () => {
     notifications: null,
     unreadCount: null
   });
+  
+  // Ref do śledzenia czy subskrypcja została właśnie zainicjalizowana
+  const isInitialLoad = useRef(true);
 
   // Efekt dla nasłuchiwania w Realtime Database
   useEffect(() => {
     if (currentUser) {
       // console.log("NotificationsMenu: Inicjalizacja dla użytkownika", currentUser.uid);
+      
+      // Oznacz że to początkowe ładowanie
+      isInitialLoad.current = true;
       
       // Pobierz początkowe dane
       fetchUnreadCount();
@@ -105,9 +111,18 @@ const NotificationsMenu = () => {
         // Dodaj nowe powiadomienie do stanu
         setNotifications(prevNotifications => [newNotification, ...prevNotifications]);
         
-        // Pokaż toast z nowym powiadomieniem
-        showToastNotification(newNotification);
+        // Pokaż toast z nowym powiadomieniem TYLKO jeśli to nie jest początkowe ładowanie
+        // onChildAdded wywołuje się dla wszystkich istniejących powiadomień przy montowaniu
+        if (!isInitialLoad.current) {
+          showToastNotification(newNotification);
+        }
       });
+      
+      // Po krótkim czasie oznacz że początkowe ładowanie się zakończyło
+      // To pozwoli na pokazywanie toastów dla prawdziwie nowych powiadomień
+      const timer = setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 2000); // 2 sekundy na załadowanie istniejących powiadomień
       
       // Zapisz funkcje wyrejestrowania
       unsubscribeRefs.current = {
@@ -120,6 +135,7 @@ const NotificationsMenu = () => {
       // Czyszczenie przy odmontowaniu
       return () => {
         // console.log("NotificationsMenu: Czyszczenie subskrypcji");
+        clearTimeout(timer);
         if (unsubscribeRefs.current.notifications) {
           unsubscribeRefs.current.notifications();
         }
@@ -538,6 +554,9 @@ const NotificationsMenu = () => {
         autoHideDuration={2000}
         onClose={handleCloseToast}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        sx={{ 
+          zIndex: 9999 // Wysokie z-index aby nie był przykryty przez inne elementy
+        }}
       >
         <Alert 
           onClose={handleCloseToast} 
