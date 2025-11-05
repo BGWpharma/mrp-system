@@ -154,14 +154,6 @@ const ProductionShiftForm = () => {
         setWarehousesLoading(true);
         const warehousesList = await getAllWarehouses();
         setWarehouses(warehousesList);
-        
-        // Ustaw pierwszy magazyn jako domyślny jeśli jeszcze nie wybrano
-        if (warehousesList.length > 0 && !formData.warehouseId) {
-          setFormData(prev => ({
-            ...prev,
-            warehouseId: warehousesList[0].id
-          }));
-        }
       } catch (error) {
         console.error('Błąd podczas pobierania magazynów:', error);
       } finally {
@@ -523,7 +515,7 @@ const ProductionShiftForm = () => {
           product: '',
           moNumber: '',
           productionQuantity: '',
-          warehouseId: warehouses.length > 0 ? warehouses[0].id : '',
+          warehouseId: '',
           firstProduct: 'BRAK',
           secondProduct: 'BRAK',
           thirdProduct: 'BRAK',
