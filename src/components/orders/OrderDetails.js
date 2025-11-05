@@ -312,18 +312,10 @@ const OrderDetails = () => {
   const location = useLocation();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const { showError, showSuccess, showInfo } = useNotification();
   const navigate = useNavigate();
-  const fileInputRef = React.useRef(null);
   const { currentUser } = useAuth();
-  const [openPurchaseOrderDialog, setOpenPurchaseOrderDialog] = useState(false);
-  const [availablePurchaseOrders, setAvailablePurchaseOrders] = useState([]);
-  const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState('');
-  const [loadingPurchaseOrders, setLoadingPurchaseOrders] = useState(false);
   const [userNames, setUserNames] = useState({});
-  const [driveLinkDialogOpen, setDriveLinkDialogOpen] = useState(false);
-  const [driveLink, setDriveLink] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [cmrDocuments, setCmrDocuments] = useState([]);
@@ -843,65 +835,6 @@ const OrderDetails = () => {
     }
   };
 
-  const handleDeliveryProofUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      setUploading(true);
-      
-      // Tworzymy referencję do pliku w Firebase Storage
-      const storageRef = ref(storage, `delivery_proofs/${orderId}/${file.name}`);
-      
-      // Przesyłamy plik
-      await uploadBytes(storageRef, file);
-      
-      // Pobieramy URL do pliku
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      // Aktualizujemy zamówienie z URL do dowodu dostawy
-      await updateOrder(orderId, { ...order, deliveryProof: downloadURL }, currentUser.uid);
-      
-      // Aktualizujemy stan lokalny
-      setOrder({ ...order, deliveryProof: downloadURL });
-      
-      showSuccess(t('orderDetails.notifications.documentUploadSuccess'));
-    } catch (error) {
-      console.error('Błąd podczas przesyłania pliku:', error);
-      showError(t('orderDetails.notifications.documentUploadGenericError'));
-    } finally {
-      setUploading(false);
-    }
-  };
-  
-  const handleDeleteDeliveryProof = async () => {
-    if (!order.deliveryProof) return;
-    
-    try {
-      setUploading(true);
-      
-      // Wyciągamy ścieżkę pliku z URL
-      const fileUrl = order.deliveryProof;
-      const storageRef = ref(storage, fileUrl);
-      
-      // Usuwamy plik z Firebase Storage
-      await deleteObject(storageRef);
-      
-      // Aktualizujemy zamówienie
-      await updateOrder(orderId, { ...order, deliveryProof: null }, currentUser.uid);
-      
-      // Aktualizujemy stan lokalny
-      setOrder({ ...order, deliveryProof: null });
-      
-      showSuccess(t('orderDetails.notifications.documentDeleteSuccess'));
-    } catch (error) {
-      console.error('Błąd podczas usuwania pliku:', error);
-      showError(t('orderDetails.notifications.documentDeleteGenericError'));
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const getStatusChipColor = (status) => {
     switch (status) {
       case 'Nowe': return 'primary';
@@ -922,75 +855,6 @@ const OrderDetails = () => {
       case 'Anulowane': return 'error';
       case 'Potwierdzenie zużycia': return 'info';
       default: return 'default';
-    }
-  };
-
-  const handleAssignPurchaseOrder = () => {
-    setOpenPurchaseOrderDialog(true);
-    fetchAvailablePurchaseOrders();
-  };
-  
-  const fetchAvailablePurchaseOrders = async () => {
-    try {
-      setLoadingPurchaseOrders(true);
-      const allPurchaseOrders = await getAllPurchaseOrders();
-      
-      // Filtruj, aby wyświetlić tylko PO, które jeszcze nie są przypisane do tego zamówienia
-      const alreadyLinkedIds = (order.linkedPurchaseOrders || []).map(po => po.id);
-      const filteredPOs = allPurchaseOrders.filter(po => !alreadyLinkedIds.includes(po.id));
-      
-      setAvailablePurchaseOrders(filteredPOs);
-    } catch (error) {
-      console.error('Błąd podczas pobierania dostępnych zamówień zakupowych:', error);
-    } finally {
-      setLoadingPurchaseOrders(false);
-    }
-  };
-  
-  const handleClosePurchaseOrderDialog = () => {
-    setOpenPurchaseOrderDialog(false);
-    setSelectedPurchaseOrderId('');
-  };
-  
-  const handlePurchaseOrderSelection = (event) => {
-    setSelectedPurchaseOrderId(event.target.value);
-  };
-  
-  const handleAssignSelected = async () => {
-    if (!selectedPurchaseOrderId) return;
-    
-    try {
-      const selectedPO = availablePurchaseOrders.find(po => po.id === selectedPurchaseOrderId);
-      if (!selectedPO) return;
-      
-      // Przygotuj dane dla nowo powiązanego PO
-      const poToLink = {
-        id: selectedPO.id,
-        number: selectedPO.number,
-        supplier: selectedPO.supplier?.name || selectedPO.supplier || 'Nieznany dostawca',
-        items: selectedPO.items?.length || 0,
-        totalGross: selectedPO.totalGross || 0,
-        status: selectedPO.status || 'draft'
-      };
-      
-      // Dodaj nowe PO do listy
-      const updatedLinkedPOs = [...(order.linkedPurchaseOrders || []), poToLink];
-      
-      // Zaktualizuj zamówienie w bazie danych
-      const updatedOrder = {
-        ...order,
-        linkedPurchaseOrders: updatedLinkedPOs
-      };
-      
-      await updateOrder(order.id, updatedOrder, currentUser.uid);
-      
-      // Zaktualizuj stan lokalny
-      setOrder(updatedOrder);
-      
-      // Zamknij dialog
-      handleClosePurchaseOrderDialog();
-    } catch (error) {
-      console.error('Błąd podczas przypisywania zamówienia zakupowego:', error);
     }
   };
 
@@ -1248,75 +1112,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
       </Paper>
     );
   };
-
-  const handleDriveLinkDialogOpen = () => {
-    setDriveLinkDialogOpen(true);
-  };
-
-  const handleDriveLinkDialogClose = () => {
-    setDriveLinkDialogOpen(false);
-    setDriveLink('');
-  };
-
-  const handleDriveLinkChange = (e) => {
-    setDriveLink(e.target.value);
-  };
-
-  const handleDriveLinkSubmit = async () => {
-    if (!driveLink) {
-      showError(t('orderDetails.notifications.invalidDriveLink'));
-      return;
-    }
-
-    // Sprawdzamy czy link jest do Google Drive
-    if (!driveLink.includes('drive.google.com')) {
-      showError(t('orderDetails.notifications.linkMustBeGoogleDrive'));
-      return;
-    }
-
-    try {
-      setUploading(true);
-      
-      // Aktualizujemy zamówienie z linkiem do Google Drive
-      await updateOrder(orderId, { 
-        ...order, 
-        deliveryProof: driveLink,
-        deliveryProofType: 'link' // Dodajemy informację o typie dowodu
-      }, currentUser.uid);
-      
-      // Aktualizujemy stan lokalny
-      setOrder({ 
-        ...order, 
-        deliveryProof: driveLink,
-        deliveryProofType: 'link'
-      });
-      
-      showSuccess(t('orderDetails.notifications.driveLinkAdded'));
-      handleDriveLinkDialogClose();
-    } catch (error) {
-      console.error('Błąd podczas dodawania linku do Google Drive:', error);
-      showError(t('orderDetails.notifications.driveLinkAddError'));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // Pomocnicze funkcje do wykrywania typu dowodu dostawy
-  const isImageUrl = (url) => {
-    return url && (
-      url.endsWith('.jpg') || 
-      url.endsWith('.jpeg') || 
-      url.endsWith('.png') || 
-      url.endsWith('.gif') || 
-      url.endsWith('.bmp') ||
-      url.startsWith('data:image/')
-    );
-  };
-
-  const isGoogleDriveLink = (url) => {
-    return url && url.includes('drive.google.com');
-  };
-
 
   // Funkcja do określania statusu produkcji dla danego elementu
   // Funkcja do pobierania faktur powiązanych z zamówieniem
@@ -2674,96 +2469,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
           </Table>
         </Paper>
 
-        {/* Sekcja dowodu dostawy */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.deliveryProof')}</Typography>
-          <Divider sx={{ mb: 2 }} />
-          
-          {order.deliveryProof ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {isImageUrl(order.deliveryProof) ? (
-                <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
-                  <img 
-                    src={order.deliveryProof} 
-                    alt={t('orderDetails.deliveryProof.altText')} 
-                    style={{ width: '100%', height: 'auto', borderRadius: 4 }} 
-                  />
-                </Box>
-              ) : isGoogleDriveLink(order.deliveryProof) ? (
-                <Box sx={{ width: '100%', maxWidth: 600, mb: 2, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
-                  <Typography variant="h6" align="center" gutterBottom>
-                    <LinkIcon color="primary" sx={{ verticalAlign: 'middle', mr: 1 }} />
-                    Link do Google Drive
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom align="center">
-                    {order.deliveryProof}
-                  </Typography>
-                </Box>
-              ) : (
-                <Box sx={{ width: '100%', maxWidth: 600, mb: 2 }}>
-                  <Alert severity="info">
-                    {t('orderDetails.deliveryProof.cannotDisplayInBrowser')} 
-                    {t('orderDetails.deliveryProof.clickToOpen')}
-                  </Alert>
-                </Box>
-              )}
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button 
-                  variant="outlined"
-                  startIcon={<OpenInNewIcon />}
-                  href={order.deliveryProof}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Otwórz
-                </Button>
-                <Button 
-                  variant="outlined" 
-                  color="error" 
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDeleteDeliveryProof}
-                  disabled={uploading}
-                >
-                  Usuń
-                </Button>
-              </Box>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Typography variant="body1" sx={{ mb: 2 }}>
-                Brak załączonego dowodu dostawy. Dodaj skan, zdjęcie lub link do dokumentu potwierdzającego dostawę.
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <input
-                  ref={fileInputRef}
-                  accept="image/*, application/pdf"
-                  style={{ display: 'none' }}
-                  id="delivery-proof-upload"
-                  type="file"
-                  onChange={handleDeliveryProofUpload}
-                />
-                <label htmlFor="delivery-proof-upload">
-                  <Button
-                    variant="contained"
-                    component="span"
-                    startIcon={<UploadIcon />}
-                    disabled={uploading}
-                  >
-                    {uploading ? t('orderDetails.deliveryProof.uploading') : t('orderDetails.deliveryProof.addFile')}
-                  </Button>
-                </label>
-                <Button
-                  variant="outlined"
-                  startIcon={<LinkIcon />}
-                  onClick={handleDriveLinkDialogOpen}
-                >
-                  Dodaj link Google Drive
-                </Button>
-              </Box>
-            </Box>
-          )}
-        </Paper>
-
         {/* Uwagi */}
         {order.notes && (
           <Paper sx={{ p: 3, mb: 3 }}>
@@ -2772,112 +2477,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
             <Typography variant="body1">
               {order.notes}
             </Typography>
-          </Paper>
-        )}
-        
-        {/* Powiązane zamówienia zakupu */}
-        {order && (
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">{t('orderDetails.sections.relatedPurchaseOrders')}</Typography>
-              <Button 
-                variant="outlined" 
-                startIcon={<PlaylistAddIcon />} 
-                onClick={handleAssignPurchaseOrder}
-              >
-                Przypisz PO
-              </Button>
-            </Box>
-            <Divider sx={{ mb: 2 }} />
-            
-            {order.linkedPurchaseOrders && order.linkedPurchaseOrders.length > 0 ? (
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Numer zamówienia</TableCell>
-                    <TableCell>Dostawca</TableCell>
-                    <TableCell>Ilość pozycji</TableCell>
-                    <TableCell align="right">Wartość brutto</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Akcje</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {order.linkedPurchaseOrders.map((po, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <Chip 
-                          label={po.number} 
-                          color="primary" 
-                          variant="outlined" 
-                          size="small"
-                          sx={{ fontWeight: 'bold' }}
-                        />
-                      </TableCell>
-                      <TableCell>{po.supplier}</TableCell>
-                      <TableCell>{po.items}</TableCell>
-                      <TableCell align="right">
-                        {(() => {
-                          try {
-                            // Jeśli zamówienie ma już wartość brutto, używamy jej
-                            if (po.totalGross !== undefined && po.totalGross !== null) {
-                              return formatCurrency(parseFloat(po.totalGross));
-                            }
-                            
-                            // W przeciwnym razie obliczamy wartość brutto
-                            const productsValue = parseFloat(po.value) || 0;
-                            const vatRate = parseFloat(po.vatRate) || 23;
-                            const vatValue = (productsValue * vatRate) / 100;
-                            
-                            // Sprawdzenie różnych formatów dodatkowych kosztów
-                            let additionalCosts = 0;
-                            if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-                              additionalCosts = po.additionalCostsItems.reduce((costsSum, cost) => {
-                                return costsSum + (parseFloat(cost.value) || 0);
-                              }, 0);
-                            } else if (po.additionalCosts !== undefined) {
-                              additionalCosts = typeof po.additionalCosts === 'number' ? po.additionalCosts : parseFloat(po.additionalCosts) || 0;
-                            }
-                            
-                            // Wartość brutto: produkty + VAT + dodatkowe koszty
-                            const grossValue = productsValue + vatValue + additionalCosts;
-                            
-                            return formatCurrency(grossValue);
-                          } catch (error) {
-                            console.error('Błąd podczas obliczania wartości PO:', error);
-                            return formatCurrency(0);
-                          }
-                        })()}
-                      </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={po.status || "Robocze"} 
-                          color={
-                            po.status === 'completed' ? 'success' : 
-                            po.status === 'in_progress' ? 'warning' : 
-                            'default'
-                          }
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => navigate(`/purchase-orders/${po.id}`)}
-                        >
-                          Szczegóły
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <Typography variant="body1" color="text.secondary">
-                Brak powiązanych zamówień zakupu
-              </Typography>
-            )}
           </Paper>
         )}
 
@@ -3166,76 +2765,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
             </Table>
           )}
         </Paper>
-
-        {/* Dialog wyboru zamówienia zakupowego */}
-        <Dialog open={openPurchaseOrderDialog} onClose={handleClosePurchaseOrderDialog} maxWidth="md" fullWidth>
-          <DialogTitle>{t('orderDetails.dialogs.purchaseOrder.title')}</DialogTitle>
-          <DialogContent>
-            {loadingPurchaseOrders ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                <CircularProgress />
-              </Box>
-            ) : availablePurchaseOrders.length > 0 ? (
-              <Box sx={{ mt: 2 }}>
-                <FormControl fullWidth>
-                  <InputLabel>{t('orderDetails.dialogs.purchaseOrder.selectLabel')}</InputLabel>
-                  <Select
-                    value={selectedPurchaseOrderId}
-                    onChange={handlePurchaseOrderSelection}
-                    label={t('orderDetails.dialogs.purchaseOrder.selectLabel')}
-                  >
-                    {availablePurchaseOrders.map(po => (
-                      <MenuItem key={po.id} value={po.id}>
-                        {po.number} - {po.supplier?.name || t('orderDetails.dialogs.purchaseOrder.unknownSupplier')} - Wartość: {po.totalGross} {po.currency || 'EUR'}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            ) : (
-              <Typography variant="body1" sx={{ mt: 2 }}>
-                {t('orderDetails.dialogs.purchaseOrder.noAvailableOrders')}
-              </Typography>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClosePurchaseOrderDialog}>{t('orderDetails.dialogs.purchaseOrder.cancel')}</Button>
-            <Button 
-              onClick={handleAssignSelected} 
-              variant="contained" 
-              disabled={!selectedPurchaseOrderId || loadingPurchaseOrders}
-            >
-              {t('orderDetails.dialogs.purchaseOrder.assign')}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Dialog do wprowadzania linku Google Drive */}
-        <Dialog open={driveLinkDialogOpen} onClose={handleDriveLinkDialogClose}>
-          <DialogTitle>{t('orderDetails.dialogs.driveLink.title')}</DialogTitle>
-          <DialogContent>
-            <DialogContentText sx={{ mb: 2 }}>
-              {t('orderDetails.dialogs.driveLink.description')}
-            </DialogContentText>
-            <TextField
-              autoFocus
-              margin="dense"
-              id="drive-link"
-              label={t('orderDetails.dialogs.driveLink.linkLabel')}
-              type="url"
-              fullWidth
-              variant="outlined"
-              value={driveLink}
-              onChange={handleDriveLinkChange}
-              placeholder={t('orderDetails.dialogs.driveLink.placeholder')}
-              helperText={t('orderDetails.dialogs.driveLink.helperText')}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleDriveLinkDialogClose}>{t('orderDetails.dialogs.driveLink.cancel')}</Button>
-            <Button onClick={handleDriveLinkSubmit} variant="contained">{t('orderDetails.dialogs.driveLink.add')}</Button>
-          </DialogActions>
-        </Dialog>
 
         {/* Dialog potwierdzenia zmiany numeru CO */}
         <Dialog

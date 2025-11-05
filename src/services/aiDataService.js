@@ -32,8 +32,8 @@ let dataCache = {
   inventoryBatches: { data: null, timestamp: null } // Dodajemy buforowanie dla inventoryBatches
 };
 
-// Czas ważności bufora w milisekundach (10 minut)
-const CACHE_EXPIRY = 10 * 60 * 1000;
+// Czas ważności bufora w milisekundach (30 minut - zoptymalizowano dla lepszej wydajności)
+const CACHE_EXPIRY = 30 * 60 * 1000;
 
 // Czas ważności bufora receptur w milisekundach (1 minuta)
 const RECIPES_CACHE_EXPIRY = 1 * 60 * 1000;
