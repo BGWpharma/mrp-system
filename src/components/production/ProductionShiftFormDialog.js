@@ -120,6 +120,7 @@ const ProductionShiftFormDialog = ({
   const [submitted, setSubmitted] = useState(false);
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [warehouses, setWarehouses] = useState([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
 
@@ -317,8 +318,12 @@ const ProductionShiftFormDialog = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Zabezpieczenie przed wielokrotnym zapisywaniem
+    if (saving) return;
+    
     if (validate()) {
       try {
+        setSaving(true);
         setSubmitted(false);
         
         const odpowiedziRef = collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi');
@@ -410,6 +415,8 @@ const ProductionShiftFormDialog = ({
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza zmiany produkcyjnej:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+      } finally {
+        setSaving(false);
       }
     }
   };
@@ -1092,9 +1099,10 @@ const ProductionShiftFormDialog = ({
                   color="primary"
                   fullWidth
                   size="large"
-                  startIcon={<SendIcon />}
+                  disabled={saving}
+                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
                 >
-                  Wyślij raport
+                  {saving ? 'Zapisywanie...' : 'Wyślij raport'}
                 </Button>
               </Box>
             </Grid>

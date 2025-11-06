@@ -376,6 +376,7 @@ const ProductionControlForm = ({
   const [loadingMO, setLoadingMO] = useState(false);
   const [editId, setEditId] = useState(null);
   const [removedAttachments, setRemovedAttachments] = useState([]); // Śledzenie usuniętych załączników
+  const [saving, setSaving] = useState(false);
 
   // Stany dla czujników środowiskowych
   const [sensors, setSensors] = useState([]);
@@ -861,8 +862,12 @@ const ProductionControlForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Zabezpieczenie przed wielokrotnym zapisywaniem
+    if (saving) return;
+    
     if (validate()) {
       try {
+        setSaving(true);
         setSubmitted(false);
         
         // Ścieżka do kolekcji odpowiedzi formularza w Firestore
@@ -1020,14 +1025,16 @@ const ProductionControlForm = ({
         });
         setRemovedAttachments([]); // Wyczyść listę usuniętych załączników
         
-        // Przekierowanie do strony odpowiedzi po 2 sekundach
+        // Przekierowanie do strony odpowiedzi po 1.2 sekundach
         setTimeout(() => {
           navigate('/production/forms/responses');
-        }, 2000);
+        }, 1200);
       }
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza kontroli produkcji:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+      } finally {
+        setSaving(false);
       }
     }
   };
@@ -1960,9 +1967,10 @@ const ProductionControlForm = ({
                 color="primary"
                 fullWidth
                 size="large"
-                startIcon={<SendIcon />}
+                disabled={saving}
+                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
               >
-                  {isEditMode ? 'Aktualizuj raport' : 'Wyślij raport'}
+                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
               </Button>
               </Box>
             </Grid>

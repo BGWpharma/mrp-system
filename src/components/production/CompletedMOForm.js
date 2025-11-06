@@ -158,6 +158,7 @@ const CompletedMOForm = () => {
   const [removedAttachments, setRemovedAttachments] = useState([]);
   const [currentTaskData, setCurrentTaskData] = useState(null); // Dodamy stan na dane zadania
   const [generatingPDF, setGeneratingPDF] = useState(false); // Stan dla generowania PDF
+  const [saving, setSaving] = useState(false);
 
   // Sprawdź, czy istnieją dane do edycji w sessionStorage
   useEffect(() => {
@@ -326,8 +327,12 @@ const CompletedMOForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Zabezpieczenie przed wielokrotnym zapisywaniem
+    if (saving) return;
+    
     if (validate()) {
       try {
+        setSaving(true);
         setSubmitted(false);
         
         // Ścieżka do kolekcji odpowiedzi formularza w Firestore
@@ -425,13 +430,15 @@ const CompletedMOForm = () => {
         });
         setRemovedAttachments([]); // Wyczyść listę usuniętych załączników
         
-        // Przekierowanie do strony odpowiedzi po 2 sekundach
+        // Przekierowanie do strony odpowiedzi po 1.2 sekundach
         setTimeout(() => {
           navigate('/production/forms/responses');
-        }, 2000);
+        }, 1200);
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+      } finally {
+        setSaving(false);
       }
     }
   };
@@ -1060,13 +1067,14 @@ const CompletedMOForm = () => {
                   type="submit"
                   variant="contained"
                   color="primary"
-                  startIcon={<SendIcon />}
+                  disabled={saving}
+                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
                   sx={{
                     ...getFormButtonStyles('contained'),
                     flexGrow: 1
                   }}
                 >
-                  {isEditMode ? 'Aktualizuj raport' : 'Wyślij raport'}
+                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
                 </Button>
               </Box>
             </Grid>

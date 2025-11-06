@@ -99,6 +99,7 @@ const LoadingReportFormPage = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [errors, setErrors] = useState({});
   const [editId, setEditId] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   // Pobieranie dokumentów CMR przy inicjalizacji
   useEffect(() => {
@@ -413,11 +414,15 @@ const LoadingReportFormPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     
+    // Zabezpieczenie przed wielokrotnym zapisywaniem
+    if (saving) return;
+    
     if (!validateForm()) {
       return;
     }
 
     try {
+      setSaving(true);
       // Przygotuj dane do zapisania
       const odpowiedzData = {
         email: formData.email,
@@ -483,14 +488,16 @@ const LoadingReportFormPage = () => {
         });
       }
       
-      // Przekierowanie po 2 sekundach
+      // Przekierowanie po 1.2 sekundach
       setTimeout(() => {
         navigate('/inventory/forms/responses');
-      }, 2000);
+      }, 1200);
       
     } catch (error) {
       console.error('Błąd podczas zapisywania formularza:', error);
       alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -967,10 +974,11 @@ const LoadingReportFormPage = () => {
                 <Button
                   type="submit"
                   variant="contained"
-                  startIcon={<SaveIcon />}
+                  disabled={saving}
+                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
                   sx={getFormButtonStyles('contained')}
                 >
-                  {isEditMode ? 'Zapisz zmiany' : 'Prześlij raport'}
+                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
                 </Button>
               </Box>
             </Grid>

@@ -60,6 +60,7 @@ const CompletedMOFormDialog = ({
   const [moOptions, setMoOptions] = useState([]);
   const [loadingMO, setLoadingMO] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false); // Stan dla generowania PDF
+  const [saving, setSaving] = useState(false);
 
   // Przygotuj dane wstępne na podstawie zadania produkcyjnego
   useEffect(() => {
@@ -169,8 +170,12 @@ const CompletedMOFormDialog = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Zabezpieczenie przed wielokrotnym zapisywaniem
+    if (saving) return;
+    
     if (validate()) {
       try {
+        setSaving(true);
         setSubmitted(false);
         
         // Ścieżka do kolekcji odpowiedzi formularza w Firestore
@@ -218,6 +223,8 @@ const CompletedMOFormDialog = ({
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza zakończonego MO:', error);
         alert(`Wystąpił błąd podczas zapisywania formularza: ${error.message}`);
+      } finally {
+        setSaving(false);
       }
     }
   };
@@ -907,9 +914,10 @@ const CompletedMOFormDialog = ({
                   color="primary"
                   fullWidth
                   size="large"
-                  startIcon={<SendIcon />}
+                  disabled={saving}
+                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
                 >
-                  Wyślij raport
+                  {saving ? 'Zapisywanie...' : 'Wyślij raport'}
                 </Button>
               </Box>
             </Grid>
