@@ -68,8 +68,7 @@ import {
   createOrder, 
   updateOrder, 
   getOrderById, 
-  ORDER_STATUSES, 
-  PAYMENT_METHODS,
+  ORDER_STATUSES,
   DEFAULT_ORDER,
   uploadDeliveryProof,
   deleteDeliveryProof,
@@ -1479,11 +1478,10 @@ const OrderForm = ({ orderId }) => {
 
   const calculateTotal = () => {
     const subtotal = calculateTotalItemsValue();
-    const shippingCost = parseFloat(orderData.shippingCost) || 0;
     const additionalCosts = calculateAdditionalCosts();
     const discounts = calculateDiscounts();
     // Nie uwzględniamy wartości PO w całkowitej wartości zamówienia
-    return subtotal + shippingCost + additionalCosts - discounts;
+    return subtotal + additionalCosts - discounts;
   };
 
   const handleCalculateCosts = async () => {
@@ -2443,12 +2441,11 @@ const OrderForm = ({ orderId }) => {
                             const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
                             
                             // Oblicz proporcjonalny udział w kosztach dodatkowych
-                            const shippingCost = parseFloat(orderData.shippingCost) || 0;
                             const additionalCosts = calculateAdditionalCosts();
                             const discounts = calculateDiscounts();
                             
                             // Całkowity udział pozycji w kosztach dodatkowych
-                            const additionalShare = proportion * (shippingCost + additionalCosts - discounts);
+                            const additionalShare = proportion * (additionalCosts - discounts);
                             
                             // Całkowity koszt pozycji z kosztami dodatkowymi
                             const totalWithAdditional = itemTotalValue + additionalShare;
@@ -2712,222 +2709,6 @@ const OrderForm = ({ orderId }) => {
             >
               {t('orderForm.buttons.addProduct')}
             </Button>
-          </Box>
-        </Paper>
-
-        <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-            <LocalShippingIcon sx={{ mr: 1 }} /> {t('orderForm.sections.paymentAndDelivery')}
-          </Typography>
-          <Divider sx={{ mb: 3 }} />
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>{t('orderForm.labels.paymentMethod')}</InputLabel>
-                <Select
-                  name="paymentMethod"
-                  value={orderData.paymentMethod || 'Przelew'}
-                  onChange={handleChange}
-                  label={t('orderForm.labels.paymentMethod')}
-                  variant="outlined"
-                  sx={inputSx}
-                >
-                  {PAYMENT_METHODS.map(method => (
-                    <MenuItem key={method.value} value={method.value}>
-                      {method.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>{t('orderForm.labels.paymentStatus')}</InputLabel>
-                <Select
-                  name="paymentStatus"
-                  value={orderData.paymentStatus || 'Nieopłacone'}
-                  onChange={handleChange}
-                  label={t('orderForm.labels.paymentStatus')}
-                  variant="outlined"
-                  sx={inputSx}
-                >
-                  <MenuItem value="Nieopłacone">Nieopłacone</MenuItem>
-                  <MenuItem value="Opłacone częściowo">Opłacone częściowo</MenuItem>
-                  <MenuItem value="Opłacone">Opłacone</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                name="shippingMethod"
-                label={t('orderForm.labels.deliveryMethod')}
-                value={orderData.shippingMethod || ''}
-                onChange={handleChange}
-                fullWidth
-                placeholder={t('orderForm.placeholders.deliveryMethod')}
-                variant="outlined"
-                sx={inputSx}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start"><LocalShippingIcon fontSize="small" /></InputAdornment>,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                <TextField
-                  name="shippingCost"
-                  label={t('orderForm.labels.deliveryCost')}
-                  type="number"
-                  value={orderData.shippingCostOriginal !== undefined ? orderData.shippingCostOriginal : orderData.shippingCost || 0}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value) || 0;
-                    const currency = orderData.shippingCurrency || 'EUR';
-                    
-                    if (currency === 'EUR') {
-                      setOrderData(prev => ({
-                        ...prev,
-                        shippingCost: value,
-                        shippingCostOriginal: value
-                      }));
-                    } else {
-                      // Przeliczenie waluty na EUR
-                      const convertedValue = convertCurrency(value, currency, 'EUR');
-                      setOrderData(prev => ({
-                        ...prev,
-                        shippingCost: convertedValue,
-                        shippingCostOriginal: value
-                      }));
-                    }
-                  }}
-                  fullWidth
-                  inputProps={{ min: 0, step: 'any' }}
-                  variant="outlined"
-                  sx={{ flex: 1, mr: 1, ...inputSx }}
-                />
-                <FormControl variant="outlined" sx={{ minWidth: 80 }}>
-                  <InputLabel>{t('orderForm.labels.currency')}</InputLabel>
-                  <Select
-                    value={orderData.shippingCurrency || 'EUR'}
-                    onChange={(e) => {
-                      const newCurrency = e.target.value;
-                      const oldCurrency = orderData.shippingCurrency || 'EUR';
-                      const originalValue = orderData.shippingCostOriginal !== undefined ? 
-                        orderData.shippingCostOriginal : 
-                        orderData.shippingCost || 0;
-                      
-                      if (newCurrency === oldCurrency) {
-                        setOrderData(prev => ({
-                          ...prev,
-                          shippingCurrency: newCurrency
-                        }));
-                        return;
-                      }
-                      
-                      // Przelicz wartość na nową walutę tylko jeśli mamy datę faktury i kurs
-                      if (orderData.invoiceDate) {
-                        if (newCurrency === 'EUR') {
-                          // Jeśli zmieniamy na EUR, używamy bezpośrednio przeliczonej wartości
-                          if (orderData.exchangeRate) {
-                            setOrderData(prev => ({
-                              ...prev,
-                              shippingCurrency: 'EUR',
-                              shippingCost: originalValue * orderData.exchangeRate,
-                              shippingCostOriginal: originalValue * orderData.exchangeRate
-                            }));
-                          } else {
-                            // Jeśli nie mamy kursu, zachowujemy wartość bez przeliczania
-                            setOrderData(prev => ({
-                              ...prev,
-                              shippingCurrency: 'EUR',
-                              shippingCost: originalValue,
-                              shippingCostOriginal: originalValue
-                            }));
-                          }
-                        } else if (oldCurrency === 'EUR') {
-                          // Jeśli zmieniamy z EUR na inną walutę
-                          // Nie przeliczamy, tylko zapamiętujemy wartość EUR jako oryginalną
-                          setOrderData(prev => ({
-                            ...prev,
-                            shippingCurrency: newCurrency,
-                            shippingCost: originalValue, // Tymczasowo bez przeliczania - kurs zostanie pobrany po podaniu daty faktury
-                            shippingCostOriginal: originalValue
-                          }));
-                        } else {
-                          // Jeśli zmieniamy z jednej waluty obcej na inną
-                          // Tymczasowo nie przeliczamy, czekamy na datę faktury
-                          setOrderData(prev => ({
-                            ...prev,
-                            shippingCurrency: newCurrency,
-                            shippingCost: originalValue, // Tymczasowo bez przeliczania
-                            shippingCostOriginal: originalValue
-                          }));
-                        }
-                      } else {
-                        // Jeśli nie mamy daty faktury, nie przeliczamy - pokazujemy komunikat
-                        showInfo('Aby przeliczać waluty, podaj datę faktury.');
-                        setOrderData(prev => ({
-                          ...prev,
-                          shippingCurrency: newCurrency,
-                          shippingCostOriginal: originalValue,
-                          // Zachowaj oryginalną wartość jako koszt dostawy do momentu podania daty faktury
-                          shippingCost: originalValue
-                        }));
-                      }
-                    }}
-                    label="Waluta"
-                    sx={inputSx}
-                  >
-                    <MenuItem value="EUR">EUR</MenuItem>
-                    <MenuItem value="PLN">PLN</MenuItem>
-                    <MenuItem value="USD">USD</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              {orderData.shippingCurrency && orderData.shippingCurrency !== 'EUR' && orderData.shippingCost > 0 && orderData.exchangeRate && (
-                <Typography variant="caption" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
-                  {formatCurrency(parseFloat(orderData.shippingCostOriginal) || 0)} {orderData.shippingCurrency} = {formatCurrency(parseFloat(orderData.shippingCost) || 0)} EUR (kurs: {orderData.exchangeRate})
-                </Typography>
-              )}
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                name="invoiceNumber"
-                label={t('orderForm.labels.invoiceNumber')}
-                value={orderData.invoiceNumber || ''}
-                onChange={handleChange}
-                fullWidth
-                placeholder={t('orderForm.placeholders.enterInvoiceNumber')}
-                variant="outlined"
-                sx={inputSx}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">📄</InputAdornment>,
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                type="date"
-                label={t('orderForm.labels.invoiceDate')}
-                name="invoiceDate"
-                value={orderData.invoiceDate || ''}
-                onChange={handleChange}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                variant="outlined"
-                helperText={t('orderForm.helperText.invoiceDate')}
-                sx={inputSx}
-              />
-            </Grid>
-          </Grid>
-          
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, alignItems: 'center', bgcolor: 'background.paper', p: 2, borderRadius: 2, boxShadow: 1 }}>
-            <Typography variant="subtitle1" sx={{ mr: 2 }}>
-              {t('orderForm.summary.deliveryCost')}: {formatCurrency(parseFloat(orderData.shippingCost) || 0)}
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              {t('orderForm.summary.total')}: {formatCurrency(calculateTotal())}
-            </Typography>
           </Box>
         </Paper>
 

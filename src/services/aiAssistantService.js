@@ -132,19 +132,21 @@ export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
         
         const requestBody = {
           model: modelConfig.model,
-          messages
+          messages,
+          stream: true  // OPTYMALIZACJA: Włączono streaming dla natychmiastowej odpowiedzi
         };
         
         // GPT-5 wymaga innych parametrów:
         if (isGPT5) {
           // GPT-5 używa max_completion_tokens i nie wspiera niestandardowego temperature
           // WAŻNE: max_completion_tokens obejmuje reasoning_tokens + output_tokens
-          // Musimy dać dużo więcej miejsca, bo GPT-5 używa dużo tokenów na wewnętrzne rozumowanie
-          requestBody.max_completion_tokens = 20000;  // Łączny limit (reasoning + output)
+          // OPTYMALIZACJA: Zmniejszono z 20000 do 4000 dla szybszych odpowiedzi
+          requestBody.max_completion_tokens = 4000;  // Łączny limit (reasoning + output) - zoptymalizowano
           
           // GPT-5 wymaga nowych parametrów kontrolujących generowanie odpowiedzi
-          requestBody.reasoning_effort = 'medium';  // low, medium, high - kontroluje czas rozumowania
-          requestBody.verbosity = 'high';           // low, medium, high - kontroluje długość odpowiedzi (zmienione na 'high' dla pełnych list)
+          // OPTYMALIZACJA: Ustawiono 'low' dla szybszego czasu odpowiedzi
+          requestBody.reasoning_effort = 'low';     // low, medium, high - kontroluje czas rozumowania (zoptymalizowano)
+          requestBody.verbosity = 'medium';         // low, medium, high - kontroluje długość odpowiedzi (zoptymalizowano)
           
           console.log('[GPT-5] Parametry zapytania:', {
             max_completion_tokens: requestBody.max_completion_tokens,
@@ -187,55 +189,92 @@ export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
           }
         }
         
-        const data = await response.json();
+        // STREAMING: Obsługa odpowiedzi strumieniowej
+        console.log('[STREAMING] Rozpoczynam odczyt odpowiedzi strumieniowej...');
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+        let buffer = '';
+        let tokenStats = null;
         
-        // DEBUGGING dla GPT-5
-        if (modelConfig.model === 'gpt-5') {
-          console.log('[GPT-5 DEBUG] Pełna odpowiedź API:', JSON.stringify(data, null, 2));
-          console.log('[GPT-5 DEBUG] data.choices:', data.choices);
-          if (data.choices && data.choices[0]) {
-            console.log('[GPT-5 DEBUG] data.choices[0]:', data.choices[0]);
-            console.log('[GPT-5 DEBUG] data.choices[0].message:', data.choices[0].message);
-            console.log('[GPT-5 DEBUG] data.choices[0].message.content:', data.choices[0].message.content);
-          }
-          
-          // Analiza użycia tokenów (ważne dla GPT-5!)
-          if (data.usage) {
-            console.log('[GPT-5 DEBUG] 📊 Użycie tokenów:', {
-              prompt_tokens: data.usage.prompt_tokens,
-              completion_tokens: data.usage.completion_tokens,
-              reasoning_tokens: data.usage.completion_tokens_details?.reasoning_tokens || 0,
-              output_tokens: (data.usage.completion_tokens - (data.usage.completion_tokens_details?.reasoning_tokens || 0)),
-              finish_reason: data.choices[0]?.finish_reason
-            });
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
             
-            // Ostrzeżenie jeśli reasoning zjada wszystkie tokeny
-            const reasoningTokens = data.usage.completion_tokens_details?.reasoning_tokens || 0;
-            const outputTokens = data.usage.completion_tokens - reasoningTokens;
-            if (reasoningTokens > 0 && outputTokens < 100) {
-              console.warn('[GPT-5 WARNING] ⚠️ Reasoning tokens zajęły prawie cały limit!', {
-                reasoning: reasoningTokens,
-                output: outputTokens,
-                recommendation: 'Zwiększ max_completion_tokens lub zmniejsz reasoning_effort'
-              });
+            if (done) {
+              console.log('[STREAMING] Zakończono odczyt strumienia');
+              break;
+            }
+            
+            // Dekoduj chunk
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            
+            // Zachowaj ostatnią niepełną linię w buforze
+            buffer = lines.pop() || '';
+            
+            // Przetwórz każdą kompletną linię
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              
+              if (trimmedLine === '') continue;
+              if (trimmedLine === 'data: [DONE]') continue;
+              
+              if (trimmedLine.startsWith('data: ')) {
+                try {
+                  const jsonData = JSON.parse(trimmedLine.substring(6));
+                  
+                  // Wyciągnij content z delta
+                  const delta = jsonData.choices?.[0]?.delta;
+                  if (delta?.content) {
+                    fullResponse += delta.content;
+                  }
+                  
+                  // Zbierz statystyki użycia (jeśli dostępne)
+                  if (jsonData.usage) {
+                    tokenStats = jsonData.usage;
+                  }
+                  
+                } catch (parseError) {
+                  console.warn('[STREAMING] Błąd parsowania linii:', trimmedLine, parseError);
+                }
+              }
             }
           }
+        } catch (streamError) {
+          console.error('[STREAMING] Błąd podczas odczytu strumienia:', streamError);
+          throw new Error(`Błąd streaming: ${streamError.message}`);
         }
         
-        // Sprawdź czy odpowiedź istnieje
-        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-          console.error('[API Error] Brak struktury choices w odpowiedzi:', data);
-          throw new Error('API zwróciło odpowiedź w nieoczekiwanym formacie');
+        // DEBUGGING dla GPT-5
+        if (modelConfig.model === 'gpt-5' && tokenStats) {
+          console.log('[GPT-5 DEBUG] 📊 Użycie tokenów (ze streaming):', {
+            prompt_tokens: tokenStats.prompt_tokens,
+            completion_tokens: tokenStats.completion_tokens,
+            reasoning_tokens: tokenStats.completion_tokens_details?.reasoning_tokens || 0,
+            output_tokens: (tokenStats.completion_tokens - (tokenStats.completion_tokens_details?.reasoning_tokens || 0))
+          });
+          
+          // Ostrzeżenie jeśli reasoning zjada wszystkie tokeny
+          const reasoningTokens = tokenStats.completion_tokens_details?.reasoning_tokens || 0;
+          const outputTokens = tokenStats.completion_tokens - reasoningTokens;
+          if (reasoningTokens > 0 && outputTokens < 100) {
+            console.warn('[GPT-5 WARNING] ⚠️ Reasoning tokens zajęły prawie cały limit!', {
+              reasoning: reasoningTokens,
+              output: outputTokens,
+              recommendation: 'Zwiększ max_completion_tokens lub zmniejsz reasoning_effort'
+            });
+          }
         }
         
-        const content = data.choices[0].message.content;
-        
-        if (!content || content.trim() === '') {
-          console.error('[API Error] Pusta zawartość w odpowiedzi. Pełna odpowiedź:', data);
-          throw new Error('API zwróciło pustą odpowiedź');
+        // Sprawdź czy mamy odpowiedź
+        if (!fullResponse || fullResponse.trim() === '') {
+          console.error('[STREAMING] Pusta odpowiedź ze strumienia');
+          throw new Error('API zwróciło pustą odpowiedź przez streaming');
         }
         
-        return content;
+        console.log(`[STREAMING] Otrzymano odpowiedź: ${fullResponse.length} znaków`);
+        return fullResponse;
       },
       cacheOptions
     );

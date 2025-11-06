@@ -1083,28 +1083,43 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+          <ScheduleIcon sx={{ mr: 1 }} />
           {t('orderDetails.sections.statusHistory')}
         </Typography>
+        <Divider sx={{ mb: 2 }} />
         
-        <Table size="small">
+        <Table size="small" sx={{ '& .MuiTableCell-root': { py: 1.5 } }}>
           <TableHead>
-            <TableRow>
-              <TableCell>{t('orderDetails.statusHistory.dateTime')}</TableCell>
-              <TableCell>{t('orderDetails.statusHistory.previousStatus')}</TableCell>
-              <TableCell>{t('orderDetails.statusHistory.newStatus')}</TableCell>
-              <TableCell>{t('orderDetails.statusHistory.whoChanged')}</TableCell>
+            <TableRow sx={{ backgroundColor: 'action.hover' }}>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('orderDetails.statusHistory.dateTime')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('orderDetails.statusHistory.previousStatus')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('orderDetails.statusHistory.newStatus')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('orderDetails.statusHistory.whoChanged')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {[...order.statusHistory].reverse().map((change, index) => (
-              <TableRow key={index}>
-                <TableCell>
+              <TableRow key={index} sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
+                <TableCell sx={{ fontSize: '0.875rem' }}>
                   {change.changedAt ? new Date(change.changedAt).toLocaleString('pl') : t('orderDetails.statusHistory.noDate')}
                 </TableCell>
-                <TableCell>{change.oldStatus}</TableCell>
-                <TableCell>{change.newStatus}</TableCell>
-                <TableCell>{getUserName(change.changedBy)}</TableCell>
+                <TableCell>
+                  <Chip 
+                    label={change.oldStatus} 
+                    size="small" 
+                    variant="outlined"
+                    color={getStatusChipColor(change.oldStatus)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Chip 
+                    label={change.newStatus} 
+                    size="small"
+                    color={getStatusChipColor(change.newStatus)}
+                  />
+                </TableCell>
+                <TableCell sx={{ fontSize: '0.875rem' }}>{getUserName(change.changedBy)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -1287,9 +1302,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     // Oblicz wartość produktów
     const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
     
-    // Koszt dostawy
-    const shippingCost = parseFloat(order.shippingCost) || 0;
-    
     // Dodatkowe koszty (tylko pozytywne)
     const additionalCosts = order.additionalCostsItems ? 
       order.additionalCostsItems
@@ -1303,7 +1315,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
     
     // Łączna wartość bez uwzględnienia PO
-    return productsValue + shippingCost + additionalCosts - discounts;
+    return productsValue + additionalCosts - discounts;
   };
 
   // Funkcja obliczająca kwotę już rozliczoną na podstawie faktur
@@ -1360,6 +1372,29 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     });
 
     return totalProforma;
+  };
+
+  // Funkcja obliczająca łączną kwotę opłaconą (proformy + rzeczywiste płatności z faktur, BEZ podwójnego liczenia)
+  const calculateTotalPaid = () => {
+    if (!invoices || invoices.length === 0) {
+      return 0;
+    }
+
+    let totalPaid = 0;
+
+    invoices.forEach(invoice => {
+      if (invoice.isProforma) {
+        // Wliczamy pełną kwotę zapłaconą w proformie
+        const proformaPaid = parseFloat(invoice.totalPaid || 0);
+        totalPaid += proformaPaid;
+      } else {
+        // Z faktur bierzemy TYLKO rzeczywiste płatności (bez proformAllocation, żeby nie liczyć podwójnie)
+        const invoiceRealPayment = parseFloat(invoice.totalPaid || 0);
+        totalPaid += invoiceRealPayment;
+      }
+    });
+
+    return totalPaid;
   };
 
   // Funkcja pomocnicza do pobierania daty ETM (Estimated Time to Manufacture)
@@ -1681,59 +1716,118 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
               )}
             </Grid>
             <Grid item xs={12} sm={6}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', height: '100%' }}>
-                <Typography variant="h6" align="right">
-                  {t('orderDetails.totalValue')}:
-                </Typography>
-                <Typography variant="h4" align="right" color="primary.main" sx={{ fontWeight: 'bold' }}>
-                  {formatCurrency(calculateOrderTotalValue())}
-                </Typography>
-                
-                {/* Kwoty rozliczone i zaliczki */}
-                <Box sx={{ mt: 2, p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
-                  {/* Faktury */}
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" align="right" color="text.secondary">
-                      FK:
-                    </Typography>
-                    <Typography variant="h6" align="right" color="success.main" sx={{ fontWeight: 'medium' }}>
-                      {formatCurrency(calculateSettledAmount())}
-                    </Typography>
-                    <Typography variant="body2" align="right" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {(() => {
-                        const totalValue = calculateOrderTotalValue();
-                        const settledAmount = calculateSettledAmount();
-                        const remainingAmount = totalValue - settledAmount;
-                        const percentage = totalValue > 0 ? ((settledAmount / totalValue) * 100).toFixed(1) : 0;
-                        
-                        return `${percentage}% • Pozostało: ${formatCurrency(remainingAmount)}`;
-                      })()}
-                    </Typography>
-                  </Box>
-                  
-                  {/* Separator */}
-                  <Divider sx={{ my: 1.5 }} />
-                  
-                  {/* Zaliczki (Proformy) */}
-                  <Box>
-                    <Typography variant="subtitle2" align="right" color="text.secondary">
-                      Zaliczki:
-                    </Typography>
-                    <Typography variant="h6" align="right" color="info.main" sx={{ fontWeight: 'medium' }}>
-                      {formatCurrency(calculateProformaTotal())}
-                    </Typography>
-                    <Typography variant="body2" align="right" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {(() => {
-                        const totalValue = calculateOrderTotalValue();
-                        const proformaTotal = calculateProformaTotal();
-                        const percentage = totalValue > 0 ? ((proformaTotal / totalValue) * 100).toFixed(1) : 0;
-                        
-                        return `${percentage}% wartości zamówienia`;
-                      })()}
-                    </Typography>
-                  </Box>
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                {/* Wartość zamówienia */}
+                <Box sx={{ 
+                  p: 2, 
+                  backgroundColor: 'primary.main', 
+                  borderRadius: 2, 
+                  mb: 2,
+                  boxShadow: 2
+                }}>
+                  <Typography variant="subtitle1" sx={{ color: 'primary.contrastText', opacity: 0.9 }}>
+                    {t('orderDetails.totalValue')}
+                  </Typography>
+                  <Typography variant="h3" sx={{ color: 'primary.contrastText', fontWeight: 'bold', mt: 0.5 }}>
+                    {formatCurrency(calculateOrderTotalValue())}
+                  </Typography>
                 </Box>
-                
+
+                {/* Karty finansowe w gridzie */}
+                <Grid container spacing={1.5}>
+                  {/* Opłacone */}
+                  <Grid item xs={12}>
+                    <Paper 
+                      elevation={3}
+                      sx={{ 
+                        p: 2, 
+                        backgroundColor: 'success.main',
+                        borderRadius: 2,
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      <Box sx={{ position: 'relative', zIndex: 1 }}>
+                        <Typography variant="subtitle2" sx={{ color: 'success.contrastText', opacity: 0.9, fontWeight: 500 }}>
+                          💰 Opłacone
+                        </Typography>
+                        <Typography variant="h5" sx={{ color: 'success.contrastText', fontWeight: 'bold', my: 0.5 }}>
+                          {formatCurrency(calculateTotalPaid())}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'success.contrastText', opacity: 0.85 }}>
+                          {(() => {
+                            const totalValue = calculateOrderTotalValue();
+                            const totalPaid = calculateTotalPaid();
+                            const percentage = totalValue > 0 ? ((totalPaid / totalValue) * 100).toFixed(1) : 0;
+                            const remaining = totalValue - totalPaid;
+                            return `${percentage}% • Do zapłaty: ${formatCurrency(remaining)}`;
+                          })()}
+                        </Typography>
+                      </Box>
+                    </Paper>
+                  </Grid>
+
+                  {/* FK i Zaliczki obok siebie */}
+                  <Grid item xs={6}>
+                    <Paper 
+                      elevation={2}
+                      sx={{ 
+                        p: 1.5, 
+                        backgroundColor: 'background.paper',
+                        borderRadius: 2,
+                        borderLeft: 4,
+                        borderColor: 'success.light',
+                        height: '100%'
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                        📄 FK
+                      </Typography>
+                      <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold', my: 0.5 }}>
+                        {formatCurrency(calculateSettledAmount())}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {(() => {
+                          const totalValue = calculateOrderTotalValue();
+                          const settledAmount = calculateSettledAmount();
+                          const percentage = totalValue > 0 ? ((settledAmount / totalValue) * 100).toFixed(1) : 0;
+                          return `${percentage}%`;
+                        })()}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+
+                  <Grid item xs={6}>
+                    <Paper 
+                      elevation={2}
+                      sx={{ 
+                        p: 1.5, 
+                        backgroundColor: 'background.paper',
+                        borderRadius: 2,
+                        borderLeft: 4,
+                        borderColor: 'info.main',
+                        height: '100%'
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                        💳 Zaliczki
+                      </Typography>
+                      <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold', my: 0.5 }}>
+                        {formatCurrency(calculateProformaTotal())}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {(() => {
+                          const totalValue = calculateOrderTotalValue();
+                          const proformaTotal = calculateProformaTotal();
+                          const percentage = totalValue > 0 ? ((proformaTotal / totalValue) * 100).toFixed(1) : 0;
+                          return `${percentage}%`;
+                        })()}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Przycisk odświeżania */}
                 <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
                   <Tooltip title={t('orderDetails.refreshOrder')}>
                     <IconButton
@@ -1750,76 +1844,66 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
           </Grid>
         </Paper>
 
-        {/* Informacje o kliencie i płatności */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">{t('orderDetails.sections.customerData')}</Typography>
-                <IconButton 
-                  size="small" 
-                  color="primary"
-                  onClick={handleSendEmail}
-                  disabled={!order.customer?.email}
-                >
-                  <EmailIcon />
-                </IconButton>
+        {/* Informacje o kliencie */}
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+              <PersonIcon sx={{ mr: 1 }} />
+              {t('orderDetails.sections.customerData')}
+            </Typography>
+            <Tooltip title="Wyślij email do klienta">
+              <IconButton 
+                size="medium" 
+                color="primary"
+                onClick={handleSendEmail}
+                disabled={!order.customer?.email}
+                sx={{
+                  backgroundColor: 'primary.light',
+                  '&:hover': { backgroundColor: 'primary.main', color: 'white' }
+                }}
+              >
+                <EmailIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <Divider sx={{ mb: 2 }} />
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Box>
+                <Typography variant="h6" color="primary.main" sx={{ mb: 2, fontWeight: 'bold' }}>
+                  {order.customer?.name || t('orderDetails.customerInfo.noCustomerName')}
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', p: 1, backgroundColor: 'action.hover', borderRadius: 1 }}>
+                    <EmailIcon sx={{ mr: 2, color: 'primary.main' }} fontSize="small" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Email</Typography>
+                      <Typography variant="body2">{order.customer?.email || '-'}</Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', p: 1, backgroundColor: 'action.hover', borderRadius: 1 }}>
+                    <PhoneIcon sx={{ mr: 2, color: 'primary.main' }} fontSize="small" />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">Telefon</Typography>
+                      <Typography variant="body2">{order.customer?.phone || '-'}</Typography>
+                    </Box>
+                  </Box>
+                </Box>
               </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="h6" sx={{ mb: 1 }}>{order.customer?.name || t('orderDetails.customerInfo.noCustomerName')}</Typography>
-              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <PersonIcon sx={{ mr: 1 }} fontSize="small" />
-                {t('orderDetails.customerInfo.email')}: {order.customer?.email || '-'}
-              </Typography>
-              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <PhoneIcon sx={{ mr: 1 }} fontSize="small" />
-                {t('orderDetails.customerInfo.phone')}: {order.customer?.phone || '-'}
-              </Typography>
-              <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
-                <LocationOnIcon sx={{ mr: 1 }} fontSize="small" />
-                {t('orderDetails.customerInfo.shippingAddress')}: {order.customer?.shippingAddress || '-'}
-              </Typography>
-            </Paper>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'start', p: 2, backgroundColor: 'action.hover', borderRadius: 1, height: '100%' }}>
+                <LocationOnIcon sx={{ mr: 2, color: 'primary.main', mt: 0.5 }} />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Adres dostawy</Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {order.customer?.shippingAddress || '-'}
+                  </Typography>
+                </Box>
+              </Box>
+            </Grid>
           </Grid>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.paymentAndDelivery')}</Typography>
-              <Divider sx={{ mb: 2 }} />
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">{t('orderDetails.payment.paymentMethod')}:</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{order.paymentMethod || '-'}</Typography>
-                  
-                  <Typography variant="subtitle2">{t('orderDetails.payment.paymentStatus')}:</Typography>
-                  <Chip 
-                    label={(() => {
-                      const statusConfig = {
-                        'Opłacone': t('orderDetails.paymentStatusLabels.paid'),
-                        'paid': t('orderDetails.paymentStatusLabels.paid'),
-                        'Opłacone częściowo': t('orderDetails.paymentStatusLabels.partiallyPaid'),
-                        'partially_paid': t('orderDetails.paymentStatusLabels.partiallyPaid'),
-                        'Nieopłacone': t('orderDetails.paymentStatusLabels.unpaid'),
-                        'unpaid': t('orderDetails.paymentStatusLabels.unpaid')
-                      };
-                      return statusConfig[order.paymentStatus] || t('orderDetails.payment.unpaid');
-                    })()} 
-                    color={order.paymentStatus === 'Opłacone' || order.paymentStatus === 'paid' ? 'success' : 
-                           order.paymentStatus === 'Opłacone częściowo' || order.paymentStatus === 'partially_paid' ? 'warning' : 'error'}
-                    size="small"
-                    sx={{ mt: 0.5 }}
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="subtitle2">{t('orderDetails.payment.deliveryMethod')}:</Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>{order.shippingMethod || '-'}</Typography>
-                  
-                  <Typography variant="subtitle2">{t('orderDetails.payment.deliveryCost')}:</Typography>
-                  <Typography variant="body1">{formatCurrency(order.shippingCost || 0)}</Typography>
-                </Grid>
-              </Grid>
-            </Paper>
-          </Grid>
-        </Grid>
+        </Paper>
 
         {/* Wyświetlenie historii zmian statusu */}
         {renderStatusHistory()}
@@ -2093,8 +2177,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                       const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
                       
                       // Oblicz proporcjonalny udział w kosztach dodatkowych
-                      const shippingCost = parseFloat(order.shippingCost) || 0;
-                      
                       // Suma dodatkowych kosztów (dodatnich)
                       const additionalCosts = order.additionalCostsItems ? 
                         order.additionalCostsItems
@@ -2108,7 +2190,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                           .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
                       
                       // Całkowity udział pozycji w kosztach dodatkowych
-                      const additionalShare = proportion * (shippingCost + additionalCosts - discounts);
+                      const additionalShare = proportion * (additionalCosts - discounts);
                       
                       // Całkowity koszt pozycji z kosztami dodatkowymi
                       const totalWithAdditional = itemTotalValue + additionalShare;
@@ -2370,16 +2452,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                   {/* Akcje - nie sumujemy */}
                   -
                 </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={3} />
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  Koszt dostawy:
-                </TableCell>
-                <TableCell align="right">
-                  {formatCurrency(order.shippingCost || 0)}
-                </TableCell>
-                <TableCell colSpan={7} />
               </TableRow>
               
               {/* Dodatkowe koszty (tylko jeśli istnieją) */}
