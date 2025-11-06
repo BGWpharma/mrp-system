@@ -96,7 +96,7 @@ export const saveOpenAIApiKey = async (userId, apiKey) => {
  * @param {Object} options - Opcje optymalizacji
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
-export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
+export const callOpenAIAPI = async (apiKey, messages, options = {}, onChunk = null) => {
   try {
     // Wyciągnij zapytanie użytkownika dla optymalizacji
     const userQuery = messages[messages.length - 1]?.content || '';
@@ -227,7 +227,20 @@ export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
                   // Wyciągnij content z delta
                   const delta = jsonData.choices?.[0]?.delta;
                   if (delta?.content) {
-                    fullResponse += delta.content;
+                    const chunk = delta.content;
+                    fullResponse += chunk;
+                    
+                    // 🔥 STREAMING CALLBACK: Wywołaj callback dla każdego chunka jeśli jest dostarczony
+                    if (onChunk && chunk) {
+                      try {
+                        onChunk(chunk, { 
+                          totalLength: fullResponse.length,
+                          isComplete: false 
+                        });
+                      } catch (callbackError) {
+                        console.warn('[STREAMING] Błąd w callback onChunk:', callbackError);
+                      }
+                    }
                   }
                   
                   // Zbierz statystyki użycia (jeśli dostępne)
@@ -271,6 +284,18 @@ export const callOpenAIAPI = async (apiKey, messages, options = {}) => {
         if (!fullResponse || fullResponse.trim() === '') {
           console.error('[STREAMING] Pusta odpowiedź ze strumienia');
           throw new Error('API zwróciło pustą odpowiedź przez streaming');
+        }
+        
+        // 🔥 STREAMING CALLBACK: Wywołaj ostatni callback z flagą isComplete
+        if (onChunk) {
+          try {
+            onChunk('', { 
+              totalLength: fullResponse.length,
+              isComplete: true 
+            });
+          } catch (callbackError) {
+            console.warn('[STREAMING] Błąd w finalnym callback onChunk:', callbackError);
+          }
         }
         
         console.log(`[STREAMING] Otrzymano odpowiedź: ${fullResponse.length} znaków`);
@@ -341,31 +366,39 @@ const formatMessagesForOpenAI = (messages, businessData = null, options = {}) =>
     };
     
     // Funkcja do inteligentnego przycięcia dużych kolekcji
-    const smartTruncate = (items, maxItems = 50) => {
+    // 🔥 OPTYMALIZACJA: Zmniejszono z 50 na 20 aby zmieścić się w limicie 272k tokenów GPT-5
+    const smartTruncate = (items, maxItems = 20) => {
       if (!Array.isArray(items)) return items;
       if (items.length <= maxItems) return items;
       
-      // Dla dużych kolekcji: pierwsze 30 + ostatnie 10 + marker
+      // Dla dużych kolekcji: pierwsze 15 + ostatnie 5 + marker
       return [
-        ...items.slice(0, 30),
-        { _truncated: true, _hiddenCount: items.length - 40, _message: `[${items.length - 40} more items omitted for brevity]` },
-        ...items.slice(-10)
+        ...items.slice(0, 15),
+        { _truncated: true, _hiddenCount: items.length - 20, _message: `[${items.length - 20} more items omitted for brevity]` },
+        ...items.slice(-5)
       ];
     };
     
-    // Dodaj dane z każdej kolekcji w formacie JSON
-    if (optimizedBusinessData.data) {
-      Object.keys(optimizedBusinessData.data).forEach(collectionName => {
-        const collectionData = optimizedBusinessData.data[collectionName];
-        
-        if (Array.isArray(collectionData) && collectionData.length > 0) {
-          compactContext.collections[collectionName] = {
-            count: collectionData.length,
-            items: smartTruncate(collectionData, 50)
-          };
-        }
-      });
-    }
+    // 🔥 FIX: Dodaj dane z każdej kolekcji w formacie JSON
+    // ContextOptimizer zwraca płaską strukturę {summary, recipes, inventory, ...}
+    // a nie {data: {recipes, inventory}, summary}
+    const dataToProcess = optimizedBusinessData.data || optimizedBusinessData;
+    
+    Object.keys(dataToProcess).forEach(collectionName => {
+      // Pomiń klucze wewnętrzne i summary
+      if (collectionName.startsWith('_') || collectionName === 'summary' || collectionName === 'analysis') {
+        return;
+      }
+      
+      const collectionData = dataToProcess[collectionName];
+      
+      if (Array.isArray(collectionData) && collectionData.length > 0) {
+        compactContext.collections[collectionName] = {
+          count: collectionData.length,
+          items: smartTruncate(collectionData, 20)  // 🔥 OPTYMALIZACJA: Limit 20 zamiast 50
+        };
+      }
+    });
     
     // Wygeneruj zwięzły kontekst tekstowy z najważniejszymi statystykami
     const summary = compactContext.summary;
@@ -1023,8 +1056,13 @@ export const addMessageToConversation = async (conversationId, role, content, at
  * @param {Array} attachments - Lista załączników (opcjonalne)
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
-export const processAIQuery = async (query, context = [], userId, attachments = []) => {
+export const processAIQuery = async (query, context = [], userId, attachments = [], onChunk = null) => {
   console.log('[processAIQuery] Rozpoczynam przetwarzanie zapytania:', query);
+  
+  // 🔥 STREAMING: Jeśli mamy callback, loguj to
+  if (onChunk) {
+    console.log('[processAIQuery] Streaming włączony - chunki będą przekazywane w czasie rzeczywistym');
+  }
   
   /* WYŁĄCZONY SYSTEM V2 - Używamy tylko prawdziwego GPT API
   // NOWY SYSTEM V2: Sprawdź czy zapytanie może być obsłużone przez zoptymalizowany system
@@ -1165,6 +1203,29 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
       modelType: complexity
     });
     
+    // 🔥 NOWA OPTYMALIZACJA: Sprawdź rozmiar danych przed wysłaniem
+    const messagesSize = JSON.stringify(formattedMessages).length;
+    const estimatedTokens = Math.ceil(messagesSize / 3); // ~3 znaki = 1 token dla PL
+    const GPT5_INPUT_LIMIT = 272000; // Limit INPUT dla GPT-5
+    
+    console.log(`[TOKEN CHECK] 📊 Rozmiar danych:`, {
+      charactersCount: messagesSize,
+      estimatedTokens: estimatedTokens,
+      limit: GPT5_INPUT_LIMIT,
+      utilizationPercent: ((estimatedTokens / GPT5_INPUT_LIMIT) * 100).toFixed(1) + '%',
+      withinLimit: estimatedTokens <= GPT5_INPUT_LIMIT
+    });
+    
+    // Ostrzeżenie jeśli zbliżamy się do limitu
+    if (estimatedTokens > GPT5_INPUT_LIMIT * 0.9) {
+      console.warn(`⚠️ [TOKEN CHECK] UWAGA: Używasz ${((estimatedTokens / GPT5_INPUT_LIMIT) * 100).toFixed(1)}% limitu tokenów!`);
+    }
+    
+    if (estimatedTokens > GPT5_INPUT_LIMIT) {
+      console.error(`❌ [TOKEN CHECK] BŁĄD: Przekroczono limit tokenów! ${estimatedTokens} > ${GPT5_INPUT_LIMIT}`);
+      throw new Error(`Zapytanie jest zbyt duże (${estimatedTokens} tokenów). Limit to ${GPT5_INPUT_LIMIT} tokenów. Spróbuj zadać bardziej konkretne pytanie.`);
+    }
+    
     console.log('Wysyłam zapytanie do API OpenAI z pełnymi danymi z Firebase...');
     
     // Wywołanie API OpenAI z optymalizacjami
@@ -1177,7 +1238,7 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
           prioritizeCost: true,
           enableCache: true
         }
-      });
+      }, onChunk);  // 🔥 STREAMING: Przekazuj callback do API
       const apiCallEndTime = performance.now();
       const responseTime = apiCallEndTime - apiCallStartTime;
       

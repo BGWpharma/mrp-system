@@ -30,16 +30,27 @@ export class ContextOptimizer {
     );
 
     // Dodaj metadane optymalizacji
+    const originalSize = this.estimateDataSize(businessData);
+    const optimizedSize = this.estimateDataSize(optimizedContext);
+    const reductionRatio = this.calculateReductionRatio(businessData, optimizedContext);
+    
     optimizedContext._optimization = {
       strategy: strategy.name,
-      originalDataSize: this.estimateDataSize(businessData),
-      optimizedDataSize: this.estimateDataSize(optimizedContext),
-      reductionRatio: this.calculateReductionRatio(businessData, optimizedContext),
+      originalDataSize: originalSize,
+      optimizedDataSize: optimizedSize,
+      reductionRatio: reductionRatio,
       includedCollections: Object.keys(optimizedContext).filter(k => !k.startsWith('_')),
       queryRelevance: queryAnalysis.confidence
     };
 
-    console.log(`[ContextOptimizer] Redukcja danych: ${optimizedContext._optimization.reductionRatio}%`);
+    console.log(`[ContextOptimizer] 📊 Optymalizacja kontekstu:`, {
+      strategy: strategy.name,
+      originalTokens: originalSize,
+      optimizedTokens: optimizedSize,
+      reduction: `${reductionRatio}%`,
+      collections: optimizedContext._optimization.includedCollections.length,
+      collectionNames: optimizedContext._optimization.includedCollections.join(', ')
+    });
     
     return optimizedContext;
   }
@@ -266,8 +277,8 @@ export class ContextOptimizer {
       },
       comprehensive: {
         name: 'comprehensive',
-        description: 'Szeroki kontekst z analizą',
-        maxItems: 200,
+        description: 'Szeroki kontekst z analizą - pełne dane',
+        maxItems: 150,  // 🔥 OPTYMALIZACJA: 150 to kompromis między pełnością a limitem 272k tokenów
         includeDetails: true,
         includeAnalysis: true,
         summaryOnly: false
@@ -275,11 +286,15 @@ export class ContextOptimizer {
     };
 
     // Wybierz strategię na podstawie modelu i złożoności
-    if (modelType === 'simple' || queryAnalysis.operations.count) {
+    // 🔥 FIX: Używaj minimal TYLKO dla prostych liczników, reszta comprehensive
+    if (modelType === 'simple' && queryAnalysis.operations.count && !queryAnalysis.operations.list) {
+      // Tylko dla czystych zapytań "ile jest X?" bez dodatkowych operacji
       return strategies.minimal;
-    } else if (modelType === 'medium' && queryAnalysis.isSpecific) {
+    } else if (modelType === 'medium' && queryAnalysis.isSpecific && !queryAnalysis.entities.length > 0) {
+      // Focused tylko gdy zapytanie jest bardzo specyficzne bez wielu encji
       return strategies.focused;
     } else {
+      // 🔥 DOMYŚLNIE: comprehensive - pełne dane dla AI
       return strategies.comprehensive;
     }
   }
@@ -304,8 +319,14 @@ export class ContextOptimizer {
     Object.keys(relevancyMap).forEach(category => {
       const relevance = relevancyMap[category];
       
-      // Pomiń kategorie o niskiej istotności w trybie minimal
+      // Pomiń kategorie o niskiej istotności TYLKO w trybie minimal
       if (strategy.name === 'minimal' && relevance < 0.8) {
+        return;
+      }
+      
+      // 🔥 FIX: W comprehensive, zawsze przekazuj dane niezależnie od relevance
+      if (strategy.name === 'comprehensive' && relevance < 0.3) {
+        // Nawet w comprehensive, pomijaj tylko jeśli relevance jest bardzo niska
         return;
       }
 

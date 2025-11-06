@@ -342,48 +342,115 @@ import APIQuotaAlert from './APIQuotaAlert';
           return [...prevMessages, userMessage];
         });
         
-        // Przetwórz zapytanie i uzyskaj odpowiedź asystenta
-        console.log('Przetwarzanie zapytania przez AI...');
+        // 🔥 STREAMING: Przetwórz zapytanie z callbackiem do streamingu w czasie rzeczywistym
+        console.log('Przetwarzanie zapytania przez AI ze streamingiem...');
         setStatusMessage('Pobieranie danych z bazy...');
         
         // Po chwili zmień na następny krok
         setTimeout(() => {
-          setStatusMessage('GPT-5 przetwarza zapytanie... (to może potrwać ~20-60 sek)');
+          setStatusMessage('GPT otrzymuje dane i generuje odpowiedź...');
         }, 2000);
         
-        const aiResponse = await processAIQuery(currentInput, messages, currentUser.uid, attachments);
-        console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
-        
-        if (!aiResponse) {
-          console.error('Otrzymano pustą odpowiedź od asystenta AI');
-          showError('Nie otrzymano odpowiedzi od asystenta. Spróbuj ponownie później.');
-          setLoading(false);
-          setStatusMessage('');
-          return;
-        }
-        
-        // Sprawdź, czy odpowiedź to wiadomość o opóźnieniu
-        const isDelayedResponse = aiResponse.includes('Pracuję nad analizą danych') &&
-                                 aiResponse.includes('Proszę o cierpliwość');
-        
-        // Dodaj odpowiedź asystenta do bazy danych
-        console.log('Dodawanie odpowiedzi asystenta do bazy danych...');
-        setStatusMessage('Zapisywanie odpowiedzi...');
-        const assistantMessageId = await addMessageToConversation(conversationId, 'assistant', aiResponse);
-        console.log('ID wiadomości asystenta:', assistantMessageId);
-        
-        // Zaktualizuj lokalny stan o odpowiedź asystenta
-        const assistantMessage = { 
-          id: assistantMessageId,
-          role: 'assistant', 
-          content: aiResponse, 
-          timestamp: new Date().toISOString() 
+        // 🔥 Utwórz tymczasowy placeholder dla wiadomości asystenta
+        const tempAssistantId = `temp-${Date.now()}`;
+        const tempAssistantMessage = {
+          id: tempAssistantId,
+          role: 'assistant',
+          content: '',  // Zaczyna się pusta, będzie wypełniana w czasie rzeczywistym
+          timestamp: new Date().toISOString(),
+          isStreaming: true  // Flaga do animacji
         };
         
-        setMessages(prevMessages => [...prevMessages, assistantMessage]);
+        // Dodaj placeholder do UI natychmiast
+        setMessages(prevMessages => [...prevMessages, tempAssistantMessage]);
+        
+        // 🔥 Zmienne do zbierania streamed content i przechowania wyniku
+        let streamedContent = '';
+        let aiResponse = null;
+        let assistantMessageId = null;
+        let isDelayedResponse = false;
+        
+        try {
+          // Wywołaj processAIQuery z callbackiem dla streamingu
+          aiResponse = await processAIQuery(
+            currentInput, 
+            messages, 
+            currentUser.uid, 
+            attachments,
+            // 🔥 STREAMING CALLBACK: Aktualizuj UI w czasie rzeczywistym
+            (chunk, metadata) => {
+              if (chunk) {
+                streamedContent += chunk;
+                
+                // Aktualizuj wiadomość w UI z nowym chunkiem
+                setMessages(prevMessages => 
+                  prevMessages.map(msg => 
+                    msg.id === tempAssistantId
+                      ? { ...msg, content: streamedContent }
+                      : msg
+                  )
+                );
+              }
+              
+              // Gdy streaming się zakończy
+              if (metadata.isComplete) {
+                console.log('[STREAMING UI] Otrzymano kompletną odpowiedź:', streamedContent.length, 'znaków');
+                setStatusMessage('Zapisywanie odpowiedzi...');
+              }
+            }
+          );
+          
+          console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
+          
+          if (!aiResponse) {
+            console.error('Otrzymano pustą odpowiedź od asystenta AI');
+            // Usuń placeholder
+            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempAssistantId));
+            showError('Nie otrzymano odpowiedzi od asystenta. Spróbuj ponownie później.');
+            setLoading(false);
+            setStatusMessage('');
+            return;
+          }
+          
+          // Sprawdź, czy odpowiedź to wiadomość o opóźnieniu
+          isDelayedResponse = aiResponse.includes('Pracuję nad analizą danych') &&
+                              aiResponse.includes('Proszę o cierpliwość');
+          
+          // Dodaj odpowiedź asystenta do bazy danych
+          console.log('Dodawanie odpowiedzi asystenta do bazy danych...');
+          assistantMessageId = await addMessageToConversation(conversationId, 'assistant', aiResponse);
+          console.log('ID wiadomości asystenta:', assistantMessageId);
+          
+          // Zaktualizuj wiadomość z prawdziwym ID i usuń flagę streamingu
+          setMessages(prevMessages => 
+            prevMessages.map(msg => 
+              msg.id === tempAssistantId
+                ? { 
+                    ...msg, 
+                    id: assistantMessageId,
+                    content: aiResponse,  // Upewnij się że mamy pełną odpowiedź
+                    isStreaming: false 
+                  }
+                : msg
+            )
+          );
+        } catch (streamError) {
+          console.error('Błąd podczas streamingu:', streamError);
+          // Usuń placeholder w przypadku błędu
+          setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempAssistantId));
+          throw streamError;  // Przekaż dalej do obsługi błędu
+        }
         
         // Wyczyść status message
         setStatusMessage('');
+        
+        // 🔥 STREAMING: Obsługa delayed response - używamy ostatecznej wiadomości z ID
+        const finalAssistantMessage = messages.find(msg => msg.id === assistantMessageId) || {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: aiResponse,
+          timestamp: new Date().toISOString()
+        };
         
         // Jeśli mamy wiadomość o opóźnieniu, uruchom drugi proces pobierania
         if (isDelayedResponse) {
@@ -395,11 +462,13 @@ import APIQuotaAlert from './APIQuotaAlert';
           // Uruchom pobieranie pełnej odpowiedzi w tle
           setTimeout(async () => {
             try {
-              // Drugie zapytanie AI z dłuższym limitem czasu
-              const fullResponse = await processAIQuery(currentInput, 
-                                                       messages.concat([assistantMessage]), 
-                                                       currentUser.uid,
-                                                       30000); // Dłuższy limit czasu
+              // Drugie zapytanie AI z dłuższym limitem czasu (bez streamingu dla delayed)
+              const fullResponse = await processAIQuery(
+                currentInput, 
+                messages.concat([finalAssistantMessage]), 
+                currentUser.uid,
+                30000
+              ); // Bez onChunk callback - nie streamujemy delayed response
               
               if (fullResponse && fullResponse !== aiResponse) {
                 console.log('Otrzymano pełną odpowiedź AI po opóźnieniu');
@@ -1190,6 +1259,24 @@ import APIQuotaAlert from './APIQuotaAlert';
                       
                       <Typography variant="body1" sx={{ ml: 4, whiteSpace: 'pre-wrap' }}>
                         {message.content}
+                        {/* 🔥 STREAMING: Animowany kursor podczas streamingu */}
+                        {message.isStreaming && (
+                          <Box
+                            component="span"
+                            sx={{
+                              display: 'inline-block',
+                              ml: 0.5,
+                              width: '2px',
+                              height: '1em',
+                              backgroundColor: 'primary.main',
+                              animation: 'blink 1s infinite',
+                              '@keyframes blink': {
+                                '0%, 49%': { opacity: 1 },
+                                '50%, 100%': { opacity: 0 }
+                              }
+                            }}
+                          />
+                        )}
                       </Typography>
                       
                       {/* Wyświetlanie załączników w wiadomości */}
@@ -1245,7 +1332,8 @@ import APIQuotaAlert from './APIQuotaAlert';
               </Box>
             )}
             
-            {loading && (
+            {/* 🔥 STARY LOADING INDICATOR: Pokaż TYLKO jeśli nie ma streaming placeholder */}
+            {loading && !messages.some(msg => msg.isStreaming) && (
               <Card 
                 sx={{ 
                   maxWidth: '90%',
