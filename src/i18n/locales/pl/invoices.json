@@ -88,7 +88,15 @@
       "settlementSummary": "Podsumowanie rozliczenia:",
       "totalAdvanceAmount": "Łączna kwota zaliczek:",
       "requiredAdvancePayment": "Wymagana przedpłata (%)",
-      "requiredAdvancePaymentHelper": "Procent kwoty faktury wymagany jako przedpłata (0-100%). Gdy osiągnięto tę kwotę, faktura będzie oznaczona jako opłacona."
+      "requiredAdvancePaymentHelper": "Procent kwoty faktury wymagany jako przedpłata (0-100%). Gdy osiągnięto tę kwotę, faktura będzie oznaczona jako opłacona.",
+      "isRefInvoice": "Refaktura",
+      "refInvoiceDescription": "Refaktura - faktura wystawiona na podstawie zamówienia zakupowego (PO)",
+      "selectPurchaseOrder": "Wybierz Zamówienie Zakupowe (PO)",
+      "selectedPO": "Wybrane PO:",
+      "supplier": "Dostawca:",
+      "value": "Wartość:",
+      "loadAllItemsFromPO": "Załaduj wszystkie pozycje z PO",
+      "allItemsLoadedFromPO": "Dodano wszystkie pozycje z PO"
     },
     "buttons": {
       "save": "Zapisz",
@@ -127,7 +135,8 @@
     },
     "toggleButtons": {
       "invoice": "Faktura",
-      "proforma": "Proforma"
+      "proforma": "Proforma",
+      "refInvoice": "Refaktura (PO)"
     },
     "filters": {
       "allStatuses": "Wszystkie statusy",

@@ -52,6 +52,7 @@ import {
 } from '../../services/purchaseOrderService';
 import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventory';
 import { getPOReservationsForItem } from '../../services/poReservationService';
+import { getInvoicesByOrderId } from '../../services/invoiceService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { db } from '../../services/firebase/config';
@@ -86,6 +87,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [paymentStatusDialogOpen, setPaymentStatusDialogOpen] = useState(false);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
   const [supplierPricesDialogOpen, setSupplierPricesDialogOpen] = useState(false);
+  const [relatedRefInvoices, setRelatedRefInvoices] = useState([]);
+  const [loadingRefInvoices, setLoadingRefInvoices] = useState(false);
   const [pendingStatusUpdate, setPendingStatusUpdate] = useState(null);
   const [shortExpiryConfirmDialogOpen, setShortExpiryConfirmDialogOpen] = useState(false);
   const [shortExpiryItems, setShortExpiryItems] = useState([]);
@@ -126,6 +129,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
         if (data.items && data.items.length > 0) {
           await loadPOReservations(orderId, data.items);
         }
+        
+        // Pobierz refaktury powiązane z tym PO
+        await fetchRefInvoices(orderId);
         
         // Pobierz odpowiedzi formularzy rozładunku dla tego PO
         if (data && data.number) {
@@ -238,6 +244,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
       console.error('Błąd podczas ładowania rezerwacji PO:', error);
     } finally {
       setLoadingReservations(false);
+    }
+  };
+  
+  // Funkcja do pobierania refaktur powiązanych z tym PO
+  const fetchRefInvoices = async (poId) => {
+    try {
+      setLoadingRefInvoices(true);
+      const invoices = await getInvoicesByOrderId(poId);
+      // Filtruj tylko refaktury (isRefInvoice === true)
+      const refInvoices = invoices.filter(inv => inv.isRefInvoice === true);
+      setRelatedRefInvoices(refInvoices);
+    } catch (error) {
+      console.error('Błąd podczas pobierania refaktur:', error);
+    } finally {
+      setLoadingRefInvoices(false);
     }
   };
   
@@ -2036,6 +2057,143 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   </TableBody>
                 </Table>
               </TableContainer>
+            </Paper>
+          )}
+          
+          {/* Sekcja refaktur (zaliczek) powiązanych z PO */}
+          {relatedRefInvoices.length > 0 && (
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Refaktury / Zaliczki
+                <Chip 
+                  label={relatedRefInvoices.length} 
+                  size="small" 
+                  color="secondary" 
+                  sx={{ ml: 1 }} 
+                />
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Faktury wystawione na podstawie tego zamówienia zakupowego
+              </Typography>
+              
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Numer faktury</TableCell>
+                      <TableCell>Data wystawienia</TableCell>
+                      <TableCell>Termin płatności</TableCell>
+                      <TableCell align="right">Kwota</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Status płatności</TableCell>
+                      <TableCell align="center">Akcje</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {relatedRefInvoices.map((invoice) => {
+                      // Oblicz status płatności
+                      const getPaymentStatus = (inv) => {
+                        if (inv.status === 'cancelled') return { label: 'Anulowana', color: 'default' };
+                        if (inv.paymentStatus === 'paid') return { label: 'Opłacona', color: 'success' };
+                        if (inv.paymentStatus === 'partially_paid') return { label: 'Częściowo opłacona', color: 'warning' };
+                        
+                        // Sprawdź czy przeterminowana
+                        const dueDate = inv.dueDate ? new Date(inv.dueDate) : null;
+                        if (dueDate && dueDate < new Date() && inv.paymentStatus !== 'paid') {
+                          return { label: 'Przeterminowana', color: 'error' };
+                        }
+                        
+                        return { label: 'Nieopłacona', color: 'warning' };
+                      };
+                      
+                      const paymentStatus = getPaymentStatus(invoice);
+                      
+                      return (
+                        <TableRow key={invoice.id} hover>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="medium">
+                              {invoice.number}
+                            </Typography>
+                            {invoice.isProforma && (
+                              <Chip label="Proforma" size="small" color="info" sx={{ ml: 1 }} />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {invoice.issueDate ? format(new Date(invoice.issueDate), 'dd.MM.yyyy', { locale: pl }) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {invoice.dueDate ? format(new Date(invoice.dueDate), 'dd.MM.yyyy', { locale: pl }) : '-'}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" fontWeight="medium">
+                              {formatCurrency(invoice.total || 0, invoice.currency || 'EUR')}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={
+                                invoice.status === 'draft' ? 'Szkic' :
+                                invoice.status === 'issued' ? 'Wystawiona' :
+                                invoice.status === 'cancelled' ? 'Anulowana' : 
+                                invoice.status
+                              } 
+                              size="small"
+                              color={
+                                invoice.status === 'draft' ? 'default' :
+                                invoice.status === 'issued' ? 'primary' :
+                                invoice.status === 'cancelled' ? 'error' : 
+                                'default'
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={paymentStatus.label}
+                              size="small"
+                              color={paymentStatus.color}
+                            />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => navigate(`/invoices/${invoice.id}`)}
+                            >
+                              Szczegóły
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              {/* Podsumowanie refaktur */}
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Podsumowanie refaktur:
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">
+                    Łączna wartość refaktur:
+                  </Typography>
+                  <Typography variant="h6" color="primary.main">
+                    {formatCurrency(
+                      relatedRefInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0),
+                      purchaseOrder.currency || 'EUR'
+                    )}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                  <Typography variant="body2">
+                    Refaktury opłacone:
+                  </Typography>
+                  <Typography variant="body2" color="success.main" fontWeight="medium">
+                    {relatedRefInvoices.filter(inv => inv.paymentStatus === 'paid').length} / {relatedRefInvoices.length}
+                  </Typography>
+                </Box>
+              </Box>
             </Paper>
           )}
           

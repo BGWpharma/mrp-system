@@ -83,7 +83,8 @@ const InvoiceForm = ({ invoiceId }) => {
     ...DEFAULT_INVOICE,
     settledAdvancePayments: 0,
     selectedProformaId: null,
-    proformAllocation: []
+    proformAllocation: [],
+    isRefInvoice: false
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -207,6 +208,22 @@ const InvoiceForm = ({ invoiceId }) => {
       }
     }
   }, [selectedOrderId, selectedOrderType, orders, purchaseOrders, ordersLoading, purchaseOrdersLoading, selectedOrder]);
+
+  // Efekt do automatycznego przełączenia na PO gdy zaznaczono refakturę
+  useEffect(() => {
+    if (invoice.isRefInvoice && selectedOrderType !== 'purchase') {
+      setSelectedOrderType('purchase');
+      // Wyczyść wybrane zamówienie klienta jeśli było
+      setSelectedOrderId('');
+      setSelectedOrder(null);
+    } else if (!invoice.isRefInvoice && !invoice.isProforma && selectedOrderType === 'purchase' && !invoice.invoiceType) {
+      // Przywróć na customer tylko jeśli to nie jest edycja faktury zakupowej
+      setSelectedOrderType('customer');
+      // Wyczyść wybrane PO jeśli było
+      setSelectedOrderId('');
+      setSelectedOrder(null);
+    }
+  }, [invoice.isRefInvoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchInvoice = async (id) => {
     setLoading(true);
@@ -877,7 +894,7 @@ const InvoiceForm = ({ invoiceId }) => {
         // Wartość produktów
         const productsValue = Array.isArray(selectedOrder.items) 
           ? selectedOrder.items.reduce((sum, item) => {
-              const itemPrice = parseFloat(item.totalPrice || (item.price * item.quantity)) || 0;
+              const itemPrice = parseFloat(item.totalPrice || (item.unitPrice * item.quantity)) || 0;
               console.log(`Produkt PO: ${item.name}, cena: ${itemPrice}`);
               return sum + itemPrice;
             }, 0)
@@ -914,26 +931,13 @@ const InvoiceForm = ({ invoiceId }) => {
           finalGrossValue
         });
         
-        // Mapowanie pozycji z uwzględnieniem kosztów z produkcji i ostatniego kosztu dla PROFORMA (PO)
+        // Mapowanie pozycji z PO - używaj bezpośrednio unitPrice z PO
         const mappedPOItems = (selectedOrder.items || []).map(item => {
-          let finalPrice;
+          // Dla PO używamy bezpośrednio unitPrice lub obliczamy z totalPrice
+          const finalPrice = parseFloat(item.unitPrice || 0) || 
+                           (parseFloat(item.totalPrice || 0) / parseFloat(item.quantity || 1));
           
-          // Dla faktur PROFORMA - używaj "ostatniego kosztu" jeśli dostępny
-          if (invoice.isProforma && item.lastUsageInfo && item.lastUsageInfo.cost && parseFloat(item.lastUsageInfo.cost) > 0) {
-            finalPrice = parseFloat(item.lastUsageInfo.cost);
-            console.log(`PROFORMA PO: Używam ostatniego kosztu ${finalPrice} dla ${item.name}`);
-          } else {
-            // Dla zwykłych faktur - sprawdź czy produkt nie jest z listy cenowej lub ma cenę 0
-            const shouldUseProductionCost = !item.fromPriceList || parseFloat(item.price || 0) === 0;
-            
-            // Użyj kosztu całkowitego (z udziałem w kosztach dodatkowych) jeśli warunki są spełnione
-            if (shouldUseProductionCost) {
-              finalPrice = calculateTotalUnitCost(item, selectedOrder);
-              console.log(`Faktura PO: Używam kosztu całk./szt. ${finalPrice.toFixed(2)}€ dla ${item.name}`);
-            } else {
-              finalPrice = parseFloat(item.price || 0);
-            }
-          }
+          console.log(`Faktura PO: ${item.name}, unitPrice: ${item.unitPrice}, finalPrice: ${finalPrice.toFixed(2)}€`);
 
           return {
             ...item,
@@ -1044,9 +1048,15 @@ const InvoiceForm = ({ invoiceId }) => {
   };
 
   const validateForm = () => {
-    // Sprawdź czy klient jest wybrany
-    if (!invoice.customer?.id) {
+    // Sprawdź czy klient jest wybrany (nie wymagane dla refaktur)
+    if (!invoice.isRefInvoice && !invoice.customer?.id) {
       showError('Wybierz klienta dla faktury');
+      return false;
+    }
+    
+    // Dla refaktur sprawdź czy wybrano PO
+    if (invoice.isRefInvoice && !selectedOrderId) {
+      showError('Wybierz zamówienie zakupowe (PO) dla refaktury');
       return false;
     }
     
@@ -1297,6 +1307,26 @@ const InvoiceForm = ({ invoiceId }) => {
               📋 {t('invoices.form.toggleButtons.proforma')}
             </ToggleButton>
           </ToggleButtonGroup>
+          
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={invoice.isRefInvoice || false}
+                onChange={(e) => {
+                  handleChange({
+                    target: {
+                      name: 'isRefInvoice',
+                      type: 'checkbox',
+                      checked: e.target.checked
+                    }
+                  });
+                }}
+                color="secondary"
+              />
+            }
+            label="Refaktura (wybór z PO)"
+            sx={{ mt: 1 }}
+          />
         </Box>
         <Button
           variant="contained"
@@ -2159,50 +2189,143 @@ const InvoiceForm = ({ invoiceId }) => {
           {t('invoices.form.fields.invoiceSource')}
         </Typography>
         
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>{t('invoices.form.fields.orderType')}</InputLabel>
-              <Select
-                value={selectedOrderType}
-                onChange={(e) => setSelectedOrderType(e.target.value)}
-                label={t('invoices.form.fields.orderType')}
-              >
-                <MenuItem value="customer">{t('invoices.form.orderTypes.customer')}</MenuItem>
-                <MenuItem value="purchase">Zamówienie zakupowe (PO)</MenuItem>
-              </Select>
-            </FormControl>
+        {/* Sekcja dla zwykłych faktur i proform (nie refaktur) */}
+        {!invoice.isRefInvoice && (
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>{t('invoices.form.fields.orderType')}</InputLabel>
+                <Select
+                  value={selectedOrderType}
+                  onChange={(e) => setSelectedOrderType(e.target.value)}
+                  label={t('invoices.form.fields.orderType')}
+                >
+                  <MenuItem value="customer">{t('invoices.form.orderTypes.customer')}</MenuItem>
+                  <MenuItem value="purchase">Zamówienie zakupowe (PO)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={8}>
+              <FormControl fullWidth>
+                <InputLabel>{t('invoices.form.buttons.selectOrder')}</InputLabel>
+                <Select
+                  value={selectedOrderId || ''}
+                  onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
+                  label={t('invoices.form.buttons.selectOrder')}
+                  disabled={!customers.length || (selectedOrderType === 'customer' ? ordersLoading : purchaseOrdersLoading)}
+                >
+                  <MenuItem value="">-- Brak --</MenuItem>
+                  
+                  {selectedOrderType === 'customer' ? (
+                    filteredOrders.map(order => (
+                      <MenuItem key={order.id} value={order.id}>
+                        {order.orderNumber} - {order.customer?.name} 
+                        {order.orderDate ? ` (${order.orderDate.toLocaleDateString()})` : ''}
+                      </MenuItem>
+                    ))
+                  ) : (
+                    purchaseOrders.map(po => (
+                      <MenuItem key={po.id} value={po.id}>
+                        {po.number} - {po.supplier?.name} ({po.status})
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
-          
-          <Grid item xs={12} md={8}>
-            <FormControl fullWidth>
-              <InputLabel>{t('invoices.form.buttons.selectOrder')}</InputLabel>
-              <Select
-                value={selectedOrderId || ''}
-                onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
-                label={t('invoices.form.buttons.selectOrder')}
-                disabled={!customers.length || (selectedOrderType === 'customer' ? ordersLoading : purchaseOrdersLoading)}
-              >
-                <MenuItem value="">-- Brak --</MenuItem>
-                
-                {selectedOrderType === 'customer' ? (
-                  filteredOrders.map(order => (
-                    <MenuItem key={order.id} value={order.id}>
-                      {order.orderNumber} - {order.customer?.name} 
-                      {order.orderDate ? ` (${order.orderDate.toLocaleDateString()})` : ''}
-                    </MenuItem>
-                  ))
-                ) : (
-                  purchaseOrders.map(po => (
+        )}
+        
+        {/* Sekcja dla refaktur - tylko wybór PO */}
+        {invoice.isRefInvoice && (
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Wybierz Zamówienie Zakupowe (PO)</InputLabel>
+                <Select
+                  value={selectedOrderId || ''}
+                  onChange={(e) => handleOrderSelect(e.target.value, 'purchase')}
+                  label="Wybierz Zamówienie Zakupowe (PO)"
+                  disabled={purchaseOrdersLoading}
+                >
+                  <MenuItem value="">-- Wybierz PO --</MenuItem>
+                  {purchaseOrders.map(po => (
                     <MenuItem key={po.id} value={po.id}>
-                      {po.number} - {po.supplier?.name} ({po.status})
+                      {po.number} - {po.supplier?.name} - {po.totalGross ? `${parseFloat(po.totalGross).toFixed(2)} ${po.currency || 'EUR'}` : 'N/A'} ({po.status})
                     </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            {/* Informacja o wybranym PO */}
+            {selectedOrderId && selectedOrder && (
+              <Grid item xs={12}>
+                <Card variant="outlined" sx={{ p: 2, bgcolor: 'info.light' }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    <strong>Wybrane PO:</strong> {selectedOrder.number}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Dostawca:</strong> {selectedOrder.supplier?.name || 'N/A'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Wartość:</strong> {selectedOrder.totalGross ? `${parseFloat(selectedOrder.totalGross).toFixed(2)} ${selectedOrder.currency || 'EUR'}` : 'N/A'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Status:</strong> {selectedOrder.status}
+                  </Typography>
+                  {selectedOrder.items && selectedOrder.items.length > 0 && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      sx={{ mt: 2 }}
+                      onClick={() => {
+                        // Automatycznie dodaj wszystkie pozycje z PO
+                        const poItems = selectedOrder.items.map(item => ({
+                          name: item.name || '',
+                          description: item.description || '',
+                          cnCode: item.cnCode || '',
+                          quantity: parseFloat(item.quantity || 0),
+                          unit: item.unit || 'szt',
+                          price: parseFloat(item.unitPrice || 0),  // unitPrice zamiast price
+                          vat: parseFloat(item.vatRate || 23),     // vatRate zamiast vat
+                          netValue: parseFloat(item.totalPrice || 0),
+                          grossValue: parseFloat(item.totalPrice || 0) * (1 + parseFloat(item.vatRate || 23) / 100),
+                          orderItemId: item.id || null
+                        }));
+                        
+                        // Pobierz koszty dodatkowe z PO
+                        const additionalCosts = selectedOrder.additionalCostsItems || [];
+                        
+                        // Oblicz łączną wartość dodatkowych kosztów
+                        const totalAdditionalCosts = additionalCosts.reduce(
+                          (sum, cost) => sum + (parseFloat(cost.value) || 0), 
+                          0
+                        );
+                        
+                        setInvoice(prev => ({
+                          ...prev,
+                          items: poItems,
+                          additionalCostsItems: additionalCosts,  // Dodaj koszty dodatkowe
+                          additionalCosts: totalAdditionalCosts,  // Suma dla kompatybilności
+                          total: calculateInvoiceTotalGross({ 
+                            items: poItems,
+                            additionalCostsItems: additionalCosts
+                          })
+                        }));
+                        
+                        showSuccess(`Dodano ${poItems.length} pozycji${additionalCosts.length > 0 ? ` i ${additionalCosts.length} kosztów dodatkowych` : ''} z PO`);
+                      }}
+                    >
+                      Załaduj wszystkie pozycje z PO
+                    </Button>
+                  )}
+                </Card>
+              </Grid>
+            )}
           </Grid>
-        </Grid>
+        )}
       </Paper>
 
       <Dialog open={customerDialogOpen} onClose={() => setCustomerDialogOpen(false)} maxWidth="md" fullWidth>
