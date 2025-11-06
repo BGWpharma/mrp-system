@@ -32,6 +32,7 @@ import {
   MenuItem,
   Tooltip,
   Alert,
+  AlertTitle,
   Popover,
   List,
   ListItem,
@@ -61,7 +62,7 @@ import {
   OpenInNew as OpenInNewIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat } from '../../services/orderService';
+import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
@@ -334,6 +335,7 @@ const OrderDetails = () => {
   const [orderNumberError, setOrderNumberError] = useState('');
   const [isUpdatingOrderNumber, setIsUpdatingOrderNumber] = useState(false);
   const [updateOrderNumberDialogOpen, setUpdateOrderNumberDialogOpen] = useState(false);
+  const [isRefreshingCmr, setIsRefreshingCmr] = useState(false);
 
   // 🚀 LAZY LOADING State Management
   const [activeSection, setActiveSection] = useState('basic'); // basic, production, documents, history
@@ -927,6 +929,55 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
       showError('Błąd: ' + error.message);
     } finally {
       setIsUpdatingOrderNumber(false);
+    }
+  };
+
+  // Funkcja do ręcznego odświeżania ilości wysłanych z CMR
+  const handleRefreshShippedQuantities = async () => {
+    if (!order || !order.id) {
+      showError('Brak danych zamówienia');
+      return;
+    }
+
+    try {
+      setIsRefreshingCmr(true);
+      console.log('🔄 Rozpoczynanie ręcznego odświeżania ilości z CMR...');
+      
+      const result = await refreshShippedQuantitiesFromCMR(order.id, currentUser.uid);
+      
+      if (result.success) {
+        const stats = result.stats || {};
+        const message = `✅ Pomyślnie odświeżono ilości wysłane
+        
+Statystyki:
+• Przetworzono dokumentów CMR: ${stats.processedCMRs || 0}
+• Zaktualizowano pozycji: ${stats.shippedItems || 0}
+• Referencji CMR: ${stats.cmrReferences || 0}
+
+${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
+        
+        showSuccess(message);
+        
+        // Odśwież dane zamówienia i wyczyść cache
+        console.log('🔄 Odświeżanie danych zamówienia...');
+        invalidateCache(order.id);
+        await refreshOrderData();
+        
+        // Odśwież też dokumenty CMR
+        invalidateCache(`orderCmr_${order.id}`);
+        setCmrDocuments([]);
+        setLoadingCmrDocuments(false);
+        await loadCmrDocuments();
+        
+        console.log('✅ Zakończono odświeżanie wszystkich danych');
+      } else {
+        throw new Error('Nie udało się odświeżyć ilości');
+      }
+    } catch (error) {
+      console.error('❌ Błąd podczas odświeżania ilości:', error);
+      showError(`Nie udało się odświeżyć ilości: ${error.message}`);
+    } finally {
+      setIsRefreshingCmr(false);
     }
   };
 
@@ -1661,30 +1712,44 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
               startIcon={<EditIcon />} 
               variant="outlined"
               onClick={handleEditClick}
-              sx={{ mr: 1 }}
             >
               {t('orderDetails.actions.edit')}
             </Button>
-            <Button 
-              startIcon={<PrintIcon />} 
-              variant="outlined"
-              onClick={handlePrintInvoice}
-              sx={{ mr: 1 }}
-            >
-              {t('orderDetails.actions.print')}
-            </Button>
-            {/* Przycisk migracji - tylko do testowania */}
-            <Button 
-              startIcon={<RefreshIcon />} 
-              variant="outlined"
-              color="secondary"
-              onClick={handleMigrateCmrData}
-              size="small"
-            >
-              Migruj CMR
-            </Button>
           </Box>
         </Box>
+
+        {/* Alert o możliwych rozbieżnościach w ilościach CMR */}
+        {order && order.items && (() => {
+          const itemsWithDiscrepancies = order.items.filter(item => {
+            if (!item.cmrHistory || item.cmrHistory.length === 0) return false;
+            const cmrTotal = item.cmrHistory.reduce((sum, entry) => sum + (parseFloat(entry.quantity) || 0), 0);
+            return Math.abs(cmrTotal - (item.shippedQuantity || 0)) > 0.01;
+          });
+          
+          if (itemsWithDiscrepancies.length === 0) return null;
+          
+          return (
+            <Alert 
+              severity="warning" 
+              sx={{ mb: 2 }}
+              action={
+                <Button 
+                  color="inherit" 
+                  size="small" 
+                  onClick={handleRefreshShippedQuantities}
+                  disabled={isRefreshingCmr}
+                  startIcon={isRefreshingCmr ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                >
+                  {isRefreshingCmr ? 'Odświeżam...' : 'Napraw teraz'}
+                </Button>
+              }
+            >
+              <AlertTitle>⚠️ Wykryto rozbieżności w ilościach wysłanych</AlertTitle>
+              Znaleziono {itemsWithDiscrepancies.length} pozycję/pozycji z niezgodnymi ilościami między historią CMR a wysłaną ilością. 
+              Kliknij "Napraw teraz", aby przeliczyć ilości na podstawie wszystkich dokumentów CMR.
+            </Alert>
+          );
+        })()}
 
         {/* Status i informacje podstawowe */}
         <Paper sx={{ p: 3, mb: 3 }}>

@@ -491,9 +491,46 @@ export const updateCmrDocument = async (cmrId, cmrData, userId) => {
       loadingDate: convertedLoadingDate
     });
 
-    // USUNIĘTO: Automatyczne aktualizacje ilości przy edycji CMR
-    // Ilości są aktualizowane TYLKO przy zmianie statusu na "W transporcie"
-    console.log('📝 CMR zaktualizowany - ilości wysłane będą zaktualizowane po zmianie statusu na "W transporcie"');
+    // 🔄 AUTOMATYCZNA AKTUALIZACJA ilości wysłanych w powiązanych zamówieniach przy edycji CMR
+    console.log('🔄 Rozpoczynam automatyczne odświeżanie ilości w powiązanych zamówieniach...');
+    
+    // Zbierz wszystkie powiązane zamówienia
+    const ordersToRefresh = new Set();
+    if (cmrData.linkedOrderIds && Array.isArray(cmrData.linkedOrderIds)) {
+      cmrData.linkedOrderIds.forEach(id => ordersToRefresh.add(id));
+    }
+    if (cmrData.linkedOrderId && !ordersToRefresh.has(cmrData.linkedOrderId)) {
+      ordersToRefresh.add(cmrData.linkedOrderId);
+    }
+
+    // Odśwież ilości w każdym zamówieniu
+    if (ordersToRefresh.size > 0) {
+      console.log(`📦 Odświeżanie ilości w ${ordersToRefresh.size} zamówieniu/zamówieniach...`);
+      
+      for (const linkedOrderId of ordersToRefresh) {
+        try {
+          const { refreshShippedQuantitiesFromCMR } = await import('./orderService');
+          const refreshResult = await refreshShippedQuantitiesFromCMR(linkedOrderId, userId);
+          
+          if (refreshResult.success) {
+            console.log(`✅ Pomyślnie odświeżono ilości w zamówieniu ${linkedOrderId}`);
+            console.log(`   • Przetworzono ${refreshResult.stats?.processedCMRs || 0} dokumentów CMR`);
+            console.log(`   • Zaktualizowano ${refreshResult.stats?.shippedItems || 0} pozycji`);
+          } else {
+            console.warn(`⚠️ Nie udało się odświeżyć ilości w zamówieniu ${linkedOrderId}`);
+          }
+        } catch (error) {
+          console.error(`❌ Błąd podczas odświeżania ilości w zamówieniu ${linkedOrderId}:`, error);
+          // Nie przerywamy procesu - logujemy tylko błąd
+        }
+      }
+      
+      console.log('✅ Zakończono automatyczne odświeżanie ilości wysłanych');
+    } else {
+      console.log('ℹ️ Brak powiązanych zamówień do odświeżenia');
+    }
+
+    console.log('📝 CMR zaktualizowany pomyślnie');
 
     return {
       id: cmrId,
