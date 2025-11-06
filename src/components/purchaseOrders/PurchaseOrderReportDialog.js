@@ -82,11 +82,11 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
         itemName: selectedItem?.name || 'Wszystkie pozycje'
       });
       
-      showSuccess('Import został wygenerowany i pobrany');
+      showSuccess('Eksport został wygenerowany i pobrany');
       onClose();
     } catch (error) {
-      console.error('Błąd podczas generowania importu:', error);
-      showError('Błąd podczas generowania importu');
+      console.error('Błąd podczas generowania eksportu:', error);
+      showError('Błąd podczas generowania eksportu');
     } finally {
       setGenerating(false);
     }
@@ -102,7 +102,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Import Purchase Orders
+          Eksport Purchase Orders
         </DialogTitle>
         
         <DialogContent>
@@ -188,7 +188,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
             {/* Podsumowanie */}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
-                Podsumowanie importu
+                Podsumowanie eksportu
               </Typography>
               <Typography variant="body2" color="textSecondary">
                 <strong>Oczekiwana dostawa:</strong> {dateFrom ? format(dateFrom, 'dd.MM.yyyy') : '---'} - {dateTo ? format(dateTo, 'dd.MM.yyyy') : '---'}
@@ -217,7 +217,7 @@ const PurchaseOrderReportDialog = ({ open, onClose, onGenerate }) => {
             disabled={generating || loading}
             startIcon={generating ? <CircularProgress size={16} /> : null}
           >
-            {generating ? 'Generowanie...' : 'Generuj import'}
+            {generating ? 'Generowanie...' : 'Generuj eksport'}
           </Button>
         </DialogActions>
       </Dialog>

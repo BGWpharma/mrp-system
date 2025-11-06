@@ -114,23 +114,23 @@ export const getPurchaseOrdersForReport = async (filters) => {
 
     return purchaseOrders;
   } catch (error) {
-    console.error('Błąd podczas pobierania danych dla importu:', error);
+    console.error('Błąd podczas pobierania danych dla eksportu:', error);
     throw error;
   }
 };
 
 /**
- * Generuje import CSV z Purchase Orders
+ * Generuje eksport CSV z Purchase Orders
  */
 export const generatePurchaseOrderReport = async (filters) => {
   try {
-    console.log('Generowanie importu PO z filtrami:', filters);
+    console.log('Generowanie eksportu PO z filtrami:', filters);
     
     // Pobierz dane
     const purchaseOrders = await getPurchaseOrdersForReport(filters);
     
     if (!purchaseOrders || purchaseOrders.length === 0) {
-      throw new Error('Brak danych do wygenerowania importu w wybranym okresie');
+      throw new Error('Brak danych do wygenerowania eksportu w wybranym okresie');
     }
 
     console.log(`Znaleziono ${purchaseOrders.length} zamówień zakupowych`);
@@ -357,13 +357,13 @@ export const generatePurchaseOrderReport = async (filters) => {
     // Eksportuj jeden plik Excel z arkuszami
     const success = exportToExcel(
       worksheets,
-      `PO_Import_${dateRange}${itemSuffix}`
+      `PO_Export_${dateRange}${itemSuffix}`
     );
 
     if (success) {
       return {
         success: true,
-        message: `Wygenerowano import Excel z 4 arkuszami: Podsumowanie PO (${totalPOs} zamówień), Pozycje (${totalItems} pozycji), Podsumowanie pozycji (${itemsSummaryData.length} pozycji), Podsumowanie dostawców (${summaryData.length} dostawców)`,
+        message: `Wygenerowano eksport Excel z 4 arkuszami: Podsumowanie PO (${totalPOs} zamówień), Pozycje (${totalItems} pozycji), Podsumowanie pozycji (${itemsSummaryData.length} pozycji), Podsumowanie dostawców (${summaryData.length} dostawców)`,
         stats: {
           totalPOs,
           totalItems,
@@ -378,7 +378,7 @@ export const generatePurchaseOrderReport = async (filters) => {
     }
 
   } catch (error) {
-    console.error('Błąd podczas generowania importu:', error);
+    console.error('Błąd podczas generowania eksportu:', error);
     throw error;
   }
 };

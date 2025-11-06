@@ -313,14 +313,14 @@ const PurchaseOrderList = () => {
     }
   };
 
-  // Funkcja generowania importu CSV
+  // Funkcja generowania eksportu CSV
   const handleGenerateReport = async (filters) => {
     try {
       const result = await generatePurchaseOrderReport(filters);
       showSuccess(result.message);
     } catch (error) {
-      console.error('Błąd podczas generowania importu:', error);
-      showError(error.message || 'Błąd podczas generowania importu');
+      console.error('Błąd podczas generowania eksportu:', error);
+      showError(error.message || 'Błąd podczas generowania eksportu');
     }
   };
   
