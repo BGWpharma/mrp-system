@@ -52,6 +52,14 @@ import {
   formatSensorTimestamp,
   checkEnvironmentalNorms 
 } from '../../services/environmentalConditionsService';
+import { 
+  getFormHeaderStyles, 
+  getFormSectionStyles,
+  getFormContainerStyles, 
+  getFormPaperStyles, 
+  getFormButtonStyles,
+  getFormActionsStyles 
+} from '../../styles/formStyles';
 
 // Funkcja pomocnicza do formatowania daty w prawidłowym formacie dla pola expiryDate
 const formatExpiryDate = (dateValue) => {
@@ -1059,19 +1067,10 @@ const ProductionControlForm = ({
   // Główny content formularza
   const formContent = (
     <>
-              <Box sx={{ 
-          mb: { xs: 2, sm: 3 },
-          p: { xs: 2, sm: 3 },
-          borderRadius: 2,
-          background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(76,175,80,0.1) 100%)'
-          : 'linear-gradient(135deg, #f5f5f5 0%, #e8f5e8 100%)',
-          border: '1px solid',
-          borderColor: 'divider'
-        }}>
+      <Box sx={getFormHeaderStyles(theme, isEditMode)}>
         <Typography variant="h5" gutterBottom align="center" fontWeight="bold" sx={{
           fontSize: { xs: '1.25rem', sm: '1.5rem' },
-          color: 'primary.main'
+          color: isEditMode ? 'warning.main' : 'primary.main'
         }}>
           {isEditMode ? 'EDYCJA - RAPORT KONTROLA PRODUKCJI' : 'RAPORT - KONTROLA PRODUKCJI'}
         </Typography>
@@ -1090,80 +1089,92 @@ const ProductionControlForm = ({
         )}
         
         <Box component="form" onSubmit={handleSubmit}>
-          <Grid container spacing={{ xs: 2, sm: 3 }}>
-            <Grid item xs={12}>
-              <TextField
-                required
-                fullWidth
-                label="Adres e-mail"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                error={!!validationErrors.email}
-                helperText={validationErrors.email}
-                InputProps={{
-                  readOnly: true, // Pole tylko do odczytu
-                }}
-              />
-            </Grid>
+          {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
+          <Box sx={getFormSectionStyles(theme, 'primary')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
+              Sekcja 1 z 3
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+              Identyfikacja
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
             
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Sekcja: Identyfikacja
-              </Typography>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth required error={!!validationErrors.name}>
-                <InputLabel>Imię i nazwisko</InputLabel>
-                <Select
-                  name="name"
-                  value={formData.name}
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid item xs={12}>
+                <TextField
+                  required
+                  fullWidth
+                  label="Adres e-mail"
+                  name="email"
+                  value={formData.email}
                   onChange={handleChange}
-                  label="Imię i nazwisko"
-                >
-                  {staffOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth required error={!!validationErrors.position}>
-                <InputLabel>Stanowisko</InputLabel>
-                <Select
-                  name="position"
-                  value={formData.position}
-                  onChange={handleChange}
-                  label="Stanowisko"
-                >
-                  {positionOptions.map(option => (
-                    <MenuItem key={option} value={option}>{option}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                <DateTimePicker
-                  label="Data wypełnienia"
-                  value={formData.fillDate}
-                  onChange={(date) => handleDateChange(date, 'fillDate')}
-                  renderInput={(params) => 
-                    <TextField {...params} fullWidth required />
-                  }
-                  format="dd.MM.yyyy"
+                  error={!!validationErrors.email}
+                  helperText={validationErrors.email}
+                  InputProps={{
+                    readOnly: true, // Pole tylko do odczytu
+                  }}
                 />
-              </LocalizationProvider>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required error={!!validationErrors.name}>
+                  <InputLabel>Imię i nazwisko</InputLabel>
+                  <Select
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    label="Imię i nazwisko"
+                  >
+                    {staffOptions.map(option => (
+                      <MenuItem key={option} value={option}>{option}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth required error={!!validationErrors.position}>
+                  <InputLabel>Stanowisko</InputLabel>
+                  <Select
+                    name="position"
+                    value={formData.position}
+                    onChange={handleChange}
+                    label="Stanowisko"
+                  >
+                    {positionOptions.map(option => (
+                      <MenuItem key={option} value={option}>{option}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data wypełnienia"
+                    value={formData.fillDate}
+                    onChange={(date) => handleDateChange(date, 'fillDate')}
+                    renderInput={(params) => 
+                      <TextField {...params} fullWidth required />
+                    }
+                    format="dd.MM.yyyy"
+                  />
+                </LocalizationProvider>
+              </Grid>
             </Grid>
+          </Box>
+
+          {/* SEKCJA 2 z 3 - PROTOKÓŁ KONTROLI PRODUKCJI */}
+          <Box sx={getFormSectionStyles(theme, 'warning')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
+              Sekcja 2 z 3
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
+              Protokół Kontroli Produkcji
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
             
-            <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom>
-                Sekcja: Protokół Kontroli Produkcji
-              </Typography>
-            </Grid>
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
             
             <Grid item xs={12}>
               <FormControl 
@@ -1356,33 +1367,23 @@ const ProductionControlForm = ({
               />
             </Grid>
             
-            {/* Sekcja wyboru czujnika i pobierania danych środowiskowych */}
-            <Grid item xs={12}>
-              <Box sx={{ 
-                mt: 3, 
-                mb: 2, 
-                p: 2, 
-                borderRadius: 2, 
-                background: theme.palette.mode === 'dark'
-            ? 'linear-gradient(45deg, rgba(33,150,243,0.1) 30%, rgba(156,39,176,0.1) 90%)'
-            : 'linear-gradient(45deg, #e3f2fd 30%, #f3e5f5 90%)',
-                border: '1px solid',
-                borderColor: 'primary.light'
-              }}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'primary.main',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  fontWeight: 'bold'
-                }}>
-                  <SensorsIcon /> Warunki środowiskowe
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Wybierz czujnik i pobierz dane dla określonej daty i godziny odczytu
-                </Typography>
-              </Box>
             </Grid>
+          </Box>
+
+          {/* SEKCJA 3 z 3 - WARUNKI ŚRODOWISKOWE */}
+          <Box sx={getFormSectionStyles(theme, 'success')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
+              Sekcja 3 z 3
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SensorsIcon /> Warunki środowiskowe
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Wybierz czujnik i pobierz dane dla określonej daty i godziny odczytu
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
+            
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
             
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
@@ -1951,30 +1952,34 @@ const ProductionControlForm = ({
               </Box>
             </Grid>
             
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  startIcon={<ArrowBackIcon />}
-                  onClick={handleBack}
-                >
-                  Powrót
-                </Button>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                fullWidth
-                size="large"
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
-              >
-                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
-              </Button>
-              </Box>
             </Grid>
-          </Grid>
+          </Box>
+
+          {/* PRZYCISKI AKCJI */}
+          <Box sx={getFormActionsStyles()}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<ArrowBackIcon />}
+              onClick={handleBack}
+              sx={getFormButtonStyles('outlined')}
+            >
+              Powrót
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+              sx={{
+                ...getFormButtonStyles('contained'),
+                flexGrow: 1
+              }}
+            >
+              {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
+            </Button>
+          </Box>
         </Box>
     </>
   );
@@ -2051,16 +2056,8 @@ const ProductionControlForm = ({
 
   // W trybie normalnym zwróć formularz w kontenerze
   return (
-    <Container maxWidth="md" sx={{ 
-      mt: { xs: 2, sm: 4 }, 
-      mb: { xs: 2, sm: 4 },
-      px: { xs: 1, sm: 3 }
-    }}>
-      <Paper sx={{ 
-        p: { xs: 2, sm: 4 },
-        borderRadius: { xs: 2, sm: 2 },
-        boxShadow: { xs: 2, sm: 3 }
-      }}>
+    <Container maxWidth="md" sx={getFormContainerStyles()}>
+      <Paper sx={getFormPaperStyles(theme)}>
         {formContent}
       </Paper>
       <SensorInfoDialog />

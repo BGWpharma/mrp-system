@@ -32,6 +32,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { 
   getFormHeaderStyles, 
+  getFormSectionStyles,
   getFormContainerStyles, 
   getFormPaperStyles, 
   getFormButtonStyles,
@@ -844,241 +845,290 @@ const CompletedMOForm = () => {
         )}
         
         <Box component="form" onSubmit={handleSubmit} sx={{ px: { xs: 1, sm: 0 } }}>
-          <Grid container spacing={{ xs: 2, sm: 3 }}>
-            <Grid item xs={12}>
-              <TextField
-                required
-                fullWidth
-                label="Adres e-mail"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                error={!!validationErrors.email}
-                helperText={validationErrors.email}
-                InputProps={{
-                  readOnly: true, // Pole tylko do odczytu
-                }}
-              />
-            </Grid>
+          {/* SEKCJA 1 z 4 - IDENTYFIKACJA */}
+          <Box sx={getFormSectionStyles(theme, 'primary')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
+              Sekcja 1 z 4
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+              Identyfikacja
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
             
-            <Grid item xs={12} sm={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                <DateTimePicker
-                  label="Data wypełnienia"
-                  value={formData.date}
-                  onChange={handleDateChange}
-                  renderInput={(params) => <TextField {...params} fullWidth required />}
-                  format="dd.MM.yyyy"
-                />
-              </LocalizationProvider>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                required
-                fullWidth
-                label="Godzina wypełnienia"
-                name="time"
-                value={formData.time}
-                onChange={handleChange}
-                placeholder="np. 8:30"
-                error={!!validationErrors.time}
-                helperText={validationErrors.time}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormControl 
-                fullWidth 
-                required 
-                error={!!validationErrors.moNumber}
-              >
-                <InputLabel>Numer MO</InputLabel>
-                <Select
-                  name="moNumber"
-                  value={formData.moNumber}
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid item xs={12}>
+                <TextField
+                  required
+                  fullWidth
+                  label="Adres e-mail"
+                  name="email"
+                  value={formData.email}
                   onChange={handleChange}
-                  label="Numer MO"
-                  disabled={loadingMO}
-                  startAdornment={
-                    loadingMO ? 
-                    <CircularProgress size={20} sx={{ mr: 1 }} /> : 
-                    null
-                  }
-                >
-                  {moOptions.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {validationErrors.moNumber && (
-                  <Typography variant="caption" color="error">
-                    {validationErrors.moNumber}
-                  </Typography>
-                )}
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                required
-                fullWidth
-                label="Ilość produktu końcowego"
-                name="productQuantity"
-                value={formData.productQuantity}
-                onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową!"
-                error={!!validationErrors.productQuantity}
-                helperText={validationErrors.productQuantity}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Strata - Opakowanie"
-                name="packagingLoss"
-                value={formData.packagingLoss}
-                onChange={handleChange}
-                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
-                error={!!validationErrors.packagingLoss}
-                helperText={validationErrors.packagingLoss}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Strata - Wieczka"
-                name="bulkLoss"
-                value={formData.bulkLoss}
-                onChange={handleChange}
-                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Strata - Surowiec"
-                name="rawMaterialLoss"
-                value={formData.rawMaterialLoss}
-                onChange={handleChange}
-                placeholder="W ramach robionego MO. Np. rozsypane kakao, rozsypany produkt końcowy itp. Jeśli nie było straty - proszę wpisać 'brak'."
-                error={!!validationErrors.rawMaterialLoss}
-                helperText={validationErrors.rawMaterialLoss}
-                multiline
-                rows={5}
-              />
-            </Grid>
-            
-                        <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Waga netto kapsułek (opcjonalne)"
-                name="netCapsuleWeight"
-                value={formData.netCapsuleWeight}
-                onChange={handleChange}
-                placeholder="Podaj wagę netto kapsułek w gramach lub kilogramach"
-                type="number"
-                inputProps={{ step: "0.01", min: "0" }}
-                error={!!validationErrors.netCapsuleWeight}
-                helperText={validationErrors.netCapsuleWeight}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom>
-                Raport z planu mieszań:
-              </Typography>
-              
-              {/* Wyświetlaj istniejący załącznik z URL */}
-              <ExistingAttachment
-                fileUrl={formData.mixingPlanReportUrl}
-                fileName={formData.mixingPlanReportName}
-                onRemove={handleRemoveAttachment}
-              />
-              
-              {/* Wyświetlaj lokalny plik (wygenerowany PDF) */}
-              {formData.mixingPlanReport && !formData.mixingPlanReportUrl && (
-                <Box sx={{ 
-                  mt: 1, 
-                  p: 2, 
-                  border: '1px solid #e0e0e0', 
-                  borderRadius: 1, 
-                  backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2
-                }}>
-                  <AttachFileIcon color="success" />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2" color="text.primary">
-                      {formData.mixingPlanReport.name}
-                    </Typography>
-                    <Typography variant="caption" color="success.main">
-                      Plik PDF wygenerowany automatycznie - gotowy do wysłania
-                    </Typography>
-                  </Box>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={() => setFormData(prev => ({ ...prev, mixingPlanReport: null }))}
-                  >
-                    Usuń
-                  </Button>
-                </Box>
-              )}
-              
-              <input
-                type="file"
-                onChange={handleFileChange}
-                style={{ width: '100%', marginTop: '8px' }}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <Box sx={getFormActionsStyles()}>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  startIcon={<ArrowBackIcon />}
-                  onClick={handleBack}
-                  sx={getFormButtonStyles('outlined')}
-                >
-                  Powrót
-                </Button>
-                {currentTaskData && (
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    startIcon={<PrintIcon />}
-                    onClick={handlePrintMODetails}
-                    disabled={generatingPDF}
-                    sx={getFormButtonStyles('outlined')}
-                  >
-                    {generatingPDF ? 'Generowanie...' : 'Załącz szczegóły MO'}
-                  </Button>
-                )}
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={saving}
-                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
-                  sx={{
-                    ...getFormButtonStyles('contained'),
-                    flexGrow: 1
+                  error={!!validationErrors.email}
+                  helperText={validationErrors.email}
+                  InputProps={{
+                    readOnly: true, // Pole tylko do odczytu
                   }}
-                >
-                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
-                </Button>
-              </Box>
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                  <DateTimePicker
+                    label="Data wypełnienia"
+                    value={formData.date}
+                    onChange={handleDateChange}
+                    renderInput={(params) => <TextField {...params} fullWidth required />}
+                    format="dd.MM.yyyy"
+                  />
+                </LocalizationProvider>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  required
+                  fullWidth
+                  label="Godzina wypełnienia"
+                  name="time"
+                  value={formData.time}
+                  onChange={handleChange}
+                  placeholder="np. 8:30"
+                  error={!!validationErrors.time}
+                  helperText={validationErrors.time}
+                />
+              </Grid>
             </Grid>
-          </Grid>
+          </Box>
+
+          {/* SEKCJA 2 z 4 - INFORMACJE O MO */}
+          <Box sx={getFormSectionStyles(theme, 'warning')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
+              Sekcja 2 z 4
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
+              Informacje o Zleceniu Produkcyjnym
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
+            
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid item xs={12}>
+                <FormControl 
+                  fullWidth 
+                  required 
+                  error={!!validationErrors.moNumber}
+                >
+                  <InputLabel>Numer MO</InputLabel>
+                  <Select
+                    name="moNumber"
+                    value={formData.moNumber}
+                    onChange={handleChange}
+                    label="Numer MO"
+                    disabled={loadingMO}
+                    startAdornment={
+                      loadingMO ? 
+                      <CircularProgress size={20} sx={{ mr: 1 }} /> : 
+                      null
+                    }
+                  >
+                    {moOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {validationErrors.moNumber && (
+                    <Typography variant="caption" color="error">
+                      {validationErrors.moNumber}
+                    </Typography>
+                  )}
+                </FormControl>
+              </Grid>
+            </Grid>
+          </Box>
+
+          {/* SEKCJA 3 z 4 - DANE PRODUKCYJNE I STRATY */}
+          <Box sx={getFormSectionStyles(theme, 'success')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
+              Sekcja 3 z 4
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main' }}>
+              Dane Produkcyjne i Straty
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
+            
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid item xs={12}>
+                <TextField
+                  required
+                  fullWidth
+                  label="Ilość produktu końcowego"
+                  name="productQuantity"
+                  value={formData.productQuantity}
+                  onChange={handleChange}
+                  placeholder="Proszę podać tylko wartość liczbową!"
+                  error={!!validationErrors.productQuantity}
+                  helperText={validationErrors.productQuantity}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Strata - Opakowanie"
+                  name="packagingLoss"
+                  value={formData.packagingLoss}
+                  onChange={handleChange}
+                  placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                  error={!!validationErrors.packagingLoss}
+                  helperText={validationErrors.packagingLoss}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Strata - Wieczka"
+                  name="bulkLoss"
+                  value={formData.bulkLoss}
+                  onChange={handleChange}
+                  placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Strata - Surowiec"
+                  name="rawMaterialLoss"
+                  value={formData.rawMaterialLoss}
+                  onChange={handleChange}
+                  placeholder="W ramach robionego MO. Np. rozsypane kakao, rozsypany produkt końcowy itp. Jeśli nie było straty - proszę wpisać 'brak'."
+                  error={!!validationErrors.rawMaterialLoss}
+                  helperText={validationErrors.rawMaterialLoss}
+                  multiline
+                  rows={5}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Waga netto kapsułek (opcjonalne)"
+                  name="netCapsuleWeight"
+                  value={formData.netCapsuleWeight}
+                  onChange={handleChange}
+                  placeholder="Podaj wagę netto kapsułek w gramach lub kilogramach"
+                  type="number"
+                  inputProps={{ step: "0.01", min: "0" }}
+                  error={!!validationErrors.netCapsuleWeight}
+                  helperText={validationErrors.netCapsuleWeight}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+
+          {/* SEKCJA 4 z 4 - ZAŁĄCZNIKI */}
+          <Box sx={getFormSectionStyles(theme, 'info')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'info.main', fontWeight: 'bold' }}>
+              Sekcja 4 z 4
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'info.main' }}>
+              Załączniki
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
+            
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Raport z planu mieszań:
+                </Typography>
+                
+                {/* Wyświetlaj istniejący załącznik z URL */}
+                <ExistingAttachment
+                  fileUrl={formData.mixingPlanReportUrl}
+                  fileName={formData.mixingPlanReportName}
+                  onRemove={handleRemoveAttachment}
+                />
+                
+                {/* Wyświetlaj lokalny plik (wygenerowany PDF) */}
+                {formData.mixingPlanReport && !formData.mixingPlanReportUrl && (
+                  <Box sx={{ 
+                    mt: 1, 
+                    p: 2, 
+                    border: '1px solid #e0e0e0', 
+                    borderRadius: 1, 
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2
+                  }}>
+                    <AttachFileIcon color="success" />
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="body2" color="text.primary">
+                        {formData.mixingPlanReport.name}
+                      </Typography>
+                      <Typography variant="caption" color="success.main">
+                        Plik PDF wygenerowany automatycznie - gotowy do wysłania
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => setFormData(prev => ({ ...prev, mixingPlanReport: null }))}
+                    >
+                      Usuń
+                    </Button>
+                  </Box>
+                )}
+                
+                <input
+                  type="file"
+                  onChange={handleFileChange}
+                  style={{ width: '100%', marginTop: '8px' }}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+
+          {/* PRZYCISKI AKCJI */}
+          <Box sx={getFormActionsStyles()}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<ArrowBackIcon />}
+              onClick={handleBack}
+              sx={getFormButtonStyles('outlined')}
+            >
+              Powrót
+            </Button>
+            {currentTaskData && (
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<PrintIcon />}
+                onClick={handlePrintMODetails}
+                disabled={generatingPDF}
+                sx={getFormButtonStyles('outlined')}
+              >
+                {generatingPDF ? 'Generowanie...' : 'Załącz szczegóły MO'}
+              </Button>
+            )}
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+              sx={{
+                ...getFormButtonStyles('contained'),
+                flexGrow: 1
+              }}
+            >
+              {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
+            </Button>
+          </Box>
         </Box>
       </Paper>
     </Container>
