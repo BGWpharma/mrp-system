@@ -51,8 +51,7 @@ const HallDataFormsResponsesPage = () => {
       case 'service': return 0;
       case 'monthly': return 1;
       case 'defect': return 2;
-      case 'environmental': return 3;
-      case 'machine': return 4;
+      case 'service-repair': return 3;
       default: return 0;
     }
   };
@@ -66,16 +65,14 @@ const HallDataFormsResponsesPage = () => {
     serviceReport: new Map(),
     monthlyServiceReport: new Map(),
     defectRegistry: new Map(),
-    environmentalReport: new Map(),
-    machineReport: new Map()
+    serviceRepairReport: new Map()
   });
 
   // Osobne stany dla każdej zakładki
   const [serviceReportResponses, setServiceReportResponses] = useState([]);
   const [monthlyServiceReportResponses, setMonthlyServiceReportResponses] = useState([]);
   const [defectRegistryResponses, setDefectRegistryResponses] = useState([]);
-  const [environmentalReportResponses, setEnvironmentalReportResponses] = useState([]);
-  const [machineReportResponses, setMachineReportResponses] = useState([]);
+  const [serviceRepairReportResponses, setServiceRepairReportResponses] = useState([]);
   
   // Paginacja
   const [page, setPage] = useState(0);
@@ -88,8 +85,7 @@ const HallDataFormsResponsesPage = () => {
     serviceReport: false,
     monthlyServiceReport: false,
     defectRegistry: false,
-    environmentalReport: false,
-    machineReport: false
+    serviceRepairReport: false
   });
   
   // Dialog usuwania
@@ -108,8 +104,7 @@ const HallDataFormsResponsesPage = () => {
       let currentCursor = null;
       const formTypeKey = tabValue === 0 ? 'serviceReport' : 
                           tabValue === 1 ? 'monthlyServiceReport' :
-                          tabValue === 2 ? 'defectRegistry' :
-                          tabValue === 3 ? 'environmentalReport' : 'machineReport';
+                          tabValue === 2 ? 'defectRegistry' : 'serviceRepairReport';
       
       if (pageNum > 1) {
         // Użyj kursora z poprzedniej strony
@@ -168,37 +163,20 @@ const HallDataFormsResponsesPage = () => {
           }
           break;
           
-        case 3: // Environmental Reports
-          const environmentalResult = await getHallDataFormResponsesWithPagination(
-            HALL_DATA_FORM_TYPES.ENVIRONMENTAL_REPORT,
+        case 3: // Service Repair Reports
+          const serviceRepairResult = await getHallDataFormResponsesWithPagination(
+            HALL_DATA_FORM_TYPES.SERVICE_REPAIR_REPORT,
             pageNum,
             rowsPerPage,
             {},
             currentCursor
           );
-          setEnvironmentalReportResponses(environmentalResult.data);
-          setTotalCount(environmentalResult.totalCount);
-          setTotalPages(environmentalResult.totalPages);
+          setServiceRepairReportResponses(serviceRepairResult.data);
+          setTotalCount(serviceRepairResult.totalCount);
+          setTotalPages(serviceRepairResult.totalPages);
           
-          if (environmentalResult.lastVisible) {
-            cursorsRef.current.environmentalReport.set(pageNum, environmentalResult.lastVisible);
-          }
-          break;
-          
-        case 4: // Machine Reports
-          const machineResult = await getHallDataFormResponsesWithPagination(
-            HALL_DATA_FORM_TYPES.MACHINE_REPORT,
-            pageNum,
-            rowsPerPage,
-            {},
-            currentCursor
-          );
-          setMachineReportResponses(machineResult.data);
-          setTotalCount(machineResult.totalCount);
-          setTotalPages(machineResult.totalPages);
-          
-          if (machineResult.lastVisible) {
-            cursorsRef.current.machineReport.set(pageNum, machineResult.lastVisible);
+          if (serviceRepairResult.lastVisible) {
+            cursorsRef.current.serviceRepairReport.set(pageNum, serviceRepairResult.lastVisible);
           }
           break;
           
@@ -237,8 +215,7 @@ const HallDataFormsResponsesPage = () => {
     // Wyczyść cache kursorów przy zmianie rozmiaru strony
     const formTypeKey = tabValue === 0 ? 'serviceReport' : 
                         tabValue === 1 ? 'monthlyServiceReport' :
-                        tabValue === 2 ? 'defectRegistry' :
-                        tabValue === 3 ? 'environmentalReport' : 'machineReport';
+                        tabValue === 2 ? 'defectRegistry' : 'serviceRepairReport';
     cursorsRef.current[formTypeKey].clear();
   };
   
@@ -275,6 +252,8 @@ const HallDataFormsResponsesPage = () => {
       navigate('/hall-data/forms/monthly-service-report?edit=true');
     } else if (formType === HALL_DATA_FORM_TYPES.DEFECT_REGISTRY) {
       navigate('/hall-data/forms/defect-registry?edit=true');
+    } else if (formType === HALL_DATA_FORM_TYPES.SERVICE_REPAIR_REPORT) {
+      navigate('/hall-data/forms/service-repair-report?edit=true');
     } else {
       navigate('/hall-data/forms/service-report?edit=true');
     }
@@ -420,8 +399,7 @@ const HallDataFormsResponsesPage = () => {
           <Tab label={`Tygodniowy Serwis (${tabValue === 0 ? totalCount : 0})`} />
           <Tab label={`Miesięczny Serwis (${tabValue === 1 ? totalCount : 0})`} />
           <Tab label={`Rejestr Usterek (${tabValue === 2 ? totalCount : 0})`} />
-          <Tab label={`Warunki Środowiskowe (${tabValue === 3 ? totalCount : 0})`} />
-          <Tab label={`Stan Maszyn (${tabValue === 4 ? totalCount : 0})`} />
+          <Tab label={`Raport Serwisu/Napraw (${tabValue === 3 ? totalCount : 0})`} />
         </Tabs>
         
         {/* Tab Panel 0 - Service Reports */}
@@ -632,21 +610,91 @@ const HallDataFormsResponsesPage = () => {
           </Box>
         )}
         
-        {/* Tab Panel 3 - Environmental Reports */}
+        {/* Tab Panel 3 - Service Repair Reports */}
         {tabValue === 3 && (
           <Box>
-            <Alert severity="info" sx={{ m: 2 }}>
-              Formularz raportów warunków środowiskowych będzie dostępny wkrótce.
-            </Alert>
-          </Box>
-        )}
-        
-        {/* Tab Panel 4 - Machine Reports */}
-        {tabValue === 4 && (
-          <Box>
-            <Alert severity="info" sx={{ m: 2 }}>
-              Formularz raportów stanu maszyn będzie dostępny wkrótce.
-            </Alert>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : serviceRepairReportResponses.length === 0 ? (
+              <Alert severity="info" sx={{ m: 2 }}>
+                Brak raportów serwisu/napraw do wyświetlenia.
+              </Alert>
+            ) : (
+              <>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Data wypełnienia</TableCell>
+                        <TableCell>Pracownik</TableCell>
+                        <TableCell>Rodzaj zadania</TableCell>
+                        <TableCell>Data wykonania</TableCell>
+                        <TableCell>Wykonany serwis/naprawa</TableCell>
+                        <TableCell>Akcje</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {serviceRepairReportResponses.map((response) => {
+                        return (
+                          <TableRow key={response.id}>
+                            <TableCell>{formatDate(response.fillDate)}</TableCell>
+                            <TableCell>{response.employeeName || '-'}</TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={response.taskType || '-'}
+                                color={response.taskType === 'Serwis' ? 'primary' : 'warning'}
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell>{formatDate(response.completionDate)}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" noWrap sx={{ maxWidth: 250 }}>
+                                {response.performedWork || '-'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Tooltip title="Edytuj">
+                                <IconButton 
+                                  size="small" 
+                                  color="primary"
+                                  onClick={() => handleEditClick(response, HALL_DATA_FORM_TYPES.SERVICE_REPAIR_REPORT)}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Usuń">
+                                <IconButton 
+                                  size="small" 
+                                  color="error"
+                                  onClick={() => handleDeleteClick(response, HALL_DATA_FORM_TYPES.SERVICE_REPAIR_REPORT)}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <TablePagination
+                  component="div"
+                  count={totalCount}
+                  page={page}
+                  onPageChange={handleChangePage}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  labelRowsPerPage="Wierszy na stronę:"
+                  labelDisplayedRows={({ from, to, count }) => 
+                    `${from}-${to} z ${count !== -1 ? count : `więcej niż ${to}`}`
+                  }
+                />
+              </>
+            )}
           </Box>
         )}
       </Paper>

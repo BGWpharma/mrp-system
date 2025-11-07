@@ -18,8 +18,7 @@ export const HALL_DATA_FORMS_COLLECTIONS = {
   SERVICE_REPORT: 'Forms/TygodniowyRaportSerwisu/Odpowiedzi',
   MONTHLY_SERVICE_REPORT: 'Forms/MiesiecznyRaportSerwisu/Odpowiedzi',
   DEFECT_REGISTRY: 'Forms/RejestrUsterek/Odpowiedzi',
-  ENVIRONMENTAL_REPORT: 'Forms/WarunkiSrodowiskowe/Odpowiedzi',
-  MACHINE_REPORT: 'Forms/StanMaszyn/Odpowiedzi'
+  SERVICE_REPAIR_REPORT: 'Forms/RaportSerwisNapraw/Odpowiedzi'
 };
 
 // Typy formularzy
@@ -27,8 +26,7 @@ export const HALL_DATA_FORM_TYPES = {
   SERVICE_REPORT: 'serviceReport',
   MONTHLY_SERVICE_REPORT: 'monthlyServiceReport',
   DEFECT_REGISTRY: 'defectRegistry',
-  ENVIRONMENTAL_REPORT: 'environmentalReport',
-  MACHINE_REPORT: 'machineReport'
+  SERVICE_REPAIR_REPORT: 'serviceRepairReport'
 };
 
 /**
@@ -63,11 +61,8 @@ export const getHallDataFormResponsesWithPagination = async (
       case HALL_DATA_FORM_TYPES.DEFECT_REGISTRY:
         collectionPath = HALL_DATA_FORMS_COLLECTIONS.DEFECT_REGISTRY;
         break;
-      case HALL_DATA_FORM_TYPES.ENVIRONMENTAL_REPORT:
-        collectionPath = HALL_DATA_FORMS_COLLECTIONS.ENVIRONMENTAL_REPORT;
-        break;
-      case HALL_DATA_FORM_TYPES.MACHINE_REPORT:
-        collectionPath = HALL_DATA_FORMS_COLLECTIONS.MACHINE_REPORT;
+      case HALL_DATA_FORM_TYPES.SERVICE_REPAIR_REPORT:
+        collectionPath = HALL_DATA_FORMS_COLLECTIONS.SERVICE_REPAIR_REPORT;
         break;
       default:
         throw new Error(`Nieznany typ formularza parametrów hali: ${formType}`);
@@ -159,11 +154,8 @@ export const deleteHallDataFormResponse = async (formType, responseId) => {
       case HALL_DATA_FORM_TYPES.DEFECT_REGISTRY:
         collectionPath = HALL_DATA_FORMS_COLLECTIONS.DEFECT_REGISTRY;
         break;
-      case HALL_DATA_FORM_TYPES.ENVIRONMENTAL_REPORT:
-        collectionPath = HALL_DATA_FORMS_COLLECTIONS.ENVIRONMENTAL_REPORT;
-        break;
-      case HALL_DATA_FORM_TYPES.MACHINE_REPORT:
-        collectionPath = HALL_DATA_FORMS_COLLECTIONS.MACHINE_REPORT;
+      case HALL_DATA_FORM_TYPES.SERVICE_REPAIR_REPORT:
+        collectionPath = HALL_DATA_FORMS_COLLECTIONS.SERVICE_REPAIR_REPORT;
         break;
       default:
         throw new Error(`Nieznany typ formularza parametrów hali: ${formType}`);

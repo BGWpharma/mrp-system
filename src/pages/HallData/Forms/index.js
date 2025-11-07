@@ -3,10 +3,9 @@ import { Container, Typography, Box, Paper, Alert, Button, Grid, Card, CardConte
 import { 
   Add as AddIcon,
   List as ListIcon,
-  Thermostat as ThermostatIcon,
-  PrecisionManufacturing as PrecisionManufacturingIcon,
   Build as BuildIcon,
-  BugReport as BugReportIcon
+  BugReport as BugReportIcon,
+  Engineering as EngineeringIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -26,82 +25,6 @@ const HallDataFormsPage = () => {
       </Box>
       
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Raport warunków środowiskowych */}
-        <Grid item xs={12} sm={6} md={4}>
-          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <CardContent sx={{ flexGrow: 1 }}>
-              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
-                <ThermostatIcon sx={{ mr: 1 }} />
-                {t('hallDataForms.environmentalReport.title')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('hallDataForms.environmentalReport.description')}
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Button 
-                startIcon={<AddIcon />} 
-                component={RouterLink} 
-                to="/hall-data/forms/environmental-report"
-                color="primary" 
-                variant="contained"
-                fullWidth
-                sx={{ mb: 1 }}
-              >
-                {t('hallDataForms.fillForm')}
-              </Button>
-              <Button 
-                startIcon={<ListIcon />} 
-                component={RouterLink} 
-                to="/hall-data/forms/responses?type=environmental"
-                color="secondary" 
-                variant="outlined"
-                fullWidth
-              >
-                {t('hallDataForms.viewResponses')}
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-        
-        {/* Raport stanu maszyn */}
-        <Grid item xs={12} sm={6} md={4}>
-          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <CardContent sx={{ flexGrow: 1 }}>
-              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
-                <PrecisionManufacturingIcon sx={{ mr: 1 }} />
-                {t('hallDataForms.machineReport.title')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('hallDataForms.machineReport.description')}
-              </Typography>
-            </CardContent>
-            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Button 
-                startIcon={<AddIcon />} 
-                component={RouterLink} 
-                to="/hall-data/forms/machine-report"
-                color="primary" 
-                variant="contained"
-                fullWidth
-                sx={{ mb: 1 }}
-              >
-                {t('hallDataForms.fillForm')}
-              </Button>
-              <Button 
-                startIcon={<ListIcon />} 
-                component={RouterLink} 
-                to="/hall-data/forms/responses?type=machine"
-                color="secondary" 
-                variant="outlined"
-                fullWidth
-              >
-                {t('hallDataForms.viewResponses')}
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
         {/* Raport serwisowy - tygodniowy */}
         <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -206,6 +129,44 @@ const HallDataFormsPage = () => {
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
                 to="/hall-data/forms/responses?type=defect"
+                color="secondary" 
+                variant="outlined"
+                fullWidth
+              >
+                {t('hallDataForms.viewResponses')}
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+
+        {/* Raport serwisu/napraw */}
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
+                <EngineeringIcon sx={{ mr: 1 }} />
+                Raport Serwisu/Napraw
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Formularz raportowania wykonanych serwisów i napraw. Zawiera rodzaj zadania, datę wykonania i szczegółowy opis prac.
+              </Typography>
+            </CardContent>
+            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Button 
+                startIcon={<AddIcon />} 
+                component={RouterLink} 
+                to="/hall-data/forms/service-repair-report"
+                color="primary" 
+                variant="contained"
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                {t('hallDataForms.fillForm')}
+              </Button>
+              <Button 
+                startIcon={<ListIcon />} 
+                component={RouterLink} 
+                to="/hall-data/forms/responses?type=service-repair"
                 color="secondary" 
                 variant="outlined"
                 fullWidth

@@ -162,6 +162,7 @@ import HallDataFormsPage from './pages/HallData/Forms';
 import ServiceReportFormPage from './pages/HallData/ServiceReportFormPage';
 import MonthlyServiceReportFormPage from './pages/HallData/MonthlyServiceReportFormPage';
 import DefectRegistryFormPage from './pages/HallData/DefectRegistryFormPage';
+import ServiceRepairReportFormPage from './pages/HallData/ServiceRepairReportFormPage';
 import HallDataFormsResponsesPage from './pages/HallData/HallDataFormsResponsesPage';
 
 // Inicjalizacja monitorowania stanu połączenia z bazą danych
@@ -340,6 +341,7 @@ function App() {
                     <Route path="/hall-data/forms/service-report" element={<PrivateLayout><ServiceReportFormPage /></PrivateLayout>} />
                     <Route path="/hall-data/forms/monthly-service-report" element={<PrivateLayout><MonthlyServiceReportFormPage /></PrivateLayout>} />
                     <Route path="/hall-data/forms/defect-registry" element={<PrivateLayout><DefectRegistryFormPage /></PrivateLayout>} />
+                    <Route path="/hall-data/forms/service-repair-report" element={<PrivateLayout><ServiceRepairReportFormPage /></PrivateLayout>} />
                     <Route path="/hall-data/forms/responses" element={<PrivateLayout><HallDataFormsResponsesPage /></PrivateLayout>} />
                     
                     {/* CRM Routes */}
