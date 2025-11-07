@@ -773,9 +773,16 @@ export const generateAndSaveInvoicePdf = async (invoiceId, userId) => {
     
     // Przygotuj stałą nazwę pliku (bez timestamp)
     const cleanInvoiceNumber = invoice.number.replace(/[\/\\:*?"<>|]/g, '_');
-    const fileName = invoice.isProforma 
-      ? `Invoice_Proforma_${cleanInvoiceNumber}.pdf`
-      : `Invoice_${cleanInvoiceNumber}.pdf`;
+    let fileName;
+    if (invoice.isProforma && invoice.isRefInvoice) {
+      fileName = `Invoice_Proforma_Reinvoice_${cleanInvoiceNumber}.pdf`;
+    } else if (invoice.isProforma) {
+      fileName = `Invoice_Proforma_${cleanInvoiceNumber}.pdf`;
+    } else if (invoice.isRefInvoice) {
+      fileName = `Invoice_Reinvoice_${cleanInvoiceNumber}.pdf`;
+    } else {
+      fileName = `Invoice_${cleanInvoiceNumber}.pdf`;
+    }
     
     // Ścieżka w Firebase Storage
     const storagePath = `invoices/${invoiceId}/${fileName}`;

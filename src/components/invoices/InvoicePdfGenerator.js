@@ -799,6 +799,17 @@ class InvoicePdfGenerator {
       doc.text('PROFORMA', 14, this.options.useTemplate ? 45 : 25);
     }
     
+    // Typ faktury (refaktura) jeśli dotyczy - na lewej stronie, poniżej proforma
+    if (this.invoice.isRefInvoice) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0); // Pomarańczowy kolor dla wyróżnienia
+      const yPosition = this.invoice.isProforma 
+        ? (this.options.useTemplate ? 52 : 32) // Jeśli jest też proforma, umieść niżej
+        : (this.options.useTemplate ? 45 : 25); // Jeśli nie, użyj standardowej pozycji
+      doc.text('REINVOICE', 14, yPosition);
+    }
+    
     // Numer faktury - na lewej stronie
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
@@ -971,9 +982,16 @@ class InvoicePdfGenerator {
     try {
       const doc = await this.generate(language);
       
-      const filename = this.invoice.isProforma 
-        ? `Faktura_Proforma_${this.invoice.number}_${language.toUpperCase()}.pdf`
-        : `Faktura_${this.invoice.number}_${language.toUpperCase()}.pdf`;
+      let filename;
+      if (this.invoice.isProforma && this.invoice.isRefInvoice) {
+        filename = `Faktura_Proforma_Refaktura_${this.invoice.number}_${language.toUpperCase()}.pdf`;
+      } else if (this.invoice.isProforma) {
+        filename = `Faktura_Proforma_${this.invoice.number}_${language.toUpperCase()}.pdf`;
+      } else if (this.invoice.isRefInvoice) {
+        filename = `Faktura_Refaktura_${this.invoice.number}_${language.toUpperCase()}.pdf`;
+      } else {
+        filename = `Faktura_${this.invoice.number}_${language.toUpperCase()}.pdf`;
+      }
       
       doc.save(filename);
       
@@ -1009,6 +1027,7 @@ export const createInvoicePdfGenerator = (invoice, companyInfo, language = 'pl',
     pl: {
       invoice: 'Faktura',
       proformaInvoice: 'Faktura proforma',
+      reinvoice: 'REFAKTURA / NOTA KREDYTOWA',
       invoiceNumber: 'Numer faktury',
       issueDate: 'Data wystawienia',
       dueDate: 'Termin płatności',
@@ -1050,6 +1069,7 @@ export const createInvoicePdfGenerator = (invoice, companyInfo, language = 'pl',
     en: {
       invoice: 'Invoice',
       proformaInvoice: 'Proforma Invoice',
+      reinvoice: 'REINVOICE',
       invoiceNumber: 'Invoice Number',
       issueDate: 'Issue Date',
       dueDate: 'Due Date',
