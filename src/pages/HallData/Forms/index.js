@@ -101,16 +101,16 @@ const HallDataFormsPage = () => {
           </Card>
         </Grid>
 
-        {/* Raport serwisowy */}
+        {/* Raport serwisowy - tygodniowy */}
         <Grid item xs={12} sm={6} md={4}>
           <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <CardContent sx={{ flexGrow: 1 }}>
               <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
                 <BuildIcon sx={{ mr: 1 }} />
-                {t('hallDataForms.serviceReport.title')}
+                Raport - Tygodniowy Serwis
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {t('hallDataForms.serviceReport.description')}
+                Formularz tygodniowego przeglądu serwisowego. Zawiera 9 podstawowych zadań kontrolnych do wykonania co tydzień.
               </Typography>
             </CardContent>
             <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -129,6 +129,44 @@ const HallDataFormsPage = () => {
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
                 to="/hall-data/forms/responses?type=service"
+                color="secondary" 
+                variant="outlined"
+                fullWidth
+              >
+                {t('hallDataForms.viewResponses')}
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+
+        {/* Raport serwisowy - miesięczny */}
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
+                <BuildIcon sx={{ mr: 1 }} />
+                Raport - Miesięczny Serwis
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Formularz miesięcznego przeglądu serwisowego. Zawiera rozszerzoną listę 12 zadań kontrolnych do wykonania co miesiąc.
+              </Typography>
+            </CardContent>
+            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Button 
+                startIcon={<AddIcon />} 
+                component={RouterLink} 
+                to="/hall-data/forms/monthly-service-report"
+                color="primary" 
+                variant="contained"
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                {t('hallDataForms.fillForm')}
+              </Button>
+              <Button 
+                startIcon={<ListIcon />} 
+                component={RouterLink} 
+                to="/hall-data/forms/responses?type=monthly"
                 color="secondary" 
                 variant="outlined"
                 fullWidth
