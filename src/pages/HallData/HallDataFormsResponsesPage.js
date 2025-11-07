@@ -28,7 +28,7 @@ import {
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Delete as DeleteIcon, Edit as EditIcon, Build as BuildIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon, Build as BuildIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { 
   getHallDataFormResponsesWithPagination,
@@ -376,11 +376,20 @@ const HallDataFormsResponsesPage = () => {
   
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
-        <BuildIcon sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
-        <Typography variant="h4" component="h1">
-          Odpowiedzi - Formularze Parametrów Hali
-        </Typography>
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <BuildIcon sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
+          <Typography variant="h4" component="h1">
+            Odpowiedzi - Formularze Parametrów Hali
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/hall-data/forms')}
+        >
+          Powrót do formularzy
+        </Button>
       </Box>
       
       {error && (

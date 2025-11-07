@@ -207,5 +207,11 @@
     "note": "Podsumowanie obejmuje wszystkie formularze dla tego zadania produkcyjnego"
   },
   "otherActivities": "Inne czynności",
-  "machineIssues": "Awarie maszyn"
+  "machineIssues": "Awarie maszyn",
+  "hallDataForms": {
+    "title": "Formularze Parametrów Hali",
+    "description": "Wybierz typ formularza, który chcesz wypełnić",
+    "fillForm": "Wypełnij formularz",
+    "viewResponses": "Zobacz odpowiedzi"
+  }
 }

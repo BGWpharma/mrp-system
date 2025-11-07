@@ -207,5 +207,11 @@
     "note": "Summary includes all forms for this production task"
   },
   "otherActivities": "Other activities",
-  "machineIssues": "Machine issues"
+  "machineIssues": "Machine issues",
+  "hallDataForms": {
+    "title": "Hall Data Forms",
+    "description": "Select the type of form you want to fill out",
+    "fillForm": "Fill form",
+    "viewResponses": "View responses"
+  }
 }
