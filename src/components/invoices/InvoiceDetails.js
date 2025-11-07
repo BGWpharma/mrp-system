@@ -68,6 +68,8 @@ const InvoiceDetails = () => {
   const [loadingRelatedInvoices, setLoadingRelatedInvoices] = useState(false);
   const [proformaUsageInfo, setProformaUsageInfo] = useState(null);
   const [issuingInvoice, setIssuingInvoice] = useState(false);
+  const [invoicesUsingProforma, setInvoicesUsingProforma] = useState([]);
+  const [loadingInvoicesUsingProforma, setLoadingInvoicesUsingProforma] = useState(false);
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -91,6 +93,14 @@ const InvoiceDetails = () => {
       // Pobierz powiązane faktury dla tego zamówienia
       if (fetchedInvoice.orderId) {
         await fetchRelatedInvoices(fetchedInvoice.orderId);
+      }
+      
+      // Jeśli to proforma, pobierz faktury które ją wykorzystują
+      if (fetchedInvoice.isProforma && fetchedInvoice.linkedAdvanceInvoices) {
+        await fetchInvoicesUsingProforma(
+          invoiceId, 
+          fetchedInvoice.linkedAdvanceInvoices
+        );
       }
     } catch (error) {
       showError(t('invoices.details.notifications.errors.fetchInvoice') + ': ' + error.message);
@@ -132,6 +142,39 @@ const InvoiceDetails = () => {
       setProformaUsageInfo(null);
     } finally {
       setLoadingRelatedInvoices(false);
+    }
+  };
+  
+  const fetchInvoicesUsingProforma = async (proformaId, linkedInvoiceIds) => {
+    if (!proformaId || !linkedInvoiceIds || linkedInvoiceIds.length === 0) {
+      setInvoicesUsingProforma([]);
+      return;
+    }
+    
+    setLoadingInvoicesUsingProforma(true);
+    try {
+      // Pobierz wszystkie faktury które wykorzystują tę proformę
+      const invoicesPromises = linkedInvoiceIds.map(id => getInvoiceById(id));
+      const invoices = await Promise.all(invoicesPromises);
+      
+      // Filtruj i dodaj informacje o wykorzystanej kwocie
+      const invoicesWithDetails = invoices
+        .filter(inv => inv !== null)
+        .map(inv => {
+          // Znajdź alokację dla tej proformy
+          const allocation = inv.proformAllocation?.find(alloc => alloc.proformaId === proformaId);
+          return {
+            ...inv,
+            usedAmount: allocation?.amount || 0
+          };
+        });
+      
+      setInvoicesUsingProforma(invoicesWithDetails);
+    } catch (error) {
+      console.error('Błąd podczas pobierania faktur wykorzystujących proformę:', error);
+      setInvoicesUsingProforma([]);
+    } finally {
+      setLoadingInvoicesUsingProforma(false);
     }
   };
   
@@ -290,7 +333,7 @@ const InvoiceDetails = () => {
                           {t('invoices.details.buttons.backToListShort')}
         </Button>
         <Typography variant="h4" component="h1">
-                          {invoice.isProforma ? t('invoices.details.proformaInvoice') : t('invoices.details.invoice')} {invoice.number}
+                          {invoice.isProforma ? t('invoices.details.proformaInvoice') : invoice.isRefInvoice ? 'Reinvoice' : t('invoices.details.invoice')} {invoice.number}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
@@ -330,11 +373,20 @@ const InvoiceDetails = () => {
         </Box>
       </Box>
       
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={9}>
             <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
+              <Typography 
+                variant="h6" 
+                gutterBottom 
+                sx={{ 
+                  pb: 1, 
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  mb: 2
+                }}
+              >
                 {t('invoices.details.basicInfo')}
               </Typography>
               <Grid container spacing={2}>
@@ -361,6 +413,16 @@ const InvoiceDetails = () => {
                     </Typography>
                     <Typography variant="body1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                       {t('invoices.details.proformaInvoice')}
+                    </Typography>
+                  </Grid>
+                )}
+                {invoice.isRefInvoice && (
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('invoices.details.invoiceType')}
+                    </Typography>
+                    <Typography variant="body1" gutterBottom sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
+                      Reinvoice (Refaktura)
                     </Typography>
                   </Grid>
                 )}
@@ -435,7 +497,16 @@ const InvoiceDetails = () => {
             <Divider sx={{ my: 3 }} />
             
             <Box>
-              <Typography variant="h6" gutterBottom>
+              <Typography 
+                variant="h6" 
+                gutterBottom 
+                sx={{ 
+                  pb: 1, 
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  mb: 2
+                }}
+              >
                 {t('invoices.details.clientInfo.addresses')}
               </Typography>
               <Grid container spacing={3}>
@@ -467,10 +538,10 @@ const InvoiceDetails = () => {
             </Box>
           </Grid>
           
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             {/* Sekcja Klient */}
-            <Card variant="outlined" sx={{ mb: 3 }}>
-              <CardContent>
+            <Card variant="outlined" sx={{ mb: 2 }}>
+              <CardContent sx={{ p: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">
                     {t('invoices.details.client')}
@@ -566,10 +637,81 @@ const InvoiceDetails = () => {
                       </Typography>
                       {proformaUsageInfo.used > 0 && (
                         <Typography variant="caption" color="text.secondary">
-                          Proforma została częściowo wykorzystana jako zaliczka w innych fakturach
+                          Proforma została wykorzystana jako zaliczka w innych fakturach
                         </Typography>
                       )}
                     </Box>
+                    
+                    {/* Lista faktur wykorzystujących proformę */}
+                    {invoicesUsingProforma.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="body2" gutterBottom fontWeight="bold">
+                          Wykorzystana w fakturach: ({invoicesUsingProforma.length})
+                        </Typography>
+                        {loadingInvoicesUsingProforma ? (
+                          <CircularProgress size={20} />
+                        ) : (
+                          <Box sx={{ 
+                            maxHeight: 300, 
+                            overflowY: 'auto', 
+                            pr: 0.5,
+                            '&::-webkit-scrollbar': {
+                              width: '8px',
+                            },
+                            '&::-webkit-scrollbar-track': {
+                              backgroundColor: 'rgba(0,0,0,0.1)',
+                              borderRadius: '4px',
+                            },
+                            '&::-webkit-scrollbar-thumb': {
+                              backgroundColor: 'rgba(0,0,0,0.3)',
+                              borderRadius: '4px',
+                              '&:hover': {
+                                backgroundColor: 'rgba(0,0,0,0.4)',
+                              }
+                            }
+                          }}>
+                            {invoicesUsingProforma.map((usedInvoice) => (
+                            <Box 
+                              key={usedInvoice.id}
+                              component={RouterLink}
+                              to={`/invoices/${usedInvoice.id}`}
+                              sx={{ 
+                                mb: 1, 
+                                p: 1.5, 
+                                bgcolor: 'rgba(255, 152, 0, 0.1)',
+                                border: '1px solid',
+                                borderColor: 'warning.main',
+                                borderRadius: 1,
+                                cursor: 'pointer',
+                                textDecoration: 'none',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover': {
+                                  bgcolor: 'warning.light',
+                                  transform: 'translateX(4px)',
+                                  boxShadow: 1
+                                }
+                              }}
+                            >
+                              <Box>
+                                <Typography variant="body2" fontWeight="bold" color="text.primary">
+                                  📄 {usedInvoice.number}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {usedInvoice.customer?.name} • {usedInvoice.issueDate?.toLocaleDateString()}
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" fontWeight="bold" color="warning.dark">
+                                -{usedInvoice.usedAmount.toFixed(2)} {invoice.currency || 'EUR'}
+                              </Typography>
+                            </Box>
+                            ))}
+                          </Box>
+                        )}
+                      </Box>
+                    )}
                   </>
                 )}
 
@@ -578,12 +720,31 @@ const InvoiceDetails = () => {
                   <>
                     <Divider sx={{ my: 2 }} />
                     <Typography variant="subtitle2" gutterBottom>
-                      {t('invoices.details.otherInvoicesForOrder')}:
+                      {t('invoices.details.otherInvoicesForOrder')}: ({relatedInvoices.length})
                     </Typography>
                     {loadingRelatedInvoices ? (
                       <CircularProgress size={20} />
                     ) : (
-                      relatedInvoices.map((relInvoice) => (
+                      <Box sx={{ 
+                        maxHeight: 400, 
+                        overflowY: 'auto', 
+                        pr: 0.5,
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          backgroundColor: 'rgba(0,0,0,0.1)',
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          backgroundColor: 'rgba(0,0,0,0.3)',
+                          borderRadius: '4px',
+                          '&:hover': {
+                            backgroundColor: 'rgba(0,0,0,0.4)',
+                          }
+                        }
+                      }}>
+                        {relatedInvoices.map((relInvoice) => (
                         <Box 
                           key={relInvoice.id}
                           component={RouterLink}
@@ -591,14 +752,14 @@ const InvoiceDetails = () => {
                           sx={{ 
                             mb: 1, 
                             p: 1, 
-                            bgcolor: relInvoice.isProforma ? 'warning.light' : 'info.light', 
+                            bgcolor: relInvoice.isProforma ? 'warning.light' : relInvoice.isRefInvoice ? 'secondary.light' : 'info.light', 
                             borderRadius: 1,
                             cursor: 'pointer',
                             textDecoration: 'none',
                             display: 'block',
                             transition: 'all 0.2s ease-in-out',
                             '&:hover': {
-                              bgcolor: relInvoice.isProforma ? 'warning.main' : 'info.main',
+                              bgcolor: relInvoice.isProforma ? 'warning.main' : relInvoice.isRefInvoice ? 'secondary.main' : 'info.main',
                               transform: 'translateY(-1px)',
                               boxShadow: 2
                             }
@@ -613,7 +774,7 @@ const InvoiceDetails = () => {
                             }}
                           >
                             <Typography variant="body2" fontWeight="bold">
-                              {relInvoice.isProforma ? '📋 Proforma' : '📄 Faktura'} {relInvoice.number}
+                              {relInvoice.isProforma ? '📋 Proforma' : relInvoice.isRefInvoice ? '🔄 Reinvoice' : '📄 Faktura'} {relInvoice.number}
                             </Typography>
                             {relInvoice.isProforma && (
                               <Typography variant="body2" color="warning.dark" fontWeight="bold">
@@ -627,16 +788,99 @@ const InvoiceDetails = () => {
                             )}
                           </Link>
                         </Box>
-                      ))
+                        ))}
+                      </Box>
                     )}
+                  </>
+                )}
+
+                {/* Wykorzystane proformy w tej fakturze */}
+                {!invoice.isProforma && invoice.proformAllocation && invoice.proformAllocation.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" gutterBottom>
+                      Rozliczone proformy (zaliczki): ({invoice.proformAllocation.length})
+                    </Typography>
+                    <Box sx={{ 
+                      maxHeight: 300, 
+                      overflowY: 'auto', 
+                      pr: 0.5,
+                      '&::-webkit-scrollbar': {
+                        width: '8px',
+                      },
+                      '&::-webkit-scrollbar-track': {
+                        backgroundColor: 'rgba(0,0,0,0.1)',
+                        borderRadius: '4px',
+                      },
+                      '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: 'rgba(0,0,0,0.3)',
+                        borderRadius: '4px',
+                        '&:hover': {
+                          backgroundColor: 'rgba(0,0,0,0.4)',
+                        }
+                      }
+                    }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {invoice.proformAllocation.map((allocation, index) => (
+                        <Box 
+                          key={allocation.proformaId || index}
+                          component={RouterLink}
+                          to={`/invoices/${allocation.proformaId}`}
+                          sx={{ 
+                            p: 1.5, 
+                            bgcolor: 'rgba(33, 150, 243, 0.08)',
+                            border: '1px solid',
+                            borderColor: 'primary.main',
+                            borderRadius: 1,
+                            cursor: 'pointer',
+                            textDecoration: 'none',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              bgcolor: 'primary.light',
+                              transform: 'translateX(4px)',
+                              boxShadow: 1
+                            }
+                          }}
+                        >
+                          <Box>
+                            <Typography variant="body2" fontWeight="bold" color="text.primary">
+                              📋 Proforma {allocation.proformaNumber}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Wykorzystano jako zaliczka
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2" fontWeight="bold" color="primary.main">
+                            -{allocation.amount.toFixed(2)} {invoice.currency || 'EUR'}
+                          </Typography>
+                        </Box>
+                      ))}
+                      <Box sx={{ 
+                        p: 1, 
+                        bgcolor: 'rgba(76, 175, 80, 0.08)', 
+                        borderRadius: 1,
+                        mt: 1
+                      }}>
+                        <Typography variant="body2" color="success.main" fontWeight="bold">
+                          Łączna kwota z proform: -
+                          {invoice.proformAllocation
+                            .reduce((sum, alloc) => sum + (alloc.amount || 0), 0)
+                            .toFixed(2)} {invoice.currency || 'EUR'}
+                        </Typography>
+                      </Box>
+                      </Box>
+                    </Box>
                   </>
                 )}
               </CardContent>
             </Card>
             
             {/* Sekcja Sprzedawca */}
-            <Card variant="outlined" sx={{ mb: 3 }}>
-              <CardContent>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom>
                   {t('invoices.details.seller')}
                 </Typography>
@@ -680,37 +924,22 @@ const InvoiceDetails = () => {
                 </Box>
               </CardContent>
             </Card>
-            
-            {/* Sekcja Akcje */}
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {t('invoices.details.actions')}
-                </Typography>
-                
-
-                
-
-                
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDeleteClick}
-                  sx={{ mb: 1 }}
-                >
-                  {t('invoices.details.buttons.deleteInvoice')}
-                </Button>
-              </CardContent>
-            </Card>
           </Grid>
         </Grid>
       </Paper>
       
       {/* Oddzielny Paper dla sekcji pozycji faktury */}
-      <Paper sx={{ p: 3, mb: 3, mt: 4, clear: 'both' }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography 
+          variant="h6" 
+          gutterBottom 
+          sx={{ 
+            pb: 1, 
+            borderBottom: '2px solid',
+            borderColor: 'primary.main',
+            mb: 2
+          }}
+        >
           {t('invoices.details.invoiceItems')}
         </Typography>
         
@@ -844,7 +1073,16 @@ const InvoiceDetails = () => {
         {/* Sekcja zamówień zakupowych związanych z fakturą */}
         {invoice.linkedPurchaseOrders && invoice.linkedPurchaseOrders.length > 0 && (
           <Box sx={{ mt: 4 }}>
-            <Typography variant="h6" gutterBottom>
+            <Typography 
+              variant="h6" 
+              gutterBottom 
+              sx={{ 
+                pb: 1, 
+                borderBottom: '2px solid',
+                borderColor: 'warning.main',
+                mb: 2
+              }}
+            >
               Zaliczki/Przedpłaty
             </Typography>
             <TableContainer>

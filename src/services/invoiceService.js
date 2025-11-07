@@ -355,13 +355,22 @@ export const calculateTotalUnitCost = (item, orderData) => {
  */
 export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
   try {
-    // Pobierz dane zamówienia
-    const orderDoc = await getDoc(doc(db, 'orders', orderId));
+    // Określ kolekcję na podstawie typu faktury
+    const collectionName = invoiceData.invoiceType === 'purchase' ? 'purchaseOrders' : 'orders';
+    
+    // Pobierz dane zamówienia z odpowiedniej kolekcji
+    const orderDoc = await getDoc(doc(db, collectionName, orderId));
     if (!orderDoc.exists()) {
       throw new Error('Zamówienie nie zostało znalezione');
     }
     
     const orderData = orderDoc.data();
+    
+    // Dla Purchase Orders, ustaw type jako 'purchase' jeśli nie jest już ustawiony
+    if (collectionName === 'purchaseOrders' && !orderData.type) {
+      orderData.type = 'purchase';
+    }
+    
     const isCustomerOrder = orderData.type !== 'purchase';
     
     // Przygotuj podstawowe dane faktury na podstawie zamówienia
@@ -428,22 +437,29 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
       basicInvoiceData.total = orderTotal;
     } else {
       // Zamówienie zakupowe (PO)
-      // Znajdujemy dostawcę i traktujemy go jako "klienta" faktury
-      basicInvoiceData.customer = {
-        id: orderData.supplierId || '',
-        name: orderData.supplier?.name || '',
-        email: orderData.supplier?.email || '',
-        phone: orderData.supplier?.phone || '',
-        address: orderData.supplier?.address || '',
-        vatEu: orderData.supplier?.vatEu || ''
-      };
+      const isRefInvoice = invoiceData.isRefInvoice === true;
+      
+      if (isRefInvoice) {
+        // Refaktura - użyj klienta przekazanego w invoiceData, nie dostawcy z PO
+        basicInvoiceData.customer = invoiceData.customer;
+        basicInvoiceData.billingAddress = invoiceData.billingAddress || invoiceData.customer?.billingAddress || invoiceData.customer?.address || '';
+        basicInvoiceData.shippingAddress = invoiceData.shippingAddress || invoiceData.customer?.shippingAddress || invoiceData.customer?.address || '';
+      } else {
+        // Zwykła faktura zakupowa - użyj dostawcę jako "klienta" faktury
+        basicInvoiceData.customer = {
+          id: orderData.supplierId || '',
+          name: orderData.supplier?.name || '',
+          email: orderData.supplier?.email || '',
+          phone: orderData.supplier?.phone || '',
+          address: orderData.supplier?.address || '',
+          vatEu: orderData.supplier?.vatEu || ''
+        };
+        basicInvoiceData.shippingAddress = orderData.deliveryAddress || '';
+        basicInvoiceData.billingAddress = orderData.supplier?.address || '';
+      }
       
       // Zamówienia zakupowe mają format items zgodny z fakturami
       basicInvoiceData.items = mapItemsWithProductionCosts(orderData.items, isProformaInvoice);
-      
-      // Dane adresowe
-      basicInvoiceData.shippingAddress = orderData.deliveryAddress || '';
-      basicInvoiceData.billingAddress = orderData.supplier?.address || '';
       
       // Oblicz wartość zamówienia zakupowego
       const poTotal = orderData.totalGross || orderData.totalValue || calculatePurchaseOrderTotal(orderData);

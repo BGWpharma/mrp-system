@@ -947,18 +947,22 @@ const InvoiceForm = ({ invoiceId }) => {
         });
 
         const invoiceData = {
-          customer: {
-            id: selectedOrder.supplier?.id || '',
-            name: selectedOrder.supplier?.name || '',
-            email: selectedOrder.supplier?.email || '',
-            phone: selectedOrder.supplier?.phone || '',
-            address: selectedOrder.supplier?.address || '',
-            vatEu: selectedOrder.supplier?.vatEu || ''
-          },
+          // Dla refaktur nie nadpisuj customer - pozostaw wybranego klienta
+          // Dla zwykłych faktur zakupowych użyj dostawcy jako "customer"
+          ...(invoice.isRefInvoice ? {} : {
+            customer: {
+              id: selectedOrder.supplier?.id || '',
+              name: selectedOrder.supplier?.name || '',
+              email: selectedOrder.supplier?.email || '',
+              phone: selectedOrder.supplier?.phone || '',
+              address: selectedOrder.supplier?.address || '',
+              vatEu: selectedOrder.supplier?.vatEu || ''
+            },
+            billingAddress: selectedOrder.supplier?.address || '',
+            shippingAddress: selectedOrder.deliveryAddress || ''
+          }),
           items: mappedPOItems,
           orderNumber: selectedOrder.number,
-          billingAddress: selectedOrder.supplier?.address || '',
-          shippingAddress: selectedOrder.deliveryAddress || '',
           total: finalGrossValue, // Używamy pełnej wartości brutto
           currency: selectedOrder.currency || 'EUR',
           vatRate: selectedOrder.vatRate || 23,
@@ -1048,8 +1052,8 @@ const InvoiceForm = ({ invoiceId }) => {
   };
 
   const validateForm = () => {
-    // Sprawdź czy klient jest wybrany (nie wymagane dla refaktur)
-    if (!invoice.isRefInvoice && !invoice.customer?.id) {
+    // Sprawdź czy klient jest wybrany (wymagane dla wszystkich faktur)
+    if (!invoice.customer?.id) {
       showError('Wybierz klienta dla faktury');
       return false;
     }
@@ -1308,25 +1312,77 @@ const InvoiceForm = ({ invoiceId }) => {
             </ToggleButton>
           </ToggleButtonGroup>
           
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={invoice.isRefInvoice || false}
-                onChange={(e) => {
-                  handleChange({
-                    target: {
-                      name: 'isRefInvoice',
-                      type: 'checkbox',
-                      checked: e.target.checked
-                    }
-                  });
+          <Box 
+            sx={{ 
+              mt: 2, 
+              p: 1.5, 
+              border: '1px solid',
+              borderColor: invoice.isRefInvoice ? 'rgba(156, 39, 176, 0.5)' : 'rgba(255, 255, 255, 0.12)',
+              borderRadius: 1,
+              backgroundColor: invoice.isRefInvoice ? 'rgba(156, 39, 176, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              '&:hover': {
+                borderColor: 'rgba(156, 39, 176, 0.4)',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)'
+              }
+            }}
+            onClick={() => {
+              handleChange({
+                target: {
+                  name: 'isRefInvoice',
+                  type: 'checkbox',
+                  checked: !invoice.isRefInvoice
+                }
+              });
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box 
+                sx={{ 
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  opacity: 0.8
                 }}
-                color="secondary"
-              />
-            }
-            label="Refaktura (wybór z PO)"
-            sx={{ mt: 1 }}
-          />
+              >
+                🔄
+              </Box>
+              <Box>
+                <Typography 
+                  variant="body2" 
+                  fontWeight="500"
+                  sx={{ 
+                    color: invoice.isRefInvoice ? 'secondary.light' : 'text.primary'
+                  }}
+                >
+                  Refaktura (wybór z PO)
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                  Faktura dla klienta bazująca na zamówieniu zakupowym
+                </Typography>
+              </Box>
+            </Box>
+            <Switch
+              checked={invoice.isRefInvoice || false}
+              onChange={(e) => {
+                e.stopPropagation();
+                handleChange({
+                  target: {
+                    name: 'isRefInvoice',
+                    type: 'checkbox',
+                    checked: e.target.checked
+                  }
+                });
+              }}
+              color="secondary"
+              size="small"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Box>
         </Box>
         <Button
           variant="contained"
@@ -1576,8 +1632,14 @@ const InvoiceForm = ({ invoiceId }) => {
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label={t('invoices.form.fields.relatedOrder')}
-                          placeholder="Wyszukaj zamówienie..."
+                          label={selectedOrderType === 'purchase' 
+                            ? '🔄 Wybierz Zamówienie Zakupowe (PO) dla refaktury'
+                            : t('invoices.form.fields.relatedOrder')
+                          }
+                          placeholder={selectedOrderType === 'purchase' 
+                            ? "Wyszukaj PO..."
+                            : "Wyszukaj zamówienie..."
+                          }
                           InputProps={{
                             ...params.InputProps,
                             endAdornment: (
@@ -1595,8 +1657,70 @@ const InvoiceForm = ({ invoiceId }) => {
                       openText="Otwórz"
                     />
                     
-                                          {selectedOrderId && (
-                        <Typography variant="body2" color="primary">
+                    {selectedOrderId && selectedOrderType === 'purchase' && selectedOrder && (
+                      <Card variant="outlined" sx={{ mt: 2, p: 2, bgcolor: 'rgba(156, 39, 176, 0.05)', borderColor: 'secondary.main' }}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ color: 'secondary.main', fontWeight: 'bold' }}>
+                          🔄 Wybrane PO dla refaktury: {selectedOrder.number}
+                        </Typography>
+                        <Divider sx={{ my: 1 }} />
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Dostawca:</strong> {selectedOrder.supplier?.name || 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" gutterBottom>
+                          <strong>Wartość:</strong> {selectedOrder.totalGross ? `${parseFloat(selectedOrder.totalGross).toFixed(2)} ${selectedOrder.currency || 'EUR'}` : 'N/A'}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Status:</strong> {selectedOrder.status}
+                        </Typography>
+                        {selectedOrder.items && selectedOrder.items.length > 0 && (
+                          <Button
+                            variant="contained"
+                            size="small"
+                            color="secondary"
+                            sx={{ mt: 2 }}
+                            onClick={() => {
+                              // Automatycznie dodaj wszystkie pozycje z PO
+                              const poItems = selectedOrder.items.map(item => ({
+                                name: item.name || '',
+                                description: item.description || '',
+                                cnCode: item.cnCode || '',
+                                quantity: parseFloat(item.quantity || 0),
+                                unit: item.unit || 'szt',
+                                price: parseFloat(item.unitPrice || 0),
+                                vat: parseFloat(item.vatRate || 23),
+                                netValue: parseFloat(item.totalPrice || 0),
+                                grossValue: parseFloat(item.totalPrice || 0) * (1 + parseFloat(item.vatRate || 23) / 100),
+                                orderItemId: item.id || null
+                              }));
+                              
+                              const additionalCosts = selectedOrder.additionalCostsItems || [];
+                              const totalAdditionalCosts = additionalCosts.reduce(
+                                (sum, cost) => sum + (parseFloat(cost.value) || 0), 
+                                0
+                              );
+                              
+                              setInvoice(prev => ({
+                                ...prev,
+                                items: poItems,
+                                additionalCostsItems: additionalCosts,
+                                additionalCosts: totalAdditionalCosts,
+                                total: calculateInvoiceTotalGross({ 
+                                  items: poItems,
+                                  additionalCostsItems: additionalCosts
+                                })
+                              }));
+                              
+                              showSuccess(`Dodano ${poItems.length} pozycji${additionalCosts.length > 0 ? ` i ${additionalCosts.length} kosztów dodatkowych` : ''} z PO`);
+                            }}
+                          >
+                            Załaduj wszystkie pozycje z PO
+                          </Button>
+                        )}
+                      </Card>
+                    )}
+                    
+                    {selectedOrderId && selectedOrderType === 'customer' && (
+                        <Typography variant="body2" color="primary" sx={{ mt: 2 }}>
                           {t('invoices.form.fields.relatedOrderInfo', { orderNumber: invoice.orderNumber || selectedOrderId })}
                         </Typography>
                       )}
@@ -2182,150 +2306,6 @@ const InvoiceForm = ({ invoiceId }) => {
             />
           </Grid>
         </Grid>
-      </Paper>
-
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('invoices.form.fields.invoiceSource')}
-        </Typography>
-        
-        {/* Sekcja dla zwykłych faktur i proform (nie refaktur) */}
-        {!invoice.isRefInvoice && (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>{t('invoices.form.fields.orderType')}</InputLabel>
-                <Select
-                  value={selectedOrderType}
-                  onChange={(e) => setSelectedOrderType(e.target.value)}
-                  label={t('invoices.form.fields.orderType')}
-                >
-                  <MenuItem value="customer">{t('invoices.form.orderTypes.customer')}</MenuItem>
-                  <MenuItem value="purchase">Zamówienie zakupowe (PO)</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={8}>
-              <FormControl fullWidth>
-                <InputLabel>{t('invoices.form.buttons.selectOrder')}</InputLabel>
-                <Select
-                  value={selectedOrderId || ''}
-                  onChange={(e) => handleOrderSelect(e.target.value, selectedOrderType)}
-                  label={t('invoices.form.buttons.selectOrder')}
-                  disabled={!customers.length || (selectedOrderType === 'customer' ? ordersLoading : purchaseOrdersLoading)}
-                >
-                  <MenuItem value="">-- Brak --</MenuItem>
-                  
-                  {selectedOrderType === 'customer' ? (
-                    filteredOrders.map(order => (
-                      <MenuItem key={order.id} value={order.id}>
-                        {order.orderNumber} - {order.customer?.name} 
-                        {order.orderDate ? ` (${order.orderDate.toLocaleDateString()})` : ''}
-                      </MenuItem>
-                    ))
-                  ) : (
-                    purchaseOrders.map(po => (
-                      <MenuItem key={po.id} value={po.id}>
-                        {po.number} - {po.supplier?.name} ({po.status})
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        )}
-        
-        {/* Sekcja dla refaktur - tylko wybór PO */}
-        {invoice.isRefInvoice && (
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Wybierz Zamówienie Zakupowe (PO)</InputLabel>
-                <Select
-                  value={selectedOrderId || ''}
-                  onChange={(e) => handleOrderSelect(e.target.value, 'purchase')}
-                  label="Wybierz Zamówienie Zakupowe (PO)"
-                  disabled={purchaseOrdersLoading}
-                >
-                  <MenuItem value="">-- Wybierz PO --</MenuItem>
-                  {purchaseOrders.map(po => (
-                    <MenuItem key={po.id} value={po.id}>
-                      {po.number} - {po.supplier?.name} - {po.totalGross ? `${parseFloat(po.totalGross).toFixed(2)} ${po.currency || 'EUR'}` : 'N/A'} ({po.status})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            {/* Informacja o wybranym PO */}
-            {selectedOrderId && selectedOrder && (
-              <Grid item xs={12}>
-                <Card variant="outlined" sx={{ p: 2, bgcolor: 'info.light' }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    <strong>Wybrane PO:</strong> {selectedOrder.number}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Dostawca:</strong> {selectedOrder.supplier?.name || 'N/A'}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Wartość:</strong> {selectedOrder.totalGross ? `${parseFloat(selectedOrder.totalGross).toFixed(2)} ${selectedOrder.currency || 'EUR'}` : 'N/A'}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Status:</strong> {selectedOrder.status}
-                  </Typography>
-                  {selectedOrder.items && selectedOrder.items.length > 0 && (
-                    <Button
-                      variant="contained"
-                      size="small"
-                      sx={{ mt: 2 }}
-                      onClick={() => {
-                        // Automatycznie dodaj wszystkie pozycje z PO
-                        const poItems = selectedOrder.items.map(item => ({
-                          name: item.name || '',
-                          description: item.description || '',
-                          cnCode: item.cnCode || '',
-                          quantity: parseFloat(item.quantity || 0),
-                          unit: item.unit || 'szt',
-                          price: parseFloat(item.unitPrice || 0),  // unitPrice zamiast price
-                          vat: parseFloat(item.vatRate || 23),     // vatRate zamiast vat
-                          netValue: parseFloat(item.totalPrice || 0),
-                          grossValue: parseFloat(item.totalPrice || 0) * (1 + parseFloat(item.vatRate || 23) / 100),
-                          orderItemId: item.id || null
-                        }));
-                        
-                        // Pobierz koszty dodatkowe z PO
-                        const additionalCosts = selectedOrder.additionalCostsItems || [];
-                        
-                        // Oblicz łączną wartość dodatkowych kosztów
-                        const totalAdditionalCosts = additionalCosts.reduce(
-                          (sum, cost) => sum + (parseFloat(cost.value) || 0), 
-                          0
-                        );
-                        
-                        setInvoice(prev => ({
-                          ...prev,
-                          items: poItems,
-                          additionalCostsItems: additionalCosts,  // Dodaj koszty dodatkowe
-                          additionalCosts: totalAdditionalCosts,  // Suma dla kompatybilności
-                          total: calculateInvoiceTotalGross({ 
-                            items: poItems,
-                            additionalCostsItems: additionalCosts
-                          })
-                        }));
-                        
-                        showSuccess(`Dodano ${poItems.length} pozycji${additionalCosts.length > 0 ? ` i ${additionalCosts.length} kosztów dodatkowych` : ''} z PO`);
-                      }}
-                    >
-                      Załaduj wszystkie pozycje z PO
-                    </Button>
-                  )}
-                </Card>
-              </Grid>
-            )}
-          </Grid>
-        )}
       </Paper>
 
       <Dialog open={customerDialogOpen} onClose={() => setCustomerDialogOpen(false)} maxWidth="md" fullWidth>

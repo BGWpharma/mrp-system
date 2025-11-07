@@ -181,8 +181,10 @@ const InvoicesList = () => {
     if (listState.filters.invoiceType) {
       if (listState.filters.invoiceType === 'proforma') {
         results = results.filter(invoice => invoice.isProforma === true);
+      } else if (listState.filters.invoiceType === 'reinvoice') {
+        results = results.filter(invoice => invoice.isRefInvoice === true);
       } else if (listState.filters.invoiceType === 'invoice') {
-        results = results.filter(invoice => !invoice.isProforma);
+        results = results.filter(invoice => !invoice.isProforma && !invoice.isRefInvoice);
       }
       // jeśli 'all' lub '', nie filtrujemy
     }
@@ -669,6 +671,7 @@ const InvoicesList = () => {
                       <MenuItem value="">Wszystkie</MenuItem>
                       <MenuItem value="invoice">Faktury</MenuItem>
                       <MenuItem value="proforma">Proformy</MenuItem>
+                      <MenuItem value="reinvoice">Reinvoice</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -816,6 +819,15 @@ const InvoicesList = () => {
                                   label={t('invoices.proforma')} 
                                   size="small" 
                                   color="primary" 
+                                  variant="outlined"
+                                  sx={{ height: 'auto', fontSize: '0.7rem', py: 0.25 }}
+                                />
+                              )}
+                              {invoice.isRefInvoice && (
+                                <Chip 
+                                  label="Reinvoice" 
+                                  size="small" 
+                                  color="secondary" 
                                   variant="outlined"
                                   sx={{ height: 'auto', fontSize: '0.7rem', py: 0.25 }}
                                 />
