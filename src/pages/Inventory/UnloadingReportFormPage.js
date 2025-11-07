@@ -778,113 +778,107 @@ const UnloadingReportFormPage = () => {
           </Box>
 
                   <Box component="form" onSubmit={handleSubmit} sx={{ px: { xs: 1, sm: 0 } }}>
-            <Grid container spacing={{ xs: 2, sm: 3 }}>
             {/* Email użytkownika */}
-            <Grid item xs={12}>
-              <TextField
-                required
-                fullWidth
-                label="Adres e-mail"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange('email')}
-                error={!!errors.email}
-                helperText={errors.email}
-                InputProps={{
-                  readOnly: true, // Pole tylko do odczytu
-                }}
-              />
-            </Grid>
+            <TextField
+              required
+              fullWidth
+              label="Adres e-mail"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange('email')}
+              error={!!errors.email}
+              helperText={errors.email}
+              InputProps={{
+                readOnly: true, // Pole tylko do odczytu
+              }}
+              sx={{ mb: 3 }}
+            />
             
-            {/* Sekcja 1: Identyfikacja */}
-            <Grid item xs={12}>
-              <Box sx={getFormSectionStyles(theme, 'primary')}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'primary.main',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <PersonIcon className="section-icon" />
-                  Identyfikacja
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormControl component="fieldset" required error={!!errors.employeeName}>
-                <FormLabel component="legend">Imię i nazwisko: </FormLabel>
-                <RadioGroup
-                  value={formData.employeeName}
-                  onChange={handleInputChange('employeeName')}
-                >
-                  {employeeLoading ? (
-                    <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
-                  ) : (
-                    employeeOptions.map((employee) => (
-                      <FormControlLabel 
-                        key={employee}
-                        value={employee} 
-                        control={<Radio />} 
-                        label={employee} 
-                      />
-                    ))
-                  )}
-                </RadioGroup>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormControl component="fieldset" required error={!!errors.position}>
-                <FormLabel component="legend">Stanowisko: </FormLabel>
-                <RadioGroup
-                  value={formData.position}
-                  onChange={handleInputChange('position')}
-                >
-                  {positionLoading ? (
-                    <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
-                  ) : (
-                    positionOptions.map((position) => (
-                      <FormControlLabel 
-                        key={position}
-                        value={position} 
-                        control={<Radio />} 
-                        label={position} 
-                      />
-                    ))
-                  )}
-                </RadioGroup>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Data wypełnienia "
-                value={formData.fillDate}
-                onChange={handleDateChange('fillDate')}
-                renderInput={(params) => <TextField {...params} fullWidth required />}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                required
-                fullWidth
-                label="Godzina wypełnienia"
-                name="fillTime"
-                type="time"
-                value={formData.fillTime}
-                onChange={handleInputChange('fillTime')}
-                error={!!errors.fillTime}
-                helperText={errors.fillTime}
-                InputLabelProps={{
-                  shrink: true,
-                }}
-              />
-            </Grid>
+            {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
+            <Box sx={getFormSectionStyles(theme, 'primary')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
+                Sekcja 1 z 3
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PersonIcon className="section-icon" />
+                Identyfikacja
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12}>
+                  <FormControl component="fieldset" required error={!!errors.employeeName}>
+                    <FormLabel component="legend">Imię i nazwisko: </FormLabel>
+                    <RadioGroup
+                      value={formData.employeeName}
+                      onChange={handleInputChange('employeeName')}
+                    >
+                      {employeeLoading ? (
+                        <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
+                      ) : (
+                        employeeOptions.map((employee) => (
+                          <FormControlLabel 
+                            key={employee}
+                            value={employee} 
+                            control={<Radio />} 
+                            label={employee} 
+                          />
+                        ))
+                      )}
+                    </RadioGroup>
+                  </FormControl>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <FormControl component="fieldset" required error={!!errors.position}>
+                    <FormLabel component="legend">Stanowisko: </FormLabel>
+                    <RadioGroup
+                      value={formData.position}
+                      onChange={handleInputChange('position')}
+                    >
+                      {positionLoading ? (
+                        <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
+                      ) : (
+                        positionOptions.map((position) => (
+                          <FormControlLabel 
+                            key={position}
+                            value={position} 
+                            control={<Radio />} 
+                            label={position} 
+                          />
+                        ))
+                      )}
+                    </RadioGroup>
+                  </FormControl>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <DatePicker
+                    label="Data wypełnienia "
+                    value={formData.fillDate}
+                    onChange={handleDateChange('fillDate')}
+                    renderInput={(params) => <TextField {...params} fullWidth required />}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    required
+                    fullWidth
+                    label="Godzina wypełnienia"
+                    name="fillTime"
+                    type="time"
+                    value={formData.fillTime}
+                    onChange={handleInputChange('fillTime')}
+                    error={!!errors.fillTime}
+                    helperText={errors.fillTime}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                </Grid>
 
-            <Grid item xs={12} sm={6}>
+                <Grid item xs={12} sm={6}>
                                               <Autocomplete
                  freeSolo
                  options={searchResults}
@@ -969,33 +963,31 @@ const UnloadingReportFormPage = () => {
                />
             </Grid>
 
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Numer faktury"
-                value={formData.invoiceNumber}
-                onChange={handleInputChange('invoiceNumber')}
-                fullWidth
-                helperText="Numer faktury dostawy (opcjonalnie)"
-              />
-            </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Numer faktury"
+                    value={formData.invoiceNumber}
+                    onChange={handleInputChange('invoiceNumber')}
+                    fullWidth
+                    helperText="Numer faktury dostawy (opcjonalnie)"
+                  />
+                </Grid>
+              </Grid>
+            </Box>
 
-            {/* Sekcja 2: Informacje o rozładunku */}
-            <Grid item xs={12}>
-              <Box sx={getFormSectionStyles(theme, 'warning')}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'warning.main',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <LocalShippingIcon className="section-icon" />
-                  Informacje o rozładunku
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
+            {/* SEKCJA 2 z 3 - INFORMACJE O ROZŁADUNKU */}
+            <Box sx={getFormSectionStyles(theme, 'warning')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
+                Sekcja 2 z 3
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LocalShippingIcon className="section-icon" />
+                Informacje o rozładunku
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} sm={6}>
               <DatePicker
                 label="Data rozładunku "
                 value={formData.unloadingDate}
@@ -1107,37 +1099,35 @@ const UnloadingReportFormPage = () => {
                 placeholder="Ewentualne uwagi do stanu technicznego samochodu lub higieny"
                 helperText="Tekst długiej odpowiedzi"
               />
-            </Grid>
+                </Grid>
+              </Grid>
+            </Box>
 
-            {/* Sekcja 3: Informacje o towarze */}
-            <Grid item xs={12}>
-              <Box sx={getFormSectionStyles(theme, 'success')}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'success.main',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <InventoryIcon className="section-icon" />
-                  Informacje o towarze
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                label="Nazwa dostawcy "
-                value={formData.supplierName}
-                onChange={handleInputChange('supplierName')}
-                fullWidth
-                required
-                error={!!errors.supplierName}
-                helperText={errors.supplierName || "Tekst krótkiej odpowiedzi"}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
+            {/* SEKCJA 3 z 3 - INFORMACJE O TOWARZE */}
+            <Box sx={getFormSectionStyles(theme, 'success')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
+                Sekcja 3 z 3
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InventoryIcon className="section-icon" />
+                Informacje o towarze
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    label="Nazwa dostawcy "
+                    value={formData.supplierName}
+                    onChange={handleInputChange('supplierName')}
+                    fullWidth
+                    required
+                    error={!!errors.supplierName}
+                    helperText={errors.supplierName || "Tekst krótkiej odpowiedzi"}
+                  />
+                </Grid>
+                
+                <Grid item xs={12}>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
                   Pozycje dostarczonego towaru 
@@ -1439,29 +1429,32 @@ const UnloadingReportFormPage = () => {
               <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
                 Dodaj plik PDF, JPG lub PNG zawierający skan dokumentów dostawy
               </Typography>
-            </Grid>
+                </Grid>
+              </Grid>
+            </Box>
 
-            <Grid item xs={12}>
-              <Box sx={getFormActionsStyles()}>
-                <Button
-                  variant="outlined"
-                  onClick={handleBack}
-                  sx={getFormButtonStyles('outlined')}
-                >
-                  Anuluj
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={saving}
-                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                  sx={getFormButtonStyles('contained')}
-                >
-                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
+            {/* PRZYCISKI AKCJI */}
+            <Box sx={getFormActionsStyles()}>
+              <Button
+                variant="outlined"
+                onClick={handleBack}
+                sx={getFormButtonStyles('outlined')}
+              >
+                Anuluj
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={saving}
+                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                sx={{
+                  ...getFormButtonStyles('contained'),
+                  flexGrow: 1
+                }}
+              >
+                {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
+              </Button>
+            </Box>
           </Box>
 
         <Snackbar

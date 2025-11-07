@@ -549,41 +549,35 @@ const LoadingReportFormPage = () => {
           </Box>
 
                   <Box component="form" onSubmit={handleSubmit} sx={{ px: { xs: 1, sm: 0 } }}>
-            <Grid container spacing={{ xs: 2, sm: 3 }}>
             {/* Email użytkownika */}
-            <Grid item xs={12}>
-              <TextField
-                required
-                fullWidth
-                label="Adres e-mail"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange('email')}
-                error={!!errors.email}
-                helperText={errors.email}
-                InputProps={{
-                  readOnly: true, // Pole tylko do odczytu
-                }}
-              />
-            </Grid>
+            <TextField
+              required
+              fullWidth
+              label="Adres e-mail"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange('email')}
+              error={!!errors.email}
+              helperText={errors.email}
+              InputProps={{
+                readOnly: true, // Pole tylko do odczytu
+              }}
+              sx={{ mb: 3 }}
+            />
             
-            {/* Sekcja 2: Identyfikacja */}
-            <Grid item xs={12}>
-              <Box sx={getFormSectionStyles(theme, 'primary')}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'primary.main',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <PersonIcon className="section-icon" />
-                  Identyfikacja
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
+            {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
+            <Box sx={getFormSectionStyles(theme, 'primary')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
+                Sekcja 1 z 3
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <PersonIcon className="section-icon" />
+                Identyfikacja
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} sm={6}>
               <Autocomplete
                 options={filteredCmrDocuments}
                 getOptionLabel={(option) => {
@@ -732,24 +726,23 @@ const LoadingReportFormPage = () => {
                   shrink: true,
                 }}
               />
-            </Grid>
+                </Grid>
+              </Grid>
+            </Box>
 
-            <Grid item xs={12}>
-              <Box sx={getFormSectionStyles(theme, 'warning')}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'warning.main',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <LocalShippingIcon className="section-icon" />
-                  Informacje o załadunku
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
+            {/* SEKCJA 2 z 3 - INFORMACJE O ZAŁADUNKU */}
+            <Box sx={getFormSectionStyles(theme, 'warning')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
+                Sekcja 2 z 3
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LocalShippingIcon className="section-icon" />
+                Informacje o załadunku
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} sm={6}>
               <DatePicker
                 label="Data załadunku"
                 value={formData.loadingDate}
@@ -831,25 +824,23 @@ const LoadingReportFormPage = () => {
                 placeholder="Ewentualne uwagi do stanu technicznego samochodu - jeśli był 'uszkodzony' w poprzednim pytaniu"
                 helperText="Tekst długiej odpowiedzi"
               />
-            </Grid>
+                </Grid>
+              </Grid>
+            </Box>
 
-            {/* Sekcja 4: Informacje o towarze */}
-            <Grid item xs={12}>
-              <Box sx={getFormSectionStyles(theme, 'success')}>
-                <Typography variant="h6" gutterBottom sx={{ 
-                  color: 'success.main',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}>
-                  <InventoryIcon className="section-icon" />
-                  Informacje o towarze
-                </Typography>
-              </Box>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
+            {/* SEKCJA 3 z 3 - INFORMACJE O TOWARZE */}
+            <Box sx={getFormSectionStyles(theme, 'success')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
+                Sekcja 3 z 3
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InventoryIcon className="section-icon" />
+                Informacje o towarze
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} sm={6}>
               <TextField
                 label="Nazwa klienta"
                 value={formData.clientName}
@@ -958,31 +949,32 @@ const LoadingReportFormPage = () => {
                 fullWidth
                 helperText="Tekst krótkiej odpowiedzi"
               />
-            </Grid>
-            
+                </Grid>
+              </Grid>
+            </Box>
 
-
-            <Grid item xs={12}>
-              <Box sx={getFormActionsStyles()}>
-                <Button
-                  variant="outlined"
-                  onClick={handleBack}
-                  sx={getFormButtonStyles('outlined')}
-                >
-                  Anuluj
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={saving}
-                  startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                  sx={getFormButtonStyles('contained')}
-                >
-                  {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
+            {/* PRZYCISKI AKCJI */}
+            <Box sx={getFormActionsStyles()}>
+              <Button
+                variant="outlined"
+                onClick={handleBack}
+                sx={getFormButtonStyles('outlined')}
+              >
+                Anuluj
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={saving}
+                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                sx={{
+                  ...getFormButtonStyles('contained'),
+                  flexGrow: 1
+                }}
+              >
+                {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
+              </Button>
+            </Box>
           </Box>
 
         <Snackbar

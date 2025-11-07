@@ -185,117 +185,144 @@ const StocktakingFormPage = () => {
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
         
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                required
-                label={t('stocktaking.name')}
-                name="name"
-                value={stocktaking.name}
-                onChange={handleChange}
-              />
-            </Grid>
+          {/* SEKCJA 1 - PODSTAWOWE INFORMACJE */}
+          <Box sx={getFormSectionStyles(theme, 'primary')}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
+              Sekcja 1 {id && id !== 'new' ? 'z 2' : ''}
+            </Typography>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <InventoryIcon className="section-icon" />
+              Podstawowe informacje
+            </Typography>
+            <Divider sx={{ mb: 3 }} />
             
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel id="location-label">{t('stocktaking.location')}</InputLabel>
-                <Select
-                  labelId="location-label"
-                  name="location"
-                  value={stocktaking.location || ''}
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  required
+                  label={t('stocktaking.name')}
+                  name="name"
+                  value={stocktaking.name}
                   onChange={handleChange}
-                  label={t('stocktaking.location')}
-                >
-                  <MenuItem value="">
-                    <em>{t('stocktaking.allLocations')}</em>
-                  </MenuItem>
-                  {warehouses.map(warehouse => (
-                    <MenuItem key={warehouse.id} value={warehouse.name}>
-                      {warehouse.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label={t('stocktaking.scheduledDate')}
-                name="scheduledDate"
-                type="date"
-                value={stocktaking.scheduledDate || new Date().toISOString().split('T')[0]}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label={t('stocktaking.description')}
-                name="description"
-                value={stocktaking.description || ''}
-                onChange={handleChange}
-                multiline
-                rows={3}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label={t('stocktaking.notes')}
-                name="notes"
-                value={stocktaking.notes || ''}
-                onChange={handleChange}
-                multiline
-                rows={2}
-              />
-            </Grid>
-            
-            {id && id !== 'new' && (
+                />
+              </Grid>
+              
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
-                  <InputLabel id="status-label">{t('stocktaking.status')}</InputLabel>
+                  <InputLabel id="location-label">{t('stocktaking.location')}</InputLabel>
                   <Select
-                    labelId="status-label"
-                    name="status"
-                    value={stocktaking.status}
+                    labelId="location-label"
+                    name="location"
+                    value={stocktaking.location || ''}
                     onChange={handleChange}
-                    label={t('stocktaking.status')}
+                    label={t('stocktaking.location')}
                   >
-                                         <MenuItem value="Otwarta">{t('stocktaking.statusValues.otwarta')}</MenuItem>
-                     <MenuItem value="W trakcie">{t('stocktaking.statusValues.wtrakcie')}</MenuItem>
+                    <MenuItem value="">
+                      <em>{t('stocktaking.allLocations')}</em>
+                    </MenuItem>
+                    {warehouses.map(warehouse => (
+                      <MenuItem key={warehouse.id} value={warehouse.name}>
+                        {warehouse.name}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
-            )}
-            
-            <Grid item xs={12}>
-              <Box sx={getFormActionsStyles()}>
-                <Button
-                  variant="outlined"
-                  onClick={handleCancel}
-                  sx={getFormButtonStyles('outlined')}
-                  disabled={saving}
-                >
-                  {t('stocktaking.cancel')}
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  startIcon={<SaveIcon />}
-                  disabled={saving}
-                  sx={getFormButtonStyles('contained')}
-                >
-                  {saving ? <CircularProgress size={24} /> : t('stocktaking.save')}
-                </Button>
-              </Box>
+              
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label={t('stocktaking.scheduledDate')}
+                  name="scheduledDate"
+                  type="date"
+                  value={stocktaking.scheduledDate || new Date().toISOString().split('T')[0]}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label={t('stocktaking.description')}
+                  name="description"
+                  value={stocktaking.description || ''}
+                  onChange={handleChange}
+                  multiline
+                  rows={3}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label={t('stocktaking.notes')}
+                  name="notes"
+                  value={stocktaking.notes || ''}
+                  onChange={handleChange}
+                  multiline
+                  rows={2}
+                />
+              </Grid>
             </Grid>
-          </Grid>
+          </Box>
+          
+          {id && id !== 'new' && (
+            <Box sx={getFormSectionStyles(theme, 'warning')}>
+              <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
+                Sekcja 2 z 2
+              </Typography>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ChecklistIcon className="section-icon" />
+                Status inwentaryzacji
+              </Typography>
+              <Divider sx={{ mb: 3 }} />
+              
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel id="status-label">{t('stocktaking.status')}</InputLabel>
+                    <Select
+                      labelId="status-label"
+                      name="status"
+                      value={stocktaking.status}
+                      onChange={handleChange}
+                      label={t('stocktaking.status')}
+                    >
+                      <MenuItem value="Otwarta">{t('stocktaking.statusValues.otwarta')}</MenuItem>
+                      <MenuItem value="W trakcie">{t('stocktaking.statusValues.wtrakcie')}</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+          
+          {/* PRZYCISKI AKCJI */}
+          <Box sx={getFormActionsStyles()}>
+            <Button
+              variant="outlined"
+              onClick={handleCancel}
+              sx={getFormButtonStyles('outlined')}
+              disabled={saving}
+            >
+              {t('stocktaking.cancel')}
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              startIcon={<SaveIcon />}
+              disabled={saving}
+              sx={{
+                ...getFormButtonStyles('contained'),
+                flexGrow: 1
+              }}
+            >
+              {saving ? <CircularProgress size={24} /> : t('stocktaking.save')}
+            </Button>
+          </Box>
         </form>
       </Paper>
     </Container>
