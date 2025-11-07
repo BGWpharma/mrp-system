@@ -14,7 +14,8 @@
     },
     "hallData": {
       "environmentalConditions": "Warunki środowiskowe",
-      "machines": "Maszyny"
+      "machines": "Maszyny",
+      "forms": "Formularze"
     },
     "sales": {
       "invoices": "Faktury",

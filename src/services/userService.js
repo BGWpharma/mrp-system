@@ -492,7 +492,8 @@ export const getAvailableSidebarTabs = () => {
       hasSubmenu: true,
       children: [
         { id: 'hall-data-conditions', name: 'Warunki środowiskowe', path: '/hall-data/conditions' },
-        { id: 'hall-data-machines', name: 'Maszyny', path: '/hall-data/machines' }
+        { id: 'hall-data-machines', name: 'Maszyny', path: '/hall-data/machines' },
+        { id: 'hall-data-forms', name: 'Formularze', path: '/hall-data/forms' }
       ]
     },
     { 

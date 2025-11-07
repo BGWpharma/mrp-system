@@ -158,6 +158,7 @@ import NotificationsHistoryPage from './pages/Notifications/NotificationsHistory
 // Hall Data
 import HallDataConditionsPage from './pages/HallData/Conditions';
 import HallDataMachinesPage from './pages/HallData/Machines';
+import HallDataFormsPage from './pages/HallData/Forms';
 
 // Inicjalizacja monitorowania stanu połączenia z bazą danych
 const initializeConnectionMonitoring = () => {
@@ -331,6 +332,7 @@ function App() {
                     {/* Hall Data Routes */}
                     <Route path="/hall-data/conditions" element={<PrivateLayout><HallDataConditionsPage /></PrivateLayout>} />
                     <Route path="/hall-data/machines" element={<PrivateLayout><HallDataMachinesPage /></PrivateLayout>} />
+                    <Route path="/hall-data/forms" element={<PrivateLayout><HallDataFormsPage /></PrivateLayout>} />
                     
                     {/* CRM Routes */}
                     <Route path="/crm" element={<PrivateLayout><CRMDashboardPage /></PrivateLayout>} />

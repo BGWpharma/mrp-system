@@ -33,5 +33,23 @@
       "title": "Raport - Rozładunek towaru",
       "description": "Formularz dokumentujący proces rozładunku towaru. Zawiera identyfikację pracownika, informacje o dostawcy oraz wizualną ocenę towaru."
     }
+  },
+  "hallDataForms": {
+    "title": "Formularze parametrów hali",
+    "description": "Formularze, dokumenty i narzędzia do raportowania warunków środowiskowych oraz pracy maszyn",
+    "fillForm": "Wypełnij formularz",
+    "viewResponses": "Wyświetl odpowiedzi",
+    "environmentalReport": {
+      "title": "Raport - Warunki środowiskowe",
+      "description": "Formularz do raportowania warunków środowiskowych w hali produkcyjnej. Zawiera pomiary temperatury, wilgotności oraz inne parametry klimatyczne."
+    },
+    "machineReport": {
+      "title": "Raport - Stan maszyn",
+      "description": "Formularz do raportowania stanu technicznego maszyn. Zawiera informacje o pracy urządzeń, awariach i konserwacji."
+    },
+    "serviceReport": {
+      "title": "Raport - Przegląd serwisowy",
+      "description": "Formularz dokumentujący przeglądy serwisowe maszyn i urządzeń. Zawiera informacje o wykonanych czynnościach konserwacyjnych i naprawach."
+    }
   }
 }

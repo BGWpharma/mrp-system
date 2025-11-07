@@ -14,7 +14,8 @@
     },
     "hallData": {
       "environmentalConditions": "Environmental Conditions",
-      "machines": "Machines"
+      "machines": "Machines",
+      "forms": "Forms"
     },
     "sales": {
       "invoices": "Invoices",

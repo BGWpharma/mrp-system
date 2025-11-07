@@ -803,7 +803,7 @@ class InvoicePdfGenerator {
     if (this.invoice.isRefInvoice) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0); // Pomarańczowy kolor dla wyróżnienia
+      doc.setTextColor(255, 69, 0); // Pomarańczowy kolor dla wyróżnienia
       const yPosition = this.invoice.isProforma 
         ? (this.options.useTemplate ? 52 : 32) // Jeśli jest też proforma, umieść niżej
         : (this.options.useTemplate ? 45 : 25); // Jeśli nie, użyj standardowej pozycji

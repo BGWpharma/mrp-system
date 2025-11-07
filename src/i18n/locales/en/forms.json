@@ -33,5 +33,23 @@
       "title": "Report - Goods Unloading",
       "description": "Form documenting goods unloading process. Contains employee identification, supplier information and visual goods assessment."
     }
+  },
+  "hallDataForms": {
+    "title": "Hall Data Forms",
+    "description": "Forms, documents and tools for reporting environmental conditions and machine work",
+    "fillForm": "Fill form",
+    "viewResponses": "View responses",
+    "environmentalReport": {
+      "title": "Report - Environmental Conditions",
+      "description": "Form for reporting environmental conditions in production hall. Contains measurements of temperature, humidity and other climate parameters."
+    },
+    "machineReport": {
+      "title": "Report - Machine Status",
+      "description": "Form for reporting technical status of machines. Contains information about equipment operation, failures and maintenance."
+    },
+    "serviceReport": {
+      "title": "Report - Service Inspection",
+      "description": "Form documenting service inspections of machines and equipment. Contains information about maintenance activities and repairs performed."
+    }
   }
 }

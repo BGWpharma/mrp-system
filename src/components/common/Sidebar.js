@@ -48,6 +48,7 @@ import {
   Factory as FactoryIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
   BugReport as BugReportIcon,
+  Assignment as FormIcon,
   TrendingUp as ForecastIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
@@ -391,6 +392,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: t('submenu.hallData.environmentalConditions'), icon: <FactoryIcon />, path: '/hall-data/conditions' },
         { text: t('submenu.hallData.machines'), icon: <PrecisionManufacturingIcon />, path: '/hall-data/machines' },
+        { text: t('submenu.hallData.forms'), icon: <FormIcon />, path: '/hall-data/forms' },
       ]
     },
     { 
