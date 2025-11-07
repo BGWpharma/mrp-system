@@ -199,7 +199,8 @@
       "refreshInvoicesList": "Odśwież listę faktur",
       "refreshCmrDocuments": "Odśwież listę dokumentów CMR",
       "clickToSeeInvoiceDetails": "Kliknij aby zobaczyć szczegóły faktur ({{count}})",
-      "clickToSeeAllInvoices": "Kliknij aby zobaczyć wszystkie faktury"
+      "clickToSeeAllInvoices": "Kliknij aby zobaczyć wszystkie faktury",
+      "viewOrderDetails": "Zobacz szczegóły zamówienia"
     },
     "deliveryProof": {
       "altText": "Dowód dostawy",

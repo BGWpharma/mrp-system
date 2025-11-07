@@ -3054,12 +3054,30 @@ export const getCmrDocumentsOptimized = async ({
           const unit = item.unit || '';
           const quantity = item.quantity || item.numberOfPackages || '';
           
-          // Sprawdź czy którekolwiek pole pozycji zawiera szukany termin
-          return (
+          // Sprawdź podstawowe pola pozycji
+          const basicFieldsMatch = (
             description.toLowerCase().includes(itemFilterLower) ||
             unit.toLowerCase().includes(itemFilterLower) ||
             quantity.toString().toLowerCase().includes(itemFilterLower)
           );
+          
+          // Sprawdź pola z powiązanych partii magazynowych
+          const batchFieldsMatch = item.linkedBatches && item.linkedBatches.length > 0 && 
+            item.linkedBatches.some(batch => {
+              const batchNumber = batch.batchNumber || batch.lotNumber || '';
+              const itemName = batch.itemName || '';
+              const barcode = batch.barcode || '';
+              const warehouseName = batch.warehouseName || '';
+              
+              return (
+                batchNumber.toLowerCase().includes(itemFilterLower) ||
+                itemName.toLowerCase().includes(itemFilterLower) ||
+                barcode.toLowerCase().includes(itemFilterLower) ||
+                warehouseName.toLowerCase().includes(itemFilterLower)
+              );
+            });
+          
+          return basicFieldsMatch || batchFieldsMatch;
         });
       });
       

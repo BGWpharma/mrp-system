@@ -606,7 +606,7 @@ const InvoiceDetails = () => {
                       <IconButton 
                         size="small" 
                         onClick={handleViewOrder}
-                        title={t('orders.viewOrderDetails')}
+                        title={t('orderDetails.tooltips.viewOrderDetails')}
                       >
                         <AssignmentIcon />
                       </IconButton>

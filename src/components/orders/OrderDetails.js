@@ -1774,11 +1774,52 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                 </Typography>
               )}
               {order.deliveryDate && (
-                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                   <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
                   {t('orderDetails.completed')}: {formatTimestamp(order.deliveryDate, true)}
                 </Typography>
               )}
+              
+              <Divider sx={{ my: 2 }} />
+              
+              {/* Dane klienta */}
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                    <PersonIcon sx={{ mr: 1 }} fontSize="small" />
+                    {t('orderDetails.sections.customerData')}
+                  </Typography>
+                  <Tooltip title="Wyślij email do klienta">
+                    <IconButton 
+                      size="small" 
+                      color="primary"
+                      onClick={handleSendEmail}
+                      disabled={!order.customer?.email}
+                    >
+                      <EmailIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <Typography variant="subtitle2" color="primary.main" sx={{ mb: 1, fontWeight: 'bold' }}>
+                  {order.customer?.name || t('orderDetails.customerInfo.noCustomerName')}
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <EmailIcon sx={{ mr: 1, color: 'text.secondary' }} fontSize="small" />
+                    <Typography variant="body2">{order.customer?.email || '-'}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <PhoneIcon sx={{ mr: 1, color: 'text.secondary' }} fontSize="small" />
+                    <Typography variant="body2">{order.customer?.phone || '-'}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'start' }}>
+                    <LocationOnIcon sx={{ mr: 1, color: 'text.secondary' }} fontSize="small" />
+                    <Typography variant="body2">
+                      {order.customer?.shippingAddress || '-'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
             </Grid>
             <Grid item xs={12} sm={6}>
               <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -1903,67 +1944,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                       <RefreshIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                </Box>
-              </Box>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Informacje o kliencie */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-              <PersonIcon sx={{ mr: 1 }} />
-              {t('orderDetails.sections.customerData')}
-            </Typography>
-            <Tooltip title="Wyślij email do klienta">
-              <IconButton 
-                size="medium" 
-                color="primary"
-                onClick={handleSendEmail}
-                disabled={!order.customer?.email}
-                sx={{
-                  backgroundColor: 'primary.light',
-                  '&:hover': { backgroundColor: 'primary.main', color: 'white' }
-                }}
-              >
-                <EmailIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-          <Divider sx={{ mb: 2 }} />
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Box>
-                <Typography variant="h6" color="primary.main" sx={{ mb: 2, fontWeight: 'bold' }}>
-                  {order.customer?.name || t('orderDetails.customerInfo.noCustomerName')}
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', p: 1, backgroundColor: 'action.hover', borderRadius: 1 }}>
-                    <EmailIcon sx={{ mr: 2, color: 'primary.main' }} fontSize="small" />
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">Email</Typography>
-                      <Typography variant="body2">{order.customer?.email || '-'}</Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', p: 1, backgroundColor: 'action.hover', borderRadius: 1 }}>
-                    <PhoneIcon sx={{ mr: 2, color: 'primary.main' }} fontSize="small" />
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">Telefon</Typography>
-                      <Typography variant="body2">{order.customer?.phone || '-'}</Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Box sx={{ display: 'flex', alignItems: 'start', p: 2, backgroundColor: 'action.hover', borderRadius: 1, height: '100%' }}>
-                <LocationOnIcon sx={{ mr: 2, color: 'primary.main', mt: 0.5 }} />
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Adres dostawy</Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {order.customer?.shippingAddress || '-'}
-                  </Typography>
                 </Box>
               </Box>
             </Grid>
