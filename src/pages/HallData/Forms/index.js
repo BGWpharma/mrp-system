@@ -5,7 +5,8 @@ import {
   List as ListIcon,
   Thermostat as ThermostatIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
-  Build as BuildIcon
+  Build as BuildIcon,
+  BugReport as BugReportIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -167,6 +168,44 @@ const HallDataFormsPage = () => {
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
                 to="/hall-data/forms/responses?type=monthly"
+                color="secondary" 
+                variant="outlined"
+                fullWidth
+              >
+                {t('hallDataForms.viewResponses')}
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+
+        {/* Rejestr usterek */}
+        <Grid item xs={12} sm={6} md={4}>
+          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <CardContent sx={{ flexGrow: 1 }}>
+              <Typography variant="h6" gutterBottom component="div" sx={{ display: 'flex', alignItems: 'center' }}>
+                <BugReportIcon sx={{ mr: 1 }} />
+                Rejestr Usterek
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Formularz zgłaszania i śledzenia usterek. Zawiera szczegółowy opis problemu, diagnozę i status naprawy.
+              </Typography>
+            </CardContent>
+            <CardActions sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Button 
+                startIcon={<AddIcon />} 
+                component={RouterLink} 
+                to="/hall-data/forms/defect-registry"
+                color="primary" 
+                variant="contained"
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                {t('hallDataForms.fillForm')}
+              </Button>
+              <Button 
+                startIcon={<ListIcon />} 
+                component={RouterLink} 
+                to="/hall-data/forms/responses?type=defect"
                 color="secondary" 
                 variant="outlined"
                 fullWidth

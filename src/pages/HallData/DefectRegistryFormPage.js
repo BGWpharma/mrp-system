@@ -21,7 +21,7 @@ import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { pl } from 'date-fns/locale';
-import { Save as SaveIcon, ArrowBack as ArrowBackIcon, Build as BuildIcon } from '@mui/icons-material';
+import { Save as SaveIcon, ArrowBack as ArrowBackIcon, BugReport as BugReportIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db } from '../../services/firebase/config';
@@ -36,7 +36,7 @@ import {
   getFormActionsStyles 
 } from '../../styles/formStyles';
 
-const MonthlyServiceReportFormPage = () => {
+const DefectRegistryFormPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
@@ -52,25 +52,14 @@ const MonthlyServiceReportFormPage = () => {
     position: '',
     fillDate: new Date(),
     
-    // Sekcja B: Data Serwisu
-    serviceDate: new Date(),
-    serviceTime: new Date(),
+    // Sekcja B: Szczegóły Usterki/Serwisu
+    defectDescription: '',
+    detectionDate: new Date(),
+    detectionTime: new Date(),
+    diagnosis: '',
+    repairStatus: '',
     
-    // Sekcja C: Zadania Serwisowe
-    dosingScrewCheck: '',
-    dosingMotorCheck: '',
-    filterCleaning: '',
-    sensorCleaning: '',
-    chamberCleaning: '',
-    rubberGasketCheck: '',
-    vBeltCheck: '',
-    bhpSafetyCheck: '',
-    pneumaticCheck: '',
-    actuatorAirtightness: '',
-    limitSwitchCheck: '',
-    screwsNutsCheck: '',
-    
-    // Sekcja D: Dodatkowe uwagi
+    // Sekcja C: Dodatkowe uwagi
     additionalNotes: ''
   });
   
@@ -87,12 +76,12 @@ const MonthlyServiceReportFormPage = () => {
           (editData.fillDate.toDate ? editData.fillDate.toDate() : new Date(editData.fillDate)) : 
           new Date();
         
-        const serviceDate = editData.serviceDate ? 
-          (editData.serviceDate.toDate ? editData.serviceDate.toDate() : new Date(editData.serviceDate)) : 
+        const detectionDate = editData.detectionDate ? 
+          (editData.detectionDate.toDate ? editData.detectionDate.toDate() : new Date(editData.detectionDate)) : 
           new Date();
         
-        const serviceTime = editData.serviceTime ? 
-          (editData.serviceTime.toDate ? editData.serviceTime.toDate() : new Date(editData.serviceTime)) : 
+        const detectionTime = editData.detectionTime ? 
+          (editData.detectionTime.toDate ? editData.detectionTime.toDate() : new Date(editData.detectionTime)) : 
           new Date();
         
         setFormData({
@@ -100,20 +89,11 @@ const MonthlyServiceReportFormPage = () => {
           employeeName: editData.employeeName || '',
           position: editData.position || '',
           fillDate: fillDate,
-          serviceDate: serviceDate,
-          serviceTime: serviceTime,
-          dosingScrewCheck: editData.dosingScrewCheck || '',
-          dosingMotorCheck: editData.dosingMotorCheck || '',
-          filterCleaning: editData.filterCleaning || '',
-          sensorCleaning: editData.sensorCleaning || '',
-          chamberCleaning: editData.chamberCleaning || '',
-          rubberGasketCheck: editData.rubberGasketCheck || '',
-          vBeltCheck: editData.vBeltCheck || '',
-          bhpSafetyCheck: editData.bhpSafetyCheck || '',
-          pneumaticCheck: editData.pneumaticCheck || '',
-          actuatorAirtightness: editData.actuatorAirtightness || '',
-          limitSwitchCheck: editData.limitSwitchCheck || '',
-          screwsNutsCheck: editData.screwsNutsCheck || '',
+          defectDescription: editData.defectDescription || '',
+          detectionDate: detectionDate,
+          detectionTime: detectionTime,
+          diagnosis: editData.diagnosis || '',
+          repairStatus: editData.repairStatus || '',
           additionalNotes: editData.additionalNotes || ''
         });
         
@@ -169,26 +149,25 @@ const MonthlyServiceReportFormPage = () => {
       newErrors.fillDate = 'Data wypełnienia jest wymagana';
     }
     
-    if (!formData.serviceDate) {
-      newErrors.serviceDate = 'Data wykonania serwisu jest wymagana';
+    if (!formData.defectDescription?.trim()) {
+      newErrors.defectDescription = 'Opis usterki jest wymagany';
     }
     
-    if (!formData.serviceTime) {
-      newErrors.serviceTime = 'Godzina wykonania serwisu jest wymagana';
+    if (!formData.detectionDate) {
+      newErrors.detectionDate = 'Data wykrycia usterki jest wymagana';
     }
     
-    const taskFields = [
-      'dosingScrewCheck', 'dosingMotorCheck', 'filterCleaning', 
-      'sensorCleaning', 'chamberCleaning', 'rubberGasketCheck',
-      'vBeltCheck', 'bhpSafetyCheck', 'pneumaticCheck',
-      'actuatorAirtightness', 'limitSwitchCheck', 'screwsNutsCheck'
-    ];
+    if (!formData.detectionTime) {
+      newErrors.detectionTime = 'Godzina wykrycia usterki jest wymagana';
+    }
     
-    taskFields.forEach(field => {
-      if (!formData[field]) {
-        newErrors[field] = 'Proszę wybrać opcję';
-      }
-    });
+    if (!formData.diagnosis?.trim()) {
+      newErrors.diagnosis = 'Diagnoza jest wymagana';
+    }
+    
+    if (!formData.repairStatus) {
+      newErrors.repairStatus = 'Status naprawy jest wymagany';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -210,34 +189,25 @@ const MonthlyServiceReportFormPage = () => {
         employeeName: formData.employeeName,
         position: formData.position,
         fillDate: formData.fillDate,
-        serviceDate: formData.serviceDate,
-        serviceTime: formData.serviceTime,
-        dosingScrewCheck: formData.dosingScrewCheck,
-        dosingMotorCheck: formData.dosingMotorCheck,
-        filterCleaning: formData.filterCleaning,
-        sensorCleaning: formData.sensorCleaning,
-        chamberCleaning: formData.chamberCleaning,
-        rubberGasketCheck: formData.rubberGasketCheck,
-        vBeltCheck: formData.vBeltCheck,
-        bhpSafetyCheck: formData.bhpSafetyCheck,
-        pneumaticCheck: formData.pneumaticCheck,
-        actuatorAirtightness: formData.actuatorAirtightness,
-        limitSwitchCheck: formData.limitSwitchCheck,
-        screwsNutsCheck: formData.screwsNutsCheck,
+        defectDescription: formData.defectDescription,
+        detectionDate: formData.detectionDate,
+        detectionTime: formData.detectionTime,
+        diagnosis: formData.diagnosis,
+        repairStatus: formData.repairStatus,
         additionalNotes: formData.additionalNotes,
-        type: 'monthly-service-report'
+        type: 'defect-registry'
       };
 
       if (isEditMode && editId) {
         odpowiedzData.updatedAt = serverTimestamp();
-        const docRef = doc(db, 'Forms/MiesiecznyRaportSerwisu/Odpowiedzi', editId);
+        const docRef = doc(db, 'Forms/RejestrUsterek/Odpowiedzi', editId);
         await updateDoc(docRef, odpowiedzData);
-        console.log('Formularz miesięcznego serwisu zaktualizowany');
+        console.log('Rejestr usterek zaktualizowany');
       } else {
         odpowiedzData.createdAt = serverTimestamp();
-        const odpowiedziRef = collection(db, 'Forms/MiesiecznyRaportSerwisu/Odpowiedzi');
+        const odpowiedziRef = collection(db, 'Forms/RejestrUsterek/Odpowiedzi');
         await addDoc(odpowiedziRef, odpowiedzData);
-        console.log('Formularz miesięcznego serwisu wysłany');
+        console.log('Rejestr usterek wysłany');
       }
       
       setShowSuccess(true);
@@ -249,20 +219,11 @@ const MonthlyServiceReportFormPage = () => {
             employeeName: '',
             position: '',
             fillDate: new Date(),
-            serviceDate: new Date(),
-            serviceTime: new Date(),
-            dosingScrewCheck: '',
-            dosingMotorCheck: '',
-            filterCleaning: '',
-            sensorCleaning: '',
-            chamberCleaning: '',
-            rubberGasketCheck: '',
-            vBeltCheck: '',
-            bhpSafetyCheck: '',
-            pneumaticCheck: '',
-            actuatorAirtightness: '',
-            limitSwitchCheck: '',
-            screwsNutsCheck: '',
+            defectDescription: '',
+            detectionDate: new Date(),
+            detectionTime: new Date(),
+            diagnosis: '',
+            repairStatus: '',
             additionalNotes: ''
           });
           setShowSuccess(false);
@@ -270,7 +231,7 @@ const MonthlyServiceReportFormPage = () => {
         }, 2000);
       } else {
         setTimeout(() => {
-          navigate('/hall-data/forms/responses?type=monthly');
+          navigate('/hall-data/forms/responses?type=defect');
         }, 2000);
       }
       
@@ -286,29 +247,14 @@ const MonthlyServiceReportFormPage = () => {
     navigate('/hall-data/forms');
   };
 
-  const serviceTasks = [
-    { field: 'dosingScrewCheck', label: 'Sprawdzenie śruby dozującej', helper: 'Dodatkowo - kontrola czy uszczelka na przejściu do silnika i wachadło nie trze o lej' },
-    { field: 'dosingMotorCheck', label: 'Sprawdzenie silnika od śruby dozującej' },
-    { field: 'filterCleaning', label: 'Wyczyszczenie filtrów na ssawkach' },
-    { field: 'sensorCleaning', label: 'Przedmuchanie czujników na podczerwień w komorze sterującej linii produkcyjnej' },
-    { field: 'chamberCleaning', label: 'Gruntowne wyczyszczenie komór sterujących automat pakujący oraz komory mieszalnika' },
-    { field: 'rubberGasketCheck', label: 'Sprawdzenie gum na dościsku opakowań' },
-    { field: 'vBeltCheck', label: 'Sprawdzenie pasków klinowych napędzających mechanizmy maszyny' },
-    { field: 'bhpSafetyCheck', label: 'Sprawdzenie zabezpieczeń maszyn pod względem standardów BHP' },
-    { field: 'pneumaticCheck', label: 'Sprawdzenie szczelności układu pneumatycznego' },
-    { field: 'actuatorAirtightness', label: 'Sprawdzenie siłowników pod kątem szczelności powietrza' },
-    { field: 'limitSwitchCheck', label: 'Sprawdzenie włączników krańcowych w drzwiach maszyn' },
-    { field: 'screwsNutsCheck', label: 'Ogólne sprawdzenie śrub i nakrętek maszyny' }
-  ];
-
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
       <Container maxWidth="md" sx={getFormContainerStyles(theme)}>
         <Paper elevation={3} sx={getFormPaperStyles(theme)}>
           <Box sx={getFormHeaderStyles(theme)}>
-            <BuildIcon sx={{ fontSize: 40, mr: 2 }} />
+            <BugReportIcon sx={{ fontSize: 40, mr: 2 }} />
             <Typography variant="h4" component="h1">
-              Formularz - Miesięczny Serwis
+              Formularz - Rejestr Usterek
             </Typography>
           </Box>
 
@@ -318,15 +264,15 @@ const MonthlyServiceReportFormPage = () => {
             </Alert>
 
             <form onSubmit={handleSubmit}>
-              {/* SEKCJA 1 z 5 - NAGŁÓWEK */}
+              {/* SEKCJA 1 z 4 - NAGŁÓWEK */}
               <Typography variant="subtitle2" sx={{ mb: 2, color: 'primary.main', fontWeight: 'bold' }}>
-                Sekcja 1 z 5
+                Sekcja 1 z 4
               </Typography>
 
-              {/* SEKCJA 2 z 5 - IDENTYFIKACJA */}
+              {/* SEKCJA 2 z 4 - IDENTYFIKACJA */}
               <Box sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-                  Sekcja 2 z 5
+                  Sekcja 2 z 4
                 </Typography>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                   Sekcja A - Identyfikacja
@@ -365,7 +311,7 @@ const MonthlyServiceReportFormPage = () => {
                   
                   <Grid item xs={12}>
                     <DatePicker
-                      label="Data wypełnienia raportu "
+                      label="Data wypełnienia raportu *"
                       value={formData.fillDate}
                       onChange={handleDateChange('fillDate')}
                       slotProps={{
@@ -381,13 +327,13 @@ const MonthlyServiceReportFormPage = () => {
                 </Grid>
               </Box>
 
-              {/* SEKCJA 3 z 5 - DATA SERWISU */}
+              {/* SEKCJA 3 z 4 - SZCZEGÓŁY USTERKI/SERWISU */}
               <Box sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-                  Sekcja 3 z 5
+                  Sekcja 3 z 4
                 </Typography>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                  Sekcja B - Data Serwisu
+                  Sekcja B - Szczegóły Usterki/Serwisu
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
                   Opis (opcjonalnie)
@@ -396,16 +342,31 @@ const MonthlyServiceReportFormPage = () => {
                 
                 <Grid container spacing={3}>
                   <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      required
+                      multiline
+                      rows={4}
+                      label="Opis usterki"
+                      value={formData.defectDescription}
+                      onChange={handleInputChange('defectDescription')}
+                      error={!!errors.defectDescription}
+                      helperText={errors.defectDescription || 'Tekst długiej odpowiedzi'}
+                      placeholder="Wprowadź szczegółowy opis usterki"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12}>
                     <DatePicker
-                      label="Data wykonania serwisu "
-                      value={formData.serviceDate}
-                      onChange={handleDateChange('serviceDate')}
+                      label="Data wykrycia usterki *"
+                      value={formData.detectionDate}
+                      onChange={handleDateChange('detectionDate')}
                       slotProps={{
                         textField: {
                           fullWidth: true,
                           required: true,
-                          error: !!errors.serviceDate,
-                          helperText: errors.serviceDate || 'Miesiąc, dzień, rok'
+                          error: !!errors.detectionDate,
+                          helperText: errors.detectionDate || 'Miesiąc, dzień, rok'
                         }
                       }}
                     />
@@ -413,72 +374,65 @@ const MonthlyServiceReportFormPage = () => {
                   
                   <Grid item xs={12}>
                     <TimePicker
-                      label="Godzina wykonania serwisu "
-                      value={formData.serviceTime}
-                      onChange={handleDateChange('serviceTime')}
+                      label="Godzina wykrycia usterki *"
+                      value={formData.detectionTime}
+                      onChange={handleDateChange('detectionTime')}
                       slotProps={{
                         textField: {
                           fullWidth: true,
                           required: true,
-                          error: !!errors.serviceTime,
-                          helperText: errors.serviceTime || 'Godzina'
+                          error: !!errors.detectionTime,
+                          helperText: errors.detectionTime || 'Godzina'
                         }
                       }}
                     />
                   </Grid>
-                </Grid>
-              </Box>
-
-              {/* SEKCJA 4 z 5 - ZADANIA SERWISOWE */}
-              <Box sx={getFormSectionStyles(theme)}>
-                <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-                  Sekcja 4 z 5
-                </Typography>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                  Sekcja C - Zadania Serwisowe
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
-                  Opis (opcjonalnie)
-                </Typography>
-                <Divider sx={{ mb: 3 }} />
-                
-                {serviceTasks.map((task, index) => (
-                  <Box key={task.field} sx={{ mb: 3 }}>
-                    <FormControl component="fieldset" error={!!errors[task.field]} required fullWidth>
+                  
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      required
+                      multiline
+                      rows={4}
+                      label="Diagnoza"
+                      value={formData.diagnosis}
+                      onChange={handleInputChange('diagnosis')}
+                      error={!!errors.diagnosis}
+                      helperText={errors.diagnosis || 'Tekst długiej odpowiedzi'}
+                      placeholder="Wprowadź diagnozę problemu"
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <FormControl component="fieldset" error={!!errors.repairStatus} required fullWidth>
                       <FormLabel component="legend" sx={{ mb: 1 }}>
-                        {task.label} 
-                        {task.helper && (
-                          <Typography variant="caption" display="block" color="text.secondary" sx={{ fontWeight: 'normal', fontStyle: 'italic', mt: 0.5 }}>
-                            {task.helper}
-                          </Typography>
-                        )}
+                        Status naprawy *
                       </FormLabel>
                       <RadioGroup
-                        row
-                        value={formData[task.field]}
-                        onChange={handleInputChange(task.field)}
+                        value={formData.repairStatus}
+                        onChange={handleInputChange('repairStatus')}
                       >
-                        <FormControlLabel value="Wykonano" control={<Radio />} label="Wykonano" />
-                        <FormControlLabel value="Nie wykonano" control={<Radio />} label="Nie wykonano" />
+                        <FormControlLabel value="Oczekuje" control={<Radio />} label="Oczekuje" />
+                        <FormControlLabel value="W trakcie" control={<Radio />} label="W trakcie" />
+                        <FormControlLabel value="Zakończono" control={<Radio />} label="Zakończono" />
                       </RadioGroup>
-                      {errors[task.field] && (
+                      {errors.repairStatus && (
                         <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
-                          {errors[task.field]}
+                          {errors.repairStatus}
                         </Typography>
                       )}
                     </FormControl>
-                    {index < serviceTasks.length - 1 && <Divider sx={{ mt: 2 }} />}
-                  </Box>
-                ))}
+                  </Grid>
+                </Grid>
               </Box>
 
-              {/* SEKCJA 5 z 5 - DODATKOWE UWAGI */}
+              {/* SEKCJA 4 z 4 - DODATKOWE UWAGI */}
               <Box sx={getFormSectionStyles(theme)}>
                 <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-                  Sekcja 5 z 5
+                  Sekcja 4 z 4
                 </Typography>
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                  Sekcja D - Dodatkowe Uwagi
+                  Sekcja C - Dodatkowe Uwagi
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 2 }}>
                   Opis (opcjonalnie)
@@ -492,7 +446,7 @@ const MonthlyServiceReportFormPage = () => {
                   label="Dodatkowe informacje lub komentarze"
                   value={formData.additionalNotes}
                   onChange={handleInputChange('additionalNotes')}
-                  placeholder="Wprowadź dodatkowe uwagi dotyczące wykonanego serwisu..."
+                  placeholder="Wprowadź dodatkowe uwagi dotyczące usterki..."
                   helperText="Tekst długiej odpowiedzi"
                 />
               </Box>
@@ -528,7 +482,7 @@ const MonthlyServiceReportFormPage = () => {
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         >
           <Alert severity="success" sx={{ width: '100%' }}>
-            {isEditMode ? 'Formularz miesięcznego serwisu został zaktualizowany!' : 'Formularz miesięcznego serwisu został wysłany pomyślnie!'}
+            {isEditMode ? 'Rejestr usterek został zaktualizowany!' : 'Rejestr usterek został wysłany pomyślnie!'}
           </Alert>
         </Snackbar>
       </Container>
@@ -536,5 +490,5 @@ const MonthlyServiceReportFormPage = () => {
   );
 };
 
-export default MonthlyServiceReportFormPage;
+export default DefectRegistryFormPage;
 

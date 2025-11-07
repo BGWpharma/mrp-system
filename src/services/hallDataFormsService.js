@@ -17,6 +17,7 @@ import { db } from './firebase/config';
 export const HALL_DATA_FORMS_COLLECTIONS = {
   SERVICE_REPORT: 'Forms/TygodniowyRaportSerwisu/Odpowiedzi',
   MONTHLY_SERVICE_REPORT: 'Forms/MiesiecznyRaportSerwisu/Odpowiedzi',
+  DEFECT_REGISTRY: 'Forms/RejestrUsterek/Odpowiedzi',
   ENVIRONMENTAL_REPORT: 'Forms/WarunkiSrodowiskowe/Odpowiedzi',
   MACHINE_REPORT: 'Forms/StanMaszyn/Odpowiedzi'
 };
@@ -25,6 +26,7 @@ export const HALL_DATA_FORMS_COLLECTIONS = {
 export const HALL_DATA_FORM_TYPES = {
   SERVICE_REPORT: 'serviceReport',
   MONTHLY_SERVICE_REPORT: 'monthlyServiceReport',
+  DEFECT_REGISTRY: 'defectRegistry',
   ENVIRONMENTAL_REPORT: 'environmentalReport',
   MACHINE_REPORT: 'machineReport'
 };
@@ -57,6 +59,9 @@ export const getHallDataFormResponsesWithPagination = async (
         break;
       case HALL_DATA_FORM_TYPES.MONTHLY_SERVICE_REPORT:
         collectionPath = HALL_DATA_FORMS_COLLECTIONS.MONTHLY_SERVICE_REPORT;
+        break;
+      case HALL_DATA_FORM_TYPES.DEFECT_REGISTRY:
+        collectionPath = HALL_DATA_FORMS_COLLECTIONS.DEFECT_REGISTRY;
         break;
       case HALL_DATA_FORM_TYPES.ENVIRONMENTAL_REPORT:
         collectionPath = HALL_DATA_FORMS_COLLECTIONS.ENVIRONMENTAL_REPORT;
@@ -150,6 +155,9 @@ export const deleteHallDataFormResponse = async (formType, responseId) => {
         break;
       case HALL_DATA_FORM_TYPES.MONTHLY_SERVICE_REPORT:
         collectionPath = HALL_DATA_FORMS_COLLECTIONS.MONTHLY_SERVICE_REPORT;
+        break;
+      case HALL_DATA_FORM_TYPES.DEFECT_REGISTRY:
+        collectionPath = HALL_DATA_FORMS_COLLECTIONS.DEFECT_REGISTRY;
         break;
       case HALL_DATA_FORM_TYPES.ENVIRONMENTAL_REPORT:
         collectionPath = HALL_DATA_FORMS_COLLECTIONS.ENVIRONMENTAL_REPORT;
