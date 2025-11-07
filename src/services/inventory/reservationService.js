@@ -55,13 +55,14 @@ import { FirebaseQueryBuilder } from './config/firebaseQueries.js';
  * @param {string} userId - ID użytkownika
  * @param {string} reservationMethod - Metoda rezerwacji ('expiry', 'fifo')
  * @param {string|null} batchId - ID konkretnej partii (opcjonalnie)
+ * @param {boolean} autoCreatePOReservations - Czy automatycznie tworzyć rezerwacje PO gdy brakuje partii (domyślnie false)
  * @returns {Promise<Object>} - Wynik operacji rezerwacji
  * @throws {ValidationError} - Gdy dane są nieprawidłowe
  * @throws {Error} - Gdy wystąpi błąd podczas operacji
  */
-export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry', batchId = null) => {
+export const bookInventoryForTask = async (itemId, quantity, taskId, userId, reservationMethod = 'expiry', batchId = null, autoCreatePOReservations = false) => {
   try {
-    console.log('🔄 [REFACTOR] bookInventoryForTask START:', { itemId, quantity, taskId, userId, reservationMethod, batchId });
+    console.log('🔄 [REFACTOR] bookInventoryForTask START:', { itemId, quantity, taskId, userId, reservationMethod, batchId, autoCreatePOReservations });
     
     // Walidacja parametrów wejściowych
     const validatedItemId = validateId(itemId, 'itemId');
@@ -262,13 +263,73 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
       message += ` (⚠️ Częściowa rezerwacja: brakuje ${missingQuantity} ${item.unit})`;
     }
     
+    // 🆕 NOWA LOGIKA: Automatyczne tworzenie rezerwacji PO gdy brakuje partii
+    let poReservationCreated = null;
+    if (isPartialReservation && !batchId && autoCreatePOReservations) {
+      const missingQuantity = preciseSubtract(validatedQuantity, actualQuantityToReserve);
+      
+      console.log(`🔍 [AUTO_PO] Sprawdzam dostępność PO dla brakującej ilości: ${missingQuantity} ${item.unit}`);
+      
+      try {
+        // Importuj funkcje do obsługi rezerwacji PO
+        const { getAvailablePOItems, createPOReservation } = await import('../poReservationService');
+        
+        // Sprawdź czy są dostępne pozycje w PO dla tego materiału
+        const availablePOItems = await getAvailablePOItems(validatedItemId);
+        
+        if (availablePOItems.length > 0) {
+          console.log(`✅ [AUTO_PO] Znaleziono ${availablePOItems.length} dostępnych pozycji w PO`);
+          
+          // Wybierz najlepsze PO (pierwsze z listy - sortowane wg daty dostawy i ceny)
+          const bestPO = availablePOItems[0];
+          
+          // Ilość do zarezerwowania z PO (maksymalnie tyle ile brakuje lub ile jest dostępne w PO)
+          const quantityToReserveFromPO = Math.min(missingQuantity, bestPO.availableQuantity);
+          
+          console.log(`📦 [AUTO_PO] Tworzę rezerwację: ${quantityToReserveFromPO} ${item.unit} z PO ${bestPO.poNumber}`);
+          
+          // Utwórz rezerwację PO
+          poReservationCreated = await createPOReservation(
+            validatedTaskId,
+            bestPO.poId,
+            bestPO.poItemId,
+            quantityToReserveFromPO,
+            validatedUserId
+          );
+          
+          console.log(`✅ [AUTO_PO] Utworzono rezerwację PO: ${poReservationCreated.id}`);
+          
+          // Zaktualizuj komunikat
+          const remainingMissing = preciseSubtract(missingQuantity, quantityToReserveFromPO);
+          const expectedDate = bestPO.expectedDeliveryDate 
+            ? new Date(bestPO.expectedDeliveryDate).toLocaleDateString('pl-PL')
+            : 'nieokreślona';
+            
+          if (preciseIsLessOrEqual(remainingMissing, 0)) {
+            message = `Zarezerwowano ${actualQuantityToReserve} ${item.unit} z partii magazynowych + ${quantityToReserveFromPO} ${item.unit} z zamówienia ${bestPO.poNumber} (oczekiwana dostawa: ${expectedDate})`;
+          } else {
+            message = `Zarezerwowano ${actualQuantityToReserve} ${item.unit} z partii + ${quantityToReserveFromPO} ${item.unit} z PO ${bestPO.poNumber} (⚠️ Nadal brakuje ${remainingMissing} ${item.unit})`;
+          }
+          
+        } else {
+          console.log(`❌ [AUTO_PO] Brak dostępnych pozycji w PO dla materiału ${item.name}`);
+        }
+        
+      } catch (poError) {
+        console.error('❌ [AUTO_PO] Błąd podczas tworzenia rezerwacji PO:', poError);
+        // Nie przerywamy procesu - rezerwacja partii jest już utworzona
+        console.warn('⚠️ [AUTO_PO] Rezerwacja partii została utworzona pomimo błędu rezerwacji PO');
+      }
+    }
+    
     return {
       success: true,
       message,
       reservedBatches: reservationResult.reservedBatches,
       isPartialReservation,
       requestedQuantity: validatedQuantity,
-      actualQuantity: actualQuantityToReserve
+      actualQuantity: actualQuantityToReserve,
+      poReservation: poReservationCreated  // 🆕 Informacja o utworzonej rezerwacji PO
     };
   } catch (error) {
     console.error('❌ [REFACTOR] bookInventoryForTask ERROR:', error);

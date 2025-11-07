@@ -1318,7 +1318,15 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
             const materialId = material.inventoryItemId || material.id;
             if (materialId) {
               console.log(`Rezerwacja materiału ${material.name} dla zadania MO: ${moNumber}`);
-              await bookInventoryForTask(materialId, material.quantity, docRef.id, userId, reservationMethod);
+              await bookInventoryForTask(
+                materialId, 
+                material.quantity, 
+                docRef.id, 
+                userId, 
+                'fifo',  // Zawsze FIFO - identycznie jak w dialogu rezerwacji w zadaniu
+                null,    // batchId = null dla automatycznej rezerwacji
+                true     // autoCreatePOReservations = true - automatyczne tworzenie rezerwacji PO
+              );
             } else {
               console.warn(`Materiał ${material.name} nie ma przypisanego ID pozycji magazynowej, pomijam rezerwację`);
             }

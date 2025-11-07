@@ -231,6 +231,7 @@ const TaskDetailsPage = () => {
   const [errors, setErrors] = useState({});
   const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
   const [reservationMethod, setReservationMethod] = useState('automatic');
+  const [autoCreatePOReservations, setAutoCreatePOReservations] = useState(true); // Automatyczne tworzenie rezerwacji PO
   const [manualBatchQuantities, setManualBatchQuantities] = useState({});
   const [reservationErrors, setReservationErrors] = useState({});
   const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
@@ -289,6 +290,7 @@ const TaskDetailsPage = () => {
   
   // Stan dla rezerwacji PO
   const [poReservations, setPOReservations] = useState([]);
+  const [poRefreshTrigger, setPoRefreshTrigger] = useState(0);
   
   // Stan edycji pozycji historii
   const [editedHistoryNote, setEditedHistoryNote] = useState('');
@@ -1317,6 +1319,7 @@ const TaskDetailsPage = () => {
       const { getPOReservationsForTask } = await import('../../services/poReservationService');
       const reservations = await getPOReservationsForTask(id);
       setPOReservations(reservations);
+      setPoRefreshTrigger(prev => prev + 1); // Zwiększ trigger aby wymusić odświeżenie POReservationManager
     } catch (error) {
       console.error('Błąd podczas pobierania rezerwacji PO:', error);
       // Nie pokazujemy błędu użytkownikowi - to nie jest krytyczne
@@ -2936,7 +2939,9 @@ const TaskDetailsPage = () => {
             requiredQuantity,
             id, // ID zadania
             currentUser.uid,
-            'fifo' // Metoda FIFO
+            'fifo', // Metoda FIFO
+            null, // batchId - dla automatycznej rezerwacji null
+            autoCreatePOReservations // Czy automatycznie tworzyć rezerwacje PO
           );
         }
         
@@ -2953,6 +2958,10 @@ const TaskDetailsPage = () => {
       const updatedTask = await getTaskById(id);
       console.log("Zaktualizowane dane zadania:", updatedTask);
       setTask(updatedTask);
+      
+      // Odśwież rezerwacje PO (mogły być utworzone automatycznie)
+      await fetchPOReservations();
+      console.log("Zaktualizowano rezerwacje PO po rezerwacji materiałów");
       
     } catch (error) {
       console.error('Błąd podczas rezerwacji materiałów:', error);
@@ -8168,6 +8177,7 @@ const TaskDetailsPage = () => {
                 // Funkcje pomocnicze
                 fetchTaskBasicData={fetchTaskBasicData}
                 fetchPOReservations={fetchPOReservations}
+                poRefreshTrigger={poRefreshTrigger}
                 
                 // Ikony jako props
                 PackagingIcon={PackagingIcon}
@@ -8513,9 +8523,32 @@ const TaskDetailsPage = () => {
               {reservationMethod === 'manual' && renderManualBatchSelection()}
               
               {reservationMethod === 'automatic' && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
-                </Alert>
+                <>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+                  </Alert>
+                  
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={autoCreatePOReservations}
+                        onChange={(e) => setAutoCreatePOReservations(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          Automatycznie twórz rezerwacje z zamówień zakupu (PO)
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Jeśli braknie partii magazynowych, system automatycznie zarezerwuje brakującą ilość z otwartych zamówień zakupowych
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ mb: 2, alignItems: 'flex-start' }}
+                  />
+                </>
               )}
             </DialogContent>
             <DialogActions>
@@ -9019,9 +9052,32 @@ const TaskDetailsPage = () => {
               {reservationMethod === 'manual' && renderManualBatchSelection()}
               
               {reservationMethod === 'automatic' && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
-                </Alert>
+                <>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
+                  </Alert>
+                  
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={autoCreatePOReservations}
+                        onChange={(e) => setAutoCreatePOReservations(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          Automatycznie twórz rezerwacje z zamówień zakupu (PO)
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Jeśli braknie partii magazynowych, system automatycznie zarezerwuje brakującą ilość z otwartych zamówień zakupowych
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ mb: 2, alignItems: 'flex-start' }}
+                  />
+                </>
               )}
             </DialogContent>
             <DialogActions>

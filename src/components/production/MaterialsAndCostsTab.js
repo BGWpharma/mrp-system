@@ -89,6 +89,7 @@ const MaterialsAndCostsTab = ({
   // Funkcje pomocnicze
   fetchTaskBasicData,
   fetchPOReservations,
+  poRefreshTrigger,
   
   // Ikony jako props
   PackagingIcon,
@@ -670,6 +671,7 @@ const MaterialsAndCostsTab = ({
           <POReservationManager 
             taskId={task?.id}
             materials={task?.materials || []}
+            refreshTrigger={poRefreshTrigger}
             onUpdate={async () => {
               // Odśwież podstawowe dane zadania i rezerwacje PO
               await Promise.all([

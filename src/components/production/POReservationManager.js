@@ -77,7 +77,7 @@ import {
   refreshLinkedBatchesQuantities
 } from '../../services/poReservationService';
 
-const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
+const POReservationManager = ({ taskId, materials = [], onUpdate, refreshTrigger }) => {
   const { t } = useTranslation('taskDetails');
   const { showSuccess, showError, showInfo } = useNotification();
   const { currentUser } = useAuth();
@@ -109,10 +109,10 @@ const POReservationManager = ({ taskId, materials = [], onUpdate }) => {
   // Stan dostępnych ilości w partiach (batchId -> dostępna ilość)
   const [batchAvailableQuantities, setBatchAvailableQuantities] = useState({});
   
-  // Pobierz dane początkowe
+  // Pobierz dane początkowe lub po zmianie refreshTrigger
   useEffect(() => {
     loadReservations();
-  }, [taskId]);
+  }, [taskId, refreshTrigger]);
 
   // 📅 Opcjonalna synchronizacja w tle co 5 minut
   useEffect(() => {
