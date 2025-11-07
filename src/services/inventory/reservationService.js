@@ -134,14 +134,30 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
       required: validatedQuantity 
     });
     
+    // 🔧 NOWA LOGIKA: Dla automatycznej rezerwacji (batchId === null) rezerwuj tyle ile jest dostępne
+    let actualQuantityToReserve = validatedQuantity;
+    let isPartialReservation = false;
+    
     if (preciseIsLessThan(effectivelyAvailable, validatedQuantity)) {
-      const errorMsg = `Niewystarczająca ilość produktu w magazynie po uwzględnieniu rezerwacji. 
-      Dostępne fizycznie: ${availableQuantity} ${item.unit}, 
-      Zarezerwowane: ${item.bookedQuantity || 0} ${item.unit}, 
-      Efektywnie dostępne: ${effectivelyAvailable} ${item.unit},
-      Wymagane: ${validatedQuantity} ${item.unit}`;
-      console.error('❌ [REFACTOR] Niewystarczająca ilość:', errorMsg);
-      throw new Error(errorMsg);
+      // Jeśli to ręczna rezerwacja konkretnej partii, rzuć błąd
+      if (batchId) {
+        const errorMsg = `Niewystarczająca ilość produktu w magazynie po uwzględnieniu rezerwacji. 
+        Dostępne fizycznie: ${availableQuantity} ${item.unit}, 
+        Zarezerwowane: ${item.bookedQuantity || 0} ${item.unit}, 
+        Efektywnie dostępne: ${effectivelyAvailable} ${item.unit},
+        Wymagane: ${validatedQuantity} ${item.unit}`;
+        console.error('❌ [REFACTOR] Niewystarczająca ilość:', errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      // Dla automatycznej rezerwacji - rezerwuj tyle ile jest dostępne
+      if (preciseIsLessOrEqual(effectivelyAvailable, 0)) {
+        throw new Error(`Brak dostępnej ilości produktu ${item.name} w magazynie (całość zarezerwowana przez inne zadania).`);
+      }
+      
+      actualQuantityToReserve = effectivelyAvailable;
+      isPartialReservation = true;
+      console.warn(`⚠️ [REFACTOR] Częściowa rezerwacja: dostępne ${effectivelyAvailable} ${item.unit}, wymagane ${validatedQuantity} ${item.unit}`);
     }
     
     // Pobierz dane zadania/CMR
@@ -150,9 +166,9 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
     console.log('📋 [REFACTOR] Dane zadania:', taskData);
     
     // Aktualizuj pole bookedQuantity w pozycji magazynowej
-    await updateItemBookedQuantity(validatedItemId, item, validatedQuantity, validatedUserId, 'add');
+    await updateItemBookedQuantity(validatedItemId, item, actualQuantityToReserve, validatedUserId, 'add');
     
-    console.log(`Rezerwacja materiału, metoda: ${validatedMethod}`);
+    console.log(`Rezerwacja materiału, metoda: ${validatedMethod}, ilość: ${actualQuantityToReserve} ${item.unit}`);
     
     // Pobierz i posortuj partie zgodnie z metodą rezerwacji
     const sortedBatches = await getSortedBatchesForReservation(validatedItemId, validatedMethod);
@@ -163,7 +179,7 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
       return await updateExistingReservation(
         existingReservation,
         validatedItemId,
-        validatedQuantity,
+        actualQuantityToReserve,
         validatedTaskId,
         validatedUserId,
         item,
@@ -174,7 +190,7 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
     // Wybierz partie do rezerwacji
     const reservationResult = await selectBatchesForReservation(
       sortedBatches, 
-      validatedQuantity, 
+      actualQuantityToReserve, 
       validatedTaskId, 
       batchId, 
       item,
@@ -193,7 +209,7 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
         
         if (existingBatchIndex >= 0) {
           // Aktualizuj istniejącą partię, zastępując ilość nową wartością
-          materialBatches[validatedItemId][existingBatchIndex].quantity = validatedQuantity;
+          materialBatches[validatedItemId][existingBatchIndex].quantity = actualQuantityToReserve;
         } else {
           // Dodaj nową partię do listy
           materialBatches[validatedItemId].push(...reservationResult.reservedBatches);
@@ -212,32 +228,47 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
     // Upewnij się, że wszystkie zarezerwowane partie mają numery
     const formattedBatches = formatReservedBatches(reservationResult.reservedBatches);
     
-    // Dodaj wpis w transakcjach
-    await createBookingTransaction({
-      itemId: validatedItemId,
-      item,
-      quantity: validatedQuantity,
-      taskId: validatedTaskId,
-      taskData,
-      batchId: reservationResult.selectedBatchId,
-      batchNumber: reservationResult.selectedBatchNumber,
-      reservationMethod: validatedMethod,
-      userId: validatedUserId
-    });
+    // 🔧 POPRAWKA: Utwórz osobną transakcję dla każdej zarezerwowanej partii
+    // Gdy automatyczna rezerwacja FIFO wybiera wiele partii (np. 5kg z partii A + 3kg z partii B),
+    // musimy utworzyć osobną transakcję rezerwacji dla każdej partii z odpowiednią ilością
+    for (const reservedBatch of reservationResult.reservedBatches) {
+      await createBookingTransaction({
+        itemId: validatedItemId,
+        item,
+        quantity: reservedBatch.quantity,  // Ilość dla konkretnej partii
+        taskId: validatedTaskId,
+        taskData,
+        batchId: reservedBatch.batchId,    // ID konkretnej partii
+        batchNumber: reservedBatch.batchNumber,
+        reservationMethod: validatedMethod,
+        userId: validatedUserId
+      });
+    }
     
     // Emituj zdarzenie o zmianie stanu magazynu
     if (typeof window !== 'undefined') {
       const event = new CustomEvent('inventory-updated', { 
-        detail: { itemId: validatedItemId, action: 'booking', quantity: validatedQuantity }
+        detail: { itemId: validatedItemId, action: 'booking', quantity: actualQuantityToReserve }
       });
       window.dispatchEvent(event);
     }
     
     console.log('🎉 [REFACTOR] bookInventoryForTask SUCCESS!');
+    
+    // Przygotuj odpowiedni komunikat w zależności od tego czy była to pełna czy częściowa rezerwacja
+    let message = `Zarezerwowano ${actualQuantityToReserve} ${item.unit} produktu ${item.name}`;
+    if (isPartialReservation) {
+      const missingQuantity = preciseSubtract(validatedQuantity, actualQuantityToReserve);
+      message += ` (⚠️ Częściowa rezerwacja: brakuje ${missingQuantity} ${item.unit})`;
+    }
+    
     return {
       success: true,
-      message: `Zarezerwowano ${validatedQuantity} ${item.unit} produktu ${item.name}`,
-      reservedBatches: reservationResult.reservedBatches
+      message,
+      reservedBatches: reservationResult.reservedBatches,
+      isPartialReservation,
+      requestedQuantity: validatedQuantity,
+      actualQuantity: actualQuantityToReserve
     };
   } catch (error) {
     console.error('❌ [REFACTOR] bookInventoryForTask ERROR:', error);
@@ -1150,9 +1181,11 @@ const selectBatchesForReservation = async (batches, quantity, taskId, batchId, i
       });
     }
     
+    // 🔧 NOWA LOGIKA: Nie rzucaj błędu - pozwól na częściową rezerwację
+    // System teraz rezerwuje tyle ile jest dostępne, nawet jeśli nie wystarcza pełna ilość
     if (!preciseIsLessOrEqual(remainingQuantity, 0)) {
-      throw new Error(`Nie można zarezerwować wymaganej ilości ${quantity} ${item.unit} produktu ${item.name}. 
-      Brakuje ${remainingQuantity} ${item.unit} ze względu na istniejące rezerwacje przez inne zadania produkcyjne.`);
+      const reservedQuantity = preciseSubtract(quantity, remainingQuantity);
+      console.warn(`⚠️ Częściowa rezerwacja w selectBatchesForReservation: zarezerwowano ${reservedQuantity} ${item.unit} z wymaganych ${quantity} ${item.unit}, brakuje ${remainingQuantity} ${item.unit}`);
     }
   }
   
