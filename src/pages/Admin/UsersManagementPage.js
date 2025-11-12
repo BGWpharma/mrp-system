@@ -22,18 +22,26 @@ import {
   Select,
   MenuItem,
   CircularProgress,
-  Box
+  Box,
+  Checkbox
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Person as PersonIcon,
   PersonOutline as PersonOutlineIcon,
   Visibility as VisibilityIcon,
-  AccountBox as AccountBoxIcon
+  AccountBox as AccountBoxIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
-import { getAllUsers, changeUserRole } from '../../services/userService';
+import { 
+  getAllUsers, 
+  changeUserRole, 
+  getUserPermissions, 
+  updateUserPermissions,
+  AVAILABLE_PERMISSIONS 
+} from '../../services/userService';
 import SidebarTabsManager from '../../components/admin/SidebarTabsManager';
 import UserProfileEditor from '../../components/admin/UserProfileEditor';
 
@@ -48,6 +56,9 @@ const UsersManagementPage = () => {
   const [selectedUserForTabs, setSelectedUserForTabs] = useState(null);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState(null);
+  const [userPermissions, setUserPermissions] = useState({});
   
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -102,6 +113,55 @@ const UsersManagementPage = () => {
   
   const handleUserUpdated = () => {
     fetchUsers(); // Odśwież listę użytkowników po edycji
+  };
+  
+  const handleOpenPermissionsDialog = async (user) => {
+    try {
+      setSelectedUserForPermissions(user);
+      setProcessing(true);
+      
+      // Pobierz aktualne uprawnienia użytkownika
+      const permissions = await getUserPermissions(user.id);
+      setUserPermissions(permissions);
+      
+      setPermissionsDialogOpen(true);
+    } catch (error) {
+      console.error('Błąd podczas pobierania uprawnień użytkownika:', error);
+      showError('Nie udało się pobrać uprawnień użytkownika');
+    } finally {
+      setProcessing(false);
+    }
+  };
+  
+  const handleClosePermissionsDialog = () => {
+    setPermissionsDialogOpen(false);
+    setSelectedUserForPermissions(null);
+    setUserPermissions({});
+  };
+  
+  const handlePermissionChange = (permissionKey) => {
+    setUserPermissions(prev => ({
+      ...prev,
+      [permissionKey]: !prev[permissionKey]
+    }));
+  };
+  
+  const handleSavePermissions = async () => {
+    if (!selectedUserForPermissions) return;
+    
+    try {
+      setProcessing(true);
+      await updateUserPermissions(selectedUserForPermissions.id, userPermissions, currentUser.uid);
+      
+      showSuccess(`Uprawnienia użytkownika ${selectedUserForPermissions.displayName || selectedUserForPermissions.email} zostały zaktualizowane`);
+      handleClosePermissionsDialog();
+      fetchUsers(); // Odśwież listę użytkowników
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji uprawnień użytkownika:', error);
+      showError(error.message || 'Nie udało się zaktualizować uprawnień użytkownika');
+    } finally {
+      setProcessing(false);
+    }
   };
   
   const handleChangeRole = async () => {
@@ -230,6 +290,15 @@ const UsersManagementPage = () => {
                         <EditIcon />
                       </IconButton>
                       <IconButton 
+                        onClick={() => handleOpenPermissionsDialog(user)}
+                        disabled={user.role === 'administrator'} // Administratorzy mają wszystkie uprawnienia
+                        title="Zarządzaj uprawnieniami"
+                        color="warning"
+                        sx={{ mr: 0.5 }}
+                      >
+                        <SecurityIcon />
+                      </IconButton>
+                      <IconButton 
                         onClick={() => handleOpenSidebarTabsDialog(user)}
                         title="Zarządzaj zakładkami sidebara"
                         color="secondary"
@@ -297,6 +366,61 @@ const UsersManagementPage = () => {
         selectedUser={selectedUserForProfile}
         onUserUpdated={handleUserUpdated}
       />
+      
+      {/* Dialog do zarządzania uprawnieniami */}
+      <Dialog 
+        open={permissionsDialogOpen} 
+        onClose={handleClosePermissionsDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Zarządzanie uprawnieniami użytkownika</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Zarządzasz uprawnieniami dla użytkownika: {selectedUserForPermissions?.displayName || selectedUserForPermissions?.email}
+          </DialogContentText>
+          <DialogContentText variant="caption" sx={{ mt: 1, mb: 2, color: 'info.main' }}>
+            Administratorzy automatycznie mają wszystkie uprawnienia. Uprawnienia można konfigurować tylko dla pracowników.
+          </DialogContentText>
+          
+          <Box sx={{ mt: 2 }}>
+            {Object.values(AVAILABLE_PERMISSIONS).map((permission) => (
+              <Box key={permission.id} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                <FormControl component="fieldset">
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {permission.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {permission.description}
+                      </Typography>
+                    </Box>
+                    <Checkbox
+                      checked={userPermissions[permission.id] === true}
+                      onChange={() => handlePermissionChange(permission.id)}
+                      color="primary"
+                    />
+                  </Box>
+                </FormControl>
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePermissionsDialog} disabled={processing}>
+            Anuluj
+          </Button>
+          <Button 
+            onClick={handleSavePermissions} 
+            color="primary" 
+            variant="contained"
+            disabled={processing}
+          >
+            {processing ? <CircularProgress size={24} /> : 'Zapisz uprawnienia'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

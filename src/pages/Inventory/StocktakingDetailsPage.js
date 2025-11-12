@@ -68,6 +68,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { usePermissions } from '../../hooks/usePermissions';
 import { formatDate } from '../../utils/formatters';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useUserNames } from '../../hooks/useUserNames';
@@ -80,6 +81,7 @@ const StocktakingDetailsPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation();
+  const { canCompleteStocktaking, loading: permissionsLoading } = usePermissions();
   
   const [stocktaking, setStocktaking] = useState(null);
   const [items, setItems] = useState([]);
@@ -453,6 +455,12 @@ const StocktakingDetailsPage = () => {
   };
   
   const handleCompleteStocktaking = async () => {
+    // Sprawdź uprawnienia użytkownika
+    if (!canCompleteStocktaking) {
+      showError('Nie masz uprawnień do kończenia inwentaryzacji. Skontaktuj się z administratorem.');
+      return;
+    }
+    
     // Sprawdź czy są pozycje bez uzupełnionej ilości
     const incompleteItems = items.filter(item => item.countedQuantity === null || item.countedQuantity === undefined);
     
@@ -746,14 +754,22 @@ const StocktakingDetailsPage = () => {
             </Button>
           )}
           {(!isCompleted || isInCorrection) && items.length > 0 && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<DoneIcon />}
-              onClick={handleCompleteStocktaking}
+            <Tooltip 
+              title={!canCompleteStocktaking ? 'Nie masz uprawnień do kończenia inwentaryzacji' : ''}
+              arrow
             >
-              {isInCorrection ? t('stocktaking.finishCorrections') : t('stocktaking.finishStocktaking')}
-            </Button>
+              <span>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<DoneIcon />}
+                  onClick={handleCompleteStocktaking}
+                  disabled={!canCompleteStocktaking || permissionsLoading}
+                >
+                  {isInCorrection ? t('stocktaking.finishCorrections') : t('stocktaking.finishStocktaking')}
+                </Button>
+              </span>
+            </Tooltip>
           )}
         </Box>
       </Box>

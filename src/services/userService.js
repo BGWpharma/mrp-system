@@ -463,6 +463,108 @@ export const updateUserProfile = async (userId, userProfile, adminId) => {
 };
 
 /**
+ * Lista wszystkich dostępnych uprawnień w systemie
+ */
+export const AVAILABLE_PERMISSIONS = {
+  canCompleteStocktaking: {
+    id: 'canCompleteStocktaking',
+    name: 'Kończenie inwentaryzacji',
+    description: 'Uprawnienie do kończenia inwentaryzacji i aktualizacji stanów magazynowych'
+  },
+  // Dodaj tutaj kolejne uprawnienia w przyszłości
+};
+
+/**
+ * Pobiera uprawnienia użytkownika
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Obiekt z uprawnieniami użytkownika
+ */
+export const getUserPermissions = async (userId) => {
+  try {
+    const userData = await getUserById(userId);
+    
+    // Administratorzy mają wszystkie uprawnienia
+    if (userData?.role === 'administrator') {
+      return Object.keys(AVAILABLE_PERMISSIONS).reduce((acc, key) => {
+        acc[key] = true;
+        return acc;
+      }, {});
+    }
+    
+    // Zwróć uprawnienia użytkownika lub puste obiekty dla pracownika
+    return userData?.permissions || {};
+  } catch (error) {
+    console.error('Błąd podczas pobierania uprawnień użytkownika:', error);
+    return {};
+  }
+};
+
+/**
+ * Sprawdza czy użytkownik ma określone uprawnienie
+ * @param {string} userId - ID użytkownika
+ * @param {string} permission - Nazwa uprawnienia do sprawdzenia
+ * @returns {Promise<boolean>} - Czy użytkownik ma dane uprawnienie
+ */
+export const hasPermission = async (userId, permission) => {
+  try {
+    const userData = await getUserById(userId);
+    
+    // Administratorzy mają wszystkie uprawnienia
+    if (userData?.role === 'administrator') {
+      return true;
+    }
+    
+    // Sprawdź czy użytkownik ma określone uprawnienie
+    return userData?.permissions?.[permission] === true;
+  } catch (error) {
+    console.error('Błąd podczas sprawdzania uprawnień użytkownika:', error);
+    return false;
+  }
+};
+
+/**
+ * Aktualizuje uprawnienia użytkownika - dostępne tylko dla administratorów
+ * @param {string} userId - ID użytkownika
+ * @param {Object} permissions - Obiekt z uprawnieniami do ustawienia
+ * @param {string} adminId - ID administratora dokonującego zmiany
+ * @returns {Promise<boolean>} - Czy operacja zakończyła się sukcesem
+ */
+export const updateUserPermissions = async (userId, permissions, adminId) => {
+  try {
+    // Sprawdź czy użytkownik dokonujący zmiany jest administratorem
+    const adminData = await getUserById(adminId);
+    if (!adminData || adminData.role !== 'administrator') {
+      throw new Error('Brak uprawnień do zarządzania uprawnieniami użytkowników');
+    }
+    
+    // Walidacja uprawnień - tylko dozwolone klucze
+    const validatedPermissions = {};
+    const availablePermissionKeys = Object.keys(AVAILABLE_PERMISSIONS);
+    
+    for (const key of availablePermissionKeys) {
+      if (permissions.hasOwnProperty(key)) {
+        validatedPermissions[key] = Boolean(permissions[key]);
+      }
+    }
+    
+    // Aktualizuj uprawnienia użytkownika
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      permissions: validatedPermissions,
+      updatedAt: new Date()
+    });
+    
+    // Wyczyść cache dla tego użytkownika
+    userCache.delete(userId);
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji uprawnień użytkownika:', error);
+    throw error;
+  }
+};
+
+/**
  * Pobiera wszystkie dostępne zakładki sidebara z ich identyfikatorami i podzakładkami
  * @returns {Array<Object>} - Lista dostępnych zakładek z ich identyfikatorami, nazwami i podzakładkami
  */
@@ -555,5 +657,9 @@ export default {
   updateUserHiddenSidebarSubtabs,
   getUserHiddenSidebarSubtabs,
   updateUserProfile,
-  getAvailableSidebarTabs
+  getAvailableSidebarTabs,
+  getUserPermissions,
+  hasPermission,
+  updateUserPermissions,
+  AVAILABLE_PERMISSIONS
 }; 
