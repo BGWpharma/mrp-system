@@ -446,5 +446,22 @@
             "otherActivities": "Inne aktywności"
         }
     },
-    "mixingReportTooltip": "Otwórz raport"
+    "mixingReportTooltip": "Otwórz raport",
+    "comments": {
+        "title": "Komentarze do MO",
+        "drawerTitle": "Komentarze do MO #{moNumber}",
+        "addComment": "Dodaj komentarz",
+        "adding": "Dodawanie...",
+        "placeholder": "Napisz komentarz...",
+        "noComments": "Brak komentarzy",
+        "emptyWarning": "Komentarz nie może być pusty",
+        "addSuccess": "Komentarz został dodany",
+        "deleteSuccess": "Komentarz został usunięty",
+        "deleteConfirm": "Czy na pewno chcesz usunąć ten komentarz?",
+        "addError": "Błąd podczas dodawania komentarza",
+        "deleteError": "Błąd podczas usuwania komentarza",
+        "by": "przez",
+        "user": "Użytkownik",
+        "tooltipComments": "Komentarze"
+    }
 }

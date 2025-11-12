@@ -446,5 +446,22 @@
             "otherActivities": "Other Activities"
         }
     },
-    "mixingReportTooltip": "Open report"
+    "mixingReportTooltip": "Open report",
+    "comments": {
+        "title": "MO Comments",
+        "drawerTitle": "Comments for MO #{moNumber}",
+        "addComment": "Add Comment",
+        "adding": "Adding...",
+        "placeholder": "Write a comment...",
+        "noComments": "No comments",
+        "emptyWarning": "Comment cannot be empty",
+        "addSuccess": "Comment has been added",
+        "deleteSuccess": "Comment has been deleted",
+        "deleteConfirm": "Are you sure you want to delete this comment?",
+        "addError": "Error adding comment",
+        "deleteError": "Error deleting comment",
+        "by": "by",
+        "user": "User",
+        "tooltipComments": "Comments"
+    }
 }

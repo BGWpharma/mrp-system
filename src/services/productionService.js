@@ -6209,3 +6209,91 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       };
     }
   };
+
+  /**
+   * Dodaje komentarz do zadania produkcyjnego
+   * @param {string} taskId - ID zadania produkcyjnego
+   * @param {string} comment - Treść komentarza
+   * @param {string} userId - ID użytkownika dodającego komentarz
+   * @param {string} userName - Nazwa użytkownika dodającego komentarz
+   * @returns {Promise<Object>} Nowy komentarz
+   */
+  export const addTaskComment = async (taskId, comment, userId, userName) => {
+    try {
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const taskData = taskDoc.data();
+      const comments = taskData.comments || [];
+      
+      const newComment = {
+        id: `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        text: comment,
+        createdAt: new Date(),
+        createdBy: userId,
+        createdByName: userName
+      };
+      
+      comments.push(newComment);
+      
+      await updateDoc(taskRef, {
+        comments,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      console.log(`[TASK-COMMENT] Dodano komentarz do zadania ${taskId}:`, newComment.id);
+      return newComment;
+    } catch (error) {
+      console.error('Błąd podczas dodawania komentarza:', error);
+      throw error;
+    }
+  };
+  
+  /**
+   * Usuwa komentarz z zadania produkcyjnego
+   * @param {string} taskId - ID zadania produkcyjnego
+   * @param {string} commentId - ID komentarza do usunięcia
+   * @param {string} userId - ID użytkownika usuwającego komentarz
+   * @returns {Promise<void>}
+   */
+  export const deleteTaskComment = async (taskId, commentId, userId) => {
+    try {
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const taskData = taskDoc.data();
+      const comments = taskData.comments || [];
+      
+      // Sprawdź czy użytkownik jest autorem komentarza
+      const commentToDelete = comments.find(c => c.id === commentId);
+      if (!commentToDelete) {
+        throw new Error('Komentarz nie istnieje');
+      }
+      
+      if (commentToDelete.createdBy !== userId) {
+        throw new Error('Brak uprawnień do usunięcia tego komentarza');
+      }
+      
+      const updatedComments = comments.filter(c => c.id !== commentId);
+      
+      await updateDoc(taskRef, {
+        comments: updatedComments,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+      
+      console.log(`[TASK-COMMENT] Usunięto komentarz ${commentId} z zadania ${taskId}`);
+    } catch (error) {
+      console.error('Błąd podczas usuwania komentarza:', error);
+      throw error;
+    }
+  };

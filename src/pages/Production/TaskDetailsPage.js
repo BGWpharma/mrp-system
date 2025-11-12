@@ -117,10 +117,13 @@ import {
   useTheme,
   Switch,
   Autocomplete,
+  Drawer,
+  Badge,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Comment as CommentIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
   Warning as WarningIcon,
@@ -161,7 +164,7 @@ import {
   Calculate as CalculateIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession, addTaskComment, deleteTaskComment } from '../../services/productionService';
 import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
 import { getRecipeVersion, sortIngredientsByQuantity } from '../../services/recipeService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventory';
@@ -283,6 +286,11 @@ const TaskDetailsPage = () => {
   const [deleteHistoryItem, setDeleteHistoryItem] = useState(null);
   const [deleteHistoryDialogOpen, setDeleteHistoryDialogOpen] = useState(false);
   const [includeInCosts, setIncludeInCosts] = useState({});
+
+  // Stany dla komentarzy
+  const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [addingComment, setAddingComment] = useState(false);
 
   // Stan dla przechowywania oczekiwanych zamówień
   const [awaitingOrders, setAwaitingOrders] = useState({});
@@ -922,7 +930,10 @@ const TaskDetailsPage = () => {
         taskData.productionDocs?.length !== previousTask.productionDocs?.length ||
         taskData.plannedStartDate?.toMillis?.() !== previousTask.plannedStartDate?.toMillis?.() ||
         taskData.actualStartDate?.toMillis?.() !== previousTask.actualStartDate?.toMillis?.() ||
-        taskData.actualEndDate?.toMillis?.() !== previousTask.actualEndDate?.toMillis?.();
+        taskData.actualEndDate?.toMillis?.() !== previousTask.actualEndDate?.toMillis?.() ||
+        // 💬 Wykrywanie zmian w komentarzach
+        taskData.comments?.length !== previousTask.comments?.length ||
+        JSON.stringify(taskData.comments) !== JSON.stringify(previousTask.comments);
       
       // Tylko aktualizuj task jeśli rzeczywiście się zmienił (po wzbogaceniu danych)
       if (hasActualChanges) {
@@ -2078,6 +2089,54 @@ const TaskDetailsPage = () => {
       console.error('Error deleting task:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Obsługa komentarzy
+  const handleOpenCommentsDrawer = () => {
+    setCommentsDrawerOpen(true);
+  };
+
+  const handleCloseCommentsDrawer = () => {
+    setCommentsDrawerOpen(false);
+    setNewComment('');
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) {
+      showWarning(t('comments.emptyWarning'));
+      return;
+    }
+
+    try {
+      setAddingComment(true);
+      await addTaskComment(
+        id,
+        newComment.trim(),
+        currentUser.uid,
+        currentUser.displayName || currentUser.email
+      );
+      showSuccess(t('comments.addSuccess'));
+      setNewComment('');
+    } catch (error) {
+      console.error('Błąd dodawania komentarza:', error);
+      showError(t('comments.addError') + ': ' + error.message);
+    } finally {
+      setAddingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm(t('comments.deleteConfirm'))) {
+      return;
+    }
+
+    try {
+      await deleteTaskComment(id, commentId, currentUser.uid);
+      showSuccess(t('comments.deleteSuccess'));
+    } catch (error) {
+      console.error('Błąd usuwania komentarza:', error);
+      showError(t('comments.deleteError') + ': ' + error.message);
     }
   };
 
@@ -8094,6 +8153,15 @@ const TaskDetailsPage = () => {
                 <EditIcon />
               </IconButton>
               <IconButton
+                color="info"
+                onClick={handleOpenCommentsDrawer}
+                title={t('comments.tooltipComments')}
+              >
+                <Badge badgeContent={task?.comments?.length || 0} color="primary">
+                  <CommentIcon />
+                </Badge>
+              </IconButton>
+              <IconButton
                 color="error"
                 onClick={() => setDeleteDialog(true)}
                 title={t('deleteTask')}
@@ -9258,6 +9326,107 @@ const TaskDetailsPage = () => {
             task={task}
             onSuccess={handleProductionShiftFormSuccess}
           />
+
+          {/* Drawer komentarzy */}
+          <Drawer
+            anchor="right"
+            open={commentsDrawerOpen}
+            onClose={handleCloseCommentsDrawer}
+            PaperProps={{
+              sx: { width: { xs: '100%', sm: 500 } }
+            }}
+          >
+            <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6">
+                  {t('comments.drawerTitle', { moNumber: task?.moNumber || '' })}
+                </Typography>
+                <IconButton onClick={handleCloseCommentsDrawer}>
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+
+              <Divider sx={{ mb: 2 }} />
+
+              {/* Lista komentarzy */}
+              <Box sx={{ flex: 1, overflowY: 'auto', mb: 3 }}>
+                {task?.comments && task.comments.length > 0 ? (
+                  <Stack spacing={2}>
+                    {task.comments
+                      .sort((a, b) => {
+                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+                        return dateB - dateA;
+                      })
+                      .map((comment) => {
+                        const commentDate = comment.createdAt?.toDate 
+                          ? comment.createdAt.toDate() 
+                          : new Date(comment.createdAt);
+                        
+                        return (
+                          <Paper key={comment.id} variant="outlined" sx={{ p: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
+                              <Box>
+                                <Typography variant="subtitle2" color="primary">
+                                  {comment.createdByName || t('comments.user')}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatDateTime(commentDate)}
+                                </Typography>
+                              </Box>
+                              {comment.createdBy === currentUser?.uid && (
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </Box>
+                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                              {comment.text}
+                            </Typography>
+                          </Paper>
+                        );
+                      })}
+                  </Stack>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <CommentIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {t('comments.noComments')}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+
+              <Divider sx={{ mb: 2 }} />
+
+              {/* Formularz dodawania komentarza */}
+              <Box>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={4}
+                  placeholder={t('comments.placeholder')}
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  disabled={addingComment}
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={addingComment ? <CircularProgress size={20} /> : <CommentIcon />}
+                  onClick={handleAddComment}
+                  disabled={addingComment || !newComment.trim()}
+                >
+                  {addingComment ? t('comments.adding') : t('comments.addComment')}
+                </Button>
+              </Box>
+            </Box>
+          </Drawer>
         </>
       ) : (
         <Typography variant="body1" color="textSecondary">
