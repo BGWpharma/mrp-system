@@ -1,52 +1,73 @@
 {
   "title": "Daty ważności produktów",
+  "pageTitle": "📅 Daty Ważności - Monitoring Partii",
   "backToInventory": "Powrót",
   "loading": "Ładowanie...",
   "expiredProducts": {
     "title": "Przeterminowane produkty",
-    "alertMessage": "W magazynie znajduje się {{count}} {{count, plural, one {przeterminowana partia} few {przeterminowane partie} many {przeterminowanych partii} other {przeterminowanych partii}}} produktów."
+    "alertTitle": "Uwaga! Przeterminowane partie",
+    "alertMessage": "Wykryto {{count}} {{count, plural, one {partię przeterminowaną} few {partie przeterminowane} many {partii przeterminowanych} other {partię przeterminowaną}}}. Natychmiast przejrzyj i podejmij odpowiednie działania!"
+  },
+  "legend": {
+    "title": "Legenda statusów:",
+    "expired": "🔴 Przeterminowana / < 7 dni",
+    "urgent": "🟠 Wygasa w ciągu tygodnia (7 dni)",
+    "warning": "🟡 Wygasa w ciągu miesiąca (7-30 dni)",
+    "safe": "🟢 Bezpieczny zapas (> 12 miesięcy)"
   },
   "thresholdSettings": {
-    "label": "Próg dni do wygaśnięcia",
-    "description": "Pokazuje produkty wygasające w ciągu {{days}} dni"
+    "label": "Próg dni",
+    "description": "Pokaż partie wygasające w ciągu {{days}} dni"
   },
   "search": {
-    "label": "Szukaj",
+    "label": "Szukaj...",
+    "placeholder": "LOT, produkt, magazyn, dostawca",
     "clear": "Wyczyść"
   },
   "tabs": {
-    "expiring": "Wkrótce wygasające ({{count}})",
+    "expiring": "Wygasające wkrótce ({{count}})",
     "expired": "Przeterminowane ({{count}})"
   },
   "table": {
     "headers": {
-      "product": "Produkt",
-      "batchNumber": "Numer partii",
-      "expiryDate": "Data ważności",
-      "status": "Status",
+      "batchNumber": "Numer LOT",
+      "product": "Pozycja magazynowa",
       "quantity": "Ilość",
+      "expiryDate": "Data ważności",
+      "daysToExpiry": "Dni do wygaśnięcia",
+      "daysExpired": "Dni od przeterminowania",
+      "location": "Lokalizacja",
+      "supplier": "Dostawca",
+      "status": "Status",
       "actions": "Akcje"
     },
     "noData": "-",
+    "unit": "szt.",
+    "daysAgo": "{{days}} dni temu",
+    "days": "{{days}} dni",
     "actions": {
+      "manage": "Zarządzaj",
       "manageBatches": "Zarządzaj partiami",
       "dispose": "Utylizuj"
     }
   },
   "status": {
     "noDate": "Brak daty",
-    "expired": "Przeterminowana",
-    "expiringSoon": "Wygasa wkrótce",
-    "current": "Aktualna"
+    "expired": "🔴 Przeterminowana",
+    "critical": "🔴 Krytyczna (< 7 dni)",
+    "urgent": "🟠 Pilne (tydzień)",
+    "warning": "🟡 Uwaga (do miesiąca)",
+    "safe": "🟢 Bezpieczny (> 12 mies.)",
+    "monitor": "Do monitorowania"
   },
   "noResults": {
     "expiring": {
-      "withSearch": "Brak wyników wyszukiwania dla produktów wkrótce wygasających.",
-      "withoutSearch": "Brak produktów wkrótce wygasających."
+      "withSearch": "🔍 Brak wyników wyszukiwania",
+      "withoutSearch": "✅ Brak partii wygasających wkrótce"
     },
     "expired": {
-      "withSearch": "Brak wyników wyszukiwania dla przeterminowanych produktów.",
-      "withoutSearch": "Brak przeterminowanych produktów."
+      "withSearch": "🔍 Brak wyników wyszukiwania",
+      "withoutSearch": "✅ Brak przeterminowanych partii"
     }
   },
   "errors": {

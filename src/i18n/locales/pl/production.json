@@ -337,7 +337,9 @@
     "description": "Opis",
     "lotNumber": "Numer partii (LOT)",
     "createdAt": "Data utworzenia",
-    "createdBy": "Utworzony przez"
+    "createdBy": "Utworzony przez",
+    "totalCost": "Koszt całkowity (EUR)",
+    "costPerUnit": "Koszt na jednostkę (EUR)"
   },
   "createFromOrder": {
     "title": "Tworzenie zadania produkcyjnego z zamówienia",

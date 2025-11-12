@@ -1173,13 +1173,19 @@ const TaskList = () => {
         { label: t('production.csvHeaders.description'), key: 'description' },
         { label: t('production.csvHeaders.lotNumber'), key: 'lotNumber' },
         { label: t('production.csvHeaders.createdAt'), key: 'createdAt' },
-        { label: t('production.csvHeaders.createdBy'), key: 'createdBy' }
+        { label: t('production.csvHeaders.createdBy'), key: 'createdBy' },
+        { label: t('production.csvHeaders.totalCost'), key: 'totalCost' },
+        { label: t('production.csvHeaders.costPerUnit'), key: 'costPerUnit' }
       ];
       
       // Przygotuj dane do eksportu
       const exportData = allTasks.map(task => {
         const totalCompletedQuantity = task.totalCompletedQuantity || 0;
         const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
+        
+        // Oblicz koszty - użyj pełnego kosztu produkcji (z wszystkimi materiałami)
+        const totalCost = task.totalFullProductionCost || task.fullProductionCost || 0;
+        const costPerUnit = task.unitFullProductionCost || task.unitCost || 0;
         
         return {
           moNumber: task.moNumber || '',
@@ -1199,7 +1205,9 @@ const TaskList = () => {
           description: task.description || '',
           lotNumber: task.lotNumber || '',
           createdAt: formatDateForCSV(task.createdAt),
-          createdBy: userNamesMap[task.createdBy] || task.createdBy || ''
+          createdBy: userNamesMap[task.createdBy] || task.createdBy || '',
+          totalCost: totalCost.toFixed(4),
+          costPerUnit: costPerUnit.toFixed(4)
         };
       });
       

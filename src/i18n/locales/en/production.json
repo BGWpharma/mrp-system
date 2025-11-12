@@ -266,7 +266,9 @@
     "description": "Description",
     "lotNumber": "Batch Number (LOT)",
     "createdAt": "Created Date",
-    "createdBy": "Created By"
+    "createdBy": "Created By",
+    "totalCost": "Total Cost (EUR)",
+    "costPerUnit": "Cost per Unit (EUR)"
   },
   "createFromOrder": {
     "title": "Creating Production Task from Order",

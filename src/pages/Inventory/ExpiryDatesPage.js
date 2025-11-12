@@ -158,42 +158,42 @@ const ExpiryDatesPage = () => {
   const getExpiryStatusInfo = (daysToExpiry) => {
     if (daysToExpiry < 0) {
       return {
-        label: '🔴 Przeterminowana',
+        label: t('expiryDates.status.expired'),
         color: 'error',
         bgColor: 'rgba(211, 47, 47, 0.15)',
         chipColor: 'error'
       };
     } else if (daysToExpiry < 7) {
       return {
-        label: '🔴 Krytyczna (< 7 dni)',
+        label: t('expiryDates.status.critical'),
         color: 'error',
         bgColor: 'rgba(211, 47, 47, 0.12)',
         chipColor: 'error'
       };
     } else if (daysToExpiry <= 7) {
       return {
-        label: '🟠 Pilne (tydzień)',
+        label: t('expiryDates.status.urgent'),
         color: 'warning',
         bgColor: 'rgba(237, 108, 2, 0.15)',
         chipColor: 'warning'
       };
     } else if (daysToExpiry <= 30) {
       return {
-        label: '🟡 Uwaga (do miesiąca)',
+        label: t('expiryDates.status.warning'),
         color: 'warning',
         bgColor: 'rgba(255, 193, 7, 0.15)',
         chipColor: 'warning'
       };
     } else if (daysToExpiry > 365) {
       return {
-        label: '🟢 Bezpieczny (> 12 mies.)',
+        label: t('expiryDates.status.safe'),
         color: 'success',
         bgColor: 'rgba(46, 125, 50, 0.08)',
         chipColor: 'success'
       };
     } else {
       return {
-        label: 'Do monitorowania',
+        label: t('expiryDates.status.monitor'),
         color: 'info',
         bgColor: 'transparent',
         chipColor: 'info'
@@ -204,7 +204,7 @@ const ExpiryDatesPage = () => {
   // Funkcja renderowania statusu
   const renderExpiryStatus = (batch) => {
     if (!batch.expiryDate) {
-      return <Chip label="Brak daty" color="default" size="small" />;
+      return <Chip label={t('expiryDates.status.noDate')} color="default" size="small" />;
     }
     
     const expiryDate = batch.expiryDate instanceof Timestamp 
@@ -214,7 +214,7 @@ const ExpiryDatesPage = () => {
     const isDefaultOrInvalidDate = expiryDate.getFullYear() <= 1970;
     
     if (isDefaultOrInvalidDate) {
-      return <Chip label="Brak daty" color="default" size="small" />;
+      return <Chip label={t('expiryDates.status.noDate')} color="default" size="small" />;
     }
     
     const daysToExpiry = calculateDaysToExpiry(expiryDate);
@@ -274,7 +274,7 @@ const ExpiryDatesPage = () => {
         <TableCell>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Typography variant="body2">
-              {batch.quantity} {batch.unit || 'szt.'}
+              {batch.quantity} {batch.unit || t('expiryDates.table.unit')}
             </Typography>
           </Box>
         </TableCell>
@@ -292,7 +292,10 @@ const ExpiryDatesPage = () => {
                        daysToExpiry <= 30 ? 'warning.main' : 'inherit'
               }}
             >
-              {daysToExpiry < 0 ? `${Math.abs(daysToExpiry)} dni temu` : `${daysToExpiry} dni`}
+              {daysToExpiry < 0 
+                ? t('expiryDates.table.daysAgo', { days: Math.abs(daysToExpiry) })
+                : t('expiryDates.table.days', { days: daysToExpiry })
+              }
             </Typography>
           </Box>
         </TableCell>
@@ -312,7 +315,7 @@ const ExpiryDatesPage = () => {
             component={Link}
             to={`/inventory/${batch.itemId}/batches`}
           >
-            Zarządzaj
+            {t('expiryDates.table.actions.manage')}
           </Button>
         </TableCell>
       </TableRow>
@@ -337,7 +340,7 @@ const ExpiryDatesPage = () => {
           {t('expiryDates.backToInventory')}
         </Button>
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-          📅 Daty Ważności - Monitoring Partii
+          {t('expiryDates.pageTitle')}
         </Typography>
         <Box />
       </Box>
@@ -345,28 +348,27 @@ const ExpiryDatesPage = () => {
       {/* Legenda kolorów */}
       <Paper sx={{ mb: 3, p: 2, backgroundColor: 'background.default' }}>
         <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', mb: 1 }}>
-          Legenda statusów:
+          {t('expiryDates.legend.title')}
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Chip label="🔴 Przeterminowana / < 7 dni" color="error" size="small" />
-          <Chip label="🟠 Wygasa w ciągu tygodnia (7 dni)" color="warning" size="small" sx={{ bgcolor: '#ed6c02' }} />
-          <Chip label="🟡 Wygasa w ciągu miesiąca (7-30 dni)" color="warning" size="small" />
-          <Chip label="🟢 Bezpieczny zapas (> 12 miesięcy)" color="success" size="small" />
+          <Chip label={t('expiryDates.legend.expired')} color="error" size="small" />
+          <Chip label={t('expiryDates.legend.urgent')} color="warning" size="small" sx={{ bgcolor: '#ed6c02' }} />
+          <Chip label={t('expiryDates.legend.warning')} color="warning" size="small" />
+          <Chip label={t('expiryDates.legend.safe')} color="success" size="small" />
         </Box>
       </Paper>
 
       {expiredBatches.length > 0 && (
         <Alert severity="error" sx={{ mb: 3 }} icon={<ErrorIcon />}>
-          <AlertTitle><strong>Uwaga! Przeterminowane partie</strong></AlertTitle>
-          Wykryto {expiredBatches.length} {expiredBatches.length === 1 ? 'partię' : 'partii'} przeterminowaną. 
-          Natychmiast przejrzyj i podejmij odpowiednie działania!
+          <AlertTitle><strong>{t('expiryDates.expiredProducts.alertTitle')}</strong></AlertTitle>
+          {t('expiryDates.expiredProducts.alertMessage', { count: expiredBatches.length })}
         </Alert>
       )}
 
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <TextField
-            label="Próg dni"
+            label={t('expiryDates.thresholdSettings.label')}
             type="number"
             value={daysThreshold}
             onChange={handleDaysThresholdChange}
@@ -376,13 +378,13 @@ const ExpiryDatesPage = () => {
             }}
           />
           <Typography variant="body2" color="text.secondary">
-            Pokaż partie wygasające w ciągu {daysThreshold || '...'} dni
+            {t('expiryDates.thresholdSettings.description', { days: daysThreshold || '...' })}
           </Typography>
         </Box>
         
         <TextField
-          label="Szukaj..."
-          placeholder="LOT, produkt, magazyn, dostawca"
+          label={t('expiryDates.search.label')}
+          placeholder={t('expiryDates.search.placeholder')}
           value={searchTerm}
           onChange={handleSearchChange}
           sx={{ width: 400 }}
@@ -394,7 +396,7 @@ const ExpiryDatesPage = () => {
             ),
             endAdornment: searchTerm && (
               <InputAdornment position="end">
-                <IconButton onClick={clearSearch} edge="end" title="Wyczyść">
+                <IconButton onClick={clearSearch} edge="end" title={t('expiryDates.search.clear')}>
                   <ClearIcon />
                 </IconButton>
               </InputAdornment>
@@ -410,7 +412,7 @@ const ExpiryDatesPage = () => {
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <WarningIcon sx={{ mr: 1, color: 'warning.main' }} />
-                  <span>Wygasające wkrótce ({filteredExpiringBatches.length})</span>
+                  <span>{t('expiryDates.tabs.expiring', { count: filteredExpiringBatches.length })}</span>
                 </Box>
               } 
               id="expiry-tab-0" 
@@ -419,7 +421,7 @@ const ExpiryDatesPage = () => {
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <ErrorIcon sx={{ mr: 1, color: 'error.main' }} />
-                  <span>Przeterminowane ({filteredExpiredBatches.length})</span>
+                  <span>{t('expiryDates.tabs.expired', { count: filteredExpiredBatches.length })}</span>
                 </Box>
               } 
               id="expiry-tab-1" 
@@ -431,7 +433,10 @@ const ExpiryDatesPage = () => {
           {filteredExpiringBatches.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="h6" color="text.secondary">
-                {searchTerm ? '🔍 Brak wyników wyszukiwania' : '✅ Brak partii wygasających wkrótce'}
+                {searchTerm 
+                  ? t('expiryDates.noResults.expiring.withSearch')
+                  : t('expiryDates.noResults.expiring.withoutSearch')
+                }
               </Typography>
             </Box>
           ) : (
@@ -439,15 +444,15 @@ const ExpiryDatesPage = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Numer LOT</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Pozycja magazynowa</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Data ważności</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Dni do wygaśnięcia</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Lokalizacja</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Dostawca</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Akcje</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.batchNumber')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.product')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.quantity')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.expiryDate')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.daysToExpiry')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.location')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.supplier')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.status')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -462,7 +467,10 @@ const ExpiryDatesPage = () => {
           {filteredExpiredBatches.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="h6" color="text.secondary">
-                {searchTerm ? '🔍 Brak wyników wyszukiwania' : '✅ Brak przeterminowanych partii'}
+                {searchTerm 
+                  ? t('expiryDates.noResults.expired.withSearch')
+                  : t('expiryDates.noResults.expired.withoutSearch')
+                }
               </Typography>
             </Box>
           ) : (
@@ -470,15 +478,15 @@ const ExpiryDatesPage = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Numer LOT</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Pozycja magazynowa</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Data ważności</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Dni od przeterminowania</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Lokalizacja</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Dostawca</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Akcje</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.batchNumber')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.product')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.quantity')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.expiryDate')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.daysExpired')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.location')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.supplier')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.status')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('expiryDates.table.headers.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

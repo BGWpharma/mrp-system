@@ -1,17 +1,27 @@
 {
   "title": "Product Expiry Dates",
+  "pageTitle": "📅 Expiry Dates - Batch Monitoring",
   "backToInventory": "Back",
   "loading": "Loading...",
   "expiredProducts": {
     "title": "Expired Products",
-    "alertMessage": "There {{count, plural, one {is} other {are}}} {{count}} expired {{count, plural, one {batch} other {batches}}} in the warehouse."
+    "alertTitle": "Warning! Expired Batches",
+    "alertMessage": "Detected {{count}} expired {{count, plural, one {batch} other {batches}}}. Please review immediately and take appropriate action!"
+  },
+  "legend": {
+    "title": "Status legend:",
+    "expired": "🔴 Expired / < 7 days",
+    "urgent": "🟠 Expires within a week (7 days)",
+    "warning": "🟡 Expires within a month (7-30 days)",
+    "safe": "🟢 Safe stock (> 12 months)"
   },
   "thresholdSettings": {
-    "label": "Days threshold for expiry",
-    "description": "Shows products expiring within {{days}} days"
+    "label": "Days threshold",
+    "description": "Show batches expiring within {{days}} days"
   },
   "search": {
-    "label": "Search",
+    "label": "Search...",
+    "placeholder": "LOT, product, warehouse, supplier",
     "clear": "Clear"
   },
   "tabs": {
@@ -20,33 +30,44 @@
   },
   "table": {
     "headers": {
-      "product": "Product",
-      "batchNumber": "Batch Number",
-      "expiryDate": "Expiry Date",
-      "status": "Status",
+      "batchNumber": "LOT Number",
+      "product": "Inventory Item",
       "quantity": "Quantity",
+      "expiryDate": "Expiry Date",
+      "daysToExpiry": "Days to Expiry",
+      "daysExpired": "Days Since Expiry",
+      "location": "Location",
+      "supplier": "Supplier",
+      "status": "Status",
       "actions": "Actions"
     },
     "noData": "-",
+    "unit": "pcs",
+    "daysAgo": "{{days}} days ago",
+    "days": "{{days}} days",
     "actions": {
+      "manage": "Manage",
       "manageBatches": "Manage Batches",
       "dispose": "Dispose"
     }
   },
   "status": {
     "noDate": "No Date",
-    "expired": "Expired",
-    "expiringSoon": "Expiring Soon",
-    "current": "Current"
+    "expired": "🔴 Expired",
+    "critical": "🔴 Critical (< 7 days)",
+    "urgent": "🟠 Urgent (week)",
+    "warning": "🟡 Warning (up to month)",
+    "safe": "🟢 Safe (> 12 months)",
+    "monitor": "Monitor"
   },
   "noResults": {
     "expiring": {
-      "withSearch": "No search results for products expiring soon.",
-      "withoutSearch": "No products expiring soon."
+      "withSearch": "🔍 No search results",
+      "withoutSearch": "✅ No batches expiring soon"
     },
     "expired": {
-      "withSearch": "No search results for expired products.",
-      "withoutSearch": "No expired products."
+      "withSearch": "🔍 No search results",
+      "withoutSearch": "✅ No expired batches"
     }
   },
   "errors": {
