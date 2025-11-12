@@ -19,6 +19,7 @@
     },
     "sales": {
       "invoices": "Invoices",
+      "materialAdvances": "Material Advances",
       "customers": "Customers",
       "priceLists": "Price Lists",
       "newProductionTask": "New Production Task",

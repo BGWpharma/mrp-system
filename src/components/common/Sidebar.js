@@ -186,6 +186,8 @@ const Sidebar = ({ onToggle }) => {
       '/hall-data/machines': 'hall-data-machines',
       
       // Sales
+      '/sales': 'sales-invoices',
+      '/sales/material-advances': 'sales-material-advances',
       '/invoices': 'sales-invoices',
       '/orders': 'sales-customer-orders',
       '/orders/customers': 'sales-customer-orders',
@@ -404,7 +406,8 @@ const Sidebar = ({ onToggle }) => {
       path: '/sales',
       hasSubmenu: true,
       children: [
-        { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
+        { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/sales' },
+        { text: t('submenu.sales.materialAdvances'), icon: <InvoicesIcon />, path: '/sales/material-advances' },
         { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
         { text: t('submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
       ].sort((a, b) => a.text.localeCompare(b.text))

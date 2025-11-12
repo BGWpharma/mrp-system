@@ -1,5 +1,10 @@
 {
+  "pageTitle": "Sprzedaż",
   "title": "Faktury",
+  "tabs": {
+    "invoices": "Faktury",
+    "materialAdvances": "Zaliczki materiałowe"
+  },
   "newInvoice": "Nowa faktura",
   "searchInvoices": "Szukaj faktur...",
   "noInvoicesFound": "Brak faktur do wyświetlenia",

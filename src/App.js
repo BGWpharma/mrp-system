@@ -122,6 +122,9 @@ import InvoiceFormPage from './pages/Invoices/InvoiceFormPage';
 import InvoiceDetailsPage from './pages/Invoices/InvoiceDetailsPage';
 import CompanySettingsPage from './pages/Invoices/CompanySettingsPage';
 
+// Sales (nowa struktura z zakładkami)
+import SalesPage from './pages/Sales/SalesPage';
+
 // CMR
 import CmrListPage from './pages/Inventory/Cmr/CmrListPage';
 import CmrCreatePage from './pages/Inventory/Cmr/CmrCreatePage';
@@ -312,8 +315,12 @@ function App() {
                     {/* CO Reports Routes - nowy moduł raportów CO */}
                     <Route path="/sales/co-reports" element={<PrivateLayout><COReportsPage /></PrivateLayout>} />
                     
+                    {/* Sales Routes - nowa struktura z zakładkami */}
+                    <Route path="/sales" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
+                    <Route path="/sales/material-advances" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
+                    
                     {/* Invoices Routes */}
-                    <Route path="/invoices" element={<PrivateLayout><InvoicesListPage /></PrivateLayout>} />
+                    <Route path="/invoices" element={<PrivateLayout><SalesPage /></PrivateLayout>} /> {/* Legacy route - przekierowanie do /sales */}
                     <Route path="/invoices/new" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />
                     <Route path="/invoices/:invoiceId" element={<PrivateLayout><InvoiceDetailsPage /></PrivateLayout>} />
                     <Route path="/invoices/:invoiceId/edit" element={<PrivateLayout><InvoiceFormPage /></PrivateLayout>} />

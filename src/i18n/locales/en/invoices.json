@@ -1,5 +1,10 @@
 {
+  "pageTitle": "Sales",
   "title": "Invoices",
+  "tabs": {
+    "invoices": "Invoices",
+    "materialAdvances": "Material Advances"
+  },
   "newInvoice": "New Invoice",
   "searchInvoices": "Search invoices...",
   "noInvoicesFound": "No invoices to display",

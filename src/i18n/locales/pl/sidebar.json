@@ -19,6 +19,7 @@
     },
     "sales": {
       "invoices": "Faktury",
+      "materialAdvances": "Zaliczki materiałowe",
       "customers": "Klienci",
       "priceLists": "Listy cenowe",
       "newProductionTask": "Nowe zadanie produkcyjne",
