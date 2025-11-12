@@ -148,6 +148,43 @@ const ForecastPage = () => {
     fetchData();
   };
   
+  /**
+   * Oblicza średnią ważoną cenę jednostkową z oczekujących zamówień zakupu (PO)
+   * @param {Array} purchaseOrders - Tablica zamówień zakupu
+   * @param {string} materialId - ID materiału
+   * @returns {number|null} - Średnia ważona cena lub null jeśli brak danych
+   */
+  const calculateWeightedPriceFromPO = (purchaseOrders, materialId) => {
+    if (!purchaseOrders || purchaseOrders.length === 0) {
+      return null;
+    }
+    
+    let totalWeightedPrice = 0;
+    let totalQuantity = 0;
+    
+    for (const po of purchaseOrders) {
+      if (po.items && Array.isArray(po.items)) {
+        for (const item of po.items) {
+          if (item.inventoryItemId === materialId) {
+            const quantity = parseFloat(item.quantityRemaining) || 0;
+            if (quantity > 0) {
+              // Oblicz cenę po rabacie
+              const unitPrice = parseFloat(item.unitPrice) || 0;
+              const discount = parseFloat(item.discount) || 0;
+              const priceAfterDiscount = unitPrice * (1 - discount / 100);
+              
+              totalWeightedPrice += priceAfterDiscount * quantity;
+              totalQuantity += quantity;
+            }
+          }
+        }
+      }
+    }
+    
+    // Zwróć średnią ważoną lub null jeśli brak ilości
+    return totalQuantity > 0 ? totalWeightedPrice / totalQuantity : null;
+  };
+  
   // Funkcja do obliczania prognozy zapotrzebowania na podstawie zadań
   const calculateForecast = async (tasksData = tasks, itemsData = inventoryItems) => {
     try {
@@ -303,7 +340,13 @@ const ForecastPage = () => {
                   materialRequirements[materialId].supplier = bestPrice.supplierName || 'Nieznany dostawca';
                   materialRequirements[materialId].supplierId = bestPrice.supplierId;
                   materialRequirements[materialId].isDefaultSupplier = bestPrice.isDefault;
+                  materialRequirements[materialId].priceSource = 'supplier'; // Oznacz źródło ceny
                 }
+              }
+              
+              // Jeśli nie ma źródła ceny, oznacz jako magazynową
+              if (!materialRequirements[materialId].priceSource) {
+                materialRequirements[materialId].priceSource = 'inventory';
               }
               
               // Zawsze obliczaj koszt - albo na podstawie ceny dostawcy, albo magazynowej
@@ -317,6 +360,19 @@ const ForecastPage = () => {
         const promises = materialIds.map(async (materialId) => {
           try {
             const purchaseOrders = await getAwaitingOrdersForInventoryItem(materialId);
+            
+            // 💰 NOWE: Oblicz średnią ważoną cenę z PO
+            const weightedPriceFromPO = calculateWeightedPriceFromPO(purchaseOrders, materialId);
+            
+            // Jeśli mamy cenę z PO, użyj jej (ma najwyższy priorytet)
+            if (weightedPriceFromPO !== null && weightedPriceFromPO > 0) {
+              materialRequirements[materialId].price = weightedPriceFromPO;
+              materialRequirements[materialId].priceSource = 'PO'; // Oznacz źródło ceny
+              materialRequirements[materialId].cost = materialRequirements[materialId].price * 
+                materialRequirements[materialId].requiredQuantity;
+              
+              console.log(`💰 Materiał ${materialId}: użyto ceny z PO = ${weightedPriceFromPO.toFixed(4)}`);
+            }
             
             // Dodaj informacje o przyszłych dostawach do prognozy
             if (purchaseOrders && purchaseOrders.length > 0) {
@@ -455,6 +511,7 @@ const ForecastPage = () => {
         'Bilans po dostawach',
         'Status',
         'Cena jednostkowa',
+        'Źródło ceny',
         'Koszt całkowity',
         'Dostawca',
         'Domyślny dostawca',
@@ -507,6 +564,7 @@ const ForecastPage = () => {
           item.balanceWithFutureDeliveries || 0,
           getStatus(item),
           item.price || 0,
+          item.priceSource === 'PO' ? 'Zamówienie zakupu (PO)' : item.priceSource === 'supplier' ? 'Dostawca' : 'Magazyn',
           item.cost || 0,
           item.supplier || '',
           item.isDefaultSupplier ? 'TAK' : 'NIE',
@@ -1322,7 +1380,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Potrzebna / Skonsumowano {renderSortIcon('requiredQuantity')}
+                          Potrzebna {renderSortIcon('requiredQuantity')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1541,24 +1599,11 @@ const ForecastPage = () => {
                                         —
                                       </Typography>
                                     ) : (
-                                      <Tooltip title={`Ilość wymagana (pozostała): ${formatNumber(item.requiredQuantity)} ${item.unit}`}>
-                                        <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                      <Tooltip 
+                                        title={`${formatNumber(item.requiredQuantity + (item.consumedQuantity || 0))} ${item.unit} - ${formatNumber(item.consumedQuantity || 0)} ${item.unit} = ${formatNumber(item.requiredQuantity)} ${item.unit}`}
+                                      >
+                                        <Typography variant="body2" sx={{ fontWeight: 'medium', cursor: 'pointer' }}>
                                           {formatNumber(item.requiredQuantity)} {item.unit}
-                                        </Typography>
-                                      </Tooltip>
-                                    )}
-                                    {(item.consumedQuantity || 0) > 0 && (
-                                      <Tooltip title={`Już skonsumowano w zadaniach: ${formatNumber(item.consumedQuantity)} ${item.unit}`}>
-                                        <Typography 
-                                          variant="caption" 
-                                          sx={{ 
-                                            color: 'info.main',
-                                            cursor: 'pointer',
-                                            display: 'block',
-                                            fontSize: '0.7rem'
-                                          }}
-                                        >
-                                          / {formatNumber(item.consumedQuantity)} {item.unit}
                                         </Typography>
                                       </Tooltip>
                                     )}
@@ -1641,14 +1686,26 @@ const ForecastPage = () => {
                                 </TableCell>
                                 <TableCell align="right">
                                   {item.price === 0 ? '-' : (
-                                    <Tooltip title={item.supplier ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Cena magazynowa'}>
+                                    <Tooltip title={
+                                      item.priceSource === 'PO' 
+                                        ? 'Cena z zamówienia zakupu (PO) - średnia ważona' 
+                                        : item.supplier 
+                                          ? `Cena od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` 
+                                          : 'Cena magazynowa'
+                                    }>
                                       <span>{formatCurrency(item.price)}</span>
                                     </Tooltip>
                                   )}
                                 </TableCell>
                                 <TableCell align="right">
                                   {item.cost === 0 ? '-' : (
-                                    <Tooltip title={item.supplier ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` : 'Koszt na podstawie ceny magazynowej'}>
+                                    <Tooltip title={
+                                      item.priceSource === 'PO' 
+                                        ? 'Koszt na podstawie ceny z zamówienia zakupu (PO)' 
+                                        : item.supplier 
+                                          ? `Koszt na podstawie ceny od dostawcy: ${item.supplier}${item.isDefaultSupplier ? ' (domyślny)' : ''}` 
+                                          : 'Koszt na podstawie ceny magazynowej'
+                                    }>
                                       <span>{formatCurrency(item.cost)}</span>
                                     </Tooltip>
                                   )}
