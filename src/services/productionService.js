@@ -4817,6 +4817,86 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
     }
   };
 
+  // Aktualizuje szczegóły mieszania (nazwa i liczba sztuk)
+  export const updateMixingDetails = async (taskId, mixingId, newName, newPiecesCount, userId) => {
+    try {
+      if (!taskId || !mixingId) {
+        throw new Error('Brak wymaganych parametrów');
+      }
+
+      // Pobierz zadanie produkcyjne
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Nie znaleziono zadania produkcyjnego');
+      }
+
+      const task = taskDoc.data();
+      const mixingPlanChecklist = task.mixingPlanChecklist || [];
+
+      // Znajdź nagłówek mieszania do aktualizacji
+      const headerIndex = mixingPlanChecklist.findIndex(item => item.id === mixingId);
+      if (headerIndex === -1) {
+        throw new Error('Nie znaleziono mieszania o podanym ID');
+      }
+
+      const header = mixingPlanChecklist[headerIndex];
+      if (header.type !== 'header') {
+        throw new Error('Wybrany element nie jest nagłówkiem mieszania');
+      }
+
+      // Wyodrębnij numer mieszania z ID
+      const mixingNumberMatch = mixingId.match(/mixing-(\d+)/);
+      const mixingNumber = mixingNumberMatch ? mixingNumberMatch[1] : '?';
+
+      // Oblicz sumę składników dla tego mieszania
+      const ingredientsInMixing = mixingPlanChecklist.filter(item => 
+        item.parentId === mixingId && 
+        item.type === 'ingredient' &&
+        item.details.includes('kg')
+      );
+
+      const totalWeight = ingredientsInMixing.reduce((sum, ing) => {
+        const quantityMatch = ing.details.match(/Ilość:\s*([\d,\.]+)/);
+        if (quantityMatch) {
+          return sum + parseFloat(quantityMatch[1]);
+        }
+        return sum;
+      }, 0);
+
+      // Zaktualizuj nagłówek
+      const updatedHeader = {
+        ...header,
+        text: newName || `Mieszanie nr ${mixingNumber}`,
+        details: `Suma składników: ${totalWeight.toFixed(4)} kg${newPiecesCount ? `, Liczba sztuk: ${newPiecesCount}` : ''}`,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userId
+      };
+
+      // Zaktualizuj checklistę
+      const updatedChecklist = [...mixingPlanChecklist];
+      updatedChecklist[headerIndex] = updatedHeader;
+
+      // Zapisz zaktualizowaną checklistę
+      await updateDoc(taskRef, {
+        mixingPlanChecklist: updatedChecklist,
+        updatedAt: serverTimestamp(),
+        updatedBy: userId
+      });
+
+      return {
+        success: true,
+        message: `Zaktualizowano szczegóły mieszania`,
+        updatedHeader: updatedHeader
+      };
+
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji szczegółów mieszania:', error);
+      throw error;
+    }
+  };
+
   // Aktualizuje koszty zadania produkcyjnego
   export const updateTaskCosts = async (taskId, costsData, userId) => {
     try {

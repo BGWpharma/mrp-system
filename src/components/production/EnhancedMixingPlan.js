@@ -120,6 +120,13 @@ const EnhancedMixingPlan = ({
   const [editQuantityValue, setEditQuantityValue] = useState('');
   const [editQuantityLoading, setEditQuantityLoading] = useState(false);
 
+  // Stany dla edycji mieszania
+  const [editMixingDialogOpen, setEditMixingDialogOpen] = useState(false);
+  const [editingMixing, setEditingMixing] = useState(null);
+  const [editMixingName, setEditMixingName] = useState('');
+  const [editMixingPiecesCount, setEditMixingPiecesCount] = useState('');
+  const [editMixingLoading, setEditMixingLoading] = useState(false);
+
   // Śledzi czy listener powiązań jest zainicjowany
   const linksListenerInitialized = useRef(false);
   // 🔒 POPRAWKA: useRef dla timera aby uniknąć memory leak przy odmontowaniu
@@ -524,6 +531,77 @@ const EnhancedMixingPlan = ({
     setEditQuantityDialogOpen(false);
     setEditingIngredient(null);
     setEditQuantityValue('');
+  };
+
+  // Funkcje dla edycji mieszania
+  const handleEditMixing = (headerItem) => {
+    // Wyodrębnij liczbę sztuk z details
+    const piecesCountMatch = headerItem.details.match(/Liczba sztuk:\s*([\d,\.]+)/);
+    const currentPiecesCount = piecesCountMatch ? piecesCountMatch[1] : '';
+    
+    setEditingMixing(headerItem);
+    setEditMixingName(headerItem.text);
+    setEditMixingPiecesCount(currentPiecesCount);
+    setEditMixingDialogOpen(true);
+  };
+
+  const handleSaveMixing = async () => {
+    if (!editingMixing) return;
+
+    // Walidacja - nazwa jest opcjonalna, ale jeśli podana, nie może być pusta
+    if (editMixingName && editMixingName.trim() === '') {
+      showError('Nazwa mieszania nie może być pusta');
+      return;
+    }
+
+    // Walidacja liczby sztuk - jeśli podana, musi być liczbą dodatnią
+    let piecesCount = null;
+    if (editMixingPiecesCount && editMixingPiecesCount.trim() !== '') {
+      const parsedPiecesCount = parseFloat(editMixingPiecesCount.replace(',', '.'));
+      if (isNaN(parsedPiecesCount) || parsedPiecesCount < 0) {
+        showError('Liczba sztuk musi być liczbą dodatnią');
+        return;
+      }
+      piecesCount = parsedPiecesCount;
+    }
+
+    try {
+      setEditMixingLoading(true);
+      
+      // Importuj funkcję dynamicznie
+      const { updateMixingDetails } = await import('../../services/productionService');
+      
+      const result = await updateMixingDetails(
+        task.id,
+        editingMixing.id,
+        editMixingName,
+        piecesCount,
+        currentUser.uid
+      );
+      
+      if (result.success) {
+        showSuccess(result.message);
+        setEditMixingDialogOpen(false);
+        setEditingMixing(null);
+        setEditMixingName('');
+        setEditMixingPiecesCount('');
+        
+        // ✅ USUNIĘTO onPlanUpdate() - real-time listener zadania automatycznie
+        // wykryje zmianę w mixingPlanChecklist i zaktualizuje dane bez resetowania scroll
+      }
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji mieszania:', error);
+      showError('Błąd podczas aktualizacji mieszania: ' + error.message);
+    } finally {
+      setEditMixingLoading(false);
+    }
+  };
+
+  const handleCancelEditMixing = () => {
+    setEditMixingDialogOpen(false);
+    setEditingMixing(null);
+    setEditMixingName('');
+    setEditMixingPiecesCount('');
   };
 
   // Usuń konkretne powiązanie składnik-rezerwacja
@@ -1005,17 +1083,31 @@ const EnhancedMixingPlan = ({
                   </Typography>
                 )}
               </Box>
-              <Button
-                size="small"
-                color="error"
-                variant="outlined"
-                startIcon={<UnlinkIcon />}
-                onClick={() => handleRemoveMixing(headerItem.id)}
-                disabled={removingMixing === headerItem.id}
-                sx={{ minWidth: 'auto', px: 1 }}
-              >
-                {removingMixing === headerItem.id ? t('common.removing') : t('mixingPlan.removeMixing')}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Tooltip title={t('mixingPlan.editMixing')}>
+                  <Button
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    startIcon={<EditIcon />}
+                    onClick={() => handleEditMixing(headerItem)}
+                    sx={{ minWidth: 'auto', px: 1 }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                </Tooltip>
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  startIcon={<UnlinkIcon />}
+                  onClick={() => handleRemoveMixing(headerItem.id)}
+                  disabled={removingMixing === headerItem.id}
+                  sx={{ minWidth: 'auto', px: 1 }}
+                >
+                  {removingMixing === headerItem.id ? t('common.removing') : t('mixingPlan.removeMixing')}
+                </Button>
+              </Box>
             </Box>
             
             <Box sx={{ p: 2 }}>
@@ -1656,6 +1748,74 @@ const EnhancedMixingPlan = ({
             startIcon={removingMixing !== null ? <CircularProgress size={16} /> : <UnlinkIcon />}
           >
             {removingMixing !== null ? t('common.removing') : t('mixingPlan.removeMixing')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog edycji mieszania */}
+      <Dialog open={editMixingDialogOpen} onClose={handleCancelEditMixing} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {t('mixingPlan.editMixingDialogTitle')}
+          {editingMixing && (
+            <Typography component="div" variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Aktualne: {editingMixing.text}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <TextField
+              autoFocus
+              fullWidth
+              label={t('mixingPlan.mixingName')}
+              type="text"
+              variant="outlined"
+              value={editMixingName}
+              onChange={(e) => setEditMixingName(e.target.value)}
+              helperText={t('mixingPlan.mixingNameHelper')}
+              placeholder="Mieszanie nr 1"
+            />
+
+            <TextField
+              fullWidth
+              label={t('mixingPlan.piecesCountLabel')}
+              type="number"
+              variant="outlined"
+              value={editMixingPiecesCount}
+              onChange={(e) => setEditMixingPiecesCount(e.target.value)}
+              helperText={t('mixingPlan.piecesCountLabelHelper')}
+              placeholder="np. 1000"
+              InputProps={{
+                inputProps: { 
+                  min: 0, 
+                  step: 0.01,
+                  style: { textAlign: 'right' }
+                },
+                endAdornment: (
+                  <InputAdornment position="end">
+                    szt.
+                  </InputAdornment>
+                )
+              }}
+            />
+
+            <Alert severity="info">
+              <AlertTitle>Informacja</AlertTitle>
+              {t('mixingPlan.editMixingInfo')}
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelEditMixing}>
+            {t('common.cancel')}
+          </Button>
+          <Button 
+            onClick={handleSaveMixing}
+            variant="contained"
+            disabled={editMixingLoading || !editMixingName || editMixingName.trim() === ''}
+            startIcon={editMixingLoading ? <CircularProgress size={16} /> : <EditIcon />}
+          >
+            {editMixingLoading ? t('common.saving') : t('common.save')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -299,10 +299,18 @@
         "noTaskMaterials": "Brak materiałów w zadaniu produkcyjnym. Wprowadź nazwę składnika ręcznie.",
         "removeMixing": "Usuń",
         "confirmRemoveMixing": "Czy na pewno chcesz usunąć mieszanie nr {{number}}?",
+        "editMixing": "Edytuj mieszanie",
+        "editMixingDialogTitle": "Edytuj szczegóły mieszania",
+        "mixingName": "Nazwa mieszania",
+        "mixingNameHelper": "Nazwa własna mieszania (np. 'Mieszanie nr 1', 'Mix A', 'Próbka testowa')",
+        "piecesCountLabel": "Liczba sztuk w mieszaniu",
+        "piecesCountLabelHelper": "Opcjonalnie: Ile sztuk produktu ma powstać z tego mieszania",
+        "editMixingInfo": "Zmiana nazwy lub liczby sztuk zaktualizuje nagłówek mieszania. Suma składników zostanie automatycznie przeliczona.",
         "errors": {
             "addMixingFailed": "Nie udało się dodać mieszania",
             "removeMixingFailed": "Nie udało się usunąć mieszania",
-            "invalidMixingId": "Nieprawidłowy identyfikator mieszania"
+            "invalidMixingId": "Nieprawidłowy identyfikator mieszania",
+            "updateMixingFailed": "Nie udało się zaktualizować mieszania"
         }
     },
     "productionHistory": {
