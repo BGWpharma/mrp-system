@@ -119,6 +119,7 @@ import {
   Autocomplete,
   Drawer,
   Badge,
+  styled,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -164,7 +165,7 @@ import {
   Calculate as CalculateIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
-import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession, addTaskComment, deleteTaskComment } from '../../services/productionService';
+import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/productionService';
 import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
 import { getRecipeVersion, sortIngredientsByQuantity } from '../../services/recipeService';
 import { getItemBatches, bookInventoryForTask, cancelBooking, getBatchReservations, getAllInventoryItems, getInventoryItemById, getInventoryBatch, updateBatch } from '../../services/inventory';
@@ -203,6 +204,15 @@ const FormsTab = lazy(() => import('../../components/production/FormsTab'));
 const ProductionPlanTab = lazy(() => import('../../components/production/ProductionPlanTab'));
 const MaterialsAndCostsTab = lazy(() => import('../../components/production/MaterialsAndCostsTab'));
 const BasicDataTab = lazy(() => import('../../components/production/BasicDataTab'));
+
+// Styled badge dla nieodczytanych komentarzy
+const UnreadCommentsBadge = styled(Badge)(({ theme }) => ({
+  '& .MuiBadge-badge': {
+    backgroundColor: '#f50057',
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+}));
 
 const TaskDetailsPage = () => {
   const { t, currentLanguage } = useTranslation('taskDetails');
@@ -2093,8 +2103,29 @@ const TaskDetailsPage = () => {
   };
 
   // Obsługa komentarzy
-  const handleOpenCommentsDrawer = () => {
+  // Oblicz liczbę nieodczytanych komentarzy
+  const unreadCommentsCount = useMemo(() => {
+    if (!task?.comments || !currentUser?.uid) return 0;
+    
+    return task.comments.filter(comment => {
+      const readBy = comment.readBy || [];
+      return !readBy.includes(currentUser.uid);
+    }).length;
+  }, [task?.comments, currentUser?.uid]);
+
+  const handleOpenCommentsDrawer = async () => {
     setCommentsDrawerOpen(true);
+    
+    // Automatycznie oznacz komentarze jako przeczytane po otwarciu drawera
+    if (unreadCommentsCount > 0 && currentUser?.uid) {
+      try {
+        await markTaskCommentsAsRead(id, currentUser.uid);
+        console.log(`[TASK-COMMENT] Oznaczono ${unreadCommentsCount} komentarzy jako przeczytane`);
+      } catch (error) {
+        console.error('Błąd podczas oznaczania komentarzy jako przeczytane:', error);
+        // Nie pokazujemy błędu użytkownikowi - to operacja w tle
+      }
+    }
   };
 
   const handleCloseCommentsDrawer = () => {
@@ -8157,9 +8188,9 @@ const TaskDetailsPage = () => {
                 onClick={handleOpenCommentsDrawer}
                 title={t('comments.tooltipComments')}
               >
-                <Badge badgeContent={task?.comments?.length || 0} color="primary">
+                <UnreadCommentsBadge badgeContent={unreadCommentsCount} max={99}>
                   <CommentIcon />
-                </Badge>
+                </UnreadCommentsBadge>
               </IconButton>
               <IconButton
                 color="error"

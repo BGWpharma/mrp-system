@@ -6235,7 +6235,8 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
         text: comment,
         createdAt: new Date(),
         createdBy: userId,
-        createdByName: userName
+        createdByName: userName,
+        readBy: [userId] // Autor komentarza automatycznie ma go jako przeczytany
       };
       
       comments.push(newComment);
@@ -6294,6 +6295,53 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       console.log(`[TASK-COMMENT] Usunięto komentarz ${commentId} z zadania ${taskId}`);
     } catch (error) {
       console.error('Błąd podczas usuwania komentarza:', error);
+      throw error;
+    }
+  };
+  
+  /**
+   * Oznacza komentarze jako przeczytane przez użytkownika
+   * @param {string} taskId - ID zadania produkcyjnego
+   * @param {string} userId - ID użytkownika oznaczającego komentarze jako przeczytane
+   * @returns {Promise<void>}
+   */
+  export const markTaskCommentsAsRead = async (taskId, userId) => {
+    try {
+      const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Zadanie produkcyjne nie istnieje');
+      }
+      
+      const taskData = taskDoc.data();
+      const comments = taskData.comments || [];
+      
+      // Sprawdź czy są jakieś nieodczytane komentarze dla tego użytkownika
+      let hasUnread = false;
+      const updatedComments = comments.map(comment => {
+        const readBy = comment.readBy || [];
+        if (!readBy.includes(userId)) {
+          hasUnread = true;
+          return {
+            ...comment,
+            readBy: [...readBy, userId]
+          };
+        }
+        return comment;
+      });
+      
+      // Aktualizuj tylko jeśli były nieodczytane komentarze
+      if (hasUnread) {
+        await updateDoc(taskRef, {
+          comments: updatedComments,
+          updatedAt: serverTimestamp()
+        });
+        
+        console.log(`[TASK-COMMENT] Oznaczono komentarze jako przeczytane dla użytkownika ${userId} w zadaniu ${taskId}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas oznaczania komentarzy jako przeczytane:', error);
       throw error;
     }
   };

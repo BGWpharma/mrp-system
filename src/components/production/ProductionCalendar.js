@@ -1666,6 +1666,15 @@ const ProductionCalendar = () => {
       workstations.find(w => w.id === workstationId)?.name || 'Unknown workstation' : 
       'No assigned workstation';
     
+    // Oblicz liczbę nieprzeczytanych komentarzy
+    const task = eventInfo.event.extendedProps.task;
+    const unreadCommentsCount = task?.comments?.length > 0 
+      ? task.comments.filter(comment => {
+          const readBy = comment.readBy || [];
+          return !readBy.includes(currentUser?.uid);
+        }).length 
+      : 0;
+    
     // Różny sposób wyświetlania dla widoku Gantta i zwykłego kalendarza
     if (view.startsWith('resourceTimeline')) {
       // W widoku Gantta pokazujemy więcej szczegółów w zależności od dostępnej przestrzeni
@@ -1729,9 +1738,38 @@ const ProductionCalendar = () => {
             overflow: 'hidden', 
             textOverflow: 'ellipsis',
             opacity: 0.8,
-            lineHeight: 1.1
+            lineHeight: 1.1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
           }}>
-            {eventInfo.event.extendedProps.status}
+            <span style={{ 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {eventInfo.event.extendedProps.status}
+            </span>
+            {unreadCommentsCount > 0 && (
+              <Box component="span" sx={{
+                backgroundColor: '#f50057',
+                color: '#fff',
+                borderRadius: '50%',
+                minWidth: '14px',
+                height: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '8px',
+                fontWeight: 'bold',
+                flexShrink: 0,
+                padding: '0 2px',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+                opacity: 1
+              }}>
+                {unreadCommentsCount > 9 ? '9+' : unreadCommentsCount}
+              </Box>
+            )}
           </Box>
         </Box>
       );
@@ -1749,10 +1787,39 @@ const ProductionCalendar = () => {
               whiteSpace: 'nowrap', 
               overflow: 'hidden', 
               textOverflow: 'ellipsis',
-              lineHeight: 1.2
+              lineHeight: 1.2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}
           >
-            {eventInfo.event.title}
+            <span style={{ 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1
+            }}>
+              {eventInfo.event.title}
+            </span>
+            {unreadCommentsCount > 0 && (
+              <Box component="span" sx={{
+                backgroundColor: '#f50057',
+                color: '#fff',
+                borderRadius: '50%',
+                minWidth: '12px',
+                height: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '8px',
+                fontWeight: 'bold',
+                flexShrink: 0,
+                padding: '0 2px',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+              }}>
+                {unreadCommentsCount > 9 ? '9+' : unreadCommentsCount}
+              </Box>
+            )}
           </Box>
           {!isMobile && workstationName && (
             <Box 
@@ -1779,9 +1846,38 @@ const ProductionCalendar = () => {
             whiteSpace: 'nowrap', 
             overflow: 'hidden', 
             textOverflow: 'ellipsis',
-            lineHeight: 1.2
+            lineHeight: 1.2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
           }}>
-            {eventInfo.event.title}
+            <span style={{ 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1
+            }}>
+              {eventInfo.event.title}
+            </span>
+            {unreadCommentsCount > 0 && (
+              <Box component="span" sx={{
+                backgroundColor: '#f50057',
+                color: '#fff',
+                borderRadius: '50%',
+                minWidth: '14px',
+                height: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '9px',
+                fontWeight: 'bold',
+                flexShrink: 0,
+                padding: '0 2px',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+              }}>
+                {unreadCommentsCount > 9 ? '9+' : unreadCommentsCount}
+              </Box>
+            )}
           </Box>
           {workstationName && (
             <Box sx={{ 

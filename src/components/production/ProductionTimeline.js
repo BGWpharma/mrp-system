@@ -2838,6 +2838,14 @@ const ProductionTimeline = React.memo(({
               }
             }
             
+            // Oblicz liczbę nieprzeczytanych komentarzy
+            const unreadCommentsCount = item.task?.comments?.length > 0 
+              ? item.task.comments.filter(comment => {
+                  const readBy = comment.readBy || [];
+                  return !readBy.includes(currentUser?.uid);
+                }).length 
+              : 0;
+            
             return (
               <div 
                 key={key}
@@ -2863,18 +2871,45 @@ const ProductionTimeline = React.memo(({
                    borderRadius: '4px',
                    padding: '2px 6px',
                    fontSize: '12px',
-                   overflow: 'hidden',
-                   textOverflow: 'ellipsis',
-                   whiteSpace: 'nowrap',
                    cursor: 'pointer',
                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
                    fontWeight: (reservationStatus.status !== 'no_materials' && 
                               reservationStatus.status !== 'completed_confirmed' && 
                               item.task.status !== 'Zakończone' && 
-                              item.task.status !== 'completed') ? '600' : 'normal' // pogrubienie dla statusów rezerwacji
+                              item.task.status !== 'completed') ? '600' : 'normal', // pogrubienie dla statusów rezerwacji
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '4px',
+                   overflow: 'hidden'
                  }}
               >
-                {itemContext.title}
+                <span style={{
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {itemContext.title}
+                </span>
+                {unreadCommentsCount > 0 && (
+                  <span style={{
+                    backgroundColor: '#f50057',
+                    color: '#fff',
+                    borderRadius: '50%',
+                    minWidth: '16px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '9px',
+                    fontWeight: 'bold',
+                    flexShrink: 0,
+                    padding: '0 3px',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                  }}>
+                    {unreadCommentsCount > 9 ? '9+' : unreadCommentsCount}
+                  </span>
+                )}
               </div>
             );
           }}
