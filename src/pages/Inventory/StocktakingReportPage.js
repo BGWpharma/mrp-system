@@ -200,14 +200,17 @@ const StocktakingReportPage = () => {
     window.print();
   };
   
-  const handleExportPDF = async () => {
+  const handleExportCSV = async () => {
     try {
-      const reportData = await generateStocktakingReport(id);
-      // Nowa funkcja zwraca obiekt z właściwością content (blob)
-      const reportBlob = reportData.content;
-      const fileName = reportData.filename || `inwentaryzacja_${id}_raport.pdf`;
+      const reportData = await generateStocktakingReport(id, { format: 'csv' });
       
-      const url = URL.createObjectURL(reportBlob);
+      // Dla CSV reportData.content to string, nie blob
+      const csvContent = reportData.content;
+      const fileName = reportData.filename || `inwentaryzacja_${id}_raport.csv`;
+      
+      // Utwórz blob dla CSV
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
@@ -216,8 +219,8 @@ const StocktakingReportPage = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Błąd podczas generowania PDF:', error);
-      setError('Nie udało się wygenerować raportu PDF');
+      console.error('Błąd podczas generowania CSV:', error);
+      setError('Nie udało się wygenerować raportu CSV');
     }
   };
   
@@ -295,9 +298,9 @@ const StocktakingReportPage = () => {
             variant="contained"
             color="primary"
             startIcon={<DownloadIcon />}
-            onClick={handleExportPDF}
+            onClick={handleExportCSV}
           >
-            {t('stocktaking.exportPDF')}
+            {t('stocktaking.exportCSV') || 'Eksportuj CSV'}
           </Button>
         </Box>
       </Box>
