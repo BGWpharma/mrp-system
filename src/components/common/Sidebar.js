@@ -187,11 +187,13 @@ const Sidebar = ({ onToggle }) => {
       
       // Sales
       '/invoices': 'sales-invoices',
-      '/customers': 'sales-customers',
-      '/sales/price-lists': 'sales-pricelists',
+      '/orders': 'sales-customer-orders',
+      '/orders/customers': 'sales-customer-orders',
+      '/orders/price-lists': 'sales-customer-orders',
+      '/customers': 'sales-customer-orders',
+      '/sales/price-lists': 'sales-customer-orders',
       '/production/create-from-order': 'sales-production-task',
       '/sales/co-reports': 'sales-co-reports',
-      '/orders': 'sales-customer-orders',
       
       // Production
       '/production/forms': 'production-forms',
@@ -399,14 +401,12 @@ const Sidebar = ({ onToggle }) => {
       id: 'sales',
       text: t('sales'),
       icon: <CustomersIcon />,
-      path: '/sales', // zmiana na bardziej ogólną ścieżkę
+      path: '/sales',
       hasSubmenu: true,
       children: [
         { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/invoices' },
-        { text: t('submenu.sales.customers'), icon: <CustomersIcon />, path: '/customers' },
-        { text: t('submenu.sales.priceLists'), icon: <ListAltIcon />, path: '/sales/price-lists' },
-        { text: t('submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
         { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
+        { text: t('submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 

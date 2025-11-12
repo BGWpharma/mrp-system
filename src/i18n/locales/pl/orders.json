@@ -1,6 +1,12 @@
 {
   "orders": {
+    "pageTitle": "Zamówienia klientów",
     "title": "Zamówienia klientów",
+    "tabs": {
+      "orders": "Zamówienia",
+      "customers": "Klienci",
+      "priceLists": "Listy cenowe"
+    },
     "newOrder": "Nowe zamówienie",
     "manageCustomers": "Zarządzaj klientami",
     "searchOrders": "Szukaj zamówień...",

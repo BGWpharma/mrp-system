@@ -1,6 +1,12 @@
 {
   "orders": {
+    "pageTitle": "Customer Orders",
     "title": "Customer Orders",
+    "tabs": {
+      "orders": "Orders",
+      "customers": "Customers",
+      "priceLists": "Price Lists"
+    },
     "newOrder": "New Order",
     "manageCustomers": "Manage Customers",
     "searchOrders": "Search orders...",

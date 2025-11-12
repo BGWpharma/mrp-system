@@ -80,6 +80,7 @@ import NewTestPage from './pages/Quality/NewTestPage';
 import QualityReportsPage from './pages/Quality/QualityReportsPage';
 
 // Orders
+import OrdersPage from './pages/Orders/OrdersPage';
 import OrdersList from './components/orders/OrdersList';
 import OrderForm from './components/orders/OrderForm';
 import OrderDetails from './components/orders/OrderDetails';
@@ -289,14 +290,21 @@ function App() {
                     <Route path="/quality/new-test" element={<PrivateLayout><NewTestPage /></PrivateLayout>} />
                     <Route path="/quality/reports" element={<PrivateLayout><QualityReportsPage /></PrivateLayout>} />
                     
-                    {/* Orders Routes */}
-                    <Route path="/orders" element={<PrivateLayout><OrdersList /></PrivateLayout>} />
+                    {/* Orders Routes - główna strona z zakładkami */}
+                    <Route path="/orders" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
+                    <Route path="/orders/customers" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
+                    <Route path="/orders/price-lists" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
                     <Route path="/orders/new" element={<PrivateLayout><OrderForm /></PrivateLayout>} />
                     <Route path="/orders/edit/:orderId" element={<PrivateLayout><EditOrderWrapper /></PrivateLayout>} />
                     <Route path="/orders/:orderId" element={<PrivateLayout><OrderDetails /></PrivateLayout>} />
                     
-                    {/* Price Lists Routes - nowy moduł */}
-                    <Route path="/sales/price-lists" element={<PrivateLayout><PriceListsPage /></PrivateLayout>} />
+                    {/* Price Lists Routes - teraz w ramach orders */}
+                    <Route path="/orders/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                    <Route path="/orders/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
+                    <Route path="/orders/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
+                    
+                    {/* Legacy Price Lists Routes - przekierowanie dla starych linków */}
+                    <Route path="/sales/price-lists" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
                     <Route path="/sales/price-lists/new" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
                     <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
                     <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
@@ -324,8 +332,11 @@ function App() {
                     <Route path="/suppliers/:id/view" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
                     <Route path="/suppliers/:id" element={<PrivateLayout><SupplierFormPage viewOnly={true} /></PrivateLayout>} />
                     
-                    {/* Customers Routes */}
-                    <Route path="/customers" element={<PrivateLayout><CustomersList /></PrivateLayout>} />
+                    {/* Customers Routes - teraz w ramach orders */}
+                    <Route path="/orders/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
+                    
+                    {/* Legacy Customers Routes - przekierowanie dla starych linków */}
+                    <Route path="/customers" element={<PrivateLayout><OrdersPage /></PrivateLayout>} />
                     <Route path="/customers/:customerId" element={<PrivateLayout><CustomerDetail /></PrivateLayout>} />
                     
                     {/* AI Assistant Routes */}
