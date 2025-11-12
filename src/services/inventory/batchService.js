@@ -189,13 +189,122 @@ export const getBatchesForMultipleItems = async (itemIds, warehouseId = null, ex
 };
 
 /**
+ * Wzbogaca dane partii o nazwy produktów, magazynów i dostawców
+ * @param {Array} batches - Lista partii do wzbogacenia
+ * @returns {Promise<Array>} - Wzbogacone partie
+ */
+const enrichBatchesWithNames = async (batches) => {
+  if (!batches || batches.length === 0) {
+    return batches;
+  }
+
+  try {
+    // Zbierz unikalne ID produktów, magazynów i zamówień zakupowych
+    const itemIds = [...new Set(batches.map(b => b.itemId).filter(Boolean))];
+    const warehouseIds = [...new Set(batches.map(b => b.warehouseId).filter(Boolean))];
+    const purchaseOrderIds = [...new Set(batches.map(b => 
+      b.purchaseOrderDetails?.id || b.sourceDetails?.orderId
+    ).filter(Boolean))];
+
+    // Mapy dla nazw
+    const itemNamesMap = {};
+    const warehouseNamesMap = {};
+    const purchaseOrdersMap = {};
+
+    // Pobierz nazwy produktów
+    if (itemIds.length > 0) {
+      const itemPromises = itemIds.map(async (itemId) => {
+        try {
+          const itemDoc = await getDoc(doc(db, COLLECTIONS.INVENTORY, itemId));
+          if (itemDoc.exists()) {
+            const data = itemDoc.data();
+            itemNamesMap[itemId] = {
+              name: data.name || 'Nieznany produkt',
+              unit: data.unit || 'szt.'
+            };
+          }
+        } catch (error) {
+          console.warn(`Nie można pobrać produktu ${itemId}:`, error);
+        }
+      });
+      await Promise.all(itemPromises);
+    }
+
+    // Pobierz nazwy magazynów
+    if (warehouseIds.length > 0) {
+      const warehousePromises = warehouseIds.map(async (warehouseId) => {
+        try {
+          const warehouseDoc = await getDoc(doc(db, COLLECTIONS.WAREHOUSES, warehouseId));
+          if (warehouseDoc.exists()) {
+            warehouseNamesMap[warehouseId] = warehouseDoc.data().name || 'Nieznany magazyn';
+          }
+        } catch (error) {
+          console.warn(`Nie można pobrać magazynu ${warehouseId}:`, error);
+        }
+      });
+      await Promise.all(warehousePromises);
+    }
+
+    // Pobierz zamówienia zakupowe aby uzyskać dostawców
+    if (purchaseOrderIds.length > 0) {
+      const poPromises = purchaseOrderIds.map(async (poId) => {
+        try {
+          const poDoc = await getDoc(doc(db, 'purchaseOrders', poId));
+          if (poDoc.exists()) {
+            const poData = poDoc.data();
+            purchaseOrdersMap[poId] = {
+              supplierId: poData.supplierId,
+              supplierName: poData.supplier?.name || null
+            };
+            
+            // Jeśli nie ma nazwy dostawcy w PO, pobierz z kolekcji suppliers
+            if (!purchaseOrdersMap[poId].supplierName && poData.supplierId) {
+              try {
+                const supplierDoc = await getDoc(doc(db, 'suppliers', poData.supplierId));
+                if (supplierDoc.exists()) {
+                  purchaseOrdersMap[poId].supplierName = supplierDoc.data().name || 'Nieznany dostawca';
+                }
+              } catch (error) {
+                console.warn(`Nie można pobrać dostawcy ${poData.supplierId}:`, error);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Nie można pobrać zamówienia ${poId}:`, error);
+        }
+      });
+      await Promise.all(poPromises);
+    }
+
+    // Wzbogać partie o nazwy
+    return batches.map(batch => {
+      const itemInfo = itemNamesMap[batch.itemId] || { name: 'Nieznany produkt', unit: 'szt.' };
+      const poId = batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId;
+      const poInfo = poId ? purchaseOrdersMap[poId] : null;
+      
+      return {
+        ...batch,
+        itemName: batch.itemName || itemInfo.name,
+        unit: batch.unit || itemInfo.unit,
+        warehouseName: batch.warehouseName || warehouseNamesMap[batch.warehouseId] || null,
+        supplierName: batch.supplierName || poInfo?.supplierName || null
+      };
+    });
+  } catch (error) {
+    console.error('Błąd podczas wzbogacania danych partii:', error);
+    // W przypadku błędu zwróć oryginalne partie
+    return batches;
+  }
+};
+
+/**
  * Pobiera partie z krótkim terminem ważności (wygasające w ciągu określonej liczby dni)
- * @param {number} daysThreshold - Liczba dni do wygaśnięcia (domyślnie 30)
+ * @param {number} daysThreshold - Liczba dni do wygaśnięcia (domyślnie 365)
  * @param {string|null} warehouseId - ID magazynu (opcjonalnie)
  * @returns {Promise<Array>} - Lista wygasających partii
  * @throws {Error} - Gdy wystąpi błąd podczas pobierania
  */
-export const getExpiringBatches = async (daysThreshold = 30, warehouseId = null) => {
+export const getExpiringBatches = async (daysThreshold = 365, warehouseId = null) => {
   try {
     // Walidacja parametrów
     if (typeof daysThreshold !== 'number' || daysThreshold < 0) {
@@ -226,7 +335,7 @@ export const getExpiringBatches = async (daysThreshold = 30, warehouseId = null)
     }
     
     // Filtruj po stronie klienta dla pewności
-    return batches.filter(batch => {
+    batches = batches.filter(batch => {
       if (!batch.expiryDate) return false;
       
       const expiryDate = convertTimestampToDate(batch.expiryDate);
@@ -235,6 +344,11 @@ export const getExpiringBatches = async (daysThreshold = 30, warehouseId = null)
       // Sprawdź czy to domyślna data (1.01.1970)
       return !isDefaultDate(expiryDate);
     });
+
+    // Wzbogać dane partii o nazwy produktów, magazynów i dostawców
+    const enrichedBatches = await enrichBatchesWithNames(batches);
+    
+    return enrichedBatches;
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;
@@ -271,7 +385,7 @@ export const getExpiredBatches = async (warehouseId = null) => {
     }
     
     // Filtruj po stronie klienta dla pewności
-    return batches.filter(batch => {
+    batches = batches.filter(batch => {
       if (!batch.expiryDate) return false;
       
       const expiryDate = convertTimestampToDate(batch.expiryDate);
@@ -280,6 +394,11 @@ export const getExpiredBatches = async (warehouseId = null) => {
       // Sprawdź czy to domyślna data (1.01.1970)
       return !isDefaultDate(expiryDate);
     });
+
+    // Wzbogać dane partii o nazwy produktów, magazynów i dostawców
+    const enrichedBatches = await enrichBatchesWithNames(batches);
+    
+    return enrichedBatches;
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;

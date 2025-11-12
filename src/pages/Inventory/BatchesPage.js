@@ -311,10 +311,10 @@ const BatchesPage = () => {
       return { label: t('inventory.batches.status.expired'), color: 'error' };
     }
     
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    const twelveMonthsFromNow = new Date();
+    twelveMonthsFromNow.setMonth(today.getMonth() + 12);
     
-    if (expiryDate <= thirtyDaysFromNow) {
+    if (expiryDate <= twelveMonthsFromNow) {
       return { label: t('inventory.batches.status.expiringSoon'), color: 'warning' };
     }
     
@@ -342,8 +342,8 @@ const BatchesPage = () => {
       if (!batch.expiryDate) return false; // Pomiń partie bez daty ważności
       
       const today = new Date();
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(today.getDate() + 30);
+      const twelveMonthsFromNow = new Date();
+      twelveMonthsFromNow.setMonth(today.getMonth() + 12);
       
       const expiryDate = batch.expiryDate instanceof Timestamp 
         ? batch.expiryDate.toDate() 
@@ -353,7 +353,7 @@ const BatchesPage = () => {
       const isDefaultOrInvalidDate = expiryDate.getFullYear() <= 1970;
       if (isDefaultOrInvalidDate) return false; // Pomiń partie z domyślną datą
       
-      return expiryDate >= today && expiryDate <= thirtyDaysFromNow;
+      return expiryDate >= today && expiryDate <= twelveMonthsFromNow;
     }).length;
     
     if (expiredCount > 0) {

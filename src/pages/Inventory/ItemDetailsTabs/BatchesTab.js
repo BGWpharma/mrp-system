@@ -55,14 +55,14 @@ const BatchesTab = ({ t, batches, itemUnit }) => {
                   const receivedDate = safeGetDate(batch.receivedDate);
                   
                   const today = new Date();
-                  const thirtyDaysFromNow = new Date();
-                  thirtyDaysFromNow.setDate(today.getDate() + 30);
+                  const twelveMonthsFromNow = new Date();
+                  twelveMonthsFromNow.setMonth(today.getMonth() + 12);
                   
                   let status = 'valid';
                   if (expiryDate) {
                     if (expiryDate < today) {
                       status = 'expired';
-                    } else if (expiryDate <= thirtyDaysFromNow) {
+                    } else if (expiryDate <= twelveMonthsFromNow) {
                       status = 'expiring';
                     }
                   }

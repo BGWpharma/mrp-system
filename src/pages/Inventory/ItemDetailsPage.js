@@ -269,11 +269,11 @@ const ItemDetailsPage = () => {
     }
   };
 
-  // Sprawdź, czy są partie z krótkim terminem ważności (30 dni)
+  // Sprawdź, czy są partie z krótkim terminem ważności (12 miesięcy)
   const getExpiringBatches = () => {
     const today = new Date();
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(today.getDate() + 30);
+    const twelveMonthsFromNow = new Date();
+    twelveMonthsFromNow.setMonth(today.getMonth() + 12);
     
     return batches.filter(batch => {
       if (batch.quantity <= 0) return false;
@@ -282,7 +282,7 @@ const ItemDetailsPage = () => {
         ? batch.expiryDate.toDate() 
         : new Date(batch.expiryDate);
       
-      return expiryDate > today && expiryDate <= thirtyDaysFromNow;
+      return expiryDate > today && expiryDate <= twelveMonthsFromNow;
     });
   };
   

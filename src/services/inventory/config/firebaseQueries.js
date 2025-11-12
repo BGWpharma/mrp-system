@@ -90,7 +90,7 @@ export class FirebaseQueryBuilder {
   /**
    * Tworzy zapytanie dla wygasających partii
    */
-  static buildExpiringBatchesQuery(daysThreshold = 30) {
+  static buildExpiringBatchesQuery(daysThreshold = 365) {
     const today = new Date();
     const thresholdDate = new Date();
     thresholdDate.setDate(today.getDate() + daysThreshold);
