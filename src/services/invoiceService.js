@@ -316,36 +316,14 @@ export const calculateTotalUnitCost = (item, orderData) => {
   // Oblicz wartość tej pozycji
   const itemTotalValue = calculateItemTotalValue(item);
   
-  // Oblicz sumę wartości wszystkich pozycji w zamówieniu
-  const allItemsValue = orderData.items?.reduce((sum, i) => sum + calculateItemTotalValue(i), 0) || 0;
-  
-  // Oblicz proporcję tej pozycji w całkowitej wartości
-  const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
-  
-  // Oblicz koszty dodatkowe
-  const shippingCost = parseFloat(orderData.shippingCost) || 0;
-  
-  // Suma dodatkowych kosztów (dodatnich)
-  const additionalCosts = orderData.additionalCostsItems ? 
-    orderData.additionalCostsItems
-      .filter(cost => parseFloat(cost.value) > 0)
-      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-  
-  // Suma rabatów (ujemnych kosztów)
-  const discounts = orderData.additionalCostsItems ? 
-    Math.abs(orderData.additionalCostsItems
-      .filter(cost => parseFloat(cost.value) < 0)
-      .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-  
-  // Całkowity udział pozycji w kosztach dodatkowych
-  const additionalShare = proportion * (shippingCost + additionalCosts - discounts);
-  
-  // Całkowity koszt pozycji z kosztami dodatkowymi
-  const totalWithAdditional = itemTotalValue + additionalShare;
+  // Zastosuj rabat globalny
+  const globalDiscount = parseFloat(orderData.globalDiscount) || 0;
+  const discountMultiplier = (100 - globalDiscount) / 100;
+  const valueAfterDiscount = itemTotalValue * discountMultiplier;
   
   // Koszt pojedynczej sztuki
   const quantity = parseFloat(item.quantity) || 1;
-  const unitCost = totalWithAdditional / quantity;
+  const unitCost = valueAfterDiscount / quantity;
   
   return unitCost;
 };

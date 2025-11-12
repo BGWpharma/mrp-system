@@ -463,8 +463,7 @@
     "summary": {
       "productsValue": "Wartość produktów",
       "deliveryCost": "Koszt dostawy",
-      "additionalCosts": "Dodatkowe koszty",
-      "discounts": "Rabaty",
+      "globalDiscount": "Rabat globalny",
       "totalOrderValue": "Wartość całkowita zamówienia",
       "purchaseOrdersValue": "Wartość zamówień zakupu",
       "total": "Razem"

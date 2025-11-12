@@ -584,25 +584,14 @@ const OrdersList = () => {
         return sum + calculateItemTotalValue(item);
       }, 0);
       
-      // Dodanie kosztów dostawy
-      const shippingCost = parseFloat(updatedOrder.shippingCost) || 0;
+      // Zastosuj rabat globalny
+      const globalDiscount = parseFloat(updatedOrder.globalDiscount) || 0;
+      const discountMultiplier = (100 - globalDiscount) / 100;
       
-      // Dodatkowe koszty (tylko pozytywne)
-      const additionalCosts = updatedOrder.additionalCostsItems ? 
-        updatedOrder.additionalCostsItems
-          .filter(cost => parseFloat(cost.value) > 0)
-          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+      // Łączna wartość zamówienia z rabatem
+      const recalculatedTotalValue = subtotal * discountMultiplier;
       
-      // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-      const discounts = updatedOrder.additionalCostsItems ? 
-        Math.abs(updatedOrder.additionalCostsItems
-          .filter(cost => parseFloat(cost.value) < 0)
-          .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-      
-      // Łączna wartość zamówienia
-      const recalculatedTotalValue = subtotal + shippingCost + additionalCosts - discounts;
-      
-      console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}, razem=${recalculatedTotalValue}`);
+      console.log(`Zaktualizowane wartości zamówienia ${order.id}: produkty=${subtotal}, rabat=${globalDiscount}%, razem=${recalculatedTotalValue}`);
       
       // Sprawdź czy wartość się zmieniła w porównaniu do zapisanej w bazie
       const savedTotalValue = parseFloat(updatedOrder.totalValue) || 0;
@@ -623,8 +612,7 @@ const OrdersList = () => {
             orderDate: updatedOrder.orderDate, // Wymagane przez walidację
             status: updatedOrder.status,
             customer: updatedOrder.customer,
-            shippingCost: updatedOrder.shippingCost,
-            additionalCostsItems: updatedOrder.additionalCostsItems,
+            globalDiscount: updatedOrder.globalDiscount,
             productionTasks: updatedOrder.productionTasks,
             linkedPurchaseOrders: updatedOrder.linkedPurchaseOrders
           };
@@ -662,8 +650,7 @@ const OrdersList = () => {
             ...updatedOrder,
             totalValue: recalculatedTotalValue,
             productsValue: subtotal,
-            purchaseOrdersValue: poTotal,
-            shippingCost: shippingCost
+            purchaseOrdersValue: poTotal
           };
         }
         return o;
@@ -850,23 +837,12 @@ const OrdersList = () => {
           return sum + calculateItemTotalValue(item);
         }, 0);
         
-        // Koszt dostawy
-        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
-        
-        // Dodatkowe koszty (tylko pozytywne)
-        const additionalCosts = updatedOrderData.additionalCostsItems ? 
-          updatedOrderData.additionalCostsItems
-            .filter(cost => parseFloat(cost.value) > 0)
-            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-        
-        // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-        const discounts = updatedOrderData.additionalCostsItems ? 
-          Math.abs(updatedOrderData.additionalCostsItems
-            .filter(cost => parseFloat(cost.value) < 0)
-            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+        // Zastosuj rabat globalny
+        const globalDiscount = parseFloat(updatedOrderData.globalDiscount) || 0;
+        const discountMultiplier = (100 - globalDiscount) / 100;
         
         // Oblicz całkowitą aktualną wartość zamówienia
-        const recalculatedTotalValue = subtotal + shippingCost + additionalCosts - discounts;
+        const recalculatedTotalValue = subtotal * discountMultiplier;
         
         // Sprawdź czy wartość się zmieniła w porównaniu do zapisanej w bazie
         const savedTotalValue = parseFloat(updatedOrderData.totalValue) || 0;
@@ -887,8 +863,7 @@ const OrdersList = () => {
                orderDate: updatedOrderData.orderDate, // Wymagane przez walidację
                status: updatedOrderData.status,
                customer: updatedOrderData.customer,
-               shippingCost: updatedOrderData.shippingCost,
-               additionalCostsItems: updatedOrderData.additionalCostsItems,
+               globalDiscount: updatedOrderData.globalDiscount,
                productionTasks: updatedOrderData.productionTasks,
                linkedPurchaseOrders: updatedOrderData.linkedPurchaseOrders
              };
@@ -903,14 +878,13 @@ const OrdersList = () => {
            console.log(`[handleRefreshAll] Wartość zamówienia ${order.id} nie zmieniła się (${recalculatedTotalValue}), pomijam zapis`);
          }
         
-        console.log(`Zaktualizowane dane zamówienia ${order.id}: przeliczenieWartości=${recalculatedTotalValue}, produkty=${subtotal}, dostawa=${shippingCost}, PO=${poTotal}`);
+        console.log(`Zaktualizowane dane zamówienia ${order.id}: przeliczenieWartości=${recalculatedTotalValue}, produkty=${subtotal}, rabat=${globalDiscount}%, PO=${poTotal}`);
         
         return {
           ...updatedOrderData,
           totalValue: recalculatedTotalValue, // Używamy przeliczonej wartości
           productsValue: subtotal,
-          purchaseOrdersValue: poTotal,
-          shippingCost: shippingCost
+          purchaseOrdersValue: poTotal
         };
       }));
       
@@ -1074,23 +1048,15 @@ const OrdersList = () => {
           return sum + calculateItemTotalValue(item);
         }, 0);
         
-        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
-        const additionalCosts = updatedOrderData.additionalCostsItems ? 
-          updatedOrderData.additionalCostsItems
-            .filter(cost => parseFloat(cost.value) > 0)
-            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
-        const discounts = updatedOrderData.additionalCostsItems ? 
-          Math.abs(updatedOrderData.additionalCostsItems
-            .filter(cost => parseFloat(cost.value) < 0)
-            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-        
-        const recalculatedTotalValue = subtotal + shippingCost + additionalCosts - discounts;
+        // Zastosuj rabat globalny
+        const globalDiscount = parseFloat(updatedOrderData.globalDiscount) || 0;
+        const discountMultiplier = (100 - globalDiscount) / 100;
+        const recalculatedTotalValue = subtotal * discountMultiplier;
         
         return {
           ...updatedOrderData,
           totalValue: recalculatedTotalValue,
-          productsValue: subtotal,
-          shippingCost: shippingCost
+          productsValue: subtotal
         };
       }));
       
@@ -1191,8 +1157,7 @@ const OrdersList = () => {
             orderDate: updatedOrder.orderDate,
             status: updatedOrder.status,
             customer: updatedOrder.customer,
-            shippingCost: updatedOrder.shippingCost,
-            additionalCostsItems: updatedOrder.additionalCostsItems,
+            globalDiscount: updatedOrder.globalDiscount,
             productionTasks: updatedOrder.productionTasks
           };
           

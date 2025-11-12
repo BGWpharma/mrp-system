@@ -462,8 +462,7 @@
     "summary": {
       "productsValue": "Products Value",
       "deliveryCost": "Delivery Cost",
-      "additionalCosts": "Additional Costs",
-      "discounts": "Discounts",
+      "globalDiscount": "Global Discount",
       "totalOrderValue": "Total Order Value",
       "purchaseOrdersValue": "Purchase Orders Value",
       "total": "Total"

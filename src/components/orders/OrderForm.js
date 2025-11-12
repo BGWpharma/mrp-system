@@ -156,8 +156,7 @@ const SortableRow = ({
   formatCurrency,
   calculateItemTotalValue,
   calculateTotalItemsValue,
-  calculateAdditionalCosts,
-  calculateDiscounts,
+  globalDiscount,
   itemsLength,
   refreshProductionTasks,
   refreshingPTs,
@@ -372,12 +371,11 @@ const SortableRow = ({
               const itemTotalValue = calculateItemTotalValue(item);
               const allItemsValue = calculateTotalItemsValue();
               const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
-              const additionalCosts = calculateAdditionalCosts();
-              const discounts = calculateDiscounts();
-              const additionalShare = proportion * (additionalCosts - discounts);
-              const totalWithAdditional = itemTotalValue + additionalShare;
+              const discount = parseFloat(globalDiscount) || 0;
+              const discountMultiplier = (100 - discount) / 100;
+              const valueAfterDiscount = itemTotalValue * discountMultiplier;
               const quantity = parseFloat(item.quantity) || 1;
-              const unitCost = totalWithAdditional / quantity;
+              const unitCost = valueAfterDiscount / quantity;
               return formatCurrency(unitCost, 'EUR', 4, true);
             })()}
           </Box>
@@ -629,9 +627,6 @@ const OrderForm = ({ orderId }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [refreshingPTs, setRefreshingPTs] = useState(false); // Dodana zmienna stanu dla odświeżania danych kosztów produkcji
   const [recalculatingTransport, setRecalculatingTransport] = useState(false); // Stan dla przeliczania usługi transportowej z CMR
-
-  // Dodatkowe zmienne stanu dla obsługi dodatkowych kosztów
-  const [additionalCostsItems, setAdditionalCostsItems] = useState([]);
   
   // Stan dla rozwiniętych wierszy w tabeli pozycji
   const [expandedRows, setExpandedRows] = useState({});
@@ -897,8 +892,8 @@ const OrderForm = ({ orderId }) => {
             orderDate: ensureDateInputFormat(orderDate),
             deadline: ensureDateInputFormat(deadline),
             deliveryDate: ensureDateInputFormat(deliveryDate),
-            // Inicjalizacja pustą tablicą, jeśli w zamówieniu nie ma dodatkowych kosztów
-            additionalCostsItems: fetchedOrder.additionalCostsItems || []
+            // Inicjalizacja globalDiscount jeśli nie istnieje
+            globalDiscount: fetchedOrder.globalDiscount || 0
           });
           
           // Zweryfikuj, czy powiązane zadania produkcyjne istnieją
@@ -1700,299 +1695,20 @@ const OrderForm = ({ orderId }) => {
     return amount * rate;
   };
 
-  // Funkcja dodawania nowego dodatkowego kosztu
-  const handleAddAdditionalCost = (isDiscount = false) => {
-    const newCost = {
-      id: Date.now().toString(), // Unikalny identyfikator
-      description: isDiscount ? 'Rabat' : 'Dodatkowy koszt',
-      value: isDiscount ? 0 : 0,
-      vatRate: 23, // Domyślna stawka VAT
-      currency: 'EUR', // Domyślna waluta EUR
-      originalValue: 0, // Wartość w oryginalnej walucie
-      exchangeRate: 1, // Domyślny kurs wymiany
-      invoiceNumber: '', // Numer faktury
-      invoiceDate: '' // Data faktury
-    };
-    
-    setOrderData(prev => ({
-      ...prev,
-      additionalCostsItems: [...(prev.additionalCostsItems || []), newCost]
-    }));
-  };
   
-  // Funkcja obsługi zmiany dodatkowych kosztów
-  const handleAdditionalCostChange = (id, field, value) => {
-    const updatedCosts = (orderData.additionalCostsItems || []).map(item => {
-      if (item.id === id) {
-        // Dla pola vatRate upewnij się, że nie jest undefined
-        if (field === 'vatRate' && value === undefined) {
-          value = 23; // Domyślna wartość VAT
-        }
-        
-        // Specjalna obsługa dla zmiany daty faktury
-        if (field === 'invoiceDate' && value) {
-          try {
-            console.log(`Zmiana daty faktury na: ${value}`);
-            
-            // Formatowanie daty do obsługi przez input type="date"
-            const formattedDate = value;
-            console.log(`Sformatowana data faktury: ${formattedDate}`);
-            
-            // Sprawdź czy data jest kompletna i poprawna przed próbą pobrania kursu
-            const invoiceDate = new Date(formattedDate);
-            const isValidDate = !isNaN(invoiceDate.getTime()) && 
-                               invoiceDate.getFullYear() > 1900 && 
-                               invoiceDate.getFullYear() < 2100;
-            
-            // Jeśli waluta pozycji jest inna niż waluta zamówienia i data jest poprawna
-            if (isValidDate && item.currency && item.currency !== 'EUR') {
-              try {
-                const rateFetchDate = new Date(invoiceDate);
-                rateFetchDate.setDate(rateFetchDate.getDate() - 1);
-                
-                console.log(`Próbuję pobrać kurs dla ${item.currency}/EUR z dnia ${rateFetchDate.toISOString().split('T')[0]}`);
-                
-                // Używamy getExchangeRate z serwisu kursów walut
-                import('../../services/exchangeRateService').then(async ({ getExchangeRate }) => {
-                  try {
-                    const rate = await getExchangeRate(item.currency, 'EUR', rateFetchDate);
-                    console.log(`Pobrany kurs: ${rate}`);
-                    
-                    if (rate > 0) {
-                      // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
-                      const originalValue = parseFloat(item.originalValue) || parseFloat(item.value) || 0;
-                      const convertedValue = originalValue * rate;
-                      
-                      const updatedItem = {
-                        ...item,
-                        invoiceDate: formattedDate,
-                        exchangeRate: rate,
-                        value: convertedValue.toFixed(2)
-                      };
-                      
-                      // Aktualizuj stan
-                      setOrderData(prev => ({
-                        ...prev,
-                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
-                          cost.id === id ? updatedItem : cost
-                        )
-                      }));
-                    } else {
-                      // W przypadku błędu, po prostu aktualizuj datę faktury
-                      setOrderData(prev => ({
-                        ...prev,
-                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
-                          cost.id === id ? { ...cost, invoiceDate: formattedDate } : cost
-                        )
-                      }));
-                    }
-                  } catch (error) {
-                    console.error(`Błąd podczas pobierania kursu:`, error);
-                    // W przypadku błędu nie zmieniamy kursu, tylko aktualizujemy datę
-                    setOrderData(prev => ({
-                      ...prev,
-                      additionalCostsItems: prev.additionalCostsItems.map(cost => 
-                        cost.id === id ? { ...cost, invoiceDate: formattedDate } : cost
-                      )
-                    }));
-                  }
-                });
-                
-                // Zwracamy tymczasową wartość z zaktualizowaną datą faktury
-                return { ...item, invoiceDate: formattedDate };
-              } catch (error) {
-                console.error('Błąd podczas przetwarzania daty faktury:', error);
-                return { ...item, invoiceDate: formattedDate };
-              }
-            } else {
-              // Jeśli data jest niepełna lub waluta jest EUR, po prostu zaktualizuj datę
-              if (!isValidDate && item.currency && item.currency !== 'EUR') {
-                console.log(`Data faktury ${formattedDate} jest niepełna - nie pobieram kursu dla dodatkowego kosztu w OrderForm`);
-              }
-              return { ...item, invoiceDate: formattedDate };
-            }
-          } catch (error) {
-            console.error('Błąd podczas przetwarzania daty faktury:', error);
-            return item;
-          }
-        }
-        
-        // Specjalna obsługa dla zmiany waluty
-        if (field === 'currency') {
-          const newCurrency = value;
-          const oldCurrency = item.currency || 'EUR';
-          
-          // Jeśli zmieniono walutę, przelicz wartość
-          if (newCurrency !== oldCurrency) {
-            const originalValue = parseFloat(item.originalValue) || parseFloat(item.value) || 0;
-            
-            // Jeśli mamy datę faktury, spróbuj pobrać kurs z API
-            if (item.invoiceDate) {
-              try {
-                const invoiceDate = new Date(item.invoiceDate);
-                const rateFetchDate = new Date(invoiceDate);
-                rateFetchDate.setDate(rateFetchDate.getDate() - 1);
-                
-                console.log(`Pobieranie kursu dla zmiany waluty z datą faktury ${item.invoiceDate}, data kursu: ${rateFetchDate.toISOString().split('T')[0]}`);
-                
-                // Używamy dynamicznego importu, aby uniknąć błędów cyklicznych importów
-                import('../../services/exchangeRateService').then(async ({ getExchangeRate }) => {
-                  try {
-                    const rate = await getExchangeRate(newCurrency, 'EUR', rateFetchDate);
-                    console.log(`Pobrany kurs dla ${newCurrency}/EUR z dnia ${rateFetchDate.toISOString().split('T')[0]}: ${rate}`);
-                    
-                    if (rate > 0) {
-                      // Przelicz wartość
-                      const convertedValue = originalValue * rate;
-                      
-                      // Aktualizuj pozycję z nowym kursem i przeliczoną wartością
-                      const updatedItem = {
-                        ...item,
-                        currency: newCurrency,
-                        originalValue: originalValue,
-                        exchangeRate: rate,
-                        value: convertedValue.toFixed(2)
-                      };
-                      
-                      // Aktualizuj stan
-                      setOrderData(prev => ({
-                        ...prev,
-                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
-                          cost.id === id ? updatedItem : cost
-                        )
-                      }));
-                    } else {
-                      // W przypadku błędu, zaktualizuj tylko walutę
-                      setOrderData(prev => ({
-                        ...prev,
-                        additionalCostsItems: prev.additionalCostsItems.map(cost => 
-                          cost.id === id ? { ...cost, currency: newCurrency, originalValue: originalValue } : cost
-                        )
-                      }));
-                    }
-                  } catch (error) {
-                    console.error(`Błąd podczas pobierania kursu:`, error);
-                    // W przypadku błędu, zaktualizuj tylko walutę
-                    setOrderData(prev => ({
-                      ...prev,
-                      additionalCostsItems: prev.additionalCostsItems.map(cost => 
-                        cost.id === id ? { ...cost, currency: newCurrency, originalValue: originalValue } : cost
-                      )
-                    }));
-                  }
-                });
-                
-                // Zwracamy tymczasową wartość z zaktualizowaną walutą
-                return { ...item, currency: newCurrency, originalValue: originalValue };
-              } catch (error) {
-                console.error('Błąd podczas zmiany waluty:', error);
-              }
-            } else {
-              // Jeśli nie mamy daty faktury, nie przeliczamy walut - tylko informujemy użytkownika
-              showInfo('Aby przeliczać waluty, podaj datę faktury.');
-              return { 
-                ...item, 
-                currency: newCurrency,
-                originalValue: originalValue,
-                // Nie zmieniamy wartości value, będzie ona przeliczona po podaniu daty faktury
-              };
-            }
-            
-            // Ten kod zostanie wykonany tylko jeśli nie mamy daty faktury i wystąpił błąd w powyższym bloku try-catch
-            return { 
-              ...item, 
-              currency: newCurrency,
-              originalValue: originalValue,
-              // Nie zmieniamy wartości, dopóki użytkownik nie poda daty faktury
-            };
-          }
-        }
-        
-        // Specjalna obsługa dla zmiany wartości
-        if (field === 'value') {
-          const newValue = parseFloat(value) || 0;
-          
-          // Jeśli waluta pozycji jest inna niż EUR (waluta bazowa)
-          if (item.currency && item.currency !== 'EUR') {
-            // Zapisz oryginalną wartość
-            const originalValue = newValue;
-            
-            // Jeśli mamy datę faktury i kurs wymiany, użyj ich
-            if (item.invoiceDate && item.exchangeRate && parseFloat(item.exchangeRate) > 0) {
-              const rate = parseFloat(item.exchangeRate);
-              const convertedValue = originalValue * rate;
-              
-              return { 
-                ...item, 
-                originalValue: originalValue,
-                value: convertedValue.toFixed(2)
-              };
-            } else {
-              // Jeśli nie mamy daty faktury lub kursu, nie przeliczamy - zapisujemy oryginalną wartość
-              // i czekamy na datę faktury
-              return { 
-                ...item, 
-                originalValue: originalValue,
-                value: originalValue // Tymczasowo przechowujemy tę samą wartość - zostanie przeliczona po podaniu daty faktury
-              };
-            }
-          } else {
-            // Jeśli waluta to EUR, obie wartości są takie same
-            return { 
-              ...item, 
-              originalValue: newValue,
-              value: newValue
-            };
-          }
-        }
-        
-        // Standardowa obsługa innych pól
-        return { ...item, [field]: value };
-      }
-      return item;
-    });
-    
-    setOrderData(prev => ({ ...prev, additionalCostsItems: updatedCosts }));
-  };
-  
-  // Funkcja usuwania pozycji dodatkowych kosztów
-  const handleRemoveAdditionalCost = (id) => {
-    setOrderData(prev => ({
-      ...prev,
-      additionalCostsItems: (prev.additionalCostsItems || []).filter(item => item.id !== id)
-    }));
-  };
-  
-  // Funkcja obliczająca sumę dodatkowych kosztów (dodatnich)
-  const calculateAdditionalCosts = () => {
-    if (!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0) {
-      return 0;
-    }
-    
-    return orderData.additionalCostsItems.reduce((sum, cost) => {
-      const value = parseFloat(cost.value) || 0;
-      return sum + (value > 0 ? value : 0);
-    }, 0);
-  };
-
-  // Funkcja obliczająca sumę rabatów (wartości ujemne)
-  const calculateDiscounts = () => {
-    if (!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0) {
-      return 0;
-    }
-    
-    return Math.abs(orderData.additionalCostsItems.reduce((sum, cost) => {
-      const value = parseFloat(cost.value) || 0;
-      return sum + (value < 0 ? value : 0);
-    }, 0));
-  };
-
+  // Funkcja obliczająca całkowitą wartość zamówienia z rabatem globalnym
   const calculateTotal = () => {
     const subtotal = calculateTotalItemsValue();
-    const additionalCosts = calculateAdditionalCosts();
-    const discounts = calculateDiscounts();
-    // Nie uwzględniamy wartości PO w całkowitej wartości zamówienia
-    return subtotal + additionalCosts - discounts;
+    const globalDiscount = parseFloat(orderData.globalDiscount) || 0;
+    const discountMultiplier = (100 - globalDiscount) / 100;
+    return subtotal * discountMultiplier;
+  };
+
+  // Funkcja obliczająca kwotę rabatu
+  const calculateDiscountAmount = () => {
+    const subtotal = calculateTotalItemsValue();
+    const globalDiscount = parseFloat(orderData.globalDiscount) || 0;
+    return subtotal * (globalDiscount / 100);
   };
 
   const handleCalculateCosts = async () => {
@@ -2798,8 +2514,7 @@ const OrderForm = ({ orderId }) => {
                         formatCurrency={formatCurrency}
                         calculateItemTotalValue={calculateItemTotalValue}
                         calculateTotalItemsValue={calculateTotalItemsValue}
-                        calculateAdditionalCosts={calculateAdditionalCosts}
-                        calculateDiscounts={calculateDiscounts}
+                        globalDiscount={orderData.globalDiscount || 0}
                         itemsLength={orderData.items.length}
                         refreshProductionTasks={refreshProductionTasks}
                         refreshingPTs={refreshingPTs}
@@ -2834,182 +2549,6 @@ const OrderForm = ({ orderId }) => {
           </Box>
         </Paper>
 
-        {/* Sekcja dodatkowych kosztów */}
-        <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <AttachMoneyIcon sx={{ mr: 1 }} /> {t('orderForm.sections.additionalCosts')}
-            </Typography>
-            <Box>
-              <Button
-                startIcon={<AddIcon />}
-                variant="outlined"
-                onClick={() => handleAddAdditionalCost(false)}
-                size="small"
-                sx={{ mr: 1, borderRadius: 2 }}
-              >
-                {t('orderForm.buttons.addCost')}
-              </Button>
-              <Button
-                startIcon={<AddIcon />}
-                variant="outlined"
-                onClick={() => handleAddAdditionalCost(true)}
-                size="small"
-                color="secondary"
-                sx={{ borderRadius: 2 }}
-              >
-                {t('orderForm.buttons.addDiscount')}
-              </Button>
-            </Box>
-          </Box>
-          
-          <Divider sx={{ mb: 3 }} />
-          
-          {!orderData.additionalCostsItems || orderData.additionalCostsItems.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
-              {t('orderForm.messages.noAdditionalCosts')}
-            </Typography>
-          ) : (
-            <TableContainer sx={{ overflow: 'auto', maxWidth: '100%' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.description')}</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.additionalCosts.amount')}</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.additionalCosts.currency')}</TableCell>
-                    <TableCell align="right" sx={tableCellSx}>{t('orderForm.additionalCosts.vat')}</TableCell>
-                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.invoiceNumber')}</TableCell>
-                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.invoiceDate')}</TableCell>
-                    <TableCell sx={tableCellSx}>{t('orderForm.additionalCosts.exchangeRate')}</TableCell>
-                    <TableCell width="50px" sx={tableCellSx}></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {orderData.additionalCostsItems.map((cost) => (
-                    <TableRow key={cost.id}>
-                      <TableCell>
-                        <TextField
-                          value={cost.description || ''}
-                          onChange={(e) => handleAdditionalCostChange(cost.id, 'description', e.target.value)}
-                          variant="standard"
-                          fullWidth
-                          placeholder="Opis kosztu"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          type="number"
-                          value={cost.originalValue !== undefined ? cost.originalValue : cost.value}
-                          onChange={(e) => handleAdditionalCostChange(cost.id, 'value', e.target.value)}
-                          variant="standard"
-                          inputProps={{ step: '0.01', min: cost.description === 'Rabat' ? undefined : '0' }}
-                          sx={{ maxWidth: 120 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <FormControl variant="standard" sx={{ minWidth: 80 }}>
-                          <Select
-                            value={cost.currency || 'EUR'}
-                            onChange={(e) => handleAdditionalCostChange(cost.id, 'currency', e.target.value)}
-                            displayEmpty
-                          >
-                            <MenuItem value="EUR">EUR</MenuItem>
-                            <MenuItem value="PLN">PLN</MenuItem>
-                            <MenuItem value="USD">USD</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </TableCell>
-                      <TableCell align="right">
-                        <FormControl variant="standard" sx={{ maxWidth: 80 }}>
-                          <Select
-                            value={cost.vatRate || 23}
-                            onChange={(e) => handleAdditionalCostChange(cost.id, 'vatRate', e.target.value)}
-                            displayEmpty
-                          >
-                            <MenuItem value={0}>0%</MenuItem>
-                            <MenuItem value={5}>5%</MenuItem>
-                            <MenuItem value={8}>8%</MenuItem>
-                            <MenuItem value={23}>23%</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          value={cost.invoiceNumber || ''}
-                          onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceNumber', e.target.value)}
-                          variant="standard"
-                          fullWidth
-                          placeholder="Nr faktury"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="date"
-                          value={cost.invoiceDate || ''}
-                          onChange={(e) => handleAdditionalCostChange(cost.id, 'invoiceDate', e.target.value)}
-                          variant="standard"
-                          inputProps={{ 
-                            max: formatDateForInput ? formatDateForInput(new Date()) : new Date().toISOString().split('T')[0]
-                          }}
-                          sx={{ width: 150 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          value={cost.exchangeRate || 1}
-                          onChange={(e) => handleAdditionalCostChange(cost.id, 'exchangeRate', e.target.value)}
-                          variant="standard"
-                          inputProps={{ step: '0.000001', min: '0' }}
-                          sx={{ maxWidth: 100 }}
-                          disabled={cost.currency === 'EUR'}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <IconButton size="small" color="error" onClick={() => handleRemoveAdditionalCost(cost.id)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  
-                  {/* Wiersz z podsumowaniem */}
-                  <TableRow>
-                    <TableCell colSpan={2} align="right" sx={{ fontWeight: 'bold' }}>
-                      Suma netto (w EUR):
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                      {formatCurrency(
-                        orderData.additionalCostsItems.reduce(
-                          (sum, cost) => sum + (parseFloat(cost.value) || 0), 
-                          0
-                        )
-                      )}
-                    </TableCell>
-                    <TableCell colSpan={2}></TableCell>
-                  </TableRow>
-                  
-                  {/* Informacja o kursach walut jeśli używane są różne waluty */}
-                  {orderData.additionalCostsItems.some(cost => cost.currency && cost.currency !== 'EUR' && cost.exchangeRate > 0) && (
-                    <TableRow>
-                      <TableCell colSpan={5} sx={{ py: 1 }}>
-                        <Typography variant="caption" sx={{ fontStyle: 'italic' }}>
-                          Wartości w walutach obcych zostały przeliczone według kursów z dnia poprzedzającego datę faktury: 
-                          {orderData.additionalCostsItems
-                            .filter(cost => cost.currency !== 'EUR' && cost.exchangeRate > 0)
-                            .map(cost => ` ${cost.currency}/EUR: ${parseFloat(cost.exchangeRate).toFixed(6)}`)
-                            .filter((value, index, self) => self.indexOf(value) === index) // Usunięcie duplikatów
-                            .join(', ')}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Paper>
-        
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>{t('orderForm.sections.notes')}</Typography>
           <TextField
@@ -3033,36 +2572,43 @@ const OrderForm = ({ orderId }) => {
           <Divider sx={{ mb: 2 }} />
           
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
                 <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.productsValue')}:</Typography>
-                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateSubtotal())}</Typography>
+                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateTotalItemsValue())}</Typography>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.deliveryCost')}:</Typography>
-                <Typography variant="h6" fontWeight="bold">{formatCurrency(parseFloat(orderData.shippingCost) || 0)}</Typography>
+                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.globalDiscount')}:</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <TextField
+                    type="number"
+                    size="small"
+                    value={orderData.globalDiscount || 0}
+                    onChange={(e) => handleChange({ target: { name: 'globalDiscount', value: e.target.value } })}
+                    inputProps={{ 
+                      min: 0, 
+                      max: 100, 
+                      step: 0.01
+                    }}
+                    sx={{ width: 100 }}
+                    InputProps={{
+                      endAdornment: <Typography variant="body2" sx={{ ml: 0.5 }}>%</Typography>
+                    }}
+                  />
+                  {parseFloat(orderData.globalDiscount || 0) > 0 && (
+                    <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 'medium' }}>
+                      -{formatCurrency(calculateDiscountAmount())}
+                    </Typography>
+                  )}
+                </Box>
               </Paper>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.additionalCosts')}:</Typography>
-                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateAdditionalCosts())}</Typography>
-              </Paper>
-            </Grid>
-            {calculateDiscounts() > 0 && (
-              <Grid item xs={12} md={3}>
-                <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                  <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.discounts')}:</Typography>
-                  <Typography variant="h6" fontWeight="bold" color="secondary">- {formatCurrency(calculateDiscounts())}</Typography>
-                </Paper>
-              </Grid>
-            )}
-            <Grid item xs={12} md={3}>
-              <Paper sx={{ p: 2, bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'background.default' }}>
-                <Typography variant="subtitle2" color="text.secondary">{t('orderForm.summary.totalOrderValue')}:</Typography>
-                <Typography variant="h6" fontWeight="bold">{formatCurrency(calculateTotal())}</Typography>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 2, bgcolor: 'primary.main', color: 'primary.contrastText' }}>
+                <Typography variant="subtitle2">{t('orderForm.summary.totalOrderValue')}:</Typography>
+                <Typography variant="h5" fontWeight="bold">{formatCurrency(calculateTotal())}</Typography>
               </Paper>
             </Grid>
           </Grid>

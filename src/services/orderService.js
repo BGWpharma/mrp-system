@@ -1216,9 +1216,9 @@ const validateOrderData = (orderData) => {
 };
 
 /**
- * Oblicza łączną wartość zamówienia
+ * Oblicza łączną wartość zamówienia z rabatem globalnym
  */
-export const calculateOrderTotal = (items, shippingCost = 0, additionalCostsItems = []) => {
+export const calculateOrderTotal = (items, globalDiscount = 0) => {
   if (!items || !Array.isArray(items)) {
     return 0;
   }
@@ -1239,28 +1239,11 @@ export const calculateOrderTotal = (items, shippingCost = 0, additionalCostsItem
     return sum + itemValue;
   }, 0);
   
-  // Dodajemy koszt dostawy
-  const totalWithShipping = itemsTotal + parseFloat(shippingCost || 0);
+  // Zastosuj rabat globalny
+  const discount = parseFloat(globalDiscount) || 0;
+  const discountMultiplier = (100 - discount) / 100;
   
-  // Jeśli nie ma dodatkowych kosztów, zwracamy wartość produktów + dostawa
-  if (!additionalCostsItems || !Array.isArray(additionalCostsItems) || additionalCostsItems.length === 0) {
-    return totalWithShipping;
-  }
-  
-  // Obliczamy dodatkowe koszty (tylko wartości dodatnie)
-  const additionalCosts = additionalCostsItems.reduce((sum, cost) => {
-    const value = parseFloat(cost.value) || 0;
-    return sum + (value > 0 ? value : 0);
-  }, 0);
-  
-  // Obliczamy rabaty (tylko wartości ujemne, przekształcone na wartości dodatnie)
-  const discounts = Math.abs(additionalCostsItems.reduce((sum, cost) => {
-    const value = parseFloat(cost.value) || 0;
-    return sum + (value < 0 ? value : 0);
-  }, 0));
-  
-  // Zwracamy łączną wartość
-  return totalWithShipping + additionalCosts - discounts;
+  return itemsTotal * discountMultiplier;
 };
 
 /**

@@ -1353,20 +1353,11 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
     // Oblicz wartość produktów
     const productsValue = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
     
-    // Dodatkowe koszty (tylko pozytywne)
-    const additionalCosts = order.additionalCostsItems ? 
-      order.additionalCostsItems
-        .filter(cost => parseFloat(cost.value) > 0)
-        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+    // Zastosuj rabat globalny
+    const globalDiscount = parseFloat(order.globalDiscount) || 0;
+    const discountMultiplier = (100 - globalDiscount) / 100;
     
-    // Rabaty (wartości ujemne) - jako wartość pozytywna do odjęcia
-    const discounts = order.additionalCostsItems ? 
-      Math.abs(order.additionalCostsItems
-        .filter(cost => parseFloat(cost.value) < 0)
-        .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
-    
-    // Łączna wartość bez uwzględnienia PO
-    return productsValue + additionalCosts - discounts;
+    return productsValue * discountMultiplier;
   };
 
   // Funkcja obliczająca kwotę już rozliczoną na podstawie faktur
@@ -2499,77 +2490,21 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                 </TableCell>
               </TableRow>
               
-              {/* Dodatkowe koszty (tylko jeśli istnieją) */}
-              {order.additionalCostsItems && order.additionalCostsItems.length > 0 && (
-                <>
-                  {/* Wyświetl pozytywne koszty (dodatnie) */}
-                  {order.additionalCostsItems.some(cost => parseFloat(cost.value) > 0) && (
-                    <>
-                      {order.additionalCostsItems
-                        .filter(cost => parseFloat(cost.value) > 0)
-                        .map((cost, index) => (
-                          <TableRow key={`cost-${cost.id || index}`}>
-                            <TableCell colSpan={3} />
-                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                              {cost.description || `Dodatkowy koszt ${index + 1}`}:
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(parseFloat(cost.value) || 0)}
-                            </TableCell>
-                            <TableCell colSpan={7} />
-                          </TableRow>
-                        ))
-                      }
-                      <TableRow>
-                        <TableCell colSpan={3} />
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          Suma dodatkowych kosztów:
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatCurrency(order.additionalCostsItems
-                            .filter(cost => parseFloat(cost.value) > 0)
-                            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-                          )}
-                        </TableCell>
-                        <TableCell colSpan={7} />
-                      </TableRow>
-                    </>
-                  )}
-                  
-                  {/* Wyświetl rabaty (wartości ujemne) */}
-                  {order.additionalCostsItems.some(cost => parseFloat(cost.value) < 0) && (
-                    <>
-                      {order.additionalCostsItems
-                        .filter(cost => parseFloat(cost.value) < 0)
-                        .map((cost, index) => (
-                          <TableRow key={`discount-${cost.id || index}`}>
-                            <TableCell colSpan={3} />
-                            <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                              {cost.description || `Rabat ${index + 1}`}:
-                            </TableCell>
-                            <TableCell align="right" sx={{ color: 'secondary.main' }}>
-                              {formatCurrency(Math.abs(parseFloat(cost.value)) || 0)}
-                            </TableCell>
-                            <TableCell colSpan={7} />
-                          </TableRow>
-                        ))
-                      }
-                      <TableRow>
-                        <TableCell colSpan={3} />
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: 'secondary.main' }}>
-                          Suma rabatów:
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'secondary.main' }}>
-                          {formatCurrency(Math.abs(order.additionalCostsItems
-                            .filter(cost => parseFloat(cost.value) < 0)
-                            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)
-                          ))}
-                        </TableCell>
-                        <TableCell colSpan={7} />
-                      </TableRow>
-                    </>
-                  )}
-                </>
+              {/* Rabat globalny */}
+              {order.globalDiscount && parseFloat(order.globalDiscount) > 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} />
+                  <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                    Rabat globalny ({order.globalDiscount}%):
+                  </TableCell>
+                  <TableCell align="right" sx={{ color: 'success.main', fontWeight: 'bold' }}>
+                    -{formatCurrency((() => {
+                      const subtotal = order.items?.reduce((sum, item) => sum + calculateItemTotalValue(item), 0) || 0;
+                      return subtotal * (parseFloat(order.globalDiscount) / 100);
+                    })())}
+                  </TableCell>
+                  <TableCell colSpan={7} />
+                </TableRow>
               )}
               
               <TableRow>
