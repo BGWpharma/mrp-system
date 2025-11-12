@@ -59,8 +59,25 @@ import {
   BuildCircle as ServiceIcon,
   Receipt as ReceiptIcon,
   KeyboardArrowDown as ExpandMoreIcon,
-  KeyboardArrowUp as ExpandLessIcon
+  KeyboardArrowUp as ExpandLessIcon,
+  DragIndicator as DragIndicatorIcon
 } from '@mui/icons-material';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { pl } from 'date-fns/locale';
@@ -121,6 +138,475 @@ const generateItemId = () => {
 };
 
 const DEFAULT_MARGIN = 20; // Domyślna marża w procentach
+
+// Komponent dla sortowalnego wiersza z drag-and-drop
+const SortableRow = ({ 
+  item, 
+  index, 
+  expandedRows,
+  services,
+  recipes,
+  validationErrors,
+  inputSx,
+  handleItemChange,
+  handleProductSelect,
+  toggleExpandRow,
+  refreshItemPrice,
+  removeItem,
+  formatCurrency,
+  calculateItemTotalValue,
+  calculateTotalItemsValue,
+  calculateAdditionalCosts,
+  calculateDiscounts,
+  itemsLength,
+  refreshProductionTasks,
+  refreshingPTs,
+  navigate,
+  formatDateToDisplay,
+  t
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    ...(isDragging && {
+      opacity: 0.5,
+      zIndex: 1000,
+    }),
+  };
+
+  return (
+    <React.Fragment>
+      {/* Główny wiersz z podstawowymi informacjami */}
+      <TableRow 
+        ref={setNodeRef}
+        style={style}
+        sx={{ 
+          '&:nth-of-type(odd)': { 
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'background.paper' 
+          },
+          '&:nth-of-type(even)': { 
+            bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
+          },
+          '&:hover': {
+            bgcolor: 'action.hover'
+          },
+          ...(isDragging && {
+            bgcolor: 'action.selected',
+            boxShadow: 3
+          })
+        }}
+      >
+        {/* Uchwyt do przeciągania */}
+        <TableCell {...attributes} {...listeners} sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' } }}>
+          <DragIndicatorIcon 
+            sx={{ 
+              color: 'action.active',
+            }} 
+          />
+        </TableCell>
+        
+        {/* Przycisk rozwijania */}
+        <TableCell>
+          <IconButton
+            aria-label="rozwiń szczegóły"
+            size="small"
+            onClick={() => toggleExpandRow(index)}
+          >
+            {expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </IconButton>
+        </TableCell>
+        
+        {/* Produkt / Receptura */}
+        <TableCell>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <ToggleButtonGroup
+              size="small"
+              value={item.itemType || (item.isRecipe ? 'recipe' : 'product')}
+              exclusive
+              onChange={(_, newType) => {
+                if (newType !== null) {
+                  handleItemChange(index, 'itemType', newType);
+                }
+              }}
+              aria-label="typ produktu"
+            >
+              <ToggleButton value="product" size="small">
+                Produkt
+              </ToggleButton>
+              <ToggleButton value="recipe" size="small">
+                Receptura
+              </ToggleButton>
+              <ToggleButton value="service" size="small">
+                Usługa
+              </ToggleButton>
+            </ToggleButtonGroup>
+            
+            {(item.itemType === 'service') ? (
+              <Autocomplete
+                options={services}
+                getOptionLabel={(option) => option.name || ''}
+                value={services.find(s => s.id === item.serviceId) || null}
+                onChange={(_, newValue) => handleProductSelect(index, newValue, 'service')}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Usługa"
+                    size="small"
+                    error={!!validationErrors[`item_${index}_name`]}
+                    helperText={validationErrors[`item_${index}_name`]}
+                  />
+                )}
+              />
+            ) : (item.itemType === 'recipe' || item.isRecipe) ? (
+              <Autocomplete
+                options={recipes}
+                getOptionLabel={(option) => option.name || ''}
+                value={recipes.find(r => r.id === item.recipeId) || null}
+                onChange={(_, newValue) => handleProductSelect(index, newValue, 'recipe')}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Receptura"
+                    size="small"
+                    error={!!validationErrors[`item_${index}_name`]}
+                    helperText={validationErrors[`item_${index}_name`]}
+                  />
+                )}
+              />
+            ) : (
+              <TextField
+                label="Nazwa produktu"
+                value={item.name}
+                onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                fullWidth
+                error={!!validationErrors[`item_${index}_name`]}
+                helperText={validationErrors[`item_${index}_name`]}
+                size="small"
+                variant="outlined"
+              />
+            )}
+          </Box>
+        </TableCell>
+        
+        {/* Ilość */}
+        <TableCell>
+          <TextField
+            type="number"
+            value={item.quantity}
+            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+            inputProps={{ min: 1 }}
+            fullWidth
+            error={!!validationErrors[`item_${index}_quantity`]}
+            helperText={validationErrors[`item_${index}_quantity`]}
+            size="small"
+            variant="outlined"
+            sx={inputSx}
+          />
+        </TableCell>
+        
+        {/* Jednostka */}
+        <TableCell>
+          <TextField
+            value={item.unit}
+            onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
+            fullWidth
+            size="small"
+            variant="outlined"
+            sx={inputSx}
+          />
+        </TableCell>
+        
+        {/* Cena EUR */}
+        <TableCell>
+          <TextField
+            type="number"
+            value={item.price}
+            onChange={(e) => handleItemChange(index, 'price', e.target.value)}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
+              endAdornment: (
+                <InputAdornment position="end">
+                  <Tooltip title="Odśwież cenę jednostkową">
+                    <IconButton
+                      aria-label="odśwież cenę"
+                      onClick={() => refreshItemPrice(index)}
+                      edge="end"
+                      size="small"
+                    >
+                      <RefreshIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }}
+            inputProps={{ min: 0, step: 'any' }}
+            fullWidth
+            error={!!validationErrors[`item_${index}_price`]}
+            helperText={validationErrors[`item_${index}_price`]}
+            size="small"
+            variant="outlined"
+            sx={inputSx}
+          />
+        </TableCell>
+        
+        {/* Wartość */}
+        <TableCell>
+          <Box sx={{ fontWeight: 'bold' }}>
+            {formatCurrency(item.quantity * item.price)}
+          </Box>
+        </TableCell>
+        
+        {/* Koszt całk./szt. */}
+        <TableCell>
+          <Box sx={{ fontWeight: 'medium' }}>
+            {(() => {
+              const itemTotalValue = calculateItemTotalValue(item);
+              const allItemsValue = calculateTotalItemsValue();
+              const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
+              const additionalCosts = calculateAdditionalCosts();
+              const discounts = calculateDiscounts();
+              const additionalShare = proportion * (additionalCosts - discounts);
+              const totalWithAdditional = itemTotalValue + additionalShare;
+              const quantity = parseFloat(item.quantity) || 1;
+              const unitCost = totalWithAdditional / quantity;
+              return formatCurrency(unitCost, 'EUR', 4, true);
+            })()}
+          </Box>
+        </TableCell>
+        
+        {/* Pełny koszt prod./szt. */}
+        <TableCell align="right">
+          {(() => {
+            if (item.productionTaskId && item.fullProductionCost !== undefined) {
+              if (item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null) {
+                return (
+                  <Box sx={{ fontWeight: 'medium', color: 'primary.main' }}>
+                    {formatCurrency(item.fullProductionUnitCost)}
+                  </Box>
+                );
+              }
+              const quantity = parseFloat(item.quantity) || 1;
+              const price = parseFloat(item.price) || 0;
+              const unitFullProductionCost = (item.fromPriceList && parseFloat(item.price || 0) > 0)
+                ? parseFloat(item.fullProductionCost) / quantity
+                : (parseFloat(item.fullProductionCost) / quantity) + price;
+              return (
+                <Box sx={{ fontWeight: 'medium', color: 'warning.main' }}>
+                  {formatCurrency(unitFullProductionCost)}
+                </Box>
+              );
+            } else {
+              return <Typography variant="body2" color="text.secondary">-</Typography>;
+            }
+          })()}
+        </TableCell>
+        
+        {/* Przycisk usuwania */}
+        <TableCell>
+          <IconButton 
+            color="error" 
+            onClick={() => removeItem(index)}
+            disabled={itemsLength === 1}
+            size="small"
+          >
+            <DeleteIcon />
+          </IconButton>
+        </TableCell>
+      </TableRow>
+      
+      {/* Rozwijany wiersz ze szczegółami - ukrywany podczas przeciągania */}
+      {!isDragging && (
+        <TableRow>
+          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={10}>
+            <Collapse in={expandedRows[index]} timeout="auto" unmountOnExit>
+              <Box sx={{ margin: 1 }}>
+                <Typography variant="h6" gutterBottom component="div" sx={{ color: 'primary.main' }}>
+                  {t('orderForm.itemDetails.title')}
+                </Typography>
+                <Grid container spacing={2}>
+                  {/* Opis */}
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label={t('orderForm.itemDetails.description')}
+                      value={item.description || ''}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      fullWidth
+                      multiline
+                      rows={3}
+                      size="small"
+                      variant="outlined"
+                      placeholder={t('orderForm.placeholders.addItemDescription')}
+                    />
+                  </Grid>
+                  
+                  {/* Z listy cenowej */}
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {t('orderForm.itemDetails.fromPriceList')}
+                      </Typography>
+                      <Chip 
+                        label={item.fromPriceList ? t('common.yes') : t('common.no')} 
+                        size="small" 
+                        color={item.fromPriceList ? "success" : "default"}
+                        variant={item.fromPriceList ? "filled" : "outlined"}
+                        sx={{ borderRadius: 1, alignSelf: 'flex-start' }}
+                      />
+                    </Box>
+                  </Grid>
+                  
+                  {/* Zadanie produkcyjne */}
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          {t('orderForm.itemDetails.productionTask')}
+                        </Typography>
+                        <Tooltip title="Odśwież status zadań produkcyjnych">
+                          <IconButton 
+                            size="small" 
+                            color="primary"
+                            onClick={refreshProductionTasks}
+                            disabled={refreshingPTs}
+                          >
+                            <RefreshIcon fontSize="small" />
+                            {refreshingPTs && <CircularProgress size={16} sx={{ position: 'absolute' }} />}
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                      {item.productionTaskId ? (
+                        <Tooltip title="Przejdź do zadania produkcyjnego">
+                          <Chip
+                            label={item.productionTaskNumber || `MO-${item.productionTaskId.substr(0, 6)}`}
+                            size="small"
+                            color={
+                              item.productionStatus === 'Zakończone' ? 'success' :
+                              item.productionStatus === 'W trakcie' ? 'warning' :
+                              item.productionStatus === 'Anulowane' ? 'error' :
+                              item.productionStatus === 'Zaplanowane' ? 'primary' : 'default'
+                            }
+                            onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
+                            sx={{ cursor: 'pointer', borderRadius: 1, alignSelf: 'flex-start' }}
+                            icon={<EventNoteIcon />}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                  
+                  {/* Koszt produkcji */}
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {t('orderForm.itemDetails.productionCost')}
+                      </Typography>
+                      {item.productionTaskId && item.productionCost !== undefined ? (
+                        <Box sx={{ fontWeight: 'medium', color: 'text.secondary' }}>
+                          {formatCurrency(item.productionCost)}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                  
+                  {/* Profit */}
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {t('orderForm.itemDetails.profit')}
+                      </Typography>
+                      {item.fromPriceList && parseFloat(item.price || 0) > 0 && item.productionCost !== undefined ? (
+                        <Box sx={{ 
+                          fontWeight: 'medium', 
+                          color: (item.quantity * item.price - item.productionCost) > 0 ? 'success.main' : 'error.main' 
+                        }}>
+                          {formatCurrency(item.quantity * item.price - item.productionCost)}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                  
+                  {/* Ostatni koszt */}
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {t('orderForm.itemDetails.lastCost')}
+                      </Typography>
+                      {item.lastUsageInfo ? (
+                        <Tooltip title={
+                          item.lastUsageInfo.estimatedCost 
+                            ? `${t('orderForm.itemDetails.estimatedMaterialsCost')}: ${formatCurrency(item.lastUsageInfo.cost)} EUR (${t('orderForm.itemDetails.basedOnMaterials', { count: item.lastUsageInfo.costDetails?.length || 0 })})${
+                                item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) 
+                                  ? `\n\n${t('orderForm.itemDetails.currencyConversionWarning')}`
+                                  : ''
+                              }`
+                            : `${t('orderForm.itemDetails.date')}: ${formatDateToDisplay(item.lastUsageInfo.date)}, ${t('orderForm.itemDetails.lastCost')}: ${formatCurrency(item.lastUsageInfo.cost)}`
+                        }>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {item.lastUsageInfo.estimatedCost ? t('orderForm.itemDetails.estimated') : formatDateToDisplay(item.lastUsageInfo.date)}
+                            </Typography>
+                            <Typography 
+                              variant="body2" 
+                              fontWeight="medium" 
+                              sx={{ 
+                                color: item.lastUsageInfo.estimatedCost ? 'info.main' : 'purple' 
+                              }}
+                            >
+                              {formatCurrency(item.lastUsageInfo.cost)}
+                              {item.lastUsageInfo.estimatedCost && (
+                                <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
+                                  (est.)
+                                </Typography>
+                              )}
+                              {item.lastUsageInfo.estimatedCost && item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) && (
+                                <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.7, color: 'warning.main' }}>
+                                  ({t('orderForm.itemDetails.convertedFromOtherCurrencies')})
+                                </Typography>
+                              )}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                  
+                  {/* Suma wartości pozycji */}
+                  <Grid item xs={12} md={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {t('orderForm.itemDetails.totalItemValue')}
+                      </Typography>
+                      <Box sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                        {formatCurrency(calculateItemTotalValue(item))}
+                      </Box>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Collapse>
+          </TableCell>
+        </TableRow>
+      )}
+    </React.Fragment>
+  );
+};
 
 const OrderForm = ({ orderId }) => {
   const [loading, setLoading] = useState(!!orderId);
@@ -1052,6 +1538,31 @@ const OrderForm = ({ orderId }) => {
     delete updatedErrors[`item_${index}_quantity`];
     delete updatedErrors[`item_${index}_price`];
     setValidationErrors(updatedErrors);
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    setOrderData((prev) => {
+      const oldIndex = prev.items.findIndex((item) => item.id === active.id);
+      const newIndex = prev.items.findIndex((item) => item.id === over.id);
+
+      return {
+        ...prev,
+        items: arrayMove(prev.items, oldIndex, newIndex),
+      };
+    });
   };
 
   const toggleExpandRow = (index) => {
@@ -2246,457 +2757,68 @@ const OrderForm = ({ orderId }) => {
           
           <Divider sx={{ mb: 3 }} />
           
-          <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'auto' }}>
-            <Table>
-              <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
-                <TableRow>
-                  <TableCell width="5%" sx={tableCellSx}></TableCell>
-                  <TableCell width="25%" sx={tableCellSx}>{t('orderForm.table.productRecipe')}</TableCell>
-                  <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.quantity')}</TableCell>
-                  <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.unit')}</TableCell>
-                  <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.priceEUR')}</TableCell>
-                  <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.value')}</TableCell>
-                  <TableCell width="14%" sx={tableCellSx}>{t('orderForm.table.totalCostPerUnit')}</TableCell>
-                  <TableCell width="14%" sx={tableCellSx}>
-                    <Tooltip title={t('orderForm.tooltips.fullProductionCostPerUnit')}>
-                      {t('orderForm.table.fullProductionCostPerUnit')}
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell width="5%" sx={tableCellSx}></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {orderData.items.map((item, index) => (
-                  <React.Fragment key={item.id || index}>
-                    {/* Główny wiersz z podstawowymi informacjami */}
-                    <TableRow sx={{ 
-                      '&:nth-of-type(odd)': { 
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'background.default' : 'background.paper' 
-                      },
-                      '&:nth-of-type(even)': { 
-                        bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.50' 
-                      },
-                      '&:hover': {
-                        bgcolor: 'action.hover'
-                      }
-                    }}>
-                      {/* Przycisk rozwijania */}
-                      <TableCell>
-                        <IconButton
-                          aria-label="rozwiń szczegóły"
-                          size="small"
-                          onClick={() => toggleExpandRow(index)}
-                        >
-                          {expandedRows[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                        </IconButton>
-                      </TableCell>
-                      
-                      {/* Produkt / Receptura */}
-                      <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <ToggleButtonGroup
-                            size="small"
-                            value={item.itemType || (item.isRecipe ? 'recipe' : 'product')}
-                            exclusive
-                            onChange={(_, newType) => {
-                              if (newType !== null) {
-                                handleItemChange(index, 'itemType', newType);
-                              }
-                            }}
-                            aria-label="typ produktu"
-                          >
-                            <ToggleButton value="product" size="small">
-                              Produkt
-                            </ToggleButton>
-                            <ToggleButton value="recipe" size="small">
-                              Receptura
-                            </ToggleButton>
-                            <ToggleButton value="service" size="small">
-                              Usługa
-                            </ToggleButton>
-                          </ToggleButtonGroup>
-                          
-                          {(item.itemType === 'service') ? (
-                            <Autocomplete
-                              options={services}
-                              getOptionLabel={(option) => option.name || ''}
-                              value={services.find(s => s.id === item.serviceId) || null}
-                              onChange={(_, newValue) => handleProductSelect(index, newValue, 'service')}
-                              renderInput={(params) => (
-                                <TextField 
-                                  {...params} 
-                                  label="Usługa"
-                                  size="small"
-                                  error={!!validationErrors[`item_${index}_name`]}
-                                  helperText={validationErrors[`item_${index}_name`]}
-                                />
-                              )}
-                            />
-                          ) : (item.itemType === 'recipe' || item.isRecipe) ? (
-                            <Autocomplete
-                              options={recipes}
-                              getOptionLabel={(option) => option.name || ''}
-                              value={recipes.find(r => r.id === item.recipeId) || null}
-                              onChange={(_, newValue) => handleProductSelect(index, newValue, 'recipe')}
-                              renderInput={(params) => (
-                                <TextField 
-                                  {...params} 
-                                  label="Receptura"
-                                  size="small"
-                                  error={!!validationErrors[`item_${index}_name`]}
-                                  helperText={validationErrors[`item_${index}_name`]}
-                                />
-                              )}
-                            />
-                          ) : (
-                            <TextField
-                              label="Nazwa produktu"
-                              value={item.name}
-                              onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                              fullWidth
-                              error={!!validationErrors[`item_${index}_name`]}
-                              helperText={validationErrors[`item_${index}_name`]}
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                      </TableCell>
-                      
-                      {/* Ilość */}
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                          inputProps={{ min: 1 }}
-                          fullWidth
-                          error={!!validationErrors[`item_${index}_quantity`]}
-                          helperText={validationErrors[`item_${index}_quantity`]}
-                          size="small"
-                          variant="outlined"
-                          sx={inputSx}
-                        />
-                      </TableCell>
-                      
-                      {/* Jednostka */}
-                      <TableCell>
-                        <TextField
-                          value={item.unit}
-                          onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
-                          fullWidth
-                          size="small"
-                          variant="outlined"
-                          sx={inputSx}
-                        />
-                      </TableCell>
-                      
-                      {/* Cena EUR */}
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          value={item.price}
-                          onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                          InputProps={{
-                            startAdornment: <InputAdornment position="start">EUR</InputAdornment>,
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <Tooltip title="Odśwież cenę jednostkową">
-                                  <IconButton
-                                    aria-label="odśwież cenę"
-                                    onClick={() => refreshItemPrice(index)}
-                                    edge="end"
-                                    size="small"
-                                  >
-                                    <RefreshIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </InputAdornment>
-                            ),
-                          }}
-                          inputProps={{ min: 0, step: 'any' }}
-                          fullWidth
-                          error={!!validationErrors[`item_${index}_price`]}
-                          helperText={validationErrors[`item_${index}_price`]}
-                          size="small"
-                          variant="outlined"
-                          sx={inputSx}
-                        />
-                      </TableCell>
-                      
-                      {/* Wartość */}
-                      <TableCell>
-                        <Box sx={{ fontWeight: 'bold' }}>
-                          {formatCurrency(item.quantity * item.price)}
-                        </Box>
-                      </TableCell>
-                      
-                      {/* Koszt całk./szt. */}
-                      <TableCell>
-                        <Box sx={{ fontWeight: 'medium' }}>
-                          {(() => {
-                            // Oblicz proporcję wartości tej pozycji do całkowitej wartości produktów
-                            const itemTotalValue = calculateItemTotalValue(item);
-                            const allItemsValue = calculateTotalItemsValue();
-                            const proportion = allItemsValue > 0 ? itemTotalValue / allItemsValue : 0;
-                            
-                            // Oblicz proporcjonalny udział w kosztach dodatkowych
-                            const additionalCosts = calculateAdditionalCosts();
-                            const discounts = calculateDiscounts();
-                            
-                            // Całkowity udział pozycji w kosztach dodatkowych
-                            const additionalShare = proportion * (additionalCosts - discounts);
-                            
-                            // Całkowity koszt pozycji z kosztami dodatkowymi
-                            const totalWithAdditional = itemTotalValue + additionalShare;
-                            
-                            // Koszt pojedynczej sztuki
-                            const quantity = parseFloat(item.quantity) || 1;
-                            const unitCost = totalWithAdditional / quantity;
-                            
-                            return formatCurrency(unitCost, 'EUR', 4, true);
-                          })()}
-                        </Box>
-                      </TableCell>
-                      
-                      {/* Pełny koszt prod./szt. */}
-                      <TableCell align="right">
-                        {(() => {
-                          // Sprawdź czy pozycja ma powiązane zadanie produkcyjne i pełny koszt produkcji
-                          if (item.productionTaskId && item.fullProductionCost !== undefined) {
-                            // Użyj zapisanej wartości fullProductionUnitCost, jeśli istnieje
-                            if (item.fullProductionUnitCost !== undefined && item.fullProductionUnitCost !== null) {
-                              return (
-                                <Box sx={{ fontWeight: 'medium', color: 'primary.main' }}>
-                                  {formatCurrency(item.fullProductionUnitCost)}
-                                </Box>
-                              );
-                            }
-                            
-                            // Jeśli brak zapisanej wartości, oblicz na podstawie fullProductionCost (fallback)
-                            const quantity = parseFloat(item.quantity) || 1;
-                            const price = parseFloat(item.price) || 0;
-                            
-                            // Jeśli pozycja jest z listy cenowej I ma cenę większą od 0, nie dodawaj ceny jednostkowej do pełnego kosztu
-                            const unitFullProductionCost = (item.fromPriceList && parseFloat(item.price || 0) > 0)
-                              ? parseFloat(item.fullProductionCost) / quantity
-                              : (parseFloat(item.fullProductionCost) / quantity) + price;
-                            
-                            return (
-                              <Box sx={{ fontWeight: 'medium', color: 'warning.main' }}>
-                                {formatCurrency(unitFullProductionCost)}
-                              </Box>
-                            );
-                          } else {
-                            return <Typography variant="body2" color="text.secondary">-</Typography>;
-                          }
-                        })()}
-                      </TableCell>
-                      
-                      {/* Przycisk usuwania */}
-                      <TableCell>
-                        <IconButton 
-                          color="error" 
-                          onClick={() => removeItem(index)}
-                          disabled={orderData.items.length === 1}
-                          size="small"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                    
-                    {/* Rozwijany wiersz ze szczegółami */}
-                    <TableRow>
-                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
-                        <Collapse in={expandedRows[index]} timeout="auto" unmountOnExit>
-                          <Box sx={{ margin: 1 }}>
-                            <Typography variant="h6" gutterBottom component="div" sx={{ color: 'primary.main' }}>
-                              {t('orderForm.itemDetails.title')}
-                            </Typography>
-                            <Grid container spacing={2}>
-                              {/* Opis */}
-                              <Grid item xs={12} md={6}>
-                                <TextField
-                                  label={t('orderForm.itemDetails.description')}
-                                  value={item.description || ''}
-                                  onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                                  fullWidth
-                                  multiline
-                                  rows={3}
-                                  size="small"
-                                  variant="outlined"
-                                  placeholder={t('orderForm.placeholders.addItemDescription')}
-                                />
-                              </Grid>
-                              
-                              {/* Z listy cenowej */}
-                              <Grid item xs={12} md={3}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                  <Typography variant="subtitle2" color="text.secondary">
-                                    {t('orderForm.itemDetails.fromPriceList')}
-                                  </Typography>
-                                  <Chip 
-                                    label={item.fromPriceList ? t('common.yes') : t('common.no')} 
-                                    size="small" 
-                                    color={item.fromPriceList ? "success" : "default"}
-                                    variant={item.fromPriceList ? "filled" : "outlined"}
-                                    sx={{ borderRadius: 1, alignSelf: 'flex-start' }}
-                                  />
-                                </Box>
-                              </Grid>
-                              
-                              {/* Zadanie produkcyjne */}
-                              <Grid item xs={12} md={3}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Typography variant="subtitle2" color="text.secondary">
-                                      {t('orderForm.itemDetails.productionTask')}
-                                    </Typography>
-                                    <Tooltip title="Odśwież status zadań produkcyjnych">
-                                      <IconButton 
-                                        size="small" 
-                                        color="primary"
-                                        onClick={refreshProductionTasks}
-                                        disabled={refreshingPTs}
-                                      >
-                                        <RefreshIcon fontSize="small" />
-                                        {refreshingPTs && <CircularProgress size={16} sx={{ position: 'absolute' }} />}
-                                      </IconButton>
-                                    </Tooltip>
-                                  </Box>
-                                  {item.productionTaskId ? (
-                                    <Tooltip title="Przejdź do zadania produkcyjnego">
-                                      <Chip
-                                        label={item.productionTaskNumber || `MO-${item.productionTaskId.substr(0, 6)}`}
-                                        size="small"
-                                        color={
-                                          item.productionStatus === 'Zakończone' ? 'success' :
-                                          item.productionStatus === 'W trakcie' ? 'warning' :
-                                          item.productionStatus === 'Anulowane' ? 'error' :
-                                          item.productionStatus === 'Zaplanowane' ? 'primary' : 'default'
-                                        }
-                                        onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
-                                        sx={{ cursor: 'pointer', borderRadius: 1, alignSelf: 'flex-start' }}
-                                        icon={<EventNoteIcon />}
-                                      />
-                                    </Tooltip>
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">-</Typography>
-                                  )}
-                                </Box>
-                              </Grid>
-                              
-                              {/* Koszt produkcji */}
-                              <Grid item xs={12} md={3}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                  <Typography variant="subtitle2" color="text.secondary">
-                                    {t('orderForm.itemDetails.productionCost')}
-                                  </Typography>
-                                  {item.productionTaskId && item.productionCost !== undefined ? (
-                                    <Box sx={{ fontWeight: 'medium', color: 'text.secondary' }}>
-                                      {formatCurrency(item.productionCost)}
-                                    </Box>
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">-</Typography>
-                                  )}
-                                </Box>
-                              </Grid>
-                              
-                              {/* Profit */}
-                              <Grid item xs={12} md={3}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                  <Typography variant="subtitle2" color="text.secondary">
-                                    {t('orderForm.itemDetails.profit')}
-                                  </Typography>
-                                  {item.fromPriceList && parseFloat(item.price || 0) > 0 && item.productionCost !== undefined ? (
-                                    <Box sx={{ 
-                                      fontWeight: 'medium', 
-                                      color: (item.quantity * item.price - item.productionCost) > 0 ? 'success.main' : 'error.main' 
-                                    }}>
-                                      {formatCurrency(item.quantity * item.price - item.productionCost)}
-                                    </Box>
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">-</Typography>
-                                  )}
-                                </Box>
-                              </Grid>
-                              
-                              {/* Ostatni koszt */}
-                              <Grid item xs={12} md={3}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                  <Typography variant="subtitle2" color="text.secondary">
-                                    {t('orderForm.itemDetails.lastCost')}
-                                  </Typography>
-                                  {item.lastUsageInfo ? (
-                                    <Tooltip title={
-                                      item.lastUsageInfo.estimatedCost 
-                                        ? `${t('orderForm.itemDetails.estimatedMaterialsCost')}: ${formatCurrency(item.lastUsageInfo.cost)} EUR (${t('orderForm.itemDetails.basedOnMaterials', { count: item.lastUsageInfo.costDetails?.length || 0 })})${
-                                            item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) 
-                                              ? `\n\n${t('orderForm.itemDetails.currencyConversionWarning')}`
-                                              : ''
-                                          }`
-                                        : `${t('orderForm.itemDetails.date')}: ${formatDateToDisplay(item.lastUsageInfo.date)}, ${t('orderForm.itemDetails.lastCost')}: ${formatCurrency(item.lastUsageInfo.cost)}`
-                                    }>
-                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                        <Typography variant="caption" color="text.secondary">
-                                          {item.lastUsageInfo.estimatedCost ? t('orderForm.itemDetails.estimated') : formatDateToDisplay(item.lastUsageInfo.date)}
-                                        </Typography>
-                                        <Typography 
-                                          variant="body2" 
-                                          fontWeight="medium" 
-                                          sx={{ 
-                                            color: item.lastUsageInfo.estimatedCost ? 'info.main' : 'purple' 
-                                          }}
-                                        >
-                                          {formatCurrency(item.lastUsageInfo.cost)}
-                                          {item.lastUsageInfo.estimatedCost && (
-                                            <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.secondary' }}>
-                                              (est.)
-                                            </Typography>
-                                          )}
-                                          {item.lastUsageInfo.estimatedCost && item.lastUsageInfo.costDetails?.some(detail => detail.priceConverted) && (
-                                            <Typography variant="caption" sx={{ display: 'block', fontSize: '0.7rem', opacity: 0.7, color: 'warning.main' }}>
-                                              ({t('orderForm.itemDetails.convertedFromOtherCurrencies')})
-                                            </Typography>
-                                          )}
-                                        </Typography>
-                                      </Box>
-                                    </Tooltip>
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">-</Typography>
-                                  )}
-                                </Box>
-                              </Grid>
-                              
-                              {/* Suma wartości pozycji */}
-                              <Grid item xs={12} md={3}>
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                  <Typography variant="subtitle2" color="text.secondary">
-                                    {t('orderForm.itemDetails.totalItemValue')}
-                                  </Typography>
-                                  <Box sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                                    {formatCurrency(calculateItemTotalValue(item))}
-                                  </Box>
-                                </Box>
-                              </Grid>
-                            </Grid>
-                          </Box>
-                        </Collapse>
-                      </TableCell>
-                    </TableRow>
-                  </React.Fragment>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'auto' }}>
+              <Table>
+                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
+                  <TableRow>
+                    <TableCell width="3%" sx={tableCellSx}></TableCell>
+                    <TableCell width="5%" sx={tableCellSx}></TableCell>
+                    <TableCell width="25%" sx={tableCellSx}>{t('orderForm.table.productRecipe')}</TableCell>
+                    <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.quantity')}</TableCell>
+                    <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.unit')}</TableCell>
+                    <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.priceEUR')}</TableCell>
+                    <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.value')}</TableCell>
+                    <TableCell width="14%" sx={tableCellSx}>{t('orderForm.table.totalCostPerUnit')}</TableCell>
+                    <TableCell width="14%" sx={tableCellSx}>
+                      <Tooltip title={t('orderForm.tooltips.fullProductionCostPerUnit')}>
+                        {t('orderForm.table.fullProductionCostPerUnit')}
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell width="5%" sx={tableCellSx}></TableCell>
+                  </TableRow>
+                </TableHead>
+                <SortableContext items={orderData.items.map(item => item.id)} strategy={verticalListSortingStrategy}>
+                  <TableBody>
+                    {orderData.items.map((item, index) => (
+                      <SortableRow
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        expandedRows={expandedRows}
+                        services={services}
+                        recipes={recipes}
+                        validationErrors={validationErrors}
+                        inputSx={inputSx}
+                        handleItemChange={handleItemChange}
+                        handleProductSelect={handleProductSelect}
+                        toggleExpandRow={toggleExpandRow}
+                        refreshItemPrice={refreshItemPrice}
+                        removeItem={removeItem}
+                        formatCurrency={formatCurrency}
+                        calculateItemTotalValue={calculateItemTotalValue}
+                        calculateTotalItemsValue={calculateTotalItemsValue}
+                        calculateAdditionalCosts={calculateAdditionalCosts}
+                        calculateDiscounts={calculateDiscounts}
+                        itemsLength={orderData.items.length}
+                        refreshProductionTasks={refreshProductionTasks}
+                        refreshingPTs={refreshingPTs}
+                        navigate={navigate}
+                        formatDateToDisplay={formatDateToDisplay}
+                        t={t}
+                      />
+                    ))}
+                  </TableBody>
+                </SortableContext>
+              </Table>
+            </TableContainer>
+          </DndContext>
           
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, bgcolor: 'success.light', p: 2, borderRadius: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'success.contrastText' }}>
               Suma: {formatCurrency(calculateTotalItemsValue())}
             </Typography>
           </Box>
-          
           {/* Dodatkowy przycisk dodaj produkt na dole */}
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
             <Button 
