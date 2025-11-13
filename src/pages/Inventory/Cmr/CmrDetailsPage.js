@@ -1661,7 +1661,7 @@ const CmrDetailsPage = () => {
     );
   }
   
-  const isEditable = cmrData.status === CMR_STATUSES.DRAFT || cmrData.status === CMR_STATUSES.ISSUED;
+  const isEditable = cmrData.status === CMR_STATUSES.DRAFT || cmrData.status === CMR_STATUSES.ISSUED || cmrData.status === CMR_STATUSES.COMPLETED;
   console.log('CMR Status:', cmrData.status);
   console.log('Is Editable:', isEditable);
   console.log('CMR_STATUSES.DRAFT:', CMR_STATUSES.DRAFT);
@@ -2270,9 +2270,16 @@ const CmrDetailsPage = () => {
                               <TableCell>{item.weight}</TableCell>
                                 <TableCell>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                      {weightDetail?.palletsCount || 0}
-                                    </Typography>
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                        {weightDetail?.palletsCount || 0}
+                                      </Typography>
+                                      {item.volume && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                                          ({item.volume} m³)
+                                        </Typography>
+                                      )}
+                                    </Box>
                                     {weightDetail?.hasDetailedData && (
                                       <Chip 
                                         size="small" 

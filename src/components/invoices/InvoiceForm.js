@@ -1733,13 +1733,41 @@ const InvoiceForm = ({ invoiceId }) => {
                                 quantity: parseFloat(item.quantity || 0),
                                 unit: item.unit || 'szt',
                                 price: parseFloat(item.unitPrice || 0),
-                                vat: parseFloat(item.vatRate || 23),
+                                vat: parseFloat(item.vatRate ?? 23),
                                 netValue: parseFloat(item.totalPrice || 0),
-                                grossValue: parseFloat(item.totalPrice || 0) * (1 + parseFloat(item.vatRate || 23) / 100),
+                                grossValue: parseFloat(item.totalPrice || 0) * (1 + parseFloat(item.vatRate ?? 23) / 100),
                                 orderItemId: item.id || null
                               }));
                               
+                              // Mapowanie dodatkowych kosztów z PO jako pozycje faktury (tak samo jak w handleOrderSelect)
+                              const mappedAdditionalCostsItems = [];
                               const additionalCosts = selectedOrder.additionalCostsItems || [];
+                              
+                              additionalCosts.forEach((cost, index) => {
+                                const costValue = parseFloat(cost.value) || 0;
+                                const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+                                
+                                if (costValue > 0) {
+                                  mappedAdditionalCostsItems.push({
+                                    id: cost.id || `additional-cost-${index}`,
+                                    name: cost.description || `Dodatkowy koszt ${index + 1}`,
+                                    description: '',
+                                    quantity: 1,
+                                    unit: 'szt.',
+                                    price: costValue,
+                                    netValue: costValue,
+                                    totalPrice: costValue,
+                                    vat: vatRate,
+                                    cnCode: '',
+                                    isAdditionalCost: true,
+                                    originalCostId: cost.id
+                                  });
+                                }
+                              });
+                              
+                              // Połącz pozycje produktów z pozycjami dodatkowych kosztów
+                              const allInvoiceItems = [...poItems, ...mappedAdditionalCostsItems];
+                              
                               const totalAdditionalCosts = additionalCosts.reduce(
                                 (sum, cost) => sum + (parseFloat(cost.value) || 0), 
                                 0
@@ -1747,16 +1775,16 @@ const InvoiceForm = ({ invoiceId }) => {
                               
                               setInvoice(prev => ({
                                 ...prev,
-                                items: poItems,
+                                items: allInvoiceItems, // Wszystkie pozycje: produkty + dodatkowe koszty
                                 additionalCostsItems: additionalCosts,
                                 additionalCosts: totalAdditionalCosts,
                                 total: calculateInvoiceTotalGross({ 
-                                  items: poItems,
+                                  items: allInvoiceItems,
                                   additionalCostsItems: additionalCosts
                                 })
                               }));
                               
-                              showSuccess(`Dodano ${poItems.length} pozycji${additionalCosts.length > 0 ? ` i ${additionalCosts.length} kosztów dodatkowych` : ''} z PO`);
+                              showSuccess(`Dodano ${poItems.length} pozycji${mappedAdditionalCostsItems.length > 0 ? ` i ${mappedAdditionalCostsItems.length} kosztów dodatkowych` : ''} z PO`);
                             }}
                           >
                             Załaduj wszystkie pozycje z PO

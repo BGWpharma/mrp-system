@@ -1994,16 +1994,35 @@ export const addTransportServicesToOrders = async (cmrId, cmrItems, linkedOrderI
         
         // Zsumuj palety dla tego zamówienia
         // Priorytet: orderId, fallback: orderNumber (dla starszych danych)
-        const palletsCount = cmrItems
-          .filter(item => {
-            const belongsToOrder = 
-              (item.orderId && item.orderId === orderId) ||
-              (!item.orderId && item.orderNumber && item.orderNumber === order.orderNumber);
-            return belongsToOrder && item.orderItemId;
-          })
-          .reduce((sum, item) => sum + (parseFloat(item.palletsCount) || 0), 0);
+        console.log(`🔍 [ADD_TRANSPORT] Sprawdzam pozycje CMR dla zamówienia ${order.orderNumber}...`);
         
-        console.log(`📊 Zamówienie ${order.orderNumber}: ${palletsCount} palet`);
+        const filteredItems = cmrItems.filter(item => {
+          const belongsToOrder = 
+            (item.orderId && item.orderId === orderId) ||
+            (!item.orderId && item.orderNumber && item.orderNumber === order.orderNumber);
+          return belongsToOrder && item.orderItemId;
+        });
+        
+        console.log(`📋 [ADD_TRANSPORT] Znaleziono ${filteredItems.length} pozycji należących do zamówienia`);
+        
+        const palletsCount = filteredItems.reduce((sum, item) => {
+          // Priorytet: volume (pracownicy wpisują tam rzeczywistą liczbę palet), fallback: palletsCount
+          const volumeValue = parseFloat(item.volume) || 0;
+          const palletsCountValue = parseFloat(item.palletsCount) || 0;
+          const quantity = volumeValue || palletsCountValue || 0;
+          const sourceField = volumeValue > 0 ? 'volume' : (palletsCountValue > 0 ? 'palletsCount' : 'brak');
+          
+          console.log(`   📦 [ADD_TRANSPORT] ${item.description}:`, {
+            'volume': item.volume,
+            'palletsCount': item.palletsCount,
+            'UŻYTA WARTOŚĆ': quantity,
+            'ŹRÓDŁO': sourceField
+          });
+          
+          return sum + quantity;
+        }, 0);
+        
+        console.log(`📊 [ADD_TRANSPORT] Zamówienie ${order.orderNumber}: SUMA = ${palletsCount} palet`);
         
         if (palletsCount === 0) {
           console.log(`⏭️ Brak palet dla zamówienia ${order.orderNumber} - pomijam`);
@@ -2202,21 +2221,33 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
     
      // KROK 1: Pobierz wszystkie dokumenty CMR powiązane z tym zamówieniem
      console.log(`🔍 [RECALCULATE] Pobieranie dokumentów CMR powiązanych z zamówieniem ${orderId}...`);
-     const cmrDocuments = await getCmrDocumentsByOrderId(orderId);
+     const allCmrDocuments = await getCmrDocumentsByOrderId(orderId);
+     
+     // Filtruj CMR - pomijamy szkice i wystawione (bierzemy tylko te w transporcie, dostarczone, zakończone)
+     const cmrDocuments = allCmrDocuments.filter(cmr => {
+       const shouldInclude = cmr.status !== CMR_STATUSES.DRAFT && cmr.status !== CMR_STATUSES.ISSUED;
+       if (!shouldInclude) {
+         console.log(`⏭️ [RECALCULATE] Pomijam CMR ${cmr.cmrNumber} ze statusem "${cmr.status}"`);
+       }
+       return shouldInclude;
+     });
+     
+     console.log(`📋 [RECALCULATE] Znaleziono ${allCmrDocuments.length} dokumentów CMR, z czego ${cmrDocuments.length} w odpowiednim statusie (pomijam szkice i wystawione)`);
      
      if (cmrDocuments.length === 0) {
-       console.log(`⏭️ [RECALCULATE] Brak dokumentów CMR dla zamówienia ${order.orderNumber}`);
+       console.log(`⏭️ [RECALCULATE] Brak dokumentów CMR w odpowiednim statusie dla zamówienia ${order.orderNumber}`);
        return { 
          success: true, 
-         message: 'Brak dokumentów CMR dla tego zamówienia',
+         message: allCmrDocuments.length > 0 ? 
+           `Wszystkie ${allCmrDocuments.length} CMR mają status szkic/wystawione - pominięto` : 
+           'Brak dokumentów CMR dla tego zamówienia',
          orderNumber: order.orderNumber,
          palletsCount: 0,
          cmrCount: 0,
+         cmrCountTotal: allCmrDocuments.length,
          action: 'none'
        };
      }
-     
-     console.log(`📋 [RECALCULATE] Znaleziono ${cmrDocuments.length} dokumentów CMR powiązanych z zamówieniem`);
      
      // KROK 2: Użyj już pobranych pozycji CMR (bez limitu Firestore!)
      // getCmrDocumentsByOrderId już pobiera pozycje dla każdego dokumentu
@@ -2228,12 +2259,21 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
      cmrDocuments.forEach(cmrDoc => {
        console.log(`📋 [RECALCULATE] Przetwarzam CMR ${cmrDoc.cmrNumber} z ${(cmrDoc.items || []).length} pozycjami`);
        
-       (cmrDoc.items || []).forEach(item => {
-         const palletsCount = parseFloat(item.palletsCount) || 0;
+      (cmrDoc.items || []).forEach(item => {
+        // Priorytet: volume (pracownicy wpisują tam rzeczywistą liczbę palet), fallback: palletsCount
+        const volumeValue = parseFloat(item.volume) || 0;
+        const palletsCountValue = parseFloat(item.palletsCount) || 0;
+        const palletsCount = volumeValue || palletsCountValue || 0;
+        const sourceField = volumeValue > 0 ? 'volume' : (palletsCountValue > 0 ? 'palletsCount' : 'brak');
          
          console.log(`   📦 [RECALCULATE] Pozycja CMR:`, {
            description: item.description,
-           palletsCount: palletsCount,
+           'volume (oryg.)': item.volume,
+           'palletsCount (oryg.)': item.palletsCount,
+           'volume (parsed)': volumeValue,
+           'palletsCount (parsed)': palletsCountValue,
+           'UŻYTA WARTOŚĆ': palletsCount,
+           'ŹRÓDŁO': sourceField,
            cmrId: item.cmrId,
            orderId: item.orderId,
            orderNumber: item.orderNumber,
@@ -2377,7 +2417,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
      if (existingServiceIndex !== -1) {
        // ZASTĄP (nie dodawaj!) ilość
        // Przygotuj notatki (dodaj notatki z listy cenowej jeśli są)
-       let serviceNotes = `Przeliczone z ${cmrDocuments.length} CMR - ${totalPallets} palet`;
+       let serviceNotes = `Przeliczone z ${cmrDocuments.length} CMR (aktywne, pominięto szkice/wystawione) - ${totalPallets} palet`;
        if (transportService.priceListNotes) {
          serviceNotes = `${transportService.priceListNotes}\n${serviceNotes}`;
        }
@@ -2394,7 +2434,7 @@ export const recalculateTransportServiceForOrder = async (orderId, userId) => {
        action = 'added';
        
        // Przygotuj notatki (dodaj notatki z listy cenowej jeśli są)
-       let serviceNotes = `Przeliczone z ${cmrDocuments.length} CMR - ${totalPallets} palet`;
+       let serviceNotes = `Przeliczone z ${cmrDocuments.length} CMR (aktywne, pominięto szkice/wystawione) - ${totalPallets} palet`;
        if (transportService.priceListNotes) {
          serviceNotes = `${transportService.priceListNotes}\n${serviceNotes}`;
        }
