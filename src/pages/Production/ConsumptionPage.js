@@ -1286,23 +1286,29 @@ const ConsumptionPage = () => {
                       />
                     </TableCell>
                     <TableCell align="center">
-                      <Tooltip title="Edytuj konsumpcję">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleEditConsumption(consumption)}
-                          color="primary"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
+                      <Tooltip title={task?.status === 'Zakończone' ? 'Nie można edytować konsumpcji zakończonego zadania' : 'Edytuj konsumpcję'}>
+                        <span>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleEditConsumption(consumption)}
+                            color="primary"
+                            disabled={task?.status === 'Zakończone'}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
-                      <Tooltip title="Usuń konsumpcję">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleDeleteConsumption(consumption)}
-                          color="error"
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
+                      <Tooltip title={task?.status === 'Zakończone' ? 'Nie można usunąć konsumpcji zakończonego zadania' : 'Usuń konsumpcję'}>
+                        <span>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteConsumption(consumption)}
+                            color="error"
+                            disabled={task?.status === 'Zakończone'}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     </TableCell>
                   </TableRow>
