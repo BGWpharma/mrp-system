@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -898,8 +898,8 @@ const OrdersList = () => {
     }
   };
 
-  // Dodajmy funkcję pomocniczą do bezpiecznego renderowania wartości
-  const safeRenderValue = (value) => {
+  // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
+  const safeRenderValue = useCallback((value) => {
     if (value === null || value === undefined) {
       return '-';
     }
@@ -909,10 +909,10 @@ const OrdersList = () => {
     }
     
     return String(value);
-  };
+  }, []);
 
-  // Funkcja do formatowania danych dostawcy
-  const formatSupplier = (supplier) => {
+  // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
+  const formatSupplier = useCallback((supplier) => {
     if (!supplier) return '-';
     
     if (typeof supplier === 'string') {
@@ -934,7 +934,7 @@ const OrdersList = () => {
     }
     
     return String(supplier);
-  };
+  }, []);
 
   // Obsługa sortowania kolumn
   const handleSort = (column) => {

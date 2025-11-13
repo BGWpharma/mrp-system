@@ -1,5 +1,5 @@
 // src/components/production/ProductionGapAnalysisTab.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -181,8 +181,8 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
     }
   };
 
-  // Funkcja do renderowania informacji o zadaniu
-  const renderTaskInfo = (session, label = '') => {
+  // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
+  const renderTaskInfo = useCallback((session, label = '') => {
     if (!session?.task) return null;
     
     const task = session.task;
@@ -233,7 +233,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
         </Box>
       </Box>
     );
-  };
+  }, [handleTaskClick]);
 
   // Funkcja do pobierania ikony zalecenia
   const getRecommendationIcon = (severity) => {

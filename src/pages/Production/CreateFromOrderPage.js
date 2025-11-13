@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Container, 
@@ -1186,8 +1186,18 @@ const CreateFromOrderPage = () => {
     }));
   };
 
-  // Komponent renderujący tabelę produktów z zamówienia
-  const renderProductsTable = () => {
+  // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
+  const handleProductDateChange = useCallback((e, itemId) => {
+    const { value } = e.target;
+    // Aktualizuj daty rozpoczęcia dla konkretnych produktów
+    setProductDates(prevDates => ({
+      ...prevDates,
+      [itemId]: value
+    }));
+  }, []);
+
+  // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
+  const renderProductsTable = useCallback(() => {
     if (!selectedOrder || !selectedOrder.items || selectedOrder.items.length === 0) {
       return (
         <Typography variant="body1" sx={{ my: 2 }}>
@@ -1195,16 +1205,6 @@ const CreateFromOrderPage = () => {
         </Typography>
       );
     }
-
-    // Funkcja do obsługi zmiany daty rozpoczęcia dla konkretnego produktu
-    const handleProductDateChange = (e, itemId) => {
-      const { value } = e.target;
-      // Aktualizuj daty rozpoczęcia dla konkretnych produktów
-      setProductDates(prevDates => ({
-        ...prevDates,
-        [itemId]: value
-      }));
-    };
 
     // Filtruj produkty, aby wyświetlać tylko te, które mają przypisaną recepturę
     const productsWithRecipes = selectedOrder.items.filter(item => {
@@ -1428,7 +1428,7 @@ const CreateFromOrderPage = () => {
         </Table>
       </TableContainer>
     );
-  };
+  }, [selectedOrder, findRecipeForProduct, isAllSelected, handleSelectAllItems, isPartiallySelected, selectedItems, existingTasks, productDates, selectedWorkstations, workstations, t, handleProductDateChange, handleWorkstationChange]);
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

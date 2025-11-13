@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useMemo, useCallback } from 'react';
 
 // Kontekst dla zarządzania stanem listy zamówień klientów
 const OrderListStateContext = createContext();
@@ -164,8 +164,8 @@ export const OrderListStateProvider = ({ children }) => {
 
   const [state, dispatch] = useReducer(orderListStateReducer, initialState, loadInitialState);
 
-  // Akcje
-  const actions = {
+  // ⚡ OPTYMALIZACJA: Memoizuj akcje aby uniknąć niepotrzebnych rerenderów konsumentów kontekstu
+  const actions = useMemo(() => ({
     setSearchTerm: (term) => dispatch({ type: actionTypes.SET_SEARCH_TERM, payload: term }),
     setDebouncedSearchTerm: (term) => dispatch({ type: actionTypes.SET_DEBOUNCED_SEARCH_TERM, payload: term }),
     setFilters: (filters) => dispatch({ type: actionTypes.SET_FILTERS, payload: filters }),
@@ -176,10 +176,13 @@ export const OrderListStateProvider = ({ children }) => {
     setShowFilters: (show) => dispatch({ type: actionTypes.SET_SHOW_FILTERS, payload: show }),
     resetFilters: () => dispatch({ type: actionTypes.RESET_FILTERS }),
     resetState: () => dispatch({ type: actionTypes.RESET_STATE })
-  };
+  }), [dispatch]);
+
+  // ⚡ OPTYMALIZACJA: Memoizuj wartość kontekstu aby uniknąć niepotrzebnych rerenderów
+  const contextValue = useMemo(() => ({ state, actions }), [state, actions]);
 
   return (
-    <OrderListStateContext.Provider value={{ state, actions }}>
+    <OrderListStateContext.Provider value={contextValue}>
       {children}
     </OrderListStateContext.Provider>
   );

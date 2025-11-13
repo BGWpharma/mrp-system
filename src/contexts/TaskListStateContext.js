@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useMemo } from 'react';
 
 // Kontekst dla zarządzania stanem listy zadań produkcyjnych
 const TaskListStateContext = createContext();
@@ -133,18 +133,21 @@ export const TaskListStateProvider = ({ children }) => {
     }
   }, []);
 
-  // Funkcje pomocnicze do zarządzania stanem
-  const actions = {
+  // ⚡ OPTYMALIZACJA: Memoizuj akcje aby uniknąć niepotrzebnych rerenderów konsumentów kontekstu
+  const actions = useMemo(() => ({
     setSearchTerm: (term) => dispatch({ type: actionTypes.SET_SEARCH_TERM, payload: term }),
     setStatusFilter: (status) => dispatch({ type: actionTypes.SET_STATUS_FILTER, payload: status }),
     setPage: (page) => dispatch({ type: actionTypes.SET_PAGE, payload: page }),
     setPageSize: (size) => dispatch({ type: actionTypes.SET_PAGE_SIZE, payload: size }),
     setTableSort: (sort) => dispatch({ type: actionTypes.SET_TABLE_SORT, payload: sort }),
     resetState: () => dispatch({ type: actionTypes.RESET_STATE })
-  };
+  }), [dispatch]);
+
+  // ⚡ OPTYMALIZACJA: Memoizuj wartość kontekstu aby uniknąć niepotrzebnych rerenderów
+  const contextValue = useMemo(() => ({ state, actions }), [state, actions]);
 
   return (
-    <TaskListStateContext.Provider value={{ state, actions }}>
+    <TaskListStateContext.Provider value={contextValue}>
       {children}
     </TaskListStateContext.Provider>
   );

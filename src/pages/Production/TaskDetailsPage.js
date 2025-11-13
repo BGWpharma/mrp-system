@@ -120,6 +120,7 @@ import {
   Drawer,
   Badge,
   styled,
+  Skeleton,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -485,15 +486,22 @@ const TaskDetailsPage = () => {
   });
 
   // ✅ Selective Data Loading - funkcje ładowania danych dla konkretnych zakładek
+  // ⚡ OPTYMALIZACJA: Lazy loading - ładuj tylko gdy zakładka jest aktywna
   const loadProductionPlanData = useCallback(async () => {
     if (loadedTabs.productionPlan || !task?.id) return;
     
     try {
-      // Ładowanie danych planu produkcji
+      console.log('⚡ [LAZY-LOAD] Ładowanie danych planu produkcji...');
       
       // Historia produkcji
       const history = await getProductionHistory(task.id);
       setProductionHistory(history || []);
+      
+      // Pobierz nazwy użytkowników z historii produkcji
+      const userIds = [...new Set(history?.map(s => s.userId).filter(Boolean))];
+      if (userIds.length > 0) {
+        await fetchUserNames(userIds);
+      }
       
       // Dostępne maszyny (jeśli nie zostały załadowane)
       if (availableMachines.length === 0) {
@@ -501,22 +509,24 @@ const TaskDetailsPage = () => {
       }
       
       setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
-      // Plan produkcji załadowany
+      console.log('✅ [LAZY-LOAD] Dane planu produkcji załadowane');
     } catch (error) {
       console.error('Błąd ładowania planu produkcji:', error.message);
     }
-  }, [loadedTabs.productionPlan, task?.id, availableMachines.length]);
+  }, [loadedTabs.productionPlan, task?.id, availableMachines.length, fetchUserNames]);
 
   const loadFormsData = useCallback(async () => {
     if (loadedTabs.forms || !task?.moNumber) return;
     
     try {
-      // Ładowanie danych formularzy
+      console.log('⚡ [LAZY-LOAD] Ładowanie danych formularzy...');
       
+      // Ładowanie danych formularzy
       const responses = await fetchFormResponsesOptimized(task.moNumber);
       setFormResponses(responses);
       
       setLoadedTabs(prev => ({ ...prev, forms: true }));
+      console.log('✅ [LAZY-LOAD] Dane formularzy załadowane');
       // Formularze załadowane
     } catch (error) {
       console.error('❌ Error loading Forms data:', error);
@@ -592,6 +602,37 @@ const TaskDetailsPage = () => {
         break;
     }
   };
+
+  // ⚡ OPTYMALIZACJA: Prefetching danych przy hover nad zakładkami
+  const handleTabHover = useCallback((tabIndex) => {
+    // Prefetchuj dane dla zakładki gdy użytkownik hover nad nią
+    switch (tabIndex) {
+      case 2: // Produkcja i Plan
+        if (!loadedTabs.productionPlan && task?.id) {
+          console.log('⚡ [PREFETCH] Prefetch danych planu produkcji...');
+          loadProductionPlanData();
+        }
+        break;
+      case 3: // Formularze
+        if (!loadedTabs.forms && task?.moNumber) {
+          console.log('⚡ [PREFETCH] Prefetch danych formularzy...');
+          loadFormsData();
+        }
+        break;
+      case 4: // Historia zmian
+        if (!loadedTabs.changeHistory && task?.statusHistory?.length) {
+          console.log('⚡ [PREFETCH] Prefetch danych historii zmian...');
+          loadChangeHistoryData();
+        }
+        break;
+      case 5: // Raport gotowego produktu
+        if (!loadedTabs.endProductReport && task?.id) {
+          console.log('⚡ [PREFETCH] Prefetch danych raportu produktu...');
+          loadEndProductReportData();
+        }
+        break;
+    }
+  }, [loadedTabs, task?.id, task?.moNumber, task?.statusHistory, loadProductionPlanData, loadFormsData, loadChangeHistoryData, loadEndProductReportData]);
 
   // ⚡ OPTYMALIZACJA: useRef dla debounceTimer aby uniknąć race condition w cleanup
   const debounceTimerRef = useRef(null);
@@ -1236,46 +1277,52 @@ const TaskDetailsPage = () => {
         });
       }
       
-      // KROK 4: Pobierz historię produkcji i nazwy użytkowników z różnych źródeł
+      // ⚡ OPTYMALIZACJA: KROK 4 - Pobierz tylko podstawowe nazwy użytkowników (bez historii produkcji)
+      // Historia produkcji będzie ładowana lazy load gdy zakładka jest aktywna
       if (fetchedTask?.id) {
         try {
-          // Pobierz historię produkcji
-          const history = await getProductionHistory(fetchedTask.id);
-          setProductionHistory(history || []);
-          
-          // Zbierz wszystkie ID użytkowników z różnych źródeł
-          const allUserIds = new Set();
-          
-          // Dodaj użytkowników z historii produkcji
-          history?.forEach(session => {
-            if (session.userId) allUserIds.add(session.userId);
-          });
+          // Zbierz ID użytkowników z podstawowych źródeł (bez historii produkcji)
+          const basicUserIds = new Set();
           
           // Dodaj użytkowników z historii statusów
           fetchedTask.statusHistory?.forEach(change => {
-            if (change.changedBy) allUserIds.add(change.changedBy);
+            if (change.changedBy) basicUserIds.add(change.changedBy);
           });
           
           // Dodaj użytkowników z materiałów skonsumowanych
           fetchedTask.consumedMaterials?.forEach(consumed => {
-            if (consumed.userId) allUserIds.add(consumed.userId);
-            if (consumed.createdBy) allUserIds.add(consumed.createdBy);
+            if (consumed.userId) basicUserIds.add(consumed.userId);
+            if (consumed.createdBy) basicUserIds.add(consumed.createdBy);
           });
           
           // Dodaj użytkowników z historii kosztów
           fetchedTask.costHistory?.forEach(costChange => {
-            if (costChange.userId) allUserIds.add(costChange.userId);
+            if (costChange.userId) basicUserIds.add(costChange.userId);
           });
           
-          // Pobierz wszystkie nazwy użytkowników jednocześnie
-          if (allUserIds.size > 0) {
-            console.log('Pobieranie wszystkich nazw użytkowników:', [...allUserIds]);
-            await fetchUserNames([...allUserIds]);
+          // Pobierz podstawowe nazwy użytkowników (bez historii produkcji - załadowane później)
+          if (basicUserIds.size > 0) {
+            console.log('⚡ [PROGRESSIVE] Pobieranie podstawowych nazw użytkowników:', [...basicUserIds]);
+            await fetchUserNames([...basicUserIds]);
           }
-        } catch (historyError) {
-          console.error('Błąd podczas pobierania historii produkcji i użytkowników:', historyError);
+        } catch (error) {
+          console.error('Błąd podczas pobierania podstawowych nazw użytkowników:', error);
         }
       }
+      
+      // ⚡ OPTYMALIZACJA: FAZA 2 - Ważne dane (opóźnione o 100ms dla lepszego UX)
+      setTimeout(async () => {
+        try {
+          const importantPromises = [];
+          
+          // Rezerwacje PO - już załadowane w KROK 3, ale możemy dodać tutaj inne ważne dane
+          // jeśli potrzebne
+          
+          await Promise.allSettled(importantPromises);
+        } catch (error) {
+          console.error('Błąd podczas ładowania ważnych danych:', error);
+        }
+      }, 100);
     } catch (error) {
       console.error('Błąd podczas pobierania zadania:', error);
       showError('Nie udało się pobrać danych zadania: ' + error.message);
@@ -8144,8 +8191,13 @@ const TaskDetailsPage = () => {
     return (
       <Container maxWidth="xl">
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <CircularProgress />
+        // ⚡ OPTYMALIZACJA: Skeleton loading zamiast CircularProgress dla lepszego UX
+        <Box sx={{ mt: 4 }}>
+          <Skeleton variant="rectangular" height={60} sx={{ mb: 2, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" height={400} sx={{ mb: 2, borderRadius: 1 }} />
+          <Skeleton variant="text" width="60%" height={40} />
+          <Skeleton variant="text" width="40%" height={40} />
+          <Skeleton variant="rectangular" height={200} sx={{ mt: 2, borderRadius: 1 }} />
         </Box>
       ) : task ? (
         <>
@@ -8205,21 +8257,53 @@ const TaskDetailsPage = () => {
           {/* Główne zakładki */}
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
             <Tabs value={mainTab} onChange={handleMainTabChange} aria-label="Główne zakładki szczegółów zadania" variant="scrollable" scrollButtons="auto">
-              <Tab label={t('tabs.basicData')} icon={<InfoIcon />} iconPosition="start" />
-              <Tab label={t('tabs.materialsAndCosts')} icon={<Materials2Icon />} iconPosition="start" />
-              <Tab label={t('tabs.productionAndPlan')} icon={<ProductionIcon />} iconPosition="start" />
-              <Tab label={t('tabs.forms')} icon={<FormIcon />} iconPosition="start" />
-              <Tab label={t('tabs.changeHistory')} icon={<TimelineIcon />} iconPosition="start" />
-              <Tab label={t('tabs.finishedProductReport')} icon={<AssessmentIcon />} iconPosition="start" />
+              <Tab 
+                label={t('tabs.basicData')} 
+                icon={<InfoIcon />} 
+                iconPosition="start"
+                onMouseEnter={() => handleTabHover(0)}
+              />
+              <Tab 
+                label={t('tabs.materialsAndCosts')} 
+                icon={<Materials2Icon />} 
+                iconPosition="start"
+                onMouseEnter={() => handleTabHover(1)}
+              />
+              <Tab 
+                label={t('tabs.productionAndPlan')} 
+                icon={<ProductionIcon />} 
+                iconPosition="start"
+                onMouseEnter={() => handleTabHover(2)}
+              />
+              <Tab 
+                label={t('tabs.forms')} 
+                icon={<FormIcon />} 
+                iconPosition="start"
+                onMouseEnter={() => handleTabHover(3)}
+              />
+              <Tab 
+                label={t('tabs.changeHistory')} 
+                icon={<TimelineIcon />} 
+                iconPosition="start"
+                onMouseEnter={() => handleTabHover(4)}
+              />
+              <Tab 
+                label={t('tabs.finishedProductReport')} 
+                icon={<AssessmentIcon />} 
+                iconPosition="start"
+                onMouseEnter={() => handleTabHover(5)}
+              />
             </Tabs>
           </Box>
 
           {/* Zawartość zakładek */}
           {mainTab === 0 && ( // Zakładka "Dane podstawowe"
             <Suspense fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-                <CircularProgress />
-                    </Box>
+              <Box sx={{ p: 2 }}>
+                <Skeleton variant="rectangular" height={200} sx={{ mb: 2, borderRadius: 1 }} />
+                <Skeleton variant="text" width="80%" height={40} />
+                <Skeleton variant="text" width="60%" height={40} />
+              </Box>
             }>
               <BasicDataTab
                 task={task}
@@ -8231,9 +8315,11 @@ const TaskDetailsPage = () => {
 
           {mainTab === 1 && ( // Zakładka "Materiały i Koszty"
             <Suspense fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-                <CircularProgress />
-                    </Box>
+              <Box sx={{ p: 2 }}>
+                <Skeleton variant="rectangular" height={300} sx={{ mb: 2, borderRadius: 1 }} />
+                <Skeleton variant="text" width="70%" height={40} />
+                <Skeleton variant="text" width="50%" height={40} />
+              </Box>
             }>
               <MaterialsAndCostsTab
                 // Dane
@@ -8287,8 +8373,10 @@ const TaskDetailsPage = () => {
 
           {mainTab === 2 && ( // Zakładka "Produkcja i Plan"
             <Suspense fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-                <CircularProgress />
+              <Box sx={{ p: 2 }}>
+                <Skeleton variant="rectangular" height={400} sx={{ mb: 2, borderRadius: 1 }} />
+                <Skeleton variant="text" width="90%" height={40} />
+                <Skeleton variant="text" width="75%" height={40} />
               </Box>
             }>
               <ProductionPlanTab
@@ -8323,8 +8411,10 @@ const TaskDetailsPage = () => {
 
           {mainTab === 3 && ( // Zakładka "Formularze"
             <Suspense fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-                <CircularProgress />
+              <Box sx={{ p: 2 }}>
+                <Skeleton variant="rectangular" height={350} sx={{ mb: 2, borderRadius: 1 }} />
+                <Skeleton variant="text" width="85%" height={40} />
+                <Skeleton variant="text" width="65%" height={40} />
               </Box>
             }>
               <FormsTab
@@ -8342,8 +8432,10 @@ const TaskDetailsPage = () => {
 
           {mainTab === 4 && ( // Zakładka "Historia zmian"
             <Suspense fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-                <CircularProgress />
+              <Box sx={{ p: 2 }}>
+                <Skeleton variant="rectangular" height={300} sx={{ mb: 2, borderRadius: 1 }} />
+                <Skeleton variant="text" width="80%" height={40} />
+                <Skeleton variant="text" width="60%" height={40} />
               </Box>
             }>
               <ChangeHistoryTab task={task} getUserName={getUserName} />
@@ -8352,8 +8444,10 @@ const TaskDetailsPage = () => {
 
           {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
             <Suspense fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-                <CircularProgress />
+              <Box sx={{ p: 2 }}>
+                <Skeleton variant="rectangular" height={500} sx={{ mb: 2, borderRadius: 1 }} />
+                <Skeleton variant="text" width="95%" height={40} />
+                <Skeleton variant="text" width="80%" height={40} />
               </Box>
             }>
               <EndProductReportTab

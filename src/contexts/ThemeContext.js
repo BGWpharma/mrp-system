@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { createTheme, ThemeProvider as MuiThemeProvider, alpha } from '@mui/material/styles';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase/config';
@@ -1047,8 +1047,8 @@ export const ThemeProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  // Funkcja do przełączania motywu
-  const toggleTheme = async () => {
+  // ⚡ OPTYMALIZACJA: useCallback zapobiega recreating funkcji przy każdym renderze
+  const toggleTheme = useCallback(async () => {
     const newMode = mode === 'light' ? 'dark' : 'light';
     setMode(newMode);
     setTheme(newMode === 'light' ? createLightTheme() : createDarkTheme());
@@ -1078,10 +1078,13 @@ export const ThemeProvider = ({ children }) => {
         console.error('Błąd podczas zapisywania preferencji motywu:', error);
       }
     }
-  };
+  }, [mode, auth]);
+
+  // ⚡ OPTYMALIZACJA: Memoizuj wartość kontekstu aby uniknąć niepotrzebnych rerenderów
+  const contextValue = useMemo(() => ({ mode, toggleTheme }), [mode, toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ mode, toggleTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       <MuiThemeProvider theme={theme}>
         {children}
       </MuiThemeProvider>
