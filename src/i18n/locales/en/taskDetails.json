@@ -449,7 +449,7 @@
     "mixingReportTooltip": "Open report",
     "comments": {
         "title": "MO Comments",
-        "drawerTitle": "Comments for MO #{moNumber}",
+        "drawerTitle": "Comments for MO {{moNumber}}",
         "addComment": "Add Comment",
         "adding": "Adding...",
         "placeholder": "Write a comment...",

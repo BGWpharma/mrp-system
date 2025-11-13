@@ -457,7 +457,7 @@
     "mixingReportTooltip": "Otwórz raport",
     "comments": {
         "title": "Komentarze do MO",
-        "drawerTitle": "Komentarze do MO #{moNumber}",
+        "drawerTitle": "Komentarze do MO {{moNumber}}",
         "addComment": "Dodaj komentarz",
         "adding": "Dodawanie...",
         "placeholder": "Napisz komentarz...",
