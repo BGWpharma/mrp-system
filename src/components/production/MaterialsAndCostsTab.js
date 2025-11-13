@@ -111,7 +111,7 @@ const MaterialsAndCostsTab = ({
                 const hasConsumptionExcess = materials.some(material => {
                   const materialId = material.inventoryItemId || material.id;
                   const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
-                  const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                  const issuedQuantity = calculateIssuedQuantityForMaterial(materialId);
                   return isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
                 });
 
@@ -210,7 +210,7 @@ const MaterialsAndCostsTab = ({
                   
                   // Sprawdź czy konsumpcja przekracza plan mieszań
                   const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
-                  const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                  const issuedQuantity = calculateIssuedQuantityForMaterial(materialId);
                   const hasConsumptionExcess = isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
                   
                   // Ustaw kolor tła: ostrzeżenie ma priorytet nad zarezerwowaniem
@@ -257,14 +257,14 @@ const MaterialsAndCostsTab = ({
                       </TableCell>
                       <TableCell>
                         {(() => { 
-                          const issuedQuantity = calculateIssuedQuantityForMaterial(material.name); 
+                          const issuedQuantity = calculateIssuedQuantityForMaterial(materialId); 
                           return issuedQuantity > 0 ? `${issuedQuantity} ${material.unit}` : '—'; 
                         })()}
                       </TableCell>
                       <TableCell>
                         {(() => { 
                           const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
-                          const issuedQuantity = calculateIssuedQuantityForMaterial(material.name);
+                          const issuedQuantity = calculateIssuedQuantityForMaterial(materialId);
                           const isExceeding = isConsumptionExceedingIssued(consumedQuantity, issuedQuantity);
                           const excessPercentage = calculateConsumptionExcess(consumedQuantity, issuedQuantity);
                           

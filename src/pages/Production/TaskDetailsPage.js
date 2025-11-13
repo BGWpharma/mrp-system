@@ -1589,7 +1589,7 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Memoizowana mapa ilości wydanych dla wszystkich materiałów
+  // Memoizowana mapa ilości wydanych dla wszystkich materiałów (indeksowana po materialId)
   const issuedQuantitiesMap = useMemo(() => {
     if (!ingredientReservationLinks || Object.keys(ingredientReservationLinks).length === 0) {
       return {};
@@ -1601,14 +1601,15 @@ const TaskDetailsPage = () => {
     Object.entries(ingredientReservationLinks).forEach(([ingredientId, linksArray]) => {
       if (Array.isArray(linksArray)) {
         linksArray.forEach(link => {
-          const batchMaterialName = link.batchSnapshot?.materialName;
-          if (batchMaterialName) {
+          // ✅ POPRAWKA: Używaj materialId zamiast materialName dla stabilnej agregacji
+          const materialId = link.batchSnapshot?.materialId;
+          if (materialId) {
             // Zainicjalizuj sumę dla materiału jeśli nie istnieje
-            if (!quantitiesMap[batchMaterialName]) {
-              quantitiesMap[batchMaterialName] = 0;
+            if (!quantitiesMap[materialId]) {
+              quantitiesMap[materialId] = 0;
             }
             // Dodaj powiązaną ilość do sumy
-            quantitiesMap[batchMaterialName] += parseFloat(link.linkedQuantity || 0);
+            quantitiesMap[materialId] += parseFloat(link.linkedQuantity || 0);
           }
         });
       }
@@ -1618,8 +1619,9 @@ const TaskDetailsPage = () => {
   }, [ingredientReservationLinks]);
 
   // Funkcja do obliczania ilości wydanej dla materiału na podstawie powiązań w planie mieszań
-  const calculateIssuedQuantityForMaterial = useCallback((materialName) => {
-    return issuedQuantitiesMap[materialName] || 0;
+  // ✅ POPRAWKA: Przyjmuje materialId zamiast materialName dla stabilności
+  const calculateIssuedQuantityForMaterial = useCallback((materialId) => {
+    return issuedQuantitiesMap[materialId] || 0;
   }, [issuedQuantitiesMap]);
 
   // Funkcja do odświeżania tylko podstawowych danych zadania (dla POReservationManager)

@@ -658,6 +658,19 @@ const ConsumptionPage = () => {
       };
     }
 
+    // Walidacja 0: Sprawdzenie czy istnieje jakakolwiek konsumpcja (BŁĄD KRYTYCZNY)
+    if (!consumptionDataToValidate || consumptionDataToValidate.length === 0) {
+      validationErrors.push(
+        'Brak zarejestrowanych konsumpcji materiałów - zadanie nie może zostać zatwierdzone bez konsumpcji'
+      );
+      
+      return {
+        isValid: false,
+        errors: validationErrors,
+        warnings: validationWarnings
+      };
+    }
+
     // Sprawdzenie każdego materiału w zadaniu
     for (const material of taskData.materials) {
       const materialId = material.inventoryItemId || material.id;
