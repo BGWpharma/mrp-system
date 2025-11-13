@@ -777,7 +777,7 @@ const ItemDetailsPage = () => {
             <AlertTitle><strong>Partie z krótkim terminem ważności</strong></AlertTitle>
             <Typography>
               W magazynie znajduje się <strong>{expiringBatches.length}</strong> {expiringBatches.length === 1 ? 'partia' : 
-              expiringBatches.length < 5 ? 'partie' : 'partii'} tego produktu z terminem ważności krótszym niż 30 dni.
+              expiringBatches.length < 5 ? 'partie' : 'partii'} tego produktu z terminem ważności krótszym niż 12 miesięcy.
               Łącznie <strong>{formatQuantity(expiringBatches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {item?.unit}</strong>.
             </Typography>
           </Alert>

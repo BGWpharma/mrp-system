@@ -12,7 +12,7 @@
     "title": "Status legend:",
     "expired": "🔴 Expired / < 7 days",
     "urgent": "🟠 Expires within a week (7 days)",
-    "warning": "🟡 Expires within a month (7-30 days)",
+    "warning": "🟡 Expires within 7 days - 12 months",
     "safe": "🟢 Safe stock (> 12 months)"
   },
   "thresholdSettings": {

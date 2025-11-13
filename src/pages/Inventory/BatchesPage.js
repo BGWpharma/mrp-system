@@ -369,7 +369,7 @@ const BatchesPage = () => {
         <Alert severity="warning" sx={{ mb: 3 }}>
           <AlertTitle>Uwaga!</AlertTitle>
           Wykryto {expiringCount} {expiringCount === 1 ? 'partię wygasającą' : 
-            expiringCount < 5 ? 'partie wygasające' : 'partii wygasających'} w ciągu 30 dni
+            expiringCount < 5 ? 'partie wygasające' : 'partii wygasających'} w ciągu 12 miesięcy
         </Alert>
       );
     }

@@ -301,8 +301,8 @@ const Sidebar = ({ onToggle }) => {
   useEffect(() => {
     const fetchExpiringProducts = async () => {
       try {
-        // Pobierz produkty zbliżające się do końca terminu ważności (domyślnie 30 dni)
-        const expiringBatches = await getExpiringBatches(30);
+        // Pobierz produkty zbliżające się do końca terminu ważności (domyślnie 365 dni - 12 miesięcy)
+        const expiringBatches = await getExpiringBatches(365);
         // Pobierz produkty, które już są przeterminowane
         const expiredBatches = await getExpiredBatches();
         // Łączna ilość produktów wygasających i przeterminowanych

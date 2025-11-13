@@ -289,7 +289,7 @@ const ExpiryDatesPage = () => {
                 fontWeight: 'bold',
                 color: daysToExpiry < 0 ? 'error.main' : 
                        daysToExpiry < 7 ? 'error.main' : 
-                       daysToExpiry <= 30 ? 'warning.main' : 'inherit'
+                       daysToExpiry <= 365 ? 'warning.main' : 'inherit'
               }}
             >
               {daysToExpiry < 0 

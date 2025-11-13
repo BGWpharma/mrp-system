@@ -12,7 +12,7 @@
     "title": "Legenda statusów:",
     "expired": "🔴 Przeterminowana / < 7 dni",
     "urgent": "🟠 Wygasa w ciągu tygodnia (7 dni)",
-    "warning": "🟡 Wygasa w ciągu miesiąca (7-30 dni)",
+    "warning": "🟡 Wygasa w ciągu 7 dni - 12 miesięcy",
     "safe": "🟢 Bezpieczny zapas (> 12 miesięcy)"
   },
   "thresholdSettings": {
