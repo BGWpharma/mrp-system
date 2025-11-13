@@ -437,7 +437,53 @@ export const createInvoiceFromOrder = async (orderId, invoiceData, userId) => {
       }
       
       // Zamówienia zakupowe mają format items zgodny z fakturami
-      basicInvoiceData.items = mapItemsWithProductionCosts(orderData.items, isProformaInvoice);
+      const mappedItems = mapItemsWithProductionCosts(orderData.items, isProformaInvoice);
+      
+      // Mapowanie dodatkowych kosztów z PO jako pozycje faktury
+      const mappedAdditionalCostsItems = [];
+      if (orderData.additionalCostsItems && Array.isArray(orderData.additionalCostsItems)) {
+        orderData.additionalCostsItems.forEach((cost, index) => {
+          const costValue = parseFloat(cost.value) || 0;
+          const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+          
+          if (costValue > 0) {
+            mappedAdditionalCostsItems.push({
+              id: cost.id || `additional-cost-${index}`,
+              name: cost.description || `Dodatkowy koszt ${index + 1}`,
+              description: '', // Opis pozostaje pusty dla dodatkowych kosztów
+              quantity: 1,
+              unit: 'szt.',
+              price: costValue,
+              netValue: costValue,
+              totalPrice: costValue,
+              vat: vatRate,
+              cnCode: '',
+              isAdditionalCost: true, // Flaga identyfikująca dodatkowe koszty
+              originalCostId: cost.id
+            });
+            console.log(`[createInvoiceFromOrder] Dodatkowy koszt jako pozycja faktury: ${cost.description || `Koszt ${index + 1}`}, wartość: ${costValue}, VAT: ${vatRate}%`);
+          }
+        });
+      } else if (orderData.additionalCosts && parseFloat(orderData.additionalCosts) > 0) {
+        // Dla wstecznej kompatybilności - stary format
+        const costValue = parseFloat(orderData.additionalCosts) || 0;
+        mappedAdditionalCostsItems.push({
+          id: 'additional-cost-legacy',
+          name: 'Dodatkowe koszty',
+          description: '', // Opis pozostaje pusty dla dodatkowych kosztów
+          quantity: 1,
+          unit: 'szt.',
+          price: costValue,
+          netValue: costValue,
+          totalPrice: costValue,
+          vat: 0,
+          cnCode: '',
+          isAdditionalCost: true
+        });
+      }
+      
+      // Połącz pozycje produktów z pozycjami dodatkowych kosztów
+      basicInvoiceData.items = [...mappedItems, ...mappedAdditionalCostsItems];
       
       // Oblicz wartość zamówienia zakupowego
       const poTotal = orderData.totalGross || orderData.totalValue || calculatePurchaseOrderTotal(orderData);

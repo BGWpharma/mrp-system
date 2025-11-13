@@ -946,6 +946,52 @@ const InvoiceForm = ({ invoiceId }) => {
           };
         });
 
+        // Mapowanie dodatkowych kosztów z PO jako pozycje faktury
+        const mappedAdditionalCostsItems = [];
+        if (selectedOrder.additionalCostsItems && Array.isArray(selectedOrder.additionalCostsItems)) {
+          selectedOrder.additionalCostsItems.forEach((cost, index) => {
+            const costValue = parseFloat(cost.value) || 0;
+            const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
+            
+            if (costValue > 0) {
+              mappedAdditionalCostsItems.push({
+                id: cost.id || `additional-cost-${index}`,
+                name: cost.description || `Dodatkowy koszt ${index + 1}`,
+                description: '', // Opis pozostaje pusty dla dodatkowych kosztów
+                quantity: 1,
+                unit: 'szt.',
+                price: costValue,
+                netValue: costValue,
+                totalPrice: costValue,
+                vat: vatRate,
+                cnCode: '',
+                isAdditionalCost: true, // Flaga identyfikująca dodatkowe koszty
+                originalCostId: cost.id
+              });
+              console.log(`Dodatkowy koszt jako pozycja faktury: ${cost.description || `Koszt ${index + 1}`}, wartość: ${costValue}, VAT: ${vatRate}%`);
+            }
+          });
+        } else if (selectedOrder.additionalCosts && parseFloat(selectedOrder.additionalCosts) > 0) {
+          // Dla wstecznej kompatybilności - stary format
+          const costValue = parseFloat(selectedOrder.additionalCosts) || 0;
+          mappedAdditionalCostsItems.push({
+            id: 'additional-cost-legacy',
+            name: 'Dodatkowe koszty',
+            description: '', // Opis pozostaje pusty dla dodatkowych kosztów
+            quantity: 1,
+            unit: 'szt.',
+            price: costValue,
+            netValue: costValue,
+            totalPrice: costValue,
+            vat: 0,
+            cnCode: '',
+            isAdditionalCost: true
+          });
+        }
+
+        // Połącz pozycje produktów z pozycjami dodatkowych kosztów
+        const allInvoiceItems = [...mappedPOItems, ...mappedAdditionalCostsItems];
+
         const invoiceData = {
           // Dla refaktur nie nadpisuj customer - pozostaw wybranego klienta
           // Dla zwykłych faktur zakupowych użyj dostawcy jako "customer"
@@ -961,7 +1007,7 @@ const InvoiceForm = ({ invoiceId }) => {
             billingAddress: selectedOrder.supplier?.address || '',
             shippingAddress: selectedOrder.deliveryAddress || ''
           }),
-          items: mappedPOItems,
+          items: allInvoiceItems, // Używamy wszystkich pozycji: produkty + dodatkowe koszty
           orderNumber: selectedOrder.number,
           total: finalGrossValue, // Używamy pełnej wartości brutto
           currency: selectedOrder.currency || 'EUR',
