@@ -220,9 +220,13 @@ const verifyProductionTasks = async (orderToVerify) => {
         task.productName !== taskDoc.productName ||
         task.quantity !== taskDoc.quantity ||
         task.endDate !== taskDoc.endDate ||
-        task.completionDate !== taskDoc.completionDate;
+        task.completionDate !== taskDoc.completionDate ||
+        task.lotNumber !== taskDoc.lotNumber ||
+        task.finalQuantity !== taskDoc.finalQuantity ||
+        task.inventoryBatchId !== taskDoc.inventoryBatchId;
       
       if (needsUpdate) {
+        // Buduj obiekt updatedTask tylko z polami, które nie są undefined
         const updatedTask = {
           ...task,
           status: taskDoc.status,
@@ -235,11 +239,28 @@ const verifyProductionTasks = async (orderToVerify) => {
           productName: taskDoc.productName,
           quantity: taskDoc.quantity,
           unit: taskDoc.unit,
-          endDate: taskDoc.endDate,
-          completionDate: taskDoc.completionDate,
-          productionSessions: taskDoc.productionSessions,
           updatedAt: new Date().toISOString()
         };
+        
+        // Dodaj opcjonalne pola tylko jeśli nie są undefined
+        if (taskDoc.endDate !== undefined) {
+          updatedTask.endDate = taskDoc.endDate;
+        }
+        if (taskDoc.completionDate !== undefined) {
+          updatedTask.completionDate = taskDoc.completionDate;
+        }
+        if (taskDoc.productionSessions !== undefined) {
+          updatedTask.productionSessions = taskDoc.productionSessions;
+        }
+        if (taskDoc.lotNumber !== undefined) {
+          updatedTask.lotNumber = taskDoc.lotNumber;
+        }
+        if (taskDoc.finalQuantity !== undefined) {
+          updatedTask.finalQuantity = taskDoc.finalQuantity;
+        }
+        if (taskDoc.inventoryBatchId !== undefined) {
+          updatedTask.inventoryBatchId = taskDoc.inventoryBatchId;
+        }
         
         verifiedTasks.push(updatedTask);
         
@@ -247,7 +268,6 @@ const verifyProductionTasks = async (orderToVerify) => {
         if (orderToVerify.items) {
           orderToVerify.items = orderToVerify.items.map(item => {
             if (item.productionTaskId === task.id) {
-              console.log(`[SYNC] Aktualizacja pozycji "${item.name}": status ${item.productionStatus} → ${taskDoc.status}`);
               return {
                 ...item,
                 productionStatus: taskDoc.status,
@@ -294,82 +314,9 @@ const verifyProductionTasks = async (orderToVerify) => {
             updatedAt: new Date().toISOString()
           };
           
-          // 🔍 DIAGNOSTYKA: Znajdź wszystkie pola z undefined
-          console.log('[VERIFY_TASKS_DEBUG] Sprawdzam dane zamówienia przed zapisem:');
-          console.log('[VERIFY_TASKS_DEBUG] ID zamówienia:', orderToVerify.id);
-          console.log('[VERIFY_TASKS_DEBUG] Liczba zadań:', verifiedTasks.length);
-          
-          const checkUndefined = (obj, path = '') => {
-            const undefinedFields = [];
-            Object.keys(obj).forEach(key => {
-              const currentPath = path ? `${path}.${key}` : key;
-              const value = obj[key];
-              
-              if (value === undefined) {
-                undefinedFields.push(currentPath);
-              } else if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-                undefinedFields.push(...checkUndefined(value, currentPath));
-              } else if (Array.isArray(value)) {
-                value.forEach((item, index) => {
-                  if (item === undefined) {
-                    undefinedFields.push(`${currentPath}[${index}]`);
-                  } else if (item !== null && typeof item === 'object') {
-                    undefinedFields.push(...checkUndefined(item, `${currentPath}[${index}]`));
-                  }
-                });
-              }
-            });
-            return undefinedFields;
-          };
-          
-          const undefinedFields = checkUndefined(updatedOrderData);
-          
-          if (undefinedFields.length > 0) {
-            console.error('[VERIFY_TASKS_DEBUG] ❌ ZNALEZIONO POLA Z UNDEFINED:', undefinedFields);
-            console.error('[VERIFY_TASKS_DEBUG] Pełna struktura danych:', JSON.stringify(updatedOrderData, (key, value) => {
-              if (value === undefined) return '__UNDEFINED__';
-              return value;
-            }, 2));
-          } else {
-            console.log('[VERIFY_TASKS_DEBUG] ✅ Brak pól z undefined');
-          }
-          
-          // 🛠️ NAPRAWA: Wyczyść wszystkie pola undefined przed zapisem do Firestore
-          const cleanUndefinedFields = (obj) => {
-            if (obj === null || obj === undefined) return null;
-            
-            if (Array.isArray(obj)) {
-              return obj.map(item => cleanUndefinedFields(item));
-            }
-            
-            if (typeof obj === 'object' && !(obj instanceof Date)) {
-              const cleaned = {};
-              Object.keys(obj).forEach(key => {
-                const value = obj[key];
-                if (value !== undefined) {
-                  cleaned[key] = cleanUndefinedFields(value);
-                }
-                // Pola undefined są pomijane (nie dodawane do cleaned)
-              });
-              return cleaned;
-            }
-            
-            return obj;
-          };
-          
-          const cleanedOrderData = cleanUndefinedFields(updatedOrderData);
-          console.log('[VERIFY_TASKS_DEBUG] 🧹 Dane po czyszczeniu - usunięto pola undefined');
-          
-          await updateOrder(orderToVerify.id, cleanedOrderData, 'system');
-          console.log('[VERIFY_TASKS_DEBUG] ✅ Pomyślnie zapisano zaktualizowane zadania');
+          await updateOrder(orderToVerify.id, updatedOrderData, 'system');
         } catch (error) {
-          console.error(`[SYNC] Błąd podczas zapisywania zaktualizowanych zadań:`, error);
-          console.error('[VERIFY_TASKS_DEBUG] Szczegóły błędu:', {
-            message: error.message,
-            code: error.code,
-            orderId: orderToVerify.id,
-            tasksCount: verifiedTasks.length
-          });
+          console.error('Błąd podczas zapisywania zaktualizowanych zadań:', error);
         }
       }
       
@@ -532,64 +479,6 @@ const OrderDetails = () => {
         }
         
         setOrder(verifiedOrder);
-        
-        // 🔍 DIAGNOSTYKA: Sprawdź powiązania pozycji z zadaniami
-        console.log('='.repeat(80));
-        console.log('[ORDER_ITEMS_DEBUG] ANALIZA POWIĄZAŃ POZYCJI Z ZADANIAMI');
-        console.log('='.repeat(80));
-        
-        if (verifiedOrder.items && verifiedOrder.items.length > 0) {
-          const itemsWithTasks = verifiedOrder.items.filter(item => item.productionTaskId);
-          const itemsWithoutTasks = verifiedOrder.items.filter(item => !item.productionTaskId);
-          
-          console.log(`[ORDER_ITEMS_DEBUG] 📊 Statystyki:`);
-          console.log(`  - Wszystkich pozycji: ${verifiedOrder.items.length}`);
-          console.log(`  - Z zadaniami: ${itemsWithTasks.length}`);
-          console.log(`  - Bez zadań: ${itemsWithoutTasks.length}`);
-          console.log(`  - Wszystkich zadań produkcyjnych: ${verifiedOrder.productionTasks?.length || 0}`);
-          
-          // Szczegóły każdej pozycji
-          console.log('\n[ORDER_ITEMS_DEBUG] 📋 Szczegóły pozycji:');
-          verifiedOrder.items.forEach((item, index) => {
-            const taskExists = verifiedOrder.productionTasks?.find(t => t.id === item.productionTaskId);
-            
-            console.log(`\n  ${index + 1}. "${item.name}":`);
-            console.log(`     - ID pozycji: ${item.id}`);
-            console.log(`     - Ma productionTaskId: ${item.productionTaskId ? 'TAK ✅' : 'NIE ❌'}`);
-            
-            if (item.productionTaskId) {
-              console.log(`     - Task ID: ${item.productionTaskId}`);
-              console.log(`     - Task Number: ${item.productionTaskNumber || 'BRAK'}`);
-              console.log(`     - Zadanie istnieje: ${taskExists ? 'TAK ✅' : 'NIE ❌ (PROBLEM!)'}`);
-              
-              if (taskExists) {
-                console.log(`     - Status zadania: ${taskExists.status}`);
-                console.log(`     - Numer MO: ${taskExists.moNumber}`);
-                console.log(`     - Koszt produkcji: ${item.productionCost || 0}€`);
-              } else {
-                console.warn(`     ⚠️ UWAGA: Pozycja ma productionTaskId, ale zadanie nie istnieje w productionTasks!`);
-              }
-            }
-          });
-          
-          // Podsumowanie problemów
-          const orphanedItems = itemsWithTasks.filter(item => 
-            !verifiedOrder.productionTasks?.find(t => t.id === item.productionTaskId)
-          );
-          
-          if (orphanedItems.length > 0) {
-            console.error('\n[ORDER_ITEMS_DEBUG] ❌ PROBLEMY:');
-            console.error(`  Znaleziono ${orphanedItems.length} pozycji z nieistniejącymi zadaniami:`);
-            orphanedItems.forEach(item => {
-              console.error(`    - "${item.name}" (taskId: ${item.productionTaskId})`);
-            });
-          }
-          
-        } else {
-          console.warn('[ORDER_ITEMS_DEBUG] ❌ Zamówienie nie ma pozycji!');
-        }
-        
-        console.log('='.repeat(80));
         
         // Zapisz pełne dane zadań (z datami) już teraz
         if (fullTasksMap && Object.keys(fullTasksMap).length > 0) {
