@@ -87,7 +87,6 @@ const getCacheKey = (type, id) => `${type}_${id}`;
 const getCachedData = (key, ttl = defaultCacheTTL) => {
   const cached = orderCache.get(key);
   if (cached && (Date.now() - cached.timestamp) < ttl) {
-    console.log(`📦 Cache hit dla ${key}`);
     return cached.data;
   }
   return null;
@@ -98,7 +97,6 @@ const setCachedData = (key, data) => {
     data,
     timestamp: Date.now()
   });
-  console.log(`💾 Zapisano do cache: ${key}`);
 };
 
 const invalidateCache = (pattern) => {
@@ -110,7 +108,6 @@ const invalidateCache = (pattern) => {
   });
   keysToDelete.forEach(key => {
     orderCache.delete(key);
-    console.log(`🗑️ Usunięto z cache: ${key}`);
   });
 };
 
@@ -123,7 +120,6 @@ const getCachedUserNames = async (userIds) => {
   
   if (cached) return cached;
   
-  console.log('🔄 Pobieranie danych użytkowników...');
   const data = await getUsersDisplayNames(userIds);
   setCachedData(cacheKey, data);
   return data;
@@ -135,7 +131,6 @@ const getCachedOrderInvoices = async (orderId) => {
   
   if (cached) return cached;
   
-  console.log('🔄 Pobieranie faktur zamówienia...');
   const data = await getInvoicesByOrderId(orderId);
   setCachedData(cacheKey, data);
   return data;
@@ -147,7 +142,6 @@ const getCachedOrderCmrDocuments = async (orderId) => {
   
   if (cached) return cached;
   
-  console.log('🔄 Pobieranie dokumentów CMR...');
   const data = await getCmrDocumentsByOrderId(orderId);
   setCachedData(cacheKey, data);
   return data;
@@ -229,8 +223,6 @@ const verifyProductionTasks = async (orderToVerify) => {
         task.completionDate !== taskDoc.completionDate;
       
       if (needsUpdate) {
-        console.log(`[SYNC] Wykryto nieaktualne dane zadania ${task.id}, synchronizuję z bazą danych`);
-        
         const updatedTask = {
           ...task,
           status: taskDoc.status,
@@ -250,6 +242,25 @@ const verifyProductionTasks = async (orderToVerify) => {
         };
         
         verifiedTasks.push(updatedTask);
+        
+        // 🔄 SYNCHRONIZACJA: Aktualizuj status i koszty w pozycjach zamówienia
+        if (orderToVerify.items) {
+          orderToVerify.items = orderToVerify.items.map(item => {
+            if (item.productionTaskId === task.id) {
+              console.log(`[SYNC] Aktualizacja pozycji "${item.name}": status ${item.productionStatus} → ${taskDoc.status}`);
+              return {
+                ...item,
+                productionStatus: taskDoc.status,
+                productionTaskNumber: taskDoc.moNumber,
+                productionCost: taskDoc.totalMaterialCost || 0,
+                fullProductionCost: taskDoc.totalFullProductionCost || 0,
+                productionUnitCost: taskDoc.unitMaterialCost || 0,
+                fullProductionUnitCost: taskDoc.unitFullProductionCost || 0
+              };
+            }
+            return item;
+          });
+        }
       } else {
         verifiedTasks.push(task);
       }
@@ -267,7 +278,6 @@ const verifyProductionTasks = async (orderToVerify) => {
         for (const task of tasksToRemove) {
           try {
             await removeProductionTaskFromOrder(orderToVerify.id, task.id);
-            console.log(`Usunięto nieistniejące zadanie ${task.id} (${task.moNumber || 'bez numeru'}) z zamówienia ${orderToVerify.id}`);
           } catch (error) {
             console.error(`Błąd podczas usuwania referencji do zadania ${task.id}:`, error);
           }
@@ -284,10 +294,82 @@ const verifyProductionTasks = async (orderToVerify) => {
             updatedAt: new Date().toISOString()
           };
           
-          await updateOrder(orderToVerify.id, updatedOrderData, 'system');
-          console.log(`[SYNC] Zaktualizowano dane zadań produkcyjnych w zamówieniu ${orderToVerify.id}`);
+          // 🔍 DIAGNOSTYKA: Znajdź wszystkie pola z undefined
+          console.log('[VERIFY_TASKS_DEBUG] Sprawdzam dane zamówienia przed zapisem:');
+          console.log('[VERIFY_TASKS_DEBUG] ID zamówienia:', orderToVerify.id);
+          console.log('[VERIFY_TASKS_DEBUG] Liczba zadań:', verifiedTasks.length);
+          
+          const checkUndefined = (obj, path = '') => {
+            const undefinedFields = [];
+            Object.keys(obj).forEach(key => {
+              const currentPath = path ? `${path}.${key}` : key;
+              const value = obj[key];
+              
+              if (value === undefined) {
+                undefinedFields.push(currentPath);
+              } else if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+                undefinedFields.push(...checkUndefined(value, currentPath));
+              } else if (Array.isArray(value)) {
+                value.forEach((item, index) => {
+                  if (item === undefined) {
+                    undefinedFields.push(`${currentPath}[${index}]`);
+                  } else if (item !== null && typeof item === 'object') {
+                    undefinedFields.push(...checkUndefined(item, `${currentPath}[${index}]`));
+                  }
+                });
+              }
+            });
+            return undefinedFields;
+          };
+          
+          const undefinedFields = checkUndefined(updatedOrderData);
+          
+          if (undefinedFields.length > 0) {
+            console.error('[VERIFY_TASKS_DEBUG] ❌ ZNALEZIONO POLA Z UNDEFINED:', undefinedFields);
+            console.error('[VERIFY_TASKS_DEBUG] Pełna struktura danych:', JSON.stringify(updatedOrderData, (key, value) => {
+              if (value === undefined) return '__UNDEFINED__';
+              return value;
+            }, 2));
+          } else {
+            console.log('[VERIFY_TASKS_DEBUG] ✅ Brak pól z undefined');
+          }
+          
+          // 🛠️ NAPRAWA: Wyczyść wszystkie pola undefined przed zapisem do Firestore
+          const cleanUndefinedFields = (obj) => {
+            if (obj === null || obj === undefined) return null;
+            
+            if (Array.isArray(obj)) {
+              return obj.map(item => cleanUndefinedFields(item));
+            }
+            
+            if (typeof obj === 'object' && !(obj instanceof Date)) {
+              const cleaned = {};
+              Object.keys(obj).forEach(key => {
+                const value = obj[key];
+                if (value !== undefined) {
+                  cleaned[key] = cleanUndefinedFields(value);
+                }
+                // Pola undefined są pomijane (nie dodawane do cleaned)
+              });
+              return cleaned;
+            }
+            
+            return obj;
+          };
+          
+          const cleanedOrderData = cleanUndefinedFields(updatedOrderData);
+          console.log('[VERIFY_TASKS_DEBUG] 🧹 Dane po czyszczeniu - usunięto pola undefined');
+          
+          await updateOrder(orderToVerify.id, cleanedOrderData, 'system');
+          console.log('[VERIFY_TASKS_DEBUG] ✅ Pomyślnie zapisano zaktualizowane zadania');
         } catch (error) {
           console.error(`[SYNC] Błąd podczas zapisywania zaktualizowanych zadań:`, error);
+          console.error('[VERIFY_TASKS_DEBUG] Szczegóły błędu:', {
+            message: error.message,
+            code: error.code,
+            orderId: orderToVerify.id,
+            tasksCount: verifiedTasks.length
+          });
         }
       }
       
@@ -349,11 +431,9 @@ const OrderDetails = () => {
   // 🚀 Funkcja do lazy loading faktur
   const loadInvoices = useCallback(async () => {
     if (invoices.length > 0 || loadingInvoices) {
-      console.log('⏭️ Pomijam ładowanie faktur - już załadowane lub w trakcie ładowania');
       return;
     }
     
-    console.log('🔄 Lazy loading faktur...');
     try {
       setLoadingInvoices(true);
       const orderInvoices = await getCachedOrderInvoices(orderId);
@@ -363,7 +443,6 @@ const OrderDetails = () => {
       if (removedCount > 0) {
         showInfo(`Usunięto ${removedCount} nieistniejących faktur z listy`);
       }
-      console.log('✅ Lazy loaded - faktury:', verifiedInvoices.length);
     } catch (error) {
       console.error('Błąd podczas lazy loading faktur:', error);
     } finally {
@@ -374,11 +453,9 @@ const OrderDetails = () => {
   // 🚀 Funkcja do lazy loading dokumentów CMR
   const loadCmrDocuments = useCallback(async () => {
     if (cmrDocuments.length > 0 || loadingCmrDocuments) {
-      console.log('⏭️ Pomijam ładowanie CMR - już załadowane lub w trakcie ładowania');
       return;
     }
     
-    console.log('🔄 Lazy loading dokumentów CMR...');
     try {
       setLoadingCmrDocuments(true);
       const orderCmr = await getCachedOrderCmrDocuments(orderId);
@@ -388,7 +465,6 @@ const OrderDetails = () => {
       if (removedCount > 0) {
         showInfo(`Usunięto ${removedCount} nieistniejących dokumentów CMR z listy`);
       }
-      console.log('✅ Lazy loaded - dokumenty CMR:', verifiedCmr.length);
     } catch (error) {
       console.error('Błąd podczas lazy loading dokumentów CMR:', error);
     } finally {
@@ -399,8 +475,6 @@ const OrderDetails = () => {
   // Funkcja do załadowania sekcji na żądanie (przestarzała - używamy teraz IntersectionObserver)
   const loadSectionData = async (sectionName) => {
     if (sectionsLoaded[sectionName] || !order) return;
-
-    console.log(`🔄 Lazy loading danych dla sekcji: ${sectionName}`);
     
     try {
       switch (sectionName) {
@@ -426,7 +500,6 @@ const OrderDetails = () => {
       }
       
       setSectionsLoaded(prev => ({ ...prev, [sectionName]: true }));
-      console.log(`✅ Załadowano sekcję: ${sectionName}`);
     } catch (error) {
       console.error(`Błąd podczas ładowania sekcji ${sectionName}:`, error);
     }
@@ -445,7 +518,6 @@ const OrderDetails = () => {
         
         // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
         if (location.pathname.includes('/purchase-orders/')) {
-          console.log('Jesteśmy na stronie zamówienia zakupowego, pomijam pobieranie zamówienia klienta.');
           setLoading(false);
           return;
         }
@@ -461,15 +533,70 @@ const OrderDetails = () => {
         
         setOrder(verifiedOrder);
         
+        // 🔍 DIAGNOSTYKA: Sprawdź powiązania pozycji z zadaniami
+        console.log('='.repeat(80));
+        console.log('[ORDER_ITEMS_DEBUG] ANALIZA POWIĄZAŃ POZYCJI Z ZADANIAMI');
+        console.log('='.repeat(80));
+        
+        if (verifiedOrder.items && verifiedOrder.items.length > 0) {
+          const itemsWithTasks = verifiedOrder.items.filter(item => item.productionTaskId);
+          const itemsWithoutTasks = verifiedOrder.items.filter(item => !item.productionTaskId);
+          
+          console.log(`[ORDER_ITEMS_DEBUG] 📊 Statystyki:`);
+          console.log(`  - Wszystkich pozycji: ${verifiedOrder.items.length}`);
+          console.log(`  - Z zadaniami: ${itemsWithTasks.length}`);
+          console.log(`  - Bez zadań: ${itemsWithoutTasks.length}`);
+          console.log(`  - Wszystkich zadań produkcyjnych: ${verifiedOrder.productionTasks?.length || 0}`);
+          
+          // Szczegóły każdej pozycji
+          console.log('\n[ORDER_ITEMS_DEBUG] 📋 Szczegóły pozycji:');
+          verifiedOrder.items.forEach((item, index) => {
+            const taskExists = verifiedOrder.productionTasks?.find(t => t.id === item.productionTaskId);
+            
+            console.log(`\n  ${index + 1}. "${item.name}":`);
+            console.log(`     - ID pozycji: ${item.id}`);
+            console.log(`     - Ma productionTaskId: ${item.productionTaskId ? 'TAK ✅' : 'NIE ❌'}`);
+            
+            if (item.productionTaskId) {
+              console.log(`     - Task ID: ${item.productionTaskId}`);
+              console.log(`     - Task Number: ${item.productionTaskNumber || 'BRAK'}`);
+              console.log(`     - Zadanie istnieje: ${taskExists ? 'TAK ✅' : 'NIE ❌ (PROBLEM!)'}`);
+              
+              if (taskExists) {
+                console.log(`     - Status zadania: ${taskExists.status}`);
+                console.log(`     - Numer MO: ${taskExists.moNumber}`);
+                console.log(`     - Koszt produkcji: ${item.productionCost || 0}€`);
+              } else {
+                console.warn(`     ⚠️ UWAGA: Pozycja ma productionTaskId, ale zadanie nie istnieje w productionTasks!`);
+              }
+            }
+          });
+          
+          // Podsumowanie problemów
+          const orphanedItems = itemsWithTasks.filter(item => 
+            !verifiedOrder.productionTasks?.find(t => t.id === item.productionTaskId)
+          );
+          
+          if (orphanedItems.length > 0) {
+            console.error('\n[ORDER_ITEMS_DEBUG] ❌ PROBLEMY:');
+            console.error(`  Znaleziono ${orphanedItems.length} pozycji z nieistniejącymi zadaniami:`);
+            orphanedItems.forEach(item => {
+              console.error(`    - "${item.name}" (taskId: ${item.productionTaskId})`);
+            });
+          }
+          
+        } else {
+          console.warn('[ORDER_ITEMS_DEBUG] ❌ Zamówienie nie ma pozycji!');
+        }
+        
+        console.log('='.repeat(80));
+        
         // Zapisz pełne dane zadań (z datami) już teraz
         if (fullTasksMap && Object.keys(fullTasksMap).length > 0) {
           setFullProductionTasks(fullTasksMap);
-          console.log('✅ OrderDetails - pobrano pełne dane zadań podczas weryfikacji');
         }
         
         // 🚀 OPTYMALIZACJA: Równoległe pobieranie z cache (TYLKO KRYTYCZNE DANE)
-        console.log('🚀 OrderDetails - rozpoczynam optymalne pobieranie danych...');
-        
         const fetchPromises = [];
         
         // 1. Dane użytkowników z cache
@@ -510,7 +637,6 @@ const OrderDetails = () => {
             const userNamesResult = results[resultIndex++];
             if (userNamesResult.status === 'fulfilled') {
               setUserNames(userNamesResult.value);
-              console.log('✅ OrderDetails - pobrano nazwy użytkowników');
             } else {
               console.error('Błąd podczas pobierania nazw użytkowników:', userNamesResult.reason);
             }
@@ -520,7 +646,6 @@ const OrderDetails = () => {
           const invoicedAmountsResult = results[resultIndex++];
           if (invoicedAmountsResult.status === 'fulfilled') {
             setInvoicedAmounts(invoicedAmountsResult.value);
-            console.log('✅ OrderDetails - pobrano zafakturowane kwoty (bez pełnych danych faktur)');
           } else {
             console.error('Błąd podczas pobierania zafakturowanych kwot:', invoicedAmountsResult.reason);
           }
@@ -529,12 +654,9 @@ const OrderDetails = () => {
           const proformaAmountsResult = results[resultIndex++];
           if (proformaAmountsResult.status === 'fulfilled') {
             setProformaAmounts(proformaAmountsResult.value);
-            console.log('✅ OrderDetails - pobrano kwoty proform (zaliczek)');
           } else {
             console.error('Błąd podczas pobierania kwot proform:', proformaAmountsResult.reason);
           }
-          
-          console.log('🎉 OrderDetails - zakończono pobieranie podstawowych danych (faktury i CMR będą lazy loaded)');
           
         } catch (error) {
           console.error('Błąd podczas równoległego pobierania danych:', error);
@@ -546,7 +668,6 @@ const OrderDetails = () => {
           
           // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
           if (retries > 0) {
-            console.log(`Ponowna próba pobierania danych zamówienia za ${delay}ms, pozostało prób: ${retries}`);
             setTimeout(() => {
               fetchOrderDetails(retries - 1, delay * 1.5);
             }, delay);
@@ -592,15 +713,12 @@ const OrderDetails = () => {
       const handleCostUpdate = (event) => {
         if (event.data.type === 'TASK_COSTS_UPDATED') {
           const { taskId, costs, timestamp } = event.data;
-          console.log(`[BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${taskId}:`, costs);
           
           // Sprawdź czy to zamówienie ma to zadanie produkcyjne
           if (order && (
             (order.items && order.items.some(item => item.productionTaskId === taskId)) ||
             (order.productionTasks && order.productionTasks.some(task => task.id === taskId))
           )) {
-            console.log(`[BROADCAST] Zadanie ${taskId} jest powiązane z tym zamówieniem, odświeżam dane`);
-            
             // Odśwież dane zamówienia po krótkiej przerwie, aby upewnić się, że baza danych została zaktualizowana
             setTimeout(() => {
               refreshOrderData();
@@ -610,7 +728,6 @@ const OrderDetails = () => {
       };
 
       channel.addEventListener('message', handleCostUpdate);
-      console.log(`[BROADCAST] Nasłuchiwanie powiadomień o kosztach dla zamówienia ${orderId}`);
       
     } catch (error) {
       console.warn('Nie można utworzyć BroadcastChannel:', error);
@@ -619,7 +736,6 @@ const OrderDetails = () => {
     return () => {
       if (channel) {
         channel.close();
-        console.log(`[BROADCAST] Zamknięto nasłuchiwanie powiadomień dla zamówienia ${orderId}`);
       }
     };
   }, [orderId, order]);
@@ -632,7 +748,6 @@ const OrderDetails = () => {
 
     // Ładuj faktury i CMR po krótkim opóźnieniu (nie blokuj głównego renderowania)
     const timer = setTimeout(() => {
-      console.log('🔄 Automatyczne ładowanie faktur i CMR po opóźnieniu...');
       loadInvoices();
       loadCmrDocuments();
     }, 500); // 500ms opóźnienia - wystarczy żeby główny widok się załadował
@@ -649,13 +764,11 @@ const OrderDetails = () => {
       
       // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
       if (location.pathname.includes('/purchase-orders/')) {
-        console.log('Jesteśmy na stronie zamówienia zakupowego, pomijam odświeżanie zamówienia klienta.');
         setLoading(false);
         return;
       }
       
       // 🗑️ Wyczyść cache dla tego zamówienia przed odświeżeniem
-      console.log('🧹 Czyszczenie cache przed odświeżeniem...');
       invalidateCache(orderId);
       
       const freshOrder = await getOrderById(orderId);
@@ -675,7 +788,6 @@ const OrderDetails = () => {
         
         // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
         if (retries > 0) {
-          console.log(`Ponowna próba odświeżania danych zamówienia za ${delay}ms, pozostało prób: ${retries}`);
           setTimeout(() => {
             refreshOrderData(retries - 1, delay * 1.5);
           }, delay);
@@ -695,7 +807,6 @@ const OrderDetails = () => {
       
       // Sprawdź, czy jesteśmy na właściwej trasie dla zamówień klientów
       if (location.pathname.includes('/purchase-orders/')) {
-        console.log('Jesteśmy na stronie zamówienia zakupowego, pomijam odświeżanie kosztów produkcji.');
         setLoading(false);
         return;
       }
@@ -746,8 +857,6 @@ const OrderDetails = () => {
                   productionUnitCost: calculatedProductionUnitCost,
                   fullProductionUnitCost: calculatedFullProductionUnitCost
                 };
-                
-                console.log(`Zaktualizowano koszty dla pozycji ${item.name}: koszt podstawowy = ${updatedOrderData.items[i].productionCost}€, pełny koszt = ${updatedOrderData.items[i].fullProductionCost}€, pełny koszt/szt = ${calculatedFullProductionUnitCost.toFixed(2)}€ (lista cenowa: ${item.fromPriceList ? 'tak' : 'nie'})`);
               } catch (error) {
                 console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
                 
@@ -782,7 +891,6 @@ const OrderDetails = () => {
         
         // Jeśli mamy jeszcze próby, spróbuj ponownie po opóźnieniu
         if (retries > 0) {
-          console.log(`Ponowna próba odświeżania kosztów produkcji za ${delay}ms, pozostało prób: ${retries}`);
           setTimeout(() => {
             refreshProductionCosts(retries - 1, delay * 1.5);
           }, delay);
@@ -941,7 +1049,6 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
 
     try {
       setIsRefreshingCmr(true);
-      console.log('🔄 Rozpoczynanie ręcznego odświeżania ilości z CMR...');
       
       const result = await refreshShippedQuantitiesFromCMR(order.id, currentUser.uid);
       
@@ -959,7 +1066,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
         showSuccess(message);
         
         // Odśwież dane zamówienia i wyczyść cache
-        console.log('🔄 Odświeżanie danych zamówienia...');
         invalidateCache(order.id);
         await refreshOrderData();
         
@@ -968,8 +1074,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
         setCmrDocuments([]);
         setLoadingCmrDocuments(false);
         await loadCmrDocuments();
-        
-        console.log('✅ Zakończono odświeżanie wszystkich danych');
       } else {
         throw new Error('Nie udało się odświeżyć ilości');
       }

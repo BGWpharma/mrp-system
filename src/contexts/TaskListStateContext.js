@@ -119,9 +119,7 @@ export const TaskListStateProvider = ({ children }) => {
         
         if (isStateValid) {
           dispatch({ type: actionTypes.LOAD_STATE, payload: parsedState });
-          console.log('Załadowano stan listy zadań z localStorage');
         } else {
-          console.log('Stan listy zadań jest zbyt stary, używam stanu domyślnego');
           // Wyczyść stary stan
           localStorage.removeItem(STORAGE_KEY);
         }

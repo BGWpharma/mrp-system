@@ -176,9 +176,7 @@ export const InvoiceListStateProvider = ({ children }) => {
             }
           };
           dispatch({ type: actionTypes.LOAD_STATE, payload: stateToLoad });
-          console.log('Załadowano stan listy faktur z localStorage');
         } else {
-          console.log('Stan listy faktur jest zbyt stary, używam stanu domyślnego');
           // Wyczyść stary stan
           localStorage.removeItem(STORAGE_KEY);
         }

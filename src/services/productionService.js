@@ -1135,7 +1135,6 @@ import {
     }
 
     try {
-      console.log(`🚀 Pobieranie ${taskIds.length} zadań produkcyjnych w batch query`);
       const startTime = performance.now();
       
       // Firestore batch get - maksymalnie 500 dokumentów na raz
@@ -1166,9 +1165,6 @@ import {
           }
         });
       }
-      
-      const endTime = performance.now();
-      console.log(`✅ Pobrano ${Object.keys(taskDocsMap).length}/${taskIds.length} zadań w ${Math.round(endTime - startTime)}ms`);
       
       return taskDocsMap;
     } catch (error) {

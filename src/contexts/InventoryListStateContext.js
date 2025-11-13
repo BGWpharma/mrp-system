@@ -208,9 +208,7 @@ export const InventoryListStateProvider = ({ children }) => {
         
         if (isStateValid) {
           dispatch({ type: actionTypes.LOAD_STATE, payload: parsedState });
-          console.log('Załadowano stan listy magazynowej z localStorage');
         } else {
-          console.log('Stan listy magazynowej jest zbyt stary, używam stanu domyślnego');
           // Wyczyść stary stan
           localStorage.removeItem(STORAGE_KEY);
         }

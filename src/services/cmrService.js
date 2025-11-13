@@ -135,39 +135,28 @@ export const getCmrDocumentById = async (cmrId) => {
     
     // Funkcja pomocnicza do konwersji pól czasowych
     const convertTimestamp = (field) => {
-      console.log('getCmrDocumentById convertTimestamp - wejście:', field, 'typ:', typeof field);
-      
       if (!field) {
-        console.log('getCmrDocumentById convertTimestamp - brak wartości, zwracam null');
         return null;
       }
       
       // Sprawdź czy pole jest obiektem Timestamp z metodą toDate
       if (field && typeof field.toDate === 'function') {
-        const converted = field.toDate();
-        console.log('getCmrDocumentById convertTimestamp - skonwertowano Firestore Timestamp:', converted);
-        return converted;
+        return field.toDate();
       }
       
       // Sprawdź czy pole jest obiektem z polami seconds i nanoseconds (deserializowany Firestore Timestamp)
       if (field && typeof field === 'object' && typeof field.seconds === 'number') {
-        const converted = new Date(field.seconds * 1000 + (field.nanoseconds || 0) / 1000000);
-        console.log('getCmrDocumentById convertTimestamp - skonwertowano obiekt z seconds/nanoseconds:', converted);
-        return converted;
+        return new Date(field.seconds * 1000 + (field.nanoseconds || 0) / 1000000);
       }
       
       // Jeśli jest stringiem lub numerem, spróbuj konwertować na Date
       if (typeof field === 'string' || typeof field === 'number') {
         try {
-          const converted = new Date(field);
-          console.log('getCmrDocumentById convertTimestamp - skonwertowano string/number:', converted);
-          return converted;
+          return new Date(field);
         } catch (e) {
-          console.warn('Nie można skonwertować pola na Date:', field);
           return null;
         }
       }
-      console.log('getCmrDocumentById convertTimestamp - nieznany typ, zwracam null');
       return null;
     };
     
@@ -181,12 +170,6 @@ export const getCmrDocumentById = async (cmrId) => {
       updatedAt: convertTimestamp(cmrData.updatedAt),
       items
     };
-    
-    console.log('getCmrDocumentById - zwracam dane z datami:', {
-      issueDate: result.issueDate,
-      deliveryDate: result.deliveryDate,
-      loadingDate: result.loadingDate
-    });
     
     return result;
   } catch (error) {
@@ -1413,12 +1396,6 @@ export const getCmrDocumentsByOrderId = async (orderId) => {
             id: itemDoc.id,
             ...itemDoc.data()
           }));
-          
-          console.log(`CMR ${cmrDoc.cmrNumber} ma ${items.length} pozycji:`, items.map(item => ({
-            description: item.description,
-            quantity: item.quantity || item.numberOfPackages,
-            unit: item.unit
-          })));
           
           return {
             ...cmrDoc,

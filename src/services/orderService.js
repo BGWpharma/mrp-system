@@ -171,40 +171,27 @@ export const getAllOrders = async (filters = null) => {
  */
 export const getOrdersByDateRange = async (startDate, endDate, limitCount = 500, filters = {}) => {
   try {
-    console.log('🔍 getOrdersByDateRange WEJŚCIE:', {
-      startDate: startDate?.toISOString(),
-      endDate: endDate?.toISOString(),
-      limitCount,
-      filters
-    });
-    
     const conditions = [];
     
     // Filtrowanie po datach - z bezpieczną konwersją
     if (startDate) {
       const startTimestamp = Timestamp.fromDate(new Date(startDate));
       conditions.push(where('orderDate', '>=', startTimestamp));
-      console.log('📅 Dodano filtr startDate >= ', startTimestamp);
     }
     
     if (endDate) {
       const endTimestamp = Timestamp.fromDate(new Date(endDate));
       conditions.push(where('orderDate', '<=', endTimestamp));
-      console.log('📅 Dodano filtr endDate <= ', endTimestamp);
     }
     
     // Dodatkowe filtry
     if (filters.status && filters.status !== 'all') {
       conditions.push(where('status', '==', filters.status));
-      console.log('🏷️ Dodano filtr status =', filters.status);
     }
     
     if (filters.customerId && filters.customerId !== 'all') {
       conditions.push(where('customer.id', '==', filters.customerId));
-      console.log('👤 Dodano filtr customerId =', filters.customerId);
     }
-    
-    console.log('📝 Łącznie warunków zapytania:', conditions.length);
     
     // Buduj zapytanie z limitem
     const ordersQuery = query(
@@ -290,8 +277,6 @@ export const getOrdersByDateRange = async (startDate, endDate, limitCount = 500,
       return order;
     });
     
-    console.log(`📊 getOrdersByDateRange: Pobrano ${ordersWithCustomers.length} zamówień dla okresu ${startDate?.toISOString().split('T')[0]} - ${endDate?.toISOString().split('T')[0]}`);
-    
     return ordersWithCustomers;
   } catch (error) {
     console.error('Błąd podczas pobierania zamówień z zakresu dat:', error);
@@ -312,15 +297,6 @@ export const getOrderById = async (id) => {
     }
     
     const orderData = orderDoc.data();
-    
-    console.log(`DEBUG - getOrderById(${id}) - Raw data from database:`, {
-      orderNumber: orderData.orderNumber,
-      orderSource: orderData.orderSource,
-      items: orderData.items,
-      itemsLength: orderData.items?.length,
-      itemsType: typeof orderData.items,
-      itemsIsArray: Array.isArray(orderData.items)
-    });
     
     // Konwertuj timestamp na obiekty Date
     // Funkcja pomocnicza do bezpiecznej konwersji dat
@@ -486,12 +462,8 @@ export const getOrderById = async (id) => {
     const existingTotalValue = parseFloat(processedOrder.totalValue) || 0;
     if (existingTotalValue === 0) {
       processedOrder.totalValue = totalProductsValue + shippingCost + additionalCostsTotal - discountsTotal;
-      console.log(`Obliczono nową wartość totalValue dla zamówienia ${id}: ${processedOrder.totalValue}`);
-    } else {
-      console.log(`Zachowano istniejącą wartość totalValue dla zamówienia ${id}: ${existingTotalValue}`);
     }
     
-    console.log("Przetworzone dane zamówienia:", processedOrder);
     return processedOrder;
   } catch (error) {
     console.error(`Błąd podczas pobierania zamówienia ${id}:`, error);

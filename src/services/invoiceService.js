@@ -1852,7 +1852,6 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
     invoices.forEach((invoice, invoiceIndex) => {
       // Pomijaj proformy - nie są rzeczywistymi fakturami
       if (invoice.isProforma) {
-        console.log(`[INVOICED_AMOUNTS_DEBUG] Pomijam proformę ${invoice.number} - nie wliczam do kwoty zafakturowanej`);
         return;
       }
       
@@ -1874,7 +1873,6 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
               if (matchingOrderItem) {
                 const orderIndex = orderData.items.indexOf(matchingOrderItem);
                 itemId = matchingOrderItem.id || `${orderId}_item_${orderIndex}`;
-                console.log(`[INVOICED_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (faktura ${invoice.number}, ilość: ${invoiceItem.quantity}, cena: ${invoiceItem.price}) przez nazwę i cenę do pozycji zamówienia: ${itemId}`);
               } else {
                 // Fallback - spróbuj dopasować tylko po nazwie
                 const matchingByNameOnly = orderData.items.find((orderItem) => {
@@ -1884,16 +1882,13 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
                 if (matchingByNameOnly) {
                   const orderIndex = orderData.items.indexOf(matchingByNameOnly);
                   itemId = matchingByNameOnly.id || `${orderId}_item_${orderIndex}`;
-                  console.log(`[INVOICED_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (faktura ${invoice.number}) tylko po nazwie do pozycji zamówienia: ${itemId}`);
                 } else {
                   // Ostateczny fallback - używaj indeksu pozycji w fakturze
                   itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
-                  console.log(`[INVOICED_AMOUNTS_DEBUG] Nie udało się dopasować pozycji "${invoiceItem.name}" (faktura ${invoice.number}, cena: ${invoiceItem.price}), używam fallback: ${itemId}`);
                 }
               }
             } else {
               itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
-              console.log(`[INVOICED_AMOUNTS_DEBUG] Brak danych zamówienia, używam fallback dla "${invoiceItem.name}": ${itemId}`);
             }
           }
           
@@ -1952,7 +1947,6 @@ export const getProformaAmountsByOrderItems = async (orderId, preloadedInvoices 
     invoices.forEach((invoice, invoiceIndex) => {
       // Uwzględniaj TYLKO proformy
       if (!invoice.isProforma) {
-        console.log(`[PROFORMA_AMOUNTS_DEBUG] Pomijam fakturę ${invoice.number} - nie jest proformą`);
         return;
       }
       
@@ -1973,7 +1967,6 @@ export const getProformaAmountsByOrderItems = async (orderId, preloadedInvoices 
               if (matchingOrderItem) {
                 const orderIndex = orderData.items.indexOf(matchingOrderItem);
                 itemId = matchingOrderItem.id || `${orderId}_item_${orderIndex}`;
-                console.log(`[PROFORMA_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (proforma ${invoice.number}, ilość: ${invoiceItem.quantity}, cena: ${invoiceItem.price}) przez nazwę i cenę do pozycji zamówienia: ${itemId}`);
               } else {
                 // Fallback - spróbuj dopasować tylko po nazwie
                 const matchingByNameOnly = orderData.items.find((orderItem) => {
@@ -1983,16 +1976,13 @@ export const getProformaAmountsByOrderItems = async (orderId, preloadedInvoices 
                 if (matchingByNameOnly) {
                   const orderIndex = orderData.items.indexOf(matchingByNameOnly);
                   itemId = matchingByNameOnly.id || `${orderId}_item_${orderIndex}`;
-                  console.log(`[PROFORMA_AMOUNTS_DEBUG] Dopasowano pozycję "${invoiceItem.name}" (proforma ${invoice.number}) tylko po nazwie do pozycji zamówienia: ${itemId}`);
                 } else {
                   // Ostateczny fallback - używaj indeksu pozycji w fakturze
                   itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
-                  console.log(`[PROFORMA_AMOUNTS_DEBUG] Nie udało się dopasować pozycji "${invoiceItem.name}" (proforma ${invoice.number}, cena: ${invoiceItem.price}), używam fallback: ${itemId}`);
                 }
               }
             } else {
               itemId = invoiceItem.id || `${orderId}_item_${itemIndex}`;
-              console.log(`[PROFORMA_AMOUNTS_DEBUG] Brak danych zamówienia, używam fallback dla "${invoiceItem.name}": ${itemId}`);
             }
           }
           
