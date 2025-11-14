@@ -785,7 +785,7 @@ export const getReservationsGroupedByTask = async (itemId) => {
           taskId,
           taskName: reservation.taskName || '',
           taskNumber: reservation.taskNumber || '',
-          moNumber: reservation.moNumber || '', // Dodanie numeru MO dla kompatybilności
+          moNumber: reservation.taskNumber || reservation.moNumber || '', // Użyj taskNumber (zawiera numer MO lub CMR)
           clientName: reservation.clientName || '',
           clientId: reservation.clientId || '',
           reservations: [],
