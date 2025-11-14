@@ -72,6 +72,7 @@ import { auth } from '../../services/firebase/config';
 import { getTaskById } from '../../services/productionService';
 import LabelDialog from '../../components/inventory/LabelDialog';
 import BatchVisualization from '../../components/inventory/BatchVisualization';
+import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
 
 const BatchesPage = () => {
   const { id } = useParams();
@@ -111,6 +112,8 @@ const BatchesPage = () => {
   const [selectedTransferSource, setSelectedTransferSource] = useState(''); // 'free' lub ID rezerwacji
   const [availableTransferQuantity, setAvailableTransferQuantity] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedBatchForDetails, setSelectedBatchForDetails] = useState(null);
   const fileInputRef = React.useRef(null);
 
   // Dodaję wykrywanie urządzeń mobilnych
@@ -599,6 +602,16 @@ const BatchesPage = () => {
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
     setSelectedBatchForDelete(null);
+  };
+
+  const handleOpenDetailsDialog = (batch) => {
+    setSelectedBatchForDetails(batch);
+    setDetailsDialogOpen(true);
+  };
+
+  const handleCloseDetailsDialog = () => {
+    setDetailsDialogOpen(false);
+    setSelectedBatchForDetails(null);
   };
   
   // Funkcje do obsługi certyfikatów
@@ -1189,6 +1202,16 @@ const BatchesPage = () => {
                         )}
                         <TableCell>
                           <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 0.5 : 1 }}>
+                            <Tooltip title="Szczegóły partii">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenDetailsDialog(batch)}
+                                color="info"
+                              >
+                                <InfoIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+
                             <Tooltip title={t('inventory.batches.printBatchLabel')}>
                               <IconButton
                                 size="small"
@@ -1905,6 +1928,13 @@ const BatchesPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog szczegółów partii */}
+      <BatchDetailsDialog
+        open={detailsDialogOpen}
+        onClose={handleCloseDetailsDialog}
+        batch={selectedBatchForDetails}
+      />
     </Container>
   );
 };

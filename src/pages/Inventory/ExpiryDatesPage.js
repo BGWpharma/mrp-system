@@ -27,13 +27,15 @@ import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Warning as WarningIcon,
-  Error as ErrorIcon
+  Error as ErrorIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useDebounce } from '../../hooks/useDebounce';
 import { Timestamp } from 'firebase/firestore';
+import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
 
 // TabPanel component
 function TabPanel(props) {
@@ -66,6 +68,8 @@ const ExpiryDatesPage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [daysThreshold, setDaysThreshold] = useState(365);
   const [searchTerm, setSearchTerm] = useState('');
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
 
   // Użyj debounce dla daysThreshold, aby uniknąć częstych wywołań API
   const debouncedDaysThreshold = useDebounce(
@@ -121,6 +125,16 @@ const ExpiryDatesPage = () => {
 
   const clearSearch = () => {
     setSearchTerm('');
+  };
+
+  const handleOpenDetailsDialog = (batch) => {
+    setSelectedBatch(batch);
+    setDetailsDialogOpen(true);
+  };
+
+  const handleCloseDetailsDialog = () => {
+    setDetailsDialogOpen(false);
+    setSelectedBatch(null);
   };
 
   // Filtrowanie partii według wyszukiwanego terminu
@@ -309,14 +323,24 @@ const ExpiryDatesPage = () => {
           {renderExpiryStatus(batch)}
         </TableCell>
         <TableCell>
-          <Button 
-            variant="outlined" 
-            size="small" 
-            component={Link}
-            to={`/inventory/${batch.itemId}/batches`}
-          >
-            {t('expiryDates.table.actions.manage')}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              variant="outlined" 
+              size="small"
+              startIcon={<InfoIcon />}
+              onClick={() => handleOpenDetailsDialog(batch)}
+            >
+              Szczegóły
+            </Button>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              component={Link}
+              to={`/inventory/${batch.itemId}/batches`}
+            >
+              {t('expiryDates.table.actions.manage')}
+            </Button>
+          </Box>
         </TableCell>
       </TableRow>
     );
@@ -497,6 +521,13 @@ const ExpiryDatesPage = () => {
           )}
         </TabPanel>
       </Paper>
+
+      {/* Dialog szczegółów partii */}
+      <BatchDetailsDialog
+        open={detailsDialogOpen}
+        onClose={handleCloseDetailsDialog}
+        batch={selectedBatch}
+      />
     </Container>
   );
 };
