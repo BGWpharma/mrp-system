@@ -613,7 +613,7 @@ const Sidebar = ({ onToggle }) => {
                   </ListItemIcon>
                 </Tooltip>
                 {isDrawerOpen && (
-                  <Box component="div" sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                  <Box component="div" sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, pr: 1 }}>
                     <ListItemText 
                       primary={item.text} 
                       primaryTypographyProps={{ 
@@ -622,14 +622,17 @@ const Sidebar = ({ onToggle }) => {
                         color: isMenuActive(item.path) 
                           ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
                           : 'inherit',
-                        lineHeight: 1.3,
-                        whiteSpace: 'normal',
                         wordBreak: 'break-word',
-                        overflowWrap: 'break-word'
-                      }} 
+                        overflowWrap: 'break-word',
+                        lineHeight: 1.3,
+                        whiteSpace: 'normal'
+                      }}
                       sx={{
-                        pr: 0.5, // Zmniejsz padding po prawej stronie
-                        flex: 1
+                        pr: 1,
+                        '& .MuiTypography-root': {
+                          wordBreak: 'break-word',
+                          overflowWrap: 'break-word'
+                        }
                       }}
                     />
                     {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
@@ -687,20 +690,23 @@ const Sidebar = ({ onToggle }) => {
                       divider={false}
                       role="menuitem"
                                              sx={{ 
-                         pl: isDrawerOpen ? 4 : 2,
-                         pr: isDrawerOpen ? 1 : 2, // Zmniejszony padding po prawej dla submenu
-                         borderRight: 'none !important',
-                         borderTop: 'none !important',
-                         borderBottom: 'none !important',
-                         outline: 'none !important',
-                         boxShadow: 'none !important',
-                         '&::before': {
-                           display: 'none !important',
-                         },
-                         '&::after': {
-                           display: 'none !important',
-                         }
-                       }}
+                        pl: isDrawerOpen ? 4 : 2,
+                        pr: 1, // Dodany padding prawy
+                        borderRight: 'none !important',
+                        borderTop: 'none !important',
+                        borderBottom: 'none !important',
+                        outline: 'none !important',
+                        boxShadow: 'none !important',
+                        '&::before': {
+                          display: 'none !important',
+                        },
+                        '&::after': {
+                          display: 'none !important',
+                        },
+                        // Zapewnienie prawidłowego layoutu dla długich tekstów
+                        overflow: 'hidden',
+                        alignItems: 'flex-start'
+                      }}
                     >
                       <Tooltip title={subItem.text} placement="right" arrow>
                         <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
@@ -722,13 +728,19 @@ const Sidebar = ({ onToggle }) => {
                             color: subItem.path && location.pathname === subItem.path
                               ? (mode === 'dark' ? '#ffffff' : '#1e293b') // biały dla dark mode, ciemny dla light mode
                               : 'inherit',
-                            lineHeight: 1.3,
-                            whiteSpace: 'normal',
+                            // Dodane style dla lepszego łamania tekstu
                             wordBreak: 'break-word',
-                            overflowWrap: 'break-word'
-                          }} 
+                            overflowWrap: 'break-word',
+                            hyphens: 'auto',
+                            lineHeight: 1.3,
+                            whiteSpace: 'normal'
+                          }}
                           sx={{
-                            pr: 0.5 // Zmniejsz padding po prawej stronie
+                            pr: 4, // Padding prawy, żeby tekst nie stykał się z krawędzią
+                            '& .MuiTypography-root': {
+                              wordBreak: 'break-word',
+                              overflowWrap: 'break-word'
+                            }
                           }}
                         />
                       )}
@@ -767,13 +779,17 @@ const Sidebar = ({ onToggle }) => {
                     color: (item.path === '/' ? location.pathname === '/' : isActive(item.path))
                       ? '#ffffff' // biały tekst dla selected items - działa dla obu motywów dzięki gradientowi tła
                       : 'inherit',
-                    lineHeight: 1.3,
-                    whiteSpace: 'normal',
                     wordBreak: 'break-word',
-                    overflowWrap: 'break-word'
-                  }} 
+                    overflowWrap: 'break-word',
+                    lineHeight: 1.3,
+                    whiteSpace: 'normal'
+                  }}
                   sx={{
-                    pr: 0.5 // Zmniejsz padding po prawej stronie
+                    pr: 2,
+                    '& .MuiTypography-root': {
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word'
+                    }
                   }}
                 />
               )}
@@ -820,8 +836,19 @@ const Sidebar = ({ onToggle }) => {
               primaryTypographyProps={{ 
                 fontSize: '0.875rem',
                 fontWeight: 'medium',
-                color: 'error.main'
-              }} 
+                color: 'error.main',
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                lineHeight: 1.3,
+                whiteSpace: 'normal'
+              }}
+              sx={{
+                pr: 2,
+                '& .MuiTypography-root': {
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word'
+                }
+              }}
             />
           )}
         </StyledListItem>
