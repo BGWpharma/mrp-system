@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Grid, Paper, Typography, Box, Button, Chip, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Collapse, Tooltip } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
@@ -20,6 +20,15 @@ import { getWorkstationById } from '../../services/workstationService';
 import { useNotification } from '../../hooks/useNotification';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
+
+// Funkcja pomocnicza do dzielenia tablicy na chunki (dla limitu Firestore 'in' = 10)
+const chunkArray = (array, size) => {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+};
 
 const TaskDetails = ({ task }) => {
   const { t } = useTranslation('taskDetails');
@@ -56,6 +65,17 @@ const TaskDetails = ({ task }) => {
   // Sprawdź czy zadanie ma zdefiniowany LOT lub datę ważności
   const hasProductBatchInfo = Boolean(task?.lotNumber || task?.expiryDate);
   
+  // Memoizuj klucze dla stabilnych zależności useEffect
+  const materialBatchesKey = useMemo(() => 
+    JSON.stringify(task?.materialBatches || {}), 
+    [task?.materialBatches]
+  );
+  
+  const consumedMaterialsKey = useMemo(() => 
+    JSON.stringify(task?.consumedMaterials || []), 
+    [task?.consumedMaterials]
+  );
+  
   // Ładuj dane stanowiska produkcyjnego, jeśli zadanie ma przypisane ID stanowiska
   useEffect(() => {
     const fetchWorkstation = async () => {
@@ -73,7 +93,7 @@ const TaskDetails = ({ task }) => {
     fetchWorkstation();
   }, [task?.workstationId, showError]);
   
-  // Pobierz LOTy powiązane z tym MO i ich powiązania z PO
+  // Pobierz LOTy powiązane z tym MO i ich powiązania z PO (zoptymalizowane)
   useEffect(() => {
     const fetchRelatedBatches = async () => {
       if (!task?.moNumber) return;
@@ -81,98 +101,93 @@ const TaskDetails = ({ task }) => {
       try {
         setLoading(true);
         
-        // Sprawdź, czy zadanie ma zarejestrowane partie materiałów
         const batchesWithPO = [];
         
-        // 1. Pobierz partie z materialBatches (partie zarezerwowane dla MO)
+        // Krok 1: Zbierz wszystkie batchId z różnych źródeł
+        const batchInfoMap = new Map(); // Mapa: batchId -> { batchInfo, source }
+        
+        // 1.1. Z materialBatches (partie zarezerwowane)
         if (task.materialBatches) {
-
-          
-          // Dla każdego materiału w materialBatches
           for (const [materialId, batches] of Object.entries(task.materialBatches)) {
-            // Dla każdej partii materiału
             for (const batchInfo of batches) {
-              try {
-                // Pobierz szczegółowe dane partii z bazy danych
-                const batchRef = doc(db, 'inventoryBatches', batchInfo.batchId);
-                const batchSnapshot = await getDoc(batchRef);
-                
-                if (batchSnapshot.exists()) {
-                  const batchData = batchSnapshot.data();
-                  
-                  // Jeśli partia ma dane o powiązanym PO
-                  if (batchData.purchaseOrderDetails) {
-                    batchesWithPO.push({
-                      id: batchInfo.batchId,
-                      lotNumber: batchInfo.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                      quantity: batchInfo.quantity,
-                      materialName: batchData.itemName || "Materiał",
-                      purchaseOrderDetails: batchData.purchaseOrderDetails,
-                      source: 'reserved' // Oznacz jako zarezerwowane
-                    });
-                  }
-                }
-              } catch (error) {
-                console.error(`Błąd podczas pobierania danych partii ${batchInfo.batchId}:`, error);
-              }
-            }
-          }
-        }
-
-        // 1.5. Pobierz partie ze skonsumowanych materiałów (consumedMaterials)
-        if (task.consumedMaterials && task.consumedMaterials.length > 0) {
-
-          
-          // Dla każdego skonsumowanego materiału
-          for (const consumed of task.consumedMaterials) {
-            if (consumed.batchId) {
-              try {
-                // Pobierz szczegółowe dane partii z bazy danych
-                const batchRef = doc(db, 'inventoryBatches', consumed.batchId);
-                const batchSnapshot = await getDoc(batchRef);
-                
-                if (batchSnapshot.exists()) {
-                  const batchData = batchSnapshot.data();
-                  
-                  // Jeśli partia ma dane o powiązanym PO
-                  if (batchData.purchaseOrderDetails) {
-                    // Sprawdź czy już nie dodaliśmy tej partii z zarezerwowanych materiałów
-                    const existingBatch = batchesWithPO.find(batch => batch.id === consumed.batchId);
-                    if (!existingBatch) {
-                      batchesWithPO.push({
-                        id: consumed.batchId,
-                        lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                        quantity: consumed.quantity,
-                        materialName: batchData.itemName || "Materiał",
-                        purchaseOrderDetails: batchData.purchaseOrderDetails,
-                        source: 'consumed' // Oznacz jako skonsumowane
-                      });
-                    }
-                  }
-                }
-              } catch (error) {
-                console.error(`Błąd podczas pobierania danych partii skonsumowanej ${consumed.batchId}:`, error);
+              if (batchInfo.batchId && !batchInfoMap.has(batchInfo.batchId)) {
+                batchInfoMap.set(batchInfo.batchId, {
+                  batchInfo,
+                  source: 'reserved'
+                });
               }
             }
           }
         }
         
-        // 2. Pobierz wszystkie partie związane z tym MO (produkty końcowe)
-        const batchesQuery = query(
+        // 1.2. Z consumedMaterials (partie skonsumowane)
+        if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+          for (const consumed of task.consumedMaterials) {
+            if (consumed.batchId && !batchInfoMap.has(consumed.batchId)) {
+              batchInfoMap.set(consumed.batchId, {
+                batchInfo: consumed,
+                source: 'consumed'
+              });
+            }
+          }
+        }
+        
+        // Krok 2: Pobierz wszystkie partie jednocześnie (batch requests)
+        const batchIds = Array.from(batchInfoMap.keys());
+        
+        if (batchIds.length > 0) {
+          // Podziel na chunki po 10 (limit Firestore dla 'in')
+          const batchChunks = chunkArray(batchIds, 10);
+          
+          // Wykonaj równoległe zapytania dla każdego chunku
+          const batchPromises = batchChunks.map(async (chunkIds) => {
+            const batchQuery = query(
+              collection(db, 'inventoryBatches'),
+              where('__name__', 'in', chunkIds)
+            );
+            const snapshot = await getDocs(batchQuery);
+            return snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          const allBatches = batchResults.flat();
+          
+          // Krok 3: Przetwórz pobrane partie
+          for (const batchData of allBatches) {
+            if (batchData.purchaseOrderDetails) {
+              const batchMeta = batchInfoMap.get(batchData.id);
+              const batchInfo = batchMeta?.batchInfo || {};
+              
+              batchesWithPO.push({
+                id: batchData.id,
+                lotNumber: batchInfo.batchNumber || batchData.lotNumber || batchData.batchNumber,
+                quantity: batchInfo.quantity || 0,
+                materialName: batchData.itemName || "Materiał",
+                purchaseOrderDetails: batchData.purchaseOrderDetails,
+                source: batchMeta?.source || 'unknown'
+              });
+            }
+          }
+        }
+        
+        // Krok 4: Pobierz partie związane z tym MO (produkty końcowe)
+        const moQuery = query(
           collection(db, 'inventoryBatches'),
           where('moNumber', '==', task.moNumber)
         );
         
-        const batchesSnapshot = await getDocs(batchesQuery);
-        const batches = batchesSnapshot.docs.map(doc => ({
+        const moSnapshot = await getDocs(moQuery);
+        const moBatches = moSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
-        // Dla każdej partii sprawdź czy ma powiązane zamówienie zakupu
-        for (const batch of batches) {
-          // Jeśli partia ma dane o powiązanym PO
-          if (batch.purchaseOrderDetails) {
+        // Dodaj partie produktów końcowych z powiązaniami PO
+        for (const batch of moBatches) {
+          if (batch.purchaseOrderDetails && !batchesWithPO.find(b => b.id === batch.id)) {
             batchesWithPO.push(batch);
           }
         }
@@ -187,7 +202,7 @@ const TaskDetails = ({ task }) => {
     };
     
     fetchRelatedBatches();
-  }, [task?.moNumber, task?.materialBatches, task?.consumedMaterials, showError]);
+  }, [task?.moNumber, materialBatchesKey, consumedMaterialsKey, showError]);
   
   // Styl dla nagłówka sekcji z ikoną zwijania/rozwijania
   const sectionHeaderStyle = {
@@ -256,31 +271,47 @@ const TaskDetails = ({ task }) => {
                 {t('relatedOrders.relatedPOsWithLots')}
               </Typography>
               {relatedBatches.length > 0 ? (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
                   {relatedBatches.map((batch, index) => (
-                    <Box key={batch.id} sx={{ mb: 2, mr: 2, border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <BatchIcon color="info" sx={{ mr: 1 }} fontSize="small" />
+                    <Box 
+                      key={batch.id} 
+                      sx={{ 
+                        border: '1px solid #e0e0e0', 
+                        borderRadius: 1, 
+                        p: 1.5,
+                        minWidth: 200,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.5
+                      }}
+                    >
+                      {/* LOT */}
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <BatchIcon color="info" sx={{ mr: 0.5, fontSize: 18 }} />
                         <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                           LOT: {batch.lotNumber || batch.batchNumber}
                         </Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <ReceiptIcon color="primary" sx={{ mr: 1 }} fontSize="small" />
-                        <Typography variant="body2">
-                          PO: {batch.purchaseOrderDetails.number || '-'}
-                        </Typography>
-                      </Box>
-                      <Button
-                        variant="outlined"
-                        size="small"
+                      
+                      {/* PO - jako klikalny link z ikoną */}
+                      <Box 
                         component={RouterLink}
                         to={`/purchase-orders/${batch.purchaseOrderDetails.id}`}
-                        startIcon={<ShoppingBasketIcon />}
-                        sx={{ mt: 1 }}
+                        sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          textDecoration: 'none',
+                          color: 'primary.main',
+                          '&:hover': {
+                            textDecoration: 'underline'
+                          }
+                        }}
                       >
-                        Zobacz szczegóły PO
-                      </Button>
+                        <ShoppingBasketIcon sx={{ mr: 0.5, fontSize: 18 }} />
+                        <Typography variant="body2">
+                          {batch.purchaseOrderDetails.number || '-'}
+                        </Typography>
+                      </Box>
                     </Box>
                   ))}
                 </Box>
@@ -295,35 +326,45 @@ const TaskDetails = ({ task }) => {
                   <Typography variant="subtitle1" sx={{ mb: 1, mt: 2, fontWeight: 'medium' }}>
                     Inne powiązane zamówienia zakupowe
                   </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-                    {/* Zamówienia automatyczne z purchaseOrders */}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {/* Zamówienia automatyczne */}
                     {task.purchaseOrders && task.purchaseOrders.map((po, index) => (
-                      <Button
+                      <Chip
                         key={`po-${index}`}
-                        variant="outlined"
-                        size="small"
+                        label={po.number || po.poNumber || po.id}
                         component={RouterLink}
                         to={`/purchase-orders/${po.id}`}
-                        startIcon={<ShoppingBasketIcon />}
-                        sx={{ mr: 1, mb: 1 }}
-                      >
-                        {po.number || po.poNumber || po.id}
-                      </Button>
+                        clickable
+                        icon={<ShoppingBasketIcon />}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ 
+                          '&:hover': { 
+                            backgroundColor: 'primary.light',
+                            color: 'white'
+                          }
+                        }}
+                      />
                     ))}
                     
-                    {/* Ręcznie powiązane zamówienia z linkedPurchaseOrders */}
+                    {/* Ręcznie powiązane zamówienia */}
                     {task.linkedPurchaseOrders && task.linkedPurchaseOrders.map((po, index) => (
-                      <Button
+                      <Chip
                         key={`linked-po-${index}`}
-                        variant="outlined"
-                        size="small"
+                        label={po.number || po.id}
                         component={RouterLink}
                         to={`/purchase-orders/${po.id}`}
-                        startIcon={<ShoppingBasketIcon />}
-                        sx={{ mr: 1, mb: 1, borderColor: 'secondary.main', color: 'secondary.main' }}
-                      >
-                        {po.number || po.id}
-                      </Button>
+                        clickable
+                        icon={<ShoppingBasketIcon />}
+                        color="secondary"
+                        variant="outlined"
+                        sx={{ 
+                          '&:hover': { 
+                            backgroundColor: 'secondary.light',
+                            color: 'white'
+                          }
+                        }}
+                      />
                     ))}
                   </Box>
                 </>
@@ -528,15 +569,16 @@ const TaskDetails = ({ task }) => {
                         </TableCell>
                         <TableCell>
                           {batch.purchaseOrderDetails?.id && (
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              component={RouterLink}
-                              to={`/purchase-orders/${batch.purchaseOrderDetails.id}`}
-                              startIcon={<ShoppingBasketIcon />}
-                            >
-                              {t('materialBatches.table.viewPODetails')}
-                            </Button>
+                            <Tooltip title={t('materialBatches.table.viewPODetails')}>
+                              <IconButton
+                                size="small"
+                                component={RouterLink}
+                                to={`/purchase-orders/${batch.purchaseOrderDetails.id}`}
+                                color="primary"
+                              >
+                                <ShoppingBasketIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           )}
                         </TableCell>
                       </TableRow>
@@ -565,35 +607,45 @@ const TaskDetails = ({ task }) => {
             </Box>
             
             <Collapse in={expandedSections.linkedPurchaseOrders}>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-                {/* Zamówienia automatyczne z purchaseOrders */}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {/* Zamówienia automatyczne */}
                 {task.purchaseOrders && task.purchaseOrders.map((po, index) => (
-                  <Button
+                  <Chip
                     key={`po-${index}`}
-                    variant="outlined"
-                    size="small"
+                    label={po.number || po.poNumber || po.id}
                     component={RouterLink}
                     to={`/purchase-orders/${po.id}`}
-                    startIcon={<ShoppingBasketIcon />}
-                    sx={{ mr: 1, mb: 1 }}
-                  >
-                    {po.number || po.poNumber || po.id}
-                  </Button>
+                    clickable
+                    icon={<ShoppingBasketIcon />}
+                    color="primary"
+                    variant="outlined"
+                    sx={{ 
+                      '&:hover': { 
+                        backgroundColor: 'primary.light',
+                        color: 'white'
+                      }
+                    }}
+                  />
                 ))}
                 
-                {/* Ręcznie powiązane zamówienia z linkedPurchaseOrders */}
+                {/* Ręcznie powiązane zamówienia */}
                 {task.linkedPurchaseOrders && task.linkedPurchaseOrders.map((po, index) => (
-                  <Button
+                  <Chip
                     key={`linked-po-${index}`}
-                    variant="outlined"
-                    size="small"
+                    label={po.number || po.id}
                     component={RouterLink}
                     to={`/purchase-orders/${po.id}`}
-                    startIcon={<ShoppingBasketIcon />}
-                    sx={{ mr: 1, mb: 1, borderColor: 'secondary.main', color: 'secondary.main' }}
-                  >
-                    {po.number || po.id}
-                  </Button>
+                    clickable
+                    icon={<ShoppingBasketIcon />}
+                    color="secondary"
+                    variant="outlined"
+                    sx={{ 
+                      '&:hover': { 
+                        backgroundColor: 'secondary.light',
+                        color: 'white'
+                      }
+                    }}
+                  />
                 ))}
               </Box>
             </Collapse>

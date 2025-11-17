@@ -77,6 +77,8 @@ import { debounce } from 'lodash';
 
 const EnhancedMixingPlan = ({ 
   task, 
+  isMobile = false,
+  isVerySmall = false,
   onChecklistItemUpdate,
   onPlanUpdate 
 }) => {
@@ -971,12 +973,21 @@ const EnhancedMixingPlan = ({
   }
 
   return (
-    <Paper ref={mixingPlanContainerRef} sx={{ p: 1.5, mb: 1.5 }}>
-      {/* Nagłówek z przyciskami */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>{t('mixingPlan.title')}</Typography>
-          {totalIngredients > 0 && (
+    <Paper ref={mixingPlanContainerRef} sx={{ p: isMobile ? 2 : 1.5, mb: 1.5 }}>
+      {/* Nagłówek z przyciskami - responsywny */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row',
+        justifyContent: 'space-between', 
+        alignItems: isMobile ? 'flex-start' : 'center',
+        mb: 1.5,
+        gap: isMobile ? 2 : 0
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h6" sx={{ fontSize: isMobile ? '1rem' : '1.1rem' }}>
+            {t('mixingPlan.title')}
+          </Typography>
+          {totalIngredients > 0 && !isVerySmall && (
             <Chip
               label={`${linkedIngredients}/${totalIngredients} (${linkagePercentage}%)`}
               size="small"
@@ -986,9 +997,15 @@ const EnhancedMixingPlan = ({
             />
           )}
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {/* Wskaźnik synchronizacji powiązań */}
-          {isLinksUpdating && (
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
+          gap: 1,
+          width: isMobile ? '100%' : 'auto'
+        }}>
+          {/* Wskaźnik synchronizacji powiązań - ukryj na mobile jeśli brak miejsca */}
+          {isLinksUpdating && !isVerySmall && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Box
                 sx={{
@@ -1005,39 +1022,53 @@ const EnhancedMixingPlan = ({
                 }}
               />
               <Typography variant="caption" sx={{ color: 'success.main', fontSize: '0.7rem' }}>
-                {isLinksUpdating ? 'Aktualizacja powiązań...' : 'Synchronizacja...'}
+                {isLinksUpdating ? 'Aktualizacja...' : 'Synchronizacja...'}
               </Typography>
             </Box>
           )}
 
           <Button
-            startIcon={<AddIcon />}
+            startIcon={!isMobile && <AddIcon />}
             onClick={() => setAddMixingDialogOpen(true)}
-            size="small"
-            sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
+            size={isMobile ? "medium" : "small"}
+            fullWidth={isMobile}
+            sx={{ 
+              fontSize: isMobile ? '0.875rem' : '0.75rem',
+              py: isMobile ? 1 : 0.5,
+              px: isMobile ? 2 : 1,
+              minHeight: isMobile ? 44 : 'auto'
+            }}
           >
             {t('mixingPlan.addMixing')}
           </Button>
 
           <Button
-            startIcon={<RefreshIcon />}
+            startIcon={!isMobile && <RefreshIcon />}
             onClick={refreshData}
             disabled={refreshing}
-            size="small"
-            sx={{ fontSize: '0.75rem', py: 0.5, px: 1 }}
+            size={isMobile ? "medium" : "small"}
+            fullWidth={isMobile}
+            sx={{ 
+              fontSize: isMobile ? '0.875rem' : '0.75rem',
+              py: isMobile ? 1 : 0.5,
+              px: isMobile ? 2 : 1,
+              minHeight: isMobile ? 44 : 'auto'
+            }}
           >
             Odśwież
           </Button>
 
-          <Tooltip title="Przewiń na dół">
-            <IconButton
-              onClick={scrollToBottom}
-              size="small"
-              color="primary"
-            >
-              <ArrowDownIcon />
-            </IconButton>
-          </Tooltip>
+          {!isMobile && (
+            <Tooltip title="Przewiń na dół">
+              <IconButton
+                onClick={scrollToBottom}
+                size="small"
+                color="primary"
+              >
+                <ArrowDownIcon />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
 
@@ -1063,56 +1094,81 @@ const EnhancedMixingPlan = ({
             overflow: 'hidden',
             bgcolor: colors.paper
           }}>
-            {/* Nagłówek mieszania z tłem */}
+            {/* Nagłówek mieszania z tłem - responsywny */}
             <Box sx={{
-              p: 2,
+              p: isMobile ? 1.5 : 2,
               bgcolor: colors.background,
               borderBottom: '1px solid',
               borderColor: borderColor,
               display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
               justifyContent: 'space-between',
-              alignItems: 'flex-start'
+              alignItems: isMobile ? 'flex-start' : 'flex-start',
+              gap: isMobile ? 1.5 : 0
             }}>
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main', mb: 0.5 }}>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 700, 
+                  color: 'primary.main', 
+                  mb: 0.5,
+                  fontSize: isMobile ? '1rem' : '1.25rem'
+                }}>
                   {headerItem.text}
                 </Typography>
                 {headerItem.details && (
-                  <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                  <Typography variant="body2" sx={{ 
+                    color: colors.text.secondary,
+                    fontSize: isMobile ? '0.875rem' : '1rem'
+                  }}>
                     {headerItem.details}
                   </Typography>
                 )}
               </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Tooltip title={t('mixingPlan.editMixing')}>
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: isMobile ? 'column' : 'row',
+                gap: 1,
+                width: isMobile ? '100%' : 'auto'
+              }}>
+                <Tooltip title={!isMobile ? t('mixingPlan.editMixing') : ''}>
                   <Button
-                    size="small"
+                    size={isMobile ? "medium" : "small"}
                     color="primary"
                     variant="outlined"
-                    startIcon={<EditIcon />}
+                    startIcon={!isMobile && <EditIcon />}
                     onClick={() => handleEditMixing(headerItem)}
-                    sx={{ minWidth: 'auto', px: 1 }}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      minWidth: isMobile ? 'auto' : 'auto',
+                      px: isMobile ? 2 : 1,
+                      minHeight: isMobile ? 44 : 'auto'
+                    }}
                   >
                     {t('common.edit')}
                   </Button>
                 </Tooltip>
                 <Button
-                  size="small"
+                  size={isMobile ? "medium" : "small"}
                   color="error"
                   variant="outlined"
-                  startIcon={<UnlinkIcon />}
+                  startIcon={!isMobile && <UnlinkIcon />}
                   onClick={() => handleRemoveMixing(headerItem.id)}
                   disabled={removingMixing === headerItem.id}
-                  sx={{ minWidth: 'auto', px: 1 }}
+                  fullWidth={isMobile}
+                  sx={{ 
+                    minWidth: isMobile ? 'auto' : 'auto',
+                    px: isMobile ? 2 : 1,
+                    minHeight: isMobile ? 44 : 'auto'
+                  }}
                 >
                   {removingMixing === headerItem.id ? t('common.removing') : t('mixingPlan.removeMixing')}
                 </Button>
               </Box>
             </Box>
             
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ p: isMobile ? 1.5 : 2 }}>
             
-            <Grid container spacing={1.5}>
+            <Grid container spacing={isMobile ? 2 : 1.5}>
               {/* Składniki z możliwością powiązania rezerwacji */}
               <Grid item xs={12} md={8}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: colors.text.primary }}>
@@ -1123,7 +1179,75 @@ const EnhancedMixingPlan = ({
                   <Alert severity="info" sx={{ mt: 1 }}>
                     Brak składników w tym mieszaniu
                   </Alert>
+                ) : isMobile ? (
+                  // 📱 Widok mobilny - Cards zamiast Grid
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {ingredients.map((ingredient, index) => {
+                      const link = ingredientLinks[ingredient.id];
+                      const isLinked = !!link;
+                      
+                      return (
+                        <Card 
+                          key={ingredient.id} 
+                          variant="outlined"
+                          sx={{
+                            cursor: 'pointer',
+                            '&:hover': {
+                              bgcolor: mode === 'dark' ? 'rgba(25, 118, 210, 0.15)' : 'primary.light',
+                              opacity: 0.9
+                            }
+                          }}
+                          onClick={() => handleLinkIngredient(ingredient)}
+                        >
+                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                            {/* Nazwa składnika */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: colors.text.primary, flex: 1, pr: 1 }}>
+                                {ingredient.text}
+                              </Typography>
+                              <Tooltip title="">
+                                <IconButton 
+                                  size="medium"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditQuantity(ingredient);
+                                  }}
+                                  sx={{ 
+                                    color: 'primary.main',
+                                    minWidth: 44,
+                                    minHeight: 44,
+                                    ml: 1
+                                  }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                            
+                            {/* Ilość */}
+                            <Box sx={{ mb: 1.5 }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                Ilość:
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: colors.text.primary, fontWeight: 500 }}>
+                                {ingredient.details}
+                              </Typography>
+                            </Box>
+                            
+                            {/* Rezerwacje */}
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5, display: 'block' }}>
+                                Rezerwacje:
+                              </Typography>
+                              {renderIngredientLinkStatus(ingredient)}
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </Box>
                 ) : (
+                  // 💻 Widok desktop - Grid jak było
                   <Box sx={{ 
                     border: '1px solid',
                     borderColor: borderColor,
@@ -1196,9 +1320,14 @@ const EnhancedMixingPlan = ({
                         <Box>
                           <Tooltip title="Edytuj ilość">
                             <IconButton 
-                              size="small" 
-                              onClick={() => handleEditQuantity(ingredient)}
-                              sx={{ color: 'primary.main' }}
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditQuantity(ingredient);
+                              }}
+                              sx={{ 
+                                color: 'primary.main'
+                              }}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -1276,9 +1405,22 @@ const EnhancedMixingPlan = ({
         );
       })}
 
-      {/* Dialog powiązania składnika z rezerwacją */}
-      <Dialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
+      {/* Dialog powiązania składnika z rezerwacją - fullScreen na mobile */}
+      <Dialog 
+        open={linkDialogOpen} 
+        onClose={() => setLinkDialogOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+        fullScreen={isMobile}
+        scroll="paper"
+      >
+        <DialogTitle sx={{ 
+          pb: isMobile ? 1 : 2,
+          position: 'sticky',
+          top: 0,
+          bgcolor: 'background.paper',
+          zIndex: 1
+        }}>
           Powiąż składnik z rezerwacją
           {selectedIngredient && (
             <Typography component="div" variant="subtitle2" color="text.secondary">
@@ -1286,7 +1428,7 @@ const EnhancedMixingPlan = ({
             </Typography>
           )}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
           {availableReservations.length === 0 ? (
             <Alert severity="warning">
               <AlertTitle>Brak dostępnych rezerwacji</AlertTitle>
@@ -1492,13 +1634,23 @@ const EnhancedMixingPlan = ({
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLinkDialogOpen(false)}>
+        <DialogActions sx={{ 
+          p: isMobile ? 2 : 1,
+          gap: isMobile ? 1 : 0,
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
+          <Button 
+            onClick={() => setLinkDialogOpen(false)}
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
             Anuluj
           </Button>
           <Button 
             onClick={handleConfirmLink}
             variant="contained"
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
             disabled={(() => {
               if (!selectedReservation || !linkQuantity || parseFloat(linkQuantity) <= 0 || parseFloat(linkQuantity) > maxAvailableQuantity) {
                 return true;
@@ -1514,8 +1666,14 @@ const EnhancedMixingPlan = ({
         </DialogActions>
       </Dialog>
 
-      {/* Dialog edycji ilości składnika */}
-      <Dialog open={editQuantityDialogOpen} onClose={handleCancelEditQuantity} maxWidth="sm" fullWidth>
+      {/* Dialog edycji ilości składnika - fullScreen na mobile */}
+      <Dialog 
+        open={editQuantityDialogOpen} 
+        onClose={handleCancelEditQuantity} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           Edytuj ilość składnika
           {editingIngredient && (
@@ -1524,7 +1682,7 @@ const EnhancedMixingPlan = ({
             </Typography>
           )}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -1557,13 +1715,23 @@ const EnhancedMixingPlan = ({
             Zmiana ilości składnika zaktualizuje plan mieszań i automatycznie przeliczy sumę dla całego mieszania.
           </Alert>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelEditQuantity}>
+        <DialogActions sx={{ 
+          p: isMobile ? 2 : 1,
+          gap: isMobile ? 1 : 0,
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
+          <Button 
+            onClick={handleCancelEditQuantity}
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
             Anuluj
           </Button>
           <Button 
             onClick={handleSaveQuantity}
             variant="contained"
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
             disabled={editQuantityLoading || !editQuantityValue || parseFloat(editQuantityValue.replace(',', '.')) < 0}
             startIcon={editQuantityLoading ? <CircularProgress size={16} /> : null}
           >
@@ -1572,17 +1740,19 @@ const EnhancedMixingPlan = ({
         </DialogActions>
       </Dialog>
 
-      {/* Dialog do dodawania nowej mieszanki */}
+      {/* Dialog do dodawania nowej mieszanki - fullScreen na mobile */}
       <Dialog
         open={addMixingDialogOpen}
         onClose={() => setAddMixingDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
+        scroll="paper"
       >
         <DialogTitle>
           {t('mixingPlan.addMixingDialogTitle')}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
 
             {/* Liczba sztuk (opcjonalne) */}
@@ -1703,13 +1873,23 @@ const EnhancedMixingPlan = ({
             </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddMixingDialogOpen(false)}>
+        <DialogActions sx={{ 
+          p: isMobile ? 2 : 1,
+          gap: isMobile ? 1 : 0,
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
+          <Button 
+            onClick={() => setAddMixingDialogOpen(false)}
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
             {t('common.cancel')}
           </Button>
           <Button
             onClick={handleAddMixing}
             variant="contained"
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
             disabled={addingMixing}
             startIcon={addingMixing ? <CircularProgress size={16} /> : <AddIcon />}
           >
@@ -1718,17 +1898,18 @@ const EnhancedMixingPlan = ({
         </DialogActions>
       </Dialog>
 
-      {/* Dialog potwierdzenia usunięcia mieszanki */}
+      {/* Dialog potwierdzenia usunięcia mieszanki - fullScreen na mobile */}
       <Dialog
         open={removeMixingDialogOpen}
         onClose={handleCancelRemoveMixing}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>
           {t('mixingPlan.removeMixing')}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
           <Typography variant="body1" gutterBottom>
             {t('mixingPlan.confirmRemoveMixing', { number: mixingToRemove?.number })}
           </Typography>
@@ -1736,14 +1917,24 @@ const EnhancedMixingPlan = ({
             Ta akcja jest nieodwracalna.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelRemoveMixing}>
+        <DialogActions sx={{ 
+          p: isMobile ? 2 : 1,
+          gap: isMobile ? 1 : 0,
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
+          <Button 
+            onClick={handleCancelRemoveMixing}
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
             {t('common.cancel')}
           </Button>
           <Button
             onClick={handleConfirmRemoveMixing}
             variant="contained"
             color="error"
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
             disabled={removingMixing !== null}
             startIcon={removingMixing !== null ? <CircularProgress size={16} /> : <UnlinkIcon />}
           >
@@ -1752,8 +1943,14 @@ const EnhancedMixingPlan = ({
         </DialogActions>
       </Dialog>
 
-      {/* Dialog edycji mieszania */}
-      <Dialog open={editMixingDialogOpen} onClose={handleCancelEditMixing} maxWidth="sm" fullWidth>
+      {/* Dialog edycji mieszania - fullScreen na mobile */}
+      <Dialog 
+        open={editMixingDialogOpen} 
+        onClose={handleCancelEditMixing} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {t('mixingPlan.editMixingDialogTitle')}
           {editingMixing && (
@@ -1762,7 +1959,7 @@ const EnhancedMixingPlan = ({
             </Typography>
           )}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             <TextField
               autoFocus
@@ -1805,13 +2002,23 @@ const EnhancedMixingPlan = ({
             </Alert>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelEditMixing}>
+        <DialogActions sx={{ 
+          p: isMobile ? 2 : 1,
+          gap: isMobile ? 1 : 0,
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
+          <Button 
+            onClick={handleCancelEditMixing}
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
+          >
             {t('common.cancel')}
           </Button>
           <Button 
             onClick={handleSaveMixing}
             variant="contained"
+            fullWidth={isMobile}
+            size={isMobile ? "large" : "medium"}
             disabled={editMixingLoading || !editMixingName || editMixingName.trim() === ''}
             startIcon={editMixingLoading ? <CircularProgress size={16} /> : <EditIcon />}
           >
@@ -1820,25 +2027,46 @@ const EnhancedMixingPlan = ({
         </DialogActions>
       </Dialog>
 
-      {/* Przyciski na dole planu */}
-      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2, pt: 2, borderTop: '1px solid', borderColor: borderColor }}>
+      {/* Przyciski na dole planu - responsywne */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row',
+        justifyContent: 'center', 
+        gap: isMobile ? 1.5 : 2,
+        mt: 2, 
+        pt: 2, 
+        borderTop: '1px solid', 
+        borderColor: borderColor 
+      }}>
         <Button
-          startIcon={<AddIcon />}
+          startIcon={!isMobile && <AddIcon />}
           onClick={() => setAddMixingDialogOpen(true)}
-          size="small"
+          size={isMobile ? "large" : "small"}
           variant="contained"
-          sx={{ fontSize: '0.75rem', py: 0.5, px: 2 }}
+          fullWidth={isMobile}
+          sx={{ 
+            fontSize: isMobile ? '0.875rem' : '0.75rem',
+            py: isMobile ? 1 : 0.5,
+            px: isMobile ? 3 : 2,
+            minHeight: isMobile ? 48 : 'auto'
+          }}
         >
           {t('mixingPlan.addMixing')}
         </Button>
         
-        <Tooltip title="Przewiń do góry">
+        <Tooltip title={!isMobile ? "Przewiń do góry" : ""}>
           <Button
             onClick={scrollToTop}
-            startIcon={<ArrowUpIcon />}
-            size="small"
+            startIcon={!isMobile && <ArrowUpIcon />}
+            size={isMobile ? "large" : "small"}
             variant="outlined"
-            sx={{ fontSize: '0.75rem', py: 0.5, px: 2 }}
+            fullWidth={isMobile}
+            sx={{ 
+              fontSize: isMobile ? '0.875rem' : '0.75rem',
+              py: isMobile ? 1 : 0.5,
+              px: isMobile ? 3 : 2,
+              minHeight: isMobile ? 48 : 'auto'
+            }}
           >
             Przewiń do góry
           </Button>

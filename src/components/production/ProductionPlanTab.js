@@ -20,7 +20,11 @@ import {
   IconButton,
   Tooltip,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Card,
+  CardContent,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import EnhancedMixingPlan from './EnhancedMixingPlan';
 import {
@@ -58,6 +62,9 @@ const ProductionPlanTab = ({
   fetchAllTaskData // ✅ Funkcja do odświeżania danych zadania
 }) => {
   const { t } = useTranslation('taskDetails');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isVerySmall = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Helper function to format quantity with specified precision
   const formatQuantityPrecision = (value, precision = 3) => {
@@ -120,13 +127,29 @@ const ProductionPlanTab = ({
     <Grid container spacing={3}>
       {/* Sekcja historii produkcji */}
       <Grid item xs={12}>
-        <Paper sx={{ p: 3 }}>
+        <Paper sx={{ p: isMobile ? 2 : 3 }}>
           <Typography variant="h6" component="h2" gutterBottom>{t('productionHistory.title')}</Typography>
           
-          {/* Selektor maszyny i przycisk dodawania */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <FormControl size="small" sx={{ minWidth: 200 }}>
+          {/* 📱 Responsywne kontrolki - selektor maszyny i przycisk dodawania */}
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: isMobile ? 'column' : 'row',
+            justifyContent: 'space-between', 
+            alignItems: isMobile ? 'stretch' : 'center',
+            mb: 2, 
+            gap: 2 
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: isMobile ? 'column' : 'row',
+              alignItems: isMobile ? 'stretch' : 'center',
+              gap: 2 
+            }}>
+              <FormControl 
+                size={isMobile ? "medium" : "small"} 
+                fullWidth={isMobile}
+                sx={{ minWidth: isMobile ? '100%' : 200 }}
+              >
                 <InputLabel>{t('productionHistory.machineSelector')}</InputLabel>
                 <Select
                   value={selectedMachineId}
@@ -144,10 +167,10 @@ const ProductionPlanTab = ({
                 </Select>
               </FormControl>
               
-              {selectedMachineId && (
+              {selectedMachineId && !isVerySmall && (
                 <Chip 
                   size="small" 
-                  label={`Wyświetlanie danych z ${availableMachines.find(m => m.id === selectedMachineId)?.name || selectedMachineId}`}
+                  label={`${availableMachines.find(m => m.id === selectedMachineId)?.name || ''}`}
                   color="info"
                   variant="outlined"
                 />
@@ -157,9 +180,13 @@ const ProductionPlanTab = ({
             <Button 
               variant="contained" 
               color="primary" 
-              startIcon={<AddIcon />} 
+              startIcon={!isMobile && <AddIcon />}
               onClick={handleAddHistoryClick}
-              size="small"
+              size={isMobile ? "large" : "small"}
+              fullWidth={isMobile}
+              sx={{ 
+                minHeight: isMobile ? 48 : 'auto' // Większy target dla dotyku
+              }}
             >
               {t('productionHistory.addRecord')}
             </Button>
@@ -169,7 +196,115 @@ const ProductionPlanTab = ({
             <Typography variant="body2" color="text.secondary">
               Brak historii produkcji dla tego zadania
             </Typography>
+          ) : isMobile ? (
+            // 📱 Widok mobilny - Cards zamiast Table
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {enrichedProductionHistory.map((item) => (
+                <Card key={item.id} variant="outlined">
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="subtitle2" color="primary">
+                        {item.startTime ? formatDateTime(item.startTime) : '-'}
+                      </Typography>
+                      <Chip 
+                        size="small" 
+                        label={`${formatQuantityPrecision(item.quantity)} ${task.unit}`}
+                        color="success"
+                      />
+                    </Box>
+                    
+                    <Typography variant="body2" color="text.secondary">
+                      ⏱️ Czas: {item.timeSpent ? `${item.timeSpent} min` : '-'}
+                    </Typography>
+                    
+                    <Typography variant="body2" color="text.secondary">
+                      👤 Operator: {getUserName(item.userId)}
+                    </Typography>
+                    
+                    {item.endTime && (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        Koniec: {formatDateTime(item.endTime)}
+                      </Typography>
+                    )}
+                    
+                    {selectedMachineId && item.machineData && (
+                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip 
+                          size="small" 
+                          label={`✓ OK: ${item.machineData.okProduced}`}
+                          color="success"
+                          variant="outlined"
+                        />
+                        <Chip 
+                          size="small" 
+                          label={`✗ NOK: ${item.machineData.nokProduced}`}
+                          color="error"
+                          variant="outlined"
+                        />
+                        <Chip 
+                          size="small" 
+                          label={`Σ: ${item.machineData.totalProduced}`}
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </Box>
+                    )}
+                    
+                    <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                      <IconButton 
+                        color="primary" 
+                        onClick={() => onEditHistoryItem(item)}
+                        size="large"
+                        sx={{ 
+                          minWidth: 48,
+                          minHeight: 48
+                        }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton 
+                        color="error" 
+                        onClick={() => onDeleteHistoryItem(item)}
+                        size="large"
+                        sx={{ 
+                          minWidth: 48,
+                          minHeight: 48
+                        }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {/* Suma dla widoku mobilnego */}
+              <Card variant="outlined" sx={{ bgcolor: 'rgba(0, 0, 0, 0.02)' }}>
+                <CardContent>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    📊 Podsumowanie
+                  </Typography>
+                  <Typography variant="body2">
+                    Czas: {enrichedProductionHistory.reduce((sum, item) => sum + (item.timeSpent || 0), 0)} min
+                  </Typography>
+                  <Typography variant="body2">
+                    Ilość: {formatQuantityPrecision(
+                      enrichedProductionHistory.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0), 
+                      3
+                    )} {task.unit}
+                  </Typography>
+                  {selectedMachineId && (
+                    <Typography variant="body2">
+                      OK: {enrichedProductionHistory.reduce((sum, item) => sum + (item.machineData?.okProduced || 0), 0)} | 
+                      NOK: {enrichedProductionHistory.reduce((sum, item) => sum + (item.machineData?.nokProduced || 0), 0)} | 
+                      Σ: {enrichedProductionHistory.reduce((sum, item) => sum + (item.machineData?.totalProduced || 0), 0)}
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Box>
           ) : (
+            // 💻 Widok desktop - Table
             <TableContainer>
               <Table>
                 <TableHead>
@@ -367,6 +502,8 @@ const ProductionPlanTab = ({
         <Grid item xs={12}>
           <EnhancedMixingPlan
             task={task}
+            isMobile={isMobile}
+            isVerySmall={isVerySmall}
             onChecklistItemUpdate={onChecklistItemUpdate}
             onPlanUpdate={async () => {
               // ✅ POPRAWKA: Odśwież dane zadania po aktualizacji planu mieszań
