@@ -7,17 +7,26 @@ import { useAuth } from '../hooks/useAuth';
 // Tworzenie kontekstu
 export const ThemeContext = createContext();
 
-// Wspólne wartości dla obu motywów
+/**
+ * Common Values - Synchronizowane z design-tokens.css
+ * Wartości są spójne między CSS a Material-UI Theme
+ */
 const commonValues = {
+  // Breakpoints - zgodne z design-tokens.css
   breakpoints: {
     values: {
-      xs: 0,
-      sm: 600,
-      md: 1100,  // Zwiększone z domyślnych 900px do 1100px
-      lg: 1400,  // Zwiększone z domyślnych 1200px do 1400px
-      xl: 1800,  // Zwiększone z domyślnych 1536px do 1800px
+      xs: 0,      // --breakpoint-xs
+      sm: 600,    // --breakpoint-sm
+      md: 1100,   // --breakpoint-md
+      lg: 1400,   // --breakpoint-lg
+      xl: 1800,   // --breakpoint-xl
     },
   },
+  
+  // Spacing - 1 unit = 4px (zgodnie z --space-1 = 0.25rem = 4px)
+  spacing: 4,
+  
+  // Typography - Zoptymalizowana dla aplikacji biznesowych
   typography: {
     fontFamily: [
       'Roboto',
@@ -28,21 +37,32 @@ const commonValues = {
       'Arial',
       'sans-serif',
     ].join(','),
+    fontSize: 14, // base font size (zmniejszony z 16px)
+    fontWeightLight: 300,     // --font-weight-light
+    fontWeightRegular: 400,   // --font-weight-normal
+    fontWeightMedium: 500,    // --font-weight-medium
+    fontWeightBold: 700,      // --font-weight-bold
+    
+    // Headings - zmniejszone rozmiary
     h1: {
       fontWeight: 700,
-      fontSize: '2.5rem',
+      fontSize: '2rem',        // 32px (było 48px)
+      lineHeight: 1.25,
     },
     h2: {
       fontWeight: 600,
-      fontSize: '2rem',
+      fontSize: '1.75rem',     // 28px (było 36px)
+      lineHeight: 1.3,
     },
     h3: {
       fontWeight: 600,
-      fontSize: '1.75rem',
+      fontSize: '1.5rem',      // 24px (było 30px)
+      lineHeight: 1.35,
     },
     h4: {
-      fontWeight: 700,
-      fontSize: '1.5rem',
+      fontWeight: 600,
+      fontSize: '1.25rem',     // 20px (było 24px)
+      lineHeight: 1.4,
       background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
       WebkitBackgroundClip: 'text',
       WebkitTextFillColor: 'transparent',
@@ -51,50 +71,77 @@ const commonValues = {
     },
     h5: {
       fontWeight: 600,
-      fontSize: '1.25rem',
+      fontSize: '1.125rem',    // 18px (było 20px)
+      lineHeight: 1.4,
     },
     h6: {
       fontWeight: 600,
-      fontSize: '1rem',
+      fontSize: '1rem',        // 16px (było 18px)
+      lineHeight: 1.4,
     },
     subtitle1: {
-      fontSize: '1rem',
+      fontSize: '0.9375rem',   // 15px (było 16px)
       fontWeight: 500,
+      lineHeight: 1.6,
     },
     subtitle2: {
-      fontSize: '0.875rem',
+      fontSize: '0.8125rem',   // 13px (było 14px)
       fontWeight: 500,
+      lineHeight: 1.6,
     },
     body1: {
-      fontSize: '1rem',
+      fontSize: '0.875rem',    // 14px (było 16px) - główny tekst
+      lineHeight: 1.5,
     },
     body2: {
-      fontSize: '0.875rem',
+      fontSize: '0.8125rem',   // 13px (było 14px)
+      lineHeight: 1.5,
+    },
+    caption: {
+      fontSize: '0.6875rem',   // 11px (było 12px)
+      lineHeight: 1.5,
     },
     button: {
       textTransform: 'none',
       fontWeight: 500,
+      fontSize: '0.875rem',    // 14px (było 16px)
     },
   },
+  
+  // Shape - zgodny z design-tokens
   shape: {
-    borderRadius: 12,
+    borderRadius: 12,          // --radius-lg
   },
+  
+  // Transitions - zgodne z design-tokens
   transitions: {
     easing: {
-      easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',
-      easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
+      easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',    // --ease-in-out
+      easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',       // --ease-out
+      easeIn: 'cubic-bezier(0.4, 0, 1, 1)',          // --ease-in
       sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
     },
     duration: {
-      shortest: 150,
+      shortest: 150,    // --transition-fast
       shorter: 200,
       short: 250,
-      standard: 300,
+      standard: 300,    // --transition-base
       complex: 375,
+      slow: 500,        // --transition-slow
       enteringScreen: 225,
       leavingScreen: 195,
     },
+  },
+  
+  // Z-Index Scale - zgodny z design-tokens
+  zIndex: {
+    mobileStepper: 1000,
+    speedDial: 1050,
+    appBar: 1100,
+    drawer: 1200,
+    modal: 1300,       // --z-modal
+    snackbar: 1400,
+    tooltip: 1500,     // --z-tooltip
   },
 };
 

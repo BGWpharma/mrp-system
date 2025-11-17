@@ -1,0 +1,137 @@
+/**
+ * Light Theme - Jasny motyw aplikacji
+ * Definiuje zmienne specyficzne dla jasnego motywu
+ */
+
+[data-theme='light'] {
+  /* ========================================
+     COLORS - LIGHT THEME
+     ======================================== */
+  
+  --bg-primary: #f5f5f5;
+  --bg-paper: rgba(255, 255, 255, 0.8);
+  --bg-paper-elevated: #ffffff;
+  --bg-default: transparent;
+  --bg-darker: #eaeaea;
+  --bg-card: rgba(255, 255, 255, 0.8);
+  --bg-dialog: rgba(255, 255, 255, 0.9);
+  --bg-tooltip: #616161;
+  
+  /* Text colors */
+  --text-primary: rgba(0, 0, 0, 0.87);
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --text-disabled: rgba(0, 0, 0, 0.38);
+  --text-hint: rgba(0, 0, 0, 0.38);
+  
+  /* Border & Divider */
+  --border-color: rgba(0, 0, 0, 0.12);
+  --divider: rgba(0, 0, 0, 0.12);
+  
+  /* Actions */
+  --action-active: rgba(0, 0, 0, 0.54);
+  --action-hover: rgba(0, 0, 0, 0.04);
+  --action-selected: rgba(0, 0, 0, 0.08);
+  --action-disabled: rgba(0, 0, 0, 0.26);
+  --action-disabled-background: rgba(0, 0, 0, 0.12);
+  
+  /* ========================================
+     GLASSMORPHISM - LIGHT THEME
+     ======================================== */
+  
+  --glass-background: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(59, 130, 246, 0.1);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.1), 0 1px 0px rgba(255, 255, 255, 0.8) inset;
+  
+  /* ========================================
+     COMPONENT OVERRIDES - LIGHT THEME
+     ======================================== */
+  
+  /* AppBar */
+  --appbar-bg: rgba(255, 255, 255, 0.9);
+  --appbar-border: rgba(0, 0, 0, 0.05);
+  --appbar-shadow: 0px 2px 10px rgba(0, 0, 0, 0.1);
+  
+  /* Drawer */
+  --drawer-bg: rgba(255, 255, 255, 0.9);
+  --drawer-border: rgba(0, 0, 0, 0.08);
+  
+  /* Card */
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-border: rgba(59, 130, 246, 0.1);
+  --card-shadow: 0px 8px 32px rgba(59, 130, 246, 0.1);
+  --card-hover-border: rgba(59, 130, 246, 0.3);
+  --card-hover-shadow: 0px 20px 40px rgba(59, 130, 246, 0.15);
+  
+  /* Table */
+  --table-bg: rgba(255, 255, 255, 0.8);
+  --table-border: rgba(0, 0, 0, 0.05);
+  --table-shadow: 0px 8px 32px rgba(25, 118, 210, 0.1);
+  --table-hover-bg: rgba(25, 118, 210, 0.04);
+  --table-header-bg: linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%);
+  --table-row-selected: rgba(25, 118, 210, 0.08);
+  
+  /* List */
+  --list-bg: rgba(255, 255, 255, 0.7);
+  --list-border: rgba(25, 118, 210, 0.15);
+  --list-hover-bg: rgba(25, 118, 210, 0.06);
+  --list-selected-bg: rgba(25, 118, 210, 0.08);
+  
+  /* Chip */
+  --chip-bg: rgba(255, 255, 255, 0.8);
+  --chip-border: rgba(25, 118, 210, 0.2);
+  --chip-filled-bg: linear-gradient(135deg, rgba(25, 118, 210, 0.9) 0%, rgba(124, 58, 237, 0.9) 100%);
+  
+  /* Input */
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(0, 0, 0, 0.23);
+  --input-hover-border: rgba(0, 0, 0, 0.4);
+  --input-focus-border: var(--color-primary-500);
+  --input-hover-bg: rgba(33, 150, 243, 0.05);
+  --input-focus-bg: rgba(33, 150, 243, 0.08);
+  
+  /* Select */
+  --select-icon-color: rgba(0, 0, 0, 0.54);
+  
+  /* ========================================
+     SCROLLBAR - LIGHT THEME
+     ======================================== */
+  
+  --scrollbar-track: rgba(0, 0, 0, 0.05);
+  --scrollbar-thumb: var(--gradient-primary);
+  --scrollbar-thumb-hover: linear-gradient(135deg, #1976d2 0%, #7c3aed 100%);
+  
+  /* ========================================
+     BACKGROUND GRADIENTS - LIGHT THEME
+     ======================================== */
+  
+  --bg-gradient-primary: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.03) 25%, rgba(236, 254, 255, 0.8) 50%, rgba(219, 234, 254, 0.6) 75%, rgba(165, 180, 252, 0.04) 100%);
+  --bg-gradient-radial: radial-gradient(circle at 15% 25%, rgba(59, 130, 246, 0.08) 0%, transparent 50%), 
+                        radial-gradient(circle at 85% 75%, rgba(139, 92, 246, 0.06) 0%, transparent 50%), 
+                        radial-gradient(circle at 50% 60%, rgba(6, 182, 212, 0.04) 0%, transparent 50%);
+}
+
+/* ========================================
+   BODY BACKGROUND - LIGHT THEME
+   ======================================== */
+
+[data-theme='light'] body::before {
+  background: var(--bg-gradient-primary);
+}
+
+[data-theme='light'] body::after {
+  background: var(--bg-gradient-radial);
+}
+
+/* ========================================
+   HIGH CONTRAST ADJUSTMENTS
+   ======================================== */
+
+@media (prefers-contrast: high) {
+  [data-theme='light'] {
+    --text-primary: #000000;
+    --text-secondary: rgba(0, 0, 0, 0.8);
+    --border-color: rgba(0, 0, 0, 0.3);
+    --bg-paper: #ffffff;
+  }
+}
+

@@ -1,0 +1,157 @@
+/**
+ * Dark Theme - Ciemny motyw aplikacji
+ * Definiuje zmienne specyficzne dla ciemnego motywu
+ */
+
+[data-theme='dark'] {
+  /* ========================================
+     COLORS - DARK THEME
+     ======================================== */
+  
+  --bg-primary: #111827;
+  --bg-paper: rgba(31, 41, 55, 0.8);
+  --bg-paper-elevated: #182136;
+  --bg-default: transparent;
+  --bg-darker: #0f172a;
+  --bg-card: rgba(30, 41, 59, 0.8);
+  --bg-dialog: rgba(30, 41, 59, 0.9);
+  --bg-tooltip: rgba(30, 41, 59, 0.9);
+  
+  /* Text colors */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-disabled: rgba(255, 255, 255, 0.5);
+  --text-hint: rgba(255, 255, 255, 0.5);
+  
+  /* Border & Divider */
+  --border-color: rgba(255, 255, 255, 0.12);
+  --divider: rgba(255, 255, 255, 0.12);
+  
+  /* Actions */
+  --action-active: rgba(255, 255, 255, 0.7);
+  --action-hover: rgba(255, 255, 255, 0.1);
+  --action-selected: rgba(255, 255, 255, 0.15);
+  --action-disabled: rgba(255, 255, 255, 0.3);
+  --action-disabled-background: rgba(255, 255, 255, 0.12);
+  
+  /* ========================================
+     GLASSMORPHISM - DARK THEME
+     ======================================== */
+  
+  --glass-background: rgba(30, 41, 59, 0.85);
+  --glass-border: rgba(59, 130, 246, 0.2);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 1px 0px rgba(255, 255, 255, 0.1) inset;
+  
+  /* ========================================
+     COMPONENT OVERRIDES - DARK THEME
+     ======================================== */
+  
+  /* AppBar */
+  --appbar-bg: rgba(31, 41, 55, 0.9);
+  --appbar-border: rgba(255, 255, 255, 0.05);
+  --appbar-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
+  
+  /* Drawer */
+  --drawer-bg: rgba(31, 41, 55, 0.9);
+  --drawer-border: rgba(255, 255, 255, 0.05);
+  
+  /* Card */
+  --card-bg: rgba(30, 41, 59, 0.85);
+  --card-border: rgba(59, 130, 246, 0.2);
+  --card-shadow: 0px 8px 32px rgba(0, 0, 0, 0.3);
+  --card-hover-border: rgba(59, 130, 246, 0.3);
+  --card-hover-shadow: 0px 20px 40px rgba(59, 130, 246, 0.2);
+  
+  /* Table */
+  --table-bg: rgba(30, 41, 59, 0.8);
+  --table-border: rgba(255, 255, 255, 0.05);
+  --table-shadow: 0px 8px 32px rgba(0, 0, 0, 0.3);
+  --table-hover-bg: rgba(59, 130, 246, 0.08);
+  --table-header-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  --table-row-selected: rgba(66, 165, 245, 0.15);
+  
+  /* List */
+  --list-bg: rgba(30, 41, 59, 0.6);
+  --list-border: rgba(59, 130, 246, 0.2);
+  --list-hover-bg: rgba(59, 130, 246, 0.15);
+  --list-selected-bg: rgba(66, 165, 245, 0.2);
+  
+  /* Chip */
+  --chip-bg: rgba(30, 41, 59, 0.6);
+  --chip-border: rgba(59, 130, 246, 0.4);
+  --chip-filled-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.8) 0%, rgba(139, 92, 246, 0.8) 100%);
+  
+  /* Input */
+  --input-bg: rgba(30, 41, 59, 0.3);
+  --input-border: rgba(255, 255, 255, 0.23);
+  --input-hover-border: rgba(255, 255, 255, 0.4);
+  --input-focus-border: var(--color-primary-500);
+  --input-hover-bg: rgba(59, 130, 246, 0.08);
+  --input-focus-bg: rgba(59, 130, 246, 0.12);
+  
+  /* Select */
+  --select-icon-color: rgba(255, 255, 255, 0.5);
+  
+  /* ========================================
+     SCROLLBAR - DARK THEME
+     ======================================== */
+  
+  --scrollbar-track: rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: var(--gradient-primary);
+  --scrollbar-thumb-hover: linear-gradient(135deg, #1976d2 0%, #7c3aed 100%);
+  
+  /* ========================================
+     BACKGROUND GRADIENTS - DARK THEME
+     ======================================== */
+  
+  --bg-gradient-primary: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #1e293b 75%, #0f172a 100%);
+  --bg-gradient-radial: radial-gradient(circle at 15% 25%, rgba(59, 130, 246, 0.12) 0%, transparent 50%), 
+                        radial-gradient(circle at 85% 75%, rgba(139, 92, 246, 0.1) 0%, transparent 50%), 
+                        radial-gradient(circle at 50% 60%, rgba(6, 182, 212, 0.08) 0%, transparent 50%);
+  
+  /* Floating accent */
+  --bg-accent-float: radial-gradient(circle, rgba(59, 130, 246, 0.05) 0%, transparent 70%);
+}
+
+/* ========================================
+   BODY BACKGROUND - DARK THEME
+   ======================================== */
+
+[data-theme='dark'] body::before {
+  background: var(--bg-gradient-primary);
+  opacity: 0.1;
+}
+
+[data-theme='dark'] body::after {
+  background: var(--bg-gradient-radial);
+}
+
+/* Dark mode class for body */
+[data-theme='dark'] body,
+body.dark-mode {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ========================================
+   HIGH CONTRAST ADJUSTMENTS
+   ======================================== */
+
+@media (prefers-contrast: high) {
+  [data-theme='dark'] {
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.9);
+    --border-color: rgba(255, 255, 255, 0.3);
+    --bg-paper: #1a1a1a;
+  }
+}
+
+/* ========================================
+   BACKDROP BLUR ENHANCEMENT
+   ======================================== */
+
+[data-theme='dark'] .MuiBackdrop-root {
+  backdrop-filter: blur(8px) !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}
+

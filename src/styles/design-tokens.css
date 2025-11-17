@@ -1,0 +1,234 @@
+/**
+ * Design Tokens - System zmiennych CSS
+ * Centralna definicja wszystkich wartości designu
+ * Używane zarówno w CSS jak i synchronizowane z Material-UI Theme
+ */
+
+:root {
+  /* ========================================
+     KOLORY - PALETA PODSTAWOWA
+     ======================================== */
+  
+  /* Primary (Niebieski) */
+  --color-primary-50: #e3f2fd;
+  --color-primary-100: #bbdefb;
+  --color-primary-200: #90caf9;
+  --color-primary-300: #64b5f6;
+  --color-primary-400: #42a5f5;
+  --color-primary-500: #2196f3;
+  --color-primary-600: #1e88e5;
+  --color-primary-700: #1976d2;
+  --color-primary-800: #1565c0;
+  --color-primary-900: #0d47a1;
+  
+  /* Secondary (Różowy) */
+  --color-secondary-50: #fce4ec;
+  --color-secondary-100: #f8bbd0;
+  --color-secondary-500: #f50057;
+  --color-secondary-700: #c51162;
+  --color-secondary-900: #880e4f;
+  
+  /* Success (Zielony) */
+  --color-success-50: #e8f5e9;
+  --color-success-100: #c8e6c9;
+  --color-success-500: #4caf50;
+  --color-success-700: #388e3c;
+  --color-success-900: #1b5e20;
+  
+  /* Error (Czerwony) */
+  --color-error-50: #ffebee;
+  --color-error-100: #ffcdd2;
+  --color-error-500: #f44336;
+  --color-error-700: #d32f2f;
+  --color-error-900: #b71c1c;
+  
+  /* Warning (Pomarańczowy) */
+  --color-warning-50: #fff3e0;
+  --color-warning-100: #ffe0b2;
+  --color-warning-500: #ff9800;
+  --color-warning-700: #f57c00;
+  --color-warning-900: #e65100;
+  
+  /* Info (Jasnoniebieski) */
+  --color-info-50: #e1f5fe;
+  --color-info-100: #b3e5fc;
+  --color-info-500: #2196f3;
+  --color-info-700: #0288d1;
+  --color-info-900: #01579b;
+  
+  /* Gray (Szary) */
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #eeeeee;
+  --color-gray-300: #e0e0e0;
+  --color-gray-400: #bdbdbd;
+  --color-gray-500: #9e9e9e;
+  --color-gray-600: #757575;
+  --color-gray-700: #616161;
+  --color-gray-800: #424242;
+  --color-gray-900: #212121;
+  
+  /* ========================================
+     SPACING SCALE (zgodny z Material-UI spacing)
+     1 unit = 4px (spacing(1) = 4px)
+     ======================================== */
+  
+  --space-0: 0;
+  --space-1: 0.25rem;    /* 4px */
+  --space-2: 0.5rem;     /* 8px */
+  --space-3: 0.75rem;    /* 12px */
+  --space-4: 1rem;       /* 16px */
+  --space-5: 1.25rem;    /* 20px */
+  --space-6: 1.5rem;     /* 24px */
+  --space-7: 1.75rem;    /* 28px */
+  --space-8: 2rem;       /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+  --space-16: 4rem;      /* 64px */
+  --space-20: 5rem;      /* 80px */
+  --space-24: 6rem;      /* 96px */
+  
+  /* ========================================
+     TYPOGRAPHY SCALE
+     ======================================== */
+  
+  --font-family-base: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  
+  /* Font Sizes - Zoptymalizowane dla aplikacji biznesowych */
+  --font-size-xs: 0.6875rem;    /* 11px */
+  --font-size-sm: 0.8125rem;    /* 13px */
+  --font-size-base: 0.875rem;   /* 14px - mniejszy base size */
+  --font-size-md: 0.9375rem;    /* 15px */
+  --font-size-lg: 1rem;         /* 16px */
+  --font-size-xl: 1.125rem;     /* 18px */
+  --font-size-2xl: 1.25rem;     /* 20px */
+  --font-size-3xl: 1.5rem;      /* 24px */
+  --font-size-4xl: 1.875rem;    /* 30px */
+  --font-size-5xl: 2.25rem;     /* 36px */
+  
+  /* Font Weights */
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  --line-height-loose: 2;
+  
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+  
+  --radius-none: 0;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+  --radius-full: 9999px;
+  
+  /* ========================================
+     SHADOWS (Light Theme)
+     ======================================== */
+  
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  
+  /* Glassmorphism shadows */
+  --shadow-glass-light: 0 8px 32px rgba(31, 38, 135, 0.1), 0 1px 0px rgba(255, 255, 255, 0.8) inset;
+  
+  /* ========================================
+     TRANSITIONS & ANIMATIONS
+     ======================================== */
+  
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0.0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* ========================================
+     Z-INDEX SCALE
+     ======================================== */
+  
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  
+  /* ========================================
+     BREAKPOINTS (zgodne z Material-UI)
+     ======================================== */
+  
+  --breakpoint-xs: 0px;
+  --breakpoint-sm: 600px;
+  --breakpoint-md: 1100px;
+  --breakpoint-lg: 1400px;
+  --breakpoint-xl: 1800px;
+  
+  /* ========================================
+     OPACITY SCALE
+     ======================================== */
+  
+  --opacity-0: 0;
+  --opacity-5: 0.05;
+  --opacity-10: 0.1;
+  --opacity-20: 0.2;
+  --opacity-30: 0.3;
+  --opacity-40: 0.4;
+  --opacity-50: 0.5;
+  --opacity-60: 0.6;
+  --opacity-70: 0.7;
+  --opacity-80: 0.8;
+  --opacity-90: 0.9;
+  --opacity-100: 1;
+  
+  /* ========================================
+     GRADIENTS
+     ======================================== */
+  
+  --gradient-primary: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  --gradient-secondary: linear-gradient(135deg, #f50057 0%, #c51162 100%);
+  --gradient-success: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  --gradient-error: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  --gradient-warning: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  --gradient-info: linear-gradient(135deg, #2196f3 0%, #0288d1 100%);
+  --gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  --gradient-ocean: linear-gradient(135deg, #2196f3 0%, #8b5cf6 100%);
+}
+
+/* ========================================
+   DARK THEME OVERRIDES
+   ======================================== */
+
+[data-theme='dark'] {
+  /* Shadow overrides for dark theme */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.6), 0 4px 6px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.7), 0 10px 10px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.8);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  
+  /* Glassmorphism shadows dark */
+  --shadow-glass-dark: 0 8px 32px rgba(0, 0, 0, 0.3), 0 1px 0px rgba(255, 255, 255, 0.1) inset;
+}
+

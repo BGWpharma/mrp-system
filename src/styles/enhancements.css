@@ -274,7 +274,35 @@
     box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* Enhanced Drawer - Remove glassmorphism to preserve original sidebar styling */
+/* Enhanced Drawer & Sidebar */
+.MuiDrawer-root {
+  /* Sidebar text wrapping for long menu items */
+  .MuiListItemText-root {
+    /* Pozwól na łamanie długich nazw */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+  }
+  
+  .MuiListItemText-primary {
+    /* Maksymalna szerokość tekstu w sidebar */
+    max-width: 100%;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+  }
+  
+  /* Zmniejsz padding dla submenu items aby tekst miał więcej miejsca */
+  .MuiCollapse-root .MuiListItem-root {
+    padding-right: 8px !important;
+  }
+  
+  /* Dla bardzo długich nazw - bardziej agresywne łamanie */
+  .MuiCollapse-root .MuiListItemText-primary {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+}
 
 /* Loading Animations */
 .loading-shimmer {

@@ -621,8 +621,16 @@ const Sidebar = ({ onToggle }) => {
                         fontWeight: isMenuActive(item.path) ? 'bold' : 'normal',
                         color: isMenuActive(item.path) 
                           ? '#ffffff' // zawsze biały dla selected w obu motywach - gradient tła zapewnia kontrast
-                          : 'inherit'
+                          : 'inherit',
+                        lineHeight: 1.3,
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word'
                       }} 
+                      sx={{
+                        pr: 0.5, // Zmniejsz padding po prawej stronie
+                        flex: 1
+                      }}
                     />
                     {openSubmenu === item.text ? <ExpandLess /> : <ExpandMore />}
                   </Box>
@@ -680,6 +688,7 @@ const Sidebar = ({ onToggle }) => {
                       role="menuitem"
                                              sx={{ 
                          pl: isDrawerOpen ? 4 : 2,
+                         pr: isDrawerOpen ? 1 : 2, // Zmniejszony padding po prawej dla submenu
                          borderRight: 'none !important',
                          borderTop: 'none !important',
                          borderBottom: 'none !important',
@@ -712,8 +721,15 @@ const Sidebar = ({ onToggle }) => {
                             fontWeight: subItem.path && location.pathname === subItem.path ? 'bold' : 'normal',
                             color: subItem.path && location.pathname === subItem.path
                               ? (mode === 'dark' ? '#ffffff' : '#1e293b') // biały dla dark mode, ciemny dla light mode
-                              : 'inherit'
+                              : 'inherit',
+                            lineHeight: 1.3,
+                            whiteSpace: 'normal',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'break-word'
                           }} 
+                          sx={{
+                            pr: 0.5 // Zmniejsz padding po prawej stronie
+                          }}
                         />
                       )}
                     </StyledListItem>
@@ -750,8 +766,15 @@ const Sidebar = ({ onToggle }) => {
                       : isActive(item.path) ? 'bold' : 'normal',
                     color: (item.path === '/' ? location.pathname === '/' : isActive(item.path))
                       ? '#ffffff' // biały tekst dla selected items - działa dla obu motywów dzięki gradientowi tła
-                      : 'inherit'
+                      : 'inherit',
+                    lineHeight: 1.3,
+                    whiteSpace: 'normal',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word'
                   }} 
+                  sx={{
+                    pr: 0.5 // Zmniejsz padding po prawej stronie
+                  }}
                 />
               )}
             </StyledListItem>

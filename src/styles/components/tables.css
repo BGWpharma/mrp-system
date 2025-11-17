@@ -1,0 +1,443 @@
+/**
+ * Table Components - Style dla tabel
+ * Rozszerza domyślne style Material-UI Table
+ */
+
+/* ========================================
+   ENHANCED TABLE CONTAINER
+   ======================================== */
+
+.table-container {
+  position: relative;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.table-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+}
+
+[data-theme='dark'] .table-container::before {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+}
+
+/* ========================================
+   TABLE HEADERS
+   ======================================== */
+
+.table-header {
+  position: relative;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: var(--font-size-xs);
+  background: transparent;
+  padding: var(--space-4);
+}
+
+.table-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-ocean);
+  opacity: 0.6;
+}
+
+.table-header-sortable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.table-header-sortable:hover {
+  background: rgba(33, 150, 243, 0.05);
+}
+
+[data-theme='dark'] .table-header-sortable:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* ========================================
+   TABLE ROWS
+   ======================================== */
+
+.table-row {
+  border: none;
+  border-radius: var(--radius-md);
+  margin: 2px 0;
+  transition: all var(--transition-base);
+}
+
+.table-row:hover {
+  background: linear-gradient(90deg, rgba(33, 150, 243, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(2px);
+}
+
+[data-theme='dark'] .table-row:hover {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.table-row-selected {
+  background: rgba(33, 150, 243, 0.15);
+}
+
+[data-theme='dark'] .table-row-selected {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.table-row-clickable {
+  cursor: pointer;
+}
+
+/* Alternate row colors */
+.table-row-striped:nth-of-type(odd) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme='dark'] .table-row-striped:nth-of-type(odd) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ========================================
+   TABLE CELLS
+   ======================================== */
+
+.table-cell {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] .table-cell {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-cell-compact {
+  padding: var(--space-2) var(--space-3);
+}
+
+.table-cell-comfortable {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* ========================================
+   TABLE ANIMATIONS
+   ======================================== */
+
+.table-fade-in {
+  animation: tableSlideIn 0.6s ease-out;
+}
+
+@keyframes tableSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.table-row-animate {
+  transition: all var(--transition-base);
+}
+
+.table-row-animate:hover {
+  transform: scale(1.001);
+  z-index: 1;
+}
+
+/* ========================================
+   TABLE LOADING STATES
+   ======================================== */
+
+.table-loading {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background-size: 200px 100%;
+  animation: tableShimmer 1.5s infinite;
+}
+
+[data-theme='dark'] .table-loading {
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+  background-size: 200px 100%;
+}
+
+@keyframes tableShimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.table-skeleton {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  background-size: 200px 100%;
+  animation: skeletonLoading 1.5s ease-in-out infinite;
+}
+
+[data-theme='dark'] .table-skeleton {
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.08), transparent);
+  background-size: 200px 100%;
+}
+
+@keyframes skeletonLoading {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+/* ========================================
+   CELL HIGHLIGHT EFFECTS
+   ======================================== */
+
+.table-cell-highlight {
+  animation: cellHighlight 0.8s ease-out;
+}
+
+@keyframes cellHighlight {
+  0% {
+    background-color: rgba(33, 150, 243, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* ========================================
+   TABLE SORTING
+   ======================================== */
+
+.table-sort-animation {
+  animation: tableSortPulse 0.4s ease-in-out;
+}
+
+@keyframes tableSortPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.table-sort-icon {
+  margin-left: var(--space-1);
+  transition: transform var(--transition-fast);
+}
+
+.table-sort-asc .table-sort-icon {
+  transform: rotate(0deg);
+}
+
+.table-sort-desc .table-sort-icon {
+  transform: rotate(180deg);
+}
+
+/* ========================================
+   EXPANDABLE ROWS
+   ======================================== */
+
+.table-expand {
+  animation: tableExpand 0.5s ease-out;
+  overflow: hidden;
+}
+
+@keyframes tableExpand {
+  0% {
+    max-height: 0;
+    opacity: 0;
+  }
+  100% {
+    max-height: 500px;
+    opacity: 1;
+  }
+}
+
+.table-expand-content {
+  padding: var(--space-4);
+  background: rgba(33, 150, 243, 0.03);
+}
+
+[data-theme='dark'] .table-expand-content {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* ========================================
+   TABLE SCROLL INDICATOR
+   ======================================== */
+
+.table-scroll-indicator {
+  position: relative;
+}
+
+.table-scroll-indicator::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.table-scroll-indicator.scrollable::after {
+  opacity: 1;
+}
+
+[data-theme='dark'] .table-scroll-indicator::after {
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.3), transparent);
+}
+
+/* ========================================
+   TABLE ACTIONS
+   ======================================== */
+
+.table-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.table-row:hover .table-actions {
+  opacity: 1;
+}
+
+/* ========================================
+   TABLE PAGINATION
+   ======================================== */
+
+.table-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .table-pagination {
+  background: rgba(30, 41, 59, 0.3);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+/* ========================================
+   RESPONSIVE TABLES
+   ======================================== */
+
+@media (max-width: 768px) {
+  .table-container {
+    border-radius: var(--radius-lg);
+  }
+
+  .table-cell {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+  }
+
+  .table-header {
+    padding: var(--space-3);
+    font-size: 0.7rem;
+  }
+
+  .table-row:hover {
+    transform: translateX(4px);
+  }
+
+  /* Stack table cells on mobile */
+  .table-mobile-stack .table-row {
+    display: block;
+    margin-bottom: var(--space-4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+  }
+
+  .table-mobile-stack .table-cell {
+    display: block;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .table-mobile-stack .table-cell:last-child {
+    border-bottom: none;
+  }
+
+  .table-mobile-stack .table-cell::before {
+    content: attr(data-label);
+    font-weight: var(--font-weight-semibold);
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--color-primary-500);
+  }
+}
+
+/* ========================================
+   TABLE DENSITY
+   ======================================== */
+
+.table-dense .table-cell {
+  padding: var(--space-2);
+}
+
+.table-comfortable .table-cell {
+  padding: var(--space-5);
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+  .table-container {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+
+  .table-row:hover {
+    background: none;
+    transform: none;
+  }
+
+  .table-actions,
+  .table-pagination {
+    display: none !important;
+  }
+
+  .table-fade-in,
+  .table-row-hover,
+  .table-sort-animation {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+

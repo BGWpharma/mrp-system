@@ -783,18 +783,38 @@ const TaskForm = ({ taskId }) => {
       let savedTaskId;
       
       if (taskId) {
+        // ZABEZPIECZENIE 1: Jeśli edytujemy zadanie z powiązaniem, ale zamówienia nie zostały załadowane,
+        // zachowaj istniejące pola powiązania aby uniknąć przypadkowego usunięcia
+        if (!dataLoaded.customerOrders && taskData.orderId) {
+          formattedData.orderId = taskData.orderId;
+          formattedData.orderNumber = taskData.orderNumber;
+          formattedData.orderItemId = taskData.orderItemId;
+          formattedData.customer = taskData.customer;
+          console.log('🛡️ Zachowano istniejące powiązanie z zamówieniem (zamówienia nie zostały jeszcze załadowane)');
+        }
+        
         // Aktualizacja zadania
         await updateTask(taskId, formattedData, currentUser.uid);
         savedTaskId = taskId;
         
-        // Sprawdź czy zmieniono powiązanie z zamówieniem klienta
+        // ZABEZPIECZENIE 2: Sprawdź czy zmieniono powiązanie z zamówieniem klienta
+        // WAŻNE: Tylko jeśli dane zamówień zostały załadowane!
         const newOrderId = selectedCustomerOrder?.id || null;
-        const orderLinkChanged = originalOrderId !== newOrderId || 
-                                 (newOrderId && taskData.orderItemId !== selectedOrderItemId);
+        const orderLinkChanged = dataLoaded.customerOrders && (
+          originalOrderId !== newOrderId || 
+          (newOrderId && taskData.orderItemId !== selectedOrderItemId)
+        );
         
         if (orderLinkChanged) {
           try {
             console.log('🔄 Wykryto zmianę powiązania z CO');
+            
+            // ZABEZPIECZENIE 3: Jeśli newOrderId jest null ale originalOrderId istnieje,
+            // sprawdź czy użytkownik faktycznie chciał usunąć powiązanie
+            if (!newOrderId && originalOrderId) {
+              console.warn('⚠️ Próba usunięcia powiązania z zamówieniem - to jest zamierzona akcja użytkownika');
+            }
+            
             await updateOrderProductionTaskLink(
               taskId,
               originalOrderId,
@@ -835,7 +855,7 @@ const TaskForm = ({ taskId }) => {
                 console.log(`Zaktualizowano powiązanie MO ${taskId} z CO ${selectedCustomerOrder.orderNumber}, pozycja: ${selectedItem?.name}`);
                 console.log('Dane do aktualizacji zadania:', JSON.stringify(orderUpdateData, null, 2));
               } else {
-                // Usuwamy powiązanie
+                // Usuwamy powiązanie (tylko jeśli to zamierzona akcja)
                 orderUpdateData.orderId = null;
                 orderUpdateData.orderNumber = null;
                 orderUpdateData.orderItemId = null;
@@ -1064,10 +1084,10 @@ const TaskForm = ({ taskId }) => {
 
   const handleRecipeChange = async (e) => {
     const recipeId = e.target.value;
-    setTaskData({
-      ...taskData,
+    setTaskData(prev => ({
+      ...prev,
       recipeId
-    });
+    }));
 
     if (!recipeId) {
       setRecipe(null);
@@ -1196,11 +1216,11 @@ const TaskForm = ({ taskId }) => {
       taskData.workingHoursPerDay || 16
     );
     
-    setTaskData({
-      ...taskData,
+    setTaskData(prev => ({
+      ...prev,
       endDate: newDate,
       estimatedDuration: durationInMinutes
-    });
+    }));
   };
 
   // Dodajemy pole do ustawiania czasu produkcji na jednostkę
@@ -1369,10 +1389,10 @@ const TaskForm = ({ taskId }) => {
   const handleQuantityChange = (e) => {
     const newQuantity = e.target.value === '' ? '' : Number(e.target.value);
     
-    setTaskData({
-      ...taskData,
+    setTaskData(prev => ({
+      ...prev,
       quantity: newQuantity
-    });
+    }));
     
     // Aktualizuj materiały i czas produkcji na podstawie nowej ilości
     if (newQuantity !== '' && recipe) {
@@ -2197,7 +2217,7 @@ const TaskForm = ({ taskId }) => {
                       label="Koszt procesowy na jednostkę (EUR)"
                       name="processingCostPerUnit"
                       value={taskData.processingCostPerUnit}
-                      onChange={(e) => setTaskData({ ...taskData, processingCostPerUnit: e.target.value })}
+                      onChange={(e) => setTaskData(prev => ({ ...prev, processingCostPerUnit: e.target.value }))}
                       type="number"
                       variant="outlined"
                       InputProps={{ 
@@ -2354,7 +2374,7 @@ const TaskForm = ({ taskId }) => {
                       <DateTimePicker
                         label="Data ważności"
                         value={taskData.expiryDate}
-                        onChange={(date) => setTaskData({...taskData, expiryDate: date})}
+                        onChange={(date) => setTaskData(prev => ({...prev, expiryDate: date}))}
                         slotProps={{
                           textField: {
                             fullWidth: true,
@@ -2367,7 +2387,7 @@ const TaskForm = ({ taskId }) => {
                     <Button 
                       variant="outlined" 
                       color="secondary"
-                      onClick={() => setTaskData({...taskData, expiryDate: null})}
+                      onClick={() => setTaskData(prev => ({...prev, expiryDate: null}))}
                       sx={{ mt: 2, ml: 1, height: 56 }}
                       title="Wyczyść datę ważności"
                     >

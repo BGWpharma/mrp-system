@@ -1,0 +1,304 @@
+/**
+ * Card Components - Style dla kart w aplikacji
+ * Zapewnia spójny wygląd wszystkich card'ów
+ */
+
+/* ========================================
+   BASE CARD STYLES
+   ======================================== */
+
+.card {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-base);
+  background-color: var(--bg-paper);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme='dark'] .card {
+  background-color: rgba(30, 41, 59, 0.85);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+[data-theme='dark'] .card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2);
+}
+
+/* ========================================
+   GLASSMORPHISM CARD
+   ======================================== */
+
+.card-glass {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glass-light);
+}
+
+[data-theme='dark'] .card-glass {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: var(--shadow-glass-dark);
+}
+
+.card-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%, rgba(255, 255, 255, 0.05) 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  border-radius: inherit;
+}
+
+.card-glass:hover::before {
+  opacity: 1;
+}
+
+/* ========================================
+   CARD VARIANTS
+   ======================================== */
+
+/* Elevated card */
+.card-elevated {
+  box-shadow: var(--shadow-xl);
+}
+
+/* Flat card */
+.card-flat {
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+}
+
+/* Outlined card */
+.card-outlined {
+  background: transparent;
+  border: 2px solid var(--color-primary-500);
+  box-shadow: none;
+}
+
+/* Gradient card */
+.card-gradient {
+  background: var(--gradient-ocean);
+  border: none;
+  color: white;
+}
+
+/* ========================================
+   CARD SECTIONS
+   ======================================== */
+
+.card-header {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-body {
+  padding: var(--space-6);
+}
+
+.card-footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ========================================
+   DASHBOARD CARDS
+   ======================================== */
+
+.dashboard-card {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-base);
+  background-color: var(--bg-paper);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-xl);
+}
+
+[data-theme='dark'] .dashboard-card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+[data-theme='light'] .dashboard-card:hover {
+  border-color: rgba(25, 118, 210, 0.3);
+}
+
+/* Dashboard stat card */
+.dashboard-stat-card {
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-paper);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--space-6);
+}
+
+.dashboard-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+/* ========================================
+   CARD LOADING STATES
+   ======================================== */
+
+.card-loading {
+  animation: cardFadeIn 0.6s ease-out forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ========================================
+   CARD HOVER EFFECTS
+   ======================================== */
+
+.card-hover {
+  transition: all var(--transition-base);
+  cursor: pointer;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px) scale(1.01);
+}
+
+.card-hover:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ========================================
+   SHIMMER EFFECT FOR CARDS
+   ======================================== */
+
+.card-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  transition: left 0.6s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.card-shimmer:hover::before {
+  left: 100%;
+}
+
+/* ========================================
+   INTERACTIVE CARDS
+   ======================================== */
+
+.card-interactive {
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-interactive::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(33, 150, 243, 0.03), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  pointer-events: none;
+}
+
+.card-interactive:hover::after {
+  opacity: 1;
+}
+
+/* ========================================
+   RESPONSIVE CARDS
+   ======================================== */
+
+@media (max-width: 768px) {
+  .card-body {
+    padding: var(--space-4);
+  }
+
+  .card-header,
+  .card-footer {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .dashboard-card:hover {
+    transform: none;
+  }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+  .card {
+    box-shadow: none;
+    border: 1px solid #000;
+    break-inside: avoid;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}
+
