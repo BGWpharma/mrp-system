@@ -49,14 +49,9 @@ const KioskPage = () => {
     setSelectedTask(null);
   };
 
-  // Auto-refresh co 30 sekund
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLastRefresh(new Date());
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
+  // ✅ OPTYMALIZACJA 1: Usunięto zbędny auto-refresh
+  // Real-time listener w KioskTaskList już automatycznie aktualizuje dane
+  // lastRefresh jest aktualizowany przez callback z KioskTaskList
 
   // Obsługa trybu pełnoekranowego
   const toggleFullscreen = async () => {
@@ -239,7 +234,7 @@ const KioskPage = () => {
                 variant="contained"
                 size="medium"
                 startIcon={<RefreshIcon />}
-                onClick={() => setLastRefresh(new Date())}
+                onClick={() => window.location.reload()}
                 sx={{
                   background: `linear-gradient(135deg, ${palettes.primary.main} 0%, ${palettes.primary.dark} 100%)`,
                   borderRadius: 3,
@@ -291,9 +286,9 @@ const KioskPage = () => {
           />
         ) : (
           <KioskTaskList 
-            refreshTrigger={lastRefresh}
             isFullscreen={isFullscreen}
             onTaskClick={handleTaskClick}
+            onLastUpdateChange={setLastRefresh}
           />
         )}
       </Container>

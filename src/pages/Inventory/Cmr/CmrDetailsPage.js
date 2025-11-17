@@ -1593,6 +1593,21 @@ const CmrDetailsPage = () => {
       const newAttachment = await uploadCmrAttachment(file, id, currentUser.uid);
       setAttachments(prev => [newAttachment, ...prev]);
       showSuccess(`Załącznik "${file.name}" został przesłany pomyślnie`);
+      
+      // Jeśli CMR ma status "Dostarczone", automatycznie zmień na "Zakończone"
+      if (cmrData.status === CMR_STATUSES.DELIVERED) {
+        try {
+          const result = await updateCmrStatus(id, CMR_STATUSES.COMPLETED, currentUser.uid);
+          if (result.success) {
+            // Odśwież dane CMR, aby zaktualizować wyświetlany status
+            await fetchCmrDocument();
+            showSuccess('Status CMR został automatycznie zmieniony na "Zakończone"');
+          }
+        } catch (statusError) {
+          console.error('Błąd podczas automatycznej zmiany statusu CMR:', statusError);
+          showError(`Załącznik dodano, ale nie udało się zmienić statusu: ${statusError.message}`);
+        }
+      }
     } catch (error) {
       console.error('Błąd podczas przesyłania załącznika:', error);
       showError(error.message || 'Nie udało się przesłać załącznika');
