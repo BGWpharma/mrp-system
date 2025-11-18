@@ -401,6 +401,9 @@ import APIQuotaAlert from './APIQuotaAlert';
           );
           
           console.log('Uzyskano odpowiedź AI:', aiResponse ? 'tak' : 'nie');
+          console.log('📝 Treść odpowiedzi AI:', aiResponse);
+          console.log('📏 Długość odpowiedzi:', aiResponse?.length, 'znaków');
+          console.log('🔍 Typ odpowiedzi:', typeof aiResponse);
           
           if (!aiResponse) {
             console.error('Otrzymano pustą odpowiedź od asystenta AI');

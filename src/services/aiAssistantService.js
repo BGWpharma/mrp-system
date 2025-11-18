@@ -27,6 +27,7 @@ import {
 } from './aiDataService';
 import { getSystemSettings, getGlobalOpenAIApiKey } from './settingsService';
 import { AIAssistantV2 } from './ai/AIAssistantV2.js';
+import { AIQueryOrchestrator } from './ai/AIQueryOrchestrator.js';
 import { SmartModelSelector } from './ai/optimization/SmartModelSelector.js';
 import { ContextOptimizer } from './ai/optimization/ContextOptimizer.js';
 import { GPTResponseCache } from './ai/optimization/GPTResponseCache.js';
@@ -1057,46 +1058,108 @@ export const addMessageToConversation = async (conversationId, role, content, at
  * @returns {Promise<string>} - Odpowiedź asystenta
  */
 export const processAIQuery = async (query, context = [], userId, attachments = [], onChunk = null) => {
-  console.log('[processAIQuery] Rozpoczynam przetwarzanie zapytania:', query);
+  console.log('[processAIQuery] 🚀 Rozpoczynam przetwarzanie zapytania:', query);
   
   // 🔥 STREAMING: Jeśli mamy callback, loguj to
   if (onChunk) {
     console.log('[processAIQuery] Streaming włączony - chunki będą przekazywane w czasie rzeczywistym');
   }
   
-  /* WYŁĄCZONY SYSTEM V2 - Używamy tylko prawdziwego GPT API
-  // NOWY SYSTEM V2: Sprawdź czy zapytanie może być obsłużone przez zoptymalizowany system
   try {
-    if (AIAssistantV2.canHandleQuery(query)) {
-      console.log('[processAIQuery] Zapytanie może być obsłużone przez AIAssistantV2');
+    // ✨ NOWY SYSTEM: AI Query Orchestrator - GPT sam decyduje jakie dane pobrać
+    // Sprawdź czy orchestrator powinien obsłużyć zapytanie (nie obsługuje załączników)
+    const hasAttachments = attachments && attachments.length > 0;
+    const shouldUseOrchestrator = !hasAttachments && AIQueryOrchestrator.shouldHandle(query);
+    
+    if (shouldUseOrchestrator) {
+      console.log('[processAIQuery] 🎯 Używam AI Query Orchestrator - GPT zdecyduje jakie dane pobrać');
       
-      const v2Result = await AIAssistantV2.processQuery(query, { userId, attachments });
-      
-      if (v2Result.success) {
-        console.log(`[processAIQuery] AIAssistantV2 zakończył w ${v2Result.processingTime.toFixed(2)}ms`);
+      try {
+        // Pobierz klucz API
+        const apiKey = await getOpenAIApiKey(userId);
         
-        // Dodaj informację o metodzie przetwarzania dla użytkownika
-        let response = v2Result.response;
-        
-        // Jeśli to bardzo szybka odpowiedź (< 2s), dodaj info o optymalizacji
-        if (v2Result.processingTime < 2000) {
-          response += `\n\n_⚡ Odpowiedź wygenerowana w ${v2Result.processingTime.toFixed(0)}ms przez zoptymalizowany system AI v2.0_`;
+        if (!apiKey) {
+          return "❌ Nie znaleziono klucza API OpenAI. Proszę skonfigurować klucz w ustawieniach systemu.";
         }
         
-        return response;
-      } else {
-        console.log('[processAIQuery] AIAssistantV2 nie zdołał przetworzyć zapytania, fallback do standardowego systemu');
+        // Użyj orchestratora - AI sam wykona targetowane zapytania
+        const orchestratorResult = await AIQueryOrchestrator.processQuery(
+          query, 
+          apiKey, 
+          context,
+          {
+            model: 'gpt-4o-mini',  // Zmieniono na gpt-4o-mini dla lepszego balansu koszt/jakość
+            // Nie przekazujemy onChunk - Function Calling (tool use) wymaga braku streamingu
+            // Odpowiedź nadal będzie szybka dzięki targetowanym zapytaniom (~1-3s)
+          }
+        );
+        
+        if (orchestratorResult.success) {
+          console.log(`[processAIQuery] ✅ Orchestrator zakończył w ${orchestratorResult.processingTime.toFixed(2)}ms`);
+          console.log(`[processAIQuery] 📊 Wykonano ${orchestratorResult.executedTools.length} targetowanych zapytań do bazy`);
+          console.log(`[processAIQuery] 📝 Otrzymano odpowiedź (długość: ${orchestratorResult.response?.length} znaków):`, orchestratorResult.response?.substring(0, 200) + '...');
+          
+          // Dodaj informację o zoptymalizowanym przetwarzaniu
+          let response = orchestratorResult.response;
+          
+          if (orchestratorResult.executedTools.length > 0) {
+            const queryNames = orchestratorResult.executedTools.map(t => t.name).join(', ');
+            const totalQueryTime = orchestratorResult.executedTools.reduce((sum, t) => sum + t.executionTime, 0);
+            const estimatedCost = AIQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed);
+            
+            response += `\n\n_🎯 Wykonano ${orchestratorResult.executedTools.length} zoptymalizowanych zapytań do bazy (${totalQueryTime.toFixed(0)}ms)_`;
+            response += `\n_⚡ Całkowity czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+          }
+          
+          console.log(`[processAIQuery] 🎁 Zwracam odpowiedź (długość: ${response?.length} znaków):`, response?.substring(0, 200) + '...');
+          
+          return response;
+        } else {
+          // Orchestrator nie zdołał przetworzyć - zwróć błąd zamiast fallbacku
+          console.error('[processAIQuery] ❌ Orchestrator nie zdołał przetworzyć zapytania');
+          console.error('[processAIQuery] Błąd:', orchestratorResult.error);
+          
+          return `❌ **Nie udało się przetworzyć zapytania**\n\n` +
+                 `Szczegóły: ${orchestratorResult.error}\n\n` +
+                 `💡 Spróbuj:\n` +
+                 `• Uprość zapytanie\n` +
+                 `• Zmniejsz liczbę żądanych elementów\n` +
+                 `• Podziel zapytanie na mniejsze części`;
+        }
+        
+      } catch (orchestratorError) {
+        console.error('[processAIQuery] ❌ Błąd w Orchestrator:', orchestratorError);
+        
+        return `❌ **Wystąpił błąd podczas przetwarzania zapytania**\n\n` +
+               `Szczegóły: ${orchestratorError.message}\n\n` +
+               `💡 Spróbuj ponownie lub skontaktuj się z administratorem.`;
       }
     } else {
-      console.log('[processAIQuery] Zapytanie przekraczające możliwości AIAssistantV2, używam standardowego systemu');
+      if (hasAttachments) {
+        console.log('[processAIQuery] 📎 Wykryto załączniki - używam standardowego systemu z pełnym kontekstem');
+        // Kontynuuj do standardowego systemu poniżej
+      } else {
+        // Zapytanie nie może być obsłużone przez orchestrator i nie ma załączników
+        console.log('[processAIQuery] 💬 Zapytanie konwersacyjne - orchestrator nie może obsłużyć');
+        return `💬 To zapytanie wygląda na konwersacyjne lub ogólne.\n\n` +
+               `System jest zoptymalizowany pod zapytania o dane (receptury, magazyn, zamówienia, produkcja).\n\n` +
+               `💡 Spróbuj zadać konkretne pytanie o dane, na przykład:\n` +
+               `• "Pokaż 10 ostatnich MO"\n` +
+               `• "Ile mamy receptur?"\n` +
+               `• "Które partie wygasają wkrótce?"\n` +
+               `• "Jaki jest stan magazynowy?"\n\n` +
+               `Lub dodaj załącznik, aby użyć pełnego kontekstu systemu.`;
+      }
     }
-  } catch (v2Error) {
-    console.error('[processAIQuery] Błąd w AIAssistantV2, fallback do standardowego systemu:', v2Error);
+  } catch (error) {
+    console.error('[processAIQuery] ❌ Błąd podczas wyboru systemu:', error);
+    return `❌ **Wystąpił nieoczekiwany błąd**\n\n` +
+           `Szczegóły: ${error.message}\n\n` +
+           `💡 Spróbuj ponownie lub skontaktuj się z administratorem.`;
   }
-  */
   
-  // STANDARDOWY SYSTEM: Używamy tylko prawdziwego OpenAI GPT API
-  console.log('[processAIQuery] Używam standardowego systemu z OpenAI API');
+  // STANDARDOWY SYSTEM - TYLKO dla załączników
+  console.log('[processAIQuery] 📚 Używam standardowego systemu z pełnym kontekstem danych (załączniki)');
   
   // Limit czasu na pobranie danych (w milisekundach) - zoptymalizowany
   const DATA_FETCH_TIMEOUT = 8000;
