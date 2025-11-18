@@ -148,6 +148,14 @@ export const DATABASE_TOOLS = [
             type: "string",
             description: "ID produktu (exact match - filtrowane po stronie serwera)"
           },
+          orderId: {
+            type: "string",
+            description: "ID zamówienia klienta (exact match - filtrowane po stronie serwera) - użyj do znalezienia wszystkich MO powiązanych z konkretnym zamówieniem"
+          },
+          lotNumber: {
+            type: "string",
+            description: "Numer LOT/partii produkcyjnej (exact match - filtrowane po stronie serwera) - np. 'SN00117'"
+          },
           status: {
             type: "array",
             items: {
@@ -515,9 +523,13 @@ export const DATABASE_TOOLS = [
             type: "string",
             description: "ID dostawcy"
           },
+          expirationDateBefore: {
+            type: "string",
+            description: "Data wygaśnięcia - pobierz partie wygasające przed tą datą (format ISO YYYY-MM-DD) - filtrowane po stronie serwera. UWAGA: wymaga Composite Index w Firestore!"
+          },
           checkExpiring: {
             type: "boolean",
-            description: "Tylko partie wygasające w ciągu 30 dni",
+            description: "Tylko partie wygasające w ciągu 30 dni (filtrowane po stronie klienta)",
             default: false
           },
           limit: {

@@ -173,7 +173,9 @@ export class ToolExecutor {
     return {
       recipes,
       count: recipes.length,
-      limitApplied: limitValue
+      limitApplied: limitValue,
+      isEmpty: recipes.length === 0,
+      warning: recipes.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych receptur spełniających kryteria. NIE WYMYŚLAJ danych!" : null
     };
   }
   
@@ -301,7 +303,9 @@ export class ToolExecutor {
       count: items.length,
       totals,
       limitApplied: limitValue,
-      searchedText: params.searchText || null
+      searchedText: params.searchText || null,
+      isEmpty: items.length === 0,
+      warning: items.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych pozycji magazynowych spełniających kryteria. NIE WYMYŚLAJ danych!" : null
     };
   }
   
@@ -321,6 +325,18 @@ export class ToolExecutor {
     // Filtr po ID produktu (exact match - po stronie serwera)
     if (params.productId) {
       constraints.push(where('productId', '==', params.productId));
+    }
+    
+    // Filtr po ID zamówienia (exact match - po stronie serwera)
+    if (params.orderId) {
+      constraints.push(where('orderId', '==', params.orderId));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie MO po orderId: ${params.orderId}`);
+    }
+    
+    // Filtr po numerze LOT (exact match - po stronie serwera)
+    if (params.lotNumber) {
+      constraints.push(where('lotNumber', '==', params.lotNumber));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie MO po lotNumber: ${params.lotNumber}`);
     }
     
     // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
@@ -416,7 +432,9 @@ export class ToolExecutor {
     return {
       tasks,
       count: tasks.length,
-      limitApplied: limitValue
+      limitApplied: limitValue,
+      isEmpty: tasks.length === 0,
+      warning: tasks.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zadań produkcyjnych spełniających kryteria. NIE WYMYŚLAJ danych!" : null
     };
   }
   
@@ -517,6 +535,8 @@ export class ToolExecutor {
     return {
       orders,
       count: orders.length,
+      isEmpty: orders.length === 0,
+      warning: orders.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zamówień klientów spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
       limitApplied: limitValue
     };
   }
@@ -535,9 +555,35 @@ export class ToolExecutor {
       constraints.push(where('number', '==', params.poNumber));
     }
     
-    // Filtr po statusie
+    // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
-      constraints.push(where('status', 'in', params.status));
+      // Mapowanie statusów PO z małych liter na właściwe wartości w Firestore
+      const statusMapping = {
+        'oczekujące': 'pending',
+        'potwierdzone': 'confirmed',
+        'częściowo dostarczone': 'partial',
+        'dostarczone': 'delivered',
+        'anulowane': 'cancelled',
+        'pending': 'pending',
+        'confirmed': 'confirmed',
+        'partial': 'partial',
+        'delivered': 'delivered',
+        'cancelled': 'cancelled',
+        'w trakcie': 'confirmed',
+        'zakończone': 'delivered'
+      };
+      
+      // Normalizuj każdy status
+      const normalizedStatuses = params.status.map(s => {
+        const lower = s.toLowerCase();
+        const normalized = statusMapping[lower] || s;
+        if (statusMapping[lower]) {
+          console.log(`[ToolExecutor] 🔄 Normalizacja statusu PO: "${s}" → "${normalized}"`);
+        }
+        return normalized;
+      });
+      
+      constraints.push(where('status', 'in', normalizedStatuses));
     }
     
     // Filtr po dostawcy
@@ -587,7 +633,9 @@ export class ToolExecutor {
     return {
       purchaseOrders,
       count: purchaseOrders.length,
-      limitApplied: limitValue
+      limitApplied: limitValue,
+      isEmpty: purchaseOrders.length === 0,
+      warning: purchaseOrders.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zamówień zakupu spełniających kryteria. NIE WYMYŚLAJ danych!" : null
     };
   }
   
@@ -812,8 +860,51 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
+    // UWAGA: Faktury mają DWA pola: 'status' (draft/issued/cancelled) i 'paymentStatus' (paid/unpaid/partially_paid)
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
-      constraints.push(where('status', 'in', params.status));
+      // Mapowanie statusów faktur z małych liter na właściwe wartości w Firestore
+      const statusMapping = {
+        // Statusy dokumentu
+        'szkic': 'draft',
+        'wystawiona': 'issued',
+        'anulowana': 'cancelled',
+        'draft': 'draft',
+        'issued': 'issued',
+        'cancelled': 'cancelled',
+        // Statusy płatności (mogą być przekazane jako status)
+        'opłacona': 'paid',
+        'nieopłacona': 'unpaid',
+        'częściowo opłacona': 'partially_paid',
+        'przeterminowana': 'overdue',
+        'paid': 'paid',
+        'unpaid': 'unpaid',
+        'partially_paid': 'partially_paid',
+        'overdue': 'overdue'
+      };
+      
+      // Normalizuj każdy status
+      const normalizedStatuses = params.status.map(s => {
+        const lower = s.toLowerCase();
+        const normalized = statusMapping[lower] || s;
+        if (statusMapping[lower]) {
+          console.log(`[ToolExecutor] 🔄 Normalizacja statusu faktury: "${s}" → "${normalized}"`);
+        }
+        return normalized;
+      });
+      
+      // UWAGA: Faktury mają osobne pole paymentStatus, więc jeśli status to paid/unpaid/partially_paid/overdue,
+      // powinniśmy filtrować po paymentStatus zamiast status
+      const paymentStatuses = ['paid', 'unpaid', 'partially_paid', 'overdue'];
+      const isPaymentStatusFilter = normalizedStatuses.every(s => paymentStatuses.includes(s));
+      
+      if (isPaymentStatusFilter) {
+        console.log(`[ToolExecutor] 📊 Filtrowanie faktur po paymentStatus: [${normalizedStatuses}]`);
+        constraints.push(where('paymentStatus', 'in', normalizedStatuses));
+      } else {
+        console.log(`[ToolExecutor] 📊 Filtrowanie faktur po status: [${normalizedStatuses}]`);
+        constraints.push(where('status', 'in', normalizedStatuses));
+      }
     }
     
     if (params.customerId) {
@@ -850,6 +941,8 @@ export class ToolExecutor {
     
     return {
       invoices,
+      isEmpty: invoices.length === 0,
+      warning: invoices.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych faktur spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
       count: invoices.length,
       limitApplied: limitValue
     };
@@ -863,8 +956,36 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
-      constraints.push(where('status', 'in', params.status));
+      // Mapowanie statusów CMR z małych liter na właściwe wartości w Firestore
+      const statusMapping = {
+        'szkic': 'Szkic',
+        'wystawiony': 'Wystawiony',
+        'w transporcie': 'W transporcie',
+        'dostarczone': 'Dostarczone',
+        'zakończony': 'Zakończony',
+        'anulowany': 'Anulowany',
+        'draft': 'Szkic',
+        'issued': 'Wystawiony',
+        'in transit': 'W transporcie',
+        'delivered': 'Dostarczone',
+        'completed': 'Zakończony',
+        'cancelled': 'Anulowany',
+        'canceled': 'Anulowany'
+      };
+      
+      // Normalizuj każdy status
+      const normalizedStatuses = params.status.map(s => {
+        const lower = s.toLowerCase();
+        const normalized = statusMapping[lower] || s;
+        if (statusMapping[lower]) {
+          console.log(`[ToolExecutor] 🔄 Normalizacja statusu CMR: "${s}" → "${normalized}"`);
+        }
+        return normalized;
+      });
+      
+      constraints.push(where('status', 'in', normalizedStatuses));
     }
     
     if (params.dateFrom) {
@@ -898,7 +1019,9 @@ export class ToolExecutor {
     return {
       cmrDocuments,
       count: cmrDocuments.length,
-      limitApplied: limitValue
+      limitApplied: limitValue,
+      isEmpty: cmrDocuments.length === 0,
+      warning: cmrDocuments.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych dokumentów CMR spełniających kryteria. NIE WYMYŚLAJ danych!" : null
     };
   }
   
@@ -940,7 +1063,9 @@ export class ToolExecutor {
           count: 0,
           limitApplied: params.limit || 100,
           searchedTerm: params.materialName,
-          itemsFound: 0
+          itemsFound: 0,
+          isEmpty: true,
+          warning: `⚠️ BRAK DANYCH - Nie znaleziono pozycji magazynowej o nazwie "${params.materialName}". NIE WYMYŚLAJ danych!`
         };
       } else if (matchingItems.length === 1) {
         // Jeśli jest dokładnie jedna, użyj jej
@@ -984,6 +1109,14 @@ export class ToolExecutor {
       constraints.push(where('supplierId', '==', params.supplierId));
     }
     
+    // Filtr po dacie wygaśnięcia (po stronie serwera)
+    // UWAGA: Wymaga Composite Index w Firestore Console!
+    if (params.expirationDateBefore) {
+      const expirationDate = Timestamp.fromDate(new Date(params.expirationDateBefore));
+      constraints.push(where('expirationDate', '<=', expirationDate));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie partii wygasających przed: ${params.expirationDateBefore}`);
+    }
+    
     const limitValue = params.limit || 100;
     constraints.push(firestoreLimit(limitValue));
     
@@ -1024,7 +1157,9 @@ export class ToolExecutor {
       count: batches.length,
       limitApplied: limitValue,
       searchedTerm: params.materialName || null,
-      itemsFound: itemsFound || null
+      itemsFound: itemsFound || null,
+      isEmpty: batches.length === 0,
+      warning: batches.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych partii magazynowych spełniających kryteria. NIE WYMYŚLAJ danych!" : null
     };
   }
   
@@ -1204,10 +1339,39 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
-    // Filtr po typie transakcji
+    // Filtr po typie transakcji - NORMALIZUJ typy przed zapytaniem (case-sensitive!)
     if (params.type && params.type.length > 0) {
       if (params.type.length <= 10) {
-        constraints.push(where('type', 'in', params.type));
+        // Mapowanie typów transakcji z małych liter na właściwe wartości w Firestore
+        const typeMapping = {
+          'rozpoczęcie produkcji': 'production_start',
+          'zużycie': 'consumption',
+          'przyjęcie materiału': 'material_in',
+          'wydanie materiału': 'material_out',
+          'korekta': 'adjustment',
+          'rezerwacja': 'reservation',
+          'production_start': 'production_start',
+          'consumption': 'consumption',
+          'material_in': 'material_in',
+          'material_out': 'material_out',
+          'adjustment': 'adjustment',
+          'reservation': 'reservation',
+          'produkcja': 'production_start',
+          'przyjęcie': 'material_in',
+          'wydanie': 'material_out'
+        };
+        
+        // Normalizuj każdy typ
+        const normalizedTypes = params.type.map(t => {
+          const lower = t.toLowerCase();
+          const normalized = typeMapping[lower] || t;
+          if (typeMapping[lower]) {
+            console.log(`[ToolExecutor] 🔄 Normalizacja typu transakcji: "${t}" → "${normalized}"`);
+          }
+          return normalized;
+        });
+        
+        constraints.push(where('type', 'in', normalizedTypes));
       }
     }
     
