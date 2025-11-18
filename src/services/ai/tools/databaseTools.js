@@ -76,7 +76,7 @@ export const DATABASE_TOOLS = [
         properties: {
           searchText: {
             type: "string",
-            description: "Wyszukaj pozycje magazynowe gdzie nazwa, opis lub ID zawiera ten tekst (case-insensitive, częściowe dopasowanie). Przykład: 'doypack 300g', 'tubes 73'"
+            description: "Wyszukaj pozycje magazynowe gdzie nazwa, opis lub ID zawiera WSZYSTKIE podane słowa (case-insensitive, częściowe dopasowanie, znaki specjalne są ignorowane, jednostki normalizowane: '300 gr'='300g', '1 kg'='1kg'). Przykład: 'doypack 300g' znajdzie 'Doypack creatine 300 gr', 'tubes 73' znajdzie 'PACKGW-LID TUBES 73'"
           },
           materialId: {
             type: "string",

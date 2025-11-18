@@ -229,20 +229,34 @@ export class ToolExecutor {
     
     console.log(`[ToolExecutor] ✅ Pobrano ${items.length} pozycji z Firestore`);
     
-    // 🆕 NOWE: Filtrowanie tekstowe po stronie klienta
+    // 🆕 NOWE: Filtrowanie tekstowe po stronie klienta z normalizacją jednostek
     if (params.searchText) {
       const searchTerm = params.searchText.toLowerCase();
       console.log(`[ToolExecutor] 🔍 Wyszukiwanie tekstowe po nazwie/opisie/ID: "${searchTerm}"`);
       console.log(`[ToolExecutor] 📦 Liczba pozycji przed filtrowaniem: ${items.length}`);
+      
+      // Podziel wyszukiwanie na słowa z normalizacją jednostek
+      const searchWords = searchTerm
+        .replace(/[^a-z0-9\s]/g, ' ')  // zamień znaki specjalne na spacje
+        .replace(/\s+(g|gr|kg|ml|l)\b/g, '$1')  // usuń spacje przed jednostkami: "300 g" → "300g"
+        .replace(/\bgr\b/g, 'g')  // normalizuj: "gr" → "g"
+        .split(/\s+/)                   // podziel na słowa
+        .filter(word => word.length > 0); // usuń puste
+      
+      console.log(`[ToolExecutor] 🔤 Słowa do wyszukania (po normalizacji): [${searchWords.join(', ')}]`);
       
       items = items.filter(item => {
         const name = (item.name || '').toLowerCase();
         const description = (item.description || '').toLowerCase();
         const itemId = (item.id || '').toLowerCase();
         
-        return name.includes(searchTerm) || 
-               description.includes(searchTerm) || 
-               itemId.includes(searchTerm);
+        // Normalizuj tekst przed wyszukiwaniem (tak samo jak searchWords)
+        const searchableText = `${name} ${description} ${itemId}`
+          .replace(/\s+(g|gr|kg|ml|l)\b/g, '$1')  // "300 gr" → "300gr"
+          .replace(/\bgr\b/g, 'g');  // "gr" → "g"
+        
+        // Wszystkie słowa muszą wystąpić w znormalizowanym tekście (AND logic)
+        return searchWords.every(word => searchableText.includes(word));
       });
       
       console.log(`[ToolExecutor] ✅ Po filtrowaniu tekstowym: ${items.length} pozycji`);
@@ -309,11 +323,36 @@ export class ToolExecutor {
       constraints.push(where('productId', '==', params.productId));
     }
     
-    // Filtr po statusie
+    // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
     if (params.status && params.status.length > 0) {
+      // Mapowanie statusów z małych liter na właściwe wartości w Firestore
+      const statusMapping = {
+        'zaplanowane': 'Zaplanowane',
+        'w trakcie': 'W trakcie',
+        'wstrzymane': 'Wstrzymane',
+        'zakończone': 'Zakończone',
+        'anulowane': 'Anulowane',
+        'on hold': 'On Hold',
+        'completed': 'Zakończone',
+        'in progress': 'W trakcie',
+        'planned': 'Zaplanowane',
+        'paused': 'Wstrzymane',
+        'cancelled': 'Anulowane'
+      };
+      
+      // Normalizuj każdy status
+      const normalizedStatuses = params.status.map(s => {
+        const lower = s.toLowerCase();
+        const normalized = statusMapping[lower] || s; // Jeśli nie ma w mapowaniu, użyj oryginalnego
+        if (statusMapping[lower]) {
+          console.log(`[ToolExecutor] 🔄 Normalizacja statusu: "${s}" → "${normalized}"`);
+        }
+        return normalized;
+      });
+      
       // Firestore obsługuje 'in' tylko dla max 10 wartości
-      if (params.status.length <= 10) {
-        constraints.push(where('status', 'in', params.status));
+      if (normalizedStatuses.length <= 10) {
+        constraints.push(where('status', 'in', normalizedStatuses));
       }
     }
     
@@ -394,9 +433,33 @@ export class ToolExecutor {
       constraints.push(where('orderNumber', '==', params.orderNumber));
     }
     
-    // Filtr po statusie
+    // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
-      constraints.push(where('status', 'in', params.status));
+      // Mapowanie statusów zamówień z małych liter na właściwe wartości w Firestore
+      const statusMapping = {
+        'nowe': 'Nowe',
+        'w realizacji': 'W realizacji',
+        'zakończone': 'Zakończone',
+        'anulowane': 'Anulowane',
+        'new': 'Nowe',
+        'in progress': 'W realizacji',
+        'completed': 'Zakończone',
+        'cancelled': 'Anulowane',
+        'wstrzymane': 'Wstrzymane',
+        'on hold': 'Wstrzymane'
+      };
+      
+      // Normalizuj każdy status
+      const normalizedStatuses = params.status.map(s => {
+        const lower = s.toLowerCase();
+        const normalized = statusMapping[lower] || s;
+        if (statusMapping[lower]) {
+          console.log(`[ToolExecutor] 🔄 Normalizacja statusu zamówienia: "${s}" → "${normalized}"`);
+        }
+        return normalized;
+      });
+      
+      constraints.push(where('status', 'in', normalizedStatuses));
     }
     
     // Filtr po kliencie

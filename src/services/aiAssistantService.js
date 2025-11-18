@@ -1190,16 +1190,50 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
         console.log('[processAIQuery] 📎 Wykryto załączniki - używam standardowego systemu z pełnym kontekstem');
         // Kontynuuj do standardowego systemu poniżej
       } else {
-        // Zapytanie nie może być obsłużone przez orchestrator i nie ma załączników
-        console.log('[processAIQuery] 💬 Zapytanie konwersacyjne - orchestrator nie może obsłużyć');
-        return `💬 To zapytanie wygląda na konwersacyjne lub ogólne.\n\n` +
-               `System jest zoptymalizowany pod zapytania o dane (receptury, magazyn, zamówienia, produkcja).\n\n` +
-               `💡 Spróbuj zadać konkretne pytanie o dane, na przykład:\n` +
-               `• "Pokaż 10 ostatnich MO"\n` +
-               `• "Ile mamy receptur?"\n` +
-               `• "Które partie wygasają wkrótce?"\n` +
-               `• "Jaki jest stan magazynowy?"\n\n` +
-               `Lub dodaj załącznik, aby użyć pełnego kontekstu systemu.`;
+        // Zapytanie konwersacyjne - użyj Gemini bez narzędzi
+        console.log('[processAIQuery] 💬 Zapytanie konwersacyjne - używam Gemini w trybie konwersacyjnym (bez dostępu do bazy)');
+        
+        try {
+          // Pobierz klucz API Gemini
+          const apiKey = await getGeminiApiKey(userId);
+          
+          if (!apiKey) {
+            return "❌ Nie znaleziono klucza API Gemini. Proszę skonfigurować klucz w ustawieniach systemu.\n\n" +
+                   "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
+          }
+          
+          const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
+            query, 
+            apiKey, 
+            context,
+            {
+              disableTools: true,  // 💬 Wyłącz narzędzia - tylko konwersacja
+              enableThinking: false  // Wyłącz thinking mode dla prostszych pytań
+            }
+          );
+          
+          if (orchestratorResult.success) {
+            console.log(`[processAIQuery] ✅ Gemini odpowiedział (tryb konwersacyjny): ${orchestratorResult.response?.substring(0, 100)}...`);
+            
+            let response = orchestratorResult.response;
+            
+            // Dodaj informację o trybie konwersacyjnym
+            const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
+            const modelEmoji = orchestratorResult.model.includes('2.5') ? '🧠' : 
+                              orchestratorResult.model.includes('1.5') ? '📚' : '⚡';
+            
+            response += `\n\n_💬 Tryb konwersacyjny (bez dostępu do bazy danych)_`;
+            response += `\n_${modelEmoji} Model: ${orchestratorResult.model} | Czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+            
+            return response;
+          } else {
+            console.error('[processAIQuery] ❌ Gemini nie zdołał odpowiedzieć (tryb konwersacyjny)');
+            return `❌ Nie udało się przetworzyć zapytania: ${orchestratorResult.error}`;
+          }
+        } catch (conversationError) {
+          console.error('[processAIQuery] ❌ Błąd w trybie konwersacyjnym:', conversationError);
+          return `❌ Wystąpił błąd: ${conversationError.message}`;
+        }
       }
     }
   } catch (error) {

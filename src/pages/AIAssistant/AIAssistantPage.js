@@ -43,6 +43,8 @@ import {
   AttachFile as AttachFileIcon,
   Close as CloseIcon
 } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -1260,8 +1262,112 @@ import APIQuotaAlert from './APIQuotaAlert';
                         </Typography>
                       </Box>
                       
-                      <Typography variant="body1" sx={{ ml: 4, whiteSpace: 'pre-wrap' }}>
-                        {message.content}
+                      <Box sx={{ ml: 4 }}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            // Stylowanie dla różnych elementów Markdown
+                            p: ({node, ...props}) => <Typography variant="body1" paragraph {...props} />,
+                            h1: ({node, ...props}) => <Typography variant="h4" gutterBottom {...props} />,
+                            h2: ({node, ...props}) => <Typography variant="h5" gutterBottom {...props} />,
+                            h3: ({node, ...props}) => <Typography variant="h6" gutterBottom {...props} />,
+                            li: ({node, ...props}) => (
+                              <Typography component="li" variant="body2" sx={{ ml: 2 }} {...props} />
+                            ),
+                            blockquote: ({node, ...props}) => (
+                              <Box
+                                component="blockquote"
+                                sx={{
+                                  borderLeft: '4px solid',
+                                  borderColor: 'primary.main',
+                                  pl: 2,
+                                  ml: 0,
+                                  fontStyle: 'italic',
+                                  color: 'text.secondary'
+                                }}
+                                {...props}
+                              />
+                            ),
+                            code: ({node, inline, ...props}) => (
+                              inline ? 
+                                <Box
+                                  component="code"
+                                  sx={{
+                                    backgroundColor: 'action.hover',
+                                    px: 0.5,
+                                    py: 0.25,
+                                    borderRadius: 0.5,
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.9em'
+                                  }}
+                                  {...props}
+                                />
+                              :
+                                <Box
+                                  component="pre"
+                                  sx={{
+                                    backgroundColor: 'action.hover',
+                                    p: 2,
+                                    borderRadius: 1,
+                                    overflow: 'auto',
+                                    '& code': {
+                                      fontFamily: 'monospace',
+                                      fontSize: '0.9em'
+                                    }
+                                  }}
+                                >
+                                  <code {...props} />
+                                </Box>
+                            ),
+                            table: ({node, ...props}) => (
+                              <Box sx={{ overflowX: 'auto', my: 2 }}>
+                                <table
+                                  style={{
+                                    borderCollapse: 'collapse',
+                                    width: '100%',
+                                    border: '1px solid rgba(224, 224, 224, 1)'
+                                  }}
+                                  {...props}
+                                />
+                              </Box>
+                            ),
+                            th: ({node, ...props}) => (
+                              <th
+                                style={{
+                                  border: '1px solid rgba(224, 224, 224, 1)',
+                                  padding: '12px',
+                                  backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                                  fontWeight: 'bold',
+                                  textAlign: 'left'
+                                }}
+                                {...props}
+                              />
+                            ),
+                            td: ({node, ...props}) => (
+                              <td
+                                style={{
+                                  border: '1px solid rgba(224, 224, 224, 1)',
+                                  padding: '12px'
+                                }}
+                                {...props}
+                              />
+                            ),
+                            a: ({node, ...props}) => (
+                              <a
+                                style={{
+                                  color: '#1976d2',
+                                  textDecoration: 'none'
+                                }}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                {...props}
+                              />
+                            )
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                        
                         {/* 🔥 STREAMING: Animowany kursor podczas streamingu */}
                         {message.isStreaming && (
                           <Box
@@ -1280,7 +1386,7 @@ import APIQuotaAlert from './APIQuotaAlert';
                             }}
                           />
                         )}
-                      </Typography>
+                      </Box>
                       
                       {/* Wyświetlanie załączników w wiadomości */}
                       {message.attachments && message.attachments.length > 0 && (

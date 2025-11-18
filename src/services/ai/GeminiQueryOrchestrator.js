@@ -140,10 +140,15 @@ export class GeminiQueryOrchestrator {
       console.log(`[GeminiQueryOrchestrator] ${reason}`);
       console.log(`[GeminiQueryOrchestrator] 📱 Model: ${model}`);
       
-      // Przygotuj tools w formacie Gemini
-      const geminiTools = [{
+      // Przygotuj tools w formacie Gemini (opcjonalnie wyłączone dla zwykłej konwersacji)
+      const disableTools = options.disableTools || false;
+      const geminiTools = disableTools ? null : [{
         function_declarations: this.convertToolsToGeminiFormat(DATABASE_TOOLS)
       }];
+      
+      if (disableTools) {
+        console.log('[GeminiQueryOrchestrator] 💬 Tryb konwersacyjny - narzędzia wyłączone');
+      }
       
       // Przygotuj historię konwersacji
       const history = context.map(msg => ({
@@ -151,13 +156,13 @@ export class GeminiQueryOrchestrator {
         parts: [{ text: msg.content }]
       }));
       
-      // System instruction
+      // System instruction (zmieniony dla trybu konwersacyjnego)
       const systemInstruction = {
-        parts: [{ text: this.getSystemPrompt() }]
+        parts: [{ text: disableTools ? this.getConversationalSystemPrompt() : this.getSystemPrompt() }]
       };
       
-      // Iteracyjne wywoływanie (max 5 rund)
-      const maxRounds = 5;
+      // Iteracyjne wywoływanie (max 5 rund dla tools, 1 runda dla konwersacji)
+      const maxRounds = disableTools ? 1 : 5;
       let currentRound = 0;
       let finalResponse = null;
       
@@ -175,7 +180,6 @@ export class GeminiQueryOrchestrator {
               parts: [{ text: query }]
             }
           ],
-          tools: geminiTools,
           systemInstruction: systemInstruction,
           generationConfig: {
             temperature: 0.85,  // Zwiększone dla bardziej ekspansywnych odpowiedzi
@@ -184,6 +188,11 @@ export class GeminiQueryOrchestrator {
             topK: 64     // Więcej opcji słów do wyboru
           }
         };
+        
+        // Dodaj tools tylko jeśli nie są wyłączone
+        if (geminiTools) {
+          requestBody.tools = geminiTools;
+        }
         
         // Gemini 2.5 Pro automatycznie używa thinking mode - nie wymaga jawnej konfiguracji
         // API nie wspiera pola 'thinkingConfig' - thinking jest wbudowany w model
@@ -397,6 +406,11 @@ FORMATOWANIE:
 - Używaj emoji dla lepszej czytelności (ale z umiarem)
 - Dodawaj podsumowania na końcu odpowiedzi
 
+WAŻNE WARTOŚCI (automatycznie normalizowane):
+- Statusy zadań produkcyjnych: możesz używać "zaplanowane", "w trakcie", "wstrzymane", "zakończone", "anulowane" (system automatycznie przekonwertuje na właściwe wartości)
+- Statusy zamówień: możesz używać "nowe", "w realizacji", "zakończone", "anulowane", "wstrzymane"
+- System automatycznie normalizuje wielkość liter, więc możesz pisać małymi literami
+
 ZASADY SZCZEGÓŁOWOŚCI:
 ⭐ Generuj PEŁNE, SZCZEGÓŁOWE odpowiedzi - użytkownicy preferują kompletne informacje
 ⭐ Pokazuj WSZYSTKIE dostępne dane - jeśli jest 10 rekordów, pokaż wszystkie 10
@@ -407,6 +421,29 @@ ZASADY SZCZEGÓŁOWOŚCI:
 ⭐ Nie skracaj informacji - lepiej więcej niż mniej
 
 Jesteś ekspertem w zarządzaniu produkcją i optymalizacji procesów.`;
+  }
+  
+  /**
+   * System prompt dla trybu konwersacyjnego (bez dostępu do bazy danych)
+   */
+  static getConversationalSystemPrompt() {
+    return `Jesteś pomocnym asystentem AI dla systemu MRP (Manufacturing Resource Planning).
+
+Obecnie jesteś w trybie konwersacyjnym - nie masz dostępu do bazy danych, ale możesz:
+- Odpowiadać na ogólne pytania o system MRP
+- Udzielać porad dotyczących zarządzania produkcją
+- Wyjaśniać pojęcia i koncepcje
+- Prowadzić przyjazną rozmowę
+- Pomagać zrozumieć funkcje systemu
+
+ZASADY:
+- Zawsze odpowiadaj po polsku
+- Bądź pomocny, przyjazny i profesjonalny
+- Jeśli użytkownik chce konkretne dane z systemu, poinformuj go, że może zadać konkretne pytanie o dane (np. "Pokaż ostatnie MO", "Ile mamy receptur?")
+- Używaj emoji dla lepszej czytelności, ale z umiarem
+- Formatuj odpowiedzi czytelnie (używaj list, nagłówków, podziałów)
+
+Pamiętaj: Jesteś ekspertem w zarządzaniu produkcją i można Cię pytać o wszystko! 💬`;
   }
   
   /**
