@@ -44,7 +44,8 @@ import {
   updateInvoiceStatus, 
   deleteInvoice,
   getInvoicesByOrderId,
-  getAvailableProformaAmount
+  getAvailableProformaAmount,
+  getInvoicesUsingProforma
 } from '../../services/invoiceService';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
@@ -96,11 +97,8 @@ const InvoiceDetails = () => {
       }
       
       // Jeśli to proforma, pobierz faktury które ją wykorzystują
-      if (fetchedInvoice.isProforma && fetchedInvoice.linkedAdvanceInvoices) {
-        await fetchInvoicesUsingProforma(
-          invoiceId, 
-          fetchedInvoice.linkedAdvanceInvoices
-        );
+      if (fetchedInvoice.isProforma) {
+        await fetchInvoicesUsingProforma(invoiceId);
       }
     } catch (error) {
       showError(t('invoices.details.notifications.errors.fetchInvoice') + ': ' + error.message);
@@ -145,31 +143,21 @@ const InvoiceDetails = () => {
     }
   };
   
-  const fetchInvoicesUsingProforma = async (proformaId, linkedInvoiceIds) => {
-    if (!proformaId || !linkedInvoiceIds || linkedInvoiceIds.length === 0) {
+  const fetchInvoicesUsingProforma = async (proformaId) => {
+    if (!proformaId) {
       setInvoicesUsingProforma([]);
       return;
     }
     
     setLoadingInvoicesUsingProforma(true);
     try {
-      // Pobierz wszystkie faktury które wykorzystują tę proformę
-      const invoicesPromises = linkedInvoiceIds.map(id => getInvoiceById(id));
-      const invoices = await Promise.all(invoicesPromises);
+      // Użyj nowej funkcji która wyszukuje faktury po proformAllocation
+      const invoices = await getInvoicesUsingProforma(proformaId);
+      setInvoicesUsingProforma(invoices);
       
-      // Filtruj i dodaj informacje o wykorzystanej kwocie
-      const invoicesWithDetails = invoices
-        .filter(inv => inv !== null)
-        .map(inv => {
-          // Znajdź alokację dla tej proformy
-          const allocation = inv.proformAllocation?.find(alloc => alloc.proformaId === proformaId);
-          return {
-            ...inv,
-            usedAmount: allocation?.amount || 0
-          };
-        });
-      
-      setInvoicesUsingProforma(invoicesWithDetails);
+      if (invoices.length > 0) {
+        console.log(`Znaleziono ${invoices.length} faktur wykorzystujących proformę ${proformaId}`);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania faktur wykorzystujących proformę:', error);
       setInvoicesUsingProforma([]);
@@ -619,38 +607,41 @@ const InvoiceDetails = () => {
                 )}
 
                 {/* Wyświetl informacje o wykorzystaniu proformy */}
-                {invoice?.isProforma && proformaUsageInfo && (
+                {invoice?.isProforma && (
                   <>
-                    <Divider sx={{ my: 2 }} />
-                    <Typography variant="subtitle2" gutterBottom>
-                      Wykorzystanie proformy:
-                    </Typography>
-                    <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
-                      <Typography variant="body2">
-                        <strong>{t('invoices.details.proformaAmount')}:</strong> {proformaUsageInfo.total.toFixed(2)} {invoice.currency || 'EUR'}
-                      </Typography>
-                      <Typography variant="body2" color="error.main">
-                        <strong>Wykorzystane:</strong> {proformaUsageInfo.used.toFixed(2)} {invoice.currency || 'EUR'}
-                      </Typography>
-                      <Typography variant="body2" color="success.main">
-                        <strong>Dostępne:</strong> {proformaUsageInfo.available.toFixed(2)} {invoice.currency || 'EUR'}
-                      </Typography>
-                      {proformaUsageInfo.used > 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                          Proforma została wykorzystana jako zaliczka w innych fakturach
+                    {proformaUsageInfo && (
+                      <>
+                        <Divider sx={{ my: 2 }} />
+                        <Typography variant="subtitle2" gutterBottom>
+                          Wykorzystanie proformy:
                         </Typography>
-                      )}
-                    </Box>
+                        <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+                          <Typography variant="body2">
+                            <strong>{t('invoices.details.proformaAmount')}:</strong> {proformaUsageInfo.total.toFixed(2)} {invoice.currency || 'EUR'}
+                          </Typography>
+                          <Typography variant="body2" color="error.main">
+                            <strong>Wykorzystane:</strong> {proformaUsageInfo.used.toFixed(2)} {invoice.currency || 'EUR'}
+                          </Typography>
+                          <Typography variant="body2" color="success.main">
+                            <strong>Dostępne:</strong> {proformaUsageInfo.available.toFixed(2)} {invoice.currency || 'EUR'}
+                          </Typography>
+                          {proformaUsageInfo.used > 0 && (
+                            <Typography variant="caption" color="text.secondary">
+                              Proforma została wykorzystana jako zaliczka w innych fakturach
+                            </Typography>
+                          )}
+                        </Box>
+                      </>
+                    )}
                     
                     {/* Lista faktur wykorzystujących proformę */}
-                    {invoicesUsingProforma.length > 0 && (
+                    {!loadingInvoicesUsingProforma && (
                       <Box sx={{ mt: 2 }}>
+                        {!proformaUsageInfo && <Divider sx={{ my: 2 }} />}
                         <Typography variant="body2" gutterBottom fontWeight="bold">
-                          Wykorzystana w fakturach: ({invoicesUsingProforma.length})
+                          Wykorzystana w fakturach:
                         </Typography>
-                        {loadingInvoicesUsingProforma ? (
-                          <CircularProgress size={20} />
-                        ) : (
+                        {invoicesUsingProforma.length > 0 ? (
                           <Box sx={{ 
                             maxHeight: 300, 
                             overflowY: 'auto', 
@@ -709,7 +700,21 @@ const InvoiceDetails = () => {
                             </Box>
                             ))}
                           </Box>
+                        ) : (
+                          <Box sx={{ p: 2, bgcolor: 'rgba(0, 0, 0, 0.03)', borderRadius: 1 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                              Proforma nie została jeszcze wykorzystana w żadnej fakturze końcowej
+                            </Typography>
+                          </Box>
                         )}
+                      </Box>
+                    )}
+                    {loadingInvoicesUsingProforma && (
+                      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CircularProgress size={20} />
+                        <Typography variant="body2" color="text.secondary">
+                          Sprawdzanie wykorzystania proformy...
+                        </Typography>
                       </Box>
                     )}
                   </>

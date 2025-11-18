@@ -8,6 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInvoicesByOrderId } from './invoiceService';
+import { safeParseDate } from '../utils/dateUtils';
 
 /**
  * Generuje raport cashflow dla zamówień klientów (CO)
@@ -42,9 +43,9 @@ export const generateCashflowReport = async (filters = {}) => {
       invoicesInRange = invoicesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        issueDate: doc.data().issueDate?.toDate(),
-        dueDate: doc.data().dueDate?.toDate(),
-        paymentDate: doc.data().paymentDate?.toDate()
+        issueDate: safeParseDate(doc.data().issueDate),
+        dueDate: safeParseDate(doc.data().dueDate),
+        paymentDate: safeParseDate(doc.data().paymentDate)
       }));
       
       console.log(`📄 Znaleziono ${invoicesInRange.length} faktur/proform w zakresie dat`);
@@ -54,9 +55,9 @@ export const generateCashflowReport = async (filters = {}) => {
       invoicesInRange = invoicesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        issueDate: doc.data().issueDate?.toDate(),
-        dueDate: doc.data().dueDate?.toDate(),
-        paymentDate: doc.data().paymentDate?.toDate()
+        issueDate: safeParseDate(doc.data().issueDate),
+        dueDate: safeParseDate(doc.data().dueDate),
+        paymentDate: safeParseDate(doc.data().paymentDate)
       }));
     }
     
@@ -83,8 +84,8 @@ export const generateCashflowReport = async (filters = {}) => {
         return snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          orderDate: doc.data().orderDate?.toDate(),
-          createdAt: doc.data().createdAt?.toDate()
+          orderDate: safeParseDate(doc.data().orderDate),
+          createdAt: safeParseDate(doc.data().createdAt)
         }));
       });
       
@@ -123,7 +124,7 @@ export const generateCashflowReport = async (filters = {}) => {
             if (proforma.payments && Array.isArray(proforma.payments)) {
               proforma.payments.forEach(payment => {
                 paymentTimeline.push({
-                  date: payment.date?.toDate ? payment.date.toDate() : payment.date,
+                  date: safeParseDate(payment.date),
                   type: 'proforma',
                   documentNumber: proforma.number,
                   documentId: proforma.id,
@@ -144,7 +145,7 @@ export const generateCashflowReport = async (filters = {}) => {
             
             // Jeśli proforma nie jest w pełni opłacona i nie jest anulowana
             if (proformaRemaining > 0.01 && proforma.status !== 'cancelled') {
-              const dueDate = proforma.dueDate?.toDate ? proforma.dueDate.toDate() : proforma.dueDate;
+              const dueDate = safeParseDate(proforma.dueDate);
               const isOverdue = dueDate && new Date(dueDate) < new Date();
               
               paymentTimeline.push({
@@ -169,7 +170,7 @@ export const generateCashflowReport = async (filters = {}) => {
             if (invoice.payments && Array.isArray(invoice.payments)) {
               invoice.payments.forEach(payment => {
                 paymentTimeline.push({
-                  date: payment.date?.toDate ? payment.date.toDate() : payment.date,
+                  date: safeParseDate(payment.date),
                   type: 'invoice',
                   documentNumber: invoice.number,
                   documentId: invoice.id,
@@ -191,7 +192,7 @@ export const generateCashflowReport = async (filters = {}) => {
             const remaining = parseFloat(invoice.total || 0) - totalAllocated - totalPaid;
             
             if (remaining > 0.01 && invoice.status !== 'cancelled') {
-              const dueDate = invoice.dueDate?.toDate ? invoice.dueDate.toDate() : invoice.dueDate;
+              const dueDate = safeParseDate(invoice.dueDate);
               const isOverdue = dueDate && new Date(dueDate) < new Date();
               
               paymentTimeline.push({
@@ -868,16 +869,15 @@ const getAllPurchaseOrdersInDateRange = async (dateFrom, dateTo) => {
       
       // Sprawdź ogólną datę dostawy PO
       if (po.expectedDeliveryDate) {
-        let deliveryDate = po.expectedDeliveryDate;
-        if (deliveryDate && typeof deliveryDate.toDate === 'function') {
-          deliveryDate = deliveryDate.toDate();
-        }
-        const deliveryTimestamp = new Date(deliveryDate).getTime();
-        const fromTimestamp = new Date(dateFrom).getTime();
-        const toTimestamp = new Date(dateTo).getTime();
-        
-        if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
-          hasDeliveryInRange = true;
+        const deliveryDate = safeParseDate(po.expectedDeliveryDate);
+        if (deliveryDate) {
+          const deliveryTimestamp = deliveryDate.getTime();
+          const fromTimestamp = new Date(dateFrom).getTime();
+          const toTimestamp = new Date(dateTo).getTime();
+          
+          if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
+            hasDeliveryInRange = true;
+          }
         }
       }
       
@@ -885,17 +885,16 @@ const getAllPurchaseOrdersInDateRange = async (dateFrom, dateTo) => {
       if (po.items && Array.isArray(po.items)) {
         for (const item of po.items) {
           if (item.plannedDeliveryDate) {
-            let deliveryDate = item.plannedDeliveryDate;
-            if (deliveryDate && typeof deliveryDate.toDate === 'function') {
-              deliveryDate = deliveryDate.toDate();
-            }
-            const deliveryTimestamp = new Date(deliveryDate).getTime();
-            const fromTimestamp = new Date(dateFrom).getTime();
-            const toTimestamp = new Date(dateTo).getTime();
-            
-            if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
-              hasDeliveryInRange = true;
-              break;
+            const deliveryDate = safeParseDate(item.plannedDeliveryDate);
+            if (deliveryDate) {
+              const deliveryTimestamp = deliveryDate.getTime();
+              const fromTimestamp = new Date(dateFrom).getTime();
+              const toTimestamp = new Date(dateTo).getTime();
+              
+              if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
+                hasDeliveryInRange = true;
+                break;
+              }
             }
           }
         }
@@ -953,22 +952,17 @@ export const generateGlobalExpenseTimeline = async (dateFrom, dateTo) => {
           const itemValue = parseFloat(item.totalPrice || 0);
           
           // Priorytet: data z pozycji, potem ogólna data PO
-          let deliveryDate = item.plannedDeliveryDate || po.expectedDeliveryDate;
-          
-          // Konwertuj Firestore Timestamp jeśli potrzeba
-          if (deliveryDate && typeof deliveryDate.toDate === 'function') {
-            deliveryDate = deliveryDate.toDate();
-          }
+          const deliveryDate = safeParseDate(item.plannedDeliveryDate || po.expectedDeliveryDate);
           
           // Dodaj tylko jeśli data jest w zakresie
           if (deliveryDate) {
-            const deliveryTimestamp = new Date(deliveryDate).getTime();
+            const deliveryTimestamp = deliveryDate.getTime();
             const fromTimestamp = dateFrom ? new Date(dateFrom).getTime() : 0;
             const toTimestamp = dateTo ? new Date(dateTo).getTime() : Infinity;
             
             if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
               expenseTimeline.push({
-                date: new Date(deliveryDate),
+                date: deliveryDate,
                 poNumber: po.number,
                 poId: po.id,
                 itemName: item.name,
@@ -979,27 +973,23 @@ export const generateGlobalExpenseTimeline = async (dateFrom, dateTo) => {
                 type: 'purchase_item',
                 supplier: po.supplier?.name || 'Nieznany',
                 isPaid: po.paymentStatus === 'paid',
-                isOverdue: deliveryDate && new Date(deliveryDate) < new Date() && po.paymentStatus !== 'paid'
+                isOverdue: deliveryDate && deliveryDate < new Date() && po.paymentStatus !== 'paid'
               });
             }
           }
         });
       } else {
         // Użyj ogólnej daty PO (jeśli brak pozycji)
-        let deliveryDate = po.expectedDeliveryDate;
-        
-        if (deliveryDate && typeof deliveryDate.toDate === 'function') {
-          deliveryDate = deliveryDate.toDate();
-        }
+        const deliveryDate = safeParseDate(po.expectedDeliveryDate);
         
         if (deliveryDate) {
-          const deliveryTimestamp = new Date(deliveryDate).getTime();
+          const deliveryTimestamp = deliveryDate.getTime();
           const fromTimestamp = dateFrom ? new Date(dateFrom).getTime() : 0;
           const toTimestamp = dateTo ? new Date(dateTo).getTime() : Infinity;
           
           if (deliveryTimestamp >= fromTimestamp && deliveryTimestamp <= toTimestamp) {
             expenseTimeline.push({
-              date: new Date(deliveryDate),
+              date: deliveryDate,
               poNumber: po.number,
               poId: po.id,
               itemName: null,
@@ -1009,7 +999,7 @@ export const generateGlobalExpenseTimeline = async (dateFrom, dateTo) => {
               type: 'purchase_order',
               supplier: po.supplier?.name || 'Nieznany',
               isPaid: po.paymentStatus === 'paid',
-              isOverdue: deliveryDate && new Date(deliveryDate) < new Date() && po.paymentStatus !== 'paid'
+              isOverdue: deliveryDate && deliveryDate < new Date() && po.paymentStatus !== 'paid'
             });
           }
         }

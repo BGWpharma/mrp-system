@@ -70,10 +70,14 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_inventory",
-      description: "Pobiera stany magazynowe (partie materiałów) z opcjonalnymi filtrami. Użyj gdy użytkownik pyta o magazyn, stany, partie, surowce.",
+      description: "Pobiera pozycje magazynowe (materiały) z opcjonalnymi filtrami. Użyj parametru 'searchText' do wyszukiwania po nazwie, opisie lub ID (wyszukiwanie częściowe).",
       parameters: {
         type: "object",
         properties: {
+          searchText: {
+            type: "string",
+            description: "Wyszukaj pozycje magazynowe gdzie nazwa, opis lub ID zawiera ten tekst (case-insensitive, częściowe dopasowanie). Przykład: 'doypack 300g', 'tubes 73'"
+          },
           materialId: {
             type: "string",
             description: "ID materiału (exact match - filtrowane po stronie serwera)"
@@ -121,7 +125,7 @@ export const DATABASE_TOOLS = [
           },
           limit: {
             type: "number",
-            description: "Maksymalna liczba wyników",
+            description: "Maksymalna liczba wyników (domyślnie 100, automatycznie 500 dla searchText)",
             default: 100
           }
         }

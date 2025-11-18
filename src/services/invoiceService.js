@@ -1569,11 +1569,13 @@ export const getAvailableProformaAmount = async (proformaId) => {
     if (requiredAdvancePaymentPercentage > 0) {
       // Proforma z wymaganą przedpłatą - sprawdź czy opłacono wymaganą kwotę
       requiredPaymentAmount = total * requiredAdvancePaymentPercentage / 100;
-      isReadyForSettlement = paid >= requiredPaymentAmount;
+      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+      isReadyForSettlement = preciseCompare(paid, requiredPaymentAmount, 0.01) >= 0;
     } else {
       // Proforma bez wymaganej przedpłaty - wymaga pełnego opłacenia
       requiredPaymentAmount = total;
-      isReadyForSettlement = paid >= total;
+      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
+      isReadyForSettlement = preciseCompare(paid, total, 0.01) >= 0;
     }
     
     // Oblicz maksymalną dostępną kwotę na podstawie procentu przedpłaty
@@ -1594,7 +1596,7 @@ export const getAvailableProformaAmount = async (proformaId) => {
       requiredPaymentAmount,
       maxAvailableAmount: Math.max(0, maxAvailableAmount),
       available: isReadyForSettlement ? Math.max(0, maxAvailableAmount) : 0, // Kwota dostępna gdy opłacono wymaganą kwotę
-      isFullyPaid: paid >= total, // Pełne opłacenie proformy
+      isFullyPaid: preciseCompare(paid, total, 0.01) >= 0, // Pełne opłacenie proformy (z tolerancją 1 cent)
       isReadyForSettlement // Czy można użyć do rozliczenia (opłacono wymaganą kwotę)
     };
   } catch (error) {
@@ -1640,9 +1642,9 @@ export const getAvailableProformasForOrder = async (orderId) => {
       })
     );
     
-    // Filtruj tylko opłacone proformy z dostępną kwotą
+    // Filtruj tylko opłacone proformy z dostępną kwotą (tolerancja 0.001 EUR dla błędów precyzji)
     const availableProformas = proformasWithAmounts.filter(proforma => 
-      proforma.amountInfo.isReadyForSettlement && proforma.amountInfo.available > 0
+      proforma.amountInfo.isReadyForSettlement && proforma.amountInfo.available > 0.001
     );
     
     return availableProformas;
@@ -1718,9 +1720,9 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
       })
     );
     
-    // Filtruj tylko opłacone proformy z dostępną kwotą
+    // Filtruj tylko opłacone proformy z dostępną kwotą (tolerancja 0.001 EUR dla błędów precyzji)
     const availableProformas = proformasWithAmounts.filter(proforma => 
-      proforma.amountInfo.isReadyForSettlement && proforma.amountInfo.available > 0
+      proforma.amountInfo.isReadyForSettlement && proforma.amountInfo.available > 0.001
     );
     
     return availableProformas;
@@ -2211,6 +2213,88 @@ export const syncProformaNumberInLinkedInvoices = async (proformaId, newProforma
     
   } catch (error) {
     console.error('Błąd podczas synchronizacji numerów proform:', error);
+    throw error;
+  }
+};
+
+/**
+ * Wyszukuje faktury które wykorzystują daną proformę jako zaliczkę
+ * Szuka po proformAllocation w fakturach (niezależnie od linkedAdvanceInvoices w proformie)
+ * @param {string} proformaId - ID proformy
+ * @returns {Promise<Array>} Lista faktur z dodatkową informacją o wykorzystanej kwocie
+ */
+export const getInvoicesUsingProforma = async (proformaId) => {
+  try {
+    if (!proformaId) {
+      return [];
+    }
+
+    console.log(`Wyszukiwanie faktur wykorzystujących proformę: ${proformaId}`);
+    
+    // Pobierz wszystkie faktury które nie są proformami
+    const invoicesQuery = query(
+      collection(db, INVOICES_COLLECTION),
+      where('isProforma', '==', false)
+    );
+    
+    const querySnapshot = await getDocs(invoicesQuery);
+    const invoicesUsingProforma = [];
+    
+    querySnapshot.forEach((docSnap) => {
+      const invoiceData = docSnap.data();
+      
+      // Sprawdź czy faktura ma proformAllocation z naszą proformą
+      if (invoiceData.proformAllocation && Array.isArray(invoiceData.proformAllocation)) {
+        const allocation = invoiceData.proformAllocation.find(
+          alloc => alloc.proformaId === proformaId
+        );
+        
+        if (allocation && allocation.amount > 0) {
+          // Konwertuj Timestamp na Date
+          const processedInvoice = {
+            id: docSnap.id,
+            ...invoiceData,
+            issueDate: invoiceData.issueDate?.toDate ? invoiceData.issueDate.toDate() : invoiceData.issueDate,
+            dueDate: invoiceData.dueDate?.toDate ? invoiceData.dueDate.toDate() : invoiceData.dueDate,
+            createdAt: invoiceData.createdAt?.toDate ? invoiceData.createdAt.toDate() : invoiceData.createdAt,
+            updatedAt: invoiceData.updatedAt?.toDate ? invoiceData.updatedAt.toDate() : invoiceData.updatedAt,
+            usedAmount: allocation.amount,
+            proformaNumber: allocation.proformaNumber
+          };
+          
+          invoicesUsingProforma.push(processedInvoice);
+        }
+      }
+      
+      // COMPATIBILITY: Sprawdź też stary system selectedProformaId
+      else if (invoiceData.selectedProformaId === proformaId && invoiceData.settledAdvancePayments > 0) {
+        const processedInvoice = {
+          id: docSnap.id,
+          ...invoiceData,
+          issueDate: invoiceData.issueDate?.toDate ? invoiceData.issueDate.toDate() : invoiceData.issueDate,
+          dueDate: invoiceData.dueDate?.toDate ? invoiceData.dueDate.toDate() : invoiceData.dueDate,
+          createdAt: invoiceData.createdAt?.toDate ? invoiceData.createdAt.toDate() : invoiceData.createdAt,
+          updatedAt: invoiceData.updatedAt?.toDate ? invoiceData.updatedAt.toDate() : invoiceData.updatedAt,
+          usedAmount: invoiceData.settledAdvancePayments,
+          proformaNumber: '(stary system)'
+        };
+        
+        invoicesUsingProforma.push(processedInvoice);
+      }
+    });
+    
+    // Sortuj po dacie wystawienia (najnowsze pierwsze)
+    invoicesUsingProforma.sort((a, b) => {
+      const dateA = a.issueDate ? new Date(a.issueDate) : new Date(0);
+      const dateB = b.issueDate ? new Date(b.issueDate) : new Date(0);
+      return dateB - dateA;
+    });
+    
+    console.log(`Znaleziono ${invoicesUsingProforma.length} faktur wykorzystujących proformę`);
+    return invoicesUsingProforma;
+    
+  } catch (error) {
+    console.error('Błąd podczas wyszukiwania faktur wykorzystujących proformę:', error);
     throw error;
   }
 };

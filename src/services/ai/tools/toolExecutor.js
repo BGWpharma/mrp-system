@@ -207,14 +207,15 @@ export class ToolExecutor {
       }
     }
     
-    // Limit
-    const limitValue = params.limit || 100;
+    // Limit (zwiększony dla wyszukiwania tekstowego)
+    const limitValue = params.searchText ? 500 : (params.limit || 100);
     constraints.push(firestoreLimit(limitValue));
     
     if (constraints.length > 0) {
       q = query(q, ...constraints);
     }
     
+    console.log(`[ToolExecutor] 📦 Pobieranie pozycji magazynowych z Firestore...`);
     const snapshot = await getDocs(q);
     let items = snapshot.docs.map(doc => {
       const data = doc.data();
@@ -225,6 +226,27 @@ export class ToolExecutor {
         expirationDate: data.expirationDate?.toDate?.()?.toISOString?.() || data.expirationDate
       };
     });
+    
+    console.log(`[ToolExecutor] ✅ Pobrano ${items.length} pozycji z Firestore`);
+    
+    // 🆕 NOWE: Filtrowanie tekstowe po stronie klienta
+    if (params.searchText) {
+      const searchTerm = params.searchText.toLowerCase();
+      console.log(`[ToolExecutor] 🔍 Wyszukiwanie tekstowe po nazwie/opisie/ID: "${searchTerm}"`);
+      console.log(`[ToolExecutor] 📦 Liczba pozycji przed filtrowaniem: ${items.length}`);
+      
+      items = items.filter(item => {
+        const name = (item.name || '').toLowerCase();
+        const description = (item.description || '').toLowerCase();
+        const itemId = (item.id || '').toLowerCase();
+        
+        return name.includes(searchTerm) || 
+               description.includes(searchTerm) || 
+               itemId.includes(searchTerm);
+      });
+      
+      console.log(`[ToolExecutor] ✅ Po filtrowaniu tekstowym: ${items.length} pozycji`);
+    }
     
     // Filtrowanie niskiego stanu (po stronie klienta, bo Firestore nie obsługuje porównań między polami)
     if (params.checkLowStock) {
@@ -264,7 +286,8 @@ export class ToolExecutor {
       items,
       count: items.length,
       totals,
-      limitApplied: limitValue
+      limitApplied: limitValue,
+      searchedText: params.searchText || null
     };
   }
   
@@ -824,14 +847,68 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // 🔥 NOWE: Jeśli jest materialName, najpierw znajdź itemId w kolekcji inventory
+    let resolvedItemId = params.materialId;
+    let itemsFound = 0;
+    let usedInQuery = false; // Flaga czy użyliśmy 'in' query
+    
+    if (params.materialName && !resolvedItemId) {
+      console.log(`[ToolExecutor] 🔍 Szukam pozycji magazynowej o nazwie zawierającej: "${params.materialName}"`);
+      
+      // Pobierz pozycje magazynowe
+      const inventoryRef = collection(db, COLLECTION_MAPPING.inventory);
+      const inventorySnapshot = await getDocs(query(inventoryRef, firestoreLimit(500)));
+      
+      const searchTerm = params.materialName.toLowerCase();
+      const matchingItems = inventorySnapshot.docs.filter(doc => {
+        const data = doc.data();
+        const itemName = (data.name || data.id || '').toLowerCase();
+        return itemName.includes(searchTerm);
+      });
+      
+      itemsFound = matchingItems.length;
+      console.log(`[ToolExecutor] ✅ Znaleziono ${itemsFound} pasujących pozycji magazynowych`);
+      
+      if (matchingItems.length === 0) {
+        console.log(`[ToolExecutor] ❌ Nie znaleziono pozycji magazynowej dla: "${params.materialName}"`);
+        // Zwróć puste wyniki
+        return {
+          batches: [],
+          count: 0,
+          limitApplied: params.limit || 100,
+          searchedTerm: params.materialName,
+          itemsFound: 0
+        };
+      } else if (matchingItems.length === 1) {
+        // Jeśli jest dokładnie jedna, użyj jej
+        resolvedItemId = matchingItems[0].id;
+        const itemName = matchingItems[0].data().name;
+        console.log(`[ToolExecutor] 🎯 Znaleziono pozycję: "${itemName}" (ID: ${resolvedItemId})`);
+      } else if (matchingItems.length <= 10) {
+        // Dla wielu pozycji (max 10), użyj 'in'
+        const itemIds = matchingItems.map(doc => doc.id);
+        constraints.push(where('itemId', 'in', itemIds));
+        usedInQuery = true;
+        console.log(`[ToolExecutor] 🎯 Używam ${itemIds.length} itemIds (${matchingItems.map(d => d.data().name).join(', ')})`);
+      } else {
+        // Więcej niż 10, użyj pierwszych 10
+        const itemIds = matchingItems.slice(0, 10).map(doc => doc.id);
+        constraints.push(where('itemId', 'in', itemIds));
+        usedInQuery = true;
+        console.log(`[ToolExecutor] ⚠️ Znaleziono ${matchingItems.length} pozycji - używam pierwszych 10`);
+      }
+    }
+    
     // Filtrowanie po stronie serwera (Firestore)
     if (params.batchNumber) {
       constraints.push(where('batchNumber', '==', params.batchNumber));
     }
     
     // UWAGA: W Firestore pole nazywa się 'itemId' a nie 'materialId'
-    if (params.materialId) {
-      constraints.push(where('itemId', '==', params.materialId));
+    // Użyj resolvedItemId tylko jeśli nie użyliśmy już 'in' query
+    if (resolvedItemId && !usedInQuery) {
+      constraints.push(where('itemId', '==', resolvedItemId));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie partii po itemId: ${resolvedItemId}`);
     }
     
     // UWAGA: W Firestore PO jest przechowywany w zagnieżdżonym obiekcie 'purchaseOrderDetails.id'
@@ -851,6 +928,7 @@ export class ToolExecutor {
       q = query(q, ...constraints);
     }
     
+    console.log(`[ToolExecutor] 📦 Pobieranie partii z Firestore...`);
     const snapshot = await getDocs(q);
     let batches = snapshot.docs.map(doc => {
       const data = doc.data();
@@ -862,13 +940,7 @@ export class ToolExecutor {
       };
     });
     
-    // Filtruj po nazwie materiału (po stronie klienta)
-    if (params.materialName) {
-      const searchTerm = params.materialName.toLowerCase();
-      batches = batches.filter(batch => 
-        (batch.materialName || '').toLowerCase().includes(searchTerm)
-      );
-    }
+    console.log(`[ToolExecutor] ✅ Pobrano ${batches.length} partii z Firestore`);
     
     // Filtruj wygasające partie
     if (params.checkExpiring) {
@@ -880,12 +952,16 @@ export class ToolExecutor {
         const expDate = new Date(batch.expirationDate);
         return expDate <= thirtyDaysFromNow && expDate >= new Date();
       });
+      
+      console.log(`[ToolExecutor] ⏰ Po filtrowaniu wygasających: ${batches.length} partii`);
     }
     
     return {
       batches,
       count: batches.length,
-      limitApplied: limitValue
+      limitApplied: limitValue,
+      searchedTerm: params.materialName || null,
+      itemsFound: itemsFound || null
     };
   }
   
@@ -1267,10 +1343,10 @@ export class ToolExecutor {
                 type: 'expiring_batch',
                 severity: severityLevel,
                 title: `Wygasa partia: ${data.batchNumber}`,
-                message: `Materiał: ${data.materialName}, Wygasa za ${daysLeft} dni`,
+                message: `Materiał: ${data.itemName || 'Nieznany'}, Wygasa za ${daysLeft} dni`,
                 batchId: doc.id,
                 batchNumber: data.batchNumber,
-                materialName: data.materialName,
+                itemName: data.itemName || 'Nieznany',  // UWAGA: Firestore używa 'itemName' nie 'materialName'
                 expirationDate: expDate.toISOString(),
                 daysLeft
               });
