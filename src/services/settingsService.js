@@ -3,7 +3,8 @@ import { db } from './firebase/config';
 
 // Stałe dla dokumentów
 const SYSTEM_SETTINGS_DOC = 'settings/system';
-const OPENAI_SETTINGS_DOC = 'settings/openai'; 
+const OPENAI_SETTINGS_DOC = 'settings/openai';
+const GEMINI_SETTINGS_DOC = 'settings/gemini'; 
 
 /**
  * Pobiera ustawienia systemowe z bazy danych
@@ -19,14 +20,16 @@ export const getSystemSettings = async () => {
     } else {
       // Domyślne ustawienia, gdy nie ma ich w bazie
       return {
-        useGlobalApiKey: false
+        useGlobalApiKey: false,
+        useGlobalGeminiKey: false
       };
     }
   } catch (error) {
     console.error('Błąd podczas pobierania ustawień systemowych:', error);
     // W przypadku błędu, zwróć podstawowe ustawienia
     return {
-      useGlobalApiKey: false
+      useGlobalApiKey: false,
+      useGlobalGeminiKey: false
     };
   }
 };
@@ -116,6 +119,58 @@ export const saveGlobalOpenAIApiKey = async (apiKey, userId) => {
     });
   } catch (error) {
     console.error('Błąd podczas zapisywania globalnego klucza API OpenAI:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera globalny klucz API Gemini (jeśli istnieje)
+ * @returns {Promise<string|null>} Klucz API lub null jeśli nie znaleziono
+ */
+export const getGlobalGeminiApiKey = async () => {
+  try {
+    const apiKeyRef = doc(db, GEMINI_SETTINGS_DOC);
+    const apiKeyDoc = await getDoc(apiKeyRef);
+    
+    if (apiKeyDoc.exists() && apiKeyDoc.data().globalApiKey) {
+      return apiKeyDoc.data().globalApiKey;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Błąd podczas pobierania globalnego klucza API Gemini:', error);
+    throw error;
+  }
+};
+
+/**
+ * Zapisuje globalny klucz API Gemini
+ * @param {string} apiKey - Klucz API Gemini
+ * @param {string} userId - ID użytkownika dokonującego zmiany
+ * @returns {Promise<void>}
+ */
+export const saveGlobalGeminiApiKey = async (apiKey, userId) => {
+  try {
+    const apiKeyRef = doc(db, GEMINI_SETTINGS_DOC);
+    await updateDoc(apiKeyRef, {
+      globalApiKey: apiKey,
+      updatedBy: userId,
+      updatedAt: serverTimestamp()
+    }).catch(async (error) => {
+      // Jeśli dokument nie istnieje, tworzymy go
+      if (error.code === 'not-found') {
+        await setDoc(apiKeyRef, {
+          globalApiKey: apiKey,
+          updatedBy: userId,
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp()
+        });
+      } else {
+        throw error;
+      }
+    });
+  } catch (error) {
+    console.error('Błąd podczas zapisywania globalnego klucza API Gemini:', error);
     throw error;
   }
 }; 

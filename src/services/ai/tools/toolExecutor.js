@@ -185,6 +185,16 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // Filtr po ID materiału (exact match - po stronie serwera)
+    if (params.materialId) {
+      constraints.push(where('id', '==', params.materialId));
+    }
+    
+    // Filtr po kategorii (exact match - po stronie serwera)
+    if (params.categoryId) {
+      constraints.push(where('categoryId', '==', params.categoryId));
+    }
+    
     // Filtry użytkownika
     if (params.filters && params.filters.length > 0) {
       for (const filter of params.filters) {
@@ -266,6 +276,16 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // Filtr po numerze MO (exact match - po stronie serwera)
+    if (params.moNumber) {
+      constraints.push(where('moNumber', '==', params.moNumber));
+    }
+    
+    // Filtr po ID produktu (exact match - po stronie serwera)
+    if (params.productId) {
+      constraints.push(where('productId', '==', params.productId));
+    }
+    
     // Filtr po statusie
     if (params.status && params.status.length > 0) {
       // Firestore obsługuje 'in' tylko dla max 10 wartości
@@ -346,6 +366,11 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // Filtr po numerze zamówienia (exact match - po stronie serwera)
+    if (params.orderNumber) {
+      constraints.push(where('orderNumber', '==', params.orderNumber));
+    }
+    
     // Filtr po statusie
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
       constraints.push(where('status', 'in', params.status));
@@ -417,6 +442,12 @@ export class ToolExecutor {
     const collectionName = COLLECTION_MAPPING.purchase_orders;
     let q = collection(db, collectionName);
     const constraints = [];
+    
+    // Filtr po numerze PO (exact match - po stronie serwera)
+    // UWAGA: W Firestore pole nazywa się 'number' a nie 'poNumber'
+    if (params.poNumber) {
+      constraints.push(where('number', '==', params.poNumber));
+    }
     
     // Filtr po statusie
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
@@ -793,8 +824,20 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // Filtrowanie po stronie serwera (Firestore)
     if (params.batchNumber) {
       constraints.push(where('batchNumber', '==', params.batchNumber));
+    }
+    
+    // UWAGA: W Firestore pole nazywa się 'itemId' a nie 'materialId'
+    if (params.materialId) {
+      constraints.push(where('itemId', '==', params.materialId));
+    }
+    
+    // UWAGA: W Firestore PO jest przechowywany w zagnieżdżonym obiekcie 'purchaseOrderDetails.id'
+    // (stary format: 'sourceDetails.orderId' - dla kompatybilności wstecznej)
+    if (params.purchaseOrderId) {
+      constraints.push(where('purchaseOrderDetails.id', '==', params.purchaseOrderId));
     }
     
     if (params.supplierId) {

@@ -74,9 +74,17 @@ export const DATABASE_TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          materialId: {
+            type: "string",
+            description: "ID materiału (exact match - filtrowane po stronie serwera)"
+          },
+          categoryId: {
+            type: "string",
+            description: "ID kategorii (exact match - filtrowane po stronie serwera)"
+          },
           filters: {
             type: "array",
-            description: "Filtry dla stanów magazynowych",
+            description: "Dodatkowe filtry dla stanów magazynowych",
             items: {
               type: "object",
               properties: {
@@ -128,6 +136,14 @@ export const DATABASE_TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          moNumber: {
+            type: "string",
+            description: "Numer MO (exact match - filtrowane po stronie serwera) - np. 'MO00116'"
+          },
+          productId: {
+            type: "string",
+            description: "ID produktu (exact match - filtrowane po stronie serwera)"
+          },
           status: {
             type: "array",
             items: {
@@ -150,7 +166,7 @@ export const DATABASE_TOOLS = [
           },
           productName: {
             type: "string",
-            description: "Nazwa produktu (częściowe dopasowanie)"
+            description: "Nazwa produktu (częściowe dopasowanie - filtrowane po stronie klienta)"
           },
           includeDetails: {
             type: "boolean",
@@ -174,6 +190,10 @@ export const DATABASE_TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          orderNumber: {
+            type: "string",
+            description: "Numer zamówienia (exact match - filtrowane po stronie serwera) - np. 'CO00123'"
+          },
           status: {
             type: "array",
             items: {
@@ -183,11 +203,11 @@ export const DATABASE_TOOLS = [
           },
           customerId: {
             type: "string",
-            description: "ID konkretnego klienta"
+            description: "ID konkretnego klienta (exact match - filtrowane po stronie serwera)"
           },
           customerName: {
             type: "string",
-            description: "Nazwa klienta (częściowe dopasowanie)"
+            description: "Nazwa klienta (częściowe dopasowanie - filtrowane po stronie klienta)"
           },
           dateFrom: {
             type: "string",
@@ -219,6 +239,10 @@ export const DATABASE_TOOLS = [
       parameters: {
         type: "object",
         properties: {
+          poNumber: {
+            type: "string",
+            description: "Numer PO (exact match - filtrowane po stronie serwera) - np. 'PO00092'"
+          },
           status: {
             type: "array",
             items: { type: "string" },
@@ -226,11 +250,11 @@ export const DATABASE_TOOLS = [
           },
           supplierId: {
             type: "string",
-            description: "ID dostawcy"
+            description: "ID dostawcy (exact match - filtrowane po stronie serwera)"
           },
           supplierName: {
             type: "string",
-            description: "Nazwa dostawcy (częściowe dopasowanie)"
+            description: "Nazwa dostawcy (częściowe dopasowanie - filtrowane po stronie klienta)"
           },
           dateFrom: {
             type: "string",
@@ -463,17 +487,25 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_inventory_batches",
-      description: "Pobiera partie magazynowe (batches) z filtrami. Użyj gdy użytkownik pyta o partie, numery partii, dostawy materiałów.",
+      description: "Pobiera partie magazynowe (batches) z filtrami. Użyj gdy użytkownik pyta o partie, numery partii, dostawy materiałów, zamówienia zakupu (PO).",
       parameters: {
         type: "object",
         properties: {
           materialName: {
             type: "string",
-            description: "Nazwa materiału (częściowe dopasowanie)"
+            description: "Nazwa materiału (częściowe dopasowanie - filtrowane po stronie klienta)"
+          },
+          materialId: {
+            type: "string",
+            description: "ID materiału (exact match - filtrowane po stronie serwera)"
           },
           batchNumber: {
             type: "string",
-            description: "Numer partii"
+            description: "Numer partii (exact match)"
+          },
+          purchaseOrderId: {
+            type: "string",
+            description: "ID zamówienia zakupu (PO) - znajdzie wszystkie partie przyjęte z tego PO"
           },
           supplierId: {
             type: "string",

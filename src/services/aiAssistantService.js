@@ -25,9 +25,10 @@ import {
   getRecipes,
   getPurchaseOrders
 } from './aiDataService';
-import { getSystemSettings, getGlobalOpenAIApiKey } from './settingsService';
+import { getSystemSettings, getGlobalOpenAIApiKey, getGlobalGeminiApiKey } from './settingsService';
 import { AIAssistantV2 } from './ai/AIAssistantV2.js';
 import { AIQueryOrchestrator } from './ai/AIQueryOrchestrator.js';
+import { GeminiQueryOrchestrator } from './ai/GeminiQueryOrchestrator.js';
 import { SmartModelSelector } from './ai/optimization/SmartModelSelector.js';
 import { ContextOptimizer } from './ai/optimization/ContextOptimizer.js';
 import { GPTResponseCache } from './ai/optimization/GPTResponseCache.js';
@@ -68,6 +69,47 @@ export const getOpenAIApiKey = async (userId) => {
   } catch (error) {
     console.error('Błąd podczas pobierania klucza API OpenAI:', error);
     throw error;
+  }
+};
+
+/**
+ * Pobiera klucz API Google Gemini
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<string|null>} - Klucz API Gemini lub null
+ */
+export const getGeminiApiKey = async (userId) => {
+  try {
+    // Najpierw sprawdzamy ustawienia systemowe
+    const systemSettings = await getSystemSettings();
+    
+    // Jeśli włączona jest opcja globalnego klucza API Gemini, pobieramy go
+    if (systemSettings?.useGlobalGeminiKey) {
+      const globalApiKey = await getGlobalGeminiApiKey();
+      if (globalApiKey) {
+        console.log('✅ Używam globalnego klucza API Gemini');
+        return globalApiKey;
+      }
+    }
+    
+    // Jeśli nie ma globalnego klucza lub nie jest używany, sprawdź klucz użytkownika
+    if (userId) {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.geminiApiKey) {
+          console.log('✅ Używam klucza API Gemini użytkownika');
+          return userData.geminiApiKey;
+        }
+      }
+    }
+    
+    // Brak klucza Gemini
+    console.warn('⚠️ Brak klucza Gemini API');
+    return null;
+    
+  } catch (error) {
+    console.error('❌ Błąd podczas pobierania klucza API Gemini:', error);
+    return null;
   }
 };
 
@@ -1066,36 +1108,39 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
   }
   
   try {
-    // ✨ NOWY SYSTEM: AI Query Orchestrator - GPT sam decyduje jakie dane pobrać
+    // ✨ NOWY SYSTEM: Gemini Query Orchestrator - Gemini 2.5 Pro sam decyduje jakie dane pobrać
     // Sprawdź czy orchestrator powinien obsłużyć zapytanie (nie obsługuje załączników)
     const hasAttachments = attachments && attachments.length > 0;
-    const shouldUseOrchestrator = !hasAttachments && AIQueryOrchestrator.shouldHandle(query);
+    const shouldUseOrchestrator = !hasAttachments && GeminiQueryOrchestrator.shouldHandle(query);
     
     if (shouldUseOrchestrator) {
-      console.log('[processAIQuery] 🎯 Używam AI Query Orchestrator - GPT zdecyduje jakie dane pobrać');
+      console.log('[processAIQuery] 🎯 Używam Gemini Query Orchestrator - Gemini zdecyduje jakie dane pobrać');
       
       try {
-        // Pobierz klucz API
-        const apiKey = await getOpenAIApiKey(userId);
+        // Pobierz klucz API Gemini
+        const apiKey = await getGeminiApiKey(userId);
         
         if (!apiKey) {
-          return "❌ Nie znaleziono klucza API OpenAI. Proszę skonfigurować klucz w ustawieniach systemu.";
+          return "❌ Nie znaleziono klucza API Gemini. Proszę skonfigurować klucz w ustawieniach systemu.\n\n" +
+                 "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
         }
         
-        // Użyj orchestratora - AI sam wykona targetowane zapytania
-        const orchestratorResult = await AIQueryOrchestrator.processQuery(
+        // Użyj orchestratora - Gemini sam wykona targetowane zapytania
+        // Inteligentnie wybierze model (2.5 Pro, 1.5 Pro, 2.0 Flash) na podstawie zapytania
+        const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
           query, 
           apiKey, 
           context,
           {
-            model: 'gpt-4o-mini',  // Zmieniono na gpt-4o-mini dla lepszego balansu koszt/jakość
-            // Nie przekazujemy onChunk - Function Calling (tool use) wymaga braku streamingu
-            // Odpowiedź nadal będzie szybka dzięki targetowanym zapytaniom (~1-3s)
+            // Gemini sam wybierze najlepszy model dla tego zapytania
+            // forceModel: 'gemini-2.5-pro' - opcjonalnie można wymusić konkretny model
+            enableThinking: true  // Włącz thinking mode dla 2.5 Pro
           }
         );
         
         if (orchestratorResult.success) {
-          console.log(`[processAIQuery] ✅ Orchestrator zakończył w ${orchestratorResult.processingTime.toFixed(2)}ms`);
+          console.log(`[processAIQuery] ✅ Gemini Orchestrator zakończył w ${orchestratorResult.processingTime.toFixed(2)}ms`);
+          console.log(`[processAIQuery] 🤖 Użyty model: ${orchestratorResult.model}`);
           console.log(`[processAIQuery] 📊 Wykonano ${orchestratorResult.executedTools.length} targetowanych zapytań do bazy`);
           console.log(`[processAIQuery] 📝 Otrzymano odpowiedź (długość: ${orchestratorResult.response?.length} znaków):`, orchestratorResult.response?.substring(0, 200) + '...');
           
@@ -1105,10 +1150,14 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
           if (orchestratorResult.executedTools.length > 0) {
             const queryNames = orchestratorResult.executedTools.map(t => t.name).join(', ');
             const totalQueryTime = orchestratorResult.executedTools.reduce((sum, t) => sum + t.executionTime, 0);
-            const estimatedCost = AIQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed);
+            const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
+            
+            // Emoji dla modelu
+            const modelEmoji = orchestratorResult.model.includes('2.5') ? '🧠' : 
+                              orchestratorResult.model.includes('1.5') ? '📚' : '⚡';
             
             response += `\n\n_🎯 Wykonano ${orchestratorResult.executedTools.length} zoptymalizowanych zapytań do bazy (${totalQueryTime.toFixed(0)}ms)_`;
-            response += `\n_⚡ Całkowity czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+            response += `\n_${modelEmoji} Model: ${orchestratorResult.model} | Czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
           }
           
           console.log(`[processAIQuery] 🎁 Zwracam odpowiedź (długość: ${response?.length} znaków):`, response?.substring(0, 200) + '...');
@@ -1116,7 +1165,7 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
           return response;
         } else {
           // Orchestrator nie zdołał przetworzyć - zwróć błąd zamiast fallbacku
-          console.error('[processAIQuery] ❌ Orchestrator nie zdołał przetworzyć zapytania');
+          console.error('[processAIQuery] ❌ Gemini Orchestrator nie zdołał przetworzyć zapytania');
           console.error('[processAIQuery] Błąd:', orchestratorResult.error);
           
           return `❌ **Nie udało się przetworzyć zapytania**\n\n` +
@@ -1124,15 +1173,17 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
                  `💡 Spróbuj:\n` +
                  `• Uprość zapytanie\n` +
                  `• Zmniejsz liczbę żądanych elementów\n` +
-                 `• Podziel zapytanie na mniejsze części`;
+                 `• Podziel zapytanie na mniejsze części\n` +
+                 `• Sprawdź czy klucz API Gemini jest poprawny`;
         }
         
       } catch (orchestratorError) {
-        console.error('[processAIQuery] ❌ Błąd w Orchestrator:', orchestratorError);
+        console.error('[processAIQuery] ❌ Błąd w Gemini Orchestrator:', orchestratorError);
         
         return `❌ **Wystąpił błąd podczas przetwarzania zapytania**\n\n` +
                `Szczegóły: ${orchestratorError.message}\n\n` +
-               `💡 Spróbuj ponownie lub skontaktuj się z administratorem.`;
+               `💡 Spróbuj ponownie lub skontaktuj się z administratorem.\n` +
+               `Jeśli problem dotyczy klucza API, sprawdź konfigurację w ustawieniach.`;
       }
     } else {
       if (hasAttachments) {
