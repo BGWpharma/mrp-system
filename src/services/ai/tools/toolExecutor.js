@@ -1343,22 +1343,43 @@ export class ToolExecutor {
     if (params.type && params.type.length > 0) {
       if (params.type.length <= 10) {
         // Mapowanie typów transakcji z małych liter na właściwe wartości w Firestore
+        // UWAGA: Typy muszą odpowiadać TRANSACTION_TYPES w src/services/inventory/config/constants.js
         const typeMapping = {
+          // Polskie nazwy
           'rozpoczęcie produkcji': 'production_start',
-          'zużycie': 'consumption',
-          'przyjęcie materiału': 'material_in',
-          'wydanie materiału': 'material_out',
-          'korekta': 'adjustment',
-          'rezerwacja': 'reservation',
+          'zużycie': 'ISSUE',           // POPRAWIONE - konsumpcja to ISSUE
+          'konsumpcja': 'ISSUE',         // DODANE - alias dla zużycia
+          'przyjęcie materiału': 'RECEIVE',  // POPRAWIONE - przyjęcie to RECEIVE
+          'przyjęcie': 'RECEIVE',        // DODANE - skrót
+          'wydanie materiału': 'ISSUE',  // wydanie to też ISSUE
+          'wydanie': 'ISSUE',            // DODANE - skrót
+          'korekta dodanie': 'adjustment-add',
+          'korekta odjęcie': 'adjustment-remove',
+          'korekta': 'adjustment-add',   // domyślnie dodanie
+          'rezerwacja': 'booking',       // POPRAWIONE - rezerwacja to booking
+          'anulowanie rezerwacji': 'booking_cancel',
+          'transfer': 'TRANSFER',
+          'przeniesienie': 'TRANSFER',
+          
+          // Angielskie nazwy - bezpośrednie mapowanie na rzeczywiste typy w Firestore
           'production_start': 'production_start',
-          'consumption': 'consumption',
-          'material_in': 'material_in',
-          'material_out': 'material_out',
-          'adjustment': 'adjustment',
-          'reservation': 'reservation',
+          'consumption': 'ISSUE',        // POPRAWIONE - consumption to faktycznie ISSUE
+          'issue': 'ISSUE',              // DODANE - bezpośredni typ
+          'receipt': 'RECEIVE',          // DODANE - receipt to RECEIVE
+          'receive': 'RECEIVE',          // DODANE - bezpośredni typ
+          'material_in': 'RECEIVE',      // material_in to RECEIVE
+          'material_out': 'ISSUE',       // material_out to ISSUE
+          'adjustment': 'adjustment-add',
+          'adjustment-add': 'adjustment-add',
+          'adjustment-remove': 'adjustment-remove',
+          'reservation': 'booking',      // POPRAWIONE - reservation to booking
+          'booking': 'booking',          // DODANE - bezpośredni typ
+          'booking_cancel': 'booking_cancel',  // DODANE - bezpośredni typ
+          'transfer': 'TRANSFER',        // DODANE - bezpośredni typ
+          
+          // Dodatkowe aliasy dla lepszego rozpoznawania
           'produkcja': 'production_start',
-          'przyjęcie': 'material_in',
-          'wydanie': 'material_out'
+          'start produkcji': 'production_start'
         };
         
         // Normalizuj każdy typ
@@ -1367,6 +1388,8 @@ export class ToolExecutor {
           const normalized = typeMapping[lower] || t;
           if (typeMapping[lower]) {
             console.log(`[ToolExecutor] 🔄 Normalizacja typu transakcji: "${t}" → "${normalized}"`);
+          } else {
+            console.warn(`[ToolExecutor] ⚠️ Nieznany typ transakcji: "${t}" - używam bez zmian`);
           }
           return normalized;
         });

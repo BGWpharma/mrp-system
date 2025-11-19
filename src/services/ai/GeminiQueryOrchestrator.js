@@ -435,7 +435,42 @@ WAŻNE WARTOŚCI (automatycznie normalizowane - możesz używać polskich lub an
 - Statusy zamówień zakupu (PO): "oczekujące", "potwierdzone", "częściowo dostarczone", "dostarczone", "anulowane"
 - Statusy faktur: "szkic", "wystawiona", "anulowana" oraz statusy płatności: "opłacona", "nieopłacona", "częściowo opłacona", "przeterminowana"
 - Statusy CMR: "szkic", "wystawiony", "w transporcie", "dostarczone", "zakończony", "anulowany"
-- Typy transakcji magazynowych: "rozpoczęcie produkcji", "zużycie", "przyjęcie materiału", "wydanie materiału", "korekta", "rezerwacja"
+
+🔑 TYPY TRANSAKCJI MAGAZYNOWYCH (BARDZO WAŻNE - CZYTAJ UWAŻNIE!):
+═══════════════════════════════════════════════════════════════
+W Firestore używane są następujące DOKŁADNE typy (case-sensitive!):
+- "booking" = rezerwacja materiałów na zadanie produkcyjne
+- "booking_cancel" = anulowanie rezerwacji
+- "ISSUE" = konsumpcja/zużycie materiałów w produkcji (WIELKIE LITERY!)
+- "RECEIVE" = przyjęcie materiału do magazynu (WIELKIE LITERY!)
+- "adjustment-add" = korekta zwiększająca stan
+- "adjustment-remove" = korekta zmniejszająca stan
+- "TRANSFER" = transfer między magazynami
+
+⚠️ KRYTYCZNE: KONSUMPCJA I REZERWACJE W ZADANIACH PRODUKCYJNYCH
+════════════════════════════════════════════════════════════════
+Gdy użytkownik pyta o konsumpcję lub rezerwacje dla konkretnego MO:
+
+✅ POPRAWNIE - Użyj query_production_tasks:
+query_production_tasks({
+  moNumber: "MO00XXX",
+  includeDetails: true  // 🔑 KLUCZOWE! To pobierze pola consumedMaterials i materialBatches
+})
+
+Zwrócone dane zawierają:
+- consumedMaterials[] - faktycznie zużyte materiały (lista z materialId, batchId, quantity, unitPrice)
+- materialBatches{} - zarezerwowane partie (obiekt { materialId: [{ batchId, quantity, batchNumber }] })
+- materials[] - planowane materiały do zużycia
+
+❌ BŁĘDNIE - NIE używaj query_inventory_transactions dla bieżących danych MO:
+- query_inventory_transactions pokazuje TYLKO historyczne transakcje
+- NIE zawiera pełnej struktury aktualnych rezerwacji i konsumpcji w zadaniu
+- Użyj go TYLKO do analiz historycznych przepływu materiałów, nie do sprawdzania stanu konkretnego MO
+
+🎯 PRZYKŁADY UŻYCIA:
+- "Pokaż konsumpcję dla MO107" → query_production_tasks({ moNumber: "MO107", includeDetails: true })
+- "Jakie materiały są zarezerwowane dla MO107?" → query_production_tasks({ moNumber: "MO107", includeDetails: true })
+- "Historia wszystkich konsumpcji z ostatniego miesiąca" → query_inventory_transactions({ type: ["ISSUE"], dateFrom: "..." })
 
 NOWE MOŻLIWOŚCI FILTROWANIA (server-side - bardzo szybkie!):
 - query_production_tasks: możesz teraz filtrować po 'orderId' (znajdź wszystkie MO dla zamówienia) i 'lotNumber' (znajdź MO po numerze LOT)

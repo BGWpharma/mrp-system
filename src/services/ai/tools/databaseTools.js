@@ -614,7 +614,7 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_inventory_transactions",
-      description: "Pobiera transakcje magazynowe (przyjęcia, zużycia, rezerwacje, korekty). Użyj do analiz przepływu materiałów, historii operacji magazynowych.",
+      description: "Pobiera transakcje magazynowe (przyjęcia, zużycia, rezerwacje, korekty). Użyj do analiz przepływu materiałów, historii operacji magazynowych. UWAGA: Dla szczegółowych danych o konsumpcji i rezerwacjach w zadaniach użyj query_production_tasks z includeDetails: true.",
       parameters: {
         type: "object",
         properties: {
@@ -622,9 +622,9 @@ export const DATABASE_TOOLS = [
             type: "array",
             items: { 
               type: "string",
-              enum: ["booking", "booking_cancel", "consumption", "receipt", "adjustment", "return"]
+              enum: ["booking", "booking_cancel", "ISSUE", "RECEIVE", "adjustment-add", "adjustment-remove", "TRANSFER"]
             },
-            description: "Typy transakcji do pobrania"
+            description: "Typy transakcji: booking=rezerwacja, booking_cancel=anulowanie rezerwacji, ISSUE=konsumpcja/zużycie, RECEIVE=przyjęcie materiału, adjustment-add/adjustment-remove=korekty, TRANSFER=transfer między magazynami"
           },
           itemId: {
             type: "string",
