@@ -139,6 +139,12 @@ const TaskForm = ({ taskId }) => {
   const [availableRecipeVersions, setAvailableRecipeVersions] = useState([]);
   const [refreshingProductName, setRefreshingProductName] = useState(false);
 
+  // Stany dla dialogu przeliczania materiałów przy zmianie ilości
+  const [quantityChangeDialogOpen, setQuantityChangeDialogOpen] = useState(false);
+  const [originalQuantity, setOriginalQuantity] = useState(null); // Oryginalna ilość przy załadowaniu
+  const [pendingSubmitEvent, setPendingSubmitEvent] = useState(null); // Zapisany event submita
+  const [recalculateMaterialsChoice, setRecalculateMaterialsChoice] = useState(null); // Wybór użytkownika
+
   // Stany dla powiązania z zamówieniem klienta
   const [customerOrders, setCustomerOrders] = useState([]);
   const [selectedCustomerOrder, setSelectedCustomerOrder] = useState(null);
@@ -433,6 +439,9 @@ const TaskForm = ({ taskId }) => {
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
       setTaskData(taskWithParsedDates);
+      
+      // Zapisz oryginalną ilość do wykrywania zmian
+      setOriginalQuantity(task.quantity);
       
       // Zapisz oryginalne orderId do śledzenia zmian
       if (task.orderId) {
@@ -733,8 +742,69 @@ const TaskForm = ({ taskId }) => {
     
     if (saving) return;
     
+    // Sprawdź czy ilość się zmieniła (tylko w trybie edycji)
+    if (taskId && taskId !== 'new' && originalQuantity !== null) {
+      const currentQuantity = parseFloat(taskData.quantity);
+      const origQty = parseFloat(originalQuantity);
+      
+      // Jeśli ilość się zmieniła i są materiały do przeliczenia
+      if (Math.abs(currentQuantity - origQty) > 0.001 && recipe && taskData.materials?.length > 0) {
+        // Sprawdź czy zadanie ma rezerwacje lub konsumpcję (blokada przeliczania)
+        const hasReservations = taskData.materialBatches && 
+          Object.keys(taskData.materialBatches).length > 0 &&
+          Object.values(taskData.materialBatches).some(batches => 
+            batches && batches.length > 0 && 
+            batches.some(batch => batch.quantity > 0)
+          );
+
+        const hasConsumption = taskData.materialConsumptionConfirmed === true ||
+          (taskData.consumedMaterials && taskData.consumedMaterials.length > 0) ||
+          (taskData.status === 'Potwierdzenie zużycia');
+
+        // Jeśli NIE ma rezerwacji ani konsumpcji, pokaż dialog wyboru
+        if (!hasReservations && !hasConsumption) {
+          setPendingSubmitEvent(e);
+          setQuantityChangeDialogOpen(true);
+          return; // Przerwij - czekamy na decyzję użytkownika
+        }
+      }
+    }
+    
+    // Kontynuuj normalny zapis
+    await performSubmit(e, null);
+  };
+
+  const performSubmit = async (e, shouldRecalculate) => {
+    if (e) e.preventDefault();
+    
     try {
       setSaving(true);
+      
+      // Jeśli użytkownik wybrał przeliczenie materiałów
+      if (shouldRecalculate && recipe && taskData.quantity) {
+        const newQuantity = parseFloat(taskData.quantity);
+        
+        if (recipe.ingredients && recipe.ingredients.length > 0) {
+          const updatedMaterials = recipe.ingredients.map(ingredient => ({
+            id: ingredient.id,
+            name: ingredient.name,
+            category: ingredient.category || 'Surowce',
+            quantity: preciseMultiply(ingredient.quantity || 0, newQuantity),
+            unit: ingredient.unit || 'szt.',
+            inventoryItemId: ingredient.inventoryItemId || ingredient.id
+          }));
+          
+          // Aktualizuj materiały przed zapisem
+          setTaskData(prev => ({
+            ...prev,
+            materials: updatedMaterials
+          }));
+          
+          // Zaktualizuj taskData.materials bezpośrednio dla dalszej części funkcji
+          taskData.materials = updatedMaterials;
+        }
+      }
+      
       // Walidacja danych zadania
       if (!taskData.productName) {
         showError('Nazwa produktu jest wymagana');
@@ -925,6 +995,10 @@ const TaskForm = ({ taskId }) => {
       console.error('Error saving task:', error);
     } finally {
       setSaving(false);
+      // Zresetuj stan dialogu
+      setQuantityChangeDialogOpen(false);
+      setPendingSubmitEvent(null);
+      setRecalculateMaterialsChoice(null);
     }
   };
 
@@ -1394,7 +1468,8 @@ const TaskForm = ({ taskId }) => {
       quantity: newQuantity
     }));
     
-    // Aktualizuj materiały i czas produkcji na podstawie nowej ilości
+    // Aktualizuj tylko czas produkcji i datę zakończenia (BEZ materiałów)
+    // Materiały będą przeliczone przez dialog lub przycisk "Przelicz materiały"
     if (newQuantity !== '' && recipe) {
       // Pobierz czas produkcji na jednostkę
       const productionTimePerUnit = taskData.productionTimePerUnit || 
@@ -1419,25 +1494,6 @@ const TaskForm = ({ taskId }) => {
         setTaskData(prev => ({
           ...prev,
           endDate: endDateWithWorkingHours
-        }));
-      }
-      
-      // Zaktualizuj ilości materiałów
-      if (taskData.materials && taskData.materials.length > 0) {
-        const updatedMaterials = taskData.materials.map(material => {
-          const recipeIngredient = recipe.ingredients.find(ing => ing.id === material.id);
-          if (recipeIngredient) {
-            return {
-              ...material,
-              quantity: preciseMultiply(recipeIngredient.quantity || 0, newQuantity)
-            };
-          }
-          return material;
-        });
-        
-        setTaskData(prev => ({
-          ...prev,
-          materials: updatedMaterials
         }));
       }
     }
@@ -1611,11 +1667,130 @@ const TaskForm = ({ taskId }) => {
   }
 
   return (
-    <Container maxWidth="md">
-      <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
-        <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3, color: 'primary.main', fontWeight: 'bold' }}>
-          {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : t('production.taskList.newTask') + ' produkcyjne'}
-        </Typography>
+    <>
+      {/* Dialog wyboru przeliczania materiałów */}
+      <Dialog
+        open={quantityChangeDialogOpen}
+        onClose={() => {
+          setQuantityChangeDialogOpen(false);
+          setPendingSubmitEvent(null);
+          setSaving(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CalculateIcon color="primary" />
+            <Typography variant="h6">Zmiana ilości produktu</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <AlertTitle>Wykryto zmianę ilości</AlertTitle>
+            <Typography variant="body2">
+              Ilość produktu zmieniła się z <strong>{originalQuantity}</strong> na <strong>{taskData.quantity}</strong> {taskData.unit}.
+            </Typography>
+          </Alert>
+          
+          <Typography variant="body1" gutterBottom>
+            Jak chcesz zaktualizować ilości materiałów?
+          </Typography>
+          
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Paper
+              elevation={recalculateMaterialsChoice === 'recalculate' ? 4 : 1}
+              sx={{
+                p: 2,
+                cursor: 'pointer',
+                border: recalculateMaterialsChoice === 'recalculate' ? 2 : 1,
+                borderColor: recalculateMaterialsChoice === 'recalculate' ? 'primary.main' : 'divider',
+                '&:hover': { borderColor: 'primary.main' }
+              }}
+              onClick={() => setRecalculateMaterialsChoice('recalculate')}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Checkbox
+                  checked={recalculateMaterialsChoice === 'recalculate'}
+                  color="primary"
+                />
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Przeliczyć materiały według receptury
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Wszystkie materiały zostaną przeliczone proporcjonalnie do nowej ilości zgodnie z recepturą.
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+            
+            <Paper
+              elevation={recalculateMaterialsChoice === 'keep' ? 4 : 1}
+              sx={{
+                p: 2,
+                cursor: 'pointer',
+                border: recalculateMaterialsChoice === 'keep' ? 2 : 1,
+                borderColor: recalculateMaterialsChoice === 'keep' ? 'primary.main' : 'divider',
+                '&:hover': { borderColor: 'primary.main' }
+              }}
+              onClick={() => setRecalculateMaterialsChoice('keep')}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Checkbox
+                  checked={recalculateMaterialsChoice === 'keep'}
+                  color="primary"
+                />
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Zachować obecne ilości materiałów
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Zmieniona zostanie tylko ilość produktu. Ilości materiałów pozostaną bez zmian.
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setQuantityChangeDialogOpen(false);
+              setPendingSubmitEvent(null);
+              setRecalculateMaterialsChoice(null);
+              setSaving(false);
+            }}
+            color="inherit"
+          >
+            Anuluj
+          </Button>
+          <Button
+            onClick={async () => {
+              if (recalculateMaterialsChoice === null) {
+                showWarning('Wybierz jedną z opcji');
+                return;
+              }
+              
+              const shouldRecalculate = recalculateMaterialsChoice === 'recalculate';
+              setQuantityChangeDialogOpen(false);
+              await performSubmit(pendingSubmitEvent, shouldRecalculate);
+            }}
+            variant="contained"
+            color="primary"
+            disabled={recalculateMaterialsChoice === null}
+            startIcon={<SaveIcon />}
+          >
+            Zapisz zadanie
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Container maxWidth="md">
+        <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
+          <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3, color: 'primary.main', fontWeight: 'bold' }}>
+            {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : t('production.taskList.newTask') + ' produkcyjne'}
+          </Typography>
         
         {/* Wyświetlanie numeru MO w trybie edycji */}
         {taskId && taskId !== 'new' && taskData.moNumber && (
@@ -2827,7 +3002,8 @@ const TaskForm = ({ taskId }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Container>
+    </>
   );
 };
 
