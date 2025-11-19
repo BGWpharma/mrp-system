@@ -312,6 +312,26 @@ const SortableRow = ({
           />
         </TableCell>
         
+        {/* Ilość wyprodukowana */}
+        <TableCell>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                color: item.producedQuantity ? 
+                  (item.producedQuantity >= item.quantity ? 'success.main' : 'warning.main') 
+                  : 'text.secondary',
+                fontWeight: item.producedQuantity ? 'bold' : 'normal',
+                fontSize: '0.875rem'
+              }}
+            >
+              {item.producedQuantity !== undefined && item.producedQuantity !== null ? 
+                parseFloat(item.producedQuantity).toFixed(2) : 
+                '-'}
+            </Typography>
+          </Box>
+        </TableCell>
+        
         {/* Jednostka */}
         <TableCell>
           <TextField
@@ -986,6 +1006,7 @@ const OrderForm = ({ orderId }) => {
                 productionTaskId: associatedTask.id,
                 productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                 productionStatus: associatedTask.status || taskDetails.status,
+                producedQuantity: taskDetails.totalCompletedQuantity || taskDetails.actualQuantity || 0,
                 // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
                 productionCost: productionCost,
                 // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
@@ -1809,6 +1830,7 @@ const OrderForm = ({ orderId }) => {
                 productionTaskId: taskToUse.id,
                 productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
                 productionStatus: taskToUse.status || taskDetails.status,
+                producedQuantity: taskDetails.totalCompletedQuantity || taskDetails.actualQuantity || 0,
                 // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
                 productionCost: productionCost,
                 // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
@@ -2479,19 +2501,20 @@ const OrderForm = ({ orderId }) => {
                 <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'background.paper' : 'grey.100' }}>
                   <TableRow>
                     <TableCell width="3%" sx={tableCellSx}></TableCell>
-                    <TableCell width="5%" sx={tableCellSx}></TableCell>
-                    <TableCell width="25%" sx={tableCellSx}>{t('orderForm.table.productRecipe')}</TableCell>
-                    <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.quantity')}</TableCell>
-                    <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.unit')}</TableCell>
-                    <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.priceEUR')}</TableCell>
-                    <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.value')}</TableCell>
-                    <TableCell width="14%" sx={tableCellSx}>{t('orderForm.table.totalCostPerUnit')}</TableCell>
-                    <TableCell width="14%" sx={tableCellSx}>
+                    <TableCell width="4%" sx={tableCellSx}></TableCell>
+                    <TableCell width="22%" sx={tableCellSx}>{t('orderForm.table.productRecipe')}</TableCell>
+                    <TableCell width="8%" sx={tableCellSx}>{t('orderForm.table.quantity')}</TableCell>
+                    <TableCell width="8%" sx={tableCellSx}>Wyprodukowano</TableCell>
+                    <TableCell width="7%" sx={tableCellSx}>{t('orderForm.table.unit')}</TableCell>
+                    <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.priceEUR')}</TableCell>
+                    <TableCell width="10%" sx={tableCellSx}>{t('orderForm.table.value')}</TableCell>
+                    <TableCell width="12%" sx={tableCellSx}>{t('orderForm.table.totalCostPerUnit')}</TableCell>
+                    <TableCell width="12%" sx={tableCellSx}>
                       <Tooltip title={t('orderForm.tooltips.fullProductionCostPerUnit')}>
                         {t('orderForm.table.fullProductionCostPerUnit')}
                       </Tooltip>
                     </TableCell>
-                    <TableCell width="5%" sx={tableCellSx}></TableCell>
+                    <TableCell width="4%" sx={tableCellSx}></TableCell>
                   </TableRow>
                 </TableHead>
                 <SortableContext items={orderData.items.map(item => item.id)} strategy={verticalListSortingStrategy}>
