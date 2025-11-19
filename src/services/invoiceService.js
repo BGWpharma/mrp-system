@@ -1488,9 +1488,14 @@ export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceI
     const newUsed = currentUsed + parseFloat(usedAmount);
     const proformaTotal = parseFloat(proformaData.total || 0);
     
-    // Sprawdź czy nie przekraczamy kwoty proformy
-    if (newUsed > proformaTotal) {
-      throw new Error(`Nie można rozliczyć ${usedAmount}. Dostępna kwota do rozliczenia: ${(proformaTotal - currentUsed).toFixed(2)}`);
+    // DODAJ LOG
+    console.log(`[updateProformaUsage] Proforma ${proformaData.number}: currentUsed=${currentUsed.toFixed(2)}, adding=${parseFloat(usedAmount).toFixed(2)}, newUsed=${newUsed.toFixed(2)}, total=${proformaTotal.toFixed(2)}`);
+    
+    // Sprawdź czy nie przekraczamy kwoty proformy (z tolerancją dla zaokrągleń)
+    if (preciseCompare(newUsed, proformaTotal, 0.01) > 0) {
+      const availableAmount = (proformaTotal - currentUsed).toFixed(2);
+      console.error(`[updateProformaUsage] ❌ Przekroczono limit proformy ${proformaData.number}: próba dodania ${usedAmount}, dostępne ${availableAmount}`);
+      throw new Error(`Nie można rozliczyć ${usedAmount}. Dostępna kwota do rozliczenia: ${availableAmount}`);
     }
     
     const linkedInvoices = proformaData.linkedAdvanceInvoices || [];
@@ -1501,6 +1506,8 @@ export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceI
       updatedAt: serverTimestamp(),
       updatedBy: userId
     });
+    
+    console.log(`[updateProformaUsage] ✅ Zaktualizowano proformę ${proformaData.number}, pozostało: ${(proformaTotal - newUsed).toFixed(2)}`);
     
     return { success: true, remainingAmount: proformaTotal - newUsed };
   } catch (error) {
@@ -1526,12 +1533,17 @@ export const removeProformaUsage = async (proformaId, usedAmount, targetInvoiceI
     const newUsed = Math.max(0, currentUsed - parseFloat(usedAmount));
     const linkedInvoices = (proformaData.linkedAdvanceInvoices || []).filter(id => id !== targetInvoiceId);
     
+    // DODAJ LOG
+    console.log(`[removeProformaUsage] Proforma ${proformaData.number}: currentUsed=${currentUsed.toFixed(2)}, removing=${parseFloat(usedAmount).toFixed(2)}, newUsed=${newUsed.toFixed(2)}`);
+    
     await updateDoc(proformaRef, {
       usedAsAdvancePayment: newUsed,
       linkedAdvanceInvoices: linkedInvoices,
       updatedAt: serverTimestamp(),
       updatedBy: userId
     });
+    
+    console.log(`[removeProformaUsage] ✅ Usunięto wykorzystanie z proformy ${proformaData.number}`);
     
     return { success: true };
   } catch (error) {
@@ -1660,12 +1672,16 @@ export const getAvailableProformasForOrder = async (orderId) => {
  */
 export const getAvailableProformasForOrderWithExclusion = async (orderId, excludeInvoiceId = null) => {
   try {
+    console.log(`[getAvailableProformasForOrderWithExclusion] WYWOŁANIE dla zamówienia: ${orderId}, exclude: ${excludeInvoiceId || 'brak'}`);
+    console.trace('[getAvailableProformasForOrderWithExclusion] Call stack:'); // Pokaż skąd funkcja jest wywoływana
+    
     if (!orderId) {
       return [];
     }
     
     const invoices = await getInvoicesByOrderId(orderId);
     const proformas = invoices.filter(inv => inv.isProforma);
+    console.log(`[getAvailableProformasForOrderWithExclusion] Znaleziono ${proformas.length} proform dla zamówienia`);
     
     // Pobierz dane wykluczonej faktury jeśli istnieje
     let excludedInvoiceProformUsage = [];
@@ -1674,9 +1690,10 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
         const excludedInvoice = await getInvoiceById(excludeInvoiceId);
         if (excludedInvoice && excludedInvoice.proformAllocation) {
           excludedInvoiceProformUsage = excludedInvoice.proformAllocation;
+          console.log(`[getAvailableProformasForOrderWithExclusion] Wykluczona faktura ma ${excludedInvoiceProformUsage.length} alokacji proform`);
         }
       } catch (error) {
-        console.warn('Nie udało się pobrać danych wykluczonej faktury:', error);
+        console.warn('[getAvailableProformasForOrderWithExclusion] Nie udało się pobrać danych wykluczonej faktury:', error);
       }
     }
     
@@ -1737,10 +1754,12 @@ export const getAvailableProformasForOrderWithExclusion = async (orderId, exclud
  */
 export const updateMultipleProformasUsage = async (proformAllocation, targetInvoiceId, userId) => {
   try {
+    console.log(`[updateMultipleProformasUsage] Rozpoczynam aktualizację ${proformAllocation.length} proform dla faktury ${targetInvoiceId}`);
     const results = [];
     
     for (const allocation of proformAllocation) {
       if (allocation.amount > 0) {
+        console.log(`[updateMultipleProformasUsage] Przetwarzam: ${allocation.proformaNumber} - kwota ${allocation.amount.toFixed(2)}`);
         try {
           const result = await updateProformaUsage(allocation.proformaId, allocation.amount, targetInvoiceId, userId);
           results.push({
@@ -1749,7 +1768,7 @@ export const updateMultipleProformasUsage = async (proformAllocation, targetInvo
             result
           });
         } catch (error) {
-          console.error(`Błąd podczas aktualizacji proformy ${allocation.proformaId}:`, error);
+          console.error(`[updateMultipleProformasUsage] ❌ Błąd podczas aktualizacji proformy ${allocation.proformaNumber}:`, error);
           results.push({
             proformaId: allocation.proformaId,
             success: false,
@@ -1759,9 +1778,10 @@ export const updateMultipleProformasUsage = async (proformAllocation, targetInvo
       }
     }
     
+    console.log(`[updateMultipleProformasUsage] ✅ Zakończono aktualizację proform. Sukces: ${results.filter(r => r.success).length}/${results.length}`);
     return results;
   } catch (error) {
-    console.error('Błąd podczas aktualizacji wielu proform:', error);
+    console.error('[updateMultipleProformasUsage] Błąd podczas aktualizacji wielu proform:', error);
     throw error;
   }
 };
@@ -1771,10 +1791,12 @@ export const updateMultipleProformasUsage = async (proformAllocation, targetInvo
  */
 export const removeMultipleProformasUsage = async (proformAllocation, targetInvoiceId, userId) => {
   try {
+    console.log(`[removeMultipleProformasUsage] Rozpoczynam usuwanie wykorzystania ${proformAllocation.length} proform dla faktury ${targetInvoiceId}`);
     const results = [];
     
     for (const allocation of proformAllocation) {
       if (allocation.amount > 0) {
+        console.log(`[removeMultipleProformasUsage] Przetwarzam: ${allocation.proformaNumber} - kwota ${allocation.amount.toFixed(2)}`);
         try {
           await removeProformaUsage(allocation.proformaId, allocation.amount, targetInvoiceId, userId);
           results.push({
@@ -1782,7 +1804,7 @@ export const removeMultipleProformasUsage = async (proformAllocation, targetInvo
             success: true
           });
         } catch (error) {
-          console.error(`Błąd podczas usuwania wykorzystania proformy ${allocation.proformaId}:`, error);
+          console.error(`[removeMultipleProformasUsage] ❌ Błąd podczas usuwania wykorzystania proformy ${allocation.proformaNumber}:`, error);
           results.push({
             proformaId: allocation.proformaId,
             success: false,
@@ -1792,9 +1814,10 @@ export const removeMultipleProformasUsage = async (proformAllocation, targetInvo
       }
     }
     
+    console.log(`[removeMultipleProformasUsage] ✅ Zakończono usuwanie wykorzystania proform. Sukces: ${results.filter(r => r.success).length}/${results.length}`);
     return results;
   } catch (error) {
-    console.error('Błąd podczas usuwania wykorzystania wielu proform:', error);
+    console.error('[removeMultipleProformasUsage] Błąd podczas usuwania wykorzystania wielu proform:', error);
     throw error;
   }
 };

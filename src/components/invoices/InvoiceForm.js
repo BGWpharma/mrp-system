@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -72,6 +72,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { formatDateForInput } from '../../utils/dateUtils';
+import { preciseCompare } from '../../utils/mathUtils';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -377,7 +378,7 @@ const InvoiceForm = ({ invoiceId }) => {
     setFilteredOrders(customerOrders);
   };
 
-  const fetchRelatedInvoices = async (orderId) => {
+  const fetchRelatedInvoices = useCallback(async (orderId) => {
     if (!orderId) {
       setRelatedInvoices([]);
       setAvailableProformaAmount(null);
@@ -385,40 +386,47 @@ const InvoiceForm = ({ invoiceId }) => {
       return;
     }
     
+    console.log(`[fetchRelatedInvoices] Rozpoczynam pobieranie dla zamówienia: ${orderId}, faktura: ${invoiceId || 'nowa'}`);
     setLoadingRelatedInvoices(true);
     try {
       const invoices = await getInvoicesByOrderId(orderId);
       // Filtruj tylko faktury inne niż obecna (jeśli edytujemy istniejącą)
       const filteredInvoices = invoices.filter(inv => inv.id !== invoiceId);
       setRelatedInvoices(filteredInvoices);
+      console.log(`[fetchRelatedInvoices] ✅ Załadowano ${filteredInvoices.length} powiązanych faktur`);
       
       // Pobierz wszystkie dostępne proformy z ich kwotami
       // Jeśli edytujemy istniejącą fakturę, uwzględnij to przy obliczaniu dostępnych kwot
+      console.log(`[fetchRelatedInvoices] Pobieranie dostępnych proform...`);
       const proformasWithAmounts = await getAvailableProformasForOrderWithExclusion(orderId, invoiceId);
       // Filtruj proformy inne niż obecna faktura (jeśli edytujemy proformę)
       const filteredProformas = proformasWithAmounts.filter(proforma => proforma.id !== invoiceId);
       setAvailableProformas(filteredProformas);
+      console.log(`[fetchRelatedInvoices] ✅ Załadowano ${filteredProformas.length} dostępnych proform`);
       
-      // Jeśli jest już wybrana proforma, zaktualizuj jej dostępną kwotę
-      if (invoice.selectedProformaId) {
-        const selectedProforma = filteredProformas.find(p => p.id === invoice.selectedProformaId);
-        if (selectedProforma) {
-          setAvailableProformaAmount(selectedProforma.amountInfo);
+      // Aktualizacja availableProformaAmount dla starego systemu kompatybilności
+      setInvoice(prev => {
+        if (prev.selectedProformaId) {
+          const selectedProforma = filteredProformas.find(p => p.id === prev.selectedProformaId);
+          if (selectedProforma) {
+            setAvailableProformaAmount(selectedProforma.amountInfo);
+          } else {
+            setAvailableProformaAmount(null);
+          }
         } else {
           setAvailableProformaAmount(null);
         }
-      } else {
-        setAvailableProformaAmount(null);
-      }
+        return prev; // Zwróć poprzedni stan bez zmian
+      });
     } catch (error) {
-      console.error('Błąd podczas pobierania powiązanych faktur:', error);
+      console.error('[fetchRelatedInvoices] ❌ Błąd podczas pobierania powiązanych faktur:', error);
       setRelatedInvoices([]);
       setAvailableProformaAmount(null);
       setAvailableProformas([]);
     } finally {
       setLoadingRelatedInvoices(false);
     }
-  };
+  }, [invoiceId]); // Tylko invoiceId w dependencies
 
   // Funkcja do obsługi zmiany alokacji proform
   const handleProformaAllocationChange = (proformaId, amount, proformaNumber) => {
@@ -1157,9 +1165,11 @@ const InvoiceForm = ({ invoiceId }) => {
           return false;
         }
         
-        // Dodaj tolerancję dla różnic zaokrągleń (1 grosz = 0.01)
+        // POPRAWKA: Użyj preciseCompare zamiast dodawania tolerancji do limitu
+        // Tolerancja dla różnic zaokrągleń (1 grosz = 0.01)
         const tolerance = 0.01;
-        if (allocation.amount > (proforma.amountInfo.available + tolerance)) {
+        const exceedsLimit = preciseCompare(allocation.amount, proforma.amountInfo.available, tolerance) > 0;
+        if (exceedsLimit) {
           showError(`Kwota do rozliczenia z proformy ${allocation.proformaNumber} (${allocation.amount.toFixed(2)}) przekracza dostępną kwotę (${proforma.amountInfo.available.toFixed(2)})`);
           return false;
         }
@@ -1168,11 +1178,15 @@ const InvoiceForm = ({ invoiceId }) => {
     
     // Compatibility: sprawdź stary system selectedProformaId
     else if (!invoice.isProforma && invoice.settledAdvancePayments > 0 && invoice.selectedProformaId) {
-      if (availableProformaAmount && invoice.settledAdvancePayments > (availableProformaAmount.available + 0.01)) {
-        const selectedProforma = availableProformas.find(p => p.id === invoice.selectedProformaId);
-        const proformaNumber = selectedProforma?.number || 'nieznana';
-        showError(`Kwota zaliczek (${invoice.settledAdvancePayments}) przekracza dostępną kwotę z proformy ${proformaNumber} (${availableProformaAmount.available.toFixed(2)})`);
-        return false;
+      if (availableProformaAmount) {
+        const tolerance = 0.01;
+        const exceedsLimit = preciseCompare(invoice.settledAdvancePayments, availableProformaAmount.available, tolerance) > 0;
+        if (exceedsLimit) {
+          const selectedProforma = availableProformas.find(p => p.id === invoice.selectedProformaId);
+          const proformaNumber = selectedProforma?.number || 'nieznana';
+          showError(`Kwota zaliczek (${invoice.settledAdvancePayments}) przekracza dostępną kwotę z proformy ${proformaNumber} (${availableProformaAmount.available.toFixed(2)})`);
+          return false;
+        }
       }
     }
     
@@ -2205,15 +2219,22 @@ const InvoiceForm = ({ invoiceId }) => {
                                 inputProps: { 
                                   min: 0, 
                                   step: 0.01,
-                                  max: proforma.amountInfo.available + 0.01
+                                  max: proforma.amountInfo.available
                                 }
                               }}
-                              error={allocatedAmount > (proforma.amountInfo.available + 0.01)}
-                              helperText={
-                                allocatedAmount > (proforma.amountInfo.available + 0.01)
-                                  ? `${t('invoices.form.fields.exceedsAvailable')} (${proforma.amountInfo.available.toFixed(2)})`
-                                  : null
-                              }
+                              error={(() => {
+                                // POPRAWKA: Użyj preciseCompare dla walidacji w czasie rzeczywistym
+                                const tolerance = 0.01;
+                                return preciseCompare(allocatedAmount, proforma.amountInfo.available, tolerance) > 0;
+                              })()}
+                              helperText={(() => {
+                                const tolerance = 0.01;
+                                const exceedsLimit = preciseCompare(allocatedAmount, proforma.amountInfo.available, tolerance) > 0;
+                                if (exceedsLimit) {
+                                  return `${t('invoices.form.fields.exceedsAvailable')} (${proforma.amountInfo.available.toFixed(2)})`;
+                                }
+                                return `${t('invoices.form.fields.available')}: ${proforma.amountInfo.available.toFixed(2)}`;
+                              })()}
                               disabled={proforma.amountInfo.available <= 0}
                             />
                           </Grid>

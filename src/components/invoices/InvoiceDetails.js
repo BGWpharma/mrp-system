@@ -228,7 +228,12 @@ const InvoiceDetails = () => {
   
   const handleViewOrder = () => {
     if (invoice?.orderId) {
-      navigate(`/orders/${invoice.orderId}`);
+      // Refaktury i faktury zakupowe kierują do Purchase Orders
+      if (invoice.isRefInvoice || invoice.originalOrderType === 'purchase') {
+        navigate(`/purchase-orders/${invoice.orderId}`);
+      } else {
+        navigate(`/orders/${invoice.orderId}`);
+      }
     }
   };
   
