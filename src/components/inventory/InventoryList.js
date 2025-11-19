@@ -241,7 +241,7 @@ const InventoryList = () => {
 
   // Dodaj efekt do pobierania wszystkich rezerwacji gdy wybrana jest zakładka Rezerwacje
   useEffect(() => {
-    if (currentTab === 3) {
+    if (currentTab === 5) {
       fetchAllReservations();
     }
   }, [currentTab]);
@@ -1734,7 +1734,7 @@ const InventoryList = () => {
     } else if (currentTab === 1) {
       // Zakładka "Lokalizacje" bez wybranego magazynu
       fetchWarehouses();
-    } else if (currentTab === 3) {
+    } else if (currentTab === 5) {
       // Zakładka "Rezerwacje"
       fetchAllReservations();
     }

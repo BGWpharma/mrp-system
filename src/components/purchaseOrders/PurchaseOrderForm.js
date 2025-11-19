@@ -470,7 +470,8 @@ const PurchaseOrderForm = ({ orderId }) => {
         paymentDueDate: '', // Termin płatności
         plannedDeliveryDate: '', // Planowana data dostawy
         actualDeliveryDate: '', // Rzeczywista data dostawy
-        expiryDate: '' // Data ważności
+        expiryDate: '', // Data ważności
+        noExpiryDate: false // Brak daty ważności
       }]
     }));
   };
@@ -841,8 +842,13 @@ const PurchaseOrderForm = ({ orderId }) => {
               exchangeRate: updatedItems[index].currency === poData.currency ? 1 : (updatedItems[index].exchangeRate || 0),
               invoiceNumber: updatedItems[index].invoiceNumber || '',
               invoiceDate: updatedItems[index].invoiceDate || '',
+              paymentDueDate: updatedItems[index].paymentDueDate || '',
               plannedDeliveryDate: updatedItems[index].plannedDeliveryDate || '',
-              actualDeliveryDate: updatedItems[index].actualDeliveryDate || ''
+              actualDeliveryDate: updatedItems[index].actualDeliveryDate || '',
+              // Automatycznie oznacz "brak daty ważności" dla opakowań
+              noExpiryDate: (selectedItem.category === 'Opakowania jednostkowe' || selectedItem.category === 'Opakowania zbiorcze') ? true : (updatedItems[index].noExpiryDate || false),
+              // Wyczyść datę ważności dla opakowań
+              expiryDate: (selectedItem.category === 'Opakowania jednostkowe' || selectedItem.category === 'Opakowania zbiorcze') ? null : (updatedItems[index].expiryDate || '')
             };
             
             console.log(`[DEBUG] Aktualizacja pozycji z ceną dostawcy:`, updatedItems[index]);
@@ -850,6 +856,11 @@ const PurchaseOrderForm = ({ orderId }) => {
             
             // Pokaż informację o cenie dostawcy
             showSuccess(`Zastosowano cenę dostawcy: ${supplierPrice.price} ${poData.currency}`);
+            
+            // Pokaż informację o automatycznym zaznaczeniu "brak daty ważności" dla opakowań
+            if (selectedItem.category === 'Opakowania jednostkowe' || selectedItem.category === 'Opakowania zbiorcze') {
+              showSuccess('Automatycznie zaznaczono "brak daty ważności" dla opakowania');
+            }
             return;
           } else {
             console.log(`[DEBUG] Nie znaleziono ceny dostawcy`);
@@ -886,12 +897,22 @@ const PurchaseOrderForm = ({ orderId }) => {
       exchangeRate: updatedItems[index].currency === poData.currency ? 1 : (updatedItems[index].exchangeRate || 0),
       invoiceNumber: updatedItems[index].invoiceNumber || '',
       invoiceDate: updatedItems[index].invoiceDate || '',
+      paymentDueDate: updatedItems[index].paymentDueDate || '',
       plannedDeliveryDate: updatedItems[index].plannedDeliveryDate || '',
-      actualDeliveryDate: updatedItems[index].actualDeliveryDate || ''
+      actualDeliveryDate: updatedItems[index].actualDeliveryDate || '',
+      // Automatycznie oznacz "brak daty ważności" dla opakowań
+      noExpiryDate: (selectedItem.category === 'Opakowania jednostkowe' || selectedItem.category === 'Opakowania zbiorcze') ? true : (updatedItems[index].noExpiryDate || false),
+      // Wyczyść datę ważności dla opakowań
+      expiryDate: (selectedItem.category === 'Opakowania jednostkowe' || selectedItem.category === 'Opakowania zbiorcze') ? null : (updatedItems[index].expiryDate || '')
     };
     
     console.log(`[DEBUG] Aktualizacja pozycji bez ceny dostawcy:`, updatedItems[index]);
     setPoData(prev => ({ ...prev, items: updatedItems }));
+    
+    // Pokaż informację o automatycznym zaznaczeniu "brak daty ważności" dla opakowań
+    if (selectedItem.category === 'Opakowania jednostkowe' || selectedItem.category === 'Opakowania zbiorcze') {
+      showSuccess('Automatycznie zaznaczono "brak daty ważności" dla opakowania');
+    }
   };
   
   // Funkcja savePurchaseOrder do zapisu lub aktualizacji zamówienia
