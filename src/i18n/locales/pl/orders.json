@@ -206,7 +206,8 @@
       "refreshCmrDocuments": "Odśwież listę dokumentów CMR",
       "clickToSeeInvoiceDetails": "Kliknij aby zobaczyć szczegóły faktur ({{count}})",
       "clickToSeeAllInvoices": "Kliknij aby zobaczyć wszystkie faktury",
-      "viewOrderDetails": "Zobacz szczegóły zamówienia"
+      "viewOrderDetails": "Zobacz szczegóły zamówienia",
+      "clickToChangeStatus": "Kliknij aby zmienić status zamówienia"
     },
     "deliveryProof": {
       "altText": "Dowód dostawy",
@@ -341,7 +342,9 @@
       "emailSent": "Email został wysłany",
       "emailError": "Błąd podczas wysyłania emaila",
       "orderNumberUpdated": "Numer zamówienia został pomyślnie zaktualizowany",
-      "orderNumberUpdateError": "Błąd podczas aktualizacji numeru zamówienia"
+      "orderNumberUpdateError": "Błąd podczas aktualizacji numeru zamówienia",
+      "statusUpdated": "Status zamówienia został zaktualizowany",
+      "statusUpdateError": "Nie udało się zaktualizować statusu zamówienia"
     },
     "dialogs": {
       "purchaseOrder": {
@@ -385,6 +388,14 @@
         "cancel": "Anuluj",
         "updating": "Aktualizuję...",
         "warningMessage": "Ta operacja jest nieodwracalna. Upewnij się, że nowy numer jest poprawny."
+      },
+      "statusChange": {
+        "title": "Zmiana statusu zamówienia",
+        "selectStatus": "Wybierz nowy status dla zamówienia:",
+        "orderNumber": "Numer:",
+        "status": "Status",
+        "cancel": "Anuluj",
+        "update": "Zaktualizuj"
       }
     }
   },

@@ -62,7 +62,7 @@ import {
   OpenInNew as OpenInNewIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR } from '../../services/orderService';
+import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR, updateOrderStatus } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatTimestamp, formatDate } from '../../utils/dateUtils';
@@ -365,6 +365,8 @@ const OrderDetails = () => {
   const [isUpdatingOrderNumber, setIsUpdatingOrderNumber] = useState(false);
   const [updateOrderNumberDialogOpen, setUpdateOrderNumberDialogOpen] = useState(false);
   const [isRefreshingCmr, setIsRefreshingCmr] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [newStatus, setNewStatus] = useState('');
 
   // 🚀 LAZY LOADING State Management
   const [activeSection, setActiveSection] = useState('basic'); // basic, production, documents, history
@@ -971,6 +973,28 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
       showError(`Nie udało się odświeżyć ilości: ${error.message}`);
     } finally {
       setIsRefreshingCmr(false);
+    }
+  };
+
+  // Funkcje obsługi zmiany statusu
+  const handleStatusClick = () => {
+    setNewStatus(order.status || 'Nowe');
+    setStatusDialogOpen(true);
+  };
+
+  const handleStatusUpdate = async () => {
+    try {
+      await updateOrderStatus(order.id, newStatus, currentUser.uid);
+      
+      // Odśwież dane zamówienia
+      invalidateCache(order.id);
+      await refreshOrderData();
+      
+      showSuccess(t('orderDetails.notifications.statusUpdated'));
+      setStatusDialogOpen(false);
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji statusu zamówienia:', error);
+      showError(t('orderDetails.notifications.statusUpdateError'));
     }
   };
 
@@ -1761,11 +1785,16 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ mr: 2 }}>{t('orderDetails.sections.status')}:</Typography>
-                <Chip 
-                  label={order.status} 
-                  color={getStatusChipColor(order.status)}
-                  size="medium"
-                />
+                <Tooltip title={t('orderDetails.tooltips.clickToChangeStatus')}>
+                  <Chip 
+                    label={order.status} 
+                    color={getStatusChipColor(order.status)}
+                    size="medium"
+                    clickable
+                    onClick={handleStatusClick}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                </Tooltip>
               </Box>
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <EventNoteIcon sx={{ mr: 1 }} fontSize="small" />
@@ -2937,6 +2966,40 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             </Box>
           )}
         </Popover>
+
+        {/* Dialog zmiany statusu */}
+        <Dialog
+          open={statusDialogOpen}
+          onClose={() => setStatusDialogOpen(false)}
+        >
+          <DialogTitle>{t('orderDetails.dialogs.statusChange.title')}</DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ mb: 2 }}>
+              {t('orderDetails.dialogs.statusChange.selectStatus')}
+              <br />
+              {t('orderDetails.dialogs.statusChange.orderNumber')} {order?.orderNumber || order?.id?.substring(0, 8).toUpperCase()}
+            </DialogContentText>
+            <FormControl fullWidth>
+              <InputLabel id="new-status-label">{t('orderDetails.dialogs.statusChange.status')}</InputLabel>
+              <Select
+                labelId="new-status-label"
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                label={t('orderDetails.dialogs.statusChange.status')}
+              >
+                {ORDER_STATUSES.map((status) => (
+                  <MenuItem key={status.value} value={status.value}>
+                    {status.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setStatusDialogOpen(false)}>{t('orderDetails.dialogs.statusChange.cancel')}</Button>
+            <Button color="primary" onClick={handleStatusUpdate}>{t('orderDetails.dialogs.statusChange.update')}</Button>
+          </DialogActions>
+        </Dialog>
 
       </Box>
     </div>
