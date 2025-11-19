@@ -16,6 +16,7 @@
   "csvExport": "Raport CSV",
   "table": {
     "invoiceNumber": "Numer faktury",
+    "orderNumber": "Numer zamówienia",
     "client": "Klient",
     "issueDate": "Data wystawienia",
     "dueDate": "Termin płatności",

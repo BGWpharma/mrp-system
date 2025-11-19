@@ -108,7 +108,8 @@ const InvoicesList = () => {
       const searchTermLower = listState.searchTerm.toLowerCase();
       results = results.filter(invoice => 
         (invoice.number && invoice.number.toLowerCase().includes(searchTermLower)) ||
-        (invoice.customer?.name && invoice.customer.name.toLowerCase().includes(searchTermLower))
+        (invoice.customer?.name && invoice.customer.name.toLowerCase().includes(searchTermLower)) ||
+        (invoice.orderNumber && invoice.orderNumber.toLowerCase().includes(searchTermLower))
       );
     }
 
@@ -240,8 +241,8 @@ const InvoicesList = () => {
           bValue = parseFloat(bValue) || 0;
         }
 
-        // Obsługa stringów (number, status)
-        if (tableSort.field === 'number' || tableSort.field === 'status') {
+        // Obsługa stringów (number, status, orderNumber)
+        if (tableSort.field === 'number' || tableSort.field === 'status' || tableSort.field === 'orderNumber') {
           aValue = (aValue || '').toString().toLowerCase();
           bValue = (bValue || '').toString().toLowerCase();
         }
@@ -779,6 +780,7 @@ const InvoicesList = () => {
                 <TableHead>
                   <TableRow>
                     <SortableTableCell id="number" label={t('invoices.table.invoiceNumber')} />
+                    <SortableTableCell id="orderNumber" label={t('invoices.table.orderNumber')} />
                     <SortableTableCell id="customer" label={t('invoices.table.client')} />
                     <SortableTableCell id="issueDate" label={t('invoices.table.issueDate')} />
                     <SortableTableCell id="dueDate" label={t('invoices.table.dueDate')} />
@@ -791,7 +793,7 @@ const InvoicesList = () => {
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center">
+                      <TableCell colSpan={9} align="center">
                         {t('invoices.noInvoicesFound')}
                       </TableCell>
                     </TableRow>
@@ -833,6 +835,25 @@ const InvoicesList = () => {
                                 />
                               )}
                             </Box>
+                          </TableCell>
+                          <TableCell>
+                            {invoice.orderNumber ? (
+                              <Link
+                                component={RouterLink}
+                                to={(invoice.isRefInvoice || invoice.originalOrderType === 'purchase')
+                                  ? `/purchase-orders/${invoice.orderId}` 
+                                  : `/orders/${invoice.orderId}`}
+                                variant="body2"
+                                sx={{ 
+                                  textDecoration: 'none',
+                                  '&:hover': { textDecoration: 'underline' }
+                                }}
+                              >
+                                {invoice.orderNumber}
+                              </Link>
+                            ) : (
+                              '-'
+                            )}
                           </TableCell>
                           <TableCell>
                             <Button

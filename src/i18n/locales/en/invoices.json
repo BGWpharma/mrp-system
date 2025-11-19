@@ -16,6 +16,7 @@
   "csvExport": "CSV Report",
   "table": {
     "invoiceNumber": "Invoice Number",
+    "orderNumber": "Order Number",
     "client": "Client",
     "issueDate": "Issue Date",
     "dueDate": "Due Date",
