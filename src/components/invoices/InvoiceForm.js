@@ -1504,21 +1504,6 @@ const InvoiceForm = ({ invoiceId }) => {
                   />
                 </LocalizationProvider>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label={t('invoices.form.fields.requiredAdvancePayment')}
-                  name="requiredAdvancePaymentPercentage"
-                  type="number"
-                  value={invoice.requiredAdvancePaymentPercentage || ''}
-                  onChange={handleChange}
-                  inputProps={{ min: 0, max: 100, step: 0.1 }}
-                  helperText={t('invoices.form.fields.requiredAdvancePaymentHelper')}
-                  InputProps={{
-                    endAdornment: <Typography variant="body2" sx={{ color: 'text.secondary' }}>%</Typography>
-                  }}
-                />
-              </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth>
                   <InputLabel>{t('invoices.form.fields.invoiceStatus')}</InputLabel>
