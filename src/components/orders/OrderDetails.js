@@ -1504,7 +1504,13 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
     if (item.productionTaskId && item.productionStatus) {
       const statusColor = getProductionStatusColor(item.productionStatus);
       
-      // Stwórz chip z możliwością kliknięcia, który przeniesie do szczegółów zadania
+      // Handler dla lewego kliknięcia - nawigacja przez React Router
+      const handleClick = (e) => {
+        e.preventDefault();
+        navigate(`/production/tasks/${item.productionTaskId}`);
+      };
+      
+      // Stwórz chip jako link, który będzie działał ze standardowym menu kontekstowym
       return (
         <Tooltip title={`Przejdź do zadania produkcyjnego ${item.productionTaskNumber || item.productionTaskId}`}>
           <Chip
@@ -1512,8 +1518,13 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             size="small"
             color={statusColor}
             clickable
-            onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
-            sx={{ cursor: 'pointer' }}
+            component="a"
+            href={`/production/tasks/${item.productionTaskId}`}
+            onClick={handleClick}
+            sx={{ 
+              cursor: 'pointer',
+              textDecoration: 'none'
+            }}
           />
         </Tooltip>
       );
@@ -1576,6 +1587,11 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
       else if (task.status === 'W trakcie' || task.status === 'Wstrzymane') statusColor = 'warning';
       else if (task.status === 'Zaplanowane') statusColor = 'primary';
       
+      const handleClick = (e) => {
+        e.preventDefault();
+        navigate(`/production/tasks/${task.id}`);
+      };
+      
       return (
         <Tooltip title={`Przejdź do zadania produkcyjnego ${task.moNumber || task.id}`}>
           <Chip
@@ -1583,9 +1599,13 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             size="small"
             color={statusColor}
             clickable
-            component={RouterLink}
-            to={`/production/tasks/${task.id}`}
-            sx={{ cursor: 'pointer' }}
+            component="a"
+            href={`/production/tasks/${task.id}`}
+            onClick={handleClick}
+            sx={{ 
+              cursor: 'pointer',
+              textDecoration: 'none'
+            }}
           />
         </Tooltip>
       );
@@ -1957,7 +1977,7 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
               <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.product')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.quantity')}</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.shipped')}</TableCell>
+                <TableCell sx={{ color: 'inherit', minWidth: 180 }} align="right">{t('orderDetails.table.shipped')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.price')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.value')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.invoicedAmount')}</TableCell>
@@ -1981,7 +2001,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.totalItemValue')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.totalCostPerUnit')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.fullProductionCostPerUnit')}</TableCell>
-                <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -2271,21 +2290,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                       }
                     })()}
                   </TableCell>
-                  <TableCell>
-                    {item.productionTaskId ? (
-                      <Tooltip title={`Przejdź do zadania produkcyjnego ${item.productionTaskNumber || item.productionTaskId}`}>
-                        <IconButton 
-                          size="small" 
-                          color="primary"
-                          onClick={() => navigate(`/production/tasks/${item.productionTaskId}`)}
-                        >
-                          <EngineeringIcon />
-                        </IconButton>
-                      </Tooltip>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">-</Typography>
-                    )}
-                  </TableCell>
                 </TableRow>
               ))}
               {/* Wiersz podsumowania */}
@@ -2477,10 +2481,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                   {/* Pełny koszt produkcji na jednostkę - nie sumujemy */}
                   -
                 </TableCell>
-                <TableCell align="right">
-                  {/* Akcje - nie sumujemy */}
-                  -
-                </TableCell>
               </TableRow>
               
               {/* Rabat globalny */}
@@ -2496,7 +2496,7 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                       return subtotal * (parseFloat(order.globalDiscount) / 100);
                     })())}
                   </TableCell>
-                  <TableCell colSpan={7} />
+                  <TableCell colSpan={9} />
                 </TableRow>
               )}
               
@@ -2508,7 +2508,7 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                 <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
                   {formatCurrency(calculateOrderTotalValue())}
                 </TableCell>
-                <TableCell colSpan={7} />
+                <TableCell colSpan={9} />
               </TableRow>
             </TableBody>
           </Table>
