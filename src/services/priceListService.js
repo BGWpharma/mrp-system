@@ -378,6 +378,54 @@ export const getPriceForCustomerProduct = async (customerId, productId, isRecipe
 };
 
 /**
+ * Pobiera pełne dane pozycji z listy cenowej dla produktu danego klienta
+ * @param {string} customerId - ID klienta
+ * @param {string} productId - ID produktu
+ * @param {boolean} isRecipe - Czy produkt jest recepturą
+ * @returns {Promise<object|null>} - Obiekt pozycji listy cenowej lub null jeśli nie znaleziono
+ */
+export const getPriceListItemForCustomerProduct = async (customerId, productId, isRecipe = false) => {
+  if (!customerId || !productId) return null;
+  
+  try {
+    // Pobierz wszystkie aktywne listy cenowe dla klienta
+    const priceLists = await getActivePriceListsByCustomer(customerId);
+    
+    if (priceLists.length === 0) return null;
+    
+    // Szukaj produktu w listach cenowych
+    let bestItem = null;
+    let newestDate = null;
+    
+    for (const priceList of priceLists) {
+      // Pobierz wszystkie pozycje z listy cenowej
+      const items = await getPriceListItems(priceList.id);
+      
+      // Znajdź pozycję dla danego produktu
+      const item = items.find(item => 
+        item.productId === productId && 
+        (isRecipe === true ? !!item.isRecipe === true : true)
+      );
+      
+      if (item) {
+        const updatedAt = priceList.updatedAt ? new Date(priceList.updatedAt.seconds * 1000) : new Date(0);
+        
+        // Jeśli pierwsza znaleziona pozycja lub nowsza lista cenowa
+        if (bestItem === null || (newestDate !== null && updatedAt > newestDate)) {
+          bestItem = item;
+          newestDate = updatedAt;
+        }
+      }
+    }
+    
+    return bestItem;
+  } catch (error) {
+    console.error('Błąd podczas pobierania pozycji z listy cenowej dla klienta:', error);
+    return null;
+  }
+};
+
+/**
  * Pobiera wszystkie listy cenowe zawierające daną recepturę
  * @param {string} recipeId - ID receptury
  * @returns {Promise<Array>} - Lista obiektów zawierających informacje o liście cenowej i pozycji

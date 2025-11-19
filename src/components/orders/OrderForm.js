@@ -1378,17 +1378,27 @@ const OrderForm = ({ orderId }) => {
       let productId = (!isRecipe && type !== 'service') ? product.id : null;
       let minOrderQuantity = 0;
       let lastUsageInfo = null;
+      let priceListNotes = '';
       
       // Jeżeli mamy klienta, spróbuj pobrać cenę z listy cenowej
       if (orderData.customer?.id) {
         try {
-          // Pobierz cenę z listy cenowej klienta, wskazując czy to receptura czy produkt
-          const priceListItem = await getPriceForCustomerProduct(orderData.customer.id, product.id, isRecipe);
+          // Importuj nową funkcję pobierającą pełne dane pozycji z listy cenowej
+          const { getPriceListItemForCustomerProduct } = await import('../../services/priceListService');
+          
+          // Pobierz pełny obiekt pozycji z listy cenowej zamiast tylko ceny
+          const priceListItem = await getPriceListItemForCustomerProduct(orderData.customer.id, product.id, isRecipe);
           
           if (priceListItem) {
-            console.log(`Znaleziono cenę w liście cenowej: ${priceListItem} dla ${name} (${isRecipe ? 'receptura' : 'produkt/usługa'})`);
-            price = priceListItem;
+            console.log(`Znaleziono w liście cenowej: ${priceListItem.productName}, cena: ${priceListItem.price} (${isRecipe ? 'receptura' : 'produkt/usługa'})`);
+            price = priceListItem.price;
             fromPriceList = true;
+            
+            // Dla usług (ale nie receptur) zapisz uwagi z listy cenowej do opisu
+            if (type === 'service' && priceListItem.notes) {
+              priceListNotes = priceListItem.notes;
+              console.log(`Dodano uwagi z listy cenowej do opisu usługi: ${priceListNotes}`);
+            }
           } else {
             console.log(`Nie znaleziono ceny w liście cenowej dla ${name} (${isRecipe ? 'receptura' : 'produkt/usługa'})`);
           }
@@ -1510,7 +1520,8 @@ const OrderForm = ({ orderId }) => {
         itemType,
         minOrderQuantity,
         originalUnit: unit,
-        lastUsageInfo: lastUsageInfo // Dodajemy informacje o ostatnim użyciu
+        lastUsageInfo: lastUsageInfo, // Dodajemy informacje o ostatnim użyciu
+        description: priceListNotes || updatedItems[index].description || '' // Wypełnij opis uwagami z listy cenowej (tylko dla usług)
       };
       
       setOrderData(prev => ({
