@@ -103,7 +103,9 @@ const translations = {
     exportToCsv: 'Eksportuj do CSV',
     reportSummary: 'Podsumowanie raportu',
     by: 'według',
-    statusReport: 'Statystyki według statusu'
+    statusReport: 'Statystyki według statusu',
+    totalGoods: 'Suma wysłanych towarów',
+    totalQuantity: 'Całkowita ilość'
   },
   en: {
     reportTitle: 'CMR Report',
@@ -132,7 +134,9 @@ const translations = {
     exportToCsv: 'Export to CSV',
     reportSummary: 'Report Summary',
     by: 'by',
-    statusReport: 'Status Statistics'
+    statusReport: 'Status Statistics',
+    totalGoods: 'Total Goods Shipped',
+    totalQuantity: 'Total Quantity'
   }
 };
 
@@ -614,6 +618,39 @@ const CmrListPage = () => {
     Object.entries(reportData.statistics.byStatus).forEach(([status, count]) => {
       rows.push([translateStatus(status), count]);
     });
+    
+    // Dodajemy sumę wysłanych towarów (jeśli opcja includeItems jest włączona)
+    if (reportFilters.includeItems) {
+      rows.push([]);
+      rows.push([t.totalGoods]);
+      rows.push([t.itemDescription, t.totalQuantity, t.itemUnit]);
+      
+      // Oblicz sumę ilości dla każdego produktu
+      const productTotals = {};
+      
+      reportData.documents.forEach(doc => {
+        if (doc.items && doc.items.length > 0) {
+          doc.items.forEach(item => {
+            const description = item.description || 'Brak opisu';
+            const quantity = parseFloat(item.quantity || item.numberOfPackages || 0);
+            const unit = item.unit || item.packagingMethod || 'szt.';
+            
+            if (!productTotals[description]) {
+              productTotals[description] = {
+                quantity: 0,
+                unit: unit
+              };
+            }
+            productTotals[description].quantity += quantity;
+          });
+        }
+      });
+      
+      // Dodaj wiersze z sumami
+      Object.entries(productTotals).forEach(([description, data]) => {
+        rows.push([description, data.quantity, data.unit]);
+      });
+    }
     
     // Tworzymy zawartość pliku CSV
     const csvContent = [
@@ -1236,6 +1273,62 @@ const CmrListPage = () => {
                   )}
                 </Box>
               ))}
+              
+              {/* Suma wysłanych towarów */}
+              {reportFilters.includeItems && (
+                <>
+                  <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>
+                    {t.totalGoods}
+                  </Typography>
+                  
+                  <TableContainer component={Paper} sx={{ mb: 3 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{t.itemDescription}</TableCell>
+                          <TableCell align="right">{t.totalQuantity}</TableCell>
+                          <TableCell align="right">{t.itemUnit}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {(() => {
+                          // Oblicz sumę ilości dla każdego produktu
+                          const productTotals = {};
+                          
+                          reportData.documents.forEach(doc => {
+                            if (doc.items && doc.items.length > 0) {
+                              doc.items.forEach(item => {
+                                const description = item.description || 'Brak opisu';
+                                const quantity = parseFloat(item.quantity || item.numberOfPackages || 0);
+                                const unit = item.unit || item.packagingMethod || 'szt.';
+                                
+                                if (!productTotals[description]) {
+                                  productTotals[description] = {
+                                    quantity: 0,
+                                    unit: unit
+                                  };
+                                }
+                                productTotals[description].quantity += quantity;
+                              });
+                            }
+                          });
+                          
+                          // Wyświetl podsumowanie
+                          return Object.entries(productTotals).map(([description, data]) => (
+                            <TableRow key={description}>
+                              <TableCell>{description}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                                {data.quantity}
+                              </TableCell>
+                              <TableCell align="right">{data.unit}</TableCell>
+                            </TableRow>
+                          ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </>
+              )}
               
               <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
                 <Button

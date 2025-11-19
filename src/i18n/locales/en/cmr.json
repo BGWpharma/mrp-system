@@ -82,7 +82,9 @@
       "includeItems": "Items Included",
       "statusStatistics": "Status Statistics",
       "documentCount": "Document Count",
-      "documentsInReport": "Documents in Report"
+      "documentsInReport": "Documents in Report",
+      "totalGoods": "Total Goods Shipped",
+      "totalQuantity": "Total Quantity"
     },
     "common": {
       "yes": "Yes",

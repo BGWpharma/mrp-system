@@ -82,7 +82,9 @@
       "includeItems": "Uwzględniono pozycje",
       "statusStatistics": "Statystyki według statusu",
       "documentCount": "Liczba dokumentów",
-      "documentsInReport": "Dokumenty w raporcie"
+      "documentsInReport": "Dokumenty w raporcie",
+      "totalGoods": "Suma wysłanych towarów",
+      "totalQuantity": "Całkowita ilość"
     },
     "common": {
       "yes": "Tak",
