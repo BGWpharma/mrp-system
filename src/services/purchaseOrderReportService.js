@@ -177,6 +177,7 @@ export const generatePurchaseOrderReport = async (filters) => {
             currency: item.currency || po.currency || 'EUR',
             invoiceNumber: item.invoiceNumber || '',
             invoiceDate: item.invoiceDate ? formatDateForExport(item.invoiceDate) : '',
+            paymentDueDate: item.paymentDueDate ? formatDateForExport(item.paymentDueDate) : '',
             plannedDeliveryDate: item.plannedDeliveryDate ? formatDateForExport(item.plannedDeliveryDate) : '',
             actualDeliveryDate: item.actualDeliveryDate ? formatDateForExport(item.actualDeliveryDate) : '',
             expiryDate: item.expiryDate ? formatDateForExport(item.expiryDate) : ''
@@ -296,6 +297,7 @@ export const generatePurchaseOrderReport = async (filters) => {
       { label: 'Waluta', key: 'currency' },
       { label: 'Nr faktury', key: 'invoiceNumber' },
       { label: 'Data faktury', key: 'invoiceDate' },
+      { label: 'Termin płatności', key: 'paymentDueDate' },
       { label: 'Planowana dostawa', key: 'plannedDeliveryDate' },
       { label: 'Rzeczywista dostawa', key: 'actualDeliveryDate' },
       { label: 'Data ważności', key: 'expiryDate' }

@@ -1540,6 +1540,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell align="right">{t('purchaseOrders.details.table.unitPriceAfterDiscount')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.netValue')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.originalAmount')}</TableCell>
+                      <TableCell align="right">Termin płatności</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.plannedDeliveryDate')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.actualDeliveryDate')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.received')}</TableCell>
@@ -1615,6 +1616,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                       ? formatCurrency(item.totalPrice, item.currency)
                                       : "-"}
                             </TableCell>
+                            <TableCell align="right">{item.paymentDueDate ? formatDate(item.paymentDueDate) : '-'}</TableCell>
                             <TableCell align="right">{item.plannedDeliveryDate ? formatDate(item.plannedDeliveryDate) : '-'}</TableCell>
                             <TableCell align="right">{item.actualDeliveryDate ? formatDate(item.actualDeliveryDate) : '-'}</TableCell>
                             <TableCell align="right">

@@ -467,6 +467,7 @@ const PurchaseOrderForm = ({ orderId }) => {
         exchangeRate: 1, // Kurs wymiany
         invoiceNumber: '', // Numer faktury
         invoiceDate: '', // Data faktury
+        paymentDueDate: '', // Termin płatności
         plannedDeliveryDate: '', // Planowana data dostawy
         actualDeliveryDate: '', // Rzeczywista data dostawy
         expiryDate: '' // Data ważności
@@ -3203,6 +3204,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   <TableCell width="8%">{t('purchaseOrders.form.orderItems.discount')}</TableCell>
                   <TableCell width="7%">{t('purchaseOrders.form.currency')}</TableCell>
                   <TableCell width="5%">{t('purchaseOrders.form.orderItems.vatRate')}</TableCell>
+                  <TableCell width="12%">{t('purchaseOrders.form.orderItems.expiryDate')}</TableCell>
                   <TableCell width="15%">{t('purchaseOrders.form.orderItems.amountAfterConversion')}</TableCell>
                   <TableCell width="5%"></TableCell>
                 </TableRow>
@@ -3348,6 +3350,87 @@ const PurchaseOrderForm = ({ orderId }) => {
                         </FormControl>
                       </TableCell>
                       <TableCell>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
+                            <DatePicker
+                              value={(() => {
+                                if (!item.expiryDate || item.noExpiryDate) return null;
+                                try {
+                                  let date;
+                                  if (typeof item.expiryDate === 'string') {
+                                    if (item.expiryDate.includes('Invalid') || item.expiryDate.trim() === '') {
+                                      return null;
+                                    }
+                                    date = item.expiryDate.includes('T') || item.expiryDate.includes('Z') 
+                                      ? parseISO(item.expiryDate) 
+                                      : new Date(item.expiryDate + 'T00:00:00');
+                                  } else if (item.expiryDate instanceof Date) {
+                                    date = item.expiryDate;
+                                  } else if (item.expiryDate && typeof item.expiryDate.toDate === 'function') {
+                                    date = item.expiryDate.toDate();
+                                  } else {
+                                    return null;
+                                  }
+                                  return isValid(date) ? date : null;
+                                } catch (error) {
+                                  console.error('Błąd parsowania expiryDate:', error, item.expiryDate);
+                                  return null;
+                                }
+                              })()}
+                              onChange={(newValue) => {
+                                // Zapisz obiekt Date bezpośrednio
+                                if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                  handleItemChange(index, 'expiryDate', newValue);
+                                  // Usuń flagę "brak daty ważności" jeśli ustawiono datę
+                                  if (item.noExpiryDate) {
+                                    handleItemChange(index, 'noExpiryDate', false);
+                                  }
+                                } else {
+                                  // Usuń datę
+                                  handleItemChange(index, 'expiryDate', null);
+                                }
+                              }}
+                              disabled={item.noExpiryDate}
+                              minDate={new Date()}
+                              maxDate={new Date('2100-12-31')}
+                              slotProps={{ 
+                                textField: { 
+                                  fullWidth: true, 
+                                  size: 'small',
+                                  placeholder: item.noExpiryDate ? 'Brak daty ważności' : 'dd.mm.yyyy',
+                                  error: false
+                                } 
+                              }}
+                              format="dd.MM.yyyy"
+                            />
+                          </LocalizationProvider>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={item.noExpiryDate || false}
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  handleItemChange(index, 'noExpiryDate', isChecked);
+                                  if (isChecked) {
+                                    // Usuń datę ważności jeśli zaznaczono "brak daty ważności"
+                                    handleItemChange(index, 'expiryDate', null);
+                                  }
+                                }}
+                                size="small"
+                              />
+                            }
+                            label="Brak daty"
+                            sx={{ 
+                              margin: 0,
+                              '& .MuiFormControlLabel-label': { 
+                                fontSize: '0.75rem',
+                                color: 'text.secondary'
+                              }
+                            }}
+                          />
+                        </Box>
+                      </TableCell>
+                      <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                           {formatCurrency(item.totalPrice || 0, poData.currency)}
                         </Typography>
@@ -3380,7 +3463,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                     {/* Dodatkowy wiersz z pozostałymi polami - widoczny po rozwinięciu */}
                     {poData.expandedItems && poData.expandedItems[index] && (
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                        <TableCell colSpan={9}>
+                        <TableCell colSpan={10}>
                           <Grid container spacing={2} sx={{ py: 1 }}>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
@@ -3514,6 +3597,59 @@ const PurchaseOrderForm = ({ orderId }) => {
                             </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
+                                Termin płatności
+                              </Typography>
+                              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
+                                <DatePicker
+                                  value={(() => {
+                                    if (!item.paymentDueDate) return null;
+                                    try {
+                                      let date;
+                                      if (typeof item.paymentDueDate === 'string') {
+                                        if (item.paymentDueDate.includes('Invalid') || item.paymentDueDate.trim() === '') {
+                                          return null;
+                                        }
+                                        date = item.paymentDueDate.includes('T') || item.paymentDueDate.includes('Z') 
+                                          ? parseISO(item.paymentDueDate) 
+                                          : new Date(item.paymentDueDate + 'T00:00:00');
+                                      } else if (item.paymentDueDate instanceof Date) {
+                                        date = item.paymentDueDate;
+                                      } else if (item.paymentDueDate && typeof item.paymentDueDate.toDate === 'function') {
+                                        date = item.paymentDueDate.toDate();
+                                      } else {
+                                        return null;
+                                      }
+                                      return isValid(date) ? date : null;
+                                    } catch (error) {
+                                      console.error('Błąd parsowania paymentDueDate:', error, item.paymentDueDate);
+                                      return null;
+                                    }
+                                  })()}
+                                  onChange={(newValue) => {
+                                    // Zapisz obiekt Date bezpośrednio
+                                    if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
+                                      handleItemChange(index, 'paymentDueDate', newValue);
+                                    } else {
+                                      // Usuń datę
+                                      handleItemChange(index, 'paymentDueDate', null);
+                                    }
+                                  }}
+                                  minDate={new Date('1900-01-01')}
+                                  maxDate={new Date('2100-12-31')}
+                                  slotProps={{ 
+                                    textField: { 
+                                      fullWidth: true, 
+                                      size: 'small',
+                                      placeholder: 'dd.mm.yyyy',
+                                      error: false
+                                    } 
+                                  }}
+                                  format="dd.MM.yyyy"
+                                />
+                              </LocalizationProvider>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
+                              <Typography variant="caption" display="block" gutterBottom>
                                 Planowana data dostawy
                               </Typography>
                               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
@@ -3617,89 +3753,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                                   format="dd.MM.yyyy"
                                 />
                               </LocalizationProvider>
-                            </Grid>
-                            <Grid item xs={12} sm={4}>
-                              <Typography variant="caption" display="block" gutterBottom>
-                                {t('purchaseOrders.form.orderItems.expiryDate')}
-                              </Typography>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
-                                  <DatePicker
-                                    value={(() => {
-                                      if (!item.expiryDate || item.noExpiryDate) return null;
-                                      try {
-                                        let date;
-                                        if (typeof item.expiryDate === 'string') {
-                                          if (item.expiryDate.includes('Invalid') || item.expiryDate.trim() === '') {
-                                            return null;
-                                          }
-                                          date = item.expiryDate.includes('T') || item.expiryDate.includes('Z') 
-                                            ? parseISO(item.expiryDate) 
-                                            : new Date(item.expiryDate + 'T00:00:00');
-                                        } else if (item.expiryDate instanceof Date) {
-                                          date = item.expiryDate;
-                                        } else if (item.expiryDate && typeof item.expiryDate.toDate === 'function') {
-                                          date = item.expiryDate.toDate();
-                                        } else {
-                                          return null;
-                                        }
-                                        return isValid(date) ? date : null;
-                                      } catch (error) {
-                                        console.error('Błąd parsowania expiryDate:', error, item.expiryDate);
-                                        return null;
-                                      }
-                                    })()}
-                                    onChange={(newValue) => {
-                                      // Zapisz obiekt Date bezpośrednio
-                                      if (newValue && newValue instanceof Date && !isNaN(newValue.getTime())) {
-                                        handleItemChange(index, 'expiryDate', newValue);
-                                        // Usuń flagę "brak daty ważności" jeśli ustawiono datę
-                                        if (item.noExpiryDate) {
-                                          handleItemChange(index, 'noExpiryDate', false);
-                                        }
-                                      } else {
-                                        // Usuń datę
-                                        handleItemChange(index, 'expiryDate', null);
-                                      }
-                                    }}
-                                    disabled={item.noExpiryDate}
-                                    minDate={new Date()}
-                                    maxDate={new Date('2100-12-31')}
-                                    slotProps={{ 
-                                      textField: { 
-                                        fullWidth: true, 
-                                        size: 'small',
-                                        placeholder: item.noExpiryDate ? 'Brak daty ważności' : 'dd.mm.yyyy',
-                                        error: false
-                                      } 
-                                    }}
-                                    format="dd.MM.yyyy"
-                                  />
-                                </LocalizationProvider>
-                                <FormControlLabel
-                                  control={
-                                    <Checkbox
-                                      checked={item.noExpiryDate || false}
-                                      onChange={(e) => {
-                                        const isChecked = e.target.checked;
-                                        handleItemChange(index, 'noExpiryDate', isChecked);
-                                        if (isChecked) {
-                                          // Usuń datę ważności jeśli zaznaczono "brak daty ważności"
-                                          handleItemChange(index, 'expiryDate', null);
-                                        }
-                                      }}
-                                      size="small"
-                                    />
-                                  }
-                                  label="Brak daty ważności"
-                                  sx={{ 
-                                    '& .MuiFormControlLabel-label': { 
-                                      fontSize: '0.875rem',
-                                      color: 'text.secondary'
-                                    }
-                                  }}
-                                />
-                              </Box>
                             </Grid>
                             <Grid item xs={12} sm={4}>
                               <Typography variant="caption" display="block" gutterBottom>
