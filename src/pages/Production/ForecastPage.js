@@ -591,8 +591,37 @@ const ForecastPage = () => {
         []
       ];
       
+      // Przygotuj dane nieużywanych materiałów do eksportu (z zastosowanymi filtrami)
+      const unusedMaterialsData = filteredUnusedMaterials();
+      let unusedMaterialsRows = [];
+      
+      if (unusedMaterialsData.length > 0) {
+        const filterInfo = [];
+        if (searchTerm || categoryFilter) {
+          filterInfo.push(`Applied filters: ${searchTerm ? `Search="${searchTerm}"` : ''}${searchTerm && categoryFilter ? ', ' : ''}${categoryFilter ? `Category="${categoryFilter}"` : ''}`);
+        }
+        
+        unusedMaterialsRows = [
+          [''],
+          [''],
+          ['UNUSED MATERIALS (NOT IN ANY MO):'],
+          ['Excluded categories: "Inne", "Gotowe produkty" | Excluded: materials with quantity 0'],
+          ...filterInfo.map(info => [info]),
+          [''],
+          ['Material Name', 'Category', 'Available Quantity', 'Unit'],
+          ...unusedMaterialsData.map(item => [
+            item.name || '',
+            item.category || '',
+            parseFloat(item.quantity) || 0,
+            item.unit || 'pcs'
+          ]),
+          [''],
+          ['Total unused materials:', unusedMaterialsData.length]
+        ];
+      }
+      
       // Połącz wszystkie wiersze
-      const allRows = [...dateRangeInfo, headers, ...rows];
+      const allRows = [...dateRangeInfo, headers, ...rows, ...unusedMaterialsRows];
       
       // Konwertuj do formatu CSV
       const csvContent = allRows.map(row => {
@@ -725,6 +754,53 @@ const ForecastPage = () => {
       return 2; // Wystarczająca ilość - najniższy priorytet
     }
   };
+  
+  // Funkcja do pobrania materiałów nie używanych w żadnym MO
+  const getUnusedMaterials = useCallback(() => {
+    if (!inventoryItems || inventoryItems.length === 0) return [];
+    if (!forecastData || forecastData.length === 0) return inventoryItems;
+    
+    // Stwórz Set z ID materiałów używanych w MO
+    const usedMaterialIds = new Set(forecastData.map(item => item.id));
+    
+    // Filtruj materiały, które nie są używane
+    // Wykluczamy kategorie "inne" i "gotowe produkty" oraz materiały ze stanem 0
+    return inventoryItems.filter(item => {
+      // Sprawdź czy materiał nie jest używany w MO
+      if (usedMaterialIds.has(item.id)) return false;
+      
+      // Wykluczamy kategorię "inne" i "gotowe produkty" (case insensitive)
+      const category = (item.category || '').toLowerCase();
+      if (category === 'inne' || category === 'gotowe produkty') return false;
+      
+      // Wykluczamy materiały ze stanem 0
+      const quantity = parseFloat(item.quantity) || 0;
+      if (quantity === 0) return false;
+      
+      return true;
+    });
+  }, [inventoryItems, forecastData]);
+  
+  // Funkcja filtrująca nieużywane materiały (dla wyszukiwania i kategorii)
+  const filteredUnusedMaterials = useCallback(() => {
+    let filtered = getUnusedMaterials();
+    
+    // Filtrowanie po kategorii
+    if (categoryFilter) {
+      filtered = filtered.filter(item => item.category === categoryFilter);
+    }
+    
+    // Filtrowanie po wyszukiwaniu
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.name.toLowerCase().includes(searchLower) || 
+        (item.category && item.category.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    return filtered;
+  }, [getUnusedMaterials, categoryFilter, searchTerm]);
   
   // Filtrowanie danych
   const filteredData = useCallback(() => {
@@ -1783,6 +1859,104 @@ const ForecastPage = () => {
                     </Button>
                   </Box>
                 )}
+              </Paper>
+            </Slide>
+          )}
+          
+          {/* Tabela z materiałami nieużywanymi w MO */}
+          {forecastData.length > 0 && getUnusedMaterials().length > 0 && (
+            <Slide direction="up" in={showResults} timeout={1000}>
+              <Paper sx={{ mt: 4, borderRadius: 2, overflow: 'hidden', boxShadow: 3 }}>
+                <Box sx={{ p: 2, bgcolor: 'info.lighter', borderBottom: 1, borderColor: 'divider' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                    <InfoIcon sx={{ mr: 1 }} color="info" />
+                    Materiały nieużywane w żadnym zleceniu produkcyjnym ({filteredUnusedMaterials().length})
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Poniższe materiały znajdują się w magazynie, ale nie są wykorzystywane w żadnym MO w wybranym okresie
+                    (wykluczono kategorie "Inne" i "Gotowe produkty" oraz materiały ze stanem 0)
+                  </Typography>
+                </Box>
+                <TableContainer sx={{ maxHeight: '50vh' }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: 'background.paper' }}>
+                      <TableRow>
+                        <TableCell 
+                          width="60%" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
+                          Materiał
+                        </TableCell>
+                        <TableCell 
+                          align="right" 
+                          width="40%" 
+                          sx={{ 
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1
+                          }}
+                        >
+                          Dostępna ilość
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredUnusedMaterials().length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={2} align="center">
+                            <Typography color="text.secondary" sx={{ py: 2 }}>
+                              Nie znaleziono materiałów pasujących do filtrów
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredUnusedMaterials().map((item, index) => (
+                          <Fade 
+                            key={item.id} 
+                            in={showResults} 
+                            timeout={1000} 
+                            style={{ 
+                              transitionDelay: showResults ? `${index * 30}ms` : '0ms' 
+                            }}
+                          >
+                            <TableRow hover>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                                  <CategoryIcon sx={{ mr: 1, mt: 0.5, fontSize: 'small', color: 'text.secondary' }} />
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                      {item.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {item.category || 'Bez kategorii'}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Typography variant="body2">
+                                  {formatNumber(parseFloat(item.quantity) || 0)} {item.unit || 'szt.'}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          </Fade>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Paper>
             </Slide>
           )}
