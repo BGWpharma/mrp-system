@@ -1208,8 +1208,6 @@ const COReportsPage = () => {
     
     // Stan dla danych historycznych kosztów wybranego produktu
     const [productCostHistory, setProductCostHistory] = useState([]);
-    // Stan dla informacji o zamówieniach zawierających wybrany produkt
-    const [productOrders, setProductOrders] = useState([]);
     
     // Efekt do obliczania danych historycznych dla wybranego produktu
     useEffect(() => {
@@ -1256,32 +1254,8 @@ const COReportsPage = () => {
         }).sort((a, b) => a.date - b.date);
         
         setProductCostHistory(historyData);
-        
-        // Znajdź zamówienia zawierające wybrany produkt
-        const orders = [];
-        filteredCosts.forEach(item => {
-          const orderExists = orders.some(order => order.orderId === item.orderId);
-          if (!orderExists) {
-            orders.push({
-              orderId: item.orderId,
-              orderNumber: item.orderNumber,
-              orderDate: item.orderDate,
-              customerName: item.customerName,
-              quantity: item.quantity,
-              unitCost: item.productionCost,
-              fullUnitCost: item.fullProductionUnitCost || item.fullProductionCost / item.quantity,
-              totalCost: item.totalProductionCost,
-              totalFullCost: item.totalFullProductionCost,
-              productionTaskId: item.productionTaskId,
-              productionTaskNumber: item.productionTaskNumber
-            });
-          }
-        });
-        
-        setProductOrders(orders);
       } else {
         setProductCostHistory([]);
-        setProductOrders([]);
       }
     }, [selectedProduct, productionCosts]);
     
@@ -2013,57 +1987,6 @@ const COReportsPage = () => {
                     </Grid>
                   </Grid>
                 )}
-                
-                {/* Tabela zamówień zawierających wybrany produkt */}
-                <Paper sx={{ mb: 3 }}>
-                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="h6" component="h3">
-                      {t('coReports.productionCosts.ordersContainingProduct')}
-                    </Typography>
-                  </Box>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>{t('coReports.table.orderNumber')}</TableCell>
-                          <TableCell>{t('coReports.table.date')}</TableCell>
-                          <TableCell>{t('coReports.table.customer')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.quantity')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
-                          <TableCell>MO</TableCell>
-                          <TableCell align="center">{t('coReports.table.actions')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {productOrders.map((order, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{order.orderNumber}</TableCell>
-                            <TableCell>{formatDateDisplay(order.orderDate)}</TableCell>
-                            <TableCell>{order.customerName}</TableCell>
-                            <TableCell align="right">{order.quantity}</TableCell>
-                            <TableCell align="right">{formatCurrency(order.fullUnitCost)}</TableCell>
-                            <TableCell align="right">{formatCurrency(order.totalFullCost)}</TableCell>
-                            <TableCell>{order.productionTaskNumber || '-'}</TableCell>
-                            <TableCell align="center">
-                              {order.productionTaskId && (
-                                <Tooltip title="Otwórz zadanie produkcyjne w nowym oknie">
-                                  <IconButton 
-                                    size="small"
-                                    onClick={() => openProductionTaskInNewWindow(order.productionTaskId)}
-                                    color="primary"
-                                  >
-                                    <LinkIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
               </>
             )}
             
