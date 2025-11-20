@@ -5,7 +5,6 @@
       "tabs": "co reports"
     },
     "tabs": {
-      "ordersReport": "Orders report",
       "productionCosts": "Production costs",
       "financialReport": "Financial Report",
       "cashflow": "Cashflow"

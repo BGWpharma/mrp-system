@@ -5,7 +5,6 @@
       "tabs": "raporty co"
     },
     "tabs": {
-      "ordersReport": "Raport zamówień",
       "productionCosts": "Koszty produkcji",
       "financialReport": "Raport Finansowy",
       "cashflow": "Cashflow"

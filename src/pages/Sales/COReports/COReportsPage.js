@@ -98,9 +98,6 @@ import {
 } from 'recharts';
 
 // Importuj komponenty
-import COReportComponent from '../../../components/sales/co-reports/COReportComponent';
-import CustomerStatsComponent from '../../../components/sales/co-reports/CustomerStatsComponent';
-import StatusStatsComponent from '../../../components/sales/co-reports/StatusStatsComponent';
 import { useTranslation } from '../../../hooks/useTranslation';
 import FinancialReportPage from '../../Analytics/FinancialReportPage';
 import CashflowTab from './CashflowTab';
@@ -149,10 +146,6 @@ const COReportsPage = () => {
   const [customers, setCustomers] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedTab, setSelectedTab] = useState(0);
-  
-  // Menu eksportu
-  const [exportMenuAnchor, setExportMenuAnchor] = useState(false);
-  const isExportMenuOpen = Boolean(exportMenuAnchor);
   
   // Menu eksportu kosztów produkcji
   const [productionExportMenuAnchor, setProductionExportMenuAnchor] = useState(false);
@@ -566,15 +559,6 @@ const COReportsPage = () => {
     }
   };
   
-  // Obsługa menu eksportu
-  const handleExportMenuOpen = (event) => {
-    setExportMenuAnchor(true);
-  };
-  
-  const handleExportMenuClose = () => {
-    setExportMenuAnchor(false);
-  };
-  
   // Obsługa menu eksportu kosztów produkcji
   const handleProductionExportMenuOpen = (event) => {
     setProductionExportMenuAnchor(true);
@@ -582,89 +566,6 @@ const COReportsPage = () => {
   
   const handleProductionExportMenuClose = () => {
     setProductionExportMenuAnchor(false);
-  };
-  
-  // Funkcja do generowania raportu CSV
-  const handleExportCSV = () => {
-    handleExportMenuClose();
-    
-    // Definicja nagłówków dla CSV - zawsze w języku angielskim
-    const headers = [
-      { label: 'Order Number', key: 'orderNumber' },
-      { label: 'Date', key: 'orderDate' },
-      { label: 'Customer', key: 'customer.name' },
-      { label: 'Status', key: 'status' },
-      { label: 'Value', key: 'totalValue' },
-      { label: 'Expected Delivery', key: 'expectedDeliveryDate' }
-    ];
-    
-    // Przygotuj dane do eksportu
-    const exportData = filteredOrders.map(order => {
-      return {
-        ...order,
-        orderDate: formatDateForExport(order.orderDate),
-        expectedDeliveryDate: formatDateForExport(order.expectedDeliveryDate),
-        totalValue: formatCurrencyForExport(order.totalValue)
-      };
-    });
-    
-    // Wygeneruj plik CSV
-    const filename = `customer_orders_report_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
-    const success = exportToCSV(exportData, headers, filename);
-    
-    if (success) {
-      showSuccess('CSV report has been generated successfully.');
-    } else {
-      showError('Failed to generate CSV report.');
-    }
-  };
-  
-  // Funkcja do generowania raportu PDF
-  const handleExportPDF = () => {
-    handleExportMenuClose();
-    
-    // Definicja nagłówków dla PDF - zawsze w języku angielskim
-    const headers = [
-      { label: 'Order Number', key: 'orderNumber' },
-      { label: 'Date', key: 'orderDate' },
-      { label: 'Customer', key: 'customer.name' },
-      { label: 'Status', key: 'status' },
-      { label: 'Value', key: 'totalValue' },
-      { label: 'Expected Delivery', key: 'expectedDeliveryDate' }
-    ];
-    
-    // Przygotuj dane do eksportu
-    const exportData = filteredOrders.map(order => {
-      return {
-        ...order,
-        orderDate: formatDateForExport(order.orderDate),
-        expectedDeliveryDate: formatDateForExport(order.expectedDeliveryDate),
-        totalValue: formatCurrencyForExport(order.totalValue)
-      };
-    });
-    
-    // Utwórz datę i zakres filtrowania jako podtytuł
-    const dateRange = `${formatDateForExport(startDate)} - ${formatDateForExport(endDate)}`;
-    const customerFilter = selectedCustomer !== 'all' 
-      ? `, Customer: ${getCustomerName(selectedCustomer)}` 
-      : '';
-    
-    // Opcje dla eksportu PDF
-    const pdfOptions = {
-      title: 'Customer Orders Report',
-      subtitle: `Date range: ${dateRange}${customerFilter}`,
-      footerText: `Generated on ${new Date().toLocaleString()} | Total Orders: ${stats.totalOrders} | Total Value: ${formatCurrency(stats.totalValue)}`
-    };
-    
-    // Wygeneruj plik PDF
-    const filename = `customer_orders_report_${formatDateForExport(new Date(), 'yyyyMMdd')}`;
-    const success = exportToPDF(exportData, headers, filename, pdfOptions);
-    
-    if (success) {
-      showSuccess('PDF report has been generated successfully.');
-    } else {
-      showError('Failed to generate PDF report.');
-    }
   };
   
   // Funkcja do odświeżenia danych - ZOPTYMALIZOWANA
@@ -964,244 +865,6 @@ const COReportsPage = () => {
     };
   }, []); // Bez zależności - czysta funkcja kalkulacyjna
 
-  // Komponent zakładki "Raport zamówień"
-  const OrdersReportTab = () => (
-    <>
-      {/* Nagłówek z przyciskami Export i Odśwież */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h6" component="h2">
-          {t('coReports.tabs.ordersReport')}
-        </Typography>
-        
-        <Box>
-          <Box sx={{ position: 'relative', display: 'inline-block' }}>
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={handleExportMenuOpen}
-              startIcon={<DownloadIcon />}
-              endIcon={<ArrowDownIcon />}
-              sx={{ mr: 1 }}
-            >
-              {t('coReports.common.export')}
-            </Button>
-            {isExportMenuOpen && (
-              <ClickAwayListener onClickAway={handleExportMenuClose}>
-                <Paper
-                  sx={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    zIndex: 1000,
-                    minWidth: 200,
-                    mt: 0.5
-                  }}
-                  elevation={3}
-                >
-                  <MenuList>
-                    <MenuItem onClick={handleExportPDF}>
-                      <ListItemIcon>
-                        <PdfIcon fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText>{t('coReports.common.exportAsPdf')}</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportCSV}>
-                      <ListItemIcon>
-                        <CsvIcon fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText>{t('coReports.common.exportAsCsv')}</ListItemText>
-                    </MenuItem>
-                  </MenuList>
-                </Paper>
-              </ClickAwayListener>
-            )}
-          </Box>
-          
-          <Tooltip title={t('coReports.common.refreshData')}>
-            <IconButton onClick={handleRefreshData} color="primary">
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Box>
-
-      {/* Filtry */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>{t('coReports.filters.period.label')}</InputLabel>
-              <Select
-                value={reportPeriod}
-                onChange={handlePeriodChange}
-                label={t('coReports.filters.period.label')}
-              >
-                <MenuItem value={TIME_PERIODS.LAST_7_DAYS}>{t('coReports.filters.period.last7days')}</MenuItem>
-                <MenuItem value={TIME_PERIODS.LAST_30_DAYS}>{t('coReports.filters.period.last30days')}</MenuItem>
-                <MenuItem value={TIME_PERIODS.LAST_MONTH}>{t('coReports.filters.period.lastMonth')}</MenuItem>
-                <MenuItem value={TIME_PERIODS.THIS_MONTH}>{t('coReports.filters.period.thisMonth')}</MenuItem>
-                <MenuItem value={TIME_PERIODS.CUSTOM}>{t('coReports.filters.period.custom')}</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} md={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
-              <DatePicker
-                label={t('coReports.filters.startDate')}
-                value={startDate}
-                onChange={(newDate) => {
-                  setStartDate(newDate);
-                  setReportPeriod(TIME_PERIODS.CUSTOM);
-                }}
-                sx={{ width: '100%' }}
-              />
-            </LocalizationProvider>
-          </Grid>
-          
-          <Grid item xs={12} md={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
-              <DatePicker
-                label={t('coReports.filters.endDate')}
-                value={endDate}
-                onChange={(newDate) => {
-                  setEndDate(newDate);
-                  setReportPeriod(TIME_PERIODS.CUSTOM);
-                }}
-                sx={{ width: '100%' }}
-              />
-            </LocalizationProvider>
-          </Grid>
-          
-          <Grid item xs={12} md={2}>
-            <Box sx={{ display: 'flex', flexDirection: 'row' }}>
-              <Button 
-                variant="outlined" 
-                onClick={() => {
-                  const prevStart = new Date(startDate);
-                  const prevEnd = new Date(endDate);
-                  const diff = endDate - startDate;
-                  prevStart.setTime(prevStart.getTime() - diff);
-                  prevEnd.setTime(prevEnd.getTime() - diff);
-                  setStartDate(prevStart);
-                  setEndDate(prevEnd);
-                  setReportPeriod(TIME_PERIODS.CUSTOM);
-                }}
-                sx={{ mr: 1, minWidth: 0, p: 1 }}
-                size="small"
-              >
-                <PrevIcon fontSize="small" />
-              </Button>
-              <Button 
-                variant="outlined" 
-                onClick={() => {
-                  const nextStart = new Date(startDate);
-                  const nextEnd = new Date(endDate);
-                  const diff = endDate - startDate;
-                  nextStart.setTime(nextStart.getTime() + diff);
-                  nextEnd.setTime(nextEnd.getTime() + diff);
-                  setStartDate(nextStart);
-                  setEndDate(nextEnd);
-                  setReportPeriod(TIME_PERIODS.CUSTOM);
-                }}
-                sx={{ minWidth: 0, p: 1 }}
-                size="small"
-              >
-                <NextIcon fontSize="small" />
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
-        
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>{t('coReports.filters.customer.label')}</InputLabel>
-              <Select
-                value={selectedCustomer}
-                onChange={(e) => setSelectedCustomer(e.target.value)}
-                label={t('coReports.filters.customer.label')}
-              >
-                <MenuItem value="all">{t('coReports.filters.customer.all')}</MenuItem>
-                {customers.map(customer => (
-                  <MenuItem key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      <Typography variant="subtitle1" gutterBottom>
-        {t('coReports.periodRange', { start: formatDateDisplay(startDate), end: formatDateDisplay(endDate) })}
-      </Typography>
-      
-      {/* Karty ze statystykami */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Liczba zamówień
-              </Typography>
-              <Typography variant="h4" component="div">
-                {stats.totalOrders}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Wartość zamówień
-              </Typography>
-              <Typography variant="h4" component="div">
-                {formatCurrency(stats.totalValue)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Średnia wartość zamówienia
-              </Typography>
-              <Typography variant="h4" component="div">
-                {formatCurrency(stats.avgOrderValue)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-      
-      {/* Statystyki według klientów */}
-      <CustomerStatsComponent 
-        customerStats={stats.customerStats} 
-        loading={loading} 
-        title={t('coReports.customerStats.title')} 
-      />
-      
-      {/* Statystyki według statusu */}
-      <StatusStatsComponent 
-        statusStats={stats.statusStats} 
-        totalValue={stats.totalValue}
-        loading={loading} 
-        title={t('coReports.statusStats.title')} 
-      />
-      
-      {/* Lista zamówień */}
-      <COReportComponent 
-        orders={filteredOrders} 
-        loading={loading} 
-        title={t('coReports.ordersList.title')} 
-      />
-    </>
-  );
-
   // Komponent zakładki "Koszty produkcji" - ZOPTYMALIZOWANY
   const ProductionCostsTab = () => {
     // Memoizacja kosztownych obliczeń - przeliczaj tylko gdy zmienią się dane
@@ -1220,7 +883,7 @@ const COReportsPage = () => {
     const [expandedRows, setExpandedRows] = useState(new Set());
     const [taskDetailsCache, setTaskDetailsCache] = useState({});
     const [loadingTasks, setLoadingTasks] = useState(new Set());
-    const [materialsCache, setMaterialsCache] = useState(null);
+    const [materialsCache, setMaterialsCache] = useState({});
     const [loadingMaterials, setLoadingMaterials] = useState(false);
     
     // Efekt do obliczania danych historycznych dla wybranego produktu
@@ -1311,7 +974,7 @@ const COReportsPage = () => {
     // Funkcja do pobierania szczegółów zadania produkcyjnego
     const fetchTaskDetails = async (taskId) => {
       if (taskDetailsCache[taskId] || loadingTasks.has(taskId)) {
-        return; // Już pobrane lub w trakcie pobierania
+        return taskDetailsCache[taskId]; // Zwróć z cache jeśli już istnieje
       }
 
       setLoadingTasks(prev => new Set([...prev, taskId]));
@@ -1321,10 +984,13 @@ const COReportsPage = () => {
         if (taskDoc.exists()) {
           const taskData = { id: taskDoc.id, ...taskDoc.data() };
           setTaskDetailsCache(prev => ({ ...prev, [taskId]: taskData }));
+          return taskData; // Zwróć pobrane dane
         }
+        return null;
       } catch (error) {
         console.error('Błąd podczas pobierania szczegółów zadania:', error);
         showError('Nie udało się pobrać szczegółów zadania');
+        return null;
       } finally {
         setLoadingTasks(prev => {
           const newSet = new Set(prev);
@@ -1334,19 +1000,39 @@ const COReportsPage = () => {
       }
     };
 
-    // Funkcja do pobierania wszystkich materiałów (cache)
-    const fetchMaterialsIfNeeded = async () => {
-      if (materialsCache || loadingMaterials) {
-        return; // Już pobrane lub w trakcie pobierania
+    // Funkcja do pobierania materiałów dla konkretnego zadania
+    const fetchMaterialsForTask = async (taskData) => {
+      if (!taskData?.consumedMaterials || taskData.consumedMaterials.length === 0) {
+        return;
+      }
+
+      // Zbierz unikalne ID materiałów z konsumpcji
+      const materialIds = [...new Set(
+        taskData.consumedMaterials
+          .map(consumed => consumed.materialId)
+          .filter(id => id && !materialsCache?.[id]) // Pobierz tylko te, których nie mamy w cache
+      )];
+
+      if (materialIds.length === 0) {
+        return; // Wszystkie materiały już są w cache
       }
 
       setLoadingMaterials(true);
       try {
+        // Pobierz wszystkie materiały jednorazowo (dla prostoty)
+        // W przyszłości można zoptymalizować do batch fetch tylko tych ID
         const items = await getAllInventoryItems();
-        setMaterialsCache(items || []);
+        
+        // Przekształć tablicę w mapę dla szybszego dostępu
+        const materialsMap = {};
+        items.forEach(item => {
+          materialsMap[item.id || item.inventoryItemId] = item;
+        });
+        
+        setMaterialsCache(prev => ({ ...prev, ...materialsMap }));
       } catch (error) {
         console.error('Błąd podczas pobierania materiałów:', error);
-        setMaterialsCache([]); // Ustaw pustą tablicę aby nie próbować ponownie
+        // Nie ustawiaj pustego obiektu, aby móc spróbować ponownie
       } finally {
         setLoadingMaterials(false);
       }
@@ -1360,13 +1046,16 @@ const COReportsPage = () => {
         newExpandedRows.delete(taskId);
       } else {
         newExpandedRows.add(taskId);
-        // Pobierz materiały jeśli jeszcze nie mamy
-        if (!materialsCache && !loadingMaterials) {
-          await fetchMaterialsIfNeeded();
+        
+        // Pobierz szczegóły zadania jeśli jeszcze nie mamy (fetchTaskDetails zwraca dane)
+        let taskData = taskDetailsCache[taskId];
+        if (!taskData) {
+          taskData = await fetchTaskDetails(taskId);
         }
-        // Pobierz szczegóły zadania jeśli jeszcze nie mamy
-        if (!taskDetailsCache[taskId]) {
-          await fetchTaskDetails(taskId);
+        
+        // Pobierz materiały dla tego zadania (tylko jeśli nie są jeszcze w cache)
+        if (taskData && !loadingMaterials) {
+          await fetchMaterialsForTask(taskData);
         }
       }
       
@@ -2094,9 +1783,7 @@ const COReportsPage = () => {
                                                     <TableBody>
                                                       {taskDetails.consumedMaterials.map((consumed, idx) => {
                                                         // Znajdź materiał w cache (priorytet: consumed.materialName, potem cache)
-                                                        const materialFromCache = materialsCache?.find(m => 
-                                                          (m.inventoryItemId || m.id) === consumed.materialId
-                                                        );
+                                                        const materialFromCache = materialsCache?.[consumed.materialId];
                                                         const materialName = consumed.materialName || materialFromCache?.name || t('coReports.consumption.unknownMaterial');
                                                         const materialUnit = consumed.unit || materialFromCache?.unit || '';
                                                         
@@ -2353,12 +2040,6 @@ const COReportsPage = () => {
             sx={{ fontSize: '1rem' }}
           />
           <Tab 
-            label={t('coReports.tabs.ordersReport')} 
-            icon={<AssessmentIcon />} 
-            iconPosition="start"
-            sx={{ fontSize: '1rem' }}
-          />
-          <Tab 
             label={t('coReports.tabs.financialReport')}
             icon={<AssessmentIcon />} 
             iconPosition="start"
@@ -2378,12 +2059,9 @@ const COReportsPage = () => {
           <ProductionCostsTab />
         </Box>
         <Box sx={{ display: selectedTab === 1 ? 'block' : 'none' }}>
-          <OrdersReportTab />
-        </Box>
-        <Box sx={{ display: selectedTab === 2 ? 'block' : 'none' }}>
           <FinancialReportTab />
         </Box>
-        <Box sx={{ display: selectedTab === 3 ? 'block' : 'none' }}>
+        <Box sx={{ display: selectedTab === 2 ? 'block' : 'none' }}>
           <CashflowTab />
         </Box>
       </Box>
