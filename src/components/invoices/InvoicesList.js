@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -27,7 +27,9 @@ import {
   Divider,
   TablePagination,
   TableSortLabel,
-  Link
+  Link,
+  Menu,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,7 +45,8 @@ import {
   Receipt as ReceiptIcon,
   People as CustomersIcon,
   Settings as SettingsIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import { 
   getAllInvoices, 
@@ -61,6 +64,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatters';
 import DeleteConfirmationDialog from '../common/DeleteConfirmationDialog';
 import InvoiceCsvExport from './InvoiceCsvExport';
+import InvoiceOptimaExport from './InvoiceOptimaExport';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
@@ -82,6 +86,14 @@ const InvoicesList = () => {
 
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // Stan dla menu dropdown akcji
+  const [actionsMenuAnchor, setActionsMenuAnchor] = useState(null);
+  const isActionsMenuOpen = Boolean(actionsMenuAnchor);
+
+  // Referencje do komponentów eksportu
+  const csvExportRef = useRef(null);
+  const optimaExportRef = useRef(null);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -416,6 +428,15 @@ const InvoicesList = () => {
     }
   };
 
+  // Funkcje obsługi menu dropdown akcji
+  const handleActionsMenuOpen = (event) => {
+    setActionsMenuAnchor(event.currentTarget);
+  };
+
+  const handleActionsMenuClose = () => {
+    setActionsMenuAnchor(null);
+  };
+
   const toggleFilters = () => {
     listActions.setFiltersExpanded(!listState.filtersExpanded);
   };
@@ -583,43 +604,107 @@ const InvoicesList = () => {
                   {t('invoices.refresh')}
                 </Button>
               </Grid>
+              
+              {/* Menu dropdown dla akcji i eksportów */}
               <Grid item>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  onClick={handleRefreshProformaAmounts}
-                  disabled={loading}
-                  title={t('invoices.form.buttons.refreshProformaAmounts')}
+                <Tooltip title="Eksporty i akcje">
+                  <IconButton
+                    onClick={handleActionsMenuOpen}
+                    disabled={loading}
+                    color="default"
+                    sx={{ border: '1px solid rgba(0, 0, 0, 0.23)' }}
+                  >
+                    <MoreVertIcon />
+                  </IconButton>
+                </Tooltip>
+                
+                <Menu
+                  anchorEl={actionsMenuAnchor}
+                  open={isActionsMenuOpen}
+                  onClose={handleActionsMenuClose}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
                 >
-                  📋
-                </Button>
+                  <MenuItem 
+                    onClick={() => {
+                      handleActionsMenuClose();
+                      setTimeout(() => {
+                        const button = csvExportRef.current?.querySelector('button');
+                        button?.click();
+                      }, 100);
+                    }}
+                    disabled={loading || filteredInvoices.length === 0}
+                  >
+                    <DownloadIcon sx={{ mr: 1 }} />
+                    {t('invoices.csvExport')}
+                  </MenuItem>
+                  <MenuItem 
+                    onClick={() => {
+                      handleActionsMenuClose();
+                      setTimeout(() => {
+                        const button = optimaExportRef.current?.querySelector('button');
+                        button?.click();
+                      }, 100);
+                    }}
+                    disabled={loading || filteredInvoices.length === 0}
+                  >
+                    <DownloadIcon sx={{ mr: 1 }} />
+                    Eksport do Comarch Optima (XML)
+                  </MenuItem>
+                  <MenuItem 
+                    onClick={() => {
+                      handleActionsMenuClose();
+                      handleRefreshProformaAmounts();
+                    }}
+                    disabled={loading || invoices.length === 0}
+                  >
+                    <ReceiptIcon sx={{ mr: 1 }} />
+                    Odśwież kwoty proform
+                  </MenuItem>
+                  <MenuItem 
+                    onClick={() => {
+                      handleActionsMenuClose();
+                      navigate('/customers');
+                    }}
+                  >
+                    <CustomersIcon sx={{ mr: 1 }} />
+                    {t('invoices.clients')}
+                  </MenuItem>
+                  <MenuItem 
+                    onClick={() => {
+                      handleActionsMenuClose();
+                      navigate('/invoices/company-settings');
+                    }}
+                  >
+                    <SettingsIcon sx={{ mr: 1 }} />
+                    {t('invoices.companyData')}
+                  </MenuItem>
+                </Menu>
               </Grid>
-              <Grid item>
-                <InvoiceCsvExport 
-                  invoices={filteredInvoices} 
-                  customers={customers}
-                />
-              </Grid>
-              <Grid item>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<CustomersIcon />}
-                  onClick={() => navigate('/customers')}
-                >
-                  {t('invoices.clients')}
-                </Button>
-              </Grid>
-              <Grid item>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<SettingsIcon />}
-                  onClick={() => navigate('/invoices/company-settings')}
-                >
-                  {t('invoices.companyData')}
-                </Button>
-              </Grid>
+
+              {/* Ukryte komponenty eksportu - wyzwalane przez menu */}
+              <Box sx={{ display: 'none' }}>
+                <div ref={csvExportRef}>
+                  <InvoiceCsvExport 
+                    invoices={filteredInvoices} 
+                    customers={customers}
+                  />
+                </div>
+                <div ref={optimaExportRef}>
+                  <InvoiceOptimaExport 
+                    selectedInvoices={[]} 
+                    allInvoices={filteredInvoices}
+                    customers={customers}
+                  />
+                </div>
+              </Box>
+              
               <Grid item>
                 <Button
                   variant="contained"

@@ -137,7 +137,23 @@
       "ordersValue": "Orders value",
       "avgValue": "Average value",
       "actions": "Actions",
-      "percentOfTotal": "% of total"
+      "details": "Details",
+      "percentOfTotal": "% of total",
+      "material": "Material",
+      "batchNumber": "Batch number (LOT)",
+      "unitPrice": "Unit price",
+      "totalValue": "Value",
+      "includeInCosts": "Include in costs",
+      "consumptionDate": "Consumption date",
+      "user": "User"
+    },
+    "consumption": {
+      "showDetails": "Show consumptions",
+      "hideDetails": "Hide consumptions",
+      "title": "Material consumptions - MO {{moNumber}}",
+      "noData": "No material consumptions for this production task",
+      "unknownMaterial": "Unknown material",
+      "unknownUser": "Unknown user"
     }
   },
   "analytics": {

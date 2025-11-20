@@ -35,6 +35,8 @@ import {
   ClickAwayListener,
   Grow,
   Autocomplete,
+  Chip,
+  Checkbox,
 
 } from '@mui/material';
 import {
@@ -53,7 +55,9 @@ import {
   Link as LinkIcon,
   Clear as ClearIcon,
   GridOn as ExcelIcon,
-  AccountBalance as AccountBalanceIcon
+  AccountBalance as AccountBalanceIcon,
+  ExpandMore as ExpandMoreIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -69,11 +73,14 @@ import {
   isValid,
   isWithinInterval 
 } from 'date-fns';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../../services/firebase/config';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 import { getAllOrders, updateOrder, getOrdersByDateRange } from '../../../services/orderService';
 import { getAllCustomers } from '../../../services/customerService';
 import { getTaskById, getMultipleTasksById } from '../../../services/productionService';
+import { getAllInventoryItems } from '../../../services/inventory/inventoryItemsService';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { exportToCSV, exportToPDF, exportToExcel, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
 import {
@@ -1209,6 +1216,13 @@ const COReportsPage = () => {
     // Stan dla danych historycznych kosztów wybranego produktu
     const [productCostHistory, setProductCostHistory] = useState([]);
     
+    // Stany dla rozwijanych wierszy z konsumpcjami
+    const [expandedRows, setExpandedRows] = useState(new Set());
+    const [taskDetailsCache, setTaskDetailsCache] = useState({});
+    const [loadingTasks, setLoadingTasks] = useState(new Set());
+    const [materialsCache, setMaterialsCache] = useState(null);
+    const [loadingMaterials, setLoadingMaterials] = useState(false);
+    
     // Efekt do obliczania danych historycznych dla wybranego produktu
     useEffect(() => {
       if (productionCosts.length > 0) {
@@ -1293,6 +1307,71 @@ const COReportsPage = () => {
         orderCount: filteredCosts.length
       };
     }, [selectedProduct, productionCosts]);
+    
+    // Funkcja do pobierania szczegółów zadania produkcyjnego
+    const fetchTaskDetails = async (taskId) => {
+      if (taskDetailsCache[taskId] || loadingTasks.has(taskId)) {
+        return; // Już pobrane lub w trakcie pobierania
+      }
+
+      setLoadingTasks(prev => new Set([...prev, taskId]));
+      
+      try {
+        const taskDoc = await getDoc(doc(db, 'productionTasks', taskId));
+        if (taskDoc.exists()) {
+          const taskData = { id: taskDoc.id, ...taskDoc.data() };
+          setTaskDetailsCache(prev => ({ ...prev, [taskId]: taskData }));
+        }
+      } catch (error) {
+        console.error('Błąd podczas pobierania szczegółów zadania:', error);
+        showError('Nie udało się pobrać szczegółów zadania');
+      } finally {
+        setLoadingTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+      }
+    };
+
+    // Funkcja do pobierania wszystkich materiałów (cache)
+    const fetchMaterialsIfNeeded = async () => {
+      if (materialsCache || loadingMaterials) {
+        return; // Już pobrane lub w trakcie pobierania
+      }
+
+      setLoadingMaterials(true);
+      try {
+        const items = await getAllInventoryItems();
+        setMaterialsCache(items || []);
+      } catch (error) {
+        console.error('Błąd podczas pobierania materiałów:', error);
+        setMaterialsCache([]); // Ustaw pustą tablicę aby nie próbować ponownie
+      } finally {
+        setLoadingMaterials(false);
+      }
+    };
+
+    // Funkcja do przełączania rozwinięcia wiersza
+    const toggleRowExpansion = async (taskId) => {
+      const newExpandedRows = new Set(expandedRows);
+      
+      if (newExpandedRows.has(taskId)) {
+        newExpandedRows.delete(taskId);
+      } else {
+        newExpandedRows.add(taskId);
+        // Pobierz materiały jeśli jeszcze nie mamy
+        if (!materialsCache && !loadingMaterials) {
+          await fetchMaterialsIfNeeded();
+        }
+        // Pobierz szczegóły zadania jeśli jeszcze nie mamy
+        if (!taskDetailsCache[taskId]) {
+          await fetchTaskDetails(taskId);
+        }
+      }
+      
+      setExpandedRows(newExpandedRows);
+    };
     
     // Funkcja do eksportu kosztów produkcji do CSV z filtrem produktu
     const handleExportProductionCostsCSVLocal = () => {
@@ -1948,37 +2027,153 @@ const COReportsPage = () => {
                                   <TableCell align="right">{t('coReports.table.totalFullCost')}</TableCell>
                                   <TableCell>MO</TableCell>
                                   <TableCell align="right">{t('coReports.table.productionTime')}</TableCell>
-                                  <TableCell align="center">{t('coReports.table.actions')}</TableCell>
+                                  <TableCell align="center">{t('coReports.table.details')}</TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {productCostHistory.map((entry, index) => (
-                                  <TableRow key={index}>
-                                    <TableCell>{formatDateDisplay(entry.date)}</TableCell>
-                                    <TableCell>{entry.orderNumber}</TableCell>
-                                    <TableCell>{entry.customerName}</TableCell>
-                                    <TableCell align="right">{entry.quantity}</TableCell>
-                                    <TableCell align="right">{formatCurrency(entry.fullUnitCost)}</TableCell>
-                                    <TableCell align="right">{formatCurrency(entry.totalFullCost)}</TableCell>
-                                    <TableCell>{entry.productionTaskNumber || '-'}</TableCell>
-                                    <TableCell align="right">
-                                      {entry.actualProductionTimeHours > 0 ? `${entry.actualProductionTimeHours} h` : '-'}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                      {entry.productionTaskId && (
-                                        <Tooltip title="Otwórz zadanie produkcyjne w nowym oknie">
-                                          <IconButton 
-                                            size="small"
-                                            onClick={() => openProductionTaskInNewWindow(entry.productionTaskId)}
-                                            color="primary"
-                                          >
-                                            <LinkIcon fontSize="small" />
-                                          </IconButton>
-                                        </Tooltip>
+                                {productCostHistory.map((entry, index) => {
+                                  const isExpanded = expandedRows.has(entry.productionTaskId);
+                                  const taskDetails = taskDetailsCache[entry.productionTaskId];
+                                  const isLoading = loadingTasks.has(entry.productionTaskId);
+                                  
+                                  return (
+                                    <React.Fragment key={index}>
+                                      <TableRow>
+                                        <TableCell>{formatDateDisplay(entry.date)}</TableCell>
+                                        <TableCell>{entry.orderNumber}</TableCell>
+                                        <TableCell>{entry.customerName}</TableCell>
+                                        <TableCell align="right">{entry.quantity}</TableCell>
+                                        <TableCell align="right">{formatCurrency(entry.fullUnitCost)}</TableCell>
+                                        <TableCell align="right">{formatCurrency(entry.totalFullCost)}</TableCell>
+                                        <TableCell>{entry.productionTaskNumber || '-'}</TableCell>
+                                        <TableCell align="right">
+                                          {entry.actualProductionTimeHours > 0 ? `${entry.actualProductionTimeHours} h` : '-'}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                          {entry.productionTaskId && (
+                                            <Tooltip title={isExpanded ? t('coReports.consumption.hideDetails') : t('coReports.consumption.showDetails')}>
+                                              <IconButton 
+                                                size="small"
+                                                onClick={() => toggleRowExpansion(entry.productionTaskId)}
+                                                color="primary"
+                                              >
+                                                {isExpanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                                              </IconButton>
+                                            </Tooltip>
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                      
+                                      {/* Rozwinięty wiersz z konsumpcjami */}
+                                      {entry.productionTaskId && isExpanded && (
+                                        <TableRow>
+                                          <TableCell colSpan={9} sx={{ backgroundColor: 'action.hover', p: 0 }}>
+                                            {isLoading ? (
+                                              <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+                                                <CircularProgress size={24} />
+                                              </Box>
+                                            ) : taskDetails?.consumedMaterials && taskDetails.consumedMaterials.length > 0 ? (
+                                              <Box sx={{ p: 2 }}>
+                                                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                                                  {t('coReports.consumption.title', { moNumber: entry.productionTaskNumber })}
+                                                </Typography>
+                                                <TableContainer>
+                                                  <Table size="small">
+                                                    <TableHead>
+                                                      <TableRow sx={{ backgroundColor: 'background.default' }}>
+                                                        <TableCell>{t('coReports.table.material')}</TableCell>
+                                                        <TableCell>{t('coReports.table.batchNumber')}</TableCell>
+                                                        <TableCell align="right">{t('coReports.table.quantity')}</TableCell>
+                                                        <TableCell align="right">{t('coReports.table.unitPrice')}</TableCell>
+                                                        <TableCell align="right">{t('coReports.table.totalValue')}</TableCell>
+                                                        <TableCell align="center">{t('coReports.table.includeInCosts')}</TableCell>
+                                                        <TableCell>{t('coReports.table.consumptionDate')}</TableCell>
+                                                        <TableCell>{t('coReports.table.user')}</TableCell>
+                                                      </TableRow>
+                                                    </TableHead>
+                                                    <TableBody>
+                                                      {taskDetails.consumedMaterials.map((consumed, idx) => {
+                                                        // Znajdź materiał w cache (priorytet: consumed.materialName, potem cache)
+                                                        const materialFromCache = materialsCache?.find(m => 
+                                                          (m.inventoryItemId || m.id) === consumed.materialId
+                                                        );
+                                                        const materialName = consumed.materialName || materialFromCache?.name || t('coReports.consumption.unknownMaterial');
+                                                        const materialUnit = consumed.unit || materialFromCache?.unit || '';
+                                                        
+                                                        let batchNumber = consumed.batchNumber || consumed.lotNumber || consumed.batchId || '-';
+                                                        const unitPrice = consumed.unitPrice || 0;
+                                                        const totalValue = consumed.quantity * unitPrice;
+                                                        
+                                                        // Sprawdź czy konsumpcja jest wliczana do kosztów
+                                                        const includeInCosts = consumed.includeInCosts !== undefined 
+                                                          ? consumed.includeInCosts 
+                                                          : true; // Domyślnie true jeśli nie określono
+                                                        
+                                                        return (
+                                                          <TableRow key={idx} hover>
+                                                            <TableCell>{materialName}</TableCell>
+                                                            <TableCell>
+                                                              <Chip 
+                                                                size="small" 
+                                                                label={batchNumber}
+                                                                color="default"
+                                                                variant="outlined"
+                                                              />
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                              {consumed.quantity} {materialUnit}
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                              {unitPrice > 0 ? `${Number(unitPrice).toFixed(4)} €` : '—'}
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                              {totalValue > 0 ? formatCurrency(totalValue) : '—'}
+                                                            </TableCell>
+                                                            <TableCell align="center">
+                                                              <Checkbox 
+                                                                checked={includeInCosts} 
+                                                                disabled 
+                                                                color="primary"
+                                                                size="small"
+                                                              />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                              {consumed.timestamp 
+                                                                ? (() => {
+                                                                    const date = consumed.timestamp?.toDate 
+                                                                      ? consumed.timestamp.toDate() 
+                                                                      : new Date(consumed.timestamp);
+                                                                    return date.toLocaleString('pl-PL', {
+                                                                      day: '2-digit',
+                                                                      month: '2-digit',
+                                                                      year: 'numeric',
+                                                                      hour: '2-digit',
+                                                                      minute: '2-digit'
+                                                                    });
+                                                                  })()
+                                                                : '—'}
+                                                            </TableCell>
+                                                            <TableCell>{consumed.userName || t('coReports.consumption.unknownUser')}</TableCell>
+                                                          </TableRow>
+                                                        );
+                                                      })}
+                                                    </TableBody>
+                                                  </Table>
+                                                </TableContainer>
+                                              </Box>
+                                            ) : (
+                                              <Box sx={{ p: 2 }}>
+                                                <Alert severity="info">
+                                                  {t('coReports.consumption.noData')}
+                                                </Alert>
+                                              </Box>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
                                       )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                    </React.Fragment>
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </TableContainer>

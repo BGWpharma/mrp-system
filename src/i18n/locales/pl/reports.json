@@ -137,7 +137,23 @@
       "ordersValue": "Wartość zamówień",
       "avgValue": "Średnia wartość",
       "actions": "Akcje",
-      "percentOfTotal": "% całości"
+      "details": "Szczegóły",
+      "percentOfTotal": "% całości",
+      "material": "Materiał",
+      "batchNumber": "Numer partii (LOT)",
+      "unitPrice": "Cena jedn.",
+      "totalValue": "Wartość",
+      "includeInCosts": "Włącz do kosztów",
+      "consumptionDate": "Data konsumpcji",
+      "user": "Użytkownik"
+    },
+    "consumption": {
+      "showDetails": "Pokaż konsumpcje",
+      "hideDetails": "Ukryj konsumpcje",
+      "title": "Konsumpcje materiałów - MO {{moNumber}}",
+      "noData": "Brak konsumpcji materiałów dla tego zadania produkcyjnego",
+      "unknownMaterial": "Nieznany materiał",
+      "unknownUser": "Nieznany użytkownik"
     }
   },
   "analytics": {

@@ -13,7 +13,7 @@
   "companyData": "Company Data",
   "clients": "Clients",
   "proforma": "Proforma",
-  "csvExport": "CSV Report",
+  "csvExport": "CSV Export",
   "table": {
     "invoiceNumber": "Invoice Number",
     "orderNumber": "Order Number",

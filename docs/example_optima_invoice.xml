@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Dokument>
+  <Naglowek>
+    <Typ>FS</Typ>
+    <Numer>FS/2024/001</Numer>
+    <DataWystawienia>2024-11-20</DataWystawienia>
+    <DataSprzedazy>2024-11-20</DataSprzedazy>
+    <TerminPlatnosci>2024-12-04</TerminPlatnosci>
+    <FormaPlat>Przelew</FormaPlat>
+    <Waluta>EUR</Waluta>
+    <Status>issued</Status>
+    <NumerZamowienia>CO/2024/123</NumerZamowienia>
+  </Naglowek>
+  
+  <Kontrahent>
+    <Kod>CUST001</Kod>
+    <Nazwa>Przykładowa Firma Sp. z o.o.</Nazwa>
+    <NIP>PL1234567890</NIP>
+    <Email>kontakt@przyklad.pl</Email>
+    <Telefon>+48 123 456 789</Telefon>
+    <Adres>
+      <Ulica>ul. Przykładowa 123</Ulica>
+      <Miasto>Warszawa</Miasto>
+      <KodPocztowy>00-001</KodPocztowy>
+      <Kraj>Polska</Kraj>
+    </Adres>
+  </Kontrahent>
+  
+  <Pozycje>
+    <Pozycja>
+      <Lp>1</Lp>
+      <Nazwa>Produkt A</Nazwa>
+      <Opis>Wysokiej jakości produkt do zastosowań przemysłowych</Opis>
+      <Ilosc>10.00</Ilosc>
+      <Jm>szt</Jm>
+      <CenaNetto>100.0000</CenaNetto>
+      <StawkaVAT>23</StawkaVAT>
+      <WartoscNetto>1000.00</WartoscNetto>
+      <WartoscVAT>230.00</WartoscVAT>
+      <WartoscBrutto>1230.00</WartoscBrutto>
+    </Pozycja>
+    <Pozycja>
+      <Lp>2</Lp>
+      <Nazwa>Usługa transportowa</Nazwa>
+      <Opis>Transport towaru na adres klienta</Opis>
+      <Ilosc>1.00</Ilosc>
+      <Jm>usł</Jm>
+      <CenaNetto>150.0000</CenaNetto>
+      <StawkaVAT>23</StawkaVAT>
+      <WartoscNetto>150.00</WartoscNetto>
+      <WartoscVAT>34.50</WartoscVAT>
+      <WartoscBrutto>184.50</WartoscBrutto>
+    </Pozycja>
+    <Pozycja>
+      <Lp>3</Lp>
+      <Nazwa>Produkt B</Nazwa>
+      <Opis>Materiał pomocniczy</Opis>
+      <Ilosc>25.50</Ilosc>
+      <Jm>kg</Jm>
+      <CenaNetto>12.5000</CenaNetto>
+      <StawkaVAT>8</StawkaVAT>
+      <WartoscNetto>318.75</WartoscNetto>
+      <WartoscVAT>25.50</WartoscVAT>
+      <WartoscBrutto>344.25</WartoscBrutto>
+    </Pozycja>
+  </Pozycje>
+  
+  <Podsumowanie>
+    <SumaNetto>1468.75</SumaNetto>
+    <SumaVAT>290.00</SumaVAT>
+    <SumaBrutto>1758.75</SumaBrutto>
+    <Waluta>EUR</Waluta>
+  </Podsumowanie>
+  
+  <Uwagi>Faktura wystawiona zgodnie z zamówieniem. Termin płatności: 14 dni.</Uwagi>
+  
+  <Platnosci>
+    <TotalPaid>500.00</TotalPaid>
+    <SettledAdvancePayments>300.00</SettledAdvancePayments>
+    <Remaining>958.75</Remaining>
+  </Platnosci>
+  
+  <Metadane>
+    <DataEksportu>2024-11-20 14:30:00</DataEksportu>
+    <SystemZrodlowy>BGW-MRP</SystemZrodlowy>
+    <CzyProforma>false</CzyProforma>
+    <CzyRefaktura>false</CzyRefaktura>
+  </Metadane>
+</Dokument>
+
