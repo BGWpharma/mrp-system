@@ -1001,6 +1001,9 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       }
     };
     
+    // Automatycznie określ status płatności na podstawie pozycji
+    const autoPaymentStatus = determinePaymentStatus(items, PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID);
+    
     // Przygotuj obiekt zamówienia zakupowego
     const newPurchaseOrder = {
       number,
@@ -1013,7 +1016,7 @@ export const createPurchaseOrder = async (purchaseOrderData, userId) => {
       globalDiscount, // Rabat globalny w procentach
       currency,
       status,
-      paymentStatus: PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID, // Domyślny status płatności
+      paymentStatus: autoPaymentStatus, // Automatycznie określony status płatności
       targetWarehouseId,
       orderDate: safeConvertToDate(orderDate) || new Date(),
       expectedDeliveryDate: safeConvertToDate(expectedDeliveryDate),
@@ -1119,6 +1122,12 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
     }
     if (updatedData.expectedDeliveryDate !== undefined) {
       dataToUpdate.expectedDeliveryDate = safeConvertToDate(updatedData.expectedDeliveryDate);
+    }
+    
+    // Jeśli aktualizujemy items, automatycznie zaktualizuj status płatności (jeśli nie jest już opłacone)
+    if (updatedData.items && updatedData.paymentStatus !== PURCHASE_ORDER_PAYMENT_STATUSES.PAID) {
+      const currentPaymentStatus = updatedData.paymentStatus || oldPoData.paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
+      dataToUpdate.paymentStatus = determinePaymentStatus(updatedData.items, currentPaymentStatus);
     }
     
     // Aktualizuj dokument
@@ -1532,6 +1541,7 @@ export const PURCHASE_ORDER_STATUSES = {
 // Stałe dla statusów płatności zamówień zakupowych
 export const PURCHASE_ORDER_PAYMENT_STATUSES = {
   UNPAID: 'unpaid',
+  TO_BE_PAID: 'to_be_paid',
   PAID: 'paid'
 };
 
@@ -1557,9 +1567,88 @@ export const translateStatus = (status) => {
 export const translatePaymentStatus = (status) => {
   switch (status) {
     case 'unpaid': return 'Nie opłacone';
+    case 'to_be_paid': return 'Do zapłaty';
     case 'paid': return 'Opłacone';
     default: return status;
   }
+};
+
+/**
+ * Oblicza najbliższą datę płatności z pozycji zamówienia
+ * @param {Array} items - Pozycje zamówienia
+ * @returns {Date|null} - Najbliższa data płatności lub null jeśli brak
+ */
+export const getNextPaymentDueDate = (items) => {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Zbierz wszystkie daty płatności
+  const dueDates = items
+    .filter(item => item.paymentDueDate)
+    .map(item => {
+      try {
+        let date;
+        
+        // Obsługa Firestore Timestamp
+        if (item.paymentDueDate && typeof item.paymentDueDate.toDate === 'function') {
+          date = item.paymentDueDate.toDate();
+        } 
+        // Obsługa stringa ISO lub obiektu Date
+        else {
+          date = new Date(item.paymentDueDate);
+        }
+        
+        return !isNaN(date.getTime()) ? date : null;
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(date => date !== null);
+
+  if (dueDates.length === 0) {
+    return [];
+  }
+
+  // Usuń duplikaty dat (porównując timestamp)
+  const uniqueDates = [];
+  const seenTimestamps = new Set();
+  
+  dueDates.forEach(date => {
+    const timestamp = date.getTime();
+    if (!seenTimestamps.has(timestamp)) {
+      seenTimestamps.add(timestamp);
+      uniqueDates.push(date);
+    }
+  });
+
+  // Sortuj daty rosnąco (od najwcześniejszej)
+  return uniqueDates.sort((a, b) => a - b);
+};
+
+/**
+ * Automatycznie określa status płatności na podstawie pozycji zamówienia
+ * @param {Array} items - Pozycje zamówienia
+ * @param {string} currentPaymentStatus - Obecny status płatności
+ * @returns {string} - Odpowiedni status płatności
+ */
+export const determinePaymentStatus = (items, currentPaymentStatus) => {
+  // Jeśli już opłacone, zachowaj ten status
+  if (currentPaymentStatus === PURCHASE_ORDER_PAYMENT_STATUSES.PAID) {
+    return PURCHASE_ORDER_PAYMENT_STATUSES.PAID;
+  }
+
+  // Sprawdź czy jest jakakolwiek data płatności w pozycjach
+  const hasPaymentDueDate = items && items.some(item => item.paymentDueDate);
+
+  if (hasPaymentDueDate) {
+    return PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID;
+  }
+
+  return PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
 };
 
 /**

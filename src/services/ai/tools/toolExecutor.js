@@ -317,26 +317,53 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
-    // Filtr po numerze MO (exact match - po stronie serwera)
+    // ⚠️ STRATEGIA: Używaj TYLKO JEDNEGO filtru serwera dla pól identyfikujących
+    // Reszta filtrów będzie zastosowana po stronie klienta
+    // Powód: Firestore wymaga composite indexes dla wielu where() na różnych polach
+    
+    let serverFilter = null;
+    const clientFilters = {};
+    
+    // PRIORYTET FILTRÓW (od najbardziej do najmniej selektywnego):
+    // 1. moNumber - najbardziej unikalny identyfikator
+    // 2. lotNumber - wysoka selektywność
+    // 3. orderId - może mieć wiele MO
+    // 4. productId - może mieć wiele MO
+    
     if (params.moNumber) {
       constraints.push(where('moNumber', '==', params.moNumber));
-    }
-    
-    // Filtr po ID produktu (exact match - po stronie serwera)
-    if (params.productId) {
-      constraints.push(where('productId', '==', params.productId));
-    }
-    
-    // Filtr po ID zamówienia (exact match - po stronie serwera)
-    if (params.orderId) {
-      constraints.push(where('orderId', '==', params.orderId));
-      console.log(`[ToolExecutor] 🔍 Filtrowanie MO po orderId: ${params.orderId}`);
-    }
-    
-    // Filtr po numerze LOT (exact match - po stronie serwera)
-    if (params.lotNumber) {
+      serverFilter = 'moNumber';
+      console.log(`[ToolExecutor] 🔍 Filtr serwera: moNumber = ${params.moNumber}`);
+    } else if (params.lotNumber) {
       constraints.push(where('lotNumber', '==', params.lotNumber));
-      console.log(`[ToolExecutor] 🔍 Filtrowanie MO po lotNumber: ${params.lotNumber}`);
+      serverFilter = 'lotNumber';
+      console.log(`[ToolExecutor] 🔍 Filtr serwera: lotNumber = ${params.lotNumber}`);
+    } else if (params.orderId) {
+      constraints.push(where('orderId', '==', params.orderId));
+      serverFilter = 'orderId';
+      console.log(`[ToolExecutor] 🔍 Filtr serwera: orderId = ${params.orderId}`);
+    } else if (params.productId) {
+      constraints.push(where('productId', '==', params.productId));
+      serverFilter = 'productId';
+      console.log(`[ToolExecutor] 🔍 Filtr serwera: productId = ${params.productId}`);
+    }
+    
+    // Zapisz pozostałe filtry do filtrowania po stronie klienta
+    if (params.productId && serverFilter !== 'productId') {
+      clientFilters.productId = params.productId;
+    }
+    if (params.orderId && serverFilter !== 'orderId') {
+      clientFilters.orderId = params.orderId;
+    }
+    if (params.lotNumber && serverFilter !== 'lotNumber') {
+      clientFilters.lotNumber = params.lotNumber;
+    }
+    if (params.moNumber && serverFilter !== 'moNumber') {
+      clientFilters.moNumber = params.moNumber;
+    }
+    
+    if (Object.keys(clientFilters).length > 0) {
+      console.log(`[ToolExecutor] 📋 Filtry klienckie: ${Object.keys(clientFilters).join(', ')}`);
     }
     
     // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
@@ -388,8 +415,8 @@ export class ToolExecutor {
       constraints.push(where('assignedTo', '==', params.assignedTo));
     }
     
-    // Limit
-    const limitValue = params.limit || 100;
+    // Limit - zmniejszony domyślny limit z 100 do 50 dla optymalizacji tokenów
+    const limitValue = params.limit || 50;
     constraints.push(firestoreLimit(limitValue));
     
     if (constraints.length > 0) {
@@ -399,15 +426,52 @@ export class ToolExecutor {
     const snapshot = await getDocs(q);
     let tasks = snapshot.docs.map(doc => {
       const data = doc.data();
+      
+      // ⚡ OPTYMALIZACJA: Usuń duże pola i metadata od razu, aby zaoszczędzić pamięć i tokeny
+      const { 
+        materials, 
+        consumedMaterials, 
+        formResponses,
+        // Usuń także inne pola, które nie są potrzebne dla AI
+        createdBy,
+        updatedBy,
+        attachments,
+        notes,
+        history,
+        ...cleanData 
+      } = data;
+      
       return {
         id: doc.id,
-        ...data,
+        ...cleanData,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
         updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() || data.updatedAt,
         startDate: data.startDate?.toDate?.()?.toISOString?.() || data.startDate,
-        endDate: data.endDate?.toDate?.()?.toISOString?.() || data.endDate
+        endDate: data.endDate?.toDate?.()?.toISOString?.() || data.endDate,
+        // Dołącz duże pola tylko gdy wyraźnie proszono (includeDetails=true)
+        ...(params.includeDetails === true ? {
+          materials,
+          consumedMaterials,
+          formResponses
+        } : {
+          // Zachowaj podstawowe statystyki zamiast pełnych danych
+          materialsCount: materials?.length || 0,
+          consumedMaterialsCount: consumedMaterials?.length || 0,
+          formResponsesCount: formResponses?.length || 0
+        })
       };
     });
+    
+    // Zastosuj filtry klienckie (dla pól, które nie były użyte w query serwera)
+    if (Object.keys(clientFilters).length > 0) {
+      const beforeCount = tasks.length;
+      tasks = tasks.filter(task => {
+        return Object.entries(clientFilters).every(([key, value]) => {
+          return task[key] === value;
+        });
+      });
+      console.log(`[ToolExecutor] ✅ Filtrowanie klienckie: ${beforeCount} → ${tasks.length} zadań`);
+    }
     
     // Filtruj po nazwie produktu (po stronie klienta)
     if (params.productName) {
@@ -418,15 +482,12 @@ export class ToolExecutor {
       );
     }
     
-    // ZAWSZE usuń duże pola (oszczędność tokenów) - zachowaj tylko gdy wyraźnie proszono o szczegóły
-    if (params.includeDetails !== true) {
-      tasks = tasks.map(({ materials, consumedMaterials, formResponses, ...task }) => ({
-        ...task,
-        // Zachowaj podstawowe statystyki zamiast pełnych danych
-        materialsCount: materials?.length || 0,
-        consumedMaterialsCount: consumedMaterials?.length || 0,
-        formResponsesCount: formResponses?.length || 0
-      }));
+    // Ostrzeżenie o dużej liczbie wyników (optymalizacja tokenów)
+    let warning = null;
+    if (tasks.length === 0) {
+      warning = "⚠️ BRAK DANYCH - Nie znaleziono żadnych zadań produkcyjnych spełniających kryteria. NIE WYMYŚLAJ danych!";
+    } else if (tasks.length > 20) {
+      warning = `⚠️ DUŻO WYNIKÓW - Zwrócono ${tasks.length} zadań. To może zwiększyć zużycie tokenów. Rozważ użycie bardziej precyzyjnych filtrów.`;
     }
     
     return {
@@ -434,7 +495,7 @@ export class ToolExecutor {
       count: tasks.length,
       limitApplied: limitValue,
       isEmpty: tasks.length === 0,
-      warning: tasks.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zadań produkcyjnych spełniających kryteria. NIE WYMYŚLAJ danych!" : null
+      warning
     };
   }
   

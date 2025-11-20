@@ -65,6 +65,7 @@
   },
   "paymentStatuses": {
     "unpaid": "Unpaid",
+    "to_be_paid": "To Be Paid",
     "partiallyPaid": "Partially Paid",
     "paid": "Paid",
     "overdue": "Overdue"

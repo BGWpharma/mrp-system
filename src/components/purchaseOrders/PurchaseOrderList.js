@@ -29,7 +29,8 @@ import {
   PURCHASE_ORDER_STATUSES, 
   PURCHASE_ORDER_PAYMENT_STATUSES, 
   translateStatus, 
-  translatePaymentStatus 
+  translatePaymentStatus,
+  getNextPaymentDueDate
 } from '../../services/purchaseOrderService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -581,12 +582,27 @@ const PurchaseOrderList = () => {
   
   const getPaymentStatusChip = (paymentStatus, po) => {
     const status = paymentStatus || PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID;
-    const label = translatePaymentStatus(status);
+    let label = translatePaymentStatus(status);
     let color = '#f44336'; // czerwony domyślny dla nie opłacone
+    
+    // Jeśli status to "to_be_paid", wyświetl daty płatności
+    if (status === PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID) {
+      const paymentDates = getNextPaymentDueDate(po.items || []);
+      if (paymentDates.length > 0) {
+        // Formatuj wszystkie daty i połącz przecinkami
+        const formattedDates = paymentDates
+          .map(date => format(new Date(date), 'dd.MM.yyyy'))
+          .join(', ');
+        label = formattedDates;
+      }
+    }
     
     switch (status) {
       case PURCHASE_ORDER_PAYMENT_STATUSES.PAID:
         color = '#4caf50'; // zielony - opłacone
+        break;
+      case PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID:
+        color = '#ff9800'; // pomarańczowy - do zapłaty
         break;
       case PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID:
       default:

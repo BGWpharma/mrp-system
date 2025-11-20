@@ -136,25 +136,25 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_production_tasks",
-      description: "Pobiera zadania produkcyjne (Manufacturing Orders - MO) z filtrami. Użyj gdy użytkownik pyta o produkcję, zlecenia, zadania produkcyjne, MO.",
+      description: "Pobiera zadania produkcyjne (Manufacturing Orders - MO) z filtrami. ✅ MOŻESZ ŁĄCZYĆ wiele filtrów jednocześnie (moNumber, productId, orderId, lotNumber) - system automatycznie optymalizuje zapytanie. Użyj gdy użytkownik pyta o produkcję, zlecenia, zadania produkcyjne, MO.",
       parameters: {
         type: "object",
         properties: {
           moNumber: {
             type: "string",
-            description: "Numer MO (exact match - filtrowane po stronie serwera) - np. 'MO00116'"
+            description: "Numer MO (exact match) - np. 'MO00116'. Najwyższy priorytet filtrowania."
           },
           productId: {
             type: "string",
-            description: "ID produktu (exact match - filtrowane po stronie serwera)"
+            description: "ID produktu (exact match). Możesz łączyć z innymi filtrami."
           },
           orderId: {
             type: "string",
-            description: "ID zamówienia klienta (exact match - filtrowane po stronie serwera) - użyj do znalezienia wszystkich MO powiązanych z konkretnym zamówieniem"
+            description: "ID zamówienia klienta (exact match). Użyj do znalezienia wszystkich MO powiązanych z konkretnym zamówieniem. Możesz łączyć z innymi filtrami."
           },
           lotNumber: {
             type: "string",
-            description: "Numer LOT/partii produkcyjnej (exact match - filtrowane po stronie serwera) - np. 'SN00117'"
+            description: "Numer LOT/partii produkcyjnej (exact match) - np. 'SN00117'. Możesz łączyć z innymi filtrami."
           },
           status: {
             type: "array",
@@ -187,8 +187,8 @@ export const DATABASE_TOOLS = [
           },
           limit: {
             type: "number",
-            description: "Maksymalna liczba wyników",
-            default: 100
+            description: "Maksymalna liczba wyników (domyślnie: 50). ⚠️ Dla testów używaj małych wartości (1-5), aby uniknąć przekroczenia limitów tokenów.",
+            default: 50
           }
         }
       }
