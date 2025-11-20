@@ -245,7 +245,7 @@ const MaterialsAndCostsTab = ({
                       }}
                     >
                       <TableCell>{material.name}</TableCell>
-                      <TableCell>{material.quantity} {material.unit}</TableCell>
+                      <TableCell>{Number(material.quantity || 0).toFixed(2)} {material.unit}</TableCell>
                       {shouldShowPlannedQuantityColumn && (
                         <TableCell>
                           {(() => {
@@ -274,14 +274,14 @@ const MaterialsAndCostsTab = ({
                               );
                             }
                             
-                            return `${plannedQuantity} ${material.unit}`;
+                            return `${Number(plannedQuantity).toFixed(2)} ${material.unit}`;
                           })()}
                         </TableCell>
                       )}
                       <TableCell>
                         {(() => { 
                           const issuedQuantity = calculateIssuedQuantityForMaterial(materialId); 
-                          return issuedQuantity > 0 ? `${issuedQuantity} ${material.unit}` : '—'; 
+                          return issuedQuantity > 0 ? `${Number(issuedQuantity).toFixed(2)} ${material.unit}` : '—'; 
                         })()}
                       </TableCell>
                       <TableCell>
@@ -297,7 +297,7 @@ const MaterialsAndCostsTab = ({
                           
                           return (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <span>{consumedQuantity} {material.unit}</span>
+                              <span>{Number(consumedQuantity).toFixed(2)} {material.unit}</span>
                               {isExceeding && (
                                 <Tooltip title={t('materials.warnings.consumptionExcessTooltip', { percentage: Number(excessPercentage || 0).toFixed(1) })}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -638,7 +638,7 @@ const MaterialsAndCostsTab = ({
                             component={Link}
                             to={`/inventory/${materialId}/batches`}
                             size="small" 
-                            label={`${batchNumber} (${consumed.quantity} ${material ? material.unit : ''})`} 
+                            label={`${batchNumber} (${Number(consumed.quantity || 0).toFixed(2)} ${material ? material.unit : ''})`} 
                             color="info" 
                             variant="outlined" 
                             sx={{ 
@@ -647,7 +647,7 @@ const MaterialsAndCostsTab = ({
                             }} 
                           />
                         </TableCell>
-                        <TableCell>{consumed.quantity} {material ? material.unit : ''}</TableCell>
+                        <TableCell>{Number(consumed.quantity || 0).toFixed(2)} {material ? material.unit : ''}</TableCell>
                         <TableCell>{batchPrice > 0 ? `${Number(batchPrice).toFixed(4)} €` : '—'}</TableCell>
                         <TableCell>
                           <Checkbox 
