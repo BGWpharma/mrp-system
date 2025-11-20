@@ -98,6 +98,14 @@ const MaterialsAndCostsTab = ({
   const { t } = useTranslation('taskDetails');
   const navigate = useNavigate();
 
+  // Sprawdź czy wszystkie materiały mają taką samą wygenerowaną i zaplanowaną ilość
+  // LUB czy jest aktywny tryb edycji (wtedy zawsze pokaż kolumnę)
+  const shouldShowPlannedQuantityColumn = editMode || materials.some(material => {
+    const generatedQuantity = material.quantity || 0;
+    const plannedQuantity = materialQuantities[material.id] || 0;
+    return generatedQuantity !== plannedQuantity;
+  });
+
   return (
     <Grid container spacing={3}>
       {/* Sekcja materiałów */}
@@ -185,8 +193,9 @@ const MaterialsAndCostsTab = ({
                 <TableRow>
                   <TableCell>{t('materials.table.name')}</TableCell>
                   <TableCell>{t('materials.table.quantity')}</TableCell>
-                  <TableCell>{t('materials.table.unit')}</TableCell>
-                  <TableCell>{t('materials.table.actualQuantity')}</TableCell>
+                  {shouldShowPlannedQuantityColumn && (
+                    <TableCell>{t('materials.table.actualQuantity')}</TableCell>
+                  )}
                   <TableCell>{t('materials.table.issuedQuantity')}</TableCell>
                   <TableCell>{t('materials.table.consumedQuantity')}</TableCell>
                   <TableCell>{t('materials.table.unitPrice')}</TableCell>
@@ -236,25 +245,39 @@ const MaterialsAndCostsTab = ({
                       }}
                     >
                       <TableCell>{material.name}</TableCell>
-                      <TableCell>{material.quantity}</TableCell>
-                      <TableCell>{material.unit}</TableCell>
-                      <TableCell>
-                        {editMode ? (
-                          <TextField 
-                            type="number" 
-                            value={materialQuantities[material.id] || 0} 
-                            onChange={(e) => handleQuantityChange(material.id, e.target.value)} 
-                            onWheel={(e) => e.target.blur()} 
-                            error={Boolean(errors[material.id])} 
-                            helperText={errors[material.id]} 
-                            inputProps={{ min: 0, step: 'any' }} 
-                            size="small" 
-                            sx={{ width: '130px' }} 
-                          />
-                        ) : (
-                          materialQuantities[material.id] || 0
-                        )}
-                      </TableCell>
+                      <TableCell>{material.quantity} {material.unit}</TableCell>
+                      {shouldShowPlannedQuantityColumn && (
+                        <TableCell>
+                          {(() => {
+                            const generatedQuantity = material.quantity || 0;
+                            const plannedQuantity = materialQuantities[material.id] || 0;
+                            
+                            // Jeśli ilości są takie same, nie wyświetlaj zaplanowanej ilości
+                            if (generatedQuantity === plannedQuantity) {
+                              return '—';
+                            }
+                            
+                            // Jeśli są różne, wyświetl z możliwością edycji
+                            if (editMode) {
+                              return (
+                                <TextField 
+                                  type="number" 
+                                  value={plannedQuantity} 
+                                  onChange={(e) => handleQuantityChange(material.id, e.target.value)} 
+                                  onWheel={(e) => e.target.blur()} 
+                                  error={Boolean(errors[material.id])} 
+                                  helperText={errors[material.id]} 
+                                  inputProps={{ min: 0, step: 'any' }} 
+                                  size="small" 
+                                  sx={{ width: '130px' }} 
+                                />
+                              );
+                            }
+                            
+                            return `${plannedQuantity} ${material.unit}`;
+                          })()}
+                        </TableCell>
+                      )}
                       <TableCell>
                         {(() => { 
                           const issuedQuantity = calculateIssuedQuantityForMaterial(materialId); 
