@@ -327,7 +327,7 @@ const ForecastPage = () => {
           
           if (itemsToCheck.length > 0) {
             // Pobierz najlepsze ceny od dostawców, priorytetyzując domyślnych dostawców
-            const bestPrices = await getBestSupplierPricesForItems(itemsToCheck);
+            const bestPrices = await getBestSupplierPricesForItems(itemsToCheck, { includeSupplierNames: true });
             
             // Aktualizuj ceny i koszty w materialRequirements na podstawie domyślnych dostawców
             for (const materialId of batchIds) {
@@ -498,44 +498,44 @@ const ForecastPage = () => {
         return;
       }
       
-      // Przygotuj nagłówki CSV
+      // Przygotuj nagłówki CSV (English)
       const headers = [
-        'ID materiału',
-        'Nazwa materiału',
-        'Kategoria',
-        'Jednostka',
-        'Ilość wymagana (pozostała)',
-        'Ilość już skonsumowana',
-        'Ilość dostępna',
-        'Bilans',
-        'Oczekujące dostawy (suma)',
-        'ETA (najbliższa dostawa)',
-        'Szczegóły dostaw',
-        'Bilans po dostawach',
+        'Material ID',
+        'Material Name',
+        'Category',
+        'Unit',
+        'Required Quantity (Remaining)',
+        'Already Consumed',
+        'Available Quantity',
+        'Balance',
+        'Pending Deliveries (Total)',
+        'ETA (Next Delivery)',
+        'Delivery Details',
+        'Balance After Deliveries',
         'Status',
-        'Cena jednostkowa',
-        'Źródło ceny',
-        'Koszt całkowity',
-        'Dostawca',
-        'Domyślny dostawca',
-        'Liczba zadań'
+        'Unit Price',
+        'Price Source',
+        'Total Cost',
+        'Supplier',
+        'Default Supplier',
+        'Number of Tasks'
       ];
       
-      // Funkcja pomocnicza do określenia statusu
+      // Funkcja pomocnicza do określenia statusu (English)
       const getStatus = (item) => {
         const balanceWithDeliveries = item.balanceWithFutureDeliveries || 0;
         const balance = item.balance || 0;
         
         if (balanceWithDeliveries < 0) {
-          return '❌ NIEDOBÓR (po dostawach)';
+          return '❌ SHORTAGE (after deliveries)';
         }
         if (balance < 0) {
-          return '⚠️ Wymaga zamówienia';
+          return '⚠️ Requires ordering';
         }
         if (balance === 0) {
-          return '✓ Wystarczająco';
+          return '✓ Sufficient';
         }
-        return '✓ Nadmiar';
+        return '✓ Surplus';
       };
       
       // Przygotuj wiersze danych - używamy przefiltrowanych i posortowanych danych
@@ -547,16 +547,16 @@ const ForecastPage = () => {
         
         const deliveryDetails = item.futureDeliveries && item.futureDeliveries.length > 0
           ? item.futureDeliveries.map(d => {
-              const date = d.expectedDeliveryDate ? formatDateDisplay(new Date(d.expectedDeliveryDate)) : 'brak daty';
+              const date = d.expectedDeliveryDate ? formatDateDisplay(new Date(d.expectedDeliveryDate)) : 'no date';
               return `${d.poNumber}: ${d.quantity} ${item.unit} (${date})`;
             }).join('; ')
-          : 'Brak';
+          : 'None';
         
         return [
           item.id || '',
           item.name || '',
           item.category || '',
-          item.unit || 'szt.',
+          item.unit || 'pcs',
           item.requiredQuantity || 0,
           item.consumedQuantity || 0,
           item.availableQuantity || 0,
@@ -567,27 +567,27 @@ const ForecastPage = () => {
           item.balanceWithFutureDeliveries || 0,
           getStatus(item),
           item.price || 0,
-          item.priceSource === 'PO' ? 'Zamówienie zakupu (PO)' : item.priceSource === 'supplier' ? 'Dostawca' : 'Magazyn',
+          item.priceSource === 'PO' ? 'Purchase Order (PO)' : item.priceSource === 'supplier' ? 'Supplier' : 'Inventory',
           item.cost || 0,
           item.supplier || '',
-          item.isDefaultSupplier ? 'TAK' : 'NIE',
+          item.isDefaultSupplier ? 'YES' : 'NO',
           (item.tasks && item.tasks.length) || 0
         ];
       });
       
-      // Dodaj informacje o zakresie dat na początku
+      // Dodaj informacje o zakresie dat na początku (English)
       const dateRangeInfo = [
-        ['RAPORT PROGNOZY ZAPOTRZEBOWANIA MATERIAŁÓW'],
-        ['Okres:', `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`],
-        ['Data wygenerowania:', formatDateDisplay(new Date())],
+        ['MATERIAL DEMAND FORECAST REPORT'],
+        ['Period:', `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`],
+        ['Generated on:', formatDateDisplay(new Date())],
         [''],
-        ['STATYSTYKI:'],
-        ['Łączna liczba materiałów:', dataToExport.length],
-        ['Materiały z niedoborem:', dataToExport.filter(item => item.balance < 0).length],
-        ['Materiały z niedoborem po dostawach:', dataToExport.filter(item => item.balanceWithFutureDeliveries < 0).length],
-        ['Łączny koszt materiałów:', dataToExport.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2) + ' PLN'],
+        ['STATISTICS:'],
+        ['Total number of materials:', dataToExport.length],
+        ['Materials with shortage:', dataToExport.filter(item => item.balance < 0).length],
+        ['Materials with shortage after deliveries:', dataToExport.filter(item => item.balanceWithFutureDeliveries < 0).length],
+        ['Total materials cost:', dataToExport.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2) + ' PLN'],
         [''],
-        ['SZCZEGÓŁOWE DANE:'],
+        ['DETAILED DATA:'],
         []
       ];
       
@@ -615,8 +615,8 @@ const ForecastPage = () => {
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       
-      // Nazwa pliku z datą
-      const fileName = `prognoza_zapotrzebowania_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+      // Nazwa pliku z datą (English)
+      const fileName = `material_demand_forecast_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
       
       link.setAttribute('href', url);
       link.setAttribute('download', fileName);
