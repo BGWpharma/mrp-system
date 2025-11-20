@@ -60,7 +60,8 @@ import {
   PictureAsPdf as PdfIcon,
   Link as LinkIcon,
   OpenInNew as OpenInNewIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR, updateOrderStatus } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
@@ -2005,7 +2006,14 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             <TableHead>
               <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
                 <TableCell sx={{ color: 'inherit' }}>{t('orderDetails.table.product')}</TableCell>
-                <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.quantity')}</TableCell>
+                <TableCell sx={{ color: 'inherit' }} align="right">
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+                    {t('orderDetails.table.quantity')}
+                    <Tooltip title="Ilość może być automatycznie skorygowana na podstawie rzeczywistej produkcji">
+                      <InfoIcon sx={{ fontSize: '1rem', opacity: 0.7 }} />
+                    </Tooltip>
+                  </Box>
+                </TableCell>
                 <TableCell sx={{ color: 'inherit', minWidth: 180 }} align="right">{t('orderDetails.table.shipped')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.price')}</TableCell>
                 <TableCell sx={{ color: 'inherit' }} align="right">{t('orderDetails.table.value')}</TableCell>
@@ -2045,7 +2053,75 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                       )}
                     </Box>
                   </TableCell>
-                  <TableCell align="right">{item.quantity} {item.unit}</TableCell>
+                  <TableCell align="right">
+                    <Box>
+                      {item.quantityUpdatedFromProduction && item.previousQuantity ? (
+                        <Tooltip 
+                          title={
+                            <Box>
+                              <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                                Autokorekta z produkcji
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block' }}>
+                                Ilość oryginalna: {item.previousQuantity} {item.unit}
+                              </Typography>
+                              <Typography variant="caption" sx={{ display: 'block' }}>
+                                Ilość aktualna: {item.quantity} {item.unit}
+                              </Typography>
+                              <Typography 
+                                variant="caption" 
+                                sx={{ 
+                                  display: 'block',
+                                  color: (item.quantity - item.previousQuantity) >= 0 ? 'success.light' : 'error.light'
+                                }}
+                              >
+                                Zmiana: {(item.quantity - item.previousQuantity) > 0 ? '+' : ''}{(item.quantity - item.previousQuantity).toFixed(3)} {item.unit}
+                              </Typography>
+                              {item.quantityUpdatedAt && (
+                                <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.8 }}>
+                                  {formatDate(item.quantityUpdatedAt)}
+                                </Typography>
+                              )}
+                              {item.quantityUpdateReason && (
+                                <Typography variant="caption" sx={{ display: 'block', fontStyle: 'italic', mt: 0.5 }}>
+                                  Powód: {item.quantityUpdateReason}
+                                </Typography>
+                              )}
+                            </Box>
+                          }
+                          arrow
+                          placement="left"
+                        >
+                          <Box sx={{ cursor: 'help' }}>
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontWeight: 'bold',
+                                color: 'primary.main'
+                              }}
+                            >
+                              {item.quantity} {item.unit}
+                            </Typography>
+                            <Typography 
+                              variant="caption" 
+                              sx={{ 
+                                textDecoration: 'line-through',
+                                color: 'text.secondary',
+                                display: 'block',
+                                fontSize: '0.7rem'
+                              }}
+                            >
+                              {item.previousQuantity} {item.unit}
+                            </Typography>
+                          </Box>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="body2">
+                          {item.quantity} {item.unit}
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
                   <TableCell align="right">
                     {item.shippedQuantity ? (
                       <Box>
