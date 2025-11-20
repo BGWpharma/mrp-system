@@ -476,6 +476,9 @@ const StocktakingReportPage = () => {
               <TableRow>
                 {renderSortableTableCell(t('stocktaking.tableHeaders.productName'), 'name')}
                 {renderSortableTableCell(t('stocktaking.tableHeaders.category'), 'category')}
+                <TableCell>{t('stocktaking.tableHeaders.lotBatch')}</TableCell>
+                <TableCell>{t('common.expiryDate')}</TableCell>
+                <TableCell>{t('stocktaking.location')}</TableCell>
                 {renderSortableTableCell(t('stocktaking.tableHeaders.systemQuantity'), 'systemQuantity')}
                 {renderSortableTableCell(t('stocktaking.tableHeaders.countedQuantity'), 'countedQuantity')}
                 {renderSortableTableCell(t('stocktaking.tableHeaders.difference'), 'discrepancy')}
@@ -486,7 +489,7 @@ const StocktakingReportPage = () => {
             <TableBody>
               {sortedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
+                  <TableCell colSpan={10} align="center">
                     {t('stocktaking.reportSections.noProductsInStocktaking')}
                   </TableCell>
                 </TableRow>
@@ -495,6 +498,9 @@ const StocktakingReportPage = () => {
                   <TableRow key={item.id} hover>
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{item.category}</TableCell>
+                    <TableCell>{item.batchNumber || item.lotNumber || '-'}</TableCell>
+                    <TableCell>{item.expiryDate ? formatDate(item.expiryDate) : '-'}</TableCell>
+                    <TableCell>{item.location || '-'}</TableCell>
                     <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
                     <TableCell align="right">{item.countedQuantity} {item.unit}</TableCell>
                     <TableCell align="right">

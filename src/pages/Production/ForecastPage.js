@@ -490,7 +490,10 @@ const ForecastPage = () => {
   // Generowanie raportu CSV
   const handleGenerateReport = async () => {
     try {
-      if (forecastData.length === 0) {
+      // Użyj przefiltrowanych i posortowanych danych z listy
+      const dataToExport = filteredData();
+      
+      if (dataToExport.length === 0) {
         showError('Brak danych do wygenerowania raportu');
         return;
       }
@@ -535,8 +538,8 @@ const ForecastPage = () => {
         return '✓ Nadmiar';
       };
       
-      // Przygotuj wiersze danych
-      const rows = forecastData.map(item => {
+      // Przygotuj wiersze danych - używamy przefiltrowanych i posortowanych danych
+      const rows = dataToExport.map(item => {
         // Przygotuj ETA i szczegóły dostaw
         const eta = item.futureDeliveries && item.futureDeliveries.length > 0 && item.futureDeliveries[0].expectedDeliveryDate
           ? formatDateDisplay(new Date(item.futureDeliveries[0].expectedDeliveryDate))
@@ -579,10 +582,10 @@ const ForecastPage = () => {
         ['Data wygenerowania:', formatDateDisplay(new Date())],
         [''],
         ['STATYSTYKI:'],
-        ['Łączna liczba materiałów:', forecastData.length],
-        ['Materiały z niedoborem:', forecastData.filter(item => item.balance < 0).length],
-        ['Materiały z niedoborem po dostawach:', forecastData.filter(item => item.balanceWithFutureDeliveries < 0).length],
-        ['Łączny koszt materiałów:', forecastData.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2) + ' PLN'],
+        ['Łączna liczba materiałów:', dataToExport.length],
+        ['Materiały z niedoborem:', dataToExport.filter(item => item.balance < 0).length],
+        ['Materiały z niedoborem po dostawach:', dataToExport.filter(item => item.balanceWithFutureDeliveries < 0).length],
+        ['Łączny koszt materiałów:', dataToExport.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2) + ' PLN'],
         [''],
         ['SZCZEGÓŁOWE DANE:'],
         []
