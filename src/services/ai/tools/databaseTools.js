@@ -788,6 +788,246 @@ export const DATABASE_TOOLS = [
         }
       }
     }
+  },
+  // ========== NOWE FUNKCJE (FAZA 2) ==========
+  {
+    type: "function",
+    function: {
+      name: "get_production_schedule",
+      description: "📅 Pobiera harmonogram produkcji z filtrowaniem po zakresie dat, statusie, stanowisku i przypisaniu. Optymalizowane dla kalendarza i planowania produkcji. Użyj gdy użytkownik pyta o harmonogram, plan produkcji, co jest zaplanowane, które zadania są na jutro/tydzień.",
+      parameters: {
+        type: "object",
+        properties: {
+          dateFrom: {
+            type: "string",
+            description: "Data początkowa harmonogramu (ISO format YYYY-MM-DD) - FILTROWANE PO STRONIE SERWERA (szybkie!)"
+          },
+          dateTo: {
+            type: "string",
+            description: "Data końcowa harmonogramu (ISO format YYYY-MM-DD) - FILTROWANE PO STRONIE SERWERA (szybkie!)"
+          },
+          status: {
+            description: "Status zadania lub tablica statusów: 'Zaplanowane', 'W trakcie', 'Wstrzymane', 'Zakończone', 'Anulowane'. Jeśli jeden status - filtrowane po stronie serwera (wymaga Composite Index z scheduledDate), jeśli wiele - filtrowane po stronie klienta.",
+            oneOf: [
+              { type: "string" },
+              { type: "array", items: { type: "string" } }
+            ]
+          },
+          workstationId: {
+            type: "string",
+            description: "ID stanowiska pracy - filtrowane po stronie klienta (dla widoku harmonogramu stanowiska)"
+          },
+          assignedTo: {
+            type: "string",
+            description: "ID przypisanego użytkownika - filtrowane po stronie klienta"
+          },
+          productId: {
+            type: "string",
+            description: "ID produktu - filtrowane po stronie klienta"
+          },
+          limit: {
+            type: "number",
+            description: "Maksymalna liczba wyników (domyślnie: 100)",
+            default: 100
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_material_forecast",
+      description: "📊 Analizuje prognozę zapotrzebowania na materiały na podstawie zaplanowanych zadań produkcyjnych. Oblicza: aktualne stany, planowane zużycie, oczekujące dostawy, przewidywane niedobory. Użyj gdy użytkownik pyta o zapotrzebowanie, co zamówić, jakie materiały są potrzebne, prognozę zużycia.",
+      parameters: {
+        type: "object",
+        properties: {
+          forecastPeriodDays: {
+            type: "number",
+            description: "Okres prognozy w dniach (domyślnie: 30 dni od dzisiaj)",
+            default: 30
+          },
+          materialId: {
+            type: "string",
+            description: "ID konkretnego materiału (opcjonalne - jeśli nie podano, analizuje wszystkie materiały)"
+          },
+          includeDetails: {
+            type: "boolean",
+            description: "Czy dołączyć szczegóły zadań i zamówień dla każdego materiału",
+            default: false
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "analyze_supplier_performance",
+      description: "📈 Analizuje wydajność i niezawodność dostawców na podstawie historii zamówień zakupu (PO). Oblicza: on-time delivery rate, średnie opóźnienia, łączną wartość zamówień, ocenę dostawcy. Użyj gdy użytkownik pyta o najlepszych dostawców, terminowość dostaw, ocenę dostawców, które firmy są najlepsze.",
+      parameters: {
+        type: "object",
+        properties: {
+          supplierId: {
+            type: "string",
+            description: "ID konkretnego dostawcy (opcjonalne - jeśli podano, analizuje tylko tego dostawcę; jeśli nie - analizuje wszystkich)"
+          },
+          dateFrom: {
+            type: "string",
+            description: "Data początkowa analizy (ISO format YYYY-MM-DD). Domyślnie: 90 dni wstecz."
+          },
+          includeDetails: {
+            type: "boolean",
+            description: "Czy dołączyć szczegóły poszczególnych zamówień dla każdego dostawcy",
+            default: false
+          },
+          limit: {
+            type: "number",
+            description: "Maksymalna liczba zamówień do analizy (domyślnie: 100 dla jednego dostawcy, 500 dla wszystkich)",
+            default: 100
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_customer_analytics",
+      description: "📊 Analizuje klientów i ich wzorce zakupowe na podstawie historii zamówień (CO). Oblicza: łączną wartość zamówień, średnią wartość zamówienia, liczbę zamówień, completion rate, kategorię klienta (VIP/Premium/Standard). Użyj gdy użytkownik pyta o najlepszych klientów, analitykę sprzedaży, top klientów, przychody od klientów.",
+      parameters: {
+        type: "object",
+        properties: {
+          customerId: {
+            type: "string",
+            description: "ID konkretnego klienta (opcjonalne - jeśli podano, analizuje tylko tego klienta; jeśli nie - analizuje wszystkich)"
+          },
+          dateFrom: {
+            type: "string",
+            description: "Data początkowa analizy (ISO format YYYY-MM-DD). Domyślnie: 90 dni wstecz."
+          },
+          status: {
+            type: "string",
+            description: "Filtr po statusie zamówień: 'Nowe', 'W realizacji', 'Zakończone', 'Anulowane', 'Wstrzymane' - filtrowane po stronie klienta"
+          },
+          includeDetails: {
+            type: "boolean",
+            description: "Czy dołączyć szczegóły poszczególnych zamówień dla każdego klienta",
+            default: false
+          },
+          limit: {
+            type: "number",
+            description: "Maksymalna liczba zamówień do analizy (domyślnie: 100 dla jednego klienta, 500 dla wszystkich)",
+            default: 100
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_form_responses",
+      description: "📝 Pobiera odpowiedzi formularzy: formularze parametrów hali (raporty serwisu, rejestr usterek) oraz formularze produkcyjne (załączone do zadań MO). Użyj gdy użytkownik pyta o formularze, raporty serwisowe, usterki, odpowiedzi formularzy, kontrole jakości.",
+      parameters: {
+        type: "object",
+        properties: {
+          formType: {
+            type: "string",
+            enum: ["hall", "production"],
+            description: "Typ formularzy: 'hall' = formularze parametrów hali (raporty serwisu, usterki), 'production' = formularze produkcyjne z zadań MO. Jeśli nie podano - pobiera oba typy."
+          },
+          dateFrom: {
+            type: "string",
+            description: "Data początkowa (ISO format YYYY-MM-DD) - dla formularzy hali filtrowane po fillDate, dla produkcyjnych po scheduledDate zadania"
+          },
+          dateTo: {
+            type: "string",
+            description: "Data końcowa (ISO format YYYY-MM-DD)"
+          },
+          author: {
+            type: "string",
+            description: "Email autora formularza (tylko dla formularzy hali) - filtrowane po stronie serwera"
+          },
+          moNumber: {
+            type: "string",
+            description: "Numer MO (tylko dla formularzy produkcyjnych) - aby pobrać formularze dla konkretnego zadania"
+          },
+          limit: {
+            type: "number",
+            description: "Maksymalna liczba odpowiedzi (domyślnie: 50)",
+            default: 50
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_audit_log",
+      description: "📜 Pobiera log audytowy zmian w systemie: zmiany statusów zamówień zakupu, aktualizacje kosztów produkcji, modyfikacje zamówień klientów. NIE MA dedykowanej kolekcji audit_log - dane są zbierane z pól statusHistory i costHistory w dokumentach. Użyj gdy użytkownik pyta o historię zmian, kto co zmienił, audit trail, logi systemowe.",
+      parameters: {
+        type: "object",
+        properties: {
+          dateFrom: {
+            type: "string",
+            description: "Data początkowa (ISO format YYYY-MM-DD). Domyślnie: 7 dni wstecz. FILTROWANE PO updatedAt po stronie serwera."
+          },
+          collection: {
+            type: "string",
+            enum: ["purchaseOrders", "productionTasks", "customerOrders"],
+            description: "Kolekcja do przeszukania: 'purchaseOrders' = zmiany statusów PO, 'productionTasks' = zmiany kosztów MO, 'customerOrders' = aktualizacje CO. Jeśli nie podano - przeszukuje wszystkie."
+          },
+          userId: {
+            type: "string",
+            description: "ID użytkownika który wykonał zmianę - filtrowane po stronie klienta"
+          },
+          limit: {
+            type: "number",
+            description: "Maksymalna liczba wpisów logu (domyślnie: 100)",
+            default: 100
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "calculate_batch_traceability",
+      description: "🔍 Oblicza pełny łańcuch traceability (śledzenie pochodzenia) dla partii produktu lub materiału. BACKWARD: PO (zakup) → Batch (partia surowca) → MO (produkcja) → Batch (partia produktu). FORWARD: Batch (partia produktu) → CO (zamówienie klienta). Używa consumedMaterials z zadań produkcyjnych. Użyj gdy użytkownik pyta o pochodzenie partii, traceability LOT, z jakiego zamówienia pochodzi, gdzie trafiła partia.",
+      parameters: {
+        type: "object",
+        properties: {
+          batchNumber: {
+            type: "string",
+            description: "Numer partii (batch number) do śledzenia - FILTROWANE PO STRONIE SERWERA (najszybsze)"
+          },
+          lotNumber: {
+            type: "string",
+            description: "Numer LOT partii - alternatywa dla batchNumber - FILTROWANE PO STRONIE SERWERA"
+          },
+          moNumber: {
+            type: "string",
+            description: "Numer MO - znajdzie partie utworzone przez to zadanie produkcyjne - FILTROWANE PO STRONIE SERWERA"
+          },
+          direction: {
+            type: "string",
+            enum: ["forward", "backward", "both"],
+            description: "Kierunek śledzenia: 'backward' = wstecz (od produktu do surowców i PO), 'forward' = do przodu (od partii do zamówień klientów), 'both' = oba kierunki. Domyślnie: 'both'",
+            default: "both"
+          },
+          includeDetails: {
+            type: "boolean",
+            description: "Czy dołączyć pełne szczegóły każdego kroku łańcucha (materiały, ilości, daty, ceny). Domyślnie: false - zwraca tylko podstawowe informacje.",
+            default: false
+          }
+        },
+        required: [],
+        description: "UWAGA: Musisz podać co najmniej jeden z parametrów: batchNumber, lotNumber lub moNumber"
+      }
+    }
   }
 ];
 

@@ -14,12 +14,44 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTION_MAPPING } from './databaseTools.js';
+import { getUsersDisplayNames } from '../../userService.js';
 
 /**
  * Wykonuje narzędzia (funkcje) wywołane przez GPT
  * Każda funkcja wykonuje targetowane zapytanie do Firestore
  */
 export class ToolExecutor {
+  
+  /**
+   * Helper: Rozwiązuje nazwy użytkowników dla listy ID
+   * @private
+   */
+  static async resolveUserNames(userIds) {
+    if (!userIds || userIds.length === 0) return {};
+    
+    try {
+      const uniqueIds = [...new Set(userIds.filter(id => id))];
+      const userNamesMap = await getUsersDisplayNames(uniqueIds);
+      return userNamesMap;
+    } catch (error) {
+      console.warn('[ToolExecutor] ⚠️ Nie udało się pobrać nazw użytkowników:', error.message);
+      // Zwróć mapę z ID jako wartościami (fallback)
+      const fallbackMap = {};
+      userIds.forEach(id => {
+        if (id) fallbackMap[id] = id;
+      });
+      return fallbackMap;
+    }
+  }
+  
+  /**
+   * Helper: Zamienia ID użytkownika na nazwę (jeśli jest w mapie)
+   * @private
+   */
+  static getUserName(userId, userNamesMap) {
+    if (!userId) return null;
+    return userNamesMap[userId] || userId; // Fallback do ID jeśli nie ma nazwy
+  }
   
   /**
    * Wykonuje funkcję wywołaną przez GPT
@@ -89,6 +121,28 @@ export class ToolExecutor {
           break;
         case 'trace_material_flow':
           result = await this.traceMaterialFlow(parameters);
+          break;
+        // ✅ NOWE FUNKCJE
+        case 'get_production_schedule':
+          result = await this.getProductionSchedule(parameters);
+          break;
+        case 'analyze_material_forecast':
+          result = await this.analyzeMaterialForecast(parameters);
+          break;
+        case 'analyze_supplier_performance':
+          result = await this.analyzeSupplierPerformance(parameters);
+          break;
+        case 'get_customer_analytics':
+          result = await this.getCustomerAnalytics(parameters);
+          break;
+        case 'query_form_responses':
+          result = await this.queryFormResponses(parameters);
+          break;
+        case 'get_audit_log':
+          result = await this.getAuditLog(parameters);
+          break;
+        case 'calculate_batch_traceability':
+          result = await this.calculateBatchTraceability(parameters);
           break;
         default:
           throw new Error(`Nieznana funkcja: ${functionName}`);
@@ -432,9 +486,7 @@ export class ToolExecutor {
         materials, 
         consumedMaterials, 
         formResponses,
-        // Usuń także inne pola, które nie są potrzebne dla AI
-        createdBy,
-        updatedBy,
+        // Usuń metadane ale ZACHOWAJ pola użytkowników do późniejszego rozwiązania
         attachments,
         notes,
         history,
@@ -448,6 +500,10 @@ export class ToolExecutor {
         updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() || data.updatedAt,
         startDate: data.startDate?.toDate?.()?.toISOString?.() || data.startDate,
         endDate: data.endDate?.toDate?.()?.toISOString?.() || data.endDate,
+        // Zachowaj pola użytkowników (będą zamienione na nazwy poniżej)
+        createdBy: data.createdBy,
+        updatedBy: data.updatedBy,
+        assignedTo: data.assignedTo,
         // Dołącz duże pola tylko gdy wyraźnie proszono (includeDetails=true)
         ...(params.includeDetails === true ? {
           materials,
@@ -480,6 +536,27 @@ export class ToolExecutor {
         (task.productName || '').toLowerCase().includes(searchTerm) ||
         (task.moNumber || '').toLowerCase().includes(searchTerm)
       );
+    }
+    
+    // ✅ NOWE: Rozwiąż nazwy użytkowników
+    const userIds = [];
+    tasks.forEach(task => {
+      if (task.createdBy) userIds.push(task.createdBy);
+      if (task.updatedBy) userIds.push(task.updatedBy);
+      if (task.assignedTo) userIds.push(task.assignedTo);
+    });
+    
+    if (userIds.length > 0) {
+      const userNamesMap = await this.resolveUserNames(userIds);
+      
+      tasks = tasks.map(task => ({
+        ...task,
+        createdBy: task.createdBy ? this.getUserName(task.createdBy, userNamesMap) : null,
+        updatedBy: task.updatedBy ? this.getUserName(task.updatedBy, userNamesMap) : null,
+        assignedTo: task.assignedTo ? this.getUserName(task.assignedTo, userNamesMap) : null
+      }));
+      
+      console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(userNamesMap).length} użytkowników`);
     }
     
     // Ostrzeżenie o dużej liczbie wyników (optymalizacja tokenów)
@@ -1308,9 +1385,15 @@ export class ToolExecutor {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
+        taskId: data.taskId,
+        moNumber: data.moNumber,
+        sessionIndex: data.sessionIndex,
         startTime: data.startTime?.toDate?.()?.toISOString?.() || data.startTime,
         endTime: data.endTime?.toDate?.()?.toISOString?.() || data.endTime,
+        timeSpent: data.timeSpent,
+        quantity: data.quantity,
+        userId: data.userId,
+        userName: data.userName,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt
       };
     });
@@ -1318,6 +1401,52 @@ export class ToolExecutor {
     // Filtruj po minimalnej ilości (po stronie klienta)
     if (params.minQuantity) {
       sessions = sessions.filter(s => (s.quantity || 0) >= params.minQuantity);
+    }
+    
+    // ✅ NOWE: Rozwiąż nazwy użytkowników jeśli nie ma userName
+    const userIds = sessions
+      .filter(s => s.userId && !s.userName)
+      .map(s => s.userId);
+    
+    if (userIds.length > 0) {
+      const userNamesMap = await this.resolveUserNames(userIds);
+      
+      sessions = sessions.map(s => ({
+        ...s,
+        userName: s.userName || (s.userId ? this.getUserName(s.userId, userNamesMap) : null)
+      }));
+      
+      console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(userNamesMap).length} użytkowników`);
+    }
+    
+    // ✅ NOWE: Pobierz moNumber dla zadań jeśli nie istnieje
+    const sessionsWithoutMO = sessions.filter(s => s.taskId && !s.moNumber);
+    if (sessionsWithoutMO.length > 0) {
+      const taskIds = [...new Set(sessionsWithoutMO.map(s => s.taskId))];
+      const tasksMap = {};
+      
+      for (const taskId of taskIds) {
+        try {
+          const taskDoc = await getDoc(doc(db, COLLECTION_MAPPING.production_tasks, taskId));
+          if (taskDoc.exists()) {
+            const taskData = taskDoc.data();
+            tasksMap[taskId] = {
+              moNumber: taskData.moNumber,
+              productName: taskData.productName
+            };
+          }
+        } catch (error) {
+          console.warn(`[ToolExecutor] ⚠️ Nie można pobrać MO dla taskId ${taskId}:`, error.message);
+        }
+      }
+      
+      sessions = sessions.map(s => ({
+        ...s,
+        moNumber: s.moNumber || tasksMap[s.taskId]?.moNumber,
+        productName: s.productName || tasksMap[s.taskId]?.productName
+      }));
+      
+      console.log(`[ToolExecutor] ✅ Wzbogacono ${Object.keys(tasksMap).length} sesji o moNumber`);
     }
     
     // Oblicz produktywność
@@ -2194,6 +2323,1106 @@ export class ToolExecutor {
       
       return total + quantityInGrams;
     }, 0);
+  }
+  
+  /**
+   * 2. Pobiera harmonogram produkcji
+   */
+  static async getProductionSchedule(params) {
+    console.log('[ToolExecutor] 📅 Pobieranie harmonogramu produkcji...', params);
+    
+    const collectionName = COLLECTION_MAPPING.production_tasks;
+    let q = collection(db, collectionName);
+    const constraints = [];
+    const clientFilters = {};
+    
+    // PRIORYTET 1: Filtruj po zakresie dat (ZAWSZE po stronie serwera)
+    if (params.dateFrom) {
+      const startTimestamp = Timestamp.fromDate(new Date(params.dateFrom));
+      constraints.push(where('scheduledDate', '>=', startTimestamp));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie od daty: ${params.dateFrom}`);
+    }
+    
+    if (params.dateTo) {
+      const endTimestamp = Timestamp.fromDate(new Date(params.dateTo));
+      constraints.push(where('scheduledDate', '<=', endTimestamp));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie do daty: ${params.dateTo}`);
+    }
+    
+    // PRIORYTET 2: Status (tylko jeśli jeden status i jest zakres dat)
+    if (params.status && !Array.isArray(params.status) && constraints.length > 0) {
+      // WYMAGA Composite Index: scheduledDate + status
+      constraints.push(where('status', '==', params.status));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po statusie (serwer): ${params.status}`);
+    } else if (params.status) {
+      // Wiele statusów - po stronie klienta
+      clientFilters.status = Array.isArray(params.status) ? params.status : [params.status];
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po statusach (klient):`, clientFilters.status);
+    }
+    
+    // POZOSTAŁE filtry po stronie klienta
+    if (params.workstationId) {
+      clientFilters.workstationId = params.workstationId;
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po stanowisku (klient): ${params.workstationId}`);
+    }
+    
+    if (params.assignedTo) {
+      clientFilters.assignedTo = params.assignedTo;
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po przypisaniu (klient): ${params.assignedTo}`);
+    }
+    
+    if (params.productId) {
+      clientFilters.productId = params.productId;
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po produkcie (klient): ${params.productId}`);
+    }
+    
+    // Sortowanie i limit
+    constraints.push(orderBy('scheduledDate', 'asc'));
+    const limitValue = params.limit || 100;
+    constraints.push(firestoreLimit(limitValue));
+    
+    if (constraints.length > 0) {
+      q = query(q, ...constraints);
+    }
+    
+    const snapshot = await getDocs(q);
+    let tasks = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        moNumber: data.moNumber,
+        productName: data.productName,
+        productId: data.productId,
+        status: data.status,
+        quantity: data.quantity,
+        finalQuantity: data.finalQuantity,
+        workstationId: data.workstationId,
+        assignedTo: data.assignedTo,
+        scheduledDate: data.scheduledDate?.toDate?.()?.toISOString?.() || data.scheduledDate,
+        endDate: data.endDate?.toDate?.()?.toISOString?.() || data.endDate,
+        orderId: data.orderId,
+        orderNumber: data.orderNumber
+      };
+    });
+    
+    console.log(`[ToolExecutor] ✅ Pobrano ${tasks.length} zadań z serwera`);
+    
+    // Zastosuj filtry klienckie
+    if (Object.keys(clientFilters).length > 0) {
+      const beforeCount = tasks.length;
+      tasks = tasks.filter(task => {
+        return Object.entries(clientFilters).every(([key, value]) => {
+          if (key === 'status' && Array.isArray(value)) {
+            return value.includes(task[key]);
+          }
+          return task[key] === value;
+        });
+      });
+      console.log(`[ToolExecutor] 🔍 Filtrowanie klienckie: ${beforeCount} → ${tasks.length} zadań`);
+    }
+    
+    // ✅ NOWE: Rozwiąż nazwy użytkowników
+    const userIds = tasks.map(t => t.assignedTo).filter(Boolean);
+    if (userIds.length > 0) {
+      const userNamesMap = await this.resolveUserNames(userIds);
+      
+      // Zastąp assignedTo ID nazwą użytkownika
+      tasks = tasks.map(task => ({
+        ...task,
+        assignedTo: task.assignedTo ? this.getUserName(task.assignedTo, userNamesMap) : null
+      }));
+      
+      console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(userNamesMap).length} użytkowników`);
+    }
+    
+    return {
+      tasks,
+      count: tasks.length,
+      limitApplied: limitValue,
+      isEmpty: tasks.length === 0,
+      warning: tasks.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono zadań w harmonogramie dla podanych kryteriów." : null
+    };
+  }
+  
+  /**
+   * 3. Analizuje prognozę zapotrzebowania na materiały
+   */
+  static async analyzeMaterialForecast(params) {
+    console.log('[ToolExecutor] 📊 Analiza prognozy zapotrzebowania...', params);
+    
+    const forecastDays = params.forecastPeriodDays || 30;
+    const now = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + forecastDays);
+    
+    console.log(`[ToolExecutor] 📅 Okres prognozy: ${now.toISOString().split('T')[0]} - ${endDate.toISOString().split('T')[0]}`);
+    
+    // 1. Pobierz zadania produkcyjne w okresie prognozy
+    const tasksQuery = query(
+      collection(db, COLLECTION_MAPPING.production_tasks),
+      where('scheduledDate', '<=', Timestamp.fromDate(endDate)),
+      where('status', 'in', ['Zaplanowane', 'W trakcie']),
+      firestoreLimit(500)
+    );
+    
+    const tasksSnapshot = await getDocs(tasksQuery);
+    const tasks = tasksSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`[ToolExecutor] ✅ Pobrano ${tasks.length} zadań produkcyjnych`);
+    
+    // 2. Agreguj zapotrzebowanie na materiały
+    const materialDemand = {};
+    
+    tasks.forEach(task => {
+      if (task.materials && Array.isArray(task.materials)) {
+        task.materials.forEach(material => {
+          const materialId = material.materialId || material.id;
+          if (!materialId) return;
+          
+          if (!materialDemand[materialId]) {
+            materialDemand[materialId] = {
+              materialId,
+              materialName: material.materialName || material.name,
+              totalDemand: 0,
+              tasks: [],
+              unit: material.unit
+            };
+          }
+          
+          const quantity = parseFloat(material.quantity) || 0;
+          materialDemand[materialId].totalDemand += quantity;
+          materialDemand[materialId].tasks.push({
+            taskId: task.id,
+            moNumber: task.moNumber,
+            productName: task.productName,
+            quantity: quantity,
+            scheduledDate: task.scheduledDate?.toDate?.()?.toISOString?.() || task.scheduledDate
+          });
+        });
+      }
+    });
+    
+    // 3. Pobierz oczekujące zamówienia zakupu
+    const poQuery = query(
+      collection(db, COLLECTION_MAPPING.purchase_orders),
+      where('status', 'in', ['oczekujące', 'potwierdzone', 'częściowo dostarczone']),
+      firestoreLimit(200)
+    );
+    
+    const poSnapshot = await getDocs(poQuery);
+    const pendingOrders = {};
+    
+    poSnapshot.docs.forEach(doc => {
+      const po = doc.data();
+      if (po.items && Array.isArray(po.items)) {
+        po.items.forEach(item => {
+          const materialId = item.itemId || item.inventoryId;
+          if (!materialId) return;
+          
+          if (!pendingOrders[materialId]) {
+            pendingOrders[materialId] = {
+              totalOrdered: 0,
+              orders: []
+            };
+          }
+          
+          const quantity = parseFloat(item.quantity) || 0;
+          pendingOrders[materialId].totalOrdered += quantity;
+          pendingOrders[materialId].orders.push({
+            poId: doc.id,
+            poNumber: po.number,
+            quantity: quantity,
+            expectedDeliveryDate: po.expectedDeliveryDate?.toDate?.()?.toISOString?.() || po.expectedDeliveryDate
+          });
+        });
+      }
+    });
+    
+    console.log(`[ToolExecutor] ✅ Pobrano ${poSnapshot.docs.length} oczekujących zamówień zakupu`);
+    
+    // 4. Pobierz aktualny stan magazynowy
+    const inventoryQuery = query(
+      collection(db, COLLECTION_MAPPING.inventory),
+      firestoreLimit(500)
+    );
+    
+    const inventorySnapshot = await getDocs(inventoryQuery);
+    const currentStock = {};
+    
+    inventorySnapshot.docs.forEach(doc => {
+      const item = doc.data();
+      currentStock[doc.id] = {
+        quantity: parseFloat(item.quantity) || 0,
+        minQuantity: parseFloat(item.minQuantity) || 0,
+        unit: item.unit
+      };
+    });
+    
+    console.log(`[ToolExecutor] ✅ Pobrano stan ${inventorySnapshot.docs.length} materiałów`);
+    
+    // 5. Oblicz prognozę dla każdego materiału
+    const forecast = Object.keys(materialDemand).map(materialId => {
+      const demand = materialDemand[materialId];
+      const stock = currentStock[materialId] || { quantity: 0, minQuantity: 0, unit: demand.unit };
+      const ordered = pendingOrders[materialId] || { totalOrdered: 0, orders: [] };
+      
+      const projectedStock = stock.quantity + ordered.totalOrdered - demand.totalDemand;
+      const shortfall = projectedStock < stock.minQuantity ? stock.minQuantity - projectedStock : 0;
+      
+      return {
+        materialId,
+        materialName: demand.materialName,
+        currentStock: stock.quantity,
+        minStock: stock.minQuantity,
+        plannedDemand: demand.totalDemand,
+        orderedQuantity: ordered.totalOrdered,
+        projectedStock: parseFloat(projectedStock.toFixed(2)),
+        shortfall: parseFloat(shortfall.toFixed(2)),
+        status: projectedStock < stock.minQuantity ? 'shortage' : projectedStock < 0 ? 'critical' : 'ok',
+        unit: demand.unit || stock.unit,
+        demandDetails: params.includeDetails ? demand.tasks : undefined,
+        orderDetails: params.includeDetails ? ordered.orders : undefined
+      };
+    });
+    
+    // Sortuj po statusie (krytyczne najpierw)
+    forecast.sort((a, b) => {
+      const statusOrder = { 'critical': 0, 'shortage': 1, 'ok': 2 };
+      return statusOrder[a.status] - statusOrder[b.status];
+    });
+    
+    return {
+      forecast,
+      count: forecast.length,
+      summary: {
+        critical: forecast.filter(f => f.status === 'critical').length,
+        shortage: forecast.filter(f => f.status === 'shortage').length,
+        ok: forecast.filter(f => f.status === 'ok').length,
+        totalTasksAnalyzed: tasks.length,
+        forecastPeriodDays: forecastDays
+      },
+      isEmpty: forecast.length === 0,
+      warning: forecast.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono zadań produkcyjnych do analizy." : null
+    };
+  }
+  
+  /**
+   * 5. Analizuje wydajność dostawców
+   */
+  static async analyzeSupplierPerformance(params) {
+    console.log('[ToolExecutor] 📈 Analiza wydajności dostawców...', params);
+    
+    let poQuery;
+    
+    if (params.supplierId) {
+      // Analiza jednego dostawcy
+      poQuery = query(
+        collection(db, COLLECTION_MAPPING.purchase_orders),
+        where('supplierId', '==', params.supplierId),
+        orderBy('orderDate', 'desc'),
+        firestoreLimit(params.limit || 100)
+      );
+      console.log(`[ToolExecutor] 🔍 Analiza dostawcy: ${params.supplierId}`);
+    } else {
+      // Analiza wszystkich dostawców w okresie
+      const dateFrom = params.dateFrom 
+        ? new Date(params.dateFrom) 
+        : new Date(Date.now() - 90*24*60*60*1000); // 90 dni wstecz
+      
+      poQuery = query(
+        collection(db, COLLECTION_MAPPING.purchase_orders),
+        where('orderDate', '>=', Timestamp.fromDate(dateFrom)),
+        orderBy('orderDate', 'desc'),
+        firestoreLimit(500)
+      );
+      console.log(`[ToolExecutor] 🔍 Analiza wszystkich dostawców od: ${dateFrom.toISOString().split('T')[0]}`);
+    }
+    
+    const poSnapshot = await getDocs(poQuery);
+    const pos = poSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`[ToolExecutor] ✅ Pobrano ${pos.length} zamówień zakupu`);
+    
+    // Dla każdego PO, pobierz partie (receivedDate) aby obliczyć faktyczne opóźnienia
+    const supplierMetrics = {};
+    
+    for (const po of pos) {
+      const supplierId = po.supplierId;
+      const supplierName = po.supplier?.name || po.supplierName || 'Nieznany dostawca';
+      
+      if (!supplierMetrics[supplierId]) {
+        supplierMetrics[supplierId] = {
+          supplierId,
+          supplierName,
+          totalOrders: 0,
+          totalValue: 0,
+          deliveredOnTime: 0,
+          deliveredLate: 0,
+          totalDelay: 0, // w dniach
+          orders: []
+        };
+      }
+      
+      const metrics = supplierMetrics[supplierId];
+      metrics.totalOrders++;
+      metrics.totalValue += parseFloat(po.totalGross || po.totalValue || 0);
+      
+      // Pobierz partie dla tego PO aby określić faktyczną datę dostawy
+      const batchesQuery = query(
+        collection(db, COLLECTION_MAPPING.inventory_batches),
+        where('purchaseOrderDetails.id', '==', po.id),
+        firestoreLimit(50)
+      );
+      
+      const batchesSnapshot = await getDocs(batchesQuery);
+      
+      if (batchesSnapshot.docs.length > 0) {
+        // Użyj pierwszej partii do określenia daty dostawy
+        const firstBatch = batchesSnapshot.docs[0].data();
+        const receivedDate = firstBatch.receivedDate?.toDate?.() || new Date(firstBatch.receivedDate);
+        const expectedDate = po.expectedDeliveryDate?.toDate?.() || new Date(po.expectedDeliveryDate);
+        
+        if (receivedDate && expectedDate) {
+          const delayDays = Math.floor((receivedDate - expectedDate) / (1000 * 60 * 60 * 24));
+          
+          if (delayDays <= 0) {
+            metrics.deliveredOnTime++;
+          } else {
+            metrics.deliveredLate++;
+            metrics.totalDelay += delayDays;
+          }
+          
+          if (params.includeDetails) {
+            metrics.orders.push({
+              poId: po.id,
+              poNumber: po.number,
+              orderDate: po.orderDate?.toDate?.()?.toISOString?.() || po.orderDate,
+              expectedDate: expectedDate.toISOString(),
+              receivedDate: receivedDate.toISOString(),
+              delayDays: delayDays,
+              value: po.totalGross || po.totalValue,
+              status: po.status
+            });
+          }
+        }
+      }
+    }
+    
+    // Oblicz metryki finalne
+    const performance = Object.values(supplierMetrics).map(metrics => {
+      const totalDelivered = metrics.deliveredOnTime + metrics.deliveredLate;
+      const onTimeRate = totalDelivered > 0 
+        ? (metrics.deliveredOnTime / totalDelivered) * 100 
+        : 0;
+      const avgDelay = metrics.deliveredLate > 0 
+        ? metrics.totalDelay / metrics.deliveredLate 
+        : 0;
+      
+      return {
+        ...metrics,
+        onTimeDeliveryRate: parseFloat(onTimeRate.toFixed(2)),
+        averageDelayDays: parseFloat(avgDelay.toFixed(2)),
+        totalDelivered,
+        rating: onTimeRate >= 90 ? 'excellent' : onTimeRate >= 70 ? 'good' : onTimeRate >= 50 ? 'fair' : 'poor'
+      };
+    });
+    
+    // Sortuj po onTimeDeliveryRate (najlepsi najpierw)
+    performance.sort((a, b) => b.onTimeDeliveryRate - a.onTimeDeliveryRate);
+    
+    return {
+      suppliers: performance,
+      count: performance.length,
+      summary: {
+        totalSuppliers: performance.length,
+        totalOrders: pos.length,
+        excellent: performance.filter(s => s.rating === 'excellent').length,
+        good: performance.filter(s => s.rating === 'good').length,
+        fair: performance.filter(s => s.rating === 'fair').length,
+        poor: performance.filter(s => s.rating === 'poor').length
+      },
+      isEmpty: performance.length === 0,
+      warning: performance.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono zamówień zakupu do analizy." : null
+    };
+  }
+  
+  /**
+   * 6. Analiza klientów i ich zamówień
+   */
+  static async getCustomerAnalytics(params) {
+    console.log('[ToolExecutor] 📊 Analiza klientów...', params);
+    
+    let ordersQuery;
+    const clientFilters = {};
+    
+    if (params.customerId) {
+      // Analiza konkretnego klienta
+      ordersQuery = query(
+        collection(db, COLLECTION_MAPPING.customer_orders),
+        where('customer.id', '==', params.customerId),
+        orderBy('orderDate', 'desc'),
+        firestoreLimit(params.limit || 100)
+      );
+      console.log(`[ToolExecutor] 🔍 Analiza klienta: ${params.customerId}`);
+    } else {
+      // Analiza wszystkich klientów w okresie
+      const dateFrom = params.dateFrom 
+        ? new Date(params.dateFrom) 
+        : new Date(Date.now() - 90*24*60*60*1000); // 90 dni wstecz
+      
+      ordersQuery = query(
+        collection(db, COLLECTION_MAPPING.customer_orders),
+        where('orderDate', '>=', Timestamp.fromDate(dateFrom)),
+        orderBy('orderDate', 'desc'),
+        firestoreLimit(500)
+      );
+      console.log(`[ToolExecutor] 🔍 Analiza wszystkich klientów od: ${dateFrom.toISOString().split('T')[0]}`);
+      
+      // Filtruj po statusie po stronie klienta jeśli potrzeba
+      if (params.status) {
+        clientFilters.status = params.status;
+      }
+    }
+    
+    const ordersSnapshot = await getDocs(ordersQuery);
+    let orders = ordersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`[ToolExecutor] ✅ Pobrano ${orders.length} zamówień`);
+    
+    // Zastosuj filtry klienckie
+    if (Object.keys(clientFilters).length > 0) {
+      orders = orders.filter(order => {
+        return Object.entries(clientFilters).every(([key, value]) => {
+          return order[key] === value;
+        });
+      });
+    }
+    
+    // Agreguj dane po klientach
+    const customerMetrics = {};
+    
+    orders.forEach(order => {
+      const customerId = order.customer?.id || order.customerId;
+      const customerName = order.customer?.name || order.customerName || 'Nieznany klient';
+      
+      if (!customerMetrics[customerId]) {
+        customerMetrics[customerId] = {
+          customerId,
+          customerName,
+          totalOrders: 0,
+          totalRevenue: 0,
+          completedOrders: 0,
+          cancelledOrders: 0,
+          orders: []
+        };
+      }
+      
+      const metrics = customerMetrics[customerId];
+      metrics.totalOrders++;
+      metrics.totalRevenue += parseFloat(order.totalValue || 0);
+      
+      if (order.status === 'Zakończone' || order.status === 'zakończone') {
+        metrics.completedOrders++;
+      } else if (order.status === 'Anulowane' || order.status === 'anulowane') {
+        metrics.cancelledOrders++;
+      }
+      
+      if (params.includeDetails) {
+        metrics.orders.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          orderDate: order.orderDate?.toDate?.()?.toISOString?.() || order.orderDate,
+          totalValue: order.totalValue,
+          status: order.status,
+          itemsCount: order.items?.length || 0
+        });
+      }
+    });
+    
+    // Oblicz metryki finalne
+    const analytics = Object.values(customerMetrics).map(metrics => {
+      const avgOrderValue = metrics.totalOrders > 0 
+        ? metrics.totalRevenue / metrics.totalOrders 
+        : 0;
+      const completionRate = metrics.totalOrders > 0
+        ? (metrics.completedOrders / metrics.totalOrders) * 100
+        : 0;
+      
+      return {
+        ...metrics,
+        averageOrderValue: parseFloat(avgOrderValue.toFixed(2)),
+        completionRate: parseFloat(completionRate.toFixed(2)),
+        category: metrics.totalRevenue > 50000 ? 'VIP' : metrics.totalRevenue > 10000 ? 'Premium' : 'Standard'
+      };
+    });
+    
+    // Sortuj po totalRevenue (najwięksi klienci najpierw)
+    analytics.sort((a, b) => b.totalRevenue - a.totalRevenue);
+    
+    return {
+      customers: analytics,
+      count: analytics.length,
+      summary: {
+        totalCustomers: analytics.length,
+        totalOrders: orders.length,
+        totalRevenue: analytics.reduce((sum, c) => sum + c.totalRevenue, 0),
+        vipCustomers: analytics.filter(c => c.category === 'VIP').length,
+        premiumCustomers: analytics.filter(c => c.category === 'Premium').length,
+        standardCustomers: analytics.filter(c => c.category === 'Standard').length
+      },
+      isEmpty: analytics.length === 0,
+      warning: analytics.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono zamówień klientów do analizy." : null
+    };
+  }
+  
+  /**
+   * 7. Pobiera odpowiedzi formularzy
+   */
+  static async queryFormResponses(params) {
+    console.log('[ToolExecutor] 📝 Pobieranie odpowiedzi formularzy...', params);
+    
+    const responses = [];
+    
+    // 1. FORMULARZE HALI (jeśli formType === 'hall' lub brak typu)
+    if (!params.formType || params.formType === 'hall') {
+      const formCollections = [
+        { path: 'Forms/TygodniowyRaportSerwisu/Odpowiedzi', name: 'TygodniowyRaportSerwisu' },
+        { path: 'Forms/RejestrUsterek/Odpowiedzi', name: 'RejestrUsterek' },
+        { path: 'Forms/MiesiecznyRaportSerwisu/Odpowiedzi', name: 'MiesiecznyRaportSerwisu' },
+        { path: 'Forms/RaportSerwisNapraw/Odpowiedzi', name: 'RaportSerwisNapraw' }
+      ];
+      
+      for (const formColl of formCollections) {
+        const constraints = [];
+        
+        if (params.dateFrom) {
+          constraints.push(where('fillDate', '>=', Timestamp.fromDate(new Date(params.dateFrom))));
+        }
+        
+        if (params.dateTo) {
+          constraints.push(where('fillDate', '<=', Timestamp.fromDate(new Date(params.dateTo))));
+        }
+        
+        if (params.author) {
+          constraints.push(where('email', '==', params.author));
+        }
+        
+        constraints.push(orderBy('createdAt', 'desc'));
+        constraints.push(firestoreLimit(params.limit || 50));
+        
+        try {
+          const q = query(collection(db, formColl.path), ...constraints);
+          const snapshot = await getDocs(q);
+          
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            responses.push({
+              id: doc.id,
+              formType: formColl.name,
+              category: 'hall',
+              ...data,
+              fillDate: data.fillDate?.toDate?.()?.toISOString?.() || data.fillDate,
+              createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt
+            });
+          });
+          
+          console.log(`[ToolExecutor] ✅ Pobrano ${snapshot.docs.length} odpowiedzi z ${formColl.name}`);
+        } catch (error) {
+          console.warn(`[ToolExecutor] ⚠️ Błąd przy pobieraniu ${formColl.name}:`, error.message);
+        }
+      }
+    }
+    
+    // 2. FORMULARZE PRODUKCYJNE (jeśli formType === 'production')
+    if (!params.formType || params.formType === 'production') {
+      const taskParams = {
+        ...params,
+        includeDetails: true // ✅ KLUCZOWE - pobierze formResponses[]
+      };
+      
+      const tasksResult = await this.queryProductionTasks(taskParams);
+      
+      tasksResult.tasks.forEach(task => {
+        if (task.formResponses && task.formResponses.length > 0) {
+          task.formResponses.forEach(form => {
+            responses.push({
+              id: `${task.id}_${form.formId || form.formType}`,
+              formType: form.formType || 'ProductionForm',
+              category: 'production',
+              taskId: task.id,
+              moNumber: task.moNumber,
+              productName: task.productName,
+              ...form,
+              submittedAt: form.submittedAt?.toDate?.()?.toISOString?.() || form.submittedAt
+            });
+          });
+        }
+      });
+      
+      console.log(`[ToolExecutor] ✅ Pobrano formularze produkcyjne z ${tasksResult.tasks.length} zadań`);
+    }
+    
+    // Sortuj po dacie (najnowsze najpierw)
+    responses.sort((a, b) => {
+      const dateA = new Date(a.submittedAt || a.fillDate || a.createdAt || 0);
+      const dateB = new Date(b.submittedAt || b.fillDate || b.createdAt || 0);
+      return dateB - dateA;
+    });
+    
+    // Zastosuj limit globalny
+    const limitValue = params.limit || 50;
+    const limitedResponses = responses.slice(0, limitValue);
+    
+    return {
+      responses: limitedResponses,
+      count: limitedResponses.length,
+      totalResponses: responses.length,
+      limitApplied: limitValue,
+      summary: {
+        hall: responses.filter(r => r.category === 'hall').length,
+        production: responses.filter(r => r.category === 'production').length
+      },
+      isEmpty: responses.length === 0,
+      warning: responses.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono odpowiedzi formularzy dla podanych kryteriów." : null
+    };
+  }
+  
+  /**
+   * 14. Pobiera log audytowy zmian w systemie
+   */
+  static async getAuditLog(params) {
+    console.log('[ToolExecutor] 📜 Pobieranie logu audytowego...', params);
+    
+    const logs = [];
+    const dateFrom = params.dateFrom 
+      ? new Date(params.dateFrom) 
+      : new Date(Date.now() - 7*24*60*60*1000); // 7 dni wstecz domyślnie
+    
+    console.log(`[ToolExecutor] 🔍 Pobieranie zmian od: ${dateFrom.toISOString().split('T')[0]}`);
+    
+    // 1. Zmiany w zamówieniach zakupu (statusHistory)
+    if (!params.collection || params.collection === 'purchaseOrders') {
+      try {
+        const poQuery = query(
+          collection(db, COLLECTION_MAPPING.purchase_orders),
+          where('updatedAt', '>=', Timestamp.fromDate(dateFrom)),
+          orderBy('updatedAt', 'desc'),
+          firestoreLimit(100)
+        );
+        
+        const posSnapshot = await getDocs(poQuery);
+        console.log(`[ToolExecutor] ✅ Pobrano ${posSnapshot.docs.length} zamówień zakupu`);
+        
+        posSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.statusHistory && Array.isArray(data.statusHistory)) {
+            data.statusHistory.forEach(change => {
+              logs.push({
+                collection: 'purchaseOrders',
+                documentId: doc.id,
+                documentNumber: data.number,
+                action: 'statusChange',
+                field: 'status',
+                oldValue: change.oldStatus,
+                newValue: change.newStatus,
+                changedBy: change.changedBy,
+                changedAt: change.changedAt,
+                timestamp: new Date(change.changedAt).getTime()
+              });
+            });
+          }
+        });
+      } catch (error) {
+        console.warn('[ToolExecutor] ⚠️ Błąd przy pobieraniu zmian PO:', error.message);
+      }
+    }
+    
+    // 2. Zmiany kosztów w zadaniach produkcyjnych (costHistory)
+    if (!params.collection || params.collection === 'productionTasks') {
+      try {
+        const tasksQuery = query(
+          collection(db, COLLECTION_MAPPING.production_tasks),
+          where('updatedAt', '>=', Timestamp.fromDate(dateFrom)),
+          orderBy('updatedAt', 'desc'),
+          firestoreLimit(100)
+        );
+        
+        const tasksSnapshot = await getDocs(tasksQuery);
+        console.log(`[ToolExecutor] ✅ Pobrano ${tasksSnapshot.docs.length} zadań produkcyjnych`);
+        
+        tasksSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.costHistory && Array.isArray(data.costHistory)) {
+            data.costHistory.forEach(change => {
+              if (new Date(change.timestamp) >= dateFrom) {
+                logs.push({
+                  collection: 'productionTasks',
+                  documentId: doc.id,
+                  documentNumber: data.moNumber,
+                  action: 'costUpdate',
+                  field: 'totalMaterialCost',
+                  oldValue: change.previousTotalCost,
+                  newValue: change.newTotalCost,
+                  changedBy: change.userId,
+                  changedByName: change.userName,
+                  changedAt: change.timestamp,
+                  reason: change.reason,
+                  timestamp: new Date(change.timestamp).getTime()
+                });
+              }
+            });
+          }
+        });
+      } catch (error) {
+        console.warn('[ToolExecutor] ⚠️ Błąd przy pobieraniu zmian zadań:', error.message);
+      }
+    }
+    
+    // 3. Zmiany w zamówieniach klientów (jeśli mają historię)
+    if (!params.collection || params.collection === 'customerOrders') {
+      try {
+        const ordersQuery = query(
+          collection(db, COLLECTION_MAPPING.customer_orders),
+          where('updatedAt', '>=', Timestamp.fromDate(dateFrom)),
+          orderBy('updatedAt', 'desc'),
+          firestoreLimit(100)
+        );
+        
+        const ordersSnapshot = await getDocs(ordersQuery);
+        console.log(`[ToolExecutor] ✅ Pobrano ${ordersSnapshot.docs.length} zamówień klientów`);
+        
+        ordersSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          
+          // Dodaj informację o aktualizacji dokumentu
+          if (data.updatedAt && data.updatedBy) {
+            logs.push({
+              collection: 'customerOrders',
+              documentId: doc.id,
+              documentNumber: data.orderNumber,
+              action: 'documentUpdate',
+              field: 'multiple',
+              changedBy: data.updatedBy,
+              changedAt: data.updatedAt?.toDate?.()?.toISOString?.() || data.updatedAt,
+              timestamp: data.updatedAt?.toDate?.()?.getTime?.() || new Date(data.updatedAt).getTime()
+            });
+          }
+        });
+      } catch (error) {
+        console.warn('[ToolExecutor] ⚠️ Błąd przy pobieraniu zmian zamówień:', error.message);
+      }
+    }
+    
+    // ✅ NOWE: Zbierz wszystkie userId do rozwiązania
+    const userIds = [];
+    logs.forEach(log => {
+      if (log.changedBy) userIds.push(log.changedBy);
+    });
+    
+    // Rozwiąż nazwy użytkowników
+    let userNamesMap = {};
+    if (userIds.length > 0) {
+      userNamesMap = await this.resolveUserNames(userIds);
+      console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(userNamesMap).length} użytkowników`);
+    }
+    
+    // Zastąp changedBy ID nazwą użytkownika
+    const logsWithNames = logs.map(log => ({
+      ...log,
+      changedBy: log.changedBy ? this.getUserName(log.changedBy, userNamesMap) : null,
+      // Zachowaj changedByName jeśli już istnieje (dla costHistory)
+      changedByName: log.changedByName || (log.changedBy ? this.getUserName(log.changedBy, userNamesMap) : null)
+    }));
+    
+    // Filtruj po użytkowniku jeśli określono
+    let filteredLogs = logsWithNames;
+    if (params.userId) {
+      // Filtruj zarówno po ID jak i nazwie użytkownika (dla elastyczności)
+      filteredLogs = logsWithNames.filter(log => {
+        // Sprawdź czy userId pasuje do changedBy (już jako nazwa) lub znajdź w mapie
+        const userIdMatches = log.changedBy === params.userId || 
+                              log.changedByName === params.userId ||
+                              (userNamesMap[params.userId] && userNamesMap[params.userId] === log.changedBy);
+        return userIdMatches;
+      });
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po użytkowniku: ${logsWithNames.length} → ${filteredLogs.length}`);
+    }
+    
+    // Sortuj po timestamp (najnowsze najpierw)
+    filteredLogs.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // Zastosuj limit
+    const limitValue = params.limit || 100;
+    const limitedLogs = filteredLogs.slice(0, limitValue);
+    
+    return {
+      logs: limitedLogs,
+      count: limitedLogs.length,
+      totalLogs: filteredLogs.length,
+      limitApplied: limitValue,
+      summary: {
+        purchaseOrders: filteredLogs.filter(l => l.collection === 'purchaseOrders').length,
+        productionTasks: filteredLogs.filter(l => l.collection === 'productionTasks').length,
+        customerOrders: filteredLogs.filter(l => l.collection === 'customerOrders').length,
+        byAction: {
+          statusChange: filteredLogs.filter(l => l.action === 'statusChange').length,
+          costUpdate: filteredLogs.filter(l => l.action === 'costUpdate').length,
+          documentUpdate: filteredLogs.filter(l => l.action === 'documentUpdate').length
+        }
+      },
+      isEmpty: filteredLogs.length === 0,
+      warning: filteredLogs.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono zmian w systemie dla podanych kryteriów." : null
+    };
+  }
+  
+  /**
+   * 15. Oblicza śledzenie pochodzenia partii (traceability)
+   */
+  static async calculateBatchTraceability(params) {
+    console.log('[ToolExecutor] 🔍 Traceability partii...', params);
+    
+    const traceability = {
+      queryBatch: params.batchNumber || params.lotNumber || params.moNumber,
+      chain: []
+    };
+    
+    // 1. ZNAJDŹ POCZĄTKOWĄ PARTIĘ
+    let batchQuery;
+    let initialBatch = null;
+    
+    if (params.batchNumber) {
+      batchQuery = query(
+        collection(db, COLLECTION_MAPPING.inventory_batches),
+        where('batchNumber', '==', params.batchNumber),
+        firestoreLimit(10)
+      );
+      console.log(`[ToolExecutor] 🔍 Szukanie partii: ${params.batchNumber}`);
+    } else if (params.lotNumber) {
+      batchQuery = query(
+        collection(db, COLLECTION_MAPPING.inventory_batches),
+        where('lotNumber', '==', params.lotNumber),
+        firestoreLimit(10)
+      );
+      console.log(`[ToolExecutor] 🔍 Szukanie LOT: ${params.lotNumber}`);
+    } else if (params.moNumber) {
+      batchQuery = query(
+        collection(db, COLLECTION_MAPPING.inventory_batches),
+        where('moNumber', '==', params.moNumber),
+        firestoreLimit(10)
+      );
+      console.log(`[ToolExecutor] 🔍 Szukanie partii dla MO: ${params.moNumber}`);
+    } else {
+      return {
+        ...traceability,
+        error: 'Wymagany jest batchNumber, lotNumber lub moNumber',
+        isEmpty: true
+      };
+    }
+    
+    const batchSnapshot = await getDocs(batchQuery);
+    if (batchSnapshot.empty) {
+      return {
+        ...traceability,
+        error: 'Nie znaleziono partii dla podanych kryteriów',
+        isEmpty: true,
+        warning: "⚠️ BRAK DANYCH - Nie znaleziono partii w systemie."
+      };
+    }
+    
+    initialBatch = { id: batchSnapshot.docs[0].id, ...batchSnapshot.docs[0].data() };
+    console.log(`[ToolExecutor] ✅ Znaleziono partię: ${initialBatch.batchNumber || initialBatch.lotNumber}`);
+    
+    // Dodaj informację o partii do łańcucha
+    traceability.chain.push({
+      step: 'batch',
+      type: 'Inventory Batch',
+      batchId: initialBatch.id,
+      batchNumber: initialBatch.batchNumber || initialBatch.lotNumber,
+      itemName: initialBatch.itemName,
+      quantity: initialBatch.quantity,
+      source: initialBatch.source,
+      expiryDate: initialBatch.expiryDate?.toDate?.()?.toISOString?.() || initialBatch.expiryDate
+    });
+    
+    // 2. TRACEABILITY WSTECZ (BACKWARD) - Skąd pochodzą surowce?
+    if (!params.direction || params.direction === 'backward' || params.direction === 'both') {
+      if (initialBatch.source === 'Produkcja' && initialBatch.sourceId) {
+        // Pobierz zadanie produkcyjne
+        const taskDoc = await getDoc(doc(db, COLLECTION_MAPPING.production_tasks, initialBatch.sourceId));
+        if (taskDoc.exists()) {
+          const task = { id: taskDoc.id, ...taskDoc.data() };
+          
+          traceability.chain.push({
+            step: 'production',
+            type: 'Manufacturing Order',
+            taskId: task.id,
+            moNumber: task.moNumber,
+            productName: task.productName,
+            quantity: task.quantity,
+            finalQuantity: task.finalQuantity,
+            scheduledDate: task.scheduledDate?.toDate?.()?.toISOString?.() || task.scheduledDate,
+            status: task.status
+          });
+          
+          console.log(`[ToolExecutor] ✅ Znaleziono MO: ${task.moNumber}`);
+          
+          // Pobierz użyte materiały (consumedMaterials)
+          if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+            for (const consumed of task.consumedMaterials.slice(0, params.includeDetails ? 50 : 10)) {
+              if (consumed.batchId) {
+                try {
+                  const materialBatch = await getDoc(doc(db, COLLECTION_MAPPING.inventory_batches, consumed.batchId));
+                  if (materialBatch.exists()) {
+                    const mBatch = materialBatch.data();
+                    
+                    traceability.chain.push({
+                      step: 'material',
+                      type: 'Material Batch',
+                      batchId: materialBatch.id,
+                      batchNumber: mBatch.batchNumber || mBatch.lotNumber,
+                      materialName: consumed.materialName || mBatch.itemName,
+                      quantity: consumed.quantity,
+                      unitPrice: consumed.unitPrice,
+                      source: mBatch.source
+                    });
+                    
+                    // Jeśli materiał pochodzi z PO, pobierz PO
+                    if (mBatch.purchaseOrderDetails?.id) {
+                      const poDoc = await getDoc(doc(db, COLLECTION_MAPPING.purchase_orders, mBatch.purchaseOrderDetails.id));
+                      if (poDoc.exists()) {
+                        const po = poDoc.data();
+                        traceability.chain.push({
+                          step: 'purchase',
+                          type: 'Purchase Order',
+                          poId: poDoc.id,
+                          poNumber: po.number,
+                          supplierName: po.supplier?.name || po.supplierName,
+                          orderDate: po.orderDate?.toDate?.()?.toISOString?.() || po.orderDate,
+                          deliveryDate: mBatch.receivedDate?.toDate?.()?.toISOString?.() || mBatch.receivedDate
+                        });
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`[ToolExecutor] ⚠️ Błąd przy pobieraniu partii materiału ${consumed.batchId}:`, error.message);
+                }
+              }
+            }
+            console.log(`[ToolExecutor] ✅ Znaleziono ${task.consumedMaterials.length} zużytych materiałów`);
+          }
+        }
+      } else if ((initialBatch.source === 'Zakup' || initialBatch.source === 'purchase') && initialBatch.purchaseOrderDetails?.id) {
+        // Bezpośrednio z PO
+        const poDoc = await getDoc(doc(db, COLLECTION_MAPPING.purchase_orders, initialBatch.purchaseOrderDetails.id));
+        if (poDoc.exists()) {
+          const po = poDoc.data();
+          traceability.chain.push({
+            step: 'purchase',
+            type: 'Purchase Order',
+            poId: poDoc.id,
+            poNumber: po.number,
+            supplierName: po.supplier?.name || po.supplierName,
+            orderDate: po.orderDate?.toDate?.()?.toISOString?.() || po.orderDate,
+            expectedDeliveryDate: po.expectedDeliveryDate?.toDate?.()?.toISOString?.() || po.expectedDeliveryDate,
+            deliveryDate: initialBatch.receivedDate?.toDate?.()?.toISOString?.() || initialBatch.receivedDate,
+            status: po.status
+          });
+          
+          console.log(`[ToolExecutor] ✅ Znaleziono PO: ${po.number}`);
+        }
+      }
+    }
+    
+    // 3. TRACEABILITY W PRZÓD (FORWARD) - Gdzie trafiła partia?
+    if (!params.direction || params.direction === 'forward' || params.direction === 'both') {
+      // Znajdź zamówienia klientów powiązane z tą partią
+      if (initialBatch.orderId) {
+        const orderDoc = await getDoc(doc(db, COLLECTION_MAPPING.customer_orders, initialBatch.orderId));
+        if (orderDoc.exists()) {
+          const order = orderDoc.data();
+          traceability.chain.push({
+            step: 'delivery',
+            type: 'Customer Order',
+            orderId: orderDoc.id,
+            orderNumber: order.orderNumber,
+            customerName: order.customer?.name || order.customerName,
+            orderDate: order.orderDate?.toDate?.()?.toISOString?.() || order.orderDate,
+            deliveryDate: order.deliveryDate?.toDate?.()?.toISOString?.() || order.deliveryDate,
+            status: order.status
+          });
+          
+          console.log(`[ToolExecutor] ✅ Znaleziono CO: ${order.orderNumber}`);
+        }
+      }
+      
+      // Znajdź zadania produkcyjne które mogły użyć tej partii (przez moNumber jeśli istnieje)
+      if (initialBatch.moNumber) {
+        // Sprawdź czy są inne partie lub zadania powiązane
+        const relatedTasksQuery = query(
+          collection(db, COLLECTION_MAPPING.production_tasks),
+          where('moNumber', '==', initialBatch.moNumber),
+          firestoreLimit(5)
+        );
+        
+        const relatedTasksSnapshot = await getDocs(relatedTasksQuery);
+        if (!relatedTasksSnapshot.empty) {
+          console.log(`[ToolExecutor] ✅ Znaleziono ${relatedTasksSnapshot.docs.length} powiązanych zadań`);
+        }
+      }
+    }
+    
+    // ✅ NOWE: Zamień ID na czytelne numeracje w łańcuchu
+    traceability.chain = traceability.chain.map(step => {
+      // Dodaj displayId z priorytetem numeracji nad ID
+      if (step.type === 'Manufacturing Order') {
+        return {
+          ...step,
+          displayId: step.moNumber || step.taskId
+        };
+      }
+      if (step.type === 'Purchase Order') {
+        return {
+          ...step,
+          displayId: step.poNumber || step.poId
+        };
+      }
+      if (step.type === 'Customer Order') {
+        return {
+          ...step,
+          displayId: step.orderNumber || step.orderId
+        };
+      }
+      if (step.type === 'Material Batch' || step.type === 'Inventory Batch') {
+        return {
+          ...step,
+          displayId: step.batchNumber || step.lotNumber || step.batchId
+        };
+      }
+      return step;
+    });
+    
+    return {
+      ...traceability,
+      chainLength: traceability.chain.length,
+      summary: {
+        totalSteps: traceability.chain.length,
+        purchaseOrders: traceability.chain.filter(c => c.type === 'Purchase Order').length,
+        materialBatches: traceability.chain.filter(c => c.type === 'Material Batch' || c.type === 'Inventory Batch').length,
+        productionTasks: traceability.chain.filter(c => c.type === 'Manufacturing Order').length,
+        customerOrders: traceability.chain.filter(c => c.type === 'Customer Order').length
+      },
+      isEmpty: traceability.chain.length === 0,
+      warning: traceability.chain.length === 0 ? "⚠️ BRAK DANYCH - Nie można utworzyć łańcucha traceability." : null
+    };
   }
 }
 
