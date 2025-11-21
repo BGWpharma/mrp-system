@@ -2793,10 +2793,23 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       borderRadius: 1, 
                       textAlign: 'center' 
                     }}>
-                      <Typography variant="h6" color="primary" gutterBottom>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#0d47a1',
+                          fontWeight: 600 
+                        }} 
+                        gutterBottom
+                      >
                         Całkowita waga
                       </Typography>
-                      <Typography variant="h4" color="primary">
+                      <Typography 
+                        variant="h4" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#0d47a1',
+                          fontWeight: 700 
+                        }}
+                      >
                         {weightSummary.totalWeight} kg
                       </Typography>
                     </Box>
@@ -2808,10 +2821,23 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       borderRadius: 1, 
                       textAlign: 'center' 
                     }}>
-                      <Typography variant="h6" color="success.main" gutterBottom>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#1b5e20',
+                          fontWeight: 600 
+                        }} 
+                        gutterBottom
+                      >
                         Łączna liczba palet
                       </Typography>
-                      <Typography variant="h4" color="success.main">
+                      <Typography 
+                        variant="h4" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#1b5e20',
+                          fontWeight: 700 
+                        }}
+                      >
                         {weightSummary.totalPallets}
                       </Typography>
                     </Box>
@@ -2823,10 +2849,23 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       borderRadius: 1, 
                       textAlign: 'center' 
                     }}>
-                      <Typography variant="h6" color="info.main" gutterBottom>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#01579b',
+                          fontWeight: 600 
+                        }} 
+                        gutterBottom
+                      >
                         Liczba pozycji
                       </Typography>
-                      <Typography variant="h4" color="info.main">
+                      <Typography 
+                        variant="h4" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#01579b',
+                          fontWeight: 700 
+                        }}
+                      >
                         {formData.items.length}
                       </Typography>
                     </Box>
@@ -2838,10 +2877,23 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                       borderRadius: 1, 
                       textAlign: 'center' 
                     }}>
-                      <Typography variant="h6" color="warning.main" gutterBottom>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#e65100',
+                          fontWeight: 600 
+                        }} 
+                        gutterBottom
+                      >
                         Pozycje z danymi
                       </Typography>
-                      <Typography variant="h4" color="warning.main">
+                      <Typography 
+                        variant="h4" 
+                        sx={{ 
+                          color: (theme) => theme.palette.mode === 'dark' ? '#fff' : '#e65100',
+                          fontWeight: 700 
+                        }}
+                      >
                         {weightSummary.itemsWeightBreakdown.filter(item => item.hasDetailedData).length}
                       </Typography>
                     </Box>
