@@ -679,6 +679,182 @@ export const deleteCompletedStocktaking = async (stocktakingId, userId) => {
 };
 
 /**
+ * Akceptuje pojedynczą pozycję inwentaryzacji i opcjonalnie aktualizuje stan magazynowy
+ * @param {string} itemId - ID pozycji inwentaryzacji
+ * @param {boolean} adjustInventory - Czy zaktualizować stan magazynowy
+ * @param {string} userId - ID użytkownika akceptującego
+ * @returns {Promise<Object>} - Wynik operacji
+ * @throws {ValidationError} - Gdy dane są nieprawidłowe
+ * @throws {Error} - Gdy wystąpi błąd podczas operacji
+ */
+export const acceptStocktakingItem = async (itemId, adjustInventory = true, userId) => {
+  try {
+    const validatedItemId = validateId(itemId, 'itemId');
+    const validatedUserId = validateId(userId, 'userId');
+
+    // Pobierz pozycję
+    const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING_ITEMS, validatedItemId);
+    const itemDoc = await getDoc(itemRef);
+    
+    if (!itemDoc.exists()) {
+      throw new Error('Pozycja inwentaryzacji nie istnieje');
+    }
+
+    const item = { id: itemDoc.id, ...itemDoc.data() };
+
+    // Sprawdź czy pozycja nie jest już zaakceptowana
+    if (item.accepted) {
+      throw new Error('Pozycja jest już zaakceptowana');
+    }
+
+    // Sprawdź czy wprowadzono policzoną ilość
+    if (item.countedQuantity === null || item.countedQuantity === undefined) {
+      throw new ValidationError('Nie można zaakceptować pozycji bez wprowadzonej policzonej ilości', 'countedQuantity');
+    }
+
+    // Sprawdź czy inwentaryzacja nie jest zakończona
+    const stocktaking = await getStocktakingById(item.stocktakingId);
+    if (stocktaking.status === STOCKTAKING_STATUS.COMPLETED) {
+      throw new Error('Nie można akceptować pozycji w zakończonej inwentaryzacji');
+    }
+
+    // Jeśli mamy aktualizować stany magazynowe
+    if (adjustInventory) {
+      const discrepancy = item.discrepancy || 0;
+      
+      // Pomiń jeśli różnica jest minimalna
+      if (Math.abs(discrepancy) >= 0.001) {
+        if (item.batchId) {
+          // Aktualizuj partię
+          const { updateBatch } = await import('./batchService');
+          const newQuantity = formatQuantityPrecision((item.systemQuantity || 0) + discrepancy);
+          await updateBatch(item.batchId, { quantity: newQuantity }, validatedUserId);
+        } else {
+          // Aktualizuj pozycję magazynową
+          const { updateInventoryItemQuantity } = await import('./inventoryItemsService');
+          const newQuantity = formatQuantityPrecision((item.systemQuantity || 0) + discrepancy);
+          await updateInventoryItemQuantity(item.inventoryItemId, newQuantity, validatedUserId);
+        }
+
+        // Dodaj transakcję korekt
+        await createInventoryAdjustmentTransaction({
+          item,
+          discrepancy,
+          operation: 'item_acceptance',
+          userId: validatedUserId
+        });
+      }
+    }
+
+    // Oznacz pozycję jako zaakceptowaną
+    await updateDoc(itemRef, {
+      accepted: true,
+      acceptedAt: serverTimestamp(),
+      acceptedBy: validatedUserId,
+      adjustmentApplied: adjustInventory,
+      status: 'Zaakceptowana',
+      updatedAt: serverTimestamp(),
+      updatedBy: validatedUserId
+    });
+
+    return {
+      success: true,
+      message: 'Pozycja została zaakceptowana',
+      itemId: validatedItemId,
+      adjustmentApplied: adjustInventory
+    };
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas akceptowania pozycji inwentaryzacji:', error);
+    throw new Error(`Nie udało się zaakceptować pozycji: ${error.message}`);
+  }
+};
+
+/**
+ * Anuluje akceptację pozycji inwentaryzacji (cofnięcie)
+ * @param {string} itemId - ID pozycji inwentaryzacji
+ * @param {boolean} revertInventory - Czy cofnąć zmiany w stanie magazynowym
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik operacji
+ * @throws {ValidationError} - Gdy dane są nieprawidłowe
+ * @throws {Error} - Gdy wystąpi błąd podczas operacji
+ */
+export const unacceptStocktakingItem = async (itemId, revertInventory = true, userId) => {
+  try {
+    const validatedItemId = validateId(itemId, 'itemId');
+    const validatedUserId = validateId(userId, 'userId');
+
+    const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING_ITEMS, validatedItemId);
+    const itemDoc = await getDoc(itemRef);
+    
+    if (!itemDoc.exists()) {
+      throw new Error('Pozycja inwentaryzacji nie istnieje');
+    }
+
+    const item = { id: itemDoc.id, ...itemDoc.data() };
+
+    if (!item.accepted) {
+      throw new Error('Pozycja nie jest zaakceptowana');
+    }
+
+    // Sprawdź czy inwentaryzacja nie jest zakończona
+    const stocktaking = await getStocktakingById(item.stocktakingId);
+    if (stocktaking.status === STOCKTAKING_STATUS.COMPLETED) {
+      throw new Error('Nie można cofnąć akceptacji w zakończonej inwentaryzacji');
+    }
+
+    // Cofnij zmiany w magazynie jeśli zastosowano korekty
+    if (revertInventory && item.adjustmentApplied) {
+      const discrepancy = item.discrepancy || 0;
+      
+      if (Math.abs(discrepancy) >= 0.001) {
+        if (item.batchId) {
+          const { updateBatch } = await import('./batchService');
+          // Przywróć oryginalną ilość systemową
+          await updateBatch(item.batchId, { quantity: item.systemQuantity }, validatedUserId);
+        } else {
+          const { updateInventoryItemQuantity } = await import('./inventoryItemsService');
+          await updateInventoryItemQuantity(item.inventoryItemId, item.systemQuantity, validatedUserId);
+        }
+
+        // Dodaj transakcję odwrócenia
+        await createInventoryAdjustmentTransaction({
+          item,
+          discrepancy: -discrepancy,
+          operation: 'item_acceptance_reversal',
+          userId: validatedUserId
+        });
+      }
+    }
+
+    // Cofnij akceptację
+    await updateDoc(itemRef, {
+      accepted: false,
+      acceptedAt: null,
+      acceptedBy: null,
+      adjustmentApplied: false,
+      status: 'Dodano',
+      updatedAt: serverTimestamp(),
+      updatedBy: validatedUserId
+    });
+
+    return {
+      success: true,
+      message: 'Akceptacja pozycji została cofnięta',
+      itemId: validatedItemId
+    };
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas cofania akceptacji pozycji:', error);
+    throw new Error(`Nie udało się cofnąć akceptacji: ${error.message}`);
+  }
+};
+
+/**
  * Kończy inwentaryzację i aktualizuje stany magazynowe
  * @param {string} stocktakingId - ID inwentaryzacji
  * @param {boolean} adjustInventory - Czy dostosować stany magazynowe
@@ -704,15 +880,33 @@ export const completeStocktaking = async (stocktakingId, adjustInventory = true,
     // Pobierz wszystkie elementy inwentaryzacji
     const items = await getStocktakingItems(validatedId);
     
+    // Filtruj tylko niezaakceptowane pozycje
+    const unacceptedItems = items.filter(item => !item.accepted);
+    
     let adjustmentResult = null;
     
-    // Jeśli mamy dostosować stany magazynowe
-    if (adjustInventory) {
-      adjustmentResult = await processStocktakingAdjustments(items, validatedUserId, 'completion');
+    // Jeśli mamy dostosować stany magazynowe dla niezaakceptowanych pozycji
+    if (adjustInventory && unacceptedItems.length > 0) {
+      adjustmentResult = await processStocktakingAdjustments(unacceptedItems, validatedUserId, 'completion');
+      
+      // Oznacz niezaakceptowane pozycje jako zaakceptowane
+      for (const item of unacceptedItems) {
+        const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING_ITEMS, item.id);
+        await updateDoc(itemRef, {
+          accepted: true,
+          acceptedAt: serverTimestamp(),
+          acceptedBy: validatedUserId,
+          adjustmentApplied: true,
+          status: 'Zaakceptowana'
+        });
+      }
     }
 
-    // Oblicz statystyki
+    // Oblicz statystyki dla wszystkich pozycji
     const stats = calculateStocktakingStats(items);
+    
+    // Policz zaakceptowane pozycje
+    const acceptedItemsCount = items.filter(i => i.accepted).length + unacceptedItems.length;
 
     // Zaktualizuj status inwentaryzacji
     const stocktakingRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING, validatedId);
@@ -721,6 +915,7 @@ export const completeStocktaking = async (stocktakingId, adjustInventory = true,
       completedAt: serverTimestamp(),
       completedBy: validatedUserId,
       itemsCount: stats.totalItems,
+      acceptedItemsCount: acceptedItemsCount,
       discrepanciesCount: stats.itemsWithDiscrepancy,
       totalValue: stats.totalValue,
       adjustmentsApplied: adjustInventory
@@ -731,9 +926,10 @@ export const completeStocktaking = async (stocktakingId, adjustInventory = true,
       type: TRANSACTION_TYPES.STOCKTAKING_COMPLETED,
       stocktakingId: validatedId,
       stocktakingName: stocktaking.name,
-      notes: `Zakończono inwentaryzację "${stocktaking.name}" z ${items.length} pozycjami${adjustInventory ? ' z korektami stanów magazynowych' : ' bez korekt stanów'}.`,
+      notes: `Zakończono inwentaryzację "${stocktaking.name}" z ${items.length} pozycjami (${acceptedItemsCount} zaakceptowanych)${adjustInventory ? ' z korektami stanów magazynowych' : ' bez korekt stanów'}.`,
       userId: validatedUserId,
       itemsCount: items.length,
+      acceptedItemsCount: acceptedItemsCount,
       discrepanciesCount: stats.itemsWithDiscrepancy
     });
 
@@ -741,7 +937,8 @@ export const completeStocktaking = async (stocktakingId, adjustInventory = true,
       success: true,
       message: 'Inwentaryzacja została zakończona',
       stats,
-      adjustmentResult
+      adjustmentResult,
+      acceptedItemsCount
     };
   } catch (error) {
     if (error instanceof ValidationError) {

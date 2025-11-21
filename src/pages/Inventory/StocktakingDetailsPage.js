@@ -48,7 +48,9 @@ import {
   Save as SaveIcon,
   Inventory as InventoryIcon,
   Filter as FilterIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelCheckIcon
 } from '@mui/icons-material';
 import {
   getStocktakingById,
@@ -58,6 +60,8 @@ import {
   deleteStocktakingItem,
   completeStocktaking,
   completeCorrectedStocktaking,
+  acceptStocktakingItem,
+  unacceptStocktakingItem,
   getAllInventoryItems,
   getItemBatches,
   checkStocktakingReservationImpact,
@@ -126,6 +130,9 @@ const StocktakingDetailsPage = () => {
   // Stan dla filtra pozycji wymagających uzupełnienia
   const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(false);
   
+  // Stan dla filtra statusu akceptacji
+  const [showAcceptedItems, setShowAcceptedItems] = useState('all'); // 'all', 'accepted', 'pending'
+  
   // Stany dla multi-select funkcjonalności
   const [selectedBatches, setSelectedBatches] = useState([]); // Koszyk wybranych partii
   const [currentStep, setCurrentStep] = useState('category'); // 'category', 'product', 'batches'
@@ -137,7 +144,7 @@ const StocktakingDetailsPage = () => {
   
   useEffect(() => {
     filterItems();
-  }, [searchTerm, items, showOnlyIncomplete]);
+  }, [searchTerm, items, showOnlyIncomplete, showAcceptedItems]);
   
   
   const fetchStocktakingData = async () => {
@@ -286,6 +293,13 @@ const StocktakingDetailsPage = () => {
       filtered = filtered.filter(item => 
         item.countedQuantity === null || item.countedQuantity === undefined
       );
+    }
+    
+    // Filtruj według statusu akceptacji
+    if (showAcceptedItems === 'accepted') {
+      filtered = filtered.filter(item => item.accepted);
+    } else if (showAcceptedItems === 'pending') {
+      filtered = filtered.filter(item => !item.accepted);
     }
     
     setFilteredItems(filtered);
@@ -454,6 +468,28 @@ const StocktakingDetailsPage = () => {
     }
   };
   
+  const handleAcceptItem = async (itemId) => {
+    try {
+      const result = await acceptStocktakingItem(itemId, true, currentUser.uid);
+      showSuccess(result.message);
+      fetchStocktakingData(); // Odśwież dane
+    } catch (error) {
+      console.error('Błąd podczas akceptowania pozycji:', error);
+      showError(`Błąd: ${error.message}`);
+    }
+  };
+
+  const handleUnacceptItem = async (itemId) => {
+    try {
+      const result = await unacceptStocktakingItem(itemId, true, currentUser.uid);
+      showSuccess(result.message);
+      fetchStocktakingData();
+    } catch (error) {
+      console.error('Błąd podczas cofania akceptacji:', error);
+      showError(`Błąd: ${error.message}`);
+    }
+  };
+
   const handleCompleteStocktaking = async () => {
     // Sprawdź uprawnienia użytkownika
     if (!canCompleteStocktaking) {
@@ -743,15 +779,29 @@ const StocktakingDetailsPage = () => {
             </Button>
           )}
           {items.length > 0 && (
-            <Button
-              variant={showOnlyIncomplete ? "contained" : "outlined"}
-              color="warning"
-              startIcon={<FilterIcon />}
-              onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
-              sx={{ mr: 1 }}
-            >
-              Pozycje do uzupełnienia
-            </Button>
+            <>
+              <Button
+                variant={showOnlyIncomplete ? "contained" : "outlined"}
+                color="warning"
+                startIcon={<FilterIcon />}
+                onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
+                sx={{ mr: 1 }}
+              >
+                Pozycje do uzupełnienia
+              </Button>
+              <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>
+                <InputLabel>Status akceptacji</InputLabel>
+                <Select
+                  value={showAcceptedItems}
+                  onChange={(e) => setShowAcceptedItems(e.target.value)}
+                  label="Status akceptacji"
+                >
+                  <MenuItem value="all">Wszystkie</MenuItem>
+                  <MenuItem value="pending">Oczekujące</MenuItem>
+                  <MenuItem value="accepted">Zaakceptowane</MenuItem>
+                </Select>
+              </FormControl>
+            </>
           )}
           {(!isCompleted || isInCorrection) && items.length > 0 && (
             <Tooltip 
@@ -813,6 +863,7 @@ const StocktakingDetailsPage = () => {
                 <TableCell align="right">{t('stocktaking.tableHeaders.unitPrice')}</TableCell>
                 <TableCell align="right">{t('stocktaking.tableHeaders.valueDifference')}</TableCell>
                 <TableCell>{t('stocktaking.tableHeaders.notes')}</TableCell>
+                <TableCell align="center">Status</TableCell>
                 {(!isCompleted || isInCorrection) && <TableCell align="center">{t('stocktaking.tableHeaders.actions')}</TableCell>}
               </TableRow>
             </TableHead>
@@ -888,6 +939,22 @@ const StocktakingDetailsPage = () => {
                         />
                       </TableCell>
                       <TableCell align="center">
+                        {item.accepted ? (
+                          <Chip 
+                            icon={<CheckCircleIcon />}
+                            label="Zaakceptowana" 
+                            color="success" 
+                            size="small" 
+                          />
+                        ) : (
+                          <Chip 
+                            label="Oczekuje" 
+                            color="default" 
+                            size="small" 
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
                         <IconButton color="primary" onClick={handleSaveEdit} size="small">
                           <SaveIcon />
                         </IconButton>
@@ -945,8 +1012,48 @@ const StocktakingDetailsPage = () => {
                         }
                       </TableCell>
                       <TableCell>{item.notes || '-'}</TableCell>
+                      <TableCell align="center">
+                        {item.accepted ? (
+                          <Chip 
+                            icon={<CheckCircleIcon />}
+                            label="Zaakceptowana" 
+                            color="success" 
+                            size="small" 
+                          />
+                        ) : (
+                          <Chip 
+                            label="Oczekuje" 
+                            color="default" 
+                            size="small" 
+                          />
+                        )}
+                      </TableCell>
                       {(!isCompleted || isInCorrection) && (
                         <TableCell align="center">
+                          {!item.accepted ? (
+                            <Tooltip title="Zaakceptuj pozycję">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="success"
+                                  onClick={() => handleAcceptItem(item.id)}
+                                  disabled={needsQuantity}
+                                >
+                                  <CheckCircleIcon />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip title="Cofnij akceptację">
+                              <IconButton
+                                size="small"
+                                color="warning"
+                                onClick={() => handleUnacceptItem(item.id)}
+                              >
+                                <CancelCheckIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <IconButton color="primary" onClick={() => handleEditItem(item.id)} size="small">
                             <EditIcon />
                           </IconButton>
