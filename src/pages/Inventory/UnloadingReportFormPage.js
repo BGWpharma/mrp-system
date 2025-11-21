@@ -253,14 +253,36 @@ const UnloadingReportFormPage = () => {
         
         // Ustaw wybrane pozycje dla selektora (z kompatybilnością wsteczną)
         const items = editData.selectedItems || [];
-        const normalizedItems = items.map(item => ({
-          ...item,
-          unloadedQuantity: item.unloadedQuantity || '',
-          expiryDate: item.expiryDate ? 
-            (item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate)) : 
-            null,
-          noExpiryDate: item.noExpiryDate || false
-        }));
+        const normalizedItems = items.map(item => {
+          // Sprawdź czy to nowy format (z partiami) czy stary (bez partii)
+          if (item.batches && Array.isArray(item.batches)) {
+            // Nowy format - normalizuj daty w partiach
+            return {
+              ...item,
+              batches: item.batches.map(batch => ({
+                ...batch,
+                expiryDate: batch.expiryDate ? 
+                  (batch.expiryDate.toDate ? batch.expiryDate.toDate() : new Date(batch.expiryDate)) : 
+                  null,
+                noExpiryDate: batch.noExpiryDate || false
+              }))
+            };
+          } else {
+            // Stary format - przekonwertuj na nowy format z jedną partią
+            return {
+              ...item,
+              batches: [{
+                id: `${item.id}_batch_${Date.now()}`,
+                batchNumber: '',
+                unloadedQuantity: item.unloadedQuantity || '',
+                expiryDate: item.expiryDate ? 
+                  (item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate)) : 
+                  null,
+                noExpiryDate: item.noExpiryDate || false
+              }]
+            };
+          }
+        });
         setSelectedPoItems(normalizedItems);
         setPoSearchQuery(editData.poNumber || '');
         
@@ -413,13 +435,17 @@ const UnloadingReportFormPage = () => {
     console.log('📦 Zaznaczanie pozycji:', item.productName, isSelected);
     
     if (isSelected) {
-      // Dodaj pozycję z domyślnymi wartościami
+      // Dodaj pozycję z domyślnymi wartościami + pierwszą partią
       const newItem = {
         ...item,
         poItemId: item.poItemId || item.originalItem?.id, // ⭐ Zachowaj oryginalne ID pozycji PO
-        unloadedQuantity: '',
-        expiryDate: null,
-        noExpiryDate: false
+        batches: [{
+          id: `${item.id}_batch_${Date.now()}`,
+          batchNumber: '',
+          unloadedQuantity: '',
+          expiryDate: null,
+          noExpiryDate: false
+        }]
       };
       
       setSelectedPoItems(prev => [...prev, newItem]);
@@ -445,7 +471,80 @@ const UnloadingReportFormPage = () => {
     }
   };
 
-  // Funkcja do aktualizacji ilości rozładowanej
+  // Nowe funkcje do zarządzania partiami
+  const handleAddBatch = (itemId) => {
+    const newBatch = {
+      id: `${itemId}_batch_${Date.now()}`,
+      batchNumber: '',
+      unloadedQuantity: '',
+      expiryDate: null,
+      noExpiryDate: false
+    };
+    
+    setSelectedPoItems(prev =>
+      prev.map(item =>
+        item.id === itemId
+          ? { ...item, batches: [...(item.batches || []), newBatch] }
+          : item
+      )
+    );
+    setFormData(prev => ({
+      ...prev,
+      selectedItems: prev.selectedItems.map(item =>
+        item.id === itemId
+          ? { ...item, batches: [...(item.batches || []), newBatch] }
+          : item
+      )
+    }));
+  };
+
+  const handleRemoveBatch = (itemId, batchId) => {
+    setSelectedPoItems(prev =>
+      prev.map(item =>
+        item.id === itemId
+          ? { ...item, batches: (item.batches || []).filter(b => b.id !== batchId) }
+          : item
+      )
+    );
+    setFormData(prev => ({
+      ...prev,
+      selectedItems: prev.selectedItems.map(item =>
+        item.id === itemId
+          ? { ...item, batches: (item.batches || []).filter(b => b.id !== batchId) }
+          : item
+      )
+    }));
+  };
+
+  const handleBatchFieldChange = (itemId, batchId, field, value) => {
+    setSelectedPoItems(prev =>
+      prev.map(item =>
+        item.id === itemId
+          ? {
+              ...item,
+              batches: (item.batches || []).map(batch =>
+                batch.id === batchId ? { ...batch, [field]: value } : batch
+              )
+            }
+          : item
+      )
+    );
+    setFormData(prev => ({
+      ...prev,
+      selectedItems: prev.selectedItems.map(item =>
+        item.id === itemId
+          ? {
+              ...item,
+              batches: (item.batches || []).map(batch =>
+                batch.id === batchId ? { ...batch, [field]: value } : batch
+              )
+            }
+          : item
+      )
+    }));
+  };
+
+  // LEGACY: Funkcje do obsługi starych danych (kompatybilność wsteczna)
   const handleUnloadedQuantityChange = (itemId, quantity) => {
     setSelectedPoItems(prev => 
       prev.map(item => 
@@ -460,7 +559,6 @@ const UnloadingReportFormPage = () => {
     }));
   };
 
-  // Funkcja do aktualizacji daty ważności
   const handleExpiryDateChange = (itemId, date) => {
     setSelectedPoItems(prev => 
       prev.map(item => 
@@ -475,14 +573,13 @@ const UnloadingReportFormPage = () => {
     }));
   };
 
-  // Funkcja do obsługi checkbox "nie dotyczy" dla daty ważności
   const handleNoExpiryDateChange = (itemId, checked) => {
     setSelectedPoItems(prev => 
       prev.map(item => 
         item.id === itemId ? { 
           ...item, 
           noExpiryDate: checked,
-          expiryDate: checked ? null : item.expiryDate // Wyczyść datę gdy zaznaczono "nie dotyczy"
+          expiryDate: checked ? null : item.expiryDate
         } : item
       )
     );
@@ -492,7 +589,7 @@ const UnloadingReportFormPage = () => {
         item.id === itemId ? { 
           ...item, 
           noExpiryDate: checked,
-          expiryDate: checked ? null : item.expiryDate // Wyczyść datę gdy zaznaczono "nie dotyczy"
+          expiryDate: checked ? null : item.expiryDate
         } : item
       )
     }));
@@ -589,10 +686,21 @@ const UnloadingReportFormPage = () => {
     if (!formData.selectedItems || formData.selectedItems.length === 0) {
       newErrors.selectedItems = 'Wybierz co najmniej jedną pozycję z PO';
     } else {
-      // Sprawdź czy dla każdej wybranej pozycji podano ilość rozładowaną
-      const missingQuantities = formData.selectedItems.filter(item => !item.unloadedQuantity?.trim());
-      if (missingQuantities.length > 0) {
-        newErrors.selectedItems = 'Podaj ilość rozładowaną dla wszystkich wybranych pozycji';
+      // Sprawdź czy dla każdej wybranej pozycji istnieją partie i czy są poprawnie wypełnione
+      for (const item of formData.selectedItems) {
+        const batches = item.batches || [];
+        
+        if (batches.length === 0) {
+          newErrors.selectedItems = 'Każda pozycja musi mieć co najmniej jedną partię';
+          break;
+        }
+        
+        // Sprawdź czy wszystkie partie mają wypełnioną ilość
+        const missingQuantities = batches.filter(batch => !batch.unloadedQuantity?.trim());
+        if (missingQuantities.length > 0) {
+          newErrors.selectedItems = 'Podaj ilość rozładowaną dla wszystkich partii';
+          break;
+        }
       }
     }
     if (!formData.palletQuantity.trim()) {
@@ -643,8 +751,11 @@ const UnloadingReportFormPage = () => {
         invoiceNumber: formData.invoiceNumber,
         selectedItems: formData.selectedItems.map(item => ({
           ...item,
-          expiryDate: item.expiryDate ? item.expiryDate : null, // Zachowaj datę jako Date object
-          noExpiryDate: item.noExpiryDate || false // Zachowaj stan checkbox "nie dotyczy"
+          batches: (item.batches || []).map(batch => ({
+            ...batch,
+            expiryDate: batch.expiryDate ? batch.expiryDate : null, // Zachowaj datę jako Date object
+            noExpiryDate: batch.noExpiryDate || false // Zachowaj stan checkbox "nie dotyczy"
+          }))
         })),
         palletQuantity: formData.palletQuantity,
         cartonsTubsQuantity: formData.cartonsTubsQuantity,
@@ -1166,87 +1277,193 @@ const UnloadingReportFormPage = () => {
                         <TableCell>Nazwa produktu</TableCell>
                         <TableCell>Ilość w PO</TableCell>
                         <TableCell>Waga</TableCell>
+                        <TableCell>Numer partii</TableCell>
                         <TableCell>Ilość rozładowana </TableCell>
                         <TableCell>Data ważności</TableCell>
+                        <TableCell align="center">Akcje</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {poItems.map((item) => {
                         const isSelected = selectedPoItems.some(selected => selected.id === item.id);
                         const selectedItem = selectedPoItems.find(selected => selected.id === item.id);
+                        const batches = selectedItem?.batches || [];
                         
                         return (
-                          <TableRow key={item.id}>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={isSelected}
-                                onChange={(e) => handleItemSelection(item, e.target.checked)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight="bold">
-                                {item.productName || 'Brak nazwy'}
-                              </Typography>
-                              {item.description && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {item.description}
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {item.quantity ? `${item.quantity} ${item.unit}` : 'Brak danych'}
-                            </TableCell>
-                            <TableCell>
-                              {item.weight > 0 ? `${item.weight} kg` : '-'}
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                placeholder="Ilość"
-                                value={selectedItem?.unloadedQuantity || ''}
-                                onChange={(e) => handleUnloadedQuantityChange(item.id, e.target.value)}
-                                disabled={!isSelected}
-                                sx={{ minWidth: 120 }}
-                                error={isSelected && !selectedItem?.unloadedQuantity?.trim()}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 160 }}>
-                                <DatePicker
-                                  value={selectedItem?.expiryDate || null}
-                                  onChange={(date) => handleExpiryDateChange(item.id, date)}
-                                  disabled={!isSelected || selectedItem?.noExpiryDate}
-                                  renderInput={(params) => (
-                                    <TextField
-                                      {...params}
-                                      size="small"
-                                      placeholder="Data ważności"
-                                      sx={{ minWidth: 140 }}
-                                    />
-                                  )}
+                          <React.Fragment key={item.id}>
+                            {/* Pierwszy wiersz - informacje o produkcie + pierwsza partia */}
+                            <TableRow>
+                              <TableCell padding="checkbox" rowSpan={isSelected ? batches.length : 1}>
+                                <Checkbox
+                                  checked={isSelected}
+                                  onChange={(e) => handleItemSelection(item, e.target.checked)}
                                 />
-                                {isSelected && (
-                                  <FormControlLabel
-                                    control={
-                                      <Checkbox
-                                        size="small"
-                                        checked={selectedItem?.noExpiryDate || false}
-                                        onChange={(e) => handleNoExpiryDateChange(item.id, e.target.checked)}
-                                      />
-                                    }
-                                    label="Nie dotyczy"
-                                    sx={{ 
-                                      margin: 0,
-                                      '& .MuiFormControlLabel-label': {
-                                        fontSize: '0.75rem',
-                                        color: 'text.secondary'
-                                      }
-                                    }}
-                                  />
+                              </TableCell>
+                              <TableCell rowSpan={isSelected ? batches.length : 1}>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {item.productName || 'Brak nazwy'}
+                                </Typography>
+                                {item.description && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {item.description}
+                                  </Typography>
                                 )}
-                              </Box>
-                            </TableCell>
-                          </TableRow>
+                              </TableCell>
+                              <TableCell rowSpan={isSelected ? batches.length : 1}>
+                                {item.quantity ? `${item.quantity} ${item.unit}` : 'Brak danych'}
+                              </TableCell>
+                              <TableCell rowSpan={isSelected ? batches.length : 1}>
+                                {item.weight > 0 ? `${item.weight} kg` : '-'}
+                              </TableCell>
+                              
+                              {/* Jeśli zaznaczone - pokaż pierwszą partię */}
+                              {isSelected && batches.length > 0 ? (
+                                <>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      placeholder="Nr partii"
+                                      value={batches[0]?.batchNumber || ''}
+                                      onChange={(e) => handleBatchFieldChange(item.id, batches[0].id, 'batchNumber', e.target.value)}
+                                      sx={{ minWidth: 100 }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      placeholder="Ilość"
+                                      value={batches[0]?.unloadedQuantity || ''}
+                                      onChange={(e) => handleBatchFieldChange(item.id, batches[0].id, 'unloadedQuantity', e.target.value)}
+                                      sx={{ minWidth: 100 }}
+                                      error={!batches[0]?.unloadedQuantity?.trim()}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 160 }}>
+                                      <DatePicker
+                                        value={batches[0]?.expiryDate || null}
+                                        onChange={(date) => handleBatchFieldChange(item.id, batches[0].id, 'expiryDate', date)}
+                                        disabled={batches[0]?.noExpiryDate}
+                                        renderInput={(params) => (
+                                          <TextField
+                                            {...params}
+                                            size="small"
+                                            placeholder="Data ważności"
+                                            sx={{ minWidth: 140 }}
+                                          />
+                                        )}
+                                      />
+                                      <FormControlLabel
+                                        control={
+                                          <Checkbox
+                                            size="small"
+                                            checked={batches[0]?.noExpiryDate || false}
+                                            onChange={(e) => handleBatchFieldChange(item.id, batches[0].id, 'noExpiryDate', e.target.checked)}
+                                          />
+                                        }
+                                        label="Nie dotyczy"
+                                        sx={{ 
+                                          margin: 0,
+                                          '& .MuiFormControlLabel-label': {
+                                            fontSize: '0.75rem',
+                                            color: 'text.secondary'
+                                          }
+                                        }}
+                                      />
+                                    </Box>
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="primary"
+                                      onClick={() => handleAddBatch(item.id)}
+                                      sx={{ minWidth: 'auto', px: 1 }}
+                                    >
+                                      + Partia
+                                    </Button>
+                                  </TableCell>
+                                </>
+                              ) : (
+                                <>
+                                  <TableCell>-</TableCell>
+                                  <TableCell>-</TableCell>
+                                  <TableCell>-</TableCell>
+                                  <TableCell>-</TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                            
+                            {/* Dodatkowe wiersze dla kolejnych partii */}
+                            {isSelected && batches.slice(1).map((batch, batchIndex) => (
+                              <TableRow key={batch.id}>
+                                <TableCell>
+                                  <TextField
+                                    size="small"
+                                    placeholder="Nr partii"
+                                    value={batch.batchNumber || ''}
+                                    onChange={(e) => handleBatchFieldChange(item.id, batch.id, 'batchNumber', e.target.value)}
+                                    sx={{ minWidth: 100 }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    size="small"
+                                    placeholder="Ilość"
+                                    value={batch.unloadedQuantity || ''}
+                                    onChange={(e) => handleBatchFieldChange(item.id, batch.id, 'unloadedQuantity', e.target.value)}
+                                    sx={{ minWidth: 100 }}
+                                    error={!batch.unloadedQuantity?.trim()}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 160 }}>
+                                    <DatePicker
+                                      value={batch.expiryDate || null}
+                                      onChange={(date) => handleBatchFieldChange(item.id, batch.id, 'expiryDate', date)}
+                                      disabled={batch.noExpiryDate}
+                                      renderInput={(params) => (
+                                        <TextField
+                                          {...params}
+                                          size="small"
+                                          placeholder="Data ważności"
+                                          sx={{ minWidth: 140 }}
+                                        />
+                                      )}
+                                    />
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          size="small"
+                                          checked={batch.noExpiryDate || false}
+                                          onChange={(e) => handleBatchFieldChange(item.id, batch.id, 'noExpiryDate', e.target.checked)}
+                                        />
+                                      }
+                                      label="Nie dotyczy"
+                                      sx={{ 
+                                        margin: 0,
+                                        '& .MuiFormControlLabel-label': {
+                                          fontSize: '0.75rem',
+                                          color: 'text.secondary'
+                                        }
+                                      }}
+                                    />
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="error"
+                                    onClick={() => handleRemoveBatch(item.id, batch.id)}
+                                    sx={{ minWidth: 'auto', px: 1 }}
+                                  >
+                                    Usuń
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
                         );
                       })}
                     </TableBody>
