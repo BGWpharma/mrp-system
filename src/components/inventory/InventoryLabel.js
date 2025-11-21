@@ -318,7 +318,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                   ${batch.moNumber ? `
                     <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
                   ` : ''}
-                  ${batch.orderNumber ? `
+                  ${batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') ? `
                     <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
                   ` : ''}
                   ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
@@ -347,7 +347,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                     ${batch.moNumber ? `
                       <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
                     ` : ''}
-                    ${batch.orderNumber ? `
+                    ${batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') ? `
                       <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
                     ` : ''}
                     ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
@@ -633,7 +633,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                   ${batch.moNumber ? `
                     <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
                   ` : ''}
-                  ${batch.orderNumber ? `
+                  ${batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') ? `
                     <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
                   ` : ''}
                   ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
@@ -662,7 +662,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                     ${batch.moNumber ? `
                       <div class="compact-info-item bold-info">MO: ${batch.moNumber}</div>
                     ` : ''}
-                    ${batch.orderNumber ? `
+                    ${batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') ? `
                       <div class="compact-info-item bold-info">CO: ${batch.orderNumber}</div>
                     ` : ''}
                     ${batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `
@@ -710,27 +710,46 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
           </div>
           <button id="capture-button">Capture and Download</button>
           <a id="download-link" download="label_${item?.id || 'product'}_${batch ? batch.batchNumber || batch.lotNumber || '' : ''}.png"></a>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
           <script>
-            document.getElementById('capture-button').addEventListener('click', function() {
-              const labelElement = document.getElementById('label-to-capture');
-              const downloadLink = document.getElementById('download-link');
-              const button = this;
+            // Czekamy na załadowanie html2canvas
+            window.addEventListener('load', function() {
+              const captureButton = document.getElementById('capture-button');
               
-              button.textContent = 'Processing...';
-              button.disabled = true;
-              
-              // Używamy html2canvas z setTimeout dla lepszego renderowania
-              setTimeout(function() {
-                html2canvas(labelElement, {
-                  scale: 3,
-                  backgroundColor: '#FFFFFF'
-                }).then(function(canvas) {
-                  const pngData = canvas.toDataURL('image/png');
-                  downloadLink.href = pngData;
-                  downloadLink.click();
-                  window.close();
-                });
-              }, 300);
+              captureButton.addEventListener('click', function() {
+                const labelElement = document.getElementById('label-to-capture');
+                const downloadLink = document.getElementById('download-link');
+                const button = this;
+                
+                button.textContent = 'Processing...';
+                button.disabled = true;
+                
+                // Sprawdzamy czy html2canvas jest dostępny
+                if (typeof html2canvas === 'undefined') {
+                  alert('html2canvas library not loaded. Please try again.');
+                  button.textContent = 'Capture and Download';
+                  button.disabled = false;
+                  return;
+                }
+                
+                // Używamy html2canvas z setTimeout dla lepszego renderowania
+                setTimeout(function() {
+                  html2canvas(labelElement, {
+                    scale: 3,
+                    backgroundColor: '#FFFFFF'
+                  }).then(function(canvas) {
+                    const pngData = canvas.toDataURL('image/png');
+                    downloadLink.href = pngData;
+                    downloadLink.click();
+                    window.close();
+                  }).catch(function(error) {
+                    console.error('Error capturing image:', error);
+                    alert('Error capturing image. Please try again.');
+                    button.textContent = 'Capture and Download';
+                    button.disabled = false;
+                  });
+                }, 300);
+              });
             });
           </script>
         </body>
@@ -784,7 +803,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
     (batch && batch.quantity ? `QTY: ${batch.quantity} ${translateUnit(item?.unit)}\n` : '') +
     (batch && batch.expiryDate ? `EXP: ${formatDate(batch.expiryDate)}\n` : '') +
     (batch && batch.moNumber ? `MO: ${batch.moNumber}\n` : '') +
-    (batch && batch.orderNumber ? `CO: ${batch.orderNumber}\n` : '') +
+    (batch && batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') ? `CO: ${batch.orderNumber}\n` : '') +
     // Pobieranie danych PO z zagnieżdżonej struktury purchaseOrderDetails
     (batch && batch.purchaseOrderDetails && batch.purchaseOrderDetails.number ? `PO: ${batch.purchaseOrderDetails.number}\n` : '') +
     (batch && batch.poNumber ? `PO: ${batch.poNumber}\n` : '') +
@@ -970,7 +989,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
               </Typography>
             )}
             
-            {batch.orderNumber && (
+            {batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') && (
               <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
                 CO: {batch.orderNumber}
               </Typography>
@@ -1030,7 +1049,7 @@ const InventoryLabel = forwardRef(({ item, batch = null, onClose, address = null
                   </Typography>
                 )}
                 
-                {batch.orderNumber && (
+                {batch.orderNumber && (item?.category === 'Produkty gotowe' || item?.category === 'Gotowe produkty') && (
                   <Typography variant="body1" sx={{ textAlign: 'center', fontWeight: 'bold', mb: 0.5 }}>
                     CO: {batch.orderNumber}
                   </Typography>

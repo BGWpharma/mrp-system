@@ -23,7 +23,6 @@ import {
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  Print as PrintIcon,
   GetApp as DownloadIcon,
   Description as ReportIcon
 } from '@mui/icons-material';
@@ -196,10 +195,6 @@ const StocktakingReportPage = () => {
     </TableCell>
   );
   
-  const handlePrint = () => {
-    window.print();
-  };
-  
   const handleExportCSV = async () => {
     try {
       const reportData = await generateStocktakingReport(id, { format: 'csv' });
@@ -286,14 +281,6 @@ const StocktakingReportPage = () => {
           {t('stocktaking.reportTitle')}
         </Typography>
         <Box>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrint}
-            sx={{ mr: 1 }}
-          >
-            {t('stocktaking.print')}
-          </Button>
           <Button
             variant="contained"
             color="primary"

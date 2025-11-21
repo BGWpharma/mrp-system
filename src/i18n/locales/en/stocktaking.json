@@ -49,6 +49,7 @@
   "reportTitle": "Stocktaking Report",
   "print": "Print",
   "exportPDF": "Export PDF",
+  "exportCSV": "Export CSV",
   "reportFor": "Stocktaking Report: {{name}}",
   "generatedOn": "Generated: {{date}}",
   "stocktakingInfo": "Stocktaking information",
@@ -105,5 +106,29 @@
     "completedAt": "Completed at",
     "notes": "Notes",
     "allLocations": "All locations"
+  },
+  "completeDialog": {
+    "title": "Complete stocktaking",
+    "confirmQuestion": "Are you sure you want to complete this stocktaking? After completion, you won't be able to add or edit products.",
+    "adjustInventory": "Adjust inventory levels",
+    "adjustInventoryHelp": "Yes, adjust inventory levels",
+    "warningTitle": "⚠️ Corrections will affect reservations",
+    "batchesWithShortages": "{{count}} batches with shortages after correction:",
+    "noConflicts": "✅ No conflicts with reservations.",
+    "canCompleteWithWarning": "You can complete the stocktaking. Consider contacting the production team.",
+    "batchInfo": "{{itemName}} - Batch: {{batchNumber}}",
+    "quantityChange": "{{currentQuantity}} → {{newQuantity}} {{unit}} (reserved: {{totalReserved}}, shortage: {{shortage}})",
+    "reservationsLabel": "Reservations:",
+    "quantityLabel": "Quantity: {{quantity}} {{unit}}",
+    "optionsTitle": "🔧 Resolution options:",
+    "cancelThreatenedReservations": "Cancel threatened reservations",
+    "cancelReservationsHelp": "Removes reservations with shortages.",
+    "cancellingBatches": "ℹ️ Cancelling {{count}} batches.",
+    "buttonCancel": "Cancel",
+    "buttonComplete": "Complete stocktaking",
+    "buttonCompleteWithWarnings": "Complete despite warnings",
+    "buttonCancelReservationsAndComplete": "Cancel reservations and complete",
+    "cancellingReservations": "Cancelling reservations...",
+    "checkingReservations": "Checking impact on reservations..."
   }
 }
