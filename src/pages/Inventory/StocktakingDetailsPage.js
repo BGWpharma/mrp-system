@@ -124,6 +124,14 @@ const StocktakingDetailsPage = () => {
   const [deleteItemId, setDeleteItemId] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
+  // Stany dla dialogu pojedynczej akceptacji z rezerwacjami
+  const [singleItemReservationDialog, setSingleItemReservationDialog] = useState({
+    open: false,
+    itemId: null,
+    warnings: [],
+    cancelReservations: true
+  });
+  
   // Hook do zarządzania nazwami użytkowników
   const { userNames, getUserName, fetchUserNames } = useUserNames();
   
@@ -475,6 +483,147 @@ const StocktakingDetailsPage = () => {
       fetchStocktakingData(); // Odśwież dane
     } catch (error) {
       console.error('Błąd podczas akceptowania pozycji:', error);
+      
+      // Jeśli to błąd rezerwacji, pokaż dialog z opcją anulowania rezerwacji
+      if (error.message && error.message.includes('OSTRZEŻENIE REZERWACJI')) {
+        // 🔍 Znajdź pozycję w items, aby pobrać batchId (KRYTYCZNE!)
+        const item = items.find(i => i.id === itemId);
+        
+        if (!item) {
+          showError('Nie można znaleźć pozycji w inwentaryzacji');
+          return;
+        }
+        
+        // Parsuj komunikat błędu aby wyodrębnić strukturowane dane
+        const warning = parseReservationWarningFromError(error.message);
+        
+        if (warning && item.batchId) {
+          // ✅ DODAJ batchId z pozycji (to tego brakowało!)
+          warning.batchId = item.batchId;
+          warning.itemName = item.name; // Dodaj też nazwę dla pewności
+          
+          console.log('🔧 Dodano batchId do ostrzeżenia:', {
+            batchId: warning.batchId,
+            batchNumber: warning.batchNumber,
+            itemName: warning.itemName
+          });
+          
+          // Pokaż dialog z ostrzeżeniem
+          setSingleItemReservationDialog({
+            open: true,
+            itemId: itemId,
+            warnings: [warning],
+            cancelReservations: true
+          });
+        } else if (!item.batchId) {
+          showError('Ta pozycja nie ma przypisanej partii. Problem z rezerwacjami dotyczy tylko partii.');
+        } else {
+          // Fallback - pokaż surowy komunikat
+          showError(error.message);
+        }
+      } else {
+        showError(`Błąd: ${error.message}`);
+      }
+    }
+  };
+  
+  // Funkcja do parsowania ostrzeżenia z komunikatu błędu
+  const parseReservationWarningFromError = (errorMessage) => {
+    try {
+      const lines = errorMessage.split('\n');
+      const warning = {};
+      
+      // Wyodrębnij dane z komunikatu
+      lines.forEach(line => {
+        if (line.includes('📦 Partia:')) {
+          warning.batchNumber = line.split(':')[1].trim();
+        } else if (line.includes('📊 Obecna ilość:')) {
+          const parts = line.split(':')[1].trim().split(' ');
+          warning.currentQuantity = parseFloat(parts[0]);
+          warning.unit = parts[1];
+        } else if (line.includes('📉 Po korekcie:')) {
+          const parts = line.split(':')[1].trim().split(' ');
+          warning.newQuantity = parseFloat(parts[0]);
+        } else if (line.includes('🔒 Zarezerwowane:')) {
+          const parts = line.split(':')[1].trim().split(' ');
+          warning.totalReserved = parseFloat(parts[0]);
+        } else if (line.includes('❌ Niedobór:')) {
+          const parts = line.split(':')[1].trim().split(' ');
+          warning.shortage = parseFloat(parts[0]);
+        }
+      });
+      
+      // Wyodrębnij rezerwacje
+      warning.reservations = [];
+      let inReservationSection = false;
+      lines.forEach(line => {
+        if (line.includes('Zarezerwowane dla zadań:')) {
+          inReservationSection = true;
+        } else if (inReservationSection && line.trim().startsWith('•')) {
+          const resLine = line.replace('•', '').trim();
+          const match = resLine.match(/(.+?)\s+-\s+(.+?)\s+(.+?)(\s+\((.+)\))?$/);
+          if (match) {
+            warning.reservations.push({
+              displayName: match[1],
+              quantity: parseFloat(match[2]),
+              clientName: match[5] || 'N/A'
+            });
+          }
+        } else if (inReservationSection && line.includes('🔧')) {
+          inReservationSection = false;
+        }
+      });
+      
+      return warning.batchNumber ? warning : null;
+    } catch (error) {
+      console.error('Błąd parsowania ostrzeżenia:', error);
+      return null;
+    }
+  };
+  
+  // Funkcja do akceptacji pozycji z anulowaniem rezerwacji
+  const handleConfirmAcceptWithReservations = async () => {
+    try {
+      const { itemId, warnings, cancelReservations: shouldCancelReservations } = singleItemReservationDialog;
+      
+      // Jeśli użytkownik chce anulować rezerwacje
+      if (shouldCancelReservations && warnings.length > 0) {
+        setCancellingReservations(true);
+        try {
+          // Anuluj rezerwacje dla tej partii
+          const result = await cancelThreatenedReservations(warnings, currentUser.uid);
+          if (result.success) {
+            showSuccess(`Anulowano ${result.cancelledCount} rezerwacji`);
+          }
+        } catch (error) {
+          console.error('Błąd podczas anulowania rezerwacji:', error);
+          showError(`Błąd podczas anulowania rezerwacji: ${error.message}`);
+        } finally {
+          setCancellingReservations(false);
+        }
+      }
+      
+      // Teraz spróbuj ponownie zaakceptować pozycję (rezerwacje już anulowane)
+      try {
+        const result = await acceptStocktakingItem(itemId, true, currentUser.uid);
+        showSuccess(result.message);
+        
+        // Zamknij dialog
+        setSingleItemReservationDialog({
+          open: false,
+          itemId: null,
+          warnings: [],
+          cancelReservations: true
+        });
+        
+        // Odśwież dane
+        fetchStocktakingData();
+      } catch (error) {
+        console.error('Błąd podczas akceptowania pozycji po anulowaniu rezerwacji:', error);
+        showError(`Błąd: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Błąd podczas potwierdzania akceptacji:', error);
       showError(`Błąd: ${error.message}`);
     }
   };
@@ -1540,6 +1689,200 @@ const StocktakingDetailsPage = () => {
               {reservationWarnings.length > 0 
                 ? (cancelReservations ? t('stocktaking.completeDialog.buttonCancelReservationsAndComplete') : t('stocktaking.completeDialog.buttonCompleteWithWarnings'))
                 : t('stocktaking.completeDialog.buttonComplete')
+              }
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+      
+      {/* Dialog ostrzeżenia o rezerwacjach dla pojedynczej pozycji */}
+      <Dialog 
+        open={singleItemReservationDialog.open} 
+        onClose={() => setSingleItemReservationDialog({ open: false, itemId: null, warnings: [], cancelReservations: true })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon color="warning" />
+            <Typography variant="h6">
+              Ostrzeżenie - Konflikt z rezerwacjami
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Nie można zaakceptować tej pozycji ze względu na istniejące rezerwacje. Po korekcie ilość będzie niewystarczająca dla zarezerwowanych zadań.
+          </DialogContentText>
+
+          {/* Ostrzeżenia o rezerwacjach */}
+          {singleItemReservationDialog.warnings.length > 0 && (
+            <Box>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                  Wykryto konflikt z rezerwacjami
+                </Typography>
+                <Typography variant="body2">
+                  Po akceptacji tej pozycji, ilość będzie niewystarczająca dla istniejących rezerwacji.
+                </Typography>
+              </Alert>
+
+              <Box sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                {singleItemReservationDialog.warnings.map((warning, index) => (
+                  <Paper 
+                    key={index} 
+                    elevation={2}
+                    sx={{ 
+                      p: 2.5, 
+                      mb: 1.5, 
+                      bgcolor: (theme) => theme.palette.mode === 'dark' 
+                        ? 'rgba(255, 193, 7, 0.08)' 
+                        : 'rgba(255, 193, 7, 0.12)',
+                      border: 1,
+                      borderColor: 'warning.main',
+                      borderRadius: 2
+                    }}>
+                    <Typography variant="subtitle2" sx={{ 
+                      fontWeight: 'bold', 
+                      color: (theme) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
+                      mb: 1
+                    }}>
+                      Partia: {warning.batchNumber}
+                    </Typography>
+                    <Typography variant="body2" sx={{ 
+                      color: (theme) => theme.palette.mode === 'dark' ? 'text.secondary' : 'warning.dark',
+                      mb: 1
+                    }}>
+                      Obecna ilość: <strong>{warning.currentQuantity} {warning.unit}</strong> → 
+                      Po korekcie: <strong>{warning.newQuantity} {warning.unit}</strong>
+                      <br />
+                      Zarezerwowane: <strong>{warning.totalReserved} {warning.unit}</strong> → 
+                      Niedobór: <strong style={{ color: 'red' }}>{warning.shortage} {warning.unit}</strong>
+                    </Typography>
+                    
+                    {warning.reservations && warning.reservations.length > 0 && (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" sx={{ 
+                          fontWeight: 'bold', 
+                          color: (theme) => theme.palette.mode === 'dark' ? 'warning.light' : 'warning.dark',
+                          display: 'block',
+                          mb: 0.5
+                        }}>
+                          Zarezerwowane dla zadań:
+                        </Typography>
+                        <Box sx={{ ml: 1, mt: 0.5 }}>
+                          {warning.reservations.map((res, resIndex) => (
+                            <Box key={resIndex} sx={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              py: 0.5,
+                              borderBottom: resIndex < warning.reservations.length - 1 ? 1 : 0,
+                              borderColor: 'divider'
+                            }}>
+                              <Typography variant="body2" sx={{ 
+                                fontWeight: 'medium',
+                                color: (theme) => theme.palette.mode === 'dark' ? 'text.primary' : 'text.primary'
+                              }}>
+                                {res.displayName} {res.clientName !== 'N/A' && `(${res.clientName})`}
+                              </Typography>
+                              <Typography variant="body2" sx={{ 
+                                fontWeight: 'bold', 
+                                color: (theme) => theme.palette.mode === 'dark' ? 'error.light' : 'error.main'
+                              }}>
+                                {res.quantity} {warning.unit}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                  </Paper>
+                ))}
+              </Box>
+
+              {/* Opcje anulowania rezerwacji */}
+              <Box sx={{ 
+                mt: 2, 
+                p: 2.5, 
+                bgcolor: (theme) => theme.palette.mode === 'dark' 
+                  ? 'rgba(66, 165, 245, 0.08)' 
+                  : 'rgba(25, 118, 210, 0.04)', 
+                borderRadius: 2,
+                border: 1,
+                borderColor: (theme) => theme.palette.mode === 'dark' 
+                  ? 'primary.dark' 
+                  : 'primary.light'
+              }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                  Co możesz zrobić?
+                </Typography>
+                
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={singleItemReservationDialog.cancelReservations}
+                      onChange={(e) => setSingleItemReservationDialog(prev => ({
+                        ...prev,
+                        cancelReservations: e.target.checked
+                      }))}
+                      color="warning"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                        Anuluj rezerwacje dla tej partii
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Rezerwacje zostaną usunięte, a następnie pozycja zostanie zaakceptowana
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: 'flex-start', mb: 1 }}
+                />
+
+                {singleItemReservationDialog.cancelReservations && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    <Typography variant="body2">
+                      Zostaną anulowane wszystkie rezerwacje dla partii <strong>{singleItemReservationDialog.warnings[0]?.batchNumber}</strong>
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+
+              <Alert severity="info" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Alternatywnie:</strong> Możesz anulować tę operację i:
+                </Typography>
+                <Typography variant="body2" component="ul" sx={{ mt: 1, mb: 0 }}>
+                  <li>Skorygować ilość policzoną w inwentaryzacji</li>
+                  <li>Cofnąć/zmniejszyć rezerwacje w zadaniach produkcyjnych</li>
+                  <li>Użyć "Zakończ inwentaryzację" do anulowania wszystkich zagrożonych rezerwacji naraz</li>
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSingleItemReservationDialog({ open: false, itemId: null, warnings: [], cancelReservations: true })}>
+            Anuluj
+          </Button>
+          
+          {cancellingReservations ? (
+            <Button disabled>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              Anulowanie rezerwacji...
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleConfirmAcceptWithReservations} 
+              color="warning"
+              variant="contained"
+            >
+              {singleItemReservationDialog.cancelReservations 
+                ? 'Anuluj rezerwacje i zaakceptuj'
+                : 'Zaakceptuj mimo ostrzeżeń'
               }
             </Button>
           )}

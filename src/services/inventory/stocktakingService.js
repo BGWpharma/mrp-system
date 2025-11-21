@@ -718,6 +718,36 @@ export const acceptStocktakingItem = async (itemId, adjustInventory = true, user
       throw new Error('Nie można akceptować pozycji w zakończonej inwentaryzacji');
     }
 
+    // 🔍 SPRAWDŹ REZERWACJE - jeśli będziemy aktualizować stany
+    if (adjustInventory) {
+      const reservationCheck = await checkSingleItemReservationImpact(item);
+      
+      if (reservationCheck.hasWarnings) {
+        const warning = reservationCheck.warnings[0];
+        
+        // Przygotuj szczegółowy komunikat o rezerwacjach
+        const reservationDetails = warning.reservations
+          .map(r => `  • ${r.displayName} - ${r.quantity} ${warning.unit}${r.clientName !== 'N/A' ? ` (${r.clientName})` : ''}`)
+          .join('\n');
+        
+        const errorMessage = 
+          `⚠️ OSTRZEŻENIE REZERWACJI\n\n` +
+          `Nie można zaakceptować pozycji ze względu na istniejące rezerwacje.\n\n` +
+          `📦 Partia: ${warning.batchNumber}\n` +
+          `📊 Obecna ilość: ${warning.currentQuantity} ${warning.unit}\n` +
+          `📉 Po korekcie: ${warning.newQuantity} ${warning.unit}\n` +
+          `🔒 Zarezerwowane: ${warning.totalReserved} ${warning.unit}\n` +
+          `❌ Niedobór: ${warning.shortage} ${warning.unit}\n\n` +
+          `Zarezerwowane dla zadań:\n${reservationDetails}\n\n` +
+          `🔧 Co możesz zrobić:\n` +
+          `1. Cofnij/zmniejsz rezerwacje w zadaniach produkcyjnych\n` +
+          `2. Skoryguj ilość policzoną w inwentaryzacji\n` +
+          `3. Użyj "Zakończ inwentaryzację" z opcją anulowania zagrożonych rezerwacji`;
+        
+        throw new Error(errorMessage);
+      }
+    }
+
     // Jeśli mamy aktualizować stany magazynowe
     if (adjustInventory) {
       const discrepancy = item.discrepancy || 0;
@@ -767,6 +797,12 @@ export const acceptStocktakingItem = async (itemId, adjustInventory = true, user
     if (error instanceof ValidationError) {
       throw error;
     }
+    
+    // Jeśli to błąd rezerwacji, rzuć go bez opakowywania
+    if (error.message && error.message.includes('OSTRZEŻENIE REZERWACJI')) {
+      throw error;
+    }
+    
     console.error('Błąd podczas akceptowania pozycji inwentaryzacji:', error);
     throw new Error(`Nie udało się zaakceptować pozycji: ${error.message}`);
   }
@@ -1245,6 +1281,69 @@ const createInventoryAdjustmentTransaction = async (params) => {
   
   const transactionRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY_TRANSACTIONS);
   await addDoc(transactionRef, transactionData);
+};
+
+/**
+ * Sprawdza wpływ pojedynczej korekty na rezerwacje partii
+ * @param {Object} item - Element inwentaryzacji
+ * @returns {Promise<Object>} - Wynik sprawdzenia z ostrzeżeniami
+ * @private
+ */
+const checkSingleItemReservationImpact = async (item) => {
+  try {
+    // Sprawdź tylko jeśli to partia i ma rozbieżność
+    if (!item.batchId || Math.abs(item.discrepancy || 0) < 0.001) {
+      return { hasWarnings: false, warnings: [] };
+    }
+
+    const { getBatchReservations } = await import('./batchService');
+    
+    // Pobierz rezerwacje dla partii
+    const reservations = await getBatchReservations(item.batchId);
+    
+    if (reservations.length === 0) {
+      return { hasWarnings: false, warnings: [] };
+    }
+    
+    // Oblicz nową ilość po korekcie
+    const newQuantity = (item.systemQuantity || 0) + (item.discrepancy || 0);
+    
+    // Oblicz łączną ilość zarezerwowaną
+    const totalReserved = reservations.reduce((sum, res) => sum + (res.quantity || 0), 0);
+    
+    // Sprawdź czy nowa ilość będzie mniejsza niż zarezerwowana
+    if (newQuantity < totalReserved) {
+      const shortage = totalReserved - newQuantity;
+      
+      const warning = {
+        batchId: item.batchId,
+        itemName: item.name,
+        batchNumber: item.batchNumber || item.lotNumber || 'Bez numeru',
+        currentQuantity: item.systemQuantity || 0,
+        newQuantity: formatQuantityPrecision(newQuantity),
+        totalReserved: formatQuantityPrecision(totalReserved),
+        shortage: formatQuantityPrecision(shortage),
+        unit: item.unit || 'szt.',
+        reservations: reservations.map(res => ({
+          taskNumber: res.taskNumber,
+          moNumber: res.moNumber,
+          displayName: res.taskNumber || res.moNumber || 'Zadanie nieznane',
+          quantity: res.quantity || 0,
+          clientName: res.clientName || 'N/A'
+        }))
+      };
+      
+      console.log(`⚠️ OSTRZEŻENIE: Partia ${warning.batchNumber} - niedobór ${shortage} ${item.unit}`);
+      
+      return { hasWarnings: true, warnings: [warning] };
+    }
+    
+    return { hasWarnings: false, warnings: [] };
+    
+  } catch (error) {
+    console.error('Błąd podczas sprawdzania rezerwacji:', error);
+    return { hasWarnings: false, warnings: [], error: error.message };
+  }
 };
 
 /**
