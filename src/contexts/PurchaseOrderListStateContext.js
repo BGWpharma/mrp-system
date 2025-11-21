@@ -10,6 +10,7 @@ const STORAGE_KEY = 'purchaseOrderListState';
 const initialState = {
   searchTerm: '',
   statusFilter: 'all',
+  paymentStatusFilter: 'all',
   page: 1,
   pageSize: 10,
   tableSort: {
@@ -23,6 +24,7 @@ const initialState = {
 const actionTypes = {
   SET_SEARCH_TERM: 'SET_SEARCH_TERM',
   SET_STATUS_FILTER: 'SET_STATUS_FILTER',
+  SET_PAYMENT_STATUS_FILTER: 'SET_PAYMENT_STATUS_FILTER',
   SET_PAGE: 'SET_PAGE',
   SET_PAGE_SIZE: 'SET_PAGE_SIZE',
   SET_TABLE_SORT: 'SET_TABLE_SORT',
@@ -47,6 +49,14 @@ const purchaseOrderListStateReducer = (state, action) => {
           ...state, 
           statusFilter: action.payload,
           page: 1, // Reset strony przy zmianie filtru statusu
+          lastUpdated: Date.now()
+        };
+      
+      case actionTypes.SET_PAYMENT_STATUS_FILTER:
+        return { 
+          ...state, 
+          paymentStatusFilter: action.payload,
+          page: 1, // Reset strony przy zmianie filtru płatności
           lastUpdated: Date.now()
         };
       
@@ -126,6 +136,7 @@ export const PurchaseOrderListStateProvider = ({ children }) => {
   const actions = {
     setSearchTerm: (searchTerm) => dispatch({ type: actionTypes.SET_SEARCH_TERM, payload: searchTerm }),
     setStatusFilter: (statusFilter) => dispatch({ type: actionTypes.SET_STATUS_FILTER, payload: statusFilter }),
+    setPaymentStatusFilter: (paymentStatusFilter) => dispatch({ type: actionTypes.SET_PAYMENT_STATUS_FILTER, payload: paymentStatusFilter }),
     setPage: (page) => dispatch({ type: actionTypes.SET_PAGE, payload: page }),
     setPageSize: (pageSize) => dispatch({ type: actionTypes.SET_PAGE_SIZE, payload: pageSize }),
     setTableSort: (tableSort) => dispatch({ type: actionTypes.SET_TABLE_SORT, payload: tableSort }),

@@ -3566,13 +3566,14 @@ export const getPurchaseOrdersOptimized = async ({
   pageSize,
   searchTerm = null,
   statusFilter = null,
+  paymentStatusFilter = null,
   sortField = 'createdAt',
   sortOrder = 'desc',
   forceRefresh = false
 }) => {
   try {
     console.log('🚀 getPurchaseOrdersOptimized - rozpoczynam zoptymalizowane pobieranie');
-    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, sortField, sortOrder, forceRefresh });
+    console.log('📄 Parametry:', { page, pageSize, searchTerm, statusFilter, paymentStatusFilter, sortField, sortOrder, forceRefresh });
 
     // Walidacja wymaganych parametrów
     if (!page || !pageSize) {
@@ -3684,6 +3685,13 @@ export const getPurchaseOrdersOptimized = async ({
           return true;
         }
         
+        // Wyszukiwanie w kosztach dodatkowych
+        if (order.additionalCostsItems && order.additionalCostsItems.some(cost => 
+          (cost.description && cost.description.toLowerCase().includes(searchLower))
+        )) {
+          return true;
+        }
+        
         // Wyszukiwanie w notatkach
         if (order.notes && order.notes.toLowerCase().includes(searchLower)) {
           return true;
@@ -3700,6 +3708,16 @@ export const getPurchaseOrdersOptimized = async ({
       console.log('📋 Filtrowanie po statusie:', statusFilter);
       allOrders = allOrders.filter(order => order.status === statusFilter);
       console.log('📋 Po filtrowaniu statusu:', allOrders.length, 'zamówień');
+    }
+
+    // KROK 3.5: Filtrowanie po statusie płatności
+    if (paymentStatusFilter && paymentStatusFilter !== 'all' && paymentStatusFilter.trim() !== '') {
+      console.log('💳 Filtrowanie po statusie płatności:', paymentStatusFilter);
+      allOrders = allOrders.filter(order => {
+        const orderPaymentStatus = order.paymentStatus || 'unpaid'; // domyślnie 'unpaid' jeśli brak statusu
+        return orderPaymentStatus === paymentStatusFilter;
+      });
+      console.log('💳 Po filtrowaniu statusu płatności:', allOrders.length, 'zamówień');
     }
 
     // KROK 4: Sortowanie

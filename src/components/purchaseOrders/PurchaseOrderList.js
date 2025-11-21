@@ -93,6 +93,7 @@ const PurchaseOrderList = () => {
   // Zmienne stanu z kontekstu
   const searchTerm = listState.searchTerm;
   const statusFilter = listState.statusFilter;
+  const paymentStatusFilter = listState.paymentStatusFilter;
   const page = listState.page;
   const pageSize = listState.pageSize;
   const tableSort = listState.tableSort;
@@ -119,6 +120,7 @@ const PurchaseOrderList = () => {
         pageSize: pageSize,
         searchTerm: debouncedSearchTerm.trim() !== '' ? debouncedSearchTerm : null,
         statusFilter: statusFilter !== 'all' ? statusFilter : null,
+        paymentStatusFilter: paymentStatusFilter !== 'all' ? paymentStatusFilter : null,
         sortField: sortFieldToUse,
         sortOrder: sortOrderToUse,
         forceRefresh: false
@@ -148,7 +150,7 @@ const PurchaseOrderList = () => {
       setMainTableLoading(false);
       setLoading(false); // Zachowaj kompatybilność ze starym loading
     }
-  }, [page, pageSize, tableSort.field, tableSort.order, statusFilter, debouncedSearchTerm, showError]);
+  }, [page, pageSize, tableSort.field, tableSort.order, statusFilter, paymentStatusFilter, debouncedSearchTerm, showError]);
   
   // Wywołujemy fetchPurchaseOrdersOptimized przy zmianach parametrów
   useEffect(() => {
@@ -213,10 +215,15 @@ const PurchaseOrderList = () => {
     listActions.setStatusFilter(e.target.value);
   };
   
+  const handlePaymentStatusFilterChange = (e) => {
+    listActions.setPaymentStatusFilter(e.target.value);
+  };
+  
   // Funkcja czyszczenia wyszukiwania i filtrów
   const handleClearFilters = async () => {
     listActions.setSearchTerm('');
     listActions.setStatusFilter('all');
+    listActions.setPaymentStatusFilter('all');
     setDebouncedSearchTerm(''); // Natychmiastowe wyczyszczenie również debounced term
     
     // Natychmiast odśwież listę z pustymi filtrami
@@ -229,6 +236,7 @@ const PurchaseOrderList = () => {
           pageSize: pageSize,
           searchTerm: null,
           statusFilter: null,
+          paymentStatusFilter: null,
           sortField: tableSort.field,
           sortOrder: tableSort.order,
           forceRefresh: true
@@ -714,12 +722,33 @@ const PurchaseOrderList = () => {
             </Select>
           </FormControl>
           
+          <FormControl variant="outlined" size="small" sx={{ minWidth: '200px' }}>
+            <InputLabel id="payment-status-filter-label">Status płatności</InputLabel>
+            <Select
+              labelId="payment-status-filter-label"
+              value={paymentStatusFilter}
+              onChange={handlePaymentStatusFilterChange}
+              label="Status płatności"
+            >
+              <MenuItem value="all">Wszystkie płatności</MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID)}
+              </MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID)}
+              </MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.PAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.PAID)}
+              </MenuItem>
+            </Select>
+          </FormControl>
+          
           <Tooltip title={t('purchaseOrders.filters.clear')}>
             <IconButton 
               color="secondary" 
               onClick={handleClearFilters}
               size="small"
-              disabled={searchTerm === '' && statusFilter === 'all'}
+              disabled={searchTerm === '' && statusFilter === 'all' && paymentStatusFilter === 'all'}
             >
               <ClearIcon />
             </IconButton>
