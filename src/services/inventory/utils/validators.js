@@ -230,35 +230,52 @@ export const validateInventoryItemData = (itemData) => {
   // Nazwa jest wymagana
   validated.name = validateRequiredString(itemData.name, 'name');
   
-  // Opis jest opcjonalny
-  validated.description = validateRequiredString(itemData.description || '', 'description', false);
+  // Pola opcjonalne - dodaj TYLKO jeśli istnieją w danych wejściowych
+  // To zapobiega nadpisywaniu istniejących danych pustymi wartościami
   
-  // Kategoria jest opcjonalna
-  validated.category = validateRequiredString(itemData.category || '', 'category', false);
+  if (itemData.hasOwnProperty('description')) {
+    validated.description = validateRequiredString(itemData.description || '', 'description', false);
+  }
   
-  // Jednostka jest opcjonalna
-  validated.unit = validateRequiredString(itemData.unit || '', 'unit', false);
+  if (itemData.hasOwnProperty('category')) {
+    validated.category = validateRequiredString(itemData.category || '', 'category', false);
+  }
   
-  // Numer CAS jest opcjonalny
-  validated.casNumber = validateRequiredString(itemData.casNumber || '', 'casNumber', false);
+  if (itemData.hasOwnProperty('unit')) {
+    validated.unit = validateRequiredString(itemData.unit || '', 'unit', false);
+  }
   
-  // Kod kreskowy jest opcjonalny
-  validated.barcode = validateRequiredString(itemData.barcode || '', 'barcode', false);
+  if (itemData.hasOwnProperty('casNumber')) {
+    validated.casNumber = validateRequiredString(itemData.casNumber || '', 'casNumber', false);
+  }
   
-  // Lokalizacja jest opcjonalna
-  validated.location = validateRequiredString(itemData.location || '', 'location', false);
+  if (itemData.hasOwnProperty('barcode')) {
+    validated.barcode = validateRequiredString(itemData.barcode || '', 'barcode', false);
+  }
   
-  // Waluta jest opcjonalna
-  validated.currency = validateRequiredString(itemData.currency || '', 'currency', false);
+  if (itemData.hasOwnProperty('location')) {
+    validated.location = validateRequiredString(itemData.location || '', 'location', false);
+  }
   
-  // Informacje o dostawcy są opcjonalne
-  validated.supplierInfo = validateRequiredString(itemData.supplierInfo || '', 'supplierInfo', false);
+  if (itemData.hasOwnProperty('currency')) {
+    validated.currency = validateRequiredString(itemData.currency || '', 'currency', false);
+  }
   
-  // Grupa pakowania jest opcjonalna
-  validated.packingGroup = validateRequiredString(itemData.packingGroup || '', 'packingGroup', false);
+  if (itemData.hasOwnProperty('supplierInfo')) {
+    validated.supplierInfo = validateRequiredString(itemData.supplierInfo || '', 'supplierInfo', false);
+  }
   
-  // ID pozycji kartonowej jest opcjonalne
-  validated.parentPackageItemId = validateRequiredString(itemData.parentPackageItemId || '', 'parentPackageItemId', false);
+  if (itemData.hasOwnProperty('packingGroup')) {
+    validated.packingGroup = validateRequiredString(itemData.packingGroup || '', 'packingGroup', false);
+  }
+  
+  if (itemData.hasOwnProperty('parentPackageItemId')) {
+    validated.parentPackageItemId = validateRequiredString(itemData.parentPackageItemId || '', 'parentPackageItemId', false);
+  }
+  
+  if (itemData.hasOwnProperty('warehouseName')) {
+    validated.warehouseName = validateRequiredString(itemData.warehouseName || '', 'warehouseName', false);
+  }
   
   // Numeryczne pola opcjonalne
   if (itemData.minStock !== undefined && itemData.minStock !== null && itemData.minStock !== '') {

@@ -429,14 +429,20 @@ export const updateInventoryItem = async (itemId, itemData, userId) => {
     const validatedId = validateId(itemId, 'itemId');
     const validatedUserId = validateId(userId, 'userId');
     
+    console.log('🔧 updateInventoryItem - dane wejściowe:', itemData);
+    
     // Walidacja danych pozycji (opcjonalne pola)
     const validatedData = validateInventoryItemData(itemData);
+    
+    console.log('✅ updateInventoryItem - dane po walidacji:', validatedData);
     
     // Sprawdź czy pozycja istnieje
     const currentItem = await getInventoryItemById(validatedId);
     if (!currentItem) {
       throw new Error('Pozycja magazynowa nie istnieje');
     }
+    
+    console.log('📊 updateInventoryItem - aktualne dane w bazie:', currentItem);
     
     // Jeśli nazwa się zmienia, sprawdź unikalność
     if (validatedData.name && validatedData.name !== currentItem.name) {
@@ -460,8 +466,13 @@ export const updateInventoryItem = async (itemId, itemData, userId) => {
       updatedItem.quantity = formatQuantityPrecision(validatedData.quantity);
     }
     
+    console.log('💾 updateInventoryItem - dane do zapisu w Firebase:', updatedItem);
+    console.log('🔑 updateInventoryItem - pola które ZOSTANĄ zaktualizowane:', Object.keys(updatedItem));
+    
     const itemRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY, validatedId);
     await updateDoc(itemRef, updatedItem);
+    
+    console.log('✅ updateInventoryItem - zapis do Firebase zakończony pomyślnie');
     
     // Emituj zdarzenie o aktualizacji pozycji magazynowej
     if (typeof window !== 'undefined') {

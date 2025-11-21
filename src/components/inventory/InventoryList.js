@@ -1327,6 +1327,27 @@ const InventoryList = () => {
     }
   };
 
+  // Funkcja pomocnicza do normalizacji i porównywania wartości numerycznych
+  // Usuwa wiodące zera i porównuje wartości jako liczby
+  const areNumericValuesEqual = (value1, value2) => {
+    // Jeśli oba puste - są równe
+    if (!value1 && !value2) return true;
+    // Jeśli tylko jedno puste - nie są równe
+    if (!value1 || !value2) return false;
+    
+    // Konwertuj na liczby i porównaj
+    const num1 = parseFloat(value1);
+    const num2 = parseFloat(value2);
+    
+    // Jeśli któraś wartość nie jest liczbą, porównaj jako string
+    if (isNaN(num1) || isNaN(num2)) {
+      return value1.toString().trim() === value2.toString().trim();
+    }
+    
+    // Porównaj numerycznie z tolerancją na błędy zaokrągleń
+    return Math.abs(num1 - num2) < 0.0001;
+  };
+
   // Funkcja parsująca CSV do tablicy obiektów
   const parseCSV = (csvText) => {
     const lines = csvText.split('\n').filter(line => line.trim() !== '');
@@ -1336,8 +1357,15 @@ const InventoryList = () => {
       throw new Error('Plik CSV jest pusty lub zawiera tylko nagłówki');
     }
 
+    // Automatyczne wykrywanie separatora (przecinek lub średnik)
+    const firstLine = lines[0];
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    const separator = semicolonCount > commaCount ? ';' : ',';
+    console.log(`🔍 Wykryto separator: "${separator}" (przecinki: ${commaCount}, średniki: ${semicolonCount})`);
+
     // Parsuj nagłówki
-    const rawHeaders = lines[0].split(',').map(header => header.replace(/^"|"$/g, '').trim());
+    const rawHeaders = lines[0].split(separator).map(header => header.replace(/^"|"$/g, '').trim());
     console.log('📋 Nagłówki CSV:', rawHeaders);
     
     // Parsuj wiersze danych
@@ -1360,7 +1388,7 @@ const InventoryList = () => {
             // Toggle quote state
             insideQuotes = !insideQuotes;
           }
-        } else if (char === ',' && !insideQuotes) {
+        } else if (char === separator && !insideQuotes) {
           values.push(currentValue.trim());
           currentValue = '';
         } else {
@@ -1447,6 +1475,7 @@ const InventoryList = () => {
       });
       const duplicates = Object.entries(skuCounts).filter(([sku, count]) => count > 1);
       if (duplicates.length > 0) {
+        console.log('⚠️ WYKRYTO DUPLIKATY SKU w pliku CSV:', duplicates);
         duplicates.forEach(([sku, count]) => {
           warnings.push({
             sku: sku,
@@ -1456,9 +1485,14 @@ const InventoryList = () => {
         });
       }
       
+      console.log('\n═══════════════════════════════════════════════════════');
+      console.log('🔍 ANALIZA PLIKU CSV - SZCZEGÓŁOWE PORÓWNANIE');
+      console.log('═══════════════════════════════════════════════════════\n');
+      
       for (const row of csvData) {
         const sku = row['SKU'];
-        console.log('\n🔍 Przetwarzanie wiersza CSV:', sku);
+        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🔍 Przetwarzanie wiersza CSV:', sku);
         
         if (!sku) {
           console.log('⚠️ Pominięto wiersz bez SKU');
@@ -1470,8 +1504,10 @@ const InventoryList = () => {
           continue;
         }
         
-        // Znajdź istniejącą pozycję magazynową
-        const existingItem = allItems.find(i => i.name === sku);
+        // Znajdź istniejącą pozycję magazynową (z normalizacją - ignoruj spacje i wielkość liter)
+        const existingItem = allItems.find(i => 
+          i.name.trim().toLowerCase() === sku.trim().toLowerCase()
+        );
         
         if (!existingItem) {
           console.log('❌ Nie znaleziono pozycji o SKU:', sku);
@@ -1490,6 +1526,35 @@ const InventoryList = () => {
         }
         
         console.log('✅ Znaleziono pozycję:', sku, 'ID:', existingItem.id);
+        console.log('📊 DANE Z BAZY (przed aktualizacją):', {
+          id: existingItem.id,
+          name: existingItem.name,
+          category: existingItem.category,
+          casNumber: existingItem.casNumber,
+          barcode: existingItem.barcode,
+          unit: existingItem.unit,
+          description: existingItem.description,
+          minStockLevel: existingItem.minStockLevel,
+          maxStockLevel: existingItem.maxStockLevel,
+          weight: existingItem.weight,
+          itemsPerBox: existingItem.itemsPerBox,
+          boxesPerPallet: existingItem.boxesPerPallet,
+          warehouseName: existingItem.warehouseName
+        });
+        console.log('📄 DANE Z CSV:', {
+          SKU: row['SKU'],
+          Category: row['Category'],
+          'CAS Number': row['CAS Number'],
+          Barcode: row['Barcode'],
+          Unit: row['Unit'],
+          Description: row['Description'],
+          'Min Stock Level': row['Min Stock Level'],
+          'Max Stock Level': row['Max Stock Level'],
+          'Gross Weight (kg)': row['Gross Weight (kg)'],
+          'Pcs Per Cardboard': row['Pcs Per Cardboard'],
+          'Cardboard Per Pallet': row['Cardboard Per Pallet'],
+          Location: row['Location']
+        });
         
         // Wykryj zmiany
         const changes = [];
@@ -1510,10 +1575,10 @@ const InventoryList = () => {
           updateData.category = csvCategory;
         }
         
-        // Sprawdź numer CAS
+        // Sprawdź numer CAS (tylko jeśli CSV zawiera wartość)
         const csvCasNumber = (row['CAS Number'] || '').trim();
         const dbCasNumber = (existingItem.casNumber || '').trim();
-        if (csvCasNumber !== dbCasNumber) {
+        if (csvCasNumber && csvCasNumber !== dbCasNumber) {
           changes.push({
             field: 'Numer CAS',
             oldValue: dbCasNumber,
@@ -1522,10 +1587,10 @@ const InventoryList = () => {
           updateData.casNumber = csvCasNumber;
         }
         
-        // Sprawdź kod kreskowy
+        // Sprawdź kod kreskowy (tylko jeśli CSV zawiera wartość)
         const csvBarcode = (row['Barcode'] || '').trim();
         const dbBarcode = (existingItem.barcode || '').trim();
-        if (csvBarcode !== dbBarcode) {
+        if (csvBarcode && csvBarcode !== dbBarcode) {
           changes.push({
             field: 'Kod kreskowy',
             oldValue: dbBarcode,
@@ -1567,10 +1632,10 @@ const InventoryList = () => {
           }
         }
         
-        // Sprawdź minimalny stan magazynowy
+        // Sprawdź minimalny stan magazynowy (porównanie numeryczne)
         const csvMinStock = (row['Min Stock Level'] || '').trim();
         const dbMinStock = (existingItem.minStockLevel || '').toString().trim();
-        if (csvMinStock && csvMinStock !== dbMinStock) {
+        if (csvMinStock && !areNumericValuesEqual(csvMinStock, dbMinStock)) {
           changes.push({
             field: 'Min. stan magazynowy',
             oldValue: dbMinStock,
@@ -1579,10 +1644,10 @@ const InventoryList = () => {
           updateData.minStockLevel = csvMinStock;
         }
         
-        // Sprawdź maksymalny stan magazynowy
+        // Sprawdź maksymalny stan magazynowy (porównanie numeryczne)
         const csvMaxStock = (row['Max Stock Level'] || '').trim();
         const dbMaxStock = (existingItem.maxStockLevel || '').toString().trim();
-        if (csvMaxStock && csvMaxStock !== dbMaxStock) {
+        if (csvMaxStock && !areNumericValuesEqual(csvMaxStock, dbMaxStock)) {
           changes.push({
             field: 'Max. stan magazynowy',
             oldValue: dbMaxStock,
@@ -1591,10 +1656,10 @@ const InventoryList = () => {
           updateData.maxStockLevel = csvMaxStock;
         }
         
-        // Sprawdź kartony na palecie
+        // Sprawdź kartony na palecie (porównanie numeryczne)
         const csvCardboardPerPallet = (row['Cardboard Per Pallet'] || '').trim();
         const dbCardboardPerPallet = (existingItem.boxesPerPallet || '').toString().trim();
-        if (csvCardboardPerPallet && csvCardboardPerPallet !== dbCardboardPerPallet) {
+        if (csvCardboardPerPallet && !areNumericValuesEqual(csvCardboardPerPallet, dbCardboardPerPallet)) {
           changes.push({
             field: 'Kartony na palecie',
             oldValue: dbCardboardPerPallet,
@@ -1603,10 +1668,10 @@ const InventoryList = () => {
           updateData.boxesPerPallet = csvCardboardPerPallet;
         }
         
-        // Sprawdź sztuki na karton
+        // Sprawdź sztuki na karton (porównanie numeryczne)
         const csvPcsPerCardboard = (row['Pcs Per Cardboard'] || '').trim();
         const dbPcsPerCardboard = (existingItem.itemsPerBox || '').toString().trim();
-        if (csvPcsPerCardboard && csvPcsPerCardboard !== dbPcsPerCardboard) {
+        if (csvPcsPerCardboard && !areNumericValuesEqual(csvPcsPerCardboard, dbPcsPerCardboard)) {
           changes.push({
             field: 'Sztuki na karton',
             oldValue: dbPcsPerCardboard,
@@ -1615,10 +1680,10 @@ const InventoryList = () => {
           updateData.itemsPerBox = csvPcsPerCardboard;
         }
         
-        // Sprawdź wagę brutto
+        // Sprawdź wagę brutto (porównanie numeryczne - ignoruje wiodące zera)
         const csvWeight = (row['Gross Weight (kg)'] || '').trim();
         const dbWeight = (existingItem.weight || '').toString().trim();
-        if (csvWeight && csvWeight !== dbWeight) {
+        if (csvWeight && !areNumericValuesEqual(csvWeight, dbWeight)) {
           changes.push({
             field: 'Waga brutto (kg)',
             oldValue: dbWeight,
@@ -1627,10 +1692,10 @@ const InventoryList = () => {
           updateData.weight = csvWeight;
         }
         
-        // Sprawdź opis
+        // Sprawdź opis (tylko jeśli CSV zawiera wartość)
         const csvDesc = (row['Description'] || '').trim();
         const dbDesc = (existingItem.description || '').trim();
-        if (csvDesc !== dbDesc) {
+        if (csvDesc && csvDesc !== dbDesc) {
           changes.push({
             field: 'Opis',
             oldValue: dbDesc,
@@ -1641,6 +1706,21 @@ const InventoryList = () => {
         
         // Dodaj do podglądu
         if (changes.length > 0) {
+          console.log('🔄 PRZYGOTOWANE DANE DO AKTUALIZACJI:', updateData);
+          console.log('📝 WYKRYTE ZMIANY:', changes);
+          console.log('⚠️ POLA NIE ZMIENIONE (pozostaną bez zmian):', {
+            category: !updateData.hasOwnProperty('category') ? existingItem.category : '(zostanie zmienione)',
+            casNumber: !updateData.hasOwnProperty('casNumber') ? existingItem.casNumber : '(zostanie zmienione)',
+            barcode: !updateData.hasOwnProperty('barcode') ? existingItem.barcode : '(zostanie zmienione)',
+            description: !updateData.hasOwnProperty('description') ? existingItem.description : '(zostanie zmienione)',
+            unit: !updateData.hasOwnProperty('unit') ? existingItem.unit : '(zostanie zmienione)',
+            minStockLevel: !updateData.hasOwnProperty('minStockLevel') ? existingItem.minStockLevel : '(zostanie zmienione)',
+            maxStockLevel: !updateData.hasOwnProperty('maxStockLevel') ? existingItem.maxStockLevel : '(zostanie zmienione)',
+            weight: !updateData.hasOwnProperty('weight') ? existingItem.weight : '(zostanie zmienione)',
+            itemsPerBox: !updateData.hasOwnProperty('itemsPerBox') ? existingItem.itemsPerBox : '(zostanie zmienione)',
+            boxesPerPallet: !updateData.hasOwnProperty('boxesPerPallet') ? existingItem.boxesPerPallet : '(zostanie zmienione)'
+          });
+          console.log('─────────────────────────────────────────────────');
           preview.push({
             sku: sku,
             itemId: existingItem.id,
@@ -1650,6 +1730,7 @@ const InventoryList = () => {
             updateData: updateData
           });
         } else {
+          console.log('ℹ️ Brak zmian dla SKU:', sku);
           preview.push({
             sku: sku,
             status: 'no-change',
@@ -1676,24 +1757,95 @@ const InventoryList = () => {
   const handleConfirmImport = async () => {
     setImporting(true);
     
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🚀 ROZPOCZĘCIE IMPORTU CSV - SZCZEGÓŁOWE LOGOWANIE');
+    console.log('═══════════════════════════════════════════════════════');
+    
     try {
-      const { updateInventoryItem } = await import('../../services/inventory/inventoryItemsService');
+      const { updateInventoryItem, getInventoryItemById } = await import('../../services/inventory/inventoryItemsService');
       
       // Filtruj tylko te pozycje, które mają zmiany
       const itemsToUpdate = importPreview.filter(p => p.status === 'update');
+      console.log(`📦 Liczba pozycji do aktualizacji: ${itemsToUpdate.length}`);
       
       let updatedCount = 0;
       let errorCount = 0;
       
       for (const item of itemsToUpdate) {
         try {
+          console.log(`\n🔄 [${updatedCount + 1}/${itemsToUpdate.length}] Aktualizacja: ${item.sku}`);
+          console.log('📤 Wysyłane dane (updateData):', item.updateData);
+          console.log('📝 Lista zmian:', item.changes.map(c => `${c.field}: "${c.oldValue}" → "${c.newValue}"`).join(', '));
+          
+          // Aktualizuj pozycję
           await updateInventoryItem(item.itemId, item.updateData, currentUser.uid);
+          
+          // Pobierz zaktualizowane dane z bazy (aby zweryfikować)
+          const updatedItem = await getInventoryItemById(item.itemId);
+          console.log('✅ SUKCES! Dane po aktualizacji w bazie:', {
+            id: updatedItem.id,
+            name: updatedItem.name,
+            category: updatedItem.category,
+            casNumber: updatedItem.casNumber,
+            barcode: updatedItem.barcode,
+            unit: updatedItem.unit,
+            description: updatedItem.description,
+            minStockLevel: updatedItem.minStockLevel,
+            maxStockLevel: updatedItem.maxStockLevel,
+            weight: updatedItem.weight,
+            itemsPerBox: updatedItem.itemsPerBox,
+            boxesPerPallet: updatedItem.boxesPerPallet,
+            warehouseName: updatedItem.warehouseName
+          });
+          
+          // Weryfikacja - sprawdź czy wszystkie zmiany zostały zastosowane
+          const verificationErrors = [];
+          item.changes.forEach(change => {
+            const fieldMapping = {
+              'Kategoria': 'category',
+              'Numer CAS': 'casNumber',
+              'Kod kreskowy': 'barcode',
+              'Jednostka': 'unit',
+              'Opis': 'description',
+              'Min. stan magazynowy': 'minStockLevel',
+              'Max. stan magazynowy': 'maxStockLevel',
+              'Waga brutto (kg)': 'weight',
+              'Sztuki na karton': 'itemsPerBox',
+              'Kartony na palecie': 'boxesPerPallet',
+              'Lokalizacja': 'warehouseName'
+            };
+            
+            const dbField = fieldMapping[change.field];
+            if (dbField && updatedItem[dbField] != change.newValue) {
+              verificationErrors.push(`${change.field}: oczekiwano "${change.newValue}", otrzymano "${updatedItem[dbField]}"`);
+            }
+          });
+          
+          if (verificationErrors.length > 0) {
+            console.warn('⚠️ WERYFIKACJA: Wykryto niezgodności:', verificationErrors);
+          } else {
+            console.log('✓ WERYFIKACJA: Wszystkie zmiany zostały poprawnie zastosowane');
+          }
+          
           updatedCount++;
         } catch (error) {
-          console.error(`Błąd podczas aktualizacji pozycji ${item.sku}:`, error);
+          console.error(`❌ BŁĄD podczas aktualizacji pozycji ${item.sku}:`, error);
+          console.error('📋 Szczegóły błędu:', {
+            message: error.message,
+            stack: error.stack,
+            updateData: item.updateData
+          });
           errorCount++;
         }
       }
+      
+      console.log('\n═══════════════════════════════════════════════════════');
+      console.log('📊 PODSUMOWANIE IMPORTU');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log(`✅ Zaktualizowano: ${updatedCount} pozycji`);
+      console.log(`❌ Błędy: ${errorCount} pozycji`);
+      console.log(`📈 Wskaźnik sukcesu: ${itemsToUpdate.length > 0 ? ((updatedCount / itemsToUpdate.length) * 100).toFixed(1) : 0}%`);
+      console.log('═══════════════════════════════════════════════════════\n');
       
       showSuccess(`Import zakończony! Zaktualizowano ${updatedCount} pozycji. Błędy: ${errorCount}`);
       
@@ -1702,9 +1854,14 @@ const InventoryList = () => {
       await fetchInventoryItems(tableSort.field, tableSort.order);
       
     } catch (error) {
-      console.error('Błąd podczas importu:', error);
+      console.error('❌ KRYTYCZNY BŁĄD podczas importu:', error);
+      console.error('📋 Szczegóły:', {
+        message: error.message,
+        stack: error.stack
+      });
       showError('Wystąpił błąd podczas importu: ' + error.message);
     } finally {
+      console.log('🏁 Import zakończony (finally block)');
       setImporting(false);
     }
   };

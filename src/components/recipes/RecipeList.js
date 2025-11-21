@@ -791,8 +791,15 @@ const RecipeList = () => {
       throw new Error('Plik CSV jest pusty lub zawiera tylko nagłówki');
     }
 
+    // Automatyczne wykrywanie separatora (przecinek lub średnik)
+    const firstLine = lines[0];
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    const separator = semicolonCount > commaCount ? ';' : ',';
+    console.log(`🔍 Wykryto separator: "${separator}" (przecinki: ${commaCount}, średniki: ${semicolonCount})`);
+
     // Parsuj nagłówki i normalizuj je
-    const rawHeaders = lines[0].split(',').map(header => header.replace(/^"|"$/g, '').trim());
+    const rawHeaders = lines[0].split(separator).map(header => header.replace(/^"|"$/g, '').trim());
     const headers = rawHeaders.map(normalizeHeader);
     console.log('📋 Nagłówki oryginalne CSV:', rawHeaders);
     console.log('📋 Nagłówki znormalizowane:', headers);
@@ -823,7 +830,7 @@ const RecipeList = () => {
             // Toggle quote state
             insideQuotes = !insideQuotes;
           }
-        } else if (char === ',' && !insideQuotes) {
+        } else if (char === separator && !insideQuotes) {
           values.push(currentValue.trim());
           currentValue = '';
         } else {
@@ -952,8 +959,10 @@ const RecipeList = () => {
           continue;
         }
         
-        // Znajdź istniejącą recepturę
-        const existingRecipe = allRecipes.find(r => r.name === sku);
+        // Znajdź istniejącą recepturę (z normalizacją - ignoruj spacje i wielkość liter)
+        const existingRecipe = allRecipes.find(r => 
+          r.name.trim().toLowerCase() === sku.trim().toLowerCase()
+        );
         
         if (!existingRecipe) {
           console.log('❌ Nie znaleziono receptury o SKU:', sku);
@@ -982,6 +991,20 @@ const RecipeList = () => {
         }
         
         console.log('✅ Znaleziono recepturę:', sku, 'ID:', existingRecipe.id);
+        console.log('📊 DANE RECEPTURY Z BAZY:', {
+          name: existingRecipe.name,
+          customerId: existingRecipe.customerId,
+          workstationId: existingRecipe.defaultWorkstationId,
+          ingredientsCount: (existingRecipe.ingredients || []).length,
+          nutritionalComponentsCount: (existingRecipe.nutritionalComponents || []).length
+        });
+        console.log('📄 DANE Z CSV:', {
+          SKU: row['SKU'],
+          Client: row['Client'],
+          Workstation: row['Workstation'],
+          'Components listing': row['Components listing']?.substring(0, 100) + '...',
+          'Micro/macro elements': row['Micro/macro elements listing']?.substring(0, 100) + '...'
+        });
         
         // Wykryj zmiany
         const changes = [];
