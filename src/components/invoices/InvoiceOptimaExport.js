@@ -119,7 +119,8 @@ const InvoiceOptimaExport = ({ selectedInvoices = [], allInvoices = [], customer
         return;
       }
 
-      const result = exportInvoicesToOptimaXML(validInvoices);
+      // Eksport jest teraz asynchroniczny (pobiera dane firmy i kursy NBP)
+      const result = await exportInvoicesToOptimaXML(validInvoices);
       
       alert(`Wyeksportowano ${result.invoicesCount} faktur do pliku: ${result.filename}`);
       handleCloseDialog();
