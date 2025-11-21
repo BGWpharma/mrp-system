@@ -31,6 +31,7 @@ import {
   getStocktakingItems,
   generateStocktakingReport
 } from '../../services/inventory';
+import { getAllWarehouses } from '../../services/inventory/warehouseService';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatCurrency } from '../../utils/formatters';
 
@@ -43,6 +44,7 @@ const StocktakingReportPage = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [warehouseNames, setWarehouseNames] = useState({});
   const [report, setReport] = useState({
     totalItems: 0,
     matchingItems: 0,
@@ -68,6 +70,15 @@ const StocktakingReportPage = () => {
       setStocktaking(stocktakingData);
       
       const stocktakingItems = await getStocktakingItems(id);
+      
+      // Pobierz wszystkie magazyny i utwórz mapę ID -> Nazwa
+      const warehouses = await getAllWarehouses();
+      const warehouseMap = {};
+      warehouses.forEach(warehouse => {
+        warehouseMap[warehouse.id] = warehouse.name;
+      });
+      setWarehouseNames(warehouseMap);
+      
       setItems(stocktakingItems);
       
       // Generate report summary
@@ -319,7 +330,11 @@ const StocktakingReportPage = () => {
                 <strong>{t('stocktaking.reportLabels.name')}:</strong> {stocktaking.name}
               </Typography>
               <Typography variant="body1">
-                <strong>{t('stocktaking.reportLabels.location')}:</strong> {stocktaking.location || t('stocktaking.reportLabels.allLocations')}
+                <strong>{t('stocktaking.reportLabels.location')}:</strong> {
+                  stocktaking.location 
+                    ? (warehouseNames[stocktaking.location] || stocktaking.location)
+                    : t('stocktaking.reportLabels.allLocations')
+                }
               </Typography>
               <Typography variant="body1">
                 <strong>{t('stocktaking.reportLabels.status')}:</strong> {stocktaking.status}
@@ -487,7 +502,7 @@ const StocktakingReportPage = () => {
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.batchNumber || item.lotNumber || '-'}</TableCell>
                     <TableCell>{item.expiryDate ? formatDate(item.expiryDate) : '-'}</TableCell>
-                    <TableCell>{item.location || '-'}</TableCell>
+                    <TableCell>{item.location ? (warehouseNames[item.location] || item.location) : '-'}</TableCell>
                     <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
                     <TableCell align="right">{item.countedQuantity} {item.unit}</TableCell>
                     <TableCell align="right">

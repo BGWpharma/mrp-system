@@ -49,6 +49,7 @@
   "reportTitle": "Raport inwentaryzacji",
   "print": "Drukuj",
   "exportPDF": "Eksportuj PDF",
+  "exportCSV": "Eksportuj CSV",
   "reportFor": "Raport inwentaryzacji: {{name}}",
   "generatedOn": "Wygenerowano: {{date}}",
   "stocktakingInfo": "Informacje o inwentaryzacji",
