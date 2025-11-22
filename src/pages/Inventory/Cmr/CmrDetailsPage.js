@@ -333,7 +333,8 @@ const CmrDetailsPage = () => {
                     orderNumber: inventoryData.batchData.orderNumber,
                     moNumber: inventoryData.batchData.moNumber,
                     expiryDate: inventoryData.batchData.expiryDate,
-                    lotNumber: inventoryData.batchData.lotNumber
+                    lotNumber: inventoryData.batchData.lotNumber,
+                    batchNumber: inventoryData.batchData.batchNumber
                   } : {})
                 })),
                 inventoryData: {
@@ -364,7 +365,8 @@ const CmrDetailsPage = () => {
                     orderNumber: inventoryData.batchData.orderNumber,
                     moNumber: inventoryData.batchData.moNumber,
                     expiryDate: inventoryData.batchData.expiryDate,
-                    lotNumber: inventoryData.batchData.lotNumber
+                    lotNumber: inventoryData.batchData.lotNumber,
+                    batchNumber: inventoryData.batchData.batchNumber
                   } : {})
                 })),
                 inventoryData: null

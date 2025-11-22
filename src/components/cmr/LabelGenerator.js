@@ -137,7 +137,7 @@ const BoxLabel = ({
             <Typography variant="body2" sx={{ fontSize: '16px', fontWeight: 'bold', mb: 1.5, lineHeight: 1.2 }}>
               {itemData.description}
               {itemData.linkedBatches && itemData.linkedBatches[0] && (itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber) && (
-                <Box component="span" sx={{ display: 'block', fontSize: '14px', fontWeight: 'normal', color: 'text.secondary', mt: 0.5 }}>
+                <Box component="span" sx={{ display: 'block', fontSize: '14px', fontWeight: 'normal', color: '#333', mt: 0.5 }}>
                   LOT: {itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber}
                 </Box>
               )}
@@ -336,7 +336,7 @@ const PalletLabel = ({
             <Typography variant="body2" sx={{ fontSize: '16px', fontWeight: 'bold', mb: 1.5, lineHeight: 1.2 }}>
               {itemData.description}
               {itemData.linkedBatches && itemData.linkedBatches[0] && (itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber) && (
-                <Box component="span" sx={{ display: 'block', fontSize: '14px', fontWeight: 'normal', color: 'text.secondary', mt: 0.5 }}>
+                <Box component="span" sx={{ display: 'block', fontSize: '14px', fontWeight: 'normal', color: '#333', mt: 0.5 }}>
                   LOT: {itemData.linkedBatches[0].batchNumber || itemData.linkedBatches[0].lotNumber}
                 </Box>
               )}
