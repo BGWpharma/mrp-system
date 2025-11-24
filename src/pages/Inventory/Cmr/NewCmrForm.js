@@ -104,7 +104,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     attachedDocuments: '',   // Załączone dokumenty
     
     // Pole 13 - Instrukcje nadawcy
-    senderInstructions: '',  // Instrukcje nadawcy
+    senderInstructions: 'Ostrożnie suplementy diety (żywność)!',  // Instrukcje nadawcy
     
     // Pozycje dokumentu (pola 6-12)
     items: []

@@ -440,7 +440,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     
     // Dane dotyczące przesyłki
     attachedDocuments: '',
-    instructionsFromSender: '',
+    instructionsFromSender: 'Ostrożnie suplementy diety (żywność)!',
     
     // Opłaty
     freight: '',

@@ -51,8 +51,8 @@
       <!-- Pole 13: Instrukcje nadawcy -->
       <rect id="field-instructions" x="70" y="710" width="310" height="125" fill="rgba(0,255,0,0.2)" stroke="green" stroke-width="2" data-field-name="instructions" opacity="0"/>
       
-      <!-- Pole 19: Numery rejestracyjne -->
-      <rect id="field-vehicle-registration-2" x="800" y="710" width="280" height="20" fill="rgba(128,0,128,0.2)" stroke="purple" stroke-width="2" data-field-name="vehicle-registration-2" opacity="0"/>
+      <!-- Pole 19: Numery rejestracyjne (główne) -->
+      <rect id="field-vehicle-registration" x="505" y="215" width="280" height="20" fill="rgba(128,0,128,0.2)" stroke="purple" stroke-width="2" data-field-name="vehicle-registration" opacity="0"/>
       
       <!-- TEST123 - pole z numerem CMR w środkowej części dokumentu -->
       <rect id="field-cmr-number-middle" x="565" y="90" width="95" height="20" fill="rgba(255,165,0,0.2)" stroke="orange" stroke-width="2" data-field-name="cmr-number-middle" opacity="0"/>
