@@ -206,3 +206,4 @@ W razie problemów sprawdź:
 **Data utworzenia**: 24 listopada 2025  
 **Wersja**: 1.0.0
 
+

@@ -237,3 +237,4 @@ Funkcja testowa `getRandomBatch` została zaimplementowana i zintegrowana z apli
 **Data**: 24 listopada 2025  
 **Wersja**: 1.0.0
 
+

@@ -65,7 +65,8 @@ import {
   Clear as ClearIcon,
   Refresh as RefreshIcon,
   Upload as UploadIcon,
-  Layers as LayersIcon
+  Layers as LayersIcon,
+  Calculate as CalculateIcon
 } from '@mui/icons-material';
 import { getAllInventoryItems, getInventoryItemsOptimized, clearInventoryItemsCache, deleteInventoryItem, getExpiringBatches, getExpiredBatches, getItemTransactions, getAllWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, getItemBatches, updateReservation, updateReservationTasks, cleanupDeletedTaskReservations, deleteReservation, getInventoryItemById, recalculateAllInventoryQuantities, cleanupMicroReservations } from '../../services/inventory';
 import { getBatchesWithFilters } from '../../services/inventory/batchService';
@@ -820,6 +821,31 @@ const InventoryList = () => {
   const handleMenuClose = () => {
     setAnchorEl(null);
     setSelectedItem(null);
+  };
+
+  // Funkcja do przeliczania ilości pojedynczej pozycji magazynowej
+  const handleRecalculateItemQuantity = async () => {
+    if (!selectedItem) return;
+    
+    try {
+      setLoading(true);
+      const { recalculateItemQuantity } = await import('../../services/inventory/inventoryOperationsService');
+      
+      const oldQuantity = selectedItem.quantity;
+      const newQuantity = await recalculateItemQuantity(selectedItem.id);
+      
+      showSuccess(`Przeliczono ilość dla "${selectedItem.name}": ${oldQuantity} → ${newQuantity}`);
+      
+      // Odśwież listę pozycji
+      await fetchInventoryItems(tableSort.field, tableSort.order);
+      
+      handleMenuClose();
+    } catch (error) {
+      console.error('Błąd podczas przeliczania ilości:', error);
+      showError(`Nie udało się przeliczać ilości: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Funkcja do otwierania dialogu edycji rezerwacji
@@ -1847,6 +1873,26 @@ const InventoryList = () => {
       console.log(`📈 Wskaźnik sukcesu: ${itemsToUpdate.length > 0 ? ((updatedCount / itemsToUpdate.length) * 100).toFixed(1) : 0}%`);
       console.log('═══════════════════════════════════════════════════════\n');
       
+      // Przelicz rzeczywiste ilości na podstawie partii dla wszystkich zaktualizowanych pozycji
+      if (updatedCount > 0) {
+        console.log('\n🔄 PRZELICZANIE RZECZYWISTYCH ILOŚCI Z PARTII...');
+        const { recalculateItemQuantity } = await import('../../services/inventory/inventoryOperationsService');
+        
+        let recalculatedCount = 0;
+        for (const item of itemsToUpdate) {
+          if (item.status === 'update' && item.itemId) {
+            try {
+              const newQuantity = await recalculateItemQuantity(item.itemId);
+              console.log(`✅ Przeliczono ilość dla ${item.sku}: ${newQuantity}`);
+              recalculatedCount++;
+            } catch (error) {
+              console.error(`⚠️ Błąd podczas przeliczania ilości dla ${item.sku}:`, error);
+            }
+          }
+        }
+        console.log(`✅ Przeliczono ilości dla ${recalculatedCount}/${updatedCount} pozycji\n`);
+      }
+      
       showSuccess(`Import zakończony! Zaktualizowano ${updatedCount} pozycji. Błędy: ${errorCount}`);
       
       // Zamknij dialog i odśwież listę
@@ -1898,6 +1944,39 @@ const InventoryList = () => {
     showSuccess('Lista została odświeżona');
   };
 
+  // Funkcja do przeliczania ilości wszystkich pozycji magazynowych z partii
+  const handleRecalculateAllQuantities = async () => {
+    if (!window.confirm('Czy na pewno chcesz przeliczać ilości wszystkich pozycji magazynowych na podstawie partii? To może zająć kilka minut dla dużych baz danych.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('🔄 Rozpoczynanie przeliczania wszystkich ilości...');
+      
+      const results = await recalculateAllInventoryQuantities();
+      
+      console.log('✅ Przeliczanie zakończone:', results);
+      
+      const changedItems = results.items.filter(item => !item.error && item.difference !== 0);
+      
+      showSuccess(
+        `Przeliczono ilości dla ${results.success} pozycji. ` +
+        `Zaktualizowano ${changedItems.length} pozycji. ` +
+        `Błędy: ${results.failed}`
+      );
+      
+      // Odśwież listę pozycji
+      await fetchInventoryItems(tableSort.field, tableSort.order);
+      
+    } catch (error) {
+      console.error('❌ Błąd podczas przeliczania ilości:', error);
+      showError(`Nie udało się przeliczać ilości: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleMenuItemClick = (action) => {
     handleMoreMenuClose();
     switch (action) {
@@ -1912,6 +1991,9 @@ const InventoryList = () => {
         break;
       case 'refresh':
         handleRefreshList();
+        break;
+      case 'recalculate':
+        handleRecalculateAllQuantities();
         break;
       default:
         break;
@@ -2025,6 +2107,12 @@ const InventoryList = () => {
               <UploadIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>Import CSV</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleMenuItemClick('recalculate')}>
+            <ListItemIcon>
+              <CalculateIcon fontSize="small" color="info" />
+            </ListItemIcon>
+            <ListItemText sx={{ color: 'info.main' }}>Przelicz ilości z partii</ListItemText>
           </MenuItem>
           <MenuItem component={RouterLink} to="/inventory/expiry-dates" onClick={handleMoreMenuClose}>
             <ListItemIcon>
@@ -3190,6 +3278,12 @@ const InventoryList = () => {
             <EditIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>{t('inventory.states.actions.edit')}</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleRecalculateItemQuantity}>
+          <ListItemIcon>
+            <RefreshIcon fontSize="small" color="info" />
+          </ListItemIcon>
+          <ListItemText sx={{ color: 'info.main' }}>Przelicz ilość z partii</ListItemText>
         </MenuItem>
         <MenuItem onClick={() => {
           if (selectedItem) handleDelete(selectedItem.id);
