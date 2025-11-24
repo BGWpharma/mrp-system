@@ -51,6 +51,7 @@ import {
   checkInventoryIntegrityAndFix,
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
+import { getRandomBatch } from '../../services/cloudFunctionsService';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -78,6 +79,31 @@ const SystemManagementPage = () => {
   const [cmrMigrationCheck, setCmrMigrationCheck] = useState(null);
   const [cmrMigrationResults, setCmrMigrationResults] = useState(null);
   const [showMigrationDialog, setShowMigrationDialog] = useState(false);
+  
+  // Stany dla Cloud Functions - getRandomBatch
+  const [randomBatchLoading, setRandomBatchLoading] = useState(false);
+  const [randomBatchData, setRandomBatchData] = useState(null);
+  
+  // Funkcja do wywołania Cloud Function - getRandomBatch
+  const handleGetRandomBatch = async () => {
+    try {
+      setRandomBatchLoading(true);
+      setRandomBatchData(null);
+      const result = await getRandomBatch();
+      
+      if (result.success) {
+        showSuccess(result.message);
+        setRandomBatchData(result.batch);
+      } else {
+        showError(result.message || 'Nie udało się pobrać losowej partii');
+      }
+    } catch (error) {
+      console.error('Błąd podczas pobierania losowej partii:', error);
+      showError(`Błąd: ${error.message}`);
+    } finally {
+      setRandomBatchLoading(false);
+    }
+  };
   
   // Funkcja do uruchomienia migracji limitów wiadomości AI
   const handleRunAILimitsMigration = async () => {
@@ -318,6 +344,94 @@ const SystemManagementPage = () => {
         
         {/* Zarządzanie składnikami odżywczymi */}
         <NutritionalComponentsManager />
+        
+        {/* NOWA SEKCJA: Cloud Functions - Losowa partia */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              🎲 Cloud Functions - Losowa partia z magazynu
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Funkcja testowa wywoływana przez Cloud Functions Firebase (region: europe-central2).
+              Pobiera losową partię z magazynu i zwraca jej szczegóły.
+            </Typography>
+            
+            {randomBatchData && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  Pobrano losową partię z magazynu!
+                </Alert>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="ID Partii"
+                      value={randomBatchData.id || ''}
+                      fullWidth
+                      disabled
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Nazwa materiału"
+                      value={randomBatchData.materialName || 'Nieznany'}
+                      fullWidth
+                      disabled
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Numer partii"
+                      value={randomBatchData.batchNumber || ''}
+                      fullWidth
+                      disabled
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Dostępna ilość"
+                      value={`${randomBatchData.availableQuantity || 0} ${randomBatchData.unit || ''}`}
+                      fullWidth
+                      disabled
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Lokalizacja"
+                      value={randomBatchData.location || '-'}
+                      fullWidth
+                      disabled
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      label="Status"
+                      value={randomBatchData.status || '-'}
+                      fullWidth
+                      disabled
+                      size="small"
+                    />
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
+          </CardContent>
+          <CardActions>
+            <Button 
+              startIcon={randomBatchLoading ? <CircularProgress size={20} /> : <SearchIcon />}
+              variant="contained" 
+              color="primary"
+              onClick={handleGetRandomBatch}
+              disabled={randomBatchLoading}
+            >
+              {randomBatchLoading ? 'Pobieranie...' : 'Pobierz losową partię'}
+            </Button>
+          </CardActions>
+        </Card>
         
         {/* NOWA SEKCJA: Czyszczenie ujemnych wpisów CMR */}
         <Card sx={{ mb: 3 }}>

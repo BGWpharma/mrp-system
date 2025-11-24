@@ -40,4 +40,7 @@ export const db = getFirestore(app);
 // Export analytics (może być null jeśli nie dostępny)
 export { analytics };
 
+// Export app for Cloud Functions
+export { app };
+
 export default app; 
