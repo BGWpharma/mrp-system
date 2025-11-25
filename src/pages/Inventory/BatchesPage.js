@@ -32,7 +32,10 @@ import {
   FormHelperText,
   CircularProgress,
   useMediaQuery,
-  useTheme
+  useTheme,
+  FormControlLabel,
+  Checkbox,
+  TableSortLabel
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -86,6 +89,9 @@ const BatchesPage = () => {
   const [filteredBatches, setFilteredBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hideDepleted, setHideDepleted] = useState(false);
+  const [orderBy, setOrderBy] = useState('batchNumber');
+  const [order, setOrder] = useState('asc');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
@@ -243,16 +249,23 @@ const BatchesPage = () => {
   };
 
   useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredBatches(batches);
-    } else {
-      const filtered = batches.filter(batch => 
+    let filtered = batches;
+    
+    // Filtruj po wyszukiwanym terminie
+    if (searchTerm.trim() !== '') {
+      filtered = filtered.filter(batch => 
         (batch.batchNumber && batch.batchNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (batch.notes && batch.notes.toLowerCase().includes(searchTerm.toLowerCase()))
       );
-      setFilteredBatches(filtered);
     }
-  }, [searchTerm, batches]);
+    
+    // Ukryj wyczerpane partie jeśli opcja jest włączona
+    if (hideDepleted) {
+      filtered = filtered.filter(batch => batch.quantity > 0);
+    }
+    
+    setFilteredBatches(filtered);
+  }, [searchTerm, batches, hideDepleted]);
 
   // Dodaj funkcje debugowania do globalnego zakresu (TYLKO DLA TESTÓW)
   useEffect(() => {
@@ -276,6 +289,89 @@ const BatchesPage = () => {
 
   const clearSearch = () => {
     setSearchTerm('');
+  };
+
+  // Funkcja do obsługi sortowania
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+    setPage(0); // Reset do pierwszej strony przy zmianie sortowania
+  };
+
+  // Funkcja do sortowania danych
+  const getSortedBatches = (batches) => {
+    const comparator = (a, b) => {
+      let aValue, bValue;
+      
+      switch (orderBy) {
+        case 'batchNumber':
+          aValue = (a.batchNumber || a.lotNumber || '').toLowerCase();
+          bValue = (b.batchNumber || b.lotNumber || '').toLowerCase();
+          break;
+          
+        case 'expiryDate':
+          // Obsługa brakujących dat lub dat domyślnych
+          aValue = a.expiryDate 
+            ? (a.expiryDate instanceof Timestamp ? a.expiryDate.toDate() : new Date(a.expiryDate))
+            : new Date('9999-12-31'); // Partie bez daty na końcu
+          bValue = b.expiryDate 
+            ? (b.expiryDate instanceof Timestamp ? b.expiryDate.toDate() : new Date(b.expiryDate))
+            : new Date('9999-12-31');
+          
+          // Sprawdź czy to domyślna data (rok 1970 lub wcześniejszy)
+          if (aValue.getFullYear() <= 1970) aValue = new Date('9999-12-31');
+          if (bValue.getFullYear() <= 1970) bValue = new Date('9999-12-31');
+          break;
+          
+        case 'warehouse':
+          aValue = (a.warehouseName || 'Magazyn podstawowy').toLowerCase();
+          bValue = (b.warehouseName || 'Magazyn podstawowy').toLowerCase();
+          break;
+          
+        case 'quantity':
+          aValue = parseFloat(a.quantity) || 0;
+          bValue = parseFloat(b.quantity) || 0;
+          break;
+          
+        case 'unitPrice':
+          aValue = parseFloat(a.unitPrice) || 0;
+          bValue = parseFloat(b.unitPrice) || 0;
+          break;
+          
+        case 'status':
+          // Sortuj według statusu: Aktualna, Wygasa wkrótce, Przeterminowana, Wyczerpana
+          const statusOrder = { 
+            'Aktualna': 1, 
+            'Wygasa wkrótce': 2, 
+            'Przeterminowana': 3, 
+            'Wyczerpana': 4,
+            'current': 1,
+            'expiringSoon': 2,
+            'expired': 3,
+            'depleted': 4
+          };
+          const statusA = getBatchStatus(a);
+          const statusB = getBatchStatus(b);
+          aValue = statusOrder[statusA.label] || 999;
+          bValue = statusOrder[statusB.label] || 999;
+          break;
+          
+        default:
+          aValue = '';
+          bValue = '';
+      }
+      
+      if (aValue < bValue) {
+        return order === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return order === 'asc' ? 1 : -1;
+      }
+      return 0;
+    };
+    
+    return [...batches].sort(comparator);
   };
 
   const handleChangePage = (event, newPage) => {
@@ -886,21 +982,22 @@ const BatchesPage = () => {
               display: 'flex', 
               alignItems: isMobile ? 'flex-start' : 'center',
               flexDirection: isMobile ? 'column' : 'row',
-              gap: isMobile ? 1 : 0,
+              gap: isMobile ? 1 : 2,
               justifyContent: 'space-between'
             }}>
               <Box sx={{ 
                 display: 'flex', 
                 alignItems: 'center',
                 flexDirection: isMobile ? 'column' : 'row',
-                gap: isMobile ? 1 : 0
+                gap: isMobile ? 1 : 2,
+                flexWrap: 'wrap'
               }}>
                 {item ? (
-                  <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
+                  <Typography variant="body2" sx={{ mr: isMobile ? 0 : 0 }}>
                     <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(item.quantity)} {item.unit}
                   </Typography>
                 ) : (
-                  <Typography variant="body2" sx={{ mr: isMobile ? 0 : 2 }}>
+                  <Typography variant="body2" sx={{ mr: isMobile ? 0 : 0 }}>
                     <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || t('common.pieces')}
                   </Typography>
                 )}
@@ -909,6 +1006,24 @@ const BatchesPage = () => {
                     <InfoIcon />
                   </IconButton>
                 </Tooltip>
+                
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={hideDepleted}
+                      onChange={(e) => {
+                        setHideDepleted(e.target.checked);
+                        setPage(0); // Reset do pierwszej strony przy zmianie filtra
+                      }}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      {t('inventory.batches.hideDepleted')}
+                    </Typography>
+                  }
+                />
               </Box>
               <Tooltip title={t('inventory.batches.refreshData')}>
                 <IconButton 
@@ -931,15 +1046,78 @@ const BatchesPage = () => {
 
       <Paper>
         <TableContainer>
-          <Table>
+          <Table sx={{ 
+            '& .MuiTableCell-root': { 
+              verticalAlign: 'top',
+              py: 1.5
+            }
+          }}>
             <TableHead>
               <TableRow>
-                <TableCell>{t('inventory.batches.batchNumber')}</TableCell>
-                <TableCell>{t('inventory.batches.expiryDate')}</TableCell>
-                {!isMobile && <TableCell>{t('inventory.batches.warehouse')}</TableCell>}
-                <TableCell>{t('inventory.batches.currentQuantity')}</TableCell>
-                {!isMobile && <TableCell>{t('inventory.batches.unitPrice')}</TableCell>}
-                <TableCell>{t('common.status')}</TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'batchNumber'}
+                    direction={orderBy === 'batchNumber' ? order : 'asc'}
+                    onClick={() => handleRequestSort('batchNumber')}
+                  >
+                    {t('inventory.batches.batchNumber')}
+                  </TableSortLabel>
+                </TableCell>
+                
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'expiryDate'}
+                    direction={orderBy === 'expiryDate' ? order : 'asc'}
+                    onClick={() => handleRequestSort('expiryDate')}
+                  >
+                    {t('inventory.batches.expiryDate')}
+                  </TableSortLabel>
+                </TableCell>
+                
+                {!isMobile && (
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'warehouse'}
+                      direction={orderBy === 'warehouse' ? order : 'asc'}
+                      onClick={() => handleRequestSort('warehouse')}
+                    >
+                      {t('inventory.batches.warehouse')}
+                    </TableSortLabel>
+                  </TableCell>
+                )}
+                
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'quantity'}
+                    direction={orderBy === 'quantity' ? order : 'asc'}
+                    onClick={() => handleRequestSort('quantity')}
+                  >
+                    {t('inventory.batches.currentQuantity')}
+                  </TableSortLabel>
+                </TableCell>
+                
+                {!isMobile && (
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'unitPrice'}
+                      direction={orderBy === 'unitPrice' ? order : 'asc'}
+                      onClick={() => handleRequestSort('unitPrice')}
+                    >
+                      {t('inventory.batches.unitPrice')}
+                    </TableSortLabel>
+                  </TableCell>
+                )}
+                
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'status'}
+                    direction={orderBy === 'status' ? order : 'asc'}
+                    onClick={() => handleRequestSort('status')}
+                  >
+                    {t('common.status')}
+                  </TableSortLabel>
+                </TableCell>
+                
                 {!isMobile && <TableCell>{t('inventory.batches.origin')}</TableCell>}
                 {!isMobile && <TableCell>{t('inventory.batches.certificate')}</TableCell>}
                 {!isMobile && <TableCell>{t('common.notes')}</TableCell>}
@@ -954,7 +1132,7 @@ const BatchesPage = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredBatches
+                getSortedBatches(filteredBatches)
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((batch) => {
                     const status = getBatchStatus(batch);
@@ -1045,107 +1223,149 @@ const BatchesPage = () => {
                           />
                         </TableCell>
                         {!isMobile && (
-                          <TableCell>
+                          <TableCell sx={{ maxWidth: 200 }}>
                             {(() => {
-                              let source = '-';
-                              
                               // Sprawdź czy partia ma powiązanie z zamówieniem zakupowym (PO)
-                              // Najpierw sprawdź nowy model danych z purchaseOrderDetails
                               if (batch.purchaseOrderDetails && batch.purchaseOrderDetails.id) {
                                 const po = batch.purchaseOrderDetails;
                                 return (
-                                  <Box>
-                                    <Typography variant="body2">
-                                      <strong>{t('inventory.batches.fromPurchaseOrder')}:</strong>
-                                    </Typography>
-                                    <Typography variant="body2">
-                                      PO: {po.number || '-'}
-                                    </Typography>
-                                    {po.supplier && (
-                                      <Typography variant="body2" color="text.secondary">
-                                        {t('inventory.batches.supplier')}: {po.supplier.name || '-'}
+                                  <Tooltip
+                                    title={
+                                      <Box>
+                                        <Typography variant="body2">
+                                          <strong>PO:</strong> {po.number || '-'}
+                                        </Typography>
+                                        {po.supplier && (
+                                          <Typography variant="body2">
+                                            <strong>{t('inventory.batches.supplier')}:</strong> {po.supplier.name || '-'}
+                                          </Typography>
+                                        )}
+                                        {po.orderDate && (
+                                          <Typography variant="body2">
+                                            <strong>{t('inventory.batches.orderDate')}:</strong> {
+                                              typeof po.orderDate === 'string' 
+                                                ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
+                                                : po.orderDate instanceof Date 
+                                                  ? po.orderDate.toLocaleDateString('pl-PL')
+                                                  : po.orderDate && po.orderDate.toDate
+                                                    ? po.orderDate.toDate().toLocaleDateString('pl-PL')
+                                                    : '-'
+                                            }
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    }
+                                    arrow
+                                  >
+                                    <Box sx={{ cursor: 'pointer' }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                                        Z zamówienia zakupu
                                       </Typography>
-                                    )}
-                                    {po.orderDate && (
-                                      <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
-                                        {t('inventory.batches.orderDate')}: {typeof po.orderDate === 'string' 
-                                          ? new Date(po.orderDate).toLocaleDateString('pl-PL') 
-                                          : po.orderDate instanceof Date 
-                                            ? po.orderDate.toLocaleDateString('pl-PL')
-                                            : po.orderDate && po.orderDate.toDate
-                                              ? po.orderDate.toDate().toLocaleDateString('pl-PL')
-                                              : '-'}
+                                      <Typography variant="body2" color="primary" sx={{ 
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        PO: {po.number || '-'}
                                       </Typography>
-                                    )}
-                                    {po.id && (
-                                      <Button 
-                                        size="small" 
-                                        variant="outlined" 
-                                        color="primary"
-                                        component={Link}
-                                        to={`/purchase-orders/${po.id}`}
-                                        sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
-                                      >
-                                        {t('inventory.batches.poDetails')}
-                                      </Button>
-                                    )}
-                                  </Box>
+                                      {po.supplier && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ 
+                                          display: 'block',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}>
+                                          {po.supplier.name}
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  </Tooltip>
                                 );
                               }
                               
                               // Stara metoda - sprawdź czy partia pochodzi z zamówienia zakupu (PO)
                               else if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
-                                // Fallback dla starszych rekordów bez szczegółów PO
-                                source = t('inventory.batches.fromPurchaseOrder');
-                                if (batch.orderNumber) {
-                                  source += ` (PO: ${batch.orderNumber})`;
-                                } else if (batch.sourceDetails && batch.sourceDetails.orderNumber) {
-                                  source += ` (PO: ${batch.sourceDetails.orderNumber})`;
-                                }
+                                let poNumber = batch.orderNumber || (batch.sourceDetails && batch.sourceDetails.orderNumber);
+                                let supplierName = batch.sourceDetails && batch.sourceDetails.supplierName;
                                 
-                                if (batch.sourceDetails && batch.sourceDetails.supplierName) {
-                                  source += ` od ${batch.sourceDetails.supplierName}`;
-                                }
-                                
-                                // Jeśli mamy orderId w sourceDetails, dodaj link do PO
-                                if (batch.sourceDetails && batch.sourceDetails.orderId) {
-                                  return (
-                                    <Box>
-                                      <Typography variant="body2">
-                                        {source}
+                                return (
+                                  <Tooltip 
+                                    title={
+                                      <Box>
+                                        {poNumber && (
+                                          <Typography variant="body2">
+                                            <strong>PO:</strong> {poNumber}
+                                          </Typography>
+                                        )}
+                                        {supplierName && (
+                                          <Typography variant="body2">
+                                            <strong>Dostawca:</strong> {supplierName}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    }
+                                    arrow
+                                  >
+                                    <Box sx={{ cursor: 'pointer' }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                                        Z zamówienia zakupu
                                       </Typography>
-                                      <Button 
-                                        size="small" 
-                                        variant="outlined" 
-                                        color="primary"
-                                        component={Link}
-                                        to={`/purchase-orders/${batch.sourceDetails.orderId}`}
-                                        sx={{ mt: 1, fontSize: '0.7rem', py: 0.3 }}
-                                      >
-                                        {t('inventory.batches.poDetails')}
-                                      </Button>
+                                      {poNumber && (
+                                        <Typography variant="body2" color="primary" sx={{ 
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}>
+                                          PO: {poNumber}
+                                        </Typography>
+                                      )}
+                                      {supplierName && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ 
+                                          display: 'block',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap'
+                                        }}>
+                                          {supplierName}
+                                        </Typography>
+                                      )}
                                     </Box>
-                                  );
-                                }
-                                
-                                return source;
+                                  </Tooltip>
+                                );
                               }
                               
                               // Produkcja - wyświetlanie informacji o MO i CO
                               else if (batch.source === 'Produkcja' || batch.source === 'production') {
-                                source = t('inventory.batches.fromProduction');
-                                // Dodaj informacje o MO i CO, jeśli są dostępne
-                                if (batch.moNumber) {
-                                  source += ` (MO: ${batch.moNumber})`;
-                                }
-                                if (batch.orderNumber) {
-                                  source += ` (CO: ${batch.orderNumber})`;
-                                }
+                                let info = [];
+                                if (batch.moNumber) info.push(`MO: ${batch.moNumber}`);
+                                if (batch.orderNumber) info.push(`CO: ${batch.orderNumber}`);
+                                
+                                return (
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
+                                      Z produkcji
+                                    </Typography>
+                                    {info.length > 0 && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ 
+                                        display: 'block',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {info.join(' / ')}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                );
                               } else if (batch.source) {
-                                source = batch.source;
+                                return (
+                                  <Typography variant="body2">
+                                    {batch.source}
+                                  </Typography>
+                                );
                               }
                               
-                              return source;
+                              return '—';
                             })()}
                           </TableCell>
                         )}
@@ -1211,6 +1431,20 @@ const BatchesPage = () => {
                                 <InfoIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
+
+                            {/* Link do PO jeśli dostępny */}
+                            {(batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId) && (
+                              <Tooltip title="Zobacz zamówienie zakupu">
+                                <IconButton
+                                  size="small"
+                                  component={Link}
+                                  to={`/purchase-orders/${batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId}`}
+                                  color="primary"
+                                >
+                                  <InsertDriveFileIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
 
                             <Tooltip title={t('inventory.batches.printBatchLabel')}>
                               <IconButton

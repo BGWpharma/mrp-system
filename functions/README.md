@@ -207,3 +207,4 @@ W razie problemów sprawdź:
 **Wersja**: 1.0.0
 
 
+

@@ -227,6 +227,8 @@
     "searchBatches": "Szukaj partii...",
     "totalStock": "Stan całkowity",
     "fefoInfo": "Partie są wydawane według zasady FEFO (First Expiry, First Out)",
+    "hideDepleted": "Ukryj wyczerpane",
+    "refreshData": "Odśwież dane",
     "batchNumber": "Numer partii",
     "expiryDate": "Data ważności",
     "warehouse": "Magazyn",

@@ -227,6 +227,8 @@
     "searchBatches": "Search batches...",
     "totalStock": "Total stock",
     "fefoInfo": "Batches are issued according to FEFO rule (First Expiry, First Out)",
+    "hideDepleted": "Hide depleted",
+    "refreshData": "Refresh data",
     "batchNumber": "Batch number",
     "expiryDate": "Expiry date",
     "warehouse": "Warehouse",

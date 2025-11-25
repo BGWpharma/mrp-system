@@ -238,3 +238,4 @@ Funkcja testowa `getRandomBatch` została zaimplementowana i zintegrowana z apli
 **Wersja**: 1.0.0
 
 
+
