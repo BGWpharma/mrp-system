@@ -5290,16 +5290,23 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         }
 
         // Określ cenę jednostkową z hierarchii fallback
+        // PRIORYTET: aktualna cena z bazy → zapisana w konsumpcji → fallback z materiału
+        // (zsynchronizowane z Cloud Function calculateTaskCosts)
         let unitPrice = 0;
         let priceSource = 'fallback';
 
-        if (consumed.unitPrice !== undefined && consumed.unitPrice > 0) {
-          unitPrice = fixFloatingPointPrecision(parseFloat(consumed.unitPrice));
-          priceSource = 'consumed-record';
-        } else if (consumed.batchId && consumedBatchPricesCache[consumed.batchId] > 0) {
+        // PRIORYTET 1: Aktualna cena z bazy danych (zawsze najważniejsza - reaguje na zmiany PO)
+        if (consumed.batchId && consumedBatchPricesCache[consumed.batchId] > 0) {
           unitPrice = consumedBatchPricesCache[consumed.batchId];
           priceSource = 'batch-current';
-        } else if (material.unitPrice > 0) {
+        } 
+        // PRIORYTET 2: Cena zapisana w momencie konsumpcji
+        else if (consumed.unitPrice !== undefined && consumed.unitPrice > 0) {
+          unitPrice = fixFloatingPointPrecision(parseFloat(consumed.unitPrice));
+          priceSource = 'consumed-record';
+        } 
+        // PRIORYTET 3: Cena domyślna z materiału
+        else if (material.unitPrice > 0) {
           unitPrice = fixFloatingPointPrecision(parseFloat(material.unitPrice));
           priceSource = 'material-default';
         }
