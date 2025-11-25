@@ -102,7 +102,16 @@
       "supplier": "Dostawca:",
       "value": "Wartość:",
       "loadAllItemsFromPO": "Załaduj wszystkie pozycje z PO",
-      "allItemsLoadedFromPO": "Dodano wszystkie pozycje z PO"
+      "allItemsLoadedFromPO": "Dodano wszystkie pozycje z PO",
+      "correctionReason": "Powód korekty",
+      "correctedInvoices": "Korygowane faktury",
+      "originalQuantity": "Ilość oryginalna",
+      "correctedQuantity": "Ilość poprawna",
+      "correctionAmount": "Kwota korekty",
+      "selectItemsToCorrect": "Wybierz pozycje do korekty",
+      "invoicedQuantity": "Ilość zafakturowana",
+      "newQuantity": "Nowa ilość",
+      "correctionDifference": "Różnica (korekta)"
     },
     "buttons": {
       "save": "Zapisz",
@@ -119,6 +128,9 @@
       "selectAll": "Zaznacz wszystkie",
       "deselectAll": "Odznacz wszystkie",
       "manageClients": "Zarządzaj klientami"
+    },
+    "notifications": {
+      "correctionItemsLoaded": "Załadowano pozycje do korekty"
     },
     "paymentMethods": {
       "przelew": "Przelew",
@@ -142,7 +154,8 @@
     "toggleButtons": {
       "invoice": "Faktura",
       "proforma": "Proforma",
-      "refInvoice": "Refaktura (PO)"
+      "refInvoice": "Refaktura (PO)",
+      "correction": "Faktura korygująca"
     },
     "filters": {
       "allStatuses": "Wszystkie statusy",
@@ -171,6 +184,7 @@
   "payments": {
     "title": "Płatności",
     "addPayment": "Dodaj płatność",
+    "addRefund": "Dodaj zwrot",
     "editPayment": "Edytuj płatność",
     "invoiceValue": "Wartość faktury",
     "paid": "Zapłacono",
@@ -241,6 +255,9 @@
     "status": "Status",
     "invoiceType": "Typ faktury",
     "proformaInvoice": "Faktura proforma",
+    "correctionInvoice": "Faktura korygująca",
+    "correctedInvoices": "Korygowane faktury",
+    "correctionReason": "Powód korekty",
     "invoice": "Faktura",
     "issueDate": "Data wystawienia",
     "dueDate": "Termin płatności",

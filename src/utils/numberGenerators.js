@@ -243,4 +243,15 @@ export const generateFSNumber = async () => {
 export const generateFPFNumber = async () => {
   const { number, month, year } = await getNextMonthlyInvoiceNumber('FPF');
   return `FPF/${number}/${month}/${year}`;
+};
+
+/**
+ * Generuje numer faktury korygującej
+ * Format: FK/x/miesiąc/rok (np. FK/1/11/2025)
+ * FK = Faktura Korygująca
+ * @returns {Promise<string>}
+ */
+export const generateFKNumber = async () => {
+  const { number, month, year } = await getNextMonthlyInvoiceNumber('FK');
+  return `FK/${number}/${month}/${year}`;
 }; 

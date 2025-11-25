@@ -3877,6 +3877,97 @@ export const removePurchaseOrderFromCache = (orderId) => {
 };
 
 /**
+ * Wyszukuje PO po numerze (prefix search) - optymalne dla Firebase
+ * Używa indeksowanego zapytania zamiast pobierania wszystkich danych
+ * Obsługuje wyszukiwanie po:
+ * - pełnym numerze (np. "PO00092")
+ * - samym numerze bez prefiksu (np. "92" -> szuka "PO...92")
+ * 
+ * @param {string} numberPrefix - Początek numeru PO do wyszukania (może być z lub bez prefiksu PO)
+ * @param {number} maxResults - Maksymalna liczba wyników (domyślnie 15)
+ * @returns {Promise<Array>} - Tablica zamówień zakupowych pasujących do wyszukiwania
+ */
+export const searchPurchaseOrdersByNumber = async (numberPrefix, maxResults = 15) => {
+  try {
+    if (!numberPrefix || numberPrefix.trim().length < 2) {
+      // Dla pustego lub zbyt krótkiego wyszukiwania zwróć puste wyniki
+      return [];
+    }
+
+    const searchTerm = numberPrefix.trim().toUpperCase();
+    
+    // Sprawdź czy użytkownik wpisał sam numer (bez PO)
+    const isNumericOnly = /^\d+$/.test(searchTerm);
+    
+    let querySnapshot;
+    
+    if (isNumericOnly) {
+      // Użytkownik wpisał sam numer (np. "92") - musimy przeszukać po stronie klienta
+      // bo Firebase nie obsługuje "contains" - pobieramy ostatnie PO i filtrujemy
+      const q = query(
+        collection(db, PURCHASE_ORDERS_COLLECTION),
+        orderBy('createdAt', 'desc'),
+        firebaseLimit(100) // Pobierz więcej żeby znaleźć pasujące
+      );
+      
+      const allResults = await getDocs(q);
+      const filteredDocs = allResults.docs.filter(doc => {
+        const number = doc.data().number || '';
+        // Szukaj numeru w dowolnym miejscu (np. "92" w "PO00092")
+        return number.includes(searchTerm);
+      }).slice(0, maxResults);
+      
+      querySnapshot = { docs: filteredDocs };
+    } else {
+      // Użytkownik wpisał pełny prefix (np. "PO00") - używamy prefix search
+      const q = query(
+        collection(db, PURCHASE_ORDERS_COLLECTION),
+        where('number', '>=', searchTerm),
+        where('number', '<=', searchTerm + '\uf8ff'),
+        orderBy('number'),
+        firebaseLimit(maxResults)
+      );
+      
+      querySnapshot = await getDocs(q);
+    }
+    const results = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      
+      // Przetworz dane PO - oblicz wartości
+      const productsValue = Array.isArray(data.items) 
+        ? data.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || (parseFloat(item.price) * parseFloat(item.quantity)) || 0), 0)
+        : 0;
+      
+      let additionalCostsValue = 0;
+      if (data.additionalCostsItems && Array.isArray(data.additionalCostsItems)) {
+        additionalCostsValue = data.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
+      } else if (data.additionalCosts) {
+        additionalCostsValue = parseFloat(data.additionalCosts) || 0;
+      }
+      
+      const vatRate = parseFloat(data.vatRate) || 23;
+      const vatValue = (productsValue * vatRate) / 100;
+      const calculatedGrossValue = productsValue + vatValue + additionalCostsValue;
+      
+      return {
+        id: doc.id,
+        ...data,
+        calculatedProductsValue: productsValue,
+        calculatedAdditionalCosts: additionalCostsValue,
+        calculatedVatValue: vatValue,
+        calculatedGrossValue: calculatedGrossValue,
+        finalGrossValue: parseFloat(data.totalGross) || calculatedGrossValue
+      };
+    });
+    
+    return results;
+  } catch (error) {
+    console.error('Błąd podczas wyszukiwania PO po numerze:', error);
+    return [];
+  }
+};
+
+/**
  * Szybkie wyszukiwanie zamówień zakupowych dla formularzy
  * Zoptymalizowane dla autouzupełniania i szybkiego wyszukiwania
  * 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -99,8 +99,10 @@ const InvoiceForm = ({ invoiceId }) => {
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [redirectToList, setRedirectToList] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(COMPANY_INFO);
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [purchaseOrdersLoading, setPurchaseOrdersLoading] = useState(false);
+  // Stany dla wyszukiwania PO (on-demand z debounce)
+  const [poSearchTerm, setPoSearchTerm] = useState('');
+  const [poSearchResults, setPoSearchResults] = useState([]);
+  const [poSearchLoading, setPoSearchLoading] = useState(false);
   const [selectedOrderType, setSelectedOrderType] = useState('customer');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [relatedInvoices, setRelatedInvoices] = useState([]);
@@ -114,18 +116,25 @@ const InvoiceForm = ({ invoiceId }) => {
   const [selectedOrderItems, setSelectedOrderItems] = useState([]);
   const [proformasByOrderItems, setProformasByOrderItems] = useState({}); // Informacje o proformach dla pozycji
   const [showAllProformas, setShowAllProformas] = useState(false);
+  
+  // Stany dla faktury korygującej
+  const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
+  const [correctionItems, setCorrectionItems] = useState([]); // Pozycje do korekty z informacjami o zafakturowanych ilościach
+  const [loadingCorrectionItems, setLoadingCorrectionItems] = useState(false);
 
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
 
   useEffect(() => {
     const init = async () => {
       // Pobierz dane klientów
       fetchCustomers();
-      fetchOrders();
-      fetchPurchaseOrders();
+      // Nie pobieraj zamówień CO ani PO - będą pobierane on demand:
+      // - CO: po wyborze klienta (filtrowanie po stronie serwera)
+      // - PO: po włączeniu opcji "Refaktura"
       
       // Pobierz dane firmy
       try {
@@ -143,20 +152,61 @@ const InvoiceForm = ({ invoiceId }) => {
       else if (customerId) {
         await handleCustomerSelect(customerId);
       }
+      // Jeśli przekierowano z zamówienia z preselectedOrder (np. dla faktury korygującej)
+      else if (location.state?.preselectedOrder && location.state?.isCorrectionInvoice) {
+        await handleCorrectionInvoiceFromOrder(location.state.preselectedOrder);
+      }
     };
     
     init();
   }, [invoiceId, customerId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Efekt do filtrowania zamówień po wyborze klienta
+  // Efekt do pobierania zamówień po wyborze klienta (filtrowanie po stronie serwera)
   useEffect(() => {
-    if (invoice.customer?.id) {
-      const filtered = orders.filter(order => order.customer.id === invoice.customer.id);
-      setFilteredOrders(filtered);
-    } else {
-      setFilteredOrders([]);
-    }
-  }, [invoice.customer?.id, orders]);
+    const fetchOrdersForCustomer = async () => {
+      if (invoice.customer?.id) {
+        setOrdersLoading(true);
+        try {
+          // Pobierz zamówienia tylko dla wybranego klienta (filtrowanie po stronie serwera)
+          const fetchedOrders = await getAllOrders({ customerId: invoice.customer.id });
+          
+          // Formatowanie dat
+          const ordersWithFormattedDates = fetchedOrders.map(order => {
+            let formattedDate = null;
+            if (order.orderDate) {
+              try {
+                if (order.orderDate instanceof Date) {
+                  formattedDate = order.orderDate;
+                } else if (order.orderDate.toDate && typeof order.orderDate.toDate === 'function') {
+                  formattedDate = order.orderDate.toDate();
+                } else if (typeof order.orderDate === 'string' || typeof order.orderDate === 'number') {
+                  formattedDate = new Date(order.orderDate);
+                }
+                if (formattedDate && isNaN(formattedDate.getTime())) {
+                  formattedDate = null;
+                }
+              } catch (e) {
+                console.warn('Problem z parsowaniem daty zamówienia:', e);
+              }
+            }
+            return { ...order, orderDate: formattedDate };
+          });
+          
+          setFilteredOrders(ordersWithFormattedDates);
+          setOrders(ordersWithFormattedDates); // Zachowaj też w orders dla kompatybilności
+        } catch (error) {
+          console.error('Błąd podczas pobierania zamówień dla klienta:', error);
+          setFilteredOrders([]);
+        } finally {
+          setOrdersLoading(false);
+        }
+      } else {
+        setFilteredOrders([]);
+      }
+    };
+    
+    fetchOrdersForCustomer();
+  }, [invoice.customer?.id]);
 
   // Efekt do ustawiania domyślnego rachunku bankowego gdy dane firmy są załadowane
   useEffect(() => {
@@ -200,15 +250,15 @@ const InvoiceForm = ({ invoiceId }) => {
   useEffect(() => {
     if (selectedOrderId && selectedOrderType && !selectedOrder) {
       const isCustomerOrder = selectedOrderType === 'customer';
-      const ordersList = isCustomerOrder ? orders : purchaseOrders;
-      const isLoading = isCustomerOrder ? ordersLoading : purchaseOrdersLoading;
+      const ordersList = isCustomerOrder ? orders : poSearchResults;
+      const isLoading = isCustomerOrder ? ordersLoading : poSearchLoading;
       
       // Sprawdź czy dane zamówień są już załadowane i lista nie jest pusta
       if (!isLoading && ordersList.length > 0) {
         handleOrderSelect(selectedOrderId, selectedOrderType);
       }
     }
-  }, [selectedOrderId, selectedOrderType, orders, purchaseOrders, ordersLoading, purchaseOrdersLoading, selectedOrder]);
+  }, [selectedOrderId, selectedOrderType, orders, poSearchResults, ordersLoading, poSearchLoading, selectedOrder]);
 
   // Efekt do automatycznego przełączenia na PO gdy zaznaczono refakturę
   useEffect(() => {
@@ -225,6 +275,38 @@ const InvoiceForm = ({ invoiceId }) => {
       setSelectedOrder(null);
     }
   }, [invoice.isRefInvoice]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Efekt do wyszukiwania PO z debounce (wyszukiwanie po stronie serwera)
+  useEffect(() => {
+    // Wyszukuj tylko gdy włączona refaktura i wpisano min 2 znaki
+    if (!invoice.isRefInvoice || poSearchTerm.length < 2) {
+      if (poSearchTerm.length === 0) {
+        setPoSearchResults([]);
+      }
+      return;
+    }
+
+    setPoSearchLoading(true);
+    
+    // Debounce - czekaj 300ms po ostatnim naciśnięciu klawisza
+    const timeoutId = setTimeout(async () => {
+      try {
+        const { searchPurchaseOrdersByNumber } = await import('../../services/purchaseOrderService');
+        const results = await searchPurchaseOrdersByNumber(poSearchTerm);
+        setPoSearchResults(results);
+      } catch (error) {
+        console.error('Błąd wyszukiwania PO:', error);
+        setPoSearchResults([]);
+      } finally {
+        setPoSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timeoutId);
+      setPoSearchLoading(false);
+    };
+  }, [poSearchTerm, invoice.isRefInvoice]);
 
   const fetchInvoice = async (id) => {
     setLoading(true);
@@ -265,117 +347,6 @@ const InvoiceForm = ({ invoiceId }) => {
     } finally {
       setCustomersLoading(false);
     }
-  };
-
-  const fetchOrders = async () => {
-    setOrdersLoading(true);
-    try {
-      const fetchedOrders = await getAllOrders();
-      // Upewnij się, że daty są poprawnie obsługiwane
-      const ordersWithFormattedDates = fetchedOrders.map(order => {
-        // Sprawdź czy data istnieje i jest w poprawnym formacie
-        let formattedDate = null;
-        if (order.orderDate) {
-          try {
-            // Sprawdź czy data jest już obiektem Date
-            if (order.orderDate instanceof Date) {
-              formattedDate = order.orderDate;
-            } else if (order.orderDate.toDate && typeof order.orderDate.toDate === 'function') {
-              // Obsługa Firestore Timestamp
-              formattedDate = order.orderDate.toDate();
-            } else if (typeof order.orderDate === 'string' || typeof order.orderDate === 'number') {
-              formattedDate = new Date(order.orderDate);
-            }
-            
-            // Sprawdź czy wynikowa data jest prawidłowa
-            if (!formattedDate || isNaN(formattedDate.getTime())) {
-              formattedDate = null;
-              // Loguj tylko raz dla każdego zamówienia i tylko w trybie deweloperskim
-              if (process.env.NODE_ENV === 'development') {
-                console.warn(`Nieprawidłowa data w zamówieniu ${order.orderNumber || order.id}`);
-              }
-            }
-          } catch (e) {
-            formattedDate = null;
-            if (process.env.NODE_ENV === 'development') {
-              console.error(`Błąd parsowania daty dla zamówienia ${order.orderNumber || order.id}`, e);
-            }
-          }
-        }
-        
-        return {
-          ...order,
-          orderDate: formattedDate
-        };
-      });
-      
-      setOrders(ordersWithFormattedDates);
-    } catch (error) {
-      showError('Błąd podczas pobierania listy zamówień: ' + error.message);
-    } finally {
-      setOrdersLoading(false);
-    }
-  };
-
-  const fetchPurchaseOrders = async () => {
-    setPurchaseOrdersLoading(true);
-    try {
-      const { getAllPurchaseOrders } = await import('../../services/purchaseOrderService');
-      const fetchedPurchaseOrders = await getAllPurchaseOrders();
-      
-      // Upewnij się, że dane PO są poprawnie przetworzone i zawierają wszystkie wartości
-      const processedPurchaseOrders = fetchedPurchaseOrders.map(po => {
-        let processedPO = { ...po };
-        
-        // Oblicz wartość produktów
-        const productsValue = Array.isArray(po.items) 
-          ? po.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || (parseFloat(item.price) * parseFloat(item.quantity)) || 0), 0)
-          : 0;
-        
-        // Oblicz wartość dodatkowych kosztów
-        let additionalCostsValue = 0;
-        if (po.additionalCostsItems && Array.isArray(po.additionalCostsItems)) {
-          additionalCostsValue = po.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-        } else if (po.additionalCosts) {
-          additionalCostsValue = parseFloat(po.additionalCosts) || 0;
-        }
-        
-        // Oblicz VAT
-        const vatRate = parseFloat(po.vatRate) || 23;
-        const vatValue = (productsValue * vatRate) / 100;
-        
-        // Oblicz wartość całkowitą (brutto)
-        const calculatedGrossValue = productsValue + vatValue + additionalCostsValue;
-        const finalGrossValue = parseFloat(po.totalGross) || calculatedGrossValue;
-        
-        // Dodaj obliczone wartości do obiektu PO
-        processedPO = {
-          ...processedPO,
-          calculatedProductsValue: productsValue,
-          calculatedAdditionalCosts: additionalCostsValue,
-          calculatedVatValue: vatValue,
-          calculatedGrossValue: calculatedGrossValue,
-          finalGrossValue: finalGrossValue
-        };
-        
-        return processedPO;
-      });
-      
-      setPurchaseOrders(processedPurchaseOrders);
-    } catch (error) {
-      showError('Błąd podczas pobierania listy zamówień zakupowych: ' + error.message);
-      console.error('Error fetching purchase orders:', error);
-    } finally {
-      setPurchaseOrdersLoading(false);
-    }
-  };
-
-  const fetchCustomerOrders = (customerId) => {
-    if (!customerId) return;
-    
-    // Filtrowanie zamówień dla wybranego klienta
-    const customerOrders = orders.filter(order => order.customer?.id === customerId);
-    setFilteredOrders(customerOrders);
   };
 
   const fetchRelatedInvoices = useCallback(async (orderId) => {
@@ -483,14 +454,16 @@ const InvoiceForm = ({ invoiceId }) => {
       }
     }
 
-    // Pobierz informacje o zafakturowanych ilościach dla tego zamówienia (dla zwykłych faktur)
+    // Pobierz informacje o zafakturowanych ilościach dla tego zamówienia (dla zwykłych faktur i faktur korygujących)
     let invoicedAmounts = {};
     if (selectedOrderId && !invoice.isProforma) {
       try {
         // Pobierz wszystkie faktury dla tego zamówienia
         const relatedInvoices = await getInvoicesByOrderId(selectedOrderId);
-        // Filtruj faktury inne niż obecna (jeśli edytujemy)
-        const filteredInvoices = relatedInvoices.filter(inv => inv.id !== invoiceId);
+        // Filtruj faktury inne niż obecna (jeśli edytujemy) - dla korekty nie filtrujemy bo chcemy widzieć wszystkie zafakturowane
+        const filteredInvoices = invoice.isCorrectionInvoice 
+          ? relatedInvoices.filter(inv => !inv.isCorrectionInvoice) // Dla korekty - wszystkie faktury oprócz innych korekt
+          : relatedInvoices.filter(inv => inv.id !== invoiceId);
         invoicedAmounts = await getInvoicedAmountsByOrderItems(selectedOrderId, filteredInvoices, selectedOrder);
         console.log('Pobrano informacje o zafakturowanych ilościach:', invoicedAmounts);
       } catch (error) {
@@ -526,15 +499,24 @@ const InvoiceForm = ({ invoiceId }) => {
       let remainingQuantity = parseFloat(item.quantity || 0);
       let remainingValue = parseFloat(item.quantity || 0) * finalPrice;
       let invoicedInfo = null;
+      let totalInvoicedQuantity = 0;
+      let totalInvoicedValue = 0;
       
       if (!invoice.isProforma && invoicedAmounts[itemId]) {
         const invoicedData = invoicedAmounts[itemId];
-        const totalInvoicedQuantity = invoicedData.invoices.reduce((sum, inv) => sum + inv.quantity, 0);
-        const totalInvoicedValue = invoicedData.totalInvoiced;
+        totalInvoicedQuantity = invoicedData.invoices.reduce((sum, inv) => sum + inv.quantity, 0);
+        totalInvoicedValue = invoicedData.totalInvoiced;
         
-        // Oblicz pozostałą ilość i wartość
-        remainingQuantity = Math.max(0, parseFloat(item.quantity || 0) - totalInvoicedQuantity);
-        remainingValue = Math.max(0, (parseFloat(item.quantity || 0) * finalPrice) - totalInvoicedValue);
+        // Dla faktury korygującej - pokazuj zafakturowane ilości, nie pozostałe
+        if (invoice.isCorrectionInvoice) {
+          // Dla korekty: ilość = to co zostało zafakturowane (bo to korygujemy)
+          remainingQuantity = totalInvoicedQuantity;
+          remainingValue = totalInvoicedValue;
+        } else {
+          // Dla zwykłej faktury: ilość = to co pozostało do zafakturowania
+          remainingQuantity = Math.max(0, parseFloat(item.quantity || 0) - totalInvoicedQuantity);
+          remainingValue = Math.max(0, (parseFloat(item.quantity || 0) * finalPrice) - totalInvoicedValue);
+        }
         
         invoicedInfo = {
           totalInvoicedQuantity: totalInvoicedQuantity,
@@ -542,21 +524,28 @@ const InvoiceForm = ({ invoiceId }) => {
           invoices: invoicedData.invoices
         };
         
-        console.log(`Pozycja ${item.name}: Zamówienie: ${item.quantity}, Zafakturowano: ${totalInvoicedQuantity}, Pozostało: ${remainingQuantity}`);
+        console.log(`Pozycja ${item.name}: Zamówienie: ${item.quantity}, Zafakturowano: ${totalInvoicedQuantity}, ${invoice.isCorrectionInvoice ? 'Do korekty' : 'Pozostało'}: ${remainingQuantity}`);
       }
 
+      // Dla faktury korygującej - pozycja jest "dostępna" jeśli coś zostało zafakturowane
+      const isAvailableForCorrection = invoice.isCorrectionInvoice && totalInvoicedQuantity > 0;
+      
       return {
         ...item,
         price: finalPrice,
-        quantity: remainingQuantity, // Ustaw pozostałą ilość
-        netValue: remainingValue, // Ustaw pozostałą wartość
+        quantity: remainingQuantity, // Dla korekty: zafakturowana ilość, dla zwykłej: pozostała ilość
+        netValue: remainingValue, // Dla korekty: zafakturowana wartość, dla zwykłej: pozostała wartość
         originalQuantity: parseFloat(item.quantity || 0), // Zachowaj oryginalną ilość z zamówienia
         originalValue: parseFloat(item.quantity || 0) * finalPrice, // Zachowaj oryginalną wartość
         selected: false, // Domyślnie nie zaznaczone
         hasProforma: hasProforma, // Czy ma już proformę (dla proform)
         proformaInfo: proformaInfo, // Informacje o istniejącej proformie (dla proform)
         invoicedInfo: invoicedInfo, // Informacje o zafakturowanych ilościach (dla zwykłych faktur)
-        isFullyInvoiced: !invoice.isProforma && remainingQuantity <= 0 // Czy pozycja jest w pełni zafakturowana
+        isFullyInvoiced: !invoice.isProforma && !invoice.isCorrectionInvoice && remainingQuantity <= 0, // Dla zwykłych faktur
+        isAvailableForCorrection: isAvailableForCorrection, // Dla faktur korygujących - czy coś zafakturowano
+        // Dla korekty: pole do wpisania nowej ilości (domyślnie = zafakturowana)
+        correctionNewQuantity: invoice.isCorrectionInvoice ? totalInvoicedQuantity : null,
+        correctionNewValue: invoice.isCorrectionInvoice ? totalInvoicedValue : null
       };
     });
     
@@ -588,8 +577,8 @@ const InvoiceForm = ({ invoiceId }) => {
       return;
     }
     
-    // WALIDACJA: Sprawdź czy wybrane pozycje są w pełni zafakturowane
-    if (!invoice.isProforma) {
+    // WALIDACJA: Sprawdź czy wybrane pozycje są w pełni zafakturowane (NIE dla faktur korygujących!)
+    if (!invoice.isProforma && !invoice.isCorrectionInvoice) {
       const fullyInvoicedItems = selectedItems.filter(item => item.isFullyInvoiced);
       
       if (fullyInvoicedItems.length > 0) {
@@ -597,6 +586,20 @@ const InvoiceForm = ({ invoiceId }) => {
         showError(
           `Nie można dodać pozycji: ${itemNames}. ` +
           `${fullyInvoicedItems.length === 1 ? 'Ta pozycja jest' : 'Te pozycje są'} już w pełni zafakturowane.`
+        );
+        return;
+      }
+    }
+    
+    // WALIDACJA dla faktury korygującej: Sprawdź czy wybrane pozycje mają coś do skorygowania
+    if (invoice.isCorrectionInvoice) {
+      const itemsWithoutInvoice = selectedItems.filter(item => !item.isAvailableForCorrection);
+      
+      if (itemsWithoutInvoice.length > 0) {
+        const itemNames = itemsWithoutInvoice.map(item => item.name).join(', ');
+        showError(
+          `Nie można skorygować pozycji: ${itemNames}. ` +
+          `${itemsWithoutInvoice.length === 1 ? 'Ta pozycja nie została' : 'Te pozycje nie zostały'} jeszcze zafakturowane.`
         );
         return;
       }
@@ -622,27 +625,95 @@ const InvoiceForm = ({ invoiceId }) => {
       }
     }
     
-    // Dodaj wybrane pozycje do faktury z pozostałymi ilościami
-    const newItems = selectedItems.map(item => ({
-      id: item.id || '',
-      orderItemId: item.id, // Zachowaj referencję do pozycji w CO dla poprawnego śledzenia zafakturowanych kwot
-      name: item.name,
-      description: item.description || '',
-      quantity: item.quantity, // To jest już pozostała ilość!
-      unit: item.unit || 'szt.',
-      price: item.price,
-      netValue: item.netValue, // To jest już pozostała wartość!
-      vat: item.vat || 0,
-      cnCode: item.cnCode || ''
-    }));
+    // Dla faktury korygującej - zbierz informacje o korygowanych fakturach
+    let correctedInvoicesFromItems = [];
+    if (invoice.isCorrectionInvoice) {
+      const invoicesMap = new Map();
+      selectedItems.forEach(item => {
+        if (item.invoicedInfo?.invoices) {
+          item.invoicedInfo.invoices.forEach(inv => {
+            if (!invoicesMap.has(inv.invoiceId)) {
+              invoicesMap.set(inv.invoiceId, {
+                invoiceId: inv.invoiceId,
+                invoiceNumber: inv.invoiceNumber
+              });
+            }
+          });
+        }
+      });
+      correctedInvoicesFromItems = Array.from(invoicesMap.values());
+    }
+    
+    // Dodaj wybrane pozycje do faktury
+    const newItems = selectedItems.map(item => {
+      // Dla faktury korygującej - oblicz różnicę między nową a zafakturowaną wartością
+      if (invoice.isCorrectionInvoice) {
+        const invoicedQuantity = item.invoicedInfo?.totalInvoicedQuantity || 0;
+        const invoicedValue = item.invoicedInfo?.totalInvoicedValue || 0;
+        // Nowa ilość/wartość to ta z kosztu produkcji (już obliczona jako finalPrice * originalQuantity)
+        const productionValue = item.originalQuantity * item.price;
+        
+        // Korekta = nowa wartość (koszt produkcji) - zafakturowana wartość
+        const correctionValue = productionValue - invoicedValue;
+        
+        // Oblicz cenę jednostkową korekty tak, aby ilość × cena = wartość korekty
+        // (zachowujemy ilość z CO, a cena = korekta / ilość)
+        const correctionUnitPrice = item.originalQuantity > 0 
+          ? correctionValue / item.originalQuantity 
+          : correctionValue;
+        
+        return {
+          id: item.id || '',
+          orderItemId: item.id,
+          name: item.name,
+          description: `Correction (${correctionValue >= 0 ? '+' : ''}${correctionValue.toFixed(2)} ${invoice.currency || 'EUR'})`,
+          quantity: item.originalQuantity, // Ilość z pozycji CO (zamówienia klienta)
+          unit: item.unit || 'szt.',
+          price: parseFloat(correctionUnitPrice.toFixed(4)), // Cena jednostkowa korekty (wartość korekty / ilość)
+          netValue: parseFloat(correctionValue.toFixed(2)), // Wartość korekty (różnica między kosztem produkcji a zafakturowaną wartością)
+          vat: item.vat || 0,
+          cnCode: item.cnCode || '',
+          // Dodatkowe dane dla korekty
+          originalInvoicedQuantity: invoicedQuantity,
+          originalInvoicedValue: invoicedValue,
+          productionQuantity: item.originalQuantity,
+          productionValue: productionValue,
+          productionUnitPrice: item.price, // Oryginalny koszt produkcji jednostkowy
+          sourceInvoices: item.invoicedInfo?.invoices || []
+        };
+      }
+      
+      // Dla zwykłych faktur - standardowe mapowanie
+      return {
+        id: item.id || '',
+        orderItemId: item.id, // Zachowaj referencję do pozycji w CO dla poprawnego śledzenia zafakturowanych kwot
+        name: item.name,
+        description: item.description || '',
+        quantity: item.quantity, // To jest już pozostała ilość!
+        unit: item.unit || 'szt.',
+        price: item.price,
+        netValue: item.netValue, // To jest już pozostała wartość!
+        vat: item.vat || 0,
+        cnCode: item.cnCode || ''
+      };
+    });
     
     setInvoice(prev => ({
       ...prev,
-      items: [...prev.items, ...newItems]
+      items: [...prev.items, ...newItems],
+      // Dla faktury korygującej - zapisz powiązane faktury
+      ...(invoice.isCorrectionInvoice && {
+        correctedInvoices: [
+          ...(prev.correctedInvoices || []),
+          ...correctedInvoicesFromItems.filter(
+            newInv => !prev.correctedInvoices?.some(existing => existing.invoiceId === newInv.invoiceId)
+          )
+        ]
+      })
     }));
     
     setOrderItemsDialogOpen(false);
-    showSuccess(`Dodano ${selectedItems.length} pozycji z zamówienia`);
+    showSuccess(`Dodano ${selectedItems.length} pozycji ${invoice.isCorrectionInvoice ? 'do korekty' : 'z zamówienia'}`);
   };
 
   const handleChange = (e) => {
@@ -829,9 +900,8 @@ const InvoiceForm = ({ invoiceId }) => {
         billingAddress: selectedCustomer.billingAddress || selectedCustomer.address || '',
         shippingAddress: selectedCustomer.shippingAddress || selectedCustomer.address || ''
       }));
-      
-      // Pobierz zamówienia klienta, jeśli klient jest wybrany
-      fetchCustomerOrders(selectedCustomer.id);
+      // Zamówienia dla klienta są pobierane automatycznie przez useEffect
+      // który reaguje na zmianę invoice.customer?.id
     }
   };
 
@@ -876,6 +946,143 @@ const InvoiceForm = ({ invoiceId }) => {
       showError('Nie udało się odświeżyć danych klienta: ' + error.message);
     } finally {
       setRefreshingCustomer(false);
+    }
+  };
+
+  // Funkcja do automatycznego utworzenia faktury korygującej z przekierowania z CO
+  const handleCorrectionInvoiceFromOrder = async (preselectedOrder) => {
+    try {
+      setLoading(true);
+      console.log('[handleCorrectionInvoiceFromOrder] Tworzenie FK dla zamówienia:', preselectedOrder.id);
+      
+      // Ustaw typ faktury na korektę
+      setInvoice(prev => ({
+        ...prev,
+        isCorrectionInvoice: true,
+        isProforma: false,
+        isRefInvoice: false
+      }));
+      
+      // Ustaw zamówienie bezpośrednio (mamy już dane z przekierowania)
+      setSelectedOrderId(preselectedOrder.id);
+      setSelectedOrderType('customer');
+      setSelectedOrder(preselectedOrder);
+      setFilteredOrders([preselectedOrder]); // Ustaw to zamówienie jako dostępne
+      setOrders([preselectedOrder]);
+      
+      // Pobierz dane klienta
+      if (preselectedOrder.customer?.id) {
+        const customer = await getCustomerById(preselectedOrder.customer.id);
+        if (customer) {
+          setInvoice(prev => ({
+            ...prev,
+            isCorrectionInvoice: true,
+            customer: {
+              id: customer.id,
+              name: customer.name || customer.companyName,
+              companyName: customer.companyName,
+              email: customer.email,
+              phone: customer.phone,
+              taxId: customer.taxId,
+              address: customer.address || {}
+            },
+            orderId: preselectedOrder.id,
+            orderNumber: preselectedOrder.orderNumber || preselectedOrder.number,
+            currency: preselectedOrder.currency || 'EUR'
+          }));
+        }
+      }
+      
+      // Pobierz informacje o zafakturowanych ilościach dla wszystkich pozycji
+      const invoicedAmounts = await getInvoicedAmountsByOrderItems(preselectedOrder.id);
+      
+      // Przygotuj pozycje do korekty - wszystkie pozycje z zamówienia
+      const itemsWithInvoicedInfo = (preselectedOrder.items || []).map((item, index) => {
+        const itemId = item.id || `${preselectedOrder.id}_item_${index}`;
+        const invoicedInfo = invoicedAmounts[itemId] || { totalInvoiced: 0, invoices: [] };
+        
+        // Oblicz koszt produkcji (cenę jednostkową)
+        const productionUnitCost = calculateTotalUnitCost(item, preselectedOrder);
+        
+        // Oblicz łączną zafakturowaną ilość z wszystkich faktur
+        const totalInvoicedQuantity = invoicedInfo.invoices?.reduce((sum, inv) => sum + (inv.quantity || 0), 0) || 0;
+        
+        return {
+          ...item,
+          id: itemId,
+          originalQuantity: item.quantity,
+          price: productionUnitCost, // Cena = koszt produkcji
+          invoicedInfo: {
+            totalInvoicedQuantity: totalInvoicedQuantity,
+            totalInvoicedValue: invoicedInfo.totalInvoiced || 0,
+            invoices: invoicedInfo.invoices || []
+          },
+          // Zaznacz jako wybraną
+          selected: true
+        };
+      });
+      
+      // Przetwórz pozycje na pozycje faktury korygującej
+      const correctionInvoiceItems = itemsWithInvoicedInfo.map(item => {
+        const invoicedValue = item.invoicedInfo?.totalInvoicedValue || 0;
+        const productionValue = item.originalQuantity * item.price;
+        const correctionValue = productionValue - invoicedValue;
+        
+        // Oblicz cenę jednostkową korekty
+        const correctionUnitPrice = item.originalQuantity > 0 
+          ? correctionValue / item.originalQuantity 
+          : correctionValue;
+        
+        return {
+          id: item.id || '',
+          orderItemId: item.id,
+          name: item.name,
+          description: `Correction (${correctionValue >= 0 ? '+' : ''}${correctionValue.toFixed(2)} ${preselectedOrder.currency || 'EUR'})`,
+          quantity: item.originalQuantity,
+          unit: item.unit || 'szt.',
+          price: parseFloat(correctionUnitPrice.toFixed(4)),
+          netValue: parseFloat(correctionValue.toFixed(2)),
+          vat: item.vat || 0,
+          cnCode: item.cnCode || '',
+          originalQuantity: item.originalQuantity,
+          invoicedInfo: item.invoicedInfo,
+          productionCost: item.productionCost
+        };
+      });
+      
+      // Zbierz informacje o korygowanych fakturach
+      const correctedInvoicesSet = new Map();
+      itemsWithInvoicedInfo.forEach(item => {
+        if (item.invoicedInfo?.invoices) {
+          item.invoicedInfo.invoices.forEach(inv => {
+            if (!correctedInvoicesSet.has(inv.invoiceId)) {
+              correctedInvoicesSet.set(inv.invoiceId, {
+                invoiceId: inv.invoiceId,
+                invoiceNumber: inv.invoiceNumber
+              });
+            }
+          });
+        }
+      });
+      
+      // Ustaw pozycje faktury korygującej
+      setInvoice(prev => ({
+        ...prev,
+        isCorrectionInvoice: true,
+        items: correctionInvoiceItems,
+        correctedInvoices: Array.from(correctedInvoicesSet.values()),
+        correctionReason: ''
+      }));
+      
+      // Pobierz powiązane faktury
+      await fetchRelatedInvoices(preselectedOrder.id);
+      
+      showSuccess(t('invoices.form.notifications.correctionItemsLoaded') || 'Załadowano pozycje do korekty');
+    } catch (error) {
+      console.error('[handleCorrectionInvoiceFromOrder] Błąd:', error);
+      showError('Nie udało się utworzyć faktury korygującej: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1125,13 +1332,26 @@ const InvoiceForm = ({ invoiceId }) => {
     }
     
     // Sprawdź czy wszystkie pozycje mają uzupełnione dane
-    const invalidItems = invoice.items.some(item => 
-      !item.name || 
-      isNaN(item.quantity) || 
-      item.quantity <= 0 || 
-      isNaN(item.price) || 
-      item.price < 0
-    );
+    // Dla faktury korygującej dozwolone są ujemne ceny i ilości (korekta w dół)
+    const invalidItems = invoice.items.some(item => {
+      if (!item.name) return true;
+      if (isNaN(item.quantity)) return true;
+      if (isNaN(item.price)) return true;
+      
+      // Dla faktury korygującej - dozwolone ujemne wartości
+      if (invoice.isCorrectionInvoice) {
+        // Ilość musi być > 0 (ilość z CO)
+        if (item.quantity <= 0) return true;
+        // Cena może być ujemna (korekta w dół) lub dodatnia (korekta w górę)
+        return false;
+      }
+      
+      // Dla zwykłych faktur - standardowa walidacja
+      if (item.quantity <= 0) return true;
+      if (item.price < 0) return true;
+      
+      return false;
+    });
     
     if (invalidItems) {
       showError('Uzupełnij prawidłowo wszystkie pozycje faktury');
@@ -1332,18 +1552,23 @@ const InvoiceForm = ({ invoiceId }) => {
             {invoiceId ? t('invoices.form.title.edit') : t('invoices.form.title.new')}
           </Typography>
           <ToggleButtonGroup
-            value={invoice.isProforma ? 'proforma' : 'faktura'}
+            value={invoice.isCorrectionInvoice ? 'correction' : (invoice.isProforma ? 'proforma' : 'faktura')}
             exclusive
             onChange={(event, newValue) => {
               if (newValue !== null) {
                 const isProforma = newValue === 'proforma';
-                handleChange({
-                  target: {
-                    name: 'isProforma',
-                    type: 'checkbox',
-                    checked: isProforma
-                  }
-                });
+                const isCorrectionInvoice = newValue === 'correction';
+                
+                // Reset innych flag przy zmianie typu
+                setInvoice(prev => ({
+                  ...prev,
+                  isProforma: isProforma,
+                  isCorrectionInvoice: isCorrectionInvoice,
+                  // Wyczyść dane refaktury i korekty przy zmianie typu
+                  isRefInvoice: false,
+                  correctedInvoices: isCorrectionInvoice ? prev.correctedInvoices : [],
+                  correctionReason: isCorrectionInvoice ? prev.correctionReason : ''
+                }));
               }
             }}
             aria-label="typ dokumentu"
@@ -1370,79 +1595,90 @@ const InvoiceForm = ({ invoiceId }) => {
             <ToggleButton value="proforma" aria-label="proforma">
               📋 {t('invoices.form.toggleButtons.proforma')}
             </ToggleButton>
+            <ToggleButton value="correction" aria-label="korekta" sx={{ 
+              '&.Mui-selected': { 
+                backgroundColor: 'error.main !important',
+                '&:hover': { backgroundColor: 'error.dark !important' }
+              }
+            }}>
+              📝 {t('invoices.form.toggleButtons.correction')}
+            </ToggleButton>
           </ToggleButtonGroup>
           
-          <Box 
-            sx={{ 
-              mt: 2, 
-              p: 1.5, 
-              border: '1px solid',
-              borderColor: invoice.isRefInvoice ? 'rgba(156, 39, 176, 0.5)' : 'rgba(255, 255, 255, 0.12)',
-              borderRadius: 1,
-              backgroundColor: invoice.isRefInvoice ? 'rgba(156, 39, 176, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              '&:hover': {
-                borderColor: 'rgba(156, 39, 176, 0.4)',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)'
-              }
-            }}
-            onClick={() => {
-              handleChange({
-                target: {
-                  name: 'isRefInvoice',
-                  type: 'checkbox',
-                  checked: !invoice.isRefInvoice
+          {/* Opcja refaktury dostępna tylko dla zwykłych faktur (nie proforma, nie korekta) */}
+          {!invoice.isProforma && !invoice.isCorrectionInvoice && (
+            <Box 
+              sx={{ 
+                mt: 2, 
+                p: 1.5, 
+                border: '1px solid',
+                borderColor: invoice.isRefInvoice ? 'rgba(156, 39, 176, 0.5)' : 'rgba(255, 255, 255, 0.12)',
+                borderRadius: 1,
+                backgroundColor: invoice.isRefInvoice ? 'rgba(156, 39, 176, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                '&:hover': {
+                  borderColor: 'rgba(156, 39, 176, 0.4)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)'
                 }
-              });
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box 
-                sx={{ 
-                  fontSize: '1.2rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  opacity: 0.8
-                }}
-              >
-                🔄
-              </Box>
-              <Box>
-                <Typography 
-                  variant="body2" 
-                  fontWeight="500"
-                  sx={{ 
-                    color: invoice.isRefInvoice ? 'secondary.light' : 'text.primary'
-                  }}
-                >
-                  Refaktura (wybór z PO)
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
-                  Faktura dla klienta bazująca na zamówieniu zakupowym
-                </Typography>
-              </Box>
-            </Box>
-            <Switch
-              checked={invoice.isRefInvoice || false}
-              onChange={(e) => {
-                e.stopPropagation();
+              }}
+              onClick={() => {
                 handleChange({
                   target: {
                     name: 'isRefInvoice',
                     type: 'checkbox',
-                    checked: e.target.checked
+                    checked: !invoice.isRefInvoice
                   }
                 });
               }}
-              color="secondary"
-              size="small"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </Box>
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box 
+                  sx={{ 
+                    fontSize: '1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    opacity: 0.8
+                  }}
+                >
+                  🔄
+                </Box>
+                <Box>
+                  <Typography 
+                    variant="body2" 
+                    fontWeight="500"
+                    sx={{ 
+                      color: invoice.isRefInvoice ? 'secondary.light' : 'text.primary'
+                    }}
+                  >
+                    Refaktura (wybór z PO)
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                    Faktura dla klienta bazująca na zamówieniu zakupowym
+                  </Typography>
+                </Box>
+              </Box>
+              <Switch
+                checked={invoice.isRefInvoice || false}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleChange({
+                    target: {
+                      name: 'isRefInvoice',
+                      type: 'checkbox',
+                      checked: e.target.checked
+                    }
+                  });
+                }}
+                color="secondary"
+                size="small"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Box>
+          )}
         </Box>
         <Button
           variant="contained"
@@ -1653,7 +1889,7 @@ const InvoiceForm = ({ invoiceId }) => {
                       fullWidth
                       size="small"
                       sx={{ mb: 2 }}
-                      options={selectedOrderType === 'customer' ? filteredOrders : purchaseOrders}
+                      options={selectedOrderType === 'customer' ? filteredOrders : poSearchResults}
                       getOptionLabel={(option) => {
                         if (selectedOrderType === 'customer') {
                           return `${option.orderNumber} - ${option.customer?.name}${option.orderDate ? ` (${option.orderDate.toLocaleDateString()})` : ''}`;
@@ -1663,40 +1899,50 @@ const InvoiceForm = ({ invoiceId }) => {
                       }}
                       value={selectedOrderType === 'customer' 
                         ? filteredOrders.find(order => order.id === selectedOrderId) || null
-                        : purchaseOrders.find(po => po.id === selectedOrderId) || null
+                        : poSearchResults.find(po => po.id === selectedOrderId) || null
                       }
                       onChange={(event, newValue) => {
                         handleOrderSelect(newValue ? newValue.id : '', selectedOrderType);
                       }}
-                      loading={ordersLoading || purchaseOrdersLoading}
-                      disabled={
-                        (selectedOrderType === 'customer' && filteredOrders.length === 0) || 
-                        (selectedOrderType === 'purchase' && purchaseOrders.length === 0) ||
-                        ordersLoading || purchaseOrdersLoading
+                      onInputChange={(event, value, reason) => {
+                        // Dla PO - aktualizuj wyszukiwanie po stronie serwera
+                        if (selectedOrderType === 'purchase' && reason === 'input') {
+                          setPoSearchTerm(value);
+                        }
+                      }}
+                      filterOptions={selectedOrderType === 'purchase' 
+                        ? (x) => x  // Dla PO - wyłącz lokalne filtrowanie (filtrujemy po stronie serwera)
+                        : undefined  // Dla CO - standardowe filtrowanie
                       }
+                      loading={ordersLoading || poSearchLoading}
+                      disabled={selectedOrderType === 'customer' && filteredOrders.length === 0 && !ordersLoading}
                       renderInput={(params) => (
                         <TextField
                           {...params}
                           label={selectedOrderType === 'purchase' 
-                            ? '🔄 Wybierz Zamówienie Zakupowe (PO) dla refaktury'
+                            ? '🔄 Wyszukaj Zamówienie Zakupowe (PO) dla refaktury'
                             : t('invoices.form.fields.relatedOrder')
                           }
                           placeholder={selectedOrderType === 'purchase' 
-                            ? "Wyszukaj PO..."
+                            ? "Wpisz numer PO (min. 2 znaki)..."
                             : "Wyszukaj zamówienie..."
                           }
                           InputProps={{
                             ...params.InputProps,
                             endAdornment: (
                               <>
-                                {ordersLoading || purchaseOrdersLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                {(ordersLoading || poSearchLoading) ? <CircularProgress color="inherit" size={20} /> : null}
                                 {params.InputProps.endAdornment}
                               </>
                             ),
                           }}
                         />
                       )}
-                      noOptionsText="Brak zamówień do wyświetlenia"
+                      noOptionsText={
+                        selectedOrderType === 'purchase' 
+                          ? (poSearchTerm.length < 2 ? "Wpisz min. 2 znaki numeru PO..." : "Brak wyników")
+                          : "Brak zamówień do wyświetlenia"
+                      }
                       clearText="Wyczyść"
                       closeText="Zamknij"
                       openText="Otwórz"
@@ -2055,15 +2301,15 @@ const InvoiceForm = ({ invoiceId }) => {
           <Grid item xs={12} sm={8} md={6}>
             <Typography variant="body1" fontWeight="bold">
               {t('invoices.form.fields.totals.netTotal')} {invoice.items.reduce((sum, item) => {
-                const quantity = Number(item.quantity) || 0;
-                const price = Number(item.price) || 0;
-                return sum + (quantity * price);
+                // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
+                const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
+                return sum + netValue;
               }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             <Typography variant="body1" fontWeight="bold">
               {t('invoices.form.fields.totals.vatTotal')} {invoice.items.reduce((sum, item) => {
-                const quantity = Number(item.quantity) || 0;
-                const price = Number(item.price) || 0;
+                // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
+                const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
                 
                 // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
                 let vatRate = 0;
@@ -2074,7 +2320,7 @@ const InvoiceForm = ({ invoiceId }) => {
                 }
                 // Dla "ZW" i "NP" vatRate pozostaje 0
                 
-                return sum + (quantity * price * (vatRate / 100));
+                return sum + (netValue * (vatRate / 100));
               }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             
@@ -2317,14 +2563,14 @@ const InvoiceForm = ({ invoiceId }) => {
             {/* Obliczenie wartości brutto bez przedpłat */}
             {(() => {
               const nettoValue = parseFloat(invoice.items.reduce((sum, item) => {
-                const quantity = Number(item.quantity) || 0;
-                const price = Number(item.price) || 0;
-                return sum + (quantity * price);
+                // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
+                const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
+                return sum + netValue;
               }, 0));
               
               const vatValue = parseFloat(invoice.items.reduce((sum, item) => {
-                const quantity = Number(item.quantity) || 0;
-                const price = Number(item.price) || 0;
+                // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
+                const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
                 
                 let vatRate = 0;
                 if (typeof item.vat === 'number') {
@@ -2333,7 +2579,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   vatRate = parseFloat(item.vat) || 0;
                 }
                 
-                return sum + (quantity * price * (vatRate / 100));
+                return sum + (netValue * (vatRate / 100));
               }, 0));
               
               const bruttoValue = nettoValue + vatValue;
@@ -2369,6 +2615,60 @@ const InvoiceForm = ({ invoiceId }) => {
         </Grid>
       </Paper>
       
+      {/* Sekcja dla faktury korygującej */}
+      {invoice.isCorrectionInvoice && (
+        <Paper sx={{ p: 3, mb: 3, border: '2px solid', borderColor: 'error.main', backgroundColor: 'rgba(211, 47, 47, 0.04)' }}>
+          <Typography variant="h6" gutterBottom sx={{ color: 'error.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+            📝 {t('invoices.form.toggleButtons.correction')}
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label={t('invoices.form.fields.correctionReason')}
+                name="correctionReason"
+                value={invoice.correctionReason || ''}
+                onChange={handleChange}
+                placeholder="Np. Wyrównanie kosztów z rzeczywistym kosztem produkcji"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: 'error.light' },
+                    '&:hover fieldset': { borderColor: 'error.main' },
+                    '&.Mui-focused fieldset': { borderColor: 'error.main' }
+                  }
+                }}
+              />
+            </Grid>
+            {invoice.correctedInvoices && invoice.correctedInvoices.length > 0 && (
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
+                  {t('invoices.form.fields.correctedInvoices')}:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {invoice.correctedInvoices.map((inv, index) => (
+                    <Chip 
+                      key={inv.invoiceId || index}
+                      label={inv.invoiceNumber}
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      onDelete={() => {
+                        setInvoice(prev => ({
+                          ...prev,
+                          correctedInvoices: prev.correctedInvoices.filter(i => i.invoiceId !== inv.invoiceId)
+                        }));
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Grid>
+            )}
+          </Grid>
+        </Paper>
+      )}
+
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
           {t('invoices.form.fields.additionalInfo')}
@@ -2457,17 +2757,26 @@ const InvoiceForm = ({ invoiceId }) => {
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">
-              {t('invoices.form.buttons.selectFromOrder')} {selectedOrder?.orderNumber}
+            <Typography variant="h6" sx={{ color: invoice.isCorrectionInvoice ? 'error.main' : 'inherit' }}>
+              {invoice.isCorrectionInvoice 
+                ? `📝 Wybierz pozycje do korekty - ${selectedOrder?.orderNumber}`
+                : `${t('invoices.form.buttons.selectFromOrder')} ${selectedOrder?.orderNumber}`
+              }
             </Typography>
             <Button
               variant="outlined"
               size="small"
+              color={invoice.isCorrectionInvoice ? 'error' : 'primary'}
               onClick={handleSelectAllOrderItems}
             >
               {availableOrderItems.every(item => item.selected) ? t('invoices.form.buttons.deselectAll') : t('invoices.form.buttons.selectAll')}
             </Button>
           </Box>
+          {invoice.isCorrectionInvoice && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Wybierz pozycje do korekty. Korekta zostanie obliczona jako różnica między kosztem produkcji a zafakturowaną wartością.
+            </Typography>
+          )}
         </DialogTitle>
         <DialogContent>
           <TableContainer>
@@ -2478,27 +2787,41 @@ const InvoiceForm = ({ invoiceId }) => {
                   <TableCell>{t('common.name')}</TableCell>
                   <TableCell>{t('invoices.form.fields.description')}</TableCell>
                   <TableCell>{t('invoices.form.fields.cnCode')}</TableCell>
-                  <TableCell align="right">{t('invoices.form.fields.quantity')}</TableCell>
+                  <TableCell align="right">
+                    {invoice.isCorrectionInvoice ? 'Zafakturowano' : t('invoices.form.fields.quantity')}
+                  </TableCell>
                   <TableCell>{t('invoices.form.fields.unit')}</TableCell>
                   <TableCell align="right">{t('common.price')}</TableCell>
-                  <TableCell align="right">{t('invoices.form.fields.netValue')}</TableCell>
-                  {!invoice.isProforma && <TableCell align="right">Zafakturowano</TableCell>}
+                  <TableCell align="right">
+                    {invoice.isCorrectionInvoice ? 'Wart. zafakturowana' : t('invoices.form.fields.netValue')}
+                  </TableCell>
+                  {invoice.isCorrectionInvoice && <TableCell align="right" sx={{ color: 'success.main' }}>Production cost</TableCell>}
+                  {invoice.isCorrectionInvoice && <TableCell align="right" sx={{ color: 'error.main' }}>Correction</TableCell>}
+                  {!invoice.isProforma && !invoice.isCorrectionInvoice && <TableCell align="right">Zafakturowano</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {availableOrderItems.map((item, index) => (
+                {availableOrderItems.map((item, index) => {
+                  // Dla faktury korygującej - pozycja jest dostępna jeśli została zafakturowana
+                  const isDisabledForCorrection = invoice.isCorrectionInvoice && !item.isAvailableForCorrection;
+                  const isDisabled = (invoice.isProforma && item.hasProforma) || 
+                                    (!invoice.isCorrectionInvoice && item.isFullyInvoiced) ||
+                                    isDisabledForCorrection;
+                  
+                  return (
                   <TableRow 
                     key={index}
-                    hover={!item.hasProforma && !item.isFullyInvoiced}
+                    hover={!isDisabled}
                     sx={{ 
                       '&:hover': { 
-                        backgroundColor: (item.hasProforma || item.isFullyInvoiced) ? 'inherit' : 'action.hover' 
+                        backgroundColor: isDisabled ? 'inherit' : 'action.hover' 
                       },
-                      backgroundColor: item.selected ? 'action.selected' : 
+                      backgroundColor: item.selected ? (invoice.isCorrectionInvoice ? 'rgba(211, 47, 47, 0.12)' : 'action.selected') : 
                                       item.hasProforma ? 'error.light' :
-                                      item.isFullyInvoiced ? 'grey.200' :
+                                      item.isFullyInvoiced && !invoice.isCorrectionInvoice ? 'grey.200' :
+                                      isDisabledForCorrection ? 'grey.200' :
                                       'inherit',
-                      opacity: item.isFullyInvoiced ? 0.6 : 1
+                      opacity: isDisabled ? 0.6 : 1
                     }}
                   >
                     <TableCell padding="checkbox">
@@ -2508,12 +2831,13 @@ const InvoiceForm = ({ invoiceId }) => {
                           e.stopPropagation();
                           handleToggleOrderItem(index);
                         }}
-                        disabled={(invoice.isProforma && item.hasProforma) || item.isFullyInvoiced}
+                        disabled={isDisabled}
+                        color={invoice.isCorrectionInvoice ? 'error' : 'primary'}
                       />
                     </TableCell>
                     <TableCell 
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {item.name}
@@ -2529,7 +2853,7 @@ const InvoiceForm = ({ invoiceId }) => {
                             />
                           </Tooltip>
                         )}
-                        {item.isFullyInvoiced && (
+                        {item.isFullyInvoiced && !invoice.isCorrectionInvoice && (
                           <Tooltip title={`Pozycja została w pełni zafakturowana (${
                             item.invoicedInfo?.invoices.map(inv => inv.invoiceNumber).join(', ')
                           })`}>
@@ -2541,48 +2865,116 @@ const InvoiceForm = ({ invoiceId }) => {
                             />
                           </Tooltip>
                         )}
+                        {invoice.isCorrectionInvoice && item.isAvailableForCorrection && (
+                          <Chip 
+                            label="Available for correction" 
+                            color="error" 
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: '0.7rem' }}
+                          />
+                        )}
+                        {isDisabledForCorrection && (
+                          <Chip 
+                            label="Nie zafakturowane" 
+                            color="default" 
+                            size="small"
+                            sx={{ fontSize: '0.7rem' }}
+                          />
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell 
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       {item.description || '-'}
                     </TableCell>
                     <TableCell 
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       {item.cnCode || '-'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       {item.quantity}
                     </TableCell>
                     <TableCell 
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       {item.unit || 'szt.'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       {item.price?.toFixed(4)} {invoice.currency || 'EUR'}
                     </TableCell>
                     <TableCell 
                       align="right"
-                      onClick={() => !(item.hasProforma || item.isFullyInvoiced) && handleToggleOrderItem(index)}
-                      sx={{ cursor: (item.hasProforma || item.isFullyInvoiced) ? 'not-allowed' : 'pointer' }}
+                      onClick={() => !isDisabled && handleToggleOrderItem(index)}
+                      sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
                     </TableCell>
-                    {!invoice.isProforma && (
+                    
+                    {/* Kolumna Koszt produkcji - tylko dla korekty */}
+                    {invoice.isCorrectionInvoice && (
+                      <TableCell align="right" sx={{ color: 'success.main' }}>
+                        {item.originalValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                      </TableCell>
+                    )}
+                    
+                    {/* Kolumna Korekta - tylko dla korekty */}
+                    {invoice.isCorrectionInvoice && (
+                      <TableCell align="right">
+                        {item.invoicedInfo ? (() => {
+                          const productionValue = item.originalQuantity * item.price;
+                          const invoicedValue = item.invoicedInfo.totalInvoicedValue || 0;
+                          const correctionValue = productionValue - invoicedValue;
+                          const isPositive = correctionValue >= 0;
+                          return (
+                            <Tooltip
+                              title={
+                                <Box>
+                                  <Typography variant="caption" sx={{ display: 'block' }}>
+                                    Koszt produkcji: {productionValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ display: 'block' }}>
+                                    Zafakturowano: {invoicedValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                  </Typography>
+                                  <Divider sx={{ my: 0.5, borderColor: 'white' }} />
+                                  <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold' }}>
+                                    Correction: {correctionValue >= 0 ? '+' : ''}{correctionValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                  </Typography>
+                                </Box>
+                              }
+                              arrow
+                            >
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  fontWeight: 'bold',
+                                  color: isPositive ? 'success.main' : 'error.main',
+                                  cursor: 'help'
+                                }}
+                              >
+                                {isPositive ? '+' : ''}{correctionValue.toFixed(2)} {invoice.currency || 'EUR'}
+                              </Typography>
+                            </Tooltip>
+                          );
+                        })() : '-'}
+                      </TableCell>
+                    )}
+                    
+                    {/* Kolumna Zafakturowano - dla zwykłych faktur (nie korekty) */}
+                    {!invoice.isProforma && !invoice.isCorrectionInvoice && (
                       <TableCell align="right">
                         {item.invoicedInfo ? (
                           <Tooltip
@@ -2625,22 +3017,52 @@ const InvoiceForm = ({ invoiceId }) => {
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
           
           {availableOrderItems.filter(item => item.selected).length > 0 && (
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+            <Box sx={{ mt: 2, p: 2, bgcolor: invoice.isCorrectionInvoice ? 'rgba(211, 47, 47, 0.1)' : 'info.light', borderRadius: 1 }}>
               <Typography variant="subtitle2">
                 Wybrane pozycje: {availableOrderItems.filter(item => item.selected).length}
               </Typography>
-              <Typography variant="body2">
-                Łączna wartość: {availableOrderItems
-                  .filter(item => item.selected)
-                  .reduce((sum, item) => sum + (item.netValue || 0), 0)
-                  .toFixed(2)} {invoice.currency || 'EUR'}
-              </Typography>
+              {invoice.isCorrectionInvoice ? (
+                <>
+                  <Typography variant="body2">
+                    Zafakturowana wartość: {availableOrderItems
+                      .filter(item => item.selected)
+                      .reduce((sum, item) => sum + (item.invoicedInfo?.totalInvoicedValue || 0), 0)
+                      .toFixed(2)} {invoice.currency || 'EUR'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Koszt produkcji: {availableOrderItems
+                      .filter(item => item.selected)
+                      .reduce((sum, item) => sum + ((item.originalQuantity || 0) * (item.price || 0)), 0)
+                      .toFixed(2)} {invoice.currency || 'EUR'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'error.main', mt: 1 }}>
+                    Total correction: {(() => {
+                      const total = availableOrderItems
+                        .filter(item => item.selected)
+                        .reduce((sum, item) => {
+                          const productionValue = (item.originalQuantity || 0) * (item.price || 0);
+                          const invoicedValue = item.invoicedInfo?.totalInvoicedValue || 0;
+                          return sum + (productionValue - invoicedValue);
+                        }, 0);
+                      return `${total >= 0 ? '+' : ''}${total.toFixed(2)}`;
+                    })()} {invoice.currency || 'EUR'}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2">
+                  Łączna wartość: {availableOrderItems
+                    .filter(item => item.selected)
+                    .reduce((sum, item) => sum + (item.netValue || 0), 0)
+                    .toFixed(2)} {invoice.currency || 'EUR'}
+                </Typography>
+              )}
             </Box>
           )}
         </DialogContent>

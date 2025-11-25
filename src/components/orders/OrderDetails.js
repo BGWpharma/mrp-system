@@ -61,7 +61,8 @@ import {
   Link as LinkIcon,
   OpenInNew as OpenInNewIcon,
   Add as AddIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Receipt as ReceiptIcon
 } from '@mui/icons-material';
 import { getOrderById, ORDER_STATUSES, updateOrder, migrateCmrHistoryData, updateCustomerOrderNumber, validateOrderNumberFormat, refreshShippedQuantitiesFromCMR, updateOrderStatus } from '../../services/orderService';
 import { useNotification } from '../../hooks/useNotification';
@@ -2617,6 +2618,25 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
               </TableRow>
             </TableBody>
           </Table>
+          
+          {/* Przycisk utworzenia faktury korygującej */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<ReceiptIcon />}
+              onClick={() => {
+                navigate('/invoices/new', {
+                  state: {
+                    preselectedOrder: order,
+                    isCorrectionInvoice: true
+                  }
+                });
+              }}
+            >
+              Utwórz FK
+            </Button>
+          </Box>
         </Paper>
 
         {/* Uwagi */}

@@ -196,8 +196,10 @@ const InvoicesList = () => {
         results = results.filter(invoice => invoice.isProforma === true);
       } else if (listState.filters.invoiceType === 'reinvoice') {
         results = results.filter(invoice => invoice.isRefInvoice === true);
+      } else if (listState.filters.invoiceType === 'correction') {
+        results = results.filter(invoice => invoice.isCorrectionInvoice === true);
       } else if (listState.filters.invoiceType === 'invoice') {
-        results = results.filter(invoice => !invoice.isProforma && !invoice.isRefInvoice);
+        results = results.filter(invoice => !invoice.isProforma && !invoice.isRefInvoice && !invoice.isCorrectionInvoice);
       }
       // jeśli 'all' lub '', nie filtrujemy
     }
@@ -758,6 +760,7 @@ const InvoicesList = () => {
                       <MenuItem value="invoice">Faktury</MenuItem>
                       <MenuItem value="proforma">Proformy</MenuItem>
                       <MenuItem value="reinvoice">Reinvoice</MenuItem>
+                      <MenuItem value="correction">Correction Invoices</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -919,6 +922,15 @@ const InvoicesList = () => {
                                   sx={{ height: 'auto', fontSize: '0.7rem', py: 0.25 }}
                                 />
                               )}
+                              {invoice.isCorrectionInvoice && (
+                                <Chip 
+                                  label="Correction Invoice" 
+                                  size="small" 
+                                  color="error" 
+                                  variant="outlined"
+                                  sx={{ height: 'auto', fontSize: '0.7rem', py: 0.25 }}
+                                />
+                              )}
                             </Box>
                           </TableCell>
                           <TableCell>
@@ -991,7 +1003,14 @@ const InvoicesList = () => {
                                       advancePayments = parseFloat(invoice.settledAdvancePayments || 0);
                                     }
                                     
-                                    const remaining = Math.max(0, total - paid - advancePayments);
+                                    // Dla faktur korygujących (ujemnych) nie używamy Math.max(0, ...)
+                                    // Ujemna kwota oznacza że firma musi zwrócić klientowi
+                                    const remaining = total - paid - advancePayments;
+                                    
+                                    // Dla faktur korygujących z ujemną wartością pokazujemy "Do zwrotu"
+                                    if (remaining < 0) {
+                                      return `Do zwrotu: ${formatCurrency(Math.abs(remaining), invoice.currency)}`;
+                                    }
                                     return `Do zapłaty: ${formatCurrency(remaining, invoice.currency)}`;
                                   }
                                 })()}

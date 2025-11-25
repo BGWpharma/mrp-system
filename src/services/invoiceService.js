@@ -16,7 +16,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from './firebase/config';
 import { formatDateForInput } from '../utils/dateUtils';
 import { preciseCompare, preciseIsLessOrEqual } from '../utils/mathUtils';
-import { generateFSNumber, generateFPFNumber } from '../utils/numberGenerators';
+import { generateFSNumber, generateFPFNumber, generateFKNumber } from '../utils/numberGenerators';
 
 const INVOICES_COLLECTION = 'invoices';
 const INVOICE_ITEMS_COLLECTION = 'invoiceItems';
@@ -219,7 +219,7 @@ export const createInvoice = async (invoiceData, userId) => {
   try {
     // Generowanie numeru faktury, jeśli nie został podany (PRZED walidacją)
     if (!invoiceData.number || invoiceData.number.trim() === '') {
-      invoiceData.number = await generateInvoiceNumber(invoiceData.isProforma);
+      invoiceData.number = await generateInvoiceNumber(invoiceData.isProforma, invoiceData.isCorrectionInvoice);
     }
     
     // Walidacja danych faktury (teraz już z numerem)
@@ -234,6 +234,10 @@ export const createInvoice = async (invoiceData, userId) => {
       linkedPurchaseOrders: linkedPurchaseOrders,
       settledAdvancePayments: settledAdvancePayments,
       isRefInvoice: invoiceData.isRefInvoice || false,
+      // Pola dla faktury korygującej - ustaw domyślne wartości jeśli undefined
+      isCorrectionInvoice: invoiceData.isCorrectionInvoice || false,
+      correctedInvoices: invoiceData.correctedInvoices || [],
+      correctionReason: invoiceData.correctionReason || '',
       createdBy: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -891,6 +895,8 @@ const validateInvoiceData = async (invoiceData, invoiceId = null) => {
   }
   
   // Walidacja pozycji faktury
+  const isCorrectionInvoice = invoiceData.isCorrectionInvoice === true;
+  
   invoiceData.items.forEach((item, index) => {
     if (!item.name) {
       throw new Error(`Nazwa pozycji ${index + 1} jest wymagana`);
@@ -900,7 +906,13 @@ const validateInvoiceData = async (invoiceData, invoiceId = null) => {
       throw new Error(`Ilość pozycji ${index + 1} jest nieprawidłowa`);
     }
     
-    if (isNaN(item.price) || item.price < 0) {
+    // Dla faktury korygującej dozwolone są ujemne ceny (korekta w dół)
+    if (isNaN(item.price)) {
+      throw new Error(`Cena pozycji ${index + 1} jest nieprawidłowa`);
+    }
+    
+    // Tylko dla zwykłych faktur - cena musi być >= 0
+    if (!isCorrectionInvoice && item.price < 0) {
       throw new Error(`Cena pozycji ${index + 1} jest nieprawidłowa`);
     }
   });
@@ -949,13 +961,17 @@ export const calculateInvoiceTotalGross = (items) => {
 
 /**
  * Generuje numer faktury
- * Format: FPF/kolejny numer/MM/RRRR lub FS/kolejny numer/MM/RRRR
+ * Format: FPF/kolejny numer/MM/RRRR lub FS/kolejny numer/MM/RRRR lub FK/kolejny numer/MM/RRRR
  * Numeracja odnawia się co miesiąc
  * Używa systemu liczników z numberGenerators.js
+ * @param {boolean} isProforma - Czy to faktura proforma
+ * @param {boolean} isCorrectionInvoice - Czy to faktura korygująca
  */
-export const generateInvoiceNumber = async (isProforma = false) => {
+export const generateInvoiceNumber = async (isProforma = false, isCorrectionInvoice = false) => {
   try {
-    if (isProforma) {
+    if (isCorrectionInvoice) {
+      return await generateFKNumber();
+    } else if (isProforma) {
       return await generateFPFNumber();
     } else {
       return await generateFSNumber();
@@ -999,6 +1015,10 @@ export const DEFAULT_INVOICE = {
   invoiceType: 'standard',
   isProforma: false,
   isRefInvoice: false,
+  // Pola dla faktury korygującej
+  isCorrectionInvoice: false,
+  correctedInvoices: [], // [{invoiceId, invoiceNumber}]
+  correctionReason: '',
   originalOrderType: null,
   orderId: null,
   orderNumber: null,
@@ -1385,6 +1405,9 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
     // Oblicz łączną kwotę rozliczoną
     const totalSettled = totalPaid + advancePayments;
     
+    // Oblicz pozostałą kwotę do zapłaty (może być ujemna dla faktur korygujących)
+    const remainingToPay = invoiceTotal - totalSettled;
+    
     // Oblicz nowy status płatności
     let newPaymentStatus = 'unpaid';
     let paymentDate = null;
@@ -1408,8 +1431,10 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
         newPaymentStatus = 'partially_paid';
       }
     } else {
-      // Standardowa logika gdy nie ma wymaganej przedpłaty z tolerancją dla błędów precyzji
-      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
+      // Standardowa logika gdy nie ma wymaganej przedpłaty
+      // Używamy wartości bezwzględnej pozostałej kwoty dla poprawnej obsługi faktur korygujących (ujemnych)
+      if (Math.abs(remainingToPay) <= 0.01) {
+        // Faktura jest w pełni rozliczona (różnica bliska zeru)
         newPaymentStatus = 'paid';
         // Znajdź najnowszą płatność jako datę płatności (jeśli są płatności)
         if (currentPayments.length > 0) {
@@ -1418,9 +1443,14 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
           );
           paymentDate = latestPayment.date;
         }
-      } else if (totalSettled > 0) {
+      } else if (invoiceTotal > 0 && totalSettled > 0) {
+        // Standardowa faktura częściowo opłacona
+        newPaymentStatus = 'partially_paid';
+      } else if (invoiceTotal < 0 && totalSettled < 0) {
+        // Faktura korygująca (ujemna) częściowo rozliczona (częściowy zwrot)
         newPaymentStatus = 'partially_paid';
       }
+      // W przeciwnym razie pozostaje 'unpaid'
     }
 
     // Sprawdź czy status się zmienił

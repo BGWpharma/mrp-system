@@ -810,6 +810,15 @@ class InvoicePdfGenerator {
       doc.text('REINVOICE', 14, yPosition);
     }
     
+    // Typ faktury (korekta) jeśli dotyczy - na lewej stronie
+    if (this.invoice.isCorrectionInvoice) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(220, 53, 69); // Czerwony kolor dla wyróżnienia
+      const yPosition = this.options.useTemplate ? 45 : 25;
+      doc.text('CORRECTION INVOICE', 14, yPosition);
+    }
+    
     // Numer faktury - na lewej stronie
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
@@ -864,11 +873,54 @@ class InvoicePdfGenerator {
     // Uwagi
     summaryY = this.addNotes(doc, summaryY);
     
+    // Informacje o korygowanych fakturach (dla faktur korygujących)
+    summaryY = this.addCorrectedInvoicesInfo(doc, summaryY);
+    
     // Stopka
     this.addFooter(doc);
     
     // Zwróć dokument PDF
     resolve(doc);
+  }
+
+  /**
+   * Dodawanie informacji o korygowanych fakturach (dla faktur korygujących)
+   */
+  addCorrectedInvoicesInfo(doc, summaryY) {
+    if (!this.invoice.isCorrectionInvoice || !this.invoice.correctedInvoices?.length) {
+      return summaryY;
+    }
+    
+    const t = this.translations;
+    
+    summaryY += 15;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(t.correctedInvoicesTitle || 'Corrected invoices:', 14, summaryY);
+    
+    doc.setFont('helvetica', 'normal');
+    this.invoice.correctedInvoices.forEach((inv) => {
+      summaryY += 5;
+      doc.text(`• ${inv.invoiceNumber}`, 18, summaryY);
+    });
+    
+    if (this.invoice.correctionReason) {
+      summaryY += 10;
+      doc.setFont('helvetica', 'bold');
+      doc.text(t.correctionReasonTitle || 'Correction reason / Powód korekty:', 14, summaryY);
+      doc.setFont('helvetica', 'normal');
+      summaryY += 5;
+      
+      // Zawijanie tekstu dla długich opisów
+      const maxWidth = 180;
+      const splitText = doc.splitTextToSize(this.invoice.correctionReason, maxWidth);
+      splitText.forEach((line) => {
+        doc.text(line, 14, summaryY);
+        summaryY += 5;
+      });
+    }
+    
+    return summaryY;
   }
 
   /**

@@ -135,19 +135,28 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
       }
 
       setLoading(true);
+      
+      // Dla faktur korygujących (ujemnych) - zapisz płatność jako ujemną (zwrot)
+      const isCorrectionWithNegativeValue = invoice.isCorrectionInvoice && parseFloat(invoice.total || 0) < 0;
+      const paymentData = {
+        ...paymentForm,
+        amount: isCorrectionWithNegativeValue 
+          ? -Math.abs(parseFloat(paymentForm.amount)) 
+          : parseFloat(paymentForm.amount)
+      };
 
       if (editingPayment) {
         // Edycja istniejącej płatności
         await updatePaymentInInvoice(
           invoice.id, 
           editingPayment.id, 
-          paymentForm, 
+          paymentData, 
           currentUser.uid
         );
         showSuccess(t('invoices.payments.notifications.paymentUpdated'));
       } else {
         // Dodanie nowej płatności
-        await addPaymentToInvoice(invoice.id, paymentForm, currentUser.uid);
+        await addPaymentToInvoice(invoice.id, paymentData, currentUser.uid);
         showSuccess(t('invoices.payments.notifications.paymentAdded'));
       }
 
@@ -208,7 +217,9 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
     const total = parseFloat(invoice.total || 0);
     const paid = getTotalPaid();
     const advancePayments = getTotalAdvancePayments();
-    return Math.max(0, total - paid - advancePayments);
+    // Dla faktur korygujących (ujemnych) nie używamy Math.max(0, ...)
+    // Ujemna kwota "do zapłaty" oznacza że firma musi zwrócić klientowi
+    return total - paid - advancePayments;
   };
 
   const getRequiredAdvancePayment = () => {
@@ -223,6 +234,7 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
     const advancePayments = getTotalAdvancePayments();
     const invoiceTotal = parseFloat(invoice.total || 0);
     const totalSettled = totalPaid + advancePayments;
+    const remainingToPay = invoiceTotal - totalSettled;
     
     // Sprawdź czy jest wymagana przedpłata
     const requiredAdvancePercentage = invoice.requiredAdvancePaymentPercentage || 0;
@@ -238,10 +250,15 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
         return <Chip label="Nieopłacona" color="error" size="small" />;
       }
     } else {
-      // Standardowa logika z tolerancją dla błędów precyzji
-      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
+      // Używamy wartości bezwzględnej pozostałej kwoty dla poprawnej obsługi faktur korygujących (ujemnych)
+      if (Math.abs(remainingToPay) <= 0.01) {
+        // Faktura jest w pełni rozliczona (różnica bliska zeru)
         return <Chip label="Opłacona" color="success" size="small" />;
-      } else if (totalSettled > 0) {
+      } else if (invoiceTotal > 0 && totalSettled > 0) {
+        // Standardowa faktura częściowo opłacona
+        return <Chip label="Częściowo opłacona" color="warning" size="small" />;
+      } else if (invoiceTotal < 0 && totalSettled < 0) {
+        // Faktura korygująca (ujemna) częściowo rozliczona (częściowy zwrot)
         return <Chip label="Częściowo opłacona" color="warning" size="small" />;
       } else {
         return <Chip label="Nieopłacona" color="error" size="small" />;
@@ -266,7 +283,9 @@ const PaymentsSection = ({ invoice, onPaymentChange }) => {
           onClick={() => handleOpenDialog()}
           size="small"
         >
-          {t('invoices.payments.addPayment')}
+          {invoice.isCorrectionInvoice && parseFloat(invoice.total || 0) < 0 
+            ? t('invoices.payments.addRefund') 
+            : t('invoices.payments.addPayment')}
         </Button>
       </Box>
 

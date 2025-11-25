@@ -325,8 +325,8 @@ const InvoiceDetails = () => {
         >
                           {t('invoices.details.buttons.backToListShort')}
         </Button>
-        <Typography variant="h4" component="h1">
-                          {invoice.isProforma ? t('invoices.details.proformaInvoice') : invoice.isRefInvoice ? 'Reinvoice' : t('invoices.details.invoice')} {invoice.number}
+        <Typography variant="h4" component="h1" sx={{ color: invoice.isCorrectionInvoice ? 'error.main' : 'inherit' }}>
+                          {invoice.isCorrectionInvoice ? t('invoices.details.correctionInvoice') : invoice.isProforma ? t('invoices.details.proformaInvoice') : invoice.isRefInvoice ? 'Reinvoice' : t('invoices.details.invoice')} {invoice.number}
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
@@ -409,6 +409,16 @@ const InvoiceDetails = () => {
                     </Typography>
                   </Grid>
                 )}
+                {invoice.isCorrectionInvoice && (
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('invoices.details.invoiceType')}
+                    </Typography>
+                    <Typography variant="body1" gutterBottom sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                      📝 {t('invoices.details.correctionInvoice')}
+                    </Typography>
+                  </Grid>
+                )}
                 {invoice.isRefInvoice && (
                   <Grid item xs={12} sm={6}>
                     <Typography variant="body2" color="text.secondary">
@@ -462,11 +472,17 @@ const InvoiceDetails = () => {
                       
                       const invoiceTotal = parseFloat(invoice.total || 0);
                       const totalSettled = totalPaid + advancePayments;
+                      const remainingToPay = invoiceTotal - totalSettled;
                       
-                      // Używamy tolerancji 0.01 EUR (1 cent) dla porównań płatności
-                      if (preciseCompare(totalSettled, invoiceTotal, 0.01) >= 0) {
+                      // Używamy wartości bezwzględnej pozostałej kwoty dla poprawnej obsługi faktur korygujących (ujemnych)
+                      if (Math.abs(remainingToPay) <= 0.01) {
+                        // Faktura jest w pełni rozliczona (różnica bliska zeru)
                         return 'Opłacona';
-                      } else if (totalSettled > 0) {
+                      } else if (invoiceTotal > 0 && totalSettled > 0) {
+                        // Standardowa faktura częściowo opłacona
+                        return 'Częściowo opłacona';
+                      } else if (invoiceTotal < 0 && totalSettled < 0) {
+                        // Faktura korygująca (ujemna) częściowo rozliczona (częściowy zwrot)
                         return 'Częściowo opłacona';
                       } else {
                         return 'Nieopłacona';
@@ -608,6 +624,47 @@ const InvoiceDetails = () => {
                     <Typography variant="body2">
                       {invoice.orderNumber || invoice.orderId}
                     </Typography>
+                  </>
+                )}
+
+                {/* Informacje o fakturze korygującej */}
+                {invoice?.isCorrectionInvoice && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Typography variant="subtitle2" gutterBottom sx={{ color: 'error.main' }}>
+                      📝 {t('invoices.details.correctedInvoices')}:
+                    </Typography>
+                    <Box sx={{ p: 2, bgcolor: 'rgba(211, 47, 47, 0.08)', borderRadius: 1, border: '1px solid', borderColor: 'error.light' }}>
+                      {invoice.correctedInvoices && invoice.correctedInvoices.length > 0 ? (
+                        invoice.correctedInvoices.map((corrInv, index) => (
+                          <Typography key={corrInv.invoiceId || index} variant="body2" sx={{ mb: 0.5 }}>
+                            • <Link 
+                                component={RouterLink} 
+                                to={`/invoices/${corrInv.invoiceId}`}
+                                sx={{ fontWeight: 'bold' }}
+                              >
+                                {corrInv.invoiceNumber}
+                              </Link>
+                          </Typography>
+                        ))
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Brak powiązanych faktur
+                        </Typography>
+                      )}
+                      
+                      {invoice.correctionReason && (
+                        <>
+                          <Divider sx={{ my: 1.5 }} />
+                          <Typography variant="body2" color="text.secondary">
+                            <strong>{t('invoices.details.correctionReason')}:</strong>
+                          </Typography>
+                          <Typography variant="body2">
+                            {invoice.correctionReason}
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
                   </>
                 )}
 
@@ -762,14 +819,14 @@ const InvoiceDetails = () => {
                           sx={{ 
                             mb: 1, 
                             p: 1, 
-                            bgcolor: relInvoice.isProforma ? 'warning.light' : relInvoice.isRefInvoice ? 'secondary.light' : 'info.light', 
+                            bgcolor: relInvoice.isCorrectionInvoice ? 'rgba(211, 47, 47, 0.1)' : relInvoice.isProforma ? 'warning.light' : relInvoice.isRefInvoice ? 'secondary.light' : 'info.light', 
                             borderRadius: 1,
                             cursor: 'pointer',
                             textDecoration: 'none',
                             display: 'block',
                             transition: 'all 0.2s ease-in-out',
                             '&:hover': {
-                              bgcolor: relInvoice.isProforma ? 'warning.main' : relInvoice.isRefInvoice ? 'secondary.main' : 'info.main',
+                              bgcolor: relInvoice.isCorrectionInvoice ? 'error.light' : relInvoice.isProforma ? 'warning.main' : relInvoice.isRefInvoice ? 'secondary.main' : 'info.main',
                               transform: 'translateY(-1px)',
                               boxShadow: 2
                             }
@@ -784,7 +841,7 @@ const InvoiceDetails = () => {
                             }}
                           >
                             <Typography variant="body2" fontWeight="bold">
-                              {relInvoice.isProforma ? '📋 Proforma' : relInvoice.isRefInvoice ? '🔄 Reinvoice' : '📄 Faktura'} {relInvoice.number}
+                              {relInvoice.isCorrectionInvoice ? '📝 Correction Invoice' : relInvoice.isProforma ? '📋 Proforma' : relInvoice.isRefInvoice ? '🔄 Reinvoice' : '📄 Faktura'} {relInvoice.number}
                             </Typography>
                             {relInvoice.isProforma && (
                               <Typography variant="body2" color="warning.dark" fontWeight="bold">

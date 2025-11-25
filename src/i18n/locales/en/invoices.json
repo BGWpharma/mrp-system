@@ -94,7 +94,24 @@
       "settlementSummary": "Settlement Summary:",
       "totalAdvanceAmount": "Total Advance Amount:",
       "requiredAdvancePayment": "Required Advance Payment (%)",
-      "requiredAdvancePaymentHelper": "Percentage of invoice amount required as advance payment (0-100%). When this amount is reached, invoice will be marked as paid."
+      "requiredAdvancePaymentHelper": "Percentage of invoice amount required as advance payment (0-100%). When this amount is reached, invoice will be marked as paid.",
+      "isRefInvoice": "Reinvoice",
+      "refInvoiceDescription": "Reinvoice - invoice issued based on purchase order (PO)",
+      "selectPurchaseOrder": "Select Purchase Order (PO)",
+      "selectedPO": "Selected PO:",
+      "supplier": "Supplier:",
+      "value": "Value:",
+      "loadAllItemsFromPO": "Load all items from PO",
+      "allItemsLoadedFromPO": "All items from PO added",
+      "correctionReason": "Correction Reason",
+      "correctedInvoices": "Corrected Invoices",
+      "originalQuantity": "Original Quantity",
+      "correctedQuantity": "Corrected Quantity",
+      "correctionAmount": "Correction Amount",
+      "selectItemsToCorrect": "Select items to correct",
+      "invoicedQuantity": "Invoiced Quantity",
+      "newQuantity": "New Quantity",
+      "correctionDifference": "Difference (correction)"
     },
     "buttons": {
       "save": "Save",
@@ -112,6 +129,9 @@
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "manageClients": "Manage Clients"
+    },
+    "notifications": {
+      "correctionItemsLoaded": "Correction items loaded"
     },
     "paymentMethods": {
       "przelew": "Bank Transfer",
@@ -134,7 +154,9 @@
     },
     "toggleButtons": {
       "invoice": "Invoice",
-      "proforma": "Proforma"
+      "proforma": "Proforma",
+      "refInvoice": "Reinvoice (PO)",
+      "correction": "Correction Invoice"
     },
     "filters": {
       "allStatuses": "All Statuses",
@@ -163,6 +185,7 @@
   "payments": {
     "title": "Payments",
     "addPayment": "Add Payment",
+    "addRefund": "Add Refund",
     "editPayment": "Edit Payment",
     "invoiceValue": "Invoice Value",
     "paid": "Paid",
@@ -233,6 +256,9 @@
     "status": "Status",
     "invoiceType": "Invoice Type",
     "proformaInvoice": "Proforma Invoice",
+    "correctionInvoice": "Correction Invoice",
+    "correctedInvoices": "Corrected Invoices",
+    "correctionReason": "Correction Reason",
     "invoice": "Invoice",
     "issueDate": "Issue Date",
     "dueDate": "Due Date",
