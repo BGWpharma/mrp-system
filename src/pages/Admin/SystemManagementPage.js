@@ -51,7 +51,6 @@ import {
   checkInventoryIntegrityAndFix,
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
-import { getRandomBatch } from '../../services/cloudFunctionsService';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -80,28 +79,179 @@ const SystemManagementPage = () => {
   const [cmrMigrationResults, setCmrMigrationResults] = useState(null);
   const [showMigrationDialog, setShowMigrationDialog] = useState(false);
   
-  // Stany dla Cloud Functions - getRandomBatch
-  const [randomBatchLoading, setRandomBatchLoading] = useState(false);
-  const [randomBatchData, setRandomBatchData] = useState(null);
+  // Stany dla Cloud Functions - Test łańcucha aktualizacji
+  const [cfTestLoading, setcfTestLoading] = useState(false);
+  const [cfTestResults, setCfTestResults] = useState(null);
+  const [cfTestStep, setCfTestStep] = useState('');
   
-  // Funkcja do wywołania Cloud Function - getRandomBatch
-  const handleGetRandomBatch = async () => {
+  // Funkcja do testowania Cloud Functions łańcucha PO → Batch → MO → CO
+  const handleTestCloudFunctionsChain = async () => {
     try {
-      setRandomBatchLoading(true);
-      setRandomBatchData(null);
-      const result = await getRandomBatch();
+      setcfTestLoading(true);
+      setCfTestResults(null);
+      setCfTestStep('Sprawdzanie statusu Cloud Functions...');
       
-      if (result.success) {
-        showSuccess(result.message);
-        setRandomBatchData(result.batch);
+      // Import funkcji Firestore
+      const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../../services/firebase/config');
+      
+      const results = {
+        functionsStatus: 'unknown',
+        testPO: null,
+        testBatch: null,
+        testTask: null,
+        testOrder: null,
+        events: [],
+        recommendations: []
+      };
+      
+      // 1. Sprawdź czy są _systemEvents (oznaka że Cloud Functions działają)
+      setCfTestStep('Sprawdzanie eventów systemowych...');
+      const eventsQuery = query(
+        collection(db, '_systemEvents'),
+        orderBy('timestamp', 'desc'),
+        limit(10)
+      );
+      const eventsSnapshot = await getDocs(eventsQuery);
+      
+      if (!eventsSnapshot.empty) {
+        results.functionsStatus = 'active';
+        results.events = eventsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          type: doc.data().type,
+          processed: doc.data().processed,
+          timestamp: doc.data().timestamp?.toDate()?.toLocaleString('pl-PL') || 'N/A'
+        }));
       } else {
-        showError(result.message || 'Nie udało się pobrać losowej partii');
+        results.functionsStatus = 'no_events';
+        results.recommendations.push('Brak eventów _systemEvents. Cloud Functions mogą nie być wdrożone lub nie było jeszcze żadnych aktualizacji.');
       }
+      
+      // 2. Znajdź ostatnie PO z powiązanymi partiami
+      setCfTestStep('Szukanie testowego PO...');
+      const poQuery = query(
+        collection(db, 'purchaseOrders'),
+        where('status', '!=', 'draft'),
+        orderBy('status'),
+        orderBy('updatedAt', 'desc'),
+        limit(5)
+      );
+      const poSnapshot = await getDocs(poQuery);
+      
+      for (const poDoc of poSnapshot.docs) {
+        const poData = poDoc.data();
+        
+        // Sprawdź czy to PO ma powiązane partie
+        const batchesQuery = query(
+          collection(db, 'inventoryBatches'),
+          where('purchaseOrderDetails.id', '==', poDoc.id),
+          limit(1)
+        );
+        const batchesSnapshot = await getDocs(batchesQuery);
+        
+        if (!batchesSnapshot.empty) {
+          results.testPO = {
+            id: poDoc.id,
+            poNumber: poData.poNumber,
+            supplier: poData.supplier?.name || 'N/A',
+            itemsCount: poData.items?.length || 0,
+            updatedAt: poData.updatedAt?.toDate()?.toLocaleString('pl-PL') || 'N/A'
+          };
+          
+          results.testBatch = {
+            id: batchesSnapshot.docs[0].id,
+            batchNumber: batchesSnapshot.docs[0].data().batchNumber,
+            materialId: batchesSnapshot.docs[0].data().materialId,
+            unitPrice: batchesSnapshot.docs[0].data().unitPrice,
+            updatedAt: batchesSnapshot.docs[0].data().updatedAt?.toDate()?.toLocaleString('pl-PL') || 'N/A',
+            lastPriceUpdateReason: batchesSnapshot.docs[0].data().lastPriceUpdateReason || 'N/A'
+          };
+          
+          // Sprawdź czy partia jest używana w jakimś zadaniu
+          const batchId = batchesSnapshot.docs[0].id;
+          const tasksSnapshot = await getDocs(query(collection(db, 'tasks'), limit(50)));
+          
+          for (const taskDoc of tasksSnapshot.docs) {
+            const taskData = taskDoc.data();
+            const materialBatches = taskData.materialBatches || {};
+            
+            let found = false;
+            for (const materialId of Object.keys(materialBatches)) {
+              const batches = materialBatches[materialId] || [];
+              if (batches.some(batch => batch.batchId === batchId)) {
+                results.testTask = {
+                  id: taskDoc.id,
+                  moNumber: taskData.moNumber,
+                  productName: taskData.productName || 'N/A',
+                  totalMaterialCost: taskData.totalMaterialCost,
+                  updatedAt: taskData.updatedAt?.toDate()?.toLocaleString('pl-PL') || 'N/A',
+                  lastCostUpdateReason: taskData.lastCostUpdateReason || 'N/A'
+                };
+                found = true;
+                break;
+              }
+            }
+            
+            if (found) {
+              // Sprawdź czy zadanie jest powiązane z zamówieniem
+              const ordersSnapshot = await getDocs(query(collection(db, 'orders'), limit(50)));
+              
+              for (const orderDoc of ordersSnapshot.docs) {
+                const orderData = orderDoc.data();
+                const items = orderData.items || [];
+                
+                if (items.some(item => item.productionTaskId === taskDoc.id)) {
+                  results.testOrder = {
+                    id: orderDoc.id,
+                    orderNumber: orderData.orderNumber,
+                    customerName: orderData.customer?.name || 'N/A',
+                    totalValue: orderData.totalValue,
+                    updatedAt: orderData.updatedAt?.toDate()?.toLocaleString('pl-PL') || 'N/A',
+                    lastCostUpdateReason: orderData.lastCostUpdateReason || 'N/A'
+                  };
+                  break;
+                }
+              }
+              break;
+            }
+          }
+          break;
+        }
+      }
+      
+      // 3. Rekomendacje
+      if (results.testPO && !results.testBatch) {
+        results.recommendations.push('Znaleziono PO, ale nie ma powiązanych partii. Utwórz przyjęcie magazynowe.');
+      }
+      if (results.testBatch && !results.testTask) {
+        results.recommendations.push('Znaleziono partię, ale nie jest używana w żadnym zadaniu. Zarezerwuj partię w zadaniu produkcyjnym.');
+      }
+      if (results.testTask && !results.testOrder) {
+        results.recommendations.push('Znaleziono zadanie, ale nie jest powiązane z zamówieniem. Utwórz zamówienie klienta z tym zadaniem.');
+      }
+      if (results.testPO && results.testBatch && results.testTask && results.testOrder) {
+        results.recommendations.push('✅ Znaleziono kompletny łańcuch PO → Batch → MO → CO!');
+        results.recommendations.push('💡 Możesz teraz przetestować: Edytuj PO (zmień cenę), zapisz i sprawdź czy wartości aktualizują się automatycznie.');
+      }
+      
+      // 4. Sprawdzenie czy Cloud Functions są aktywne na podstawie pól
+      if (results.testBatch?.lastPriceUpdateReason?.includes('Cloud Function')) {
+        results.functionsStatus = 'confirmed';
+        results.recommendations.push('✅ Potwierdzono: Cloud Functions są aktywne (wykryto aktualizację przez CF)');
+      } else if (results.functionsStatus === 'active') {
+        results.recommendations.push('⚠️ Cloud Functions mogą być aktywne (są eventy), ale nie wykryto jeszcze aktualizacji przez CF');
+      }
+      
+      setCfTestResults(results);
+      setCfTestStep('');
+      showSuccess('Test zakończony! Sprawdź wyniki poniżej.');
+      
     } catch (error) {
-      console.error('Błąd podczas pobierania losowej partii:', error);
+      console.error('Błąd podczas testowania Cloud Functions:', error);
       showError(`Błąd: ${error.message}`);
+      setCfTestStep('');
     } finally {
-      setRandomBatchLoading(false);
+      setcfTestLoading(false);
     }
   };
   
@@ -345,90 +495,214 @@ const SystemManagementPage = () => {
         {/* Zarządzanie składnikami odżywczymi */}
         <NutritionalComponentsManager />
         
-        {/* NOWA SEKCJA: Cloud Functions - Losowa partia */}
+        {/* NOWA SEKCJA: Test Cloud Functions - Łańcuch aktualizacji */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              🎲 Cloud Functions - Losowa partia z magazynu
+              ⚡ Cloud Functions - Test łańcucha aktualizacji PO → Batch → MO → CO
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Funkcja testowa wywoływana przez Cloud Functions Firebase (region: europe-central2).
-              Pobiera losową partię z magazynu i zwraca jej szczegóły.
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              To narzędzie testuje czy Cloud Functions poprawnie obsługują automatyczną aktualizację łańcucha wartości:
+              Purchase Order → Inventory Batch → Manufacturing Order → Customer Order.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Test sprawdza: status Cloud Functions, przykładowe dane z bazy, oraz kompletność łańcucha.
             </Typography>
             
-            {randomBatchData && (
-              <Box sx={{ mt: 2 }}>
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  Pobrano losową partię z magazynu!
+            {cfTestStep && (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Alert severity="info">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2">{cfTestStep}</Typography>
+                  </Box>
                 </Alert>
+              </Box>
+            )}
+            
+            {cfTestResults && (
+              <Box sx={{ mt: 2 }}>
+                {/* Status Cloud Functions */}
+                <Alert 
+                  severity={
+                    cfTestResults.functionsStatus === 'confirmed' ? 'success' :
+                    cfTestResults.functionsStatus === 'active' ? 'info' : 'warning'
+                  } 
+                  sx={{ mb: 2 }}
+                >
+                  <Typography variant="subtitle2" gutterBottom>
+                    Status Cloud Functions: {
+                      cfTestResults.functionsStatus === 'confirmed' ? '✅ Potwierdzone - Działają' :
+                      cfTestResults.functionsStatus === 'active' ? 'ℹ️ Aktywne (eventy wykryte)' :
+                      cfTestResults.functionsStatus === 'no_events' ? '⚠️ Brak eventów' :
+                      '❓ Nieznany'
+                    }
+                  </Typography>
+                </Alert>
+                
+                {/* Ostatnie eventy */}
+                {cfTestResults.events.length > 0 && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      📊 Ostatnie eventy systemowe ({cfTestResults.events.length}):
+                    </Typography>
+                    <TableContainer component={Paper} variant="outlined">
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Typ</TableCell>
+                            <TableCell>Przetworzony</TableCell>
+                            <TableCell>Data</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {cfTestResults.events.map((event) => (
+                            <TableRow key={event.id}>
+                              <TableCell>{event.type}</TableCell>
+                              <TableCell>{event.processed ? '✅ Tak' : '⏳ Nie'}</TableCell>
+                              <TableCell>{event.timestamp}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                )}
+                
+                {/* Testowy łańcuch danych */}
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
+                  🔗 Testowy łańcuch danych:
+                </Typography>
+                
                 <Grid container spacing={2}>
+                  {/* Purchase Order */}
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="ID Partii"
-                      value={randomBatchData.id || ''}
-                      fullWidth
-                      disabled
-                      size="small"
-                    />
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testPO ? 'success.light' : 'grey.100' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        1️⃣ Purchase Order {cfTestResults.testPO ? '✅' : '❌'}
+                      </Typography>
+                      {cfTestResults.testPO ? (
+                        <>
+                          <Typography variant="body2">PO: {cfTestResults.testPO.poNumber}</Typography>
+                          <Typography variant="body2">Dostawca: {cfTestResults.testPO.supplier}</Typography>
+                          <Typography variant="body2">Pozycji: {cfTestResults.testPO.itemsCount}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Aktualizacja: {cfTestResults.testPO.updatedAt}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Brak testowego PO</Typography>
+                      )}
+                    </Paper>
                   </Grid>
+                  
+                  {/* Batch */}
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Nazwa materiału"
-                      value={randomBatchData.materialName || 'Nieznany'}
-                      fullWidth
-                      disabled
-                      size="small"
-                    />
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testBatch ? 'success.light' : 'grey.100' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        2️⃣ Inventory Batch {cfTestResults.testBatch ? '✅' : '❌'}
+                      </Typography>
+                      {cfTestResults.testBatch ? (
+                        <>
+                          <Typography variant="body2">Nr: {cfTestResults.testBatch.batchNumber}</Typography>
+                          <Typography variant="body2">Cena: {cfTestResults.testBatch.unitPrice}€</Typography>
+                          <Typography variant="body2" sx={{ 
+                            color: cfTestResults.testBatch.lastPriceUpdateReason?.includes('Cloud Function') ? 'success.main' : 'text.primary'
+                          }}>
+                            Aktualizacja: {cfTestResults.testBatch.lastPriceUpdateReason}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {cfTestResults.testBatch.updatedAt}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Brak powiązanej partii</Typography>
+                      )}
+                    </Paper>
                   </Grid>
+                  
+                  {/* Task (MO) */}
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Numer partii"
-                      value={randomBatchData.batchNumber || ''}
-                      fullWidth
-                      disabled
-                      size="small"
-                    />
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testTask ? 'success.light' : 'grey.100' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        3️⃣ Manufacturing Order {cfTestResults.testTask ? '✅' : '❌'}
+                      </Typography>
+                      {cfTestResults.testTask ? (
+                        <>
+                          <Typography variant="body2">MO: {cfTestResults.testTask.moNumber}</Typography>
+                          <Typography variant="body2">Produkt: {cfTestResults.testTask.productName}</Typography>
+                          <Typography variant="body2">Koszt: {cfTestResults.testTask.totalMaterialCost?.toFixed(2) || 'N/A'}€</Typography>
+                          <Typography variant="body2" sx={{ 
+                            color: cfTestResults.testTask.lastCostUpdateReason?.includes('Cloud Function') ? 'success.main' : 'text.primary'
+                          }}>
+                            Aktualizacja: {cfTestResults.testTask.lastCostUpdateReason}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {cfTestResults.testTask.updatedAt}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Brak powiązanego zadania</Typography>
+                      )}
+                    </Paper>
                   </Grid>
+                  
+                  {/* Order (CO) */}
                   <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Dostępna ilość"
-                      value={`${randomBatchData.availableQuantity || 0} ${randomBatchData.unit || ''}`}
-                      fullWidth
-                      disabled
-                      size="small"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Lokalizacja"
-                      value={randomBatchData.location || '-'}
-                      fullWidth
-                      disabled
-                      size="small"
-                    />
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      label="Status"
-                      value={randomBatchData.status || '-'}
-                      fullWidth
-                      disabled
-                      size="small"
-                    />
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testOrder ? 'success.light' : 'grey.100' }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        4️⃣ Customer Order {cfTestResults.testOrder ? '✅' : '❌'}
+                      </Typography>
+                      {cfTestResults.testOrder ? (
+                        <>
+                          <Typography variant="body2">CO: {cfTestResults.testOrder.orderNumber}</Typography>
+                          <Typography variant="body2">Klient: {cfTestResults.testOrder.customerName}</Typography>
+                          <Typography variant="body2">Wartość: {cfTestResults.testOrder.totalValue?.toFixed(2) || 'N/A'}€</Typography>
+                          <Typography variant="body2" sx={{ 
+                            color: cfTestResults.testOrder.lastCostUpdateReason?.includes('Cloud Function') ? 'success.main' : 'text.primary'
+                          }}>
+                            Aktualizacja: {cfTestResults.testOrder.lastCostUpdateReason || 'N/A'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {cfTestResults.testOrder.updatedAt}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Brak powiązanego zamówienia</Typography>
+                      )}
+                    </Paper>
                   </Grid>
                 </Grid>
+                
+                {/* Rekomendacje */}
+                {cfTestResults.recommendations.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      💡 Rekomendacje i następne kroki:
+                    </Typography>
+                    {cfTestResults.recommendations.map((rec, index) => (
+                      <Alert 
+                        key={index} 
+                        severity={rec.includes('✅') ? 'success' : rec.includes('⚠️') ? 'warning' : 'info'}
+                        sx={{ mb: 1 }}
+                      >
+                        {rec}
+                      </Alert>
+                    ))}
+                  </Box>
+                )}
               </Box>
             )}
           </CardContent>
           <CardActions>
             <Button 
-              startIcon={randomBatchLoading ? <CircularProgress size={20} /> : <SearchIcon />}
+              startIcon={cfTestLoading ? <CircularProgress size={20} /> : <SettingsIcon />}
               variant="contained" 
               color="primary"
-              onClick={handleGetRandomBatch}
-              disabled={randomBatchLoading}
+              onClick={handleTestCloudFunctionsChain}
+              disabled={cfTestLoading}
             >
-              {randomBatchLoading ? 'Pobieranie...' : 'Pobierz losową partię'}
+              {cfTestLoading ? 'Testowanie...' : 'Testuj Cloud Functions'}
             </Button>
           </CardActions>
         </Card>

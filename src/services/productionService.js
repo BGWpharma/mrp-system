@@ -5650,8 +5650,14 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       console.warn('[AUTO] Błąd podczas wysyłania powiadomienia BroadcastChannel:', broadcastError);
     }
 
-    // 7. AUTOMATYCZNIE AKTUALIZUJ ZWIĄZANE ZAMÓWIENIA KLIENTÓW
+    // ============================================================================
+    // 7. AKTUALIZACJA ZAMÓWIEŃ - PRZYWRÓCONA (Cloud Functions nie działają poprawnie)
+    // TYMCZASOWO używamy logiki frontendowej dopóki Cloud Functions nie zostaną naprawione
+    // ============================================================================
+    console.log(`[AUTO] Rozpoczynam aktualizację związanych zamówień dla zadania ${taskId}`);
     let relatedOrders = [];
+    
+    // PRZYWRÓCONA LOGIKA: Automatycznie aktualizuj związane zamówienia klientów
     try {
       const { getOrdersByProductionTaskId, updateOrder } = await import('./orderService');
       const { calculateFullProductionUnitCost, calculateProductionUnitCost } = await import('../utils/costCalculator');

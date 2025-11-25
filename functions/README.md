@@ -4,6 +4,46 @@
 
 Cloud Functions dla systemu BGW-MRP działają w regionie `europe-central2` i używają Firebase Functions v2 (2nd Generation) z Node.js 22.
 
+### Zaimplementowane funkcje:
+
+#### 1. Callable Functions
+- **getRandomBatch** - ~~Funkcja testowa~~ (PRZESTARZAŁA - zastąpiona narzędziem testowym w UI)
+
+#### 2. Firestore Triggers - Automatyczna aktualizacja łańcucha wartości ⭐
+- **onPurchaseOrderUpdate** - PO → Batch (aktualizacja cen partii)
+- **onBatchPriceUpdate** - Batch → MO (aktualizacja kosztów zadań) 🔥 **ULEPSZONA × 2**
+- **onProductionTaskCostUpdate** - MO → CO (aktualizacja wartości zamówień) 🔥 **ULEPSZONA**
+
+**Kompleksowa kalkulacja kosztów zadań (100% zgodność z frontendem):** ✨
+- ✅ Consumed materials (skonsumowane materiały) - **aktualna cena z bazy jako priorytet** 🆕
+- ✅ Reserved batches (zarezerwowane partie)  
+- ✅ PO reservations (rezerwacje z zamówień zakupowych)
+- ✅ Processing cost (koszt procesowy)
+- ✅ Średnia ważona cena z wszystkich źródeł
+- ✅ Tolerancja zmian (0.005€) - sprawdza 4 wartości
+- ✅ **Precyzyjne obliczenia** - eliminacja błędów floating point
+- ✅ **Identyczna logika** jak frontend
+
+**Pełna kalkulacja totalValue zamówień klientów:** ✨
+- ✅ Wartość produktów (productsValue)
+- ✅ Koszt dostawy (shippingCost) 🆕
+- ✅ Dodatkowe koszty (additionalCostsTotal) 🆕
+- ✅ Rabaty (discountsTotal) 🆕
+- ✅ **Zgodność lista CO = szczegóły CO** 🆕
+
+#### 3. Narzędzia testowe w UI 🧪
+Zamiast wywołań funkcji testowych, system posiada **kompleksowe narzędzie testowe** w:
+- **Admin** → **Zarządzanie systemem** → **Test Cloud Functions**
+
+📖 **Dokumentacja:**
+- `CLOUD_FUNCTIONS_CHAIN_UPDATE.md` - Pełna dokumentacja techniczna
+- `CLOUD_FUNCTIONS_ENHANCED_COST_CALCULATION.md` - Ulepszona kalkulacja kosztów
+- `CLOUD_FUNCTIONS_PRECISION_FIX.md` - Poprawka precyzji floating point (25.11.2024)
+- `CLOUD_FUNCTIONS_PRICE_HIERARCHY_FIX.md` - Poprawka hierarchii cen (25.11.2024) 🆕
+- `CLOUD_FUNCTIONS_TOTALVALUE_FIX.md` - Poprawka totalValue w CO (25.11.2024) ⭐ NAJNOWSZE
+- `CLOUD_FUNCTIONS_TEST_TOOL.md` - Przewodnik po narzędziu testowym
+- `CLOUD_FUNCTIONS_MIGRATION_COMPLETED.md` - Szczegóły migracji
+
 ## 🔧 Konfiguracja
 
 - **Region**: `europe-central2`
@@ -26,28 +66,56 @@ functions/
 
 ## 🚀 Deployment
 
-### ⚠️ WAŻNE: ZAWSZE deployuj pojedyncze funkcje!
+### ⚠️ WAŻNE: ZAWSZE używaj prefixu codebase `bgw-mrp:`!
 
 ```bash
-# ✅ POPRAWNIE - Deploy konkretnej funkcji
-firebase deploy --only functions:getRandomBatch
+# ✅ POPRAWNIE - Deploy konkretnej funkcji z prefiksem codebase
+firebase deploy --only functions:bgw-mrp:onBatchPriceUpdate
 
-# ❌ NIGDY TAK NIE RÓB - Nadpisze wszystkie funkcje!
+# ❌ NIGDY TAK NIE RÓB - Może nadpisać funkcje z innych projektów!
 firebase deploy --only functions
+firebase deploy --only functions:onBatchPriceUpdate  # BEZ prefixu bgw-mrp:
 ```
+
+**Dlaczego prefix `bgw-mrp:` jest wymagany?**
+Projekt ma wiele codebase (np. `bgw-mrp`, `customer-portal`). Deploy bez prefixu może nadpisać funkcje z innych codebase!
 
 ### Przykłady deployment:
 
 ```bash
 # Deploy funkcji getRandomBatch
-firebase deploy --only functions:getRandomBatch
+firebase deploy --only functions:bgw-mrp:getRandomBatch
 
-# Deploy wielu konkretnych funkcji
-firebase deploy --only functions:getRandomBatch,functions:calculateBatchCosts
+# Deploy funkcji automatycznej aktualizacji
+firebase deploy --only functions:bgw-mrp:onPurchaseOrderUpdate
+firebase deploy --only functions:bgw-mrp:onBatchPriceUpdate
+firebase deploy --only functions:bgw-mrp:onProductionTaskCostUpdate
+
+# Deploy wielu funkcji naraz
+firebase deploy --only functions:bgw-mrp:onPurchaseOrderUpdate,bgw-mrp:onBatchPriceUpdate,bgw-mrp:onProductionTaskCostUpdate
 
 # Sprawdź logi funkcji
 npm run logs
 ```
+
+### Deployment za pomocą skryptów (zalecane):
+
+```powershell
+# Windows PowerShell
+.\deploy-functions.ps1
+```
+
+```bash
+# Linux/Mac
+chmod +x deploy-functions.sh
+./deploy-functions.sh
+```
+
+Skrypty oferują:
+- ✅ Automatyczną weryfikację kodu (linting)
+- ✅ Interaktywny wybór funkcji do deployment
+- ✅ Potwierdzenia przed deployment krytycznych funkcji
+- ✅ Kolorowe logowanie postępu
 
 ## 🧪 Development
 

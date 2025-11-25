@@ -1147,7 +1147,14 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       newItemsCount: newPoData?.items?.length || 0
     });
     
-    // NOWA LOGIKA: Zawsze aktualizuj ceny partii przy każdym zapisie PO
+    // ============================================================================
+    // WYŁĄCZONE: Cloud Functions obsługują aktualizację partii (onPurchaseOrderUpdate)
+    // Cloud Function automatycznie wykryje zmiany w PO i zaktualizuje partie
+    // ============================================================================
+    console.log('ℹ️ [PO_UPDATE_DEBUG] Aktualizacja cen partii będzie wykonana przez Cloud Function (onPurchaseOrderUpdate)');
+    
+    /*
+    // STARA LOGIKA (przed Cloud Functions): Zawsze aktualizuj ceny partii przy każdym zapisie PO
     console.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam automatyczną aktualizację cen partii przy zapisie PO');
     try {
       await updateBatchPricesOnAnySave(purchaseOrderId, newPoData, userId || 'system');
@@ -1156,6 +1163,7 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       console.error('❌ [PO_UPDATE_DEBUG] Błąd podczas aktualizacji cen partii przy zapisie:', error);
       // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji partii
     }
+    */
     
     // Aktualizuj ceny w rezerwacjach PO
     console.log('🔄 [PO_UPDATE_DEBUG] Rozpoczynam aktualizację cen w rezerwacjach PO');
@@ -1179,14 +1187,20 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       }
     }
     
-    // Jeśli zaktualizowano dodatkowe koszty, zaktualizuj również powiązane partie
+    // ============================================================================
+    // WYŁĄCZONE: Cloud Functions obsługują aktualizację partii (onPurchaseOrderUpdate)
+    // Dotyczy także aktualizacji dodatkowych kosztów
+    // ============================================================================
     const hasAdditionalCostsUpdate = updatedData.additionalCostsItems !== undefined || 
                                      updatedData.additionalCosts !== undefined;
     
     if (hasAdditionalCostsUpdate) {
+      console.log('ℹ️ [PO_UPDATE_DEBUG] Wykryto aktualizację dodatkowych kosztów - Cloud Function obsłuży aktualizację partii');
+      /*
+      // STARA LOGIKA (przed Cloud Functions)
       console.log('Wykryto aktualizację dodatkowych kosztów, aktualizuję ceny partii');
-      // Aktualizuj ceny w powiązanych partiach
       await updateBatchPricesWithAdditionalCosts(purchaseOrderId, newPoData, userId || 'system');
+      */
     }
     
     // Wyczyść cache po aktualizacji
@@ -2888,8 +2902,15 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
     // Wyczyść cache dotyczące tego zamówienia
     searchCache.invalidateForOrder(purchaseOrderId);
     
-    // NOWA FUNKCJONALNOŚĆ: Automatycznie aktualizuj koszty wszystkich zadań produkcyjnych używających zaktualizowanych partii
+    // ============================================================================
+    // WYŁĄCZONE: Cloud Functions obsługują aktualizację zadań (onBatchPriceUpdate)
+    // Cloud Function automatycznie wykryje zmiany cen partii i zaktualizuje zadania
+    // ============================================================================
     if (updatePromises.length > 0) {
+      console.log(`ℹ️ [TASK_COST_UPDATE] Aktualizacja kosztów zadań będzie wykonana przez Cloud Function (onBatchPriceUpdate) dla ${updatePromises.length} partii`);
+      
+      /*
+      // STARA LOGIKA (przed Cloud Functions): Automatycznie aktualizuj koszty zadań
       try {
         console.log(`🔄 [TASK_COST_UPDATE] Rozpoczynam aktualizację kosztów zadań po zmianie cen partii...`);
         
@@ -2915,6 +2936,7 @@ const updateBatchPricesOnAnySave = async (purchaseOrderId, poData, userId) => {
           taskCostUpdateError: error.message
         };
       }
+      */
     }
     
     return { success: true, updated: updatePromises.length };

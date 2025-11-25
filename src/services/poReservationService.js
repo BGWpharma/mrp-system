@@ -1045,8 +1045,16 @@ export const updatePOReservationsPricesOnPOChange = async (purchaseOrderId, poDa
     
     console.log(`📊 [PO_RES_PRICE_UPDATE] Zaktualizowano ${updatedCount} rezerwacji, ${errorCount} błędów`);
     
-    // Aktualizuj koszty w zadaniach które mają zaktualizowane rezerwacje
+    // ============================================================================
+    // WYŁĄCZONE: Cloud Functions obsługują aktualizację zadań
+    // Zmiany cen w rezerwacjach PO nie wymagają już ręcznej aktualizacji zadań
+    // Cloud Function onBatchPriceUpdate wykryje zmiany i zaktualizuje zadania
+    // ============================================================================
     if (affectedTaskIds.size > 0) {
+      console.log(`ℹ️ [PO_RES_PRICE_UPDATE] Aktualizacja kosztów ${affectedTaskIds.size} zadań będzie wykonana przez Cloud Function`);
+      
+      /*
+      // STARA LOGIKA (przed Cloud Functions): Aktualizuj koszty w zadaniach
       console.log(`🔄 [PO_RES_PRICE_UPDATE] Aktualizacja kosztów w ${affectedTaskIds.size} zadaniach...`);
       
       const { updateTaskCostsAutomatically } = await import('./productionService');
@@ -1060,14 +1068,15 @@ export const updatePOReservationsPricesOnPOChange = async (purchaseOrderId, poDa
       const taskErrorCount = taskResults.filter(r => r.status === 'rejected').length;
       
       console.log(`✅ [PO_RES_PRICE_UPDATE] Zaktualizowano koszty: ${taskSuccessCount} zadań pomyślnie, ${taskErrorCount} błędów`);
+      */
       
       return {
         success: true,
         updated: updatedCount,
         errors: errorCount,
         affectedTasks: affectedTaskIds.size,
-        tasksUpdated: taskSuccessCount,
-        tasksErrors: taskErrorCount
+        tasksUpdated: 0, // Cloud Function obsługuje
+        tasksErrors: 0
       };
     }
     
