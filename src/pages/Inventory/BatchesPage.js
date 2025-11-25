@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -80,6 +80,8 @@ import BatchDetailsDialog from '../../components/inventory/BatchDetailsDialog';
 const BatchesPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showError, showSuccess } = useNotification();
   const { currentUser } = useAuth();
   const { t } = useTranslation();
@@ -120,6 +122,7 @@ const BatchesPage = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedBatchForDetails, setSelectedBatchForDetails] = useState(null);
+  const [highlightedBatchId, setHighlightedBatchId] = useState(null);
   const fileInputRef = React.useRef(null);
 
   // Dodaję wykrywanie urządzeń mobilnych
@@ -281,6 +284,48 @@ const BatchesPage = () => {
       console.log('  - window.debugAndCleanDuplicateReservations(batchId)');
     }
   }, []);
+
+  // Automatyczne otwieranie dialogu szczegółów partii z URL
+  useEffect(() => {
+    const batchIdFromUrl = searchParams.get('batchId');
+    
+    if (batchIdFromUrl && batches.length > 0 && !detailsDialogOpen) {
+      // Znajdź partię po ID
+      const foundBatch = batches.find(b => b.id === batchIdFromUrl);
+      
+      if (foundBatch) {
+        console.log('🔍 [BatchesPage] Znaleziono partię z URL:', foundBatch);
+        
+        // Otwórz dialog szczegółów
+        handleOpenDetailsDialog(foundBatch);
+        
+        // Podświetl partię w tabeli
+        setHighlightedBatchId(batchIdFromUrl);
+        
+        // Przewiń do strony z tą partią
+        setTimeout(() => {
+          const batchIndex = filteredBatches.findIndex(b => b.id === batchIdFromUrl);
+          if (batchIndex !== -1) {
+            const pageIndex = Math.floor(batchIndex / rowsPerPage);
+            setPage(pageIndex);
+          }
+        }, 100);
+        
+        // Usuń parametr z URL (aby URL był czysty)
+        searchParams.delete('batchId');
+        setSearchParams(searchParams, { replace: true });
+        
+        // Usuń podświetlenie po 3 sekundach
+        setTimeout(() => setHighlightedBatchId(null), 3000);
+      } else {
+        // Partia nie znaleziona - pokaż komunikat
+        console.warn('⚠️ [BatchesPage] Nie znaleziono partii o ID:', batchIdFromUrl);
+        showError('Nie znaleziono partii o podanym ID');
+        searchParams.delete('batchId');
+        setSearchParams(searchParams, { replace: true });
+      }
+    }
+  }, [batches, searchParams, detailsDialogOpen, filteredBatches, rowsPerPage, setSearchParams, showError]);
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -1001,11 +1046,7 @@ const BatchesPage = () => {
                     <strong>{t('inventory.batches.totalStock')}:</strong> {formatQuantity(batches.reduce((sum, batch) => sum + parseFloat(batch.quantity || 0), 0))} {batches[0]?.unit || t('common.pieces')}
                   </Typography>
                 )}
-                <Tooltip title={t('inventory.batches.fefoInfo')}>
-                  <IconButton size="small">
-                    <InfoIcon />
-                  </IconButton>
-                </Tooltip>
+
                 
                 <FormControlLabel
                   control={
@@ -1137,7 +1178,18 @@ const BatchesPage = () => {
                   .map((batch) => {
                     const status = getBatchStatus(batch);
                     return (
-                      <TableRow key={batch.id}>
+                      <TableRow 
+                        key={batch.id}
+                        sx={highlightedBatchId === batch.id ? {
+                          backgroundColor: theme => theme.palette.mode === 'dark' 
+                            ? 'rgba(33, 150, 243, 0.3)' 
+                            : 'rgba(33, 150, 243, 0.15)',
+                          transition: 'background-color 0.5s ease',
+                          '& td': {
+                            fontWeight: 500
+                          }
+                        } : {}}
+                      >
                         <TableCell>
                           {batch.batchNumber || batch.lotNumber || 'Brak numeru'}
                         </TableCell>

@@ -393,7 +393,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
     }
     
     if (itemId) {
-      navigate(`/inventory/${itemId}/batches`);
+      // Dodaj parametr batchId do URL, aby automatycznie otworzyć dialog szczegółów
+      navigate(`/inventory/${itemId}/batches?batchId=${batchId}`);
       return;
     }
     
@@ -403,7 +404,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
       setLoadingBatches(false);
       
       if (batch && batch.itemId) {
-        navigate(`/inventory/${batch.itemId}/batches`);
+        // Dodaj parametr batchId do URL, aby automatycznie otworzyć dialog szczegółów
+        navigate(`/inventory/${batch.itemId}/batches?batchId=${batchId}`);
       } else {
         navigate(`/inventory/batch/${batchId}`);
       }

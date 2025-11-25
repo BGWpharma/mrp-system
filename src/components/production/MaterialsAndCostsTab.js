@@ -427,7 +427,7 @@ const MaterialsAndCostsTab = ({
                                 <Box
                                   key={`standard-${index}`}
                                   component={Link}
-                                  to={`/inventory/${materialId}/batches`}
+                                  to={`/inventory/${materialId}/batches${batch.batchId ? `?batchId=${batch.batchId}` : ''}`}
                                   sx={{
                                     display: 'inline-block',
                                     textDecoration: 'none',
@@ -636,7 +636,7 @@ const MaterialsAndCostsTab = ({
                         <TableCell>
                           <Chip 
                             component={Link}
-                            to={`/inventory/${materialId}/batches`}
+                            to={`/inventory/${materialId}/batches${consumed.batchId ? `?batchId=${consumed.batchId}` : ''}`}
                             size="small" 
                             label={`${batchNumber} (${Number(consumed.quantity || 0).toFixed(2)} ${material ? material.unit : ''})`} 
                             color="info" 
