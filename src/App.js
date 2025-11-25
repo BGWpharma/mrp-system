@@ -1,5 +1,5 @@
 // src/App.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -15,6 +15,7 @@ import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
 import { rtdb } from './services/firebase/config';
 import { ref, onValue } from 'firebase/database';
+import { Box, CircularProgress, Typography } from '@mui/material';
 
 // Inicjujemy przechwytywanie logów konsoli
 import './services/logsCaptureService';
@@ -25,84 +26,11 @@ import './i18n';
 // Localization wrapper
 import LocalizationWrapper from './components/common/LocalizationWrapper';
 
-// Pages
+// Auth - ładowane natychmiast bo są potrzebne przy starcie
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
-import Dashboard from './pages/Dashboard/Dashboard';
 
-// Recipes
-import RecipesPage from './pages/Recipes/RecipesPage';
-import RecipeDetailsPage from './pages/Recipes/RecipeDetailsPage';
-import NewRecipePage from './pages/Recipes/NewRecipePage';
-import EditRecipePage from './pages/Recipes/EditRecipePage';
-
-// Production
-import ProductionPage from './pages/Production/ProductionPage';
-import NewTaskPage from './pages/Production/NewTaskPage';
-import ProductionTimelinePage from './pages/Production/ProductionTimelinePage';
-import TaskDetailsPage from './pages/Production/TaskDetailsPage';
-import EditTaskPage from './pages/Production/EditTaskPage';
-import ConsumptionPage from './pages/Production/ConsumptionPage';
-import ForecastPage from './pages/Production/ForecastPage';
-import ReportsPage from './pages/Production/ReportsPage';
-import CreateFromOrderPage from './pages/Production/CreateFromOrderPage';
-import WorkstationsPage from './pages/Production/WorkstationsPage';
-import CalculatorPage from './pages/Production/CalculatorPage';
-import FormsPage from './pages/Production/FormsPage';
-import CompletedMOFormPage from './pages/Production/CompletedMOFormPage';
-import ProductionControlFormPage from './pages/Production/ProductionControlFormPage';
-import ProductionShiftFormPage from './pages/Production/ProductionShiftFormPage';
-import FormsResponsesPage from './pages/Production/FormsResponsesPage';
-
-// Inventory
-import InventoryPage from './pages/Inventory/InventoryPage';
-import ItemDetailsPage from './pages/Inventory/ItemDetailsPage';
-import NewInventoryItemPage from './pages/Inventory/NewInventoryItemPage';
-import EditInventoryItemPage from './pages/Inventory/EditInventoryItemPage';
-import ReceiveInventoryPage from './pages/Inventory/ReceiveInventoryPage';
-import IssueInventoryPage from './pages/Inventory/IssueInventoryPage';
-import InventoryHistoryPage from './pages/Inventory/InventoryHistoryPage';
-import ExpiryDatesPage from './pages/Inventory/ExpiryDatesPage';
-import BatchesPage from './pages/Inventory/BatchesPage';
-import BatchEditPage from './pages/Inventory/BatchEditPage';
-import StocktakingPage from './pages/Inventory/StocktakingPage';
-import StocktakingFormPage from './pages/Inventory/StocktakingFormPage';
-import StocktakingDetailsPage from './pages/Inventory/StocktakingDetailsPage';
-import StocktakingReportPage from './pages/Inventory/StocktakingReportPage';
-import InventoryFormsPage from './pages/Inventory/InventoryFormsPage';
-import InventoryFormsResponsesPage from './pages/Inventory/InventoryFormsResponsesPage';
-import LoadingReportFormPage from './pages/Inventory/LoadingReportFormPage';
-import UnloadingReportFormPage from './pages/Inventory/UnloadingReportFormPage';
-
-// Quality
-import QualityPage from './pages/Quality/QualityPage';
-import NewTestPage from './pages/Quality/NewTestPage';
-import QualityReportsPage from './pages/Quality/QualityReportsPage';
-
-// Orders
-import OrdersPage from './pages/Orders/OrdersPage';
-import OrdersList from './components/orders/OrdersList';
-import OrderForm from './components/orders/OrderForm';
-import OrderDetails from './components/orders/OrderDetails';
-
-// Purchase Orders
-import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
-import PurchaseOrderFormPage from './pages/PurchaseOrderFormPage';
-import PurchaseOrderDetailsPage from './pages/PurchaseOrderDetailsPage';
-import SuppliersPage from './pages/SuppliersPage';
-import SupplierFormPage from './pages/SupplierFormPage';
-
-// Customers
-import CustomersList from './components/customers/CustomersList';
-import CustomerDetail from './components/customers/CustomerDetail';
-
-// AI Assistant
-import AIAssistantPage from './pages/AIAssistant/AIAssistantPage';
-
-// Kiosk
-import KioskPage from './pages/Kiosk/KioskPage';
-
-// Common Components
+// Common Components - ładowane statycznie bo są potrzebne w każdym widoku
 import BackgroundEffects from './components/common/BackgroundEffects';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
@@ -112,72 +40,190 @@ import AdminRoute from './components/common/AdminRoute';
 // Styles
 import './assets/styles/global.css';
 
-// Import komponentu WarehousesList
-import WarehousesList from './components/inventory/WarehousesList';
+// ============================================================================
+// LAZY LOADED PAGES - ładowane on-demand dla lepszej wydajności
+// ============================================================================
+
+// Dashboard - ładowany lazy bo może być duży
+const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
+
+// Recipes
+const RecipesPage = lazy(() => import('./pages/Recipes/RecipesPage'));
+const RecipeDetailsPage = lazy(() => import('./pages/Recipes/RecipeDetailsPage'));
+const NewRecipePage = lazy(() => import('./pages/Recipes/NewRecipePage'));
+const EditRecipePage = lazy(() => import('./pages/Recipes/EditRecipePage'));
+
+// Production
+const ProductionPage = lazy(() => import('./pages/Production/ProductionPage'));
+const NewTaskPage = lazy(() => import('./pages/Production/NewTaskPage'));
+const ProductionTimelinePage = lazy(() => import('./pages/Production/ProductionTimelinePage'));
+const TaskDetailsPage = lazy(() => import('./pages/Production/TaskDetailsPage'));
+const EditTaskPage = lazy(() => import('./pages/Production/EditTaskPage'));
+const ConsumptionPage = lazy(() => import('./pages/Production/ConsumptionPage'));
+const ForecastPage = lazy(() => import('./pages/Production/ForecastPage'));
+const ReportsPage = lazy(() => import('./pages/Production/ReportsPage'));
+const CreateFromOrderPage = lazy(() => import('./pages/Production/CreateFromOrderPage'));
+const WorkstationsPage = lazy(() => import('./pages/Production/WorkstationsPage'));
+const CalculatorPage = lazy(() => import('./pages/Production/CalculatorPage'));
+const FormsPage = lazy(() => import('./pages/Production/FormsPage'));
+const CompletedMOFormPage = lazy(() => import('./pages/Production/CompletedMOFormPage'));
+const ProductionControlFormPage = lazy(() => import('./pages/Production/ProductionControlFormPage'));
+const ProductionShiftFormPage = lazy(() => import('./pages/Production/ProductionShiftFormPage'));
+const FormsResponsesPage = lazy(() => import('./pages/Production/FormsResponsesPage'));
+
+// Inventory
+const InventoryPage = lazy(() => import('./pages/Inventory/InventoryPage'));
+const ItemDetailsPage = lazy(() => import('./pages/Inventory/ItemDetailsPage'));
+const NewInventoryItemPage = lazy(() => import('./pages/Inventory/NewInventoryItemPage'));
+const EditInventoryItemPage = lazy(() => import('./pages/Inventory/EditInventoryItemPage'));
+const ReceiveInventoryPage = lazy(() => import('./pages/Inventory/ReceiveInventoryPage'));
+const IssueInventoryPage = lazy(() => import('./pages/Inventory/IssueInventoryPage'));
+const InventoryHistoryPage = lazy(() => import('./pages/Inventory/InventoryHistoryPage'));
+const ExpiryDatesPage = lazy(() => import('./pages/Inventory/ExpiryDatesPage'));
+const BatchesPage = lazy(() => import('./pages/Inventory/BatchesPage'));
+const BatchEditPage = lazy(() => import('./pages/Inventory/BatchEditPage'));
+const StocktakingPage = lazy(() => import('./pages/Inventory/StocktakingPage'));
+const StocktakingFormPage = lazy(() => import('./pages/Inventory/StocktakingFormPage'));
+const StocktakingDetailsPage = lazy(() => import('./pages/Inventory/StocktakingDetailsPage'));
+const StocktakingReportPage = lazy(() => import('./pages/Inventory/StocktakingReportPage'));
+const InventoryFormsPage = lazy(() => import('./pages/Inventory/InventoryFormsPage'));
+const InventoryFormsResponsesPage = lazy(() => import('./pages/Inventory/InventoryFormsResponsesPage'));
+const LoadingReportFormPage = lazy(() => import('./pages/Inventory/LoadingReportFormPage'));
+const UnloadingReportFormPage = lazy(() => import('./pages/Inventory/UnloadingReportFormPage'));
+
+// Quality
+const QualityPage = lazy(() => import('./pages/Quality/QualityPage'));
+const NewTestPage = lazy(() => import('./pages/Quality/NewTestPage'));
+const QualityReportsPage = lazy(() => import('./pages/Quality/QualityReportsPage'));
+
+// Orders
+const OrdersPage = lazy(() => import('./pages/Orders/OrdersPage'));
+const OrdersList = lazy(() => import('./components/orders/OrdersList'));
+const OrderForm = lazy(() => import('./components/orders/OrderForm'));
+const OrderDetails = lazy(() => import('./components/orders/OrderDetails'));
+
+// Purchase Orders
+const PurchaseOrdersPage = lazy(() => import('./pages/PurchaseOrdersPage'));
+const PurchaseOrderFormPage = lazy(() => import('./pages/PurchaseOrderFormPage'));
+const PurchaseOrderDetailsPage = lazy(() => import('./pages/PurchaseOrderDetailsPage'));
+const SuppliersPage = lazy(() => import('./pages/SuppliersPage'));
+const SupplierFormPage = lazy(() => import('./pages/SupplierFormPage'));
+
+// Customers
+const CustomersList = lazy(() => import('./components/customers/CustomersList'));
+const CustomerDetail = lazy(() => import('./components/customers/CustomerDetail'));
+
+// AI Assistant
+const AIAssistantPage = lazy(() => import('./pages/AIAssistant/AIAssistantPage'));
+
+// Kiosk
+const KioskPage = lazy(() => import('./pages/Kiosk/KioskPage'));
+
+// Warehouses
+const WarehousesList = lazy(() => import('./components/inventory/WarehousesList'));
 
 // Invoices
-import InvoicesPage from './pages/Invoices/InvoicesPage';
-import InvoicesListPage from './pages/Invoices/InvoicesListPage';
-import InvoiceFormPage from './pages/Invoices/InvoiceFormPage';
-import InvoiceDetailsPage from './pages/Invoices/InvoiceDetailsPage';
-import CompanySettingsPage from './pages/Invoices/CompanySettingsPage';
+const InvoicesPage = lazy(() => import('./pages/Invoices/InvoicesPage'));
+const InvoicesListPage = lazy(() => import('./pages/Invoices/InvoicesListPage'));
+const InvoiceFormPage = lazy(() => import('./pages/Invoices/InvoiceFormPage'));
+const InvoiceDetailsPage = lazy(() => import('./pages/Invoices/InvoiceDetailsPage'));
+const CompanySettingsPage = lazy(() => import('./pages/Invoices/CompanySettingsPage'));
 
 // Sales (nowa struktura z zakładkami)
-import SalesPage from './pages/Sales/SalesPage';
+const SalesPage = lazy(() => import('./pages/Sales/SalesPage'));
 
 // CMR
-import CmrListPage from './pages/Inventory/Cmr/CmrListPage';
-import CmrCreatePage from './pages/Inventory/Cmr/CmrCreatePage';
-import CmrDetailsPage from './pages/Inventory/Cmr/CmrDetailsPage';
-import CmrEditPage from './pages/Inventory/Cmr/CmrEditPage';
+const CmrListPage = lazy(() => import('./pages/Inventory/Cmr/CmrListPage'));
+const CmrCreatePage = lazy(() => import('./pages/Inventory/Cmr/CmrCreatePage'));
+const CmrDetailsPage = lazy(() => import('./pages/Inventory/Cmr/CmrDetailsPage'));
+const CmrEditPage = lazy(() => import('./pages/Inventory/Cmr/CmrEditPage'));
 
 // CRM
-import CRMDashboardPage from './pages/CRM/CRMDashboardPage';
-import ContactsPage from './pages/CRM/ContactsPage';
-import ContactFormPage from './pages/CRM/ContactFormPage';
-import ContactDetailsPage from './pages/CRM/ContactDetailsPage';
-import InteractionsPage from './pages/CRM/InteractionsPage';
-import InteractionFormPage from './pages/CRM/InteractionFormPage';
-import InteractionDetailsPage from './pages/CRM/InteractionDetailsPage';
-import OpportunitiesPage from './pages/CRM/OpportunitiesPage';
-import OpportunityFormPage from './pages/CRM/OpportunityFormPage';
-import OpportunityDetailsPage from './pages/CRM/OpportunityDetailsPage';
+const CRMDashboardPage = lazy(() => import('./pages/CRM/CRMDashboardPage'));
+const ContactsPage = lazy(() => import('./pages/CRM/ContactsPage'));
+const ContactFormPage = lazy(() => import('./pages/CRM/ContactFormPage'));
+const ContactDetailsPage = lazy(() => import('./pages/CRM/ContactDetailsPage'));
+const InteractionsPage = lazy(() => import('./pages/CRM/InteractionsPage'));
+const InteractionFormPage = lazy(() => import('./pages/CRM/InteractionFormPage'));
+const InteractionDetailsPage = lazy(() => import('./pages/CRM/InteractionDetailsPage'));
+const OpportunitiesPage = lazy(() => import('./pages/CRM/OpportunitiesPage'));
+const OpportunityFormPage = lazy(() => import('./pages/CRM/OpportunityFormPage'));
+const OpportunityDetailsPage = lazy(() => import('./pages/CRM/OpportunityDetailsPage'));
 
 // Price Lists - nowy moduł listy cenowej
-import PriceListsPage from './pages/Sales/PriceLists/PriceListsPage';
-import PriceListFormPage from './pages/Sales/PriceLists/PriceListFormPage';
-import PriceListDetailsPage from './pages/Sales/PriceLists/PriceListDetailsPage';
+const PriceListsPage = lazy(() => import('./pages/Sales/PriceLists/PriceListsPage'));
+const PriceListFormPage = lazy(() => import('./pages/Sales/PriceLists/PriceListFormPage'));
+const PriceListDetailsPage = lazy(() => import('./pages/Sales/PriceLists/PriceListDetailsPage'));
 
 // CO Reports - nowy moduł raportów CO
-import COReportsPage from './pages/Sales/COReports/COReportsPage';
+const COReportsPage = lazy(() => import('./pages/Sales/COReports/COReportsPage'));
 
 // Admin Pages
-import UsersManagementPage from './pages/Admin/UsersManagementPage';
-import SystemManagementPage from './pages/Admin/SystemManagementPage';
-import BugReportsPage from './pages/Admin/BugReportsPage';
+const UsersManagementPage = lazy(() => import('./pages/Admin/UsersManagementPage'));
+const SystemManagementPage = lazy(() => import('./pages/Admin/SystemManagementPage'));
+const BugReportsPage = lazy(() => import('./pages/Admin/BugReportsPage'));
 
 // Powiadomienia
-import NotificationsHistoryPage from './pages/Notifications/NotificationsHistoryPage';
+const NotificationsHistoryPage = lazy(() => import('./pages/Notifications/NotificationsHistoryPage'));
 
 // Hall Data
-import HallDataConditionsPage from './pages/HallData/Conditions';
-import HallDataMachinesPage from './pages/HallData/Machines';
-import HallDataFormsPage from './pages/HallData/Forms';
-import ServiceReportFormPage from './pages/HallData/ServiceReportFormPage';
-import MonthlyServiceReportFormPage from './pages/HallData/MonthlyServiceReportFormPage';
-import DefectRegistryFormPage from './pages/HallData/DefectRegistryFormPage';
-import ServiceRepairReportFormPage from './pages/HallData/ServiceRepairReportFormPage';
-import HallDataFormsResponsesPage from './pages/HallData/HallDataFormsResponsesPage';
+const HallDataConditionsPage = lazy(() => import('./pages/HallData/Conditions'));
+const HallDataMachinesPage = lazy(() => import('./pages/HallData/Machines'));
+const HallDataFormsPage = lazy(() => import('./pages/HallData/Forms'));
+const ServiceReportFormPage = lazy(() => import('./pages/HallData/ServiceReportFormPage'));
+const MonthlyServiceReportFormPage = lazy(() => import('./pages/HallData/MonthlyServiceReportFormPage'));
+const DefectRegistryFormPage = lazy(() => import('./pages/HallData/DefectRegistryFormPage'));
+const ServiceRepairReportFormPage = lazy(() => import('./pages/HallData/ServiceRepairReportFormPage'));
+const HallDataFormsResponsesPage = lazy(() => import('./pages/HallData/HallDataFormsResponsesPage'));
 
-// Inicjalizacja monitorowania stanu połączenia z bazą danych
+// ============================================================================
+// KOMPONENT ŁADOWANIA DLA SUSPENSE
+// ============================================================================
+
+const PageLoading = () => (
+  <Box sx={{ 
+    display: 'flex', 
+    flexDirection: 'column',
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    minHeight: '50vh',
+    gap: 2
+  }}>
+    <CircularProgress size={40} thickness={4} />
+    <Typography variant="body2" color="text.secondary">
+      Ładowanie...
+    </Typography>
+  </Box>
+);
+
+// ============================================================================
+// INICJALIZACJA MONITOROWANIA POŁĄCZENIA
+// ============================================================================
+
+// OPTYMALIZACJA: Singleton dla monitorowania połączenia - zapobiega wielokrotnej inicjalizacji
+let connectionMonitorInitialized = false;
+let lastConnectionState = null;
+
 const initializeConnectionMonitoring = () => {
+  // OPTYMALIZACJA: Zapobiegaj wielokrotnej inicjalizacji
+  if (connectionMonitorInitialized) {
+    return;
+  }
+  connectionMonitorInitialized = true;
+  
   try {
     const connectedRef = ref(rtdb, '.info/connected');
     onValue(connectedRef, (snap) => {
-      if (snap.val() === true) {
-        console.log('Połączono z Realtime Database');
-      } else {
-        console.log('Brak połączenia z Realtime Database - działanie w trybie offline');
+      const isConnected = snap.val() === true;
+      
+      // OPTYMALIZACJA: Loguj tylko przy zmianie stanu (unika spam w konsoli)
+      if (lastConnectionState !== isConnected) {
+        lastConnectionState = isConnected;
+        if (isConnected) {
+          console.log('Połączono z Realtime Database');
+        } else {
+          console.log('Brak połączenia z Realtime Database - działanie w trybie offline');
+        }
       }
     });
   } catch (error) {
@@ -187,6 +233,10 @@ const initializeConnectionMonitoring = () => {
 
 // Wywołanie inicjalizacji
 initializeConnectionMonitoring();
+
+// ============================================================================
+// GŁÓWNY KOMPONENT APLIKACJI
+// ============================================================================
 
 function App() {
   return (
@@ -280,7 +330,7 @@ function App() {
                     <Route path="/inventory/forms" element={<PrivateLayout><InventoryFormsPage /></PrivateLayout>} />
                     <Route path="/inventory/forms/responses" element={<PrivateLayout><InventoryFormsResponsesPage /></PrivateLayout>} />
                     <Route path="/inventory/forms/loading-report" element={<PrivateLayout><LoadingReportFormPage /></PrivateLayout>} />
-            <Route path="/inventory/forms/unloading-report" element={<PrivateLayout><UnloadingReportFormPage /></PrivateLayout>} />
+                    <Route path="/inventory/forms/unloading-report" element={<PrivateLayout><UnloadingReportFormPage /></PrivateLayout>} />
                     
                     {/* CMR Routes */}
                     <Route path="/inventory/cmr" element={<PrivateLayout><CmrListPage /></PrivateLayout>} />
@@ -350,7 +400,11 @@ function App() {
                     <Route path="/ai-assistant" element={<PrivateLayout><AIAssistantPage /></PrivateLayout>} />
                     
                     {/* Kiosk Routes */}
-                    <Route path="/kiosk" element={<KioskPage />} />
+                    <Route path="/kiosk" element={
+                      <Suspense fallback={<PageLoading />}>
+                        <KioskPage />
+                      </Suspense>
+                    } />
                     
                     {/* Hall Data Routes */}
                     <Route path="/hall-data/conditions" element={<PrivateLayout><HallDataConditionsPage /></PrivateLayout>} />
@@ -401,7 +455,10 @@ function App() {
   );
 }
 
-// PrivateLayout component to wrap authenticated routes
+// ============================================================================
+// PRIVATE LAYOUT - wrapper dla stron wymagających autoryzacji
+// ============================================================================
+
 function PrivateLayout({ children }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { mode } = useTheme();
@@ -424,7 +481,10 @@ function PrivateLayout({ children }) {
         <div className="content-container">
           <Sidebar onToggle={handleSidebarToggle} />
           <main className={`main-content ${isSidebarCollapsed || !isOpen ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
-            {children}
+            {/* ✅ Suspense wrapper dla lazy-loaded komponentów */}
+            <Suspense fallback={<PageLoading />}>
+              {children}
+            </Suspense>
           </main>
         </div>
       </div>
@@ -432,9 +492,13 @@ function PrivateLayout({ children }) {
   );
 }
 
-// Komponent pomocniczy do obsługi edycji zamówienia
+// ============================================================================
+// KOMPONENT POMOCNICZY - edycja zamówienia
+// ============================================================================
+
 function EditOrderWrapper() {
   const { orderId } = useParams();
+  // OrderForm jest lazy-loaded, więc już jest obsługiwany przez Suspense w PrivateLayout
   return <OrderForm orderId={orderId} />;
 }
 

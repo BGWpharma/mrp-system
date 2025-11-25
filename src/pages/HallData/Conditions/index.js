@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Typography, 
   Paper, 
@@ -87,6 +87,13 @@ const HallDataConditionsPage = () => {
   const [tempMinMax, setTempMinMax] = useState({ min: 15, max: 30 });
   // Wykres - oś Y - min/max wilgotność
   const [humidityMinMax, setHumidityMinMax] = useState({ min: 20, max: 50 });
+  
+  // OPTYMALIZACJA: Refs do debounce i Page Visibility
+  const debounceTimerRef = useRef(null);
+  const sensorDebounceTimerRef = useRef(null);
+  const isPageVisibleRef = useRef(true);
+  const lastSensorsHashRef = useRef(null);
+  const lastSensorDataRef = useRef(null);
 
   // Predefiniowane zakresy czasu z tłumaczeniami
   const TIME_RANGES = [
@@ -99,33 +106,67 @@ const HallDataConditionsPage = () => {
     { label: t('environmentalConditions.timeRanges.lastMonth'), value: 'month', fn: () => subMonths(new Date(), 1) },
     { label: t('environmentalConditions.timeRanges.custom'), value: 'custom', fn: () => null }
   ];
+  
+  // OPTYMALIZACJA: Page Visibility API - zatrzymaj aktualizacje gdy strona ukryta
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isPageVisibleRef.current = !document.hidden;
+      console.log(`[HallData Conditions] Widoczność strony: ${isPageVisibleRef.current ? 'widoczna' : 'ukryta'}`);
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
-  // Pobieranie listy dostępnych czujników
+  // Pobieranie listy dostępnych czujników - ZOPTYMALIZOWANE
   useEffect(() => {
     setLoading(true);
     const sensorsRef = ref(rtdb, 'sensors');
     
-    onValue(sensorsRef, (snapshot) => {
+    // OPTYMALIZACJA: Debounce time (5 sekund dla listy sensorów)
+    const DEBOUNCE_TIME = 5000;
+    
+    const unsubscribe = onValue(sensorsRef, (snapshot) => {
+      // OPTYMALIZACJA: Nie aktualizuj gdy strona jest ukryta
+      if (!isPageVisibleRef.current) {
+        console.log('[HallData Conditions] Strona ukryta - pomijam aktualizację listy czujników');
+        return;
+      }
+      
       if (snapshot.exists()) {
         const sensorsData = snapshot.val();
-        // Zmodyfikowana metoda konwersji danych z nowej struktury
-        const sensorsList = Object.entries(sensorsData).map(([key, data]) => ({
-          id: key,
-          name: data.device_id || key // Używamy device_id jeśli dostępne, w przeciwnym razie key
-        }));
         
-        setSensors(sensorsList);
-        
-        // Wybierz pierwszy czujnik automatycznie jeśli nie wybrano żadnego
-        if (sensorsList.length > 0 && !selectedSensor) {
-          setSelectedSensor(sensorsList[0].id);
+        // OPTYMALIZACJA: Sprawdź czy dane się zmieniły
+        const sensorsHash = JSON.stringify(Object.keys(sensorsData).sort());
+        if (lastSensorsHashRef.current === sensorsHash) {
+          setLoading(false);
+          return;
         }
+        
+        // OPTYMALIZACJA: Debouncing
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        
+        debounceTimerRef.current = setTimeout(() => {
+          const sensorsList = Object.entries(sensorsData).map(([key, data]) => ({
+            id: key,
+            name: data.device_id || key
+          }));
+          
+          lastSensorsHashRef.current = sensorsHash;
+          setSensors(sensorsList);
+          
+          if (sensorsList.length > 0 && !selectedSensor) {
+            setSelectedSensor(sensorsList[0].id);
+          }
+          setLoading(false);
+          console.log(`[HallData Conditions] Zaktualizowano listę ${sensorsList.length} czujników`);
+        }, DEBOUNCE_TIME);
       } else {
-        // Brak danych czujników w bazie
         setSensors([]);
         setLoading(false);
       }
-      setLoading(false);
     }, (error) => {
       console.error("Błąd podczas pobierania listy czujników:", error);
       if (error.message && error.message.includes('permission_denied')) {
@@ -134,26 +175,56 @@ const HallDataConditionsPage = () => {
       setError("Nie udało się pobrać listy czujników");
       setLoading(false);
     });
+    
+    return () => {
+      unsubscribe();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [selectedSensor]);
 
-  // Pobieranie aktualnych danych dla wybranego czujnika
+  // Pobieranie aktualnych danych dla wybranego czujnika - ZOPTYMALIZOWANE
   useEffect(() => {
     if (!selectedSensor) return;
 
     const sensorRef = ref(rtdb, `sensors/${selectedSensor}`);
     
-    onValue(sensorRef, (snapshot) => {
+    // OPTYMALIZACJA: Debounce time (3 sekundy dla danych sensora)
+    const DEBOUNCE_TIME = 3000;
+    
+    const unsubscribe = onValue(sensorRef, (snapshot) => {
+      // OPTYMALIZACJA: Nie aktualizuj gdy strona jest ukryta
+      if (!isPageVisibleRef.current) {
+        console.log('[HallData Conditions] Strona ukryta - pomijam aktualizację danych czujnika');
+        return;
+      }
+      
       if (snapshot.exists()) {
         const sensorData = snapshot.val();
         
-        // Pobierz ostatni odczyt - teraz dane są bezpośrednio w obiekcie
-        const lastReading = {
-          temperature: sensorData.temperature || 0,
-          humidity: sensorData.humidity || 0,
-          timestamp: sensorData.timestamp || new Date().toISOString()
-        };
+        // OPTYMALIZACJA: Sprawdź czy dane się zmieniły
+        const dataKey = `${sensorData.temperature}-${sensorData.humidity}-${sensorData.timestamp}`;
+        if (lastSensorDataRef.current === dataKey) {
+          return;
+        }
         
-        setCurrentData(lastReading);
+        // OPTYMALIZACJA: Debouncing
+        if (sensorDebounceTimerRef.current) {
+          clearTimeout(sensorDebounceTimerRef.current);
+        }
+        
+        sensorDebounceTimerRef.current = setTimeout(() => {
+          lastSensorDataRef.current = dataKey;
+          const lastReading = {
+            temperature: sensorData.temperature || 0,
+            humidity: sensorData.humidity || 0,
+            timestamp: sensorData.timestamp || new Date().toISOString()
+          };
+          
+          setCurrentData(lastReading);
+          console.log(`[HallData Conditions] Zaktualizowano dane czujnika ${selectedSensor}`);
+        }, DEBOUNCE_TIME);
       } else {
         setCurrentData({
           temperature: 0,
@@ -168,6 +239,13 @@ const HallDataConditionsPage = () => {
       }
       setError("Nie udało się pobrać aktualnych danych");
     });
+    
+    return () => {
+      unsubscribe();
+      if (sensorDebounceTimerRef.current) {
+        clearTimeout(sensorDebounceTimerRef.current);
+      }
+    };
   }, [selectedSensor]);
 
   // Aktualizacja przedziału czasu na podstawie wybranego zakresu

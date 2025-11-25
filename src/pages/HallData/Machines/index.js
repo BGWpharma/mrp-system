@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Card, 
@@ -88,6 +88,22 @@ const HallDataMachinesPage = () => {
   const [isFilteringByDate, setIsFilteringByDate] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   
+  // OPTYMALIZACJA: Ref do debounce timera i flagi widoczności
+  const debounceTimerRef = useRef(null);
+  const isPageVisibleRef = useRef(true);
+  const lastDataHashRef = useRef(null);
+  
+  // OPTYMALIZACJA: Page Visibility API - zatrzymaj aktualizacje gdy strona ukryta
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isPageVisibleRef.current = !document.hidden;
+      console.log(`[HallData Machines] Widoczność strony: ${isPageVisibleRef.current ? 'widoczna' : 'ukryta'}`);
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+  
   // Pobieranie danych z podsumowań maszyn
   useEffect(() => {
     setLoading(true);
@@ -97,29 +113,55 @@ const HallDataMachinesPage = () => {
     // Referencja do węzła weight_summaries w realtime database
     const summariesRef = ref(rtdb, 'weight_summaries');
     
+    // OPTYMALIZACJA: Debounce time (3 sekundy)
+    const DEBOUNCE_TIME = 3000;
+    
     const unsubscribe = onValue(summariesRef, (snapshot) => {
+      // OPTYMALIZACJA: Nie aktualizuj gdy strona jest ukryta
+      if (!isPageVisibleRef.current) {
+        console.log('[HallData Machines] Strona ukryta - pomijam aktualizację');
+        return;
+      }
+      
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const summariesArray = [];
         
-        // Przetworzenie danych do formatu tablicy
-        Object.keys(data).forEach(machineId => {
-          const machineData = data[machineId];
-          summariesArray.push({
-            id: machineId,
-            ...machineData
-          });
-        });
-        
-        setMachineSummaries(summariesArray);
-        setFilteredSummaries(summariesArray);
-        
-        // Jeśli nie wybrano wcześniej maszyny, wybierz pierwszą dostępną
-        if (summariesArray.length > 0 && !selectedMachine) {
-          setSelectedMachine(summariesArray[0].id);
+        // OPTYMALIZACJA: Sprawdź czy dane się zmieniły (prosty hash)
+        const dataHash = JSON.stringify(Object.keys(data).sort());
+        if (lastDataHashRef.current === dataHash) {
+          console.log('[HallData Machines] Dane bez zmian - pomijam aktualizację');
+          return;
         }
         
-        setLoading(false);
+        // OPTYMALIZACJA: Debouncing - opóźnij aktualizację
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        
+        debounceTimerRef.current = setTimeout(() => {
+          const summariesArray = [];
+          
+          // Przetworzenie danych do formatu tablicy
+          Object.keys(data).forEach(machineId => {
+            const machineData = data[machineId];
+            summariesArray.push({
+              id: machineId,
+              ...machineData
+            });
+          });
+          
+          lastDataHashRef.current = dataHash;
+          setMachineSummaries(summariesArray);
+          setFilteredSummaries(summariesArray);
+          
+          // Jeśli nie wybrano wcześniej maszyny, wybierz pierwszą dostępną
+          if (summariesArray.length > 0 && !selectedMachine) {
+            setSelectedMachine(summariesArray[0].id);
+          }
+          
+          setLoading(false);
+          console.log(`[HallData Machines] Zaktualizowano ${summariesArray.length} maszyn`);
+        }, DEBOUNCE_TIME);
       } else {
         setMachineSummaries([]);
         setFilteredSummaries([]);
@@ -135,7 +177,12 @@ const HallDataMachinesPage = () => {
       }
     });
     
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [rtdb]);
   
   // Pobieranie historii dla wybranej maszyny
