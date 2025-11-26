@@ -66,6 +66,7 @@ import {
   getItemBatches,
   checkStocktakingReservationImpact,
   cancelThreatenedReservations,
+  saveCancelledReservationsToStocktaking,
   getInventoryCategories,
   getInventoryItemsByCategory
 } from '../../services/inventory';
@@ -594,6 +595,9 @@ const StocktakingDetailsPage = () => {
           const result = await cancelThreatenedReservations(warnings, currentUser.uid);
           if (result.success) {
             showSuccess(`Anulowano ${result.cancelledCount} rezerwacji`);
+            
+            // Zapisz informacje o anulowanych rezerwacjach do inwentaryzacji (dla raportu)
+            await saveCancelledReservationsToStocktaking(id, result, currentUser.uid);
           }
         } catch (error) {
           console.error('Błąd podczas anulowania rezerwacji:', error);
@@ -703,6 +707,9 @@ const StocktakingDetailsPage = () => {
           const result = await cancelThreatenedReservations(reservationWarnings, currentUser.uid);
           if (result.success) {
             showSuccess(result.message);
+            
+            // Zapisz informacje o anulowanych rezerwacjach do inwentaryzacji (dla raportu)
+            await saveCancelledReservationsToStocktaking(id, result, currentUser.uid);
           } else {
             showError(result.message);
           }

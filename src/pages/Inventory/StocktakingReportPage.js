@@ -524,6 +524,82 @@ const StocktakingReportPage = () => {
         </TableContainer>
       </Paper>
       
+      {/* Sekcja anulowanych rezerwacji */}
+      {stocktaking.cancelledReservations && stocktaking.cancelledReservations.length > 0 && (
+        <Paper sx={{ mb: 3, border: '2px solid', borderColor: 'error.main' }} className="print-visible">
+          <Box sx={{ 
+            bgcolor: 'error.main', 
+            color: 'white', 
+            p: 2, 
+            display: 'flex', 
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <Typography variant="h6">
+              ⚠️ {t('stocktaking.reportSections.cancelledReservations') || 'Anulowane rezerwacje z powodu inwentaryzacji'}
+            </Typography>
+            <Chip 
+              label={`${stocktaking.cancelledReservations.length} ${t('stocktaking.reportSections.reservations') || 'rezerwacji'}`}
+              sx={{ bgcolor: 'white', color: 'error.main', fontWeight: 'bold' }}
+            />
+          </Box>
+          <Alert severity="warning" sx={{ borderRadius: 0 }}>
+            {t('stocktaking.reportSections.cancelledReservationsInfo') || 'Poniższe rezerwacje zostały automatycznie anulowane, ponieważ inwentaryzacja wykazała niewystarczającą ilość na partiach.'}
+          </Alert>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'error.light' }}>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    {t('stocktaking.tableHeaders.batchNumber') || 'Nr partii'}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    {t('stocktaking.tableHeaders.taskNumber') || 'Nr zadania'}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    {t('stocktaking.tableHeaders.materialName') || 'Materiał'}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    {t('stocktaking.tableHeaders.quantity') || 'Ilość'}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    {t('stocktaking.tableHeaders.unit') || 'Jedn.'}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'error.contrastText' }}>
+                    {t('stocktaking.tableHeaders.client') || 'Klient'}
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {stocktaking.cancelledReservations.map((reservation, index) => (
+                  <TableRow 
+                    key={index} 
+                    hover
+                    sx={{ '&:nth-of-type(odd)': { bgcolor: 'error.lighter' || '#ffebee' } }}
+                  >
+                    <TableCell>{reservation.batchNumber || '-'}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={reservation.taskNumber || 'Nieznane'} 
+                        size="small" 
+                        color="warning"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>{reservation.materialName || '-'}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                      {reservation.quantity || 0}
+                    </TableCell>
+                    <TableCell>{reservation.unit || 'szt.'}</TableCell>
+                    <TableCell>{reservation.clientName !== 'N/A' ? reservation.clientName : '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
+      
       <Box sx={{ mt: 4, textAlign: 'center' }} className="print-visible print-footer">
         <Typography variant="body2" color="textSecondary">
           {t('stocktaking.reportSections.reportGenerated')} • {formatDate(new Date())}

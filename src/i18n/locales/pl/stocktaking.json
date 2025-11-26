@@ -66,7 +66,13 @@
     "unitPrice": "Cena jedn.",
     "valueDifference": "Wartość różnicy",
     "notes": "Uwagi",
-    "actions": "Akcje"
+    "actions": "Akcje",
+    "batchNumber": "Nr partii",
+    "taskNumber": "Nr zadania",
+    "materialName": "Materiał",
+    "quantity": "Ilość",
+    "unit": "Jedn.",
+    "client": "Klient"
   },
   "finishCorrections": "Zakończ korekty",
   "finishStocktaking": "Zakończ inwentaryzację",
@@ -93,7 +99,10 @@
     "valueDifference": "Różnica wartości",
     "percentageProducts": "{{percent}}% produktów",
     "noProductsInStocktaking": "Brak produktów w inwentaryzacji",
-    "reportGenerated": "Raport wygenerowany z systemu MRP"
+    "reportGenerated": "Raport wygenerowany z systemu MRP",
+    "cancelledReservations": "Anulowane rezerwacje z powodu inwentaryzacji",
+    "reservations": "rezerwacji",
+    "cancelledReservationsInfo": "Poniższe rezerwacje zostały automatycznie anulowane, ponieważ inwentaryzacja wykazała niewystarczającą ilość na partiach."
   },
   "reportLabels": {
     "id": "ID",

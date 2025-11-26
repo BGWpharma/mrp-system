@@ -1012,10 +1012,13 @@ export const generateStocktakingReport = async (stocktakingId, options = {}) => 
       ? items 
       : items.filter(item => Math.abs(item.discrepancy || 0) > 0.001);
 
+    // Pobierz anulowane rezerwacje z dokumentu inwentaryzacji
+    const cancelledReservations = stocktaking.cancelledReservations || [];
+
     if (format === 'csv') {
-      return generateStocktakingCSVReport(stocktaking, reportItems);
+      return generateStocktakingCSVReport(stocktaking, reportItems, cancelledReservations);
     } else {
-      return generateStocktakingPDFReport(stocktaking, reportItems);
+      return generateStocktakingPDFReport(stocktaking, reportItems, cancelledReservations);
     }
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -1541,8 +1544,13 @@ const cancelBatchReservations = async (batchId, userId) => {
       results.push({
         reservationId: doc.id,
         taskId: reservation.taskId,
+        taskNumber: reservation.taskNumber || null,
+        moNumber: reservation.moNumber || null,
         quantity: reservation.quantity,
-        itemId: reservation.itemId
+        itemId: reservation.itemId,
+        itemName: reservation.itemName || null,
+        clientName: reservation.clientName || null,
+        unit: reservation.unit || 'szt.'
       });
       
       console.log(`🗑️ Usuwam rezerwację ${doc.id} (zadanie: ${reservation.taskId}, ilość: ${reservation.quantity})`);
@@ -1665,7 +1673,7 @@ export const cancelThreatenedReservations = async (reservationWarnings, userId) 
  * Generuje raport CSV z inwentaryzacji
  * @private
  */
-const generateStocktakingCSVReport = (stocktaking, items) => {
+const generateStocktakingCSVReport = (stocktaking, items, cancelledReservations = []) => {
   const stats = calculateStocktakingStats(items);
   
   const headers = [
@@ -1689,6 +1697,28 @@ const generateStocktakingCSVReport = (stocktaking, items) => {
     item.notes || ''
   ]);
   
+  // Sekcja anulowanych rezerwacji
+  const cancelledSection = cancelledReservations.length > 0 ? [
+    '',
+    '',
+    'ANULOWANE REZERWACJE Z POWODU INWENTARYZACJI:',
+    `Liczba anulowanych rezerwacji: ${cancelledReservations.length}`,
+    '',
+    'Numer partii,Numer zadania,Nazwa materialu,Ilosc,Jednostka,Klient',
+    ...cancelledReservations.map(res => [
+      res.batchNumber || '',
+      res.taskNumber || '',
+      res.materialName || '',
+      formatQuantityPrecision(res.quantity || 0),
+      res.unit || '',
+      res.clientName || ''
+    ].map(cell => 
+      typeof cell === 'string' && (cell.includes(',') || cell.includes('"')) 
+        ? `"${cell.replace(/"/g, '""')}"` 
+        : cell
+    ).join(','))
+  ] : [];
+  
   const csvContent = [
     `Raport inwentaryzacji: ${stocktaking.name}`,
     `Status: ${stocktaking.status}`,
@@ -1699,14 +1729,16 @@ const generateStocktakingCSVReport = (stocktaking, items) => {
     `Pozycje zgodne: ${stats.itemsAccurate}`,
     `Pozycje z różnicami: ${stats.itemsWithDiscrepancy}`,
     `Wartość różnic: ${stats.totalValue} PLN`,
+    cancelledReservations.length > 0 ? `Anulowane rezerwacje: ${cancelledReservations.length}` : '',
     '',
     headers.join(','),
     ...csvRows.map(row => row.map(cell => 
       typeof cell === 'string' && (cell.includes(',') || cell.includes('"')) 
         ? `"${cell.replace(/"/g, '""')}"` 
         : cell
-    ).join(','))
-  ].join('\n');
+    ).join(',')),
+    ...cancelledSection
+  ].filter(line => line !== '').join('\n');
   
   return {
     content: csvContent,
@@ -1719,7 +1751,7 @@ const generateStocktakingCSVReport = (stocktaking, items) => {
  * Generuje raport PDF z inwentaryzacji
  * @private
  */
-const generateStocktakingPDFReport = async (stocktaking, items) => {
+const generateStocktakingPDFReport = async (stocktaking, items, cancelledReservations = []) => {
   // Import dynamiczny jsPDF
   const { jsPDF } = await import('jspdf');
   
@@ -1926,6 +1958,87 @@ const generateStocktakingPDFReport = async (stocktaking, items) => {
     doc.text(fixPolishChars('Gratulacje! Brak pozycji z roznicami'), 148.5, 162, { align: 'center' });
   }
   
+  // Sekcja anulowanych rezerwacji
+  if (cancelledReservations.length > 0) {
+    // Dodaj nową stronę jeśli potrzeba
+    const currentY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 180;
+    
+    if (currentY > 170) {
+      doc.addPage();
+    }
+    
+    const startY = currentY > 170 ? 20 : currentY;
+    
+    // Nagłówek sekcji
+    doc.setFillColor(211, 47, 47); // Czerwony - ostrzegawczy
+    doc.rect(10, startY, 277, 12, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(fixPolishChars('ANULOWANE REZERWACJE Z POWODU INWENTARYZACJI'), 148.5, startY + 8, { align: 'center' });
+    
+    // Resetuj kolory
+    doc.setTextColor(0, 0, 0);
+    doc.setFont(undefined, 'normal');
+    
+    // Informacja o liczbie anulowanych rezerwacji
+    doc.setFillColor(255, 243, 224); // Jasny pomarańczowy
+    doc.rect(10, startY + 14, 277, 10, 'F');
+    doc.setFontSize(10);
+    doc.text(fixPolishChars(`Liczba anulowanych rezerwacji: ${cancelledReservations.length}`), 15, startY + 21);
+    
+    // Tabela anulowanych rezerwacji
+    const autoTableCancelled = (await import('jspdf-autotable')).default;
+    
+    const cancelledTableData = cancelledReservations.map(res => [
+      fixPolishChars(res.batchNumber || ''),
+      fixPolishChars(res.taskNumber || ''),
+      fixPolishChars(res.materialName || ''),
+      formatQuantityPrecision(res.quantity || 0),
+      fixPolishChars(res.unit || ''),
+      fixPolishChars(res.clientName || 'N/A')
+    ]);
+    
+    autoTableCancelled(doc, {
+      head: [[
+        fixPolishChars('Nr partii'),
+        fixPolishChars('Nr zadania'),
+        fixPolishChars('Material'),
+        fixPolishChars('Ilosc'),
+        fixPolishChars('Jedn.'),
+        fixPolishChars('Klient')
+      ]],
+      body: cancelledTableData,
+      startY: startY + 28,
+      theme: 'striped',
+      headStyles: { 
+        fillColor: [211, 47, 47], // Czerwony
+        textColor: [255, 255, 255],
+        fontSize: 9,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [33, 37, 41]
+      },
+      alternateRowStyles: { 
+        fillColor: [255, 235, 238] // Jasny czerwony
+      },
+      columnStyles: {
+        0: { cellWidth: 40, halign: 'center' },
+        1: { cellWidth: 40, halign: 'center' },
+        2: { cellWidth: 70, halign: 'left' },
+        3: { cellWidth: 30, halign: 'right' },
+        4: { cellWidth: 20, halign: 'center' },
+        5: { cellWidth: 55, halign: 'left' }
+      },
+      margin: { top: 10, right: 10, bottom: 20, left: 10 },
+      tableLineWidth: 0.1,
+      tableLineColor: [189, 195, 199]
+    });
+  }
+  
   // Dodaj stopkę na każdej stronie
   const pageCount = doc.internal.getNumberOfPages();
   for(let i = 1; i <= pageCount; i++) {
@@ -1950,6 +2063,53 @@ const generateStocktakingPDFReport = async (stocktaking, items) => {
     filename: `inwentaryzacja_${stocktaking.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
     type: 'application/pdf'
   };
+};
+
+/**
+ * Zapisuje informacje o anulowanych rezerwacjach do dokumentu inwentaryzacji
+ * @param {string} stocktakingId - ID inwentaryzacji
+ * @param {Object} cancellationResults - Wyniki anulowania rezerwacji z cancelThreatenedReservations
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik operacji
+ */
+export const saveCancelledReservationsToStocktaking = async (stocktakingId, cancellationResults, userId) => {
+  try {
+    const validatedId = validateId(stocktakingId, 'stocktakingId');
+    const validatedUserId = validateId(userId, 'userId');
+    
+    const stocktakingRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING, validatedId);
+    
+    // Przygotuj dane do zapisania - pobierz szczegóły z wyników anulowania
+    const cancelledReservationsData = cancellationResults.results
+      .filter(result => result.success)
+      .flatMap(result => result.reservations.map(res => ({
+        batchId: result.batchId,
+        batchNumber: result.batchName || 'Nieznana',
+        taskId: res.taskId || null,
+        taskNumber: res.taskNumber || res.moNumber || 'Nieznane',
+        materialName: res.itemName || 'Nieznany materiał',
+        quantity: res.quantity || 0,
+        unit: res.unit || 'szt.',
+        clientName: res.clientName || 'N/A',
+        cancelledAt: new Date().toISOString()
+      })));
+    
+    await updateDoc(stocktakingRef, {
+      cancelledReservations: cancelledReservationsData,
+      cancelledReservationsCount: cancellationResults.cancelledCount || 0,
+      reservationsCancelledAt: serverTimestamp(),
+      reservationsCancelledBy: validatedUserId,
+      updatedAt: serverTimestamp(),
+      updatedBy: validatedUserId
+    });
+    
+    console.log(`✅ Zapisano ${cancelledReservationsData.length} anulowanych rezerwacji do inwentaryzacji ${validatedId}`);
+    
+    return { success: true, savedCount: cancelledReservationsData.length };
+  } catch (error) {
+    console.error('Błąd podczas zapisywania anulowanych rezerwacji:', error);
+    throw new Error(`Nie udało się zapisać anulowanych rezerwacji: ${error.message}`);
+  }
 };
 
 /**
