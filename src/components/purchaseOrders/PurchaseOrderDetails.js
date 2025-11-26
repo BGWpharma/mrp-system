@@ -318,34 +318,36 @@ const PurchaseOrderDetails = ({ orderId }) => {
               formType: 'unloading',
               // Obsługa selectedItems z bezpieczną konwersją dat ważności
               selectedItems: data.selectedItems?.map(item => {
-                let convertedExpiryDate = item.expiryDate;
-                
-                // Bezpiecznie konwertuj datę ważności
-                if (item.expiryDate) {
+                // Pomocnicza funkcja do konwersji daty
+                const convertDate = (dateValue) => {
+                  if (!dateValue) return null;
                   try {
-                    if (item.expiryDate.toDate && typeof item.expiryDate.toDate === 'function') {
-                      // Firestore Timestamp
-                      convertedExpiryDate = item.expiryDate.toDate();
-                    } else if (typeof item.expiryDate === 'string') {
-                      // String ISO lub inny format
-                      convertedExpiryDate = new Date(item.expiryDate);
-                      // Sprawdź czy data jest prawidłowa
-                      if (isNaN(convertedExpiryDate.getTime())) {
-                        console.warn('Nieprawidłowa data ważności:', item.expiryDate);
-                        convertedExpiryDate = null;
-                      }
-                    } else if (item.expiryDate instanceof Date) {
-                      // Już jest Date
-                      convertedExpiryDate = item.expiryDate;
+                    if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+                      return dateValue.toDate();
+                    } else if (typeof dateValue === 'string') {
+                      const parsed = new Date(dateValue);
+                      return isNaN(parsed.getTime()) ? null : parsed;
+                    } else if (dateValue instanceof Date) {
+                      return dateValue;
                     }
                   } catch (error) {
-                    console.error('Błąd konwersji daty ważności:', error, item.expiryDate);
-                    convertedExpiryDate = null;
+                    console.error('Błąd konwersji daty:', error, dateValue);
                   }
-                }
+                  return null;
+                };
+                
+                // NOWY FORMAT: Konwersja dat w partiach (batches)
+                const convertedBatches = item.batches?.map(batch => ({
+                  ...batch,
+                  expiryDate: convertDate(batch.expiryDate)
+                })) || [];
+                
+                // STARY FORMAT: Konwersja daty ważności na poziomie pozycji (kompatybilność wsteczna)
+                const convertedExpiryDate = convertDate(item.expiryDate);
                 
                 return {
                   ...item,
+                  batches: convertedBatches,
                   expiryDate: convertedExpiryDate
                 };
               }) || []
@@ -557,10 +559,30 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   // Funkcja znajdująca informację o dacie ważności dla pozycji PO w odpowiedziach formularzy rozładunku
+  // Obsługuje zarówno nowy format z partiami (batches) jak i stary format (kompatybilność wsteczna)
   const getExpiryInfoFromUnloadingForms = (item) => {
     if (!unloadingFormResponses || unloadingFormResponses.length === 0) {
-      return { expiryDate: null, noExpiryDate: false };
+      return { expiryDate: null, noExpiryDate: false, batches: [] };
     }
+    
+    // Pomocnicza funkcja do walidacji daty
+    const validateDate = (dateValue) => {
+      if (!dateValue) return null;
+      try {
+        if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+          return dateValue;
+        } else if (typeof dateValue === 'string') {
+          const parsedDate = new Date(dateValue);
+          return !isNaN(parsedDate.getTime()) ? parsedDate : null;
+        } else if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+          const convertedDate = dateValue.toDate();
+          return !isNaN(convertedDate.getTime()) ? convertedDate : null;
+        }
+      } catch (error) {
+        console.error('Błąd walidacji daty:', error, dateValue);
+      }
+      return null;
+    };
     
     // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku od najnowszych
     for (const response of unloadingFormResponses) {
@@ -572,50 +594,60 @@ const PurchaseOrderDetails = ({ orderId }) => {
         
         // Jeśli znaleziono pozycję po dokładnym ID
         if (foundItem) {
-          // Sprawdź czy zaznaczono "nie dotyczy"
-          if (foundItem.noExpiryDate === true) {
-            console.log(`🚫 Pozycja "${item.name}" (ID: ${item.id}) ma zaznaczone "nie dotyczy" dla daty ważności`);
-            return { expiryDate: null, noExpiryDate: true };
+          // NOWY FORMAT: Sprawdź czy ma tablicę partii (batches)
+          if (foundItem.batches && Array.isArray(foundItem.batches) && foundItem.batches.length > 0) {
+            const validBatches = foundItem.batches.map(batch => ({
+              batchNumber: batch.batchNumber || '',
+              unloadedQuantity: batch.unloadedQuantity || '',
+              expiryDate: validateDate(batch.expiryDate),
+              noExpiryDate: batch.noExpiryDate || false
+            }));
+            
+            // Zwróć pierwszą datę ważności dla kompatybilności wstecznej + wszystkie partie
+            const firstBatchWithDate = validBatches.find(b => b.expiryDate);
+            const firstBatchNoExpiry = validBatches.find(b => b.noExpiryDate);
+            
+            console.log(`📦 Pozycja "${item.name}" ma ${validBatches.length} partii w nowym formacie`);
+            
+            return { 
+              expiryDate: firstBatchWithDate?.expiryDate || null, 
+              noExpiryDate: !firstBatchWithDate && firstBatchNoExpiry ? true : false,
+              batches: validBatches
+            };
           }
           
-          // Sprawdź czy ma datę ważności i czy jest prawidłowa
-          if (foundItem.expiryDate) {
-            // Walidacja daty ważności
-            let validDate = null;
-            try {
-              if (foundItem.expiryDate instanceof Date && !isNaN(foundItem.expiryDate.getTime())) {
-                validDate = foundItem.expiryDate;
-              } else if (typeof foundItem.expiryDate === 'string') {
-                const parsedDate = new Date(foundItem.expiryDate);
-                if (!isNaN(parsedDate.getTime())) {
-                  validDate = parsedDate;
-                }
-              } else if (foundItem.expiryDate.toDate && typeof foundItem.expiryDate.toDate === 'function') {
-                const convertedDate = foundItem.expiryDate.toDate();
-                if (!isNaN(convertedDate.getTime())) {
-                  validDate = convertedDate;
-                }
-              }
-            } catch (error) {
-              console.error('Błąd walidacji daty ważności:', error, foundItem.expiryDate);
-            }
-            
-            if (validDate) {
-              console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}" (ID: ${item.id}):`, validDate);
-              return { expiryDate: validDate, noExpiryDate: false };
-            } else {
-              console.warn(`⚠️ Nieprawidłowa data ważności dla pozycji "${item.name}" (ID: ${item.id}):`, foundItem.expiryDate);
-            }
+          // STARY FORMAT: Sprawdź czy zaznaczono "nie dotyczy"
+          if (foundItem.noExpiryDate === true) {
+            console.log(`🚫 Pozycja "${item.name}" (ID: ${item.id}) ma zaznaczone "nie dotyczy" dla daty ważności`);
+            return { expiryDate: null, noExpiryDate: true, batches: [] };
+          }
+          
+          // STARY FORMAT: Sprawdź czy ma datę ważności i czy jest prawidłowa
+          const validDate = validateDate(foundItem.expiryDate);
+          
+          if (validDate) {
+            console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}" (ID: ${item.id}):`, validDate);
+            // Zwróć w starym formacie jako jedną "partię" dla kompatybilności
+            return { 
+              expiryDate: validDate, 
+              noExpiryDate: false,
+              batches: [{
+                batchNumber: '',
+                unloadedQuantity: foundItem.unloadedQuantity || '',
+                expiryDate: validDate,
+                noExpiryDate: false
+              }]
+            };
           }
           
           // Jeśli znaleziono pozycję ale bez daty ważności
-          return { expiryDate: null, noExpiryDate: false };
+          return { expiryDate: null, noExpiryDate: false, batches: [] };
         }
       }
     }
     
     // Nie znaleziono pozycji w żadnym formularzu rozładunku
-    return { expiryDate: null, noExpiryDate: false };
+    return { expiryDate: null, noExpiryDate: false, batches: [] };
   };
 
   // Kompatybilność wsteczna - funkcja zwracająca tylko datę ważności
@@ -2748,35 +2780,94 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             Pozycje dostarczone
                           </Typography>
                           <Box sx={{ mt: 0.5 }}>
-                            {report.selectedItems.map((item, itemIndex) => (
-                              <Box 
-                                key={itemIndex} 
-                                sx={{ 
-                                  display: 'flex', 
-                                  justifyContent: 'space-between', 
-                                  alignItems: 'center',
-                                  p: 0.5, 
-                                  mb: 0.5, 
-                                  backgroundColor: (theme) => theme.palette.background.paper, 
-                                  borderRadius: 0.5,
-                                  border: (theme) => `1px solid ${theme.palette.divider}`
-                                }}
-                              >
-                                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
-                                  {item.productName || 'Nieznany produkt'}
-                                </Typography>
-                                <Box sx={{ textAlign: 'right' }}>
-                                  <Typography variant="body2" color="primary" sx={{ fontSize: '0.8rem' }}>
-                                    {item.unloadedQuantity || 'Nie podano'} {item.unit || ''}
+                            {report.selectedItems.map((item, itemIndex) => {
+                              // Obsługa nowego formatu z partiami (batches) i starego formatu
+                              const hasBatches = item.batches && Array.isArray(item.batches) && item.batches.length > 0;
+                              
+                              return (
+                                <Box 
+                                  key={itemIndex} 
+                                  sx={{ 
+                                    p: 0.75, 
+                                    mb: 0.5, 
+                                    backgroundColor: (theme) => theme.palette.background.paper, 
+                                    borderRadius: 0.5,
+                                    border: (theme) => `1px solid ${theme.palette.divider}`
+                                  }}
+                                >
+                                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', mb: hasBatches ? 0.5 : 0 }}>
+                                    {item.productName || 'Nieznany produkt'}
                                   </Typography>
-                                  {item.expiryDate && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                                      {safeFormatDate(item.expiryDate, 'dd.MM.yyyy')}
-                                    </Typography>
+                                  
+                                  {hasBatches ? (
+                                    // NOWY FORMAT: Wyświetl wszystkie partie
+                                    <Box sx={{ pl: 1 }}>
+                                      {item.batches.map((batch, batchIndex) => (
+                                        <Box 
+                                          key={batch.id || batchIndex}
+                                          sx={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center',
+                                            py: 0.25,
+                                            borderBottom: batchIndex < item.batches.length - 1 ? '1px dashed' : 'none',
+                                            borderColor: 'divider'
+                                          }}
+                                        >
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            {batch.batchNumber && (
+                                              <Chip 
+                                                label={`LOT: ${batch.batchNumber}`} 
+                                                size="small" 
+                                                color="info"
+                                                variant="outlined"
+                                                sx={{ fontSize: '0.65rem', height: 18 }}
+                                              />
+                                            )}
+                                          </Box>
+                                          <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Typography variant="body2" color="primary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                                              {batch.unloadedQuantity || 'Nie podano'} {item.unit || ''}
+                                            </Typography>
+                                            {batch.noExpiryDate ? (
+                                              <Chip 
+                                                label="Bez daty ważności" 
+                                                size="small" 
+                                                color="default"
+                                                sx={{ fontSize: '0.6rem', height: 16 }}
+                                              />
+                                            ) : batch.expiryDate && (
+                                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                                                {safeFormatDate(batch.expiryDate, 'dd.MM.yyyy')}
+                                              </Typography>
+                                            )}
+                                          </Box>
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                  ) : (
+                                    // STARY FORMAT: Wyświetl jak wcześniej (kompatybilność wsteczna)
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <Box />
+                                      <Box sx={{ textAlign: 'right' }}>
+                                        <Typography variant="body2" color="primary" sx={{ fontSize: '0.8rem' }}>
+                                          {item.unloadedQuantity || 'Nie podano'} {item.unit || ''}
+                                        </Typography>
+                                        {item.noExpiryDate ? (
+                                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                            Bez daty ważności
+                                          </Typography>
+                                        ) : item.expiryDate && (
+                                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                            {safeFormatDate(item.expiryDate, 'dd.MM.yyyy')}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Box>
                                   )}
                                 </Box>
-                              </Box>
-                            ))}
+                              );
+                            })}
                           </Box>
                         </Grid>
                       )}

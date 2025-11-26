@@ -1214,7 +1214,8 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
           previousUnitCost: 0,
           newUnitCost: 0,
           reason: 'Inicjalizacja kosztów przy tworzeniu zadania'
-        }]
+        }],
+        originalQuantity: taskData.quantity // Zapisz oryginalną ilość przy tworzeniu zadania
       };
       
       console.log(`[DEBUG-MO] Dane powiązane z zamówieniem w taskWithMeta:`, JSON.stringify({
@@ -1463,6 +1464,16 @@ export const updateTask = async (taskId, taskData, userId) => {
         }];
       }
       
+      // Zachowaj oryginalną ilość przy aktualizacji zadania
+      // Jeśli zadanie ma już originalQuantity, zachowaj je
+      // Jeśli nie ma, a ilość się zmienia, zapisz poprzednią ilość jako originalQuantity
+      if (currentTask.originalQuantity !== undefined) {
+        taskData.originalQuantity = currentTask.originalQuantity;
+      } else if (taskData.quantity !== undefined && taskData.quantity !== currentTask.quantity) {
+        // Zadanie nie miało jeszcze originalQuantity, zapisujemy oryginalną ilość
+        taskData.originalQuantity = currentTask.quantity;
+      }
+      
       const updatedTask = {
         ...taskData,
         updatedAt: serverTimestamp(),
@@ -1581,20 +1592,18 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
       else if (newStatus === 'Zakończone') {
         updates.completionDate = new Date().toISOString();
         
+        // Sprawdź czy zadanie ma materiały i czy nie ma potwierdzonego zużycia
+        // (niezależnie od tego czy ma produkt)
+        if (!task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
+          // Zmień status na "Potwierdzenie zużycia" zamiast "Zakończone"
+          updates.status = 'Potwierdzenie zużycia';
+          console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, zmieniono status na "Potwierdzenie zużycia"`);
+        }
+        
         // Jeśli zadanie ma produkt, oznaczamy je jako gotowe do dodania do magazynu
         if (task.productName) {
           updates.readyForInventory = true;
-          
-          // Sprawdź czy zadanie ma materiały i czy nie ma potwierdzonego zużycia
-          if (!task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
-            // Zmień status na "Potwierdzenie zużycia" zamiast "Zakończone"
-            updates.status = 'Potwierdzenie zużycia';
-            console.log(`Zadanie ${taskId} wymaga potwierdzenia zużycia, zmieniono status na "Potwierdzenie zużycia"`);
-          } else {
-            // Jeśli zadanie ma potwierdzenie zużycia materiałów lub nie ma materiałów,
-            // oznaczamy je jako gotowe do dodania, ale nie dodajemy automatycznie
-            console.log(`Zadanie ${taskId} oznaczono jako gotowe do dodania do magazynu`);
-          }
+          console.log(`Zadanie ${taskId} oznaczono jako gotowe do dodania do magazynu`);
         }
       }
       
@@ -3092,6 +3101,18 @@ export const updateTaskStatus = async (taskId, newStatus, userId) => {
         updatedAt: serverTimestamp(),
         updatedBy: userId || 'system'
       };
+      
+      // Jeśli wyprodukowana ilość różni się od planowanej, zaktualizuj ilość zadania
+      // (bez przeliczania materiałów - materiały zostały już skonsumowane)
+      const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+      if (totalCompletedQuantity > 0 && totalCompletedQuantity !== task.quantity) {
+        console.log(`[CONSUMPTION] Aktualizacja ilości zadania: ${task.quantity} -> ${totalCompletedQuantity} (bez przeliczania materiałów)`);
+        updates.quantity = totalCompletedQuantity;
+        // Zapisz oryginalną ilość jeśli jeszcze nie była zapisana
+        if (!task.originalQuantity) {
+          updates.originalQuantity = task.quantity;
+        }
+      }
       
       // Zapisz w bazie danych
       await updateDoc(taskRef, updates);

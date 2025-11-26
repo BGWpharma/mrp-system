@@ -11,6 +11,7 @@ import {
   Grid,
   Chip,
   Box,
+  Tooltip,
   useMediaQuery,
   useTheme
 } from '@mui/material';
@@ -90,7 +91,54 @@ const BasicDataTab = ({
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                 {t('quantity')}:
               </Typography>
-              <Typography variant="body1">{task.quantity} {task.unit}</Typography>
+              {task.originalQuantity && task.originalQuantity !== task.quantity ? (
+                <Tooltip
+                  title={
+                    <Box>
+                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                        Zmiana ilości
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block' }}>
+                        Ilość oryginalna: {task.originalQuantity} {task.unit}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block' }}>
+                        Ilość aktualna: {task.quantity} {task.unit}
+                      </Typography>
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          display: 'block',
+                          color: (task.quantity - task.originalQuantity) >= 0 ? 'success.light' : 'error.light'
+                        }}
+                      >
+                        Zmiana: {(task.quantity - task.originalQuantity) > 0 ? '+' : ''}
+                        {(task.quantity - task.originalQuantity).toFixed(3)} {task.unit}
+                      </Typography>
+                    </Box>
+                  }
+                  arrow
+                  placement="right"
+                >
+                  <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, cursor: 'help' }}>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        textDecoration: 'line-through', 
+                        color: 'text.secondary',
+                        fontSize: '0.9em'
+                      }}
+                    >
+                      {task.originalQuantity}
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                      {task.quantity} {task.unit}
+                    </Typography>
+                    
+                  </Box>
+                </Tooltip>
+              ) : (
+                <Typography variant="body1">{task.quantity} {task.unit}</Typography>
+              )}
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>

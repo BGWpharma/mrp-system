@@ -582,7 +582,12 @@ const MaterialsAndCostsTab = ({
                 const totalCompletedQuantity = task.totalCompletedQuantity || 0;
                 const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
                 const isFullyProduced = remainingQuantity === 0;
-                if (isFullyProduced) {
+                // Pokazuj przycisk gdy: wyprodukowano 100% LUB status to "Potwierdzenie zużycia" LUB "Zakończone"
+                const canManageConsumption = isFullyProduced || 
+                  task.status === 'Potwierdzenie zużycia' || 
+                  task.status === 'Zakończone';
+                  
+                if (canManageConsumption) {
                   const isConsumptionConfirmed = task.materialConsumptionConfirmed === true;
                   const buttonColor = isConsumptionConfirmed ? "success" : "info";
                   const buttonText = isConsumptionConfirmed ? t('consumedMaterials.confirmedConsumption') : t('consumedMaterials.manageConsumption');

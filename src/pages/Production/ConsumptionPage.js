@@ -916,8 +916,8 @@ const ConsumptionPage = () => {
       // Zapisz wyniki walidacji wraz z zatwierdzeniem
       const validation = validationResults || validatePostProductionConsumption();
       
-      // Najpierw oznacz zadanie jako mające potwierdzone zużycie materiałów
-      await updateDoc(doc(db, 'productionTasks', taskId), {
+      // Przygotuj dane do aktualizacji
+      const updateData = {
         materialConsumptionConfirmed: true,
         materialConsumptionConfirmedAt: new Date().toISOString(),
         materialConsumptionConfirmedBy: currentUser.uid,
@@ -930,7 +930,22 @@ const ConsumptionPage = () => {
         },
         updatedAt: serverTimestamp(),
         updatedBy: currentUser.uid
-      });
+      };
+      
+      // Jeśli wyprodukowana ilość różni się od planowanej, zaktualizuj ilość zadania
+      // (bez przeliczania materiałów - materiały zostały już skonsumowane)
+      const totalCompletedQuantity = task.totalCompletedQuantity || 0;
+      if (totalCompletedQuantity > 0 && totalCompletedQuantity !== task.quantity) {
+        console.log(`[CONSUMPTION] Aktualizacja ilości zadania: ${task.quantity} -> ${totalCompletedQuantity}`);
+        updateData.quantity = totalCompletedQuantity;
+        // Zapisz oryginalną ilość jeśli jeszcze nie była zapisana
+        if (!task.originalQuantity) {
+          updateData.originalQuantity = task.quantity;
+        }
+      }
+      
+      // Zapisz zmiany
+      await updateDoc(doc(db, 'productionTasks', taskId), updateData);
       
       // Następnie zaktualizuj status zadania na "Zakończone"
       await updateTaskStatus(taskId, 'Zakończone', currentUser.uid);
@@ -1022,8 +1037,8 @@ const ConsumptionPage = () => {
           </Typography>
         </Box>
         
-        {/* Przycisk zatwierdzenia konsumpcji - widoczny tylko gdy zadanie nie jest zakończone */}
-        {task?.status !== 'Zakończone' && (
+        {/* Przycisk zatwierdzenia konsumpcji - widoczny gdy konsumpcja nie została jeszcze potwierdzona */}
+        {!task?.materialConsumptionConfirmed && (
           <Button
             variant="contained"
             color="success"
@@ -1033,6 +1048,7 @@ const ConsumptionPage = () => {
               setValidationResults(validation);
               setConfirmDialogOpen(true);
             }}
+            disabled={confirmLoading || !consumptionData || consumptionData.length === 0}
             size="large"
             sx={{ 
               minWidth: '200px',
@@ -1043,7 +1059,7 @@ const ConsumptionPage = () => {
               }
             }}
           >
-            Zatwierdź konsumpcję
+            {confirmLoading ? <CircularProgress size={20} /> : 'Zatwierdź konsumpcję'}
           </Button>
         )}
       </Box>
