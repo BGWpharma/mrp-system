@@ -23,7 +23,9 @@ import {
   InputAdornment,
   Checkbox,
   FormGroup,
-  Switch
+  Switch,
+  IconButton,
+  Chip
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -34,7 +36,10 @@ import {
   AccessTime as AccessTimeIcon,
   Calculate as CalculateIcon,
   Inventory as InventoryIcon,
-  FileUpload as FileUploadIcon
+  FileUpload as FileUploadIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Label as LabelIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -82,12 +87,45 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
     noExpiryDate: false // Nowe pole do oznaczenia braku terminu ważności
   });
 
+  // NOWE: Tablica partii dla przyjęcia wielu partii jednocześnie
+  const [batchesData, setBatchesData] = useState([{
+    id: `batch_${Date.now()}`,
+    batchNumber: '',
+    quantity: '',
+    expiryDate: null,
+    batchNotes: '',
+    noExpiryDate: false
+  }]);
+
   // Wymuś włączone informacje o partii dla przyjęcia (nie pozwalaj wyłączyć)
   useEffect(() => {
     if (isReceive) {
       setBatchData(prev => ({ ...prev, useBatch: true }));
     }
   }, [isReceive]);
+
+  // Funkcje do zarządzania wieloma partiami
+  const handleAddBatch = () => {
+    setBatchesData(prev => [...prev, {
+      id: `batch_${Date.now()}`,
+      batchNumber: '',
+      quantity: '',
+      expiryDate: null,
+      batchNotes: '',
+      noExpiryDate: false
+    }]);
+  };
+
+  const handleRemoveBatch = (batchId) => {
+    if (batchesData.length <= 1) return; // Nie usuwaj ostatniej partii
+    setBatchesData(prev => prev.filter(b => b.id !== batchId));
+  };
+
+  const handleBatchFieldChange = (batchId, field, value) => {
+    setBatchesData(prev => prev.map(batch => 
+      batch.id === batchId ? { ...batch, [field]: value } : batch
+    ));
+  };
 
   // Dodanie stanu dla certyfikatu
   const [certificateFile, setCertificateFile] = useState(null);
@@ -117,27 +155,60 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
         itemPOId: initialData.itemPOId || initialData.id || ''
       }));
       
-      // Ustawienie danych partii
-      setBatchData(prev => {
-        const newBatchData = {
-        ...prev,
-          useBatch: true, // Włącz obsługę partii, gdy mamy dane LOT lub datę ważności
-        batchNumber: initialData.lotNumber || initialData.batchNumber || ''
-        };
+      // NOWY FORMAT: Obsługa wielu partii z raportu rozładunku
+      if (initialData.batches && initialData.batches.length > 0) {
+        console.log('📦 Inicjalizacja wielu partii z raportu rozładunku:', initialData.batches);
         
-        // Obsłuż informacje o dacie ważności
-        if (initialData.noExpiryDate === true) {
-          console.log('Znaleziono "brak terminu ważności" w initialData');
-          newBatchData.expiryDate = null;
-          newBatchData.noExpiryDate = true;
-        } else if (initialData.expiryDate) {
-          console.log('Znaleziono datę ważności w initialData:', initialData.expiryDate);
-          newBatchData.expiryDate = new Date(initialData.expiryDate);
-          newBatchData.noExpiryDate = false;
-        }
+        setBatchesData(initialData.batches.map((batch, index) => ({
+          id: `batch_${Date.now()}_${index}`,
+          batchNumber: batch.batchNumber || '',
+          quantity: batch.quantity || '',
+          expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
+          noExpiryDate: batch.noExpiryDate || false,
+          batchNotes: ''
+        })));
         
-        return newBatchData;
-      });
+        // Dla kompatybilności: ustaw też pojedynczy batchData z pierwszą partią
+        const firstBatch = initialData.batches[0];
+        setBatchData(prev => ({
+          ...prev,
+          useBatch: true,
+          batchNumber: firstBatch.batchNumber || '',
+          expiryDate: firstBatch.expiryDate ? new Date(firstBatch.expiryDate) : null,
+          noExpiryDate: firstBatch.noExpiryDate || false
+        }));
+      } else {
+        // STARY FORMAT: Pojedyncza partia (kompatybilność wsteczna)
+        setBatchData(prev => {
+          const newBatchData = {
+            ...prev,
+            useBatch: true,
+            batchNumber: initialData.lotNumber || initialData.batchNumber || ''
+          };
+          
+          if (initialData.noExpiryDate === true) {
+            console.log('Znaleziono "brak terminu ważności" w initialData');
+            newBatchData.expiryDate = null;
+            newBatchData.noExpiryDate = true;
+          } else if (initialData.expiryDate) {
+            console.log('Znaleziono datę ważności w initialData:', initialData.expiryDate);
+            newBatchData.expiryDate = new Date(initialData.expiryDate);
+            newBatchData.noExpiryDate = false;
+          }
+          
+          return newBatchData;
+        });
+        
+        // Ustaw pojedynczą partię w tablicy
+        setBatchesData([{
+          id: `batch_${Date.now()}`,
+          batchNumber: initialData.lotNumber || initialData.batchNumber || '',
+          quantity: initialData.quantity || '',
+          expiryDate: initialData.expiryDate ? new Date(initialData.expiryDate) : null,
+          noExpiryDate: initialData.noExpiryDate || false,
+          batchNotes: ''
+        }]);
+      }
       
       // Dodaj logowanie dla debugowania
       console.log('Dane początkowe z formularza:', initialData);
@@ -252,19 +323,19 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
       }
       
       // Dodaj informacje o partii, jeśli używamy partii
-      if (batchData.useBatch) {
+      // UWAGA: Dla przyjęcia z wieloma partiami, dane partii są dodawane osobno w pętli poniżej
+      const useMultipleBatches = isReceive && batchesData.length > 0 && batchesData.some(b => b.quantity);
+      
+      if (batchData.useBatch && !useMultipleBatches) {
         if (isReceive) {
-          // Dla przyjęcia - dane nowej partii
+          // Dla przyjęcia z pojedynczą partią (stara ścieżka - kompatybilność wsteczna)
           transactionPayload.lotNumber = batchData.batchNumber;
           transactionPayload.batchNotes = batchData.batchNotes;
           
           // Obsługa daty ważności
           if (batchData.noExpiryDate) {
-            // Jeśli zaznaczono "brak terminu ważności", nie ustawiamy pola expiryDate
-            // To spowoduje, że zostanie ono zapisane jako null w bazie danych
-            transactionPayload.noExpiryDate = true; // Dodatkowa flaga informująca o braku daty
+            transactionPayload.noExpiryDate = true;
           } else if (batchData.expiryDate) {
-            // Tylko jeśli mamy faktyczną datę ważności, ustawiamy ją
             const expiryDate = new Date(batchData.expiryDate);
             transactionPayload.expiryDate = Timestamp.fromDate(expiryDate);
           }
@@ -285,57 +356,113 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
       // Wykonaj odpowiednią operację w zależności od typu transakcji
       let result;
       if (isReceive) {
-        // Sprawdź czy istnieje już partia dla tej pozycji PO
-        if (transactionData.source === 'purchase' && transactionData.orderId && transactionData.itemPOId && transactionData.warehouseId) {
-          console.log('Sprawdzam czy istnieje partia dla PO:', {
-            itemId,
-            orderId: transactionData.orderId,
-            itemPOId: transactionData.itemPOId,
-            warehouseId: transactionData.warehouseId
-          });
+        // NOWA LOGIKA: Obsługa wielu partii
+        // Użyj nowej ścieżki jeśli mamy partie z wypełnionymi ilościami
+        if (useMultipleBatches) {
+          // Przyjęcie wielu partii
+          console.log('📦 Przyjmowanie wielu partii:', batchesData);
           
-          const existingBatch = await getExistingBatchForPOItem(
-            itemId,
-            transactionData.orderId,
-            transactionData.itemPOId,
-            transactionData.warehouseId
-          );
+          let totalQuantityReceived = 0;
+          let batchesReceived = 0;
           
-          if (existingBatch) {
-            console.log('Znaleziono istniejącą partię:', existingBatch);
-            // Zapisz dane transakcji i pokaż dialog wyboru
-            setBatchChoiceDialog({
-              open: true,
-              existingBatch,
-              pendingTransaction: {
-                itemId,
-                quantity: transactionData.quantity,
-                transactionPayload,
-                userId: currentUser.uid
-              }
-            });
-            setProcessing(false);
-            return; // Przerwij wykonanie - czekamy na wybór użytkownika
+          for (const batch of batchesData) {
+            const batchQuantity = parseFloat(batch.quantity);
+            if (!batchQuantity || batchQuantity <= 0) continue;
+            
+            // Przygotuj payload dla tej partii
+            // forceCreateNew: true wymusza utworzenie osobnej partii dla każdego LOT
+            // (bez tego system łączyłby partie z tego samego PO/pozycji)
+            const batchPayload = {
+              ...transactionPayload,
+              lotNumber: batch.batchNumber || '',
+              batchNotes: batch.batchNotes || '',
+              noExpiryDate: batch.noExpiryDate || false,
+              forceCreateNew: true
+            };
+            
+            // Obsługa daty ważności dla tej partii
+            if (!batch.noExpiryDate && batch.expiryDate) {
+              const expiryDate = new Date(batch.expiryDate);
+              batchPayload.expiryDate = Timestamp.fromDate(expiryDate);
+            }
+            
+            // Dodaj certyfikat tylko do pierwszej partii
+            if (batchesReceived === 0 && certificateFile) {
+              batchPayload.certificateFile = certificateFile;
+            }
+            
+            console.log(`📦 Przyjmowanie partii ${batchesReceived + 1}: ${batchQuantity} ${item.unit}, LOT: ${batch.batchNumber || 'auto'}`);
+            
+            await receiveInventory(
+              itemId,
+              batchQuantity,
+              batchPayload,
+              currentUser.uid
+            );
+            
+            totalQuantityReceived += batchQuantity;
+            batchesReceived++;
           }
-        }
-        
-        // Jeśli nie ma istniejącej partii, wykonaj normalne przyjęcie
-        result = await receiveInventory(
-          itemId, 
-          transactionData.quantity, 
-          transactionPayload,
-          currentUser.uid
-        );
-        // Pokazuj odpowiedni komunikat w zależności od tego czy partia została zaktualizowana czy utworzona nowa
-        if (result.isNewBatch !== undefined) {
-          if (result.isNewBatch) {
-            showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu - utworzono nową partię`);
+          
+          if (batchesReceived > 0) {
+            showSuccess(`Przyjęto ${totalQuantityReceived} ${item.unit} w ${batchesReceived} ${batchesReceived === 1 ? 'partii' : 'partiach'}`);
           } else {
-            showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu - dodano do istniejącej partii`);
+            throw new Error('Nie podano ilości dla żadnej partii');
           }
         } else {
-          // Fallback dla przypadku gdy nie mamy informacji o partii
-          showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu`);
+          // STARA LOGIKA: Pojedyncza partia (kompatybilność wsteczna)
+          // Sprawdź czy istnieje już partia dla tej pozycji PO
+          if (transactionData.source === 'purchase' && transactionData.orderId && transactionData.itemPOId && transactionData.warehouseId) {
+            console.log('Sprawdzam czy istnieje partia dla PO:', {
+              itemId,
+              orderId: transactionData.orderId,
+              itemPOId: transactionData.itemPOId,
+              warehouseId: transactionData.warehouseId
+            });
+            
+            const existingBatch = await getExistingBatchForPOItem(
+              itemId,
+              transactionData.orderId,
+              transactionData.itemPOId,
+              transactionData.warehouseId
+            );
+            
+            if (existingBatch) {
+              console.log('Znaleziono istniejącą partię:', existingBatch);
+              // Zapisz dane transakcji i pokaż dialog wyboru
+              setBatchChoiceDialog({
+                open: true,
+                existingBatch,
+                pendingTransaction: {
+                  itemId,
+                  quantity: transactionData.quantity,
+                  transactionPayload,
+                  userId: currentUser.uid
+                }
+              });
+              setProcessing(false);
+              return; // Przerwij wykonanie - czekamy na wybór użytkownika
+            }
+          }
+          
+          // Jeśli nie ma istniejącej partii, wykonaj normalne przyjęcie
+          result = await receiveInventory(
+            itemId, 
+            transactionData.quantity, 
+            transactionPayload,
+            currentUser.uid
+          );
+          // Pokazuj odpowiedni komunikat w zależności od tego czy partia została zaktualizowana czy utworzona nowa
+          if (result.isNewBatch !== undefined) {
+            if (result.isNewBatch) {
+              showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu - utworzono nową partię`);
+            } else {
+              showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu - dodano do istniejącej partii`);
+            }
+          } else {
+            // Fallback dla przypadku gdy nie mamy informacji o partii
+            showSuccess(`Przyjęto ${transactionData.quantity} ${item.unit} na stan magazynu`);
+          }
         }
       } else {
         result = await issueInventory(
@@ -756,95 +883,169 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
           {batchData.useBatch && (
             <Grid container spacing={3}>
               {isReceive ? (
-                // Formularz dla przyjęcia
+                // Formularz dla przyjęcia - obsługa WIELU PARTII
                 <>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <TextField
-                      label="Numer partii/LOT"
-                      name="batchNumber"
-                      value={batchData.batchNumber}
-                      onChange={handleBatchChange}
-                      fullWidth
-                      size="small"
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                      placeholder="Wprowadź numer partii dostawcy lub zostaw puste — wygenerujemy LOT"
-                      helperText="Jeśli puste — automatyczna generacja numeru LOT"
-                    />
+                  {/* Nagłówek z przyciskiem dodawania partii */}
+                  <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="subtitle2" color="primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <LabelIcon fontSize="small" />
+                        Partie do przyjęcia ({batchesData.length})
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddIcon />}
+                        onClick={handleAddBatch}
+                      >
+                        Dodaj partię
+                      </Button>
+                    </Box>
                   </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                      <InputLabel shrink id="expiry-date-label">Data ważności</InputLabel>
-                      <Box sx={{ 
-                        mt: 2,
-                        display: 'flex', 
-                        flexDirection: 'column'
-                      }}>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={batchData.noExpiryDate}
-                              onChange={(e) => {
-                                const { checked } = e.target;
-                                setBatchData(prev => ({ 
-                                  ...prev, 
-                                  noExpiryDate: checked,
-                                  expiryDate: checked ? null : prev.expiryDate 
-                                }));
+                  
+                  {/* Lista partii */}
+                  {batchesData.map((batch, index) => (
+                    <Grid item xs={12} key={batch.id}>
+                      <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                          p: 2, 
+                          borderRadius: 2,
+                          borderColor: batch.batchNumber ? 'primary.main' : 'divider',
+                          borderWidth: batch.batchNumber ? 2 : 1,
+                          backgroundColor: theme => theme.palette.mode === 'dark' 
+                            ? 'rgba(25, 35, 55, 0.3)' 
+                            : 'rgba(245, 247, 250, 0.5)'
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>
+                              Partia {index + 1}
+                            </Typography>
+                            {batch.batchNumber && (
+                              <Chip 
+                                label={`LOT: ${batch.batchNumber}`} 
+                                size="small" 
+                                color="primary" 
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+                          {batchesData.length > 1 && (
+                            <IconButton 
+                              size="small" 
+                              color="error" 
+                              onClick={() => handleRemoveBatch(batch.id)}
+                              title="Usuń partię"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Box>
+                        
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={6} md={3}>
+                            <TextField
+                              label="Numer LOT"
+                              value={batch.batchNumber}
+                              onChange={(e) => handleBatchFieldChange(batch.id, 'batchNumber', e.target.value)}
+                              fullWidth
+                              size="small"
+                              placeholder="Nr partii dostawcy"
+                              helperText="Puste = auto LOT"
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={6} md={2}>
+                            <TextField
+                              label="Ilość"
+                              type="number"
+                              value={batch.quantity}
+                              onChange={(e) => handleBatchFieldChange(batch.id, 'quantity', e.target.value)}
+                              fullWidth
+                              size="small"
+                              required
+                              inputProps={{ min: 0.01, step: "0.01" }}
+                              InputProps={{
+                                endAdornment: item?.unit ? <InputAdornment position="end">{item.unit}</InputAdornment> : null
                               }}
-                              name="noExpiryDate"
-                              color="primary"
+                              error={!batch.quantity || parseFloat(batch.quantity) <= 0}
                             />
-                          }
-                          label={<Typography variant="body2">Brak terminu ważności</Typography>}
-                          sx={{ 
-                            mb: 1
-                          }}
-                        />
-                        {!batchData.noExpiryDate && (
-                          <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-                            <DatePicker
-                              label="Wybierz datę"
-                              value={batchData.expiryDate}
-                              onChange={handleDateChange}
-                              renderInput={(params) => 
-                                <TextField 
-                                  {...params} 
-                                  fullWidth
-                                  variant="outlined"
-                                  required
-                                  size="small"
-                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                                  error={!batchData.expiryDate && !batchData.noExpiryDate}
-                                  helperText={!batchData.expiryDate && !batchData.noExpiryDate ? "Data ważności jest wymagana" : ""}
-                                />
-                              }
-                              disablePast
+                          </Grid>
+                          <Grid item xs={12} sm={6} md={4}>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={batch.noExpiryDate}
+                                    onChange={(e) => {
+                                      handleBatchFieldChange(batch.id, 'noExpiryDate', e.target.checked);
+                                      if (e.target.checked) {
+                                        handleBatchFieldChange(batch.id, 'expiryDate', null);
+                                      }
+                                    }}
+                                    size="small"
+                                  />
+                                }
+                                label={<Typography variant="body2">Bez daty ważności</Typography>}
+                              />
+                              {!batch.noExpiryDate && (
+                                <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
+                                  <DatePicker
+                                    label="Data ważności"
+                                    value={batch.expiryDate}
+                                    onChange={(date) => handleBatchFieldChange(batch.id, 'expiryDate', date)}
+                                    renderInput={(params) => 
+                                      <TextField 
+                                        {...params} 
+                                        fullWidth
+                                        size="small"
+                                      />
+                                    }
+                                    disablePast
+                                  />
+                                </LocalizationProvider>
+                              )}
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12} sm={6} md={3}>
+                            <TextField
+                              label="Uwagi"
+                              value={batch.batchNotes || ''}
+                              onChange={(e) => handleBatchFieldChange(batch.id, 'batchNotes', e.target.value)}
+                              fullWidth
+                              size="small"
+                              placeholder="Np. numer CoA"
                             />
-                          </LocalizationProvider>
-                        )}
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    </Grid>
+                  ))}
+                  
+                  {/* Podsumowanie ilości */}
+                  {batchesData.length > 0 && (
+                    <Grid item xs={12}>
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'flex-end', 
+                        alignItems: 'center', 
+                        gap: 2,
+                        p: 1,
+                        backgroundColor: theme => theme.palette.mode === 'dark' 
+                          ? 'rgba(25, 118, 210, 0.1)' 
+                          : 'rgba(25, 118, 210, 0.05)',
+                        borderRadius: 1
+                      }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Suma ilości ze wszystkich partii:
+                        </Typography>
+                        <Typography variant="h6" color="primary" fontWeight={600}>
+                          {batchesData.reduce((sum, b) => sum + (parseFloat(b.quantity) || 0), 0).toFixed(2)} {item?.unit || ''}
+                        </Typography>
                       </Box>
-                      {batchData.noExpiryDate && (
-                        <FormHelperText>
-                          Produkt nie będzie śledzony pod kątem terminu przydatności. 
-                          Zalecane tylko dla przedmiotów bez określonego terminu ważności.
-                        </FormHelperText>
-                      )}
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      label="Uwagi do partii (opcjonalnie)"
-                      name="batchNotes"
-                      value={batchData.batchNotes}
-                      onChange={handleBatchChange}
-                      fullWidth
-                      multiline
-                      rows={2}
-                      size="small"
-                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                      placeholder="Np. numer CoA, dodatkowe uwagi"
-                    />
-                  </Grid>
+                    </Grid>
+                  )}
                   
                   {/* Certyfikat produktu (opcjonalnie) w akordeonie dla mniejszego hałasu wizualnego */}
                   <Grid item xs={12}>

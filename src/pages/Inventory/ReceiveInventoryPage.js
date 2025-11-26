@@ -31,6 +31,9 @@ const ReceiveInventoryPage = () => {
     const expiryDate = queryParams.get('expiryDate');
     const noExpiryDate = queryParams.get('noExpiryDate');
     
+    // Pobierz partie z URL (nowy format - wszystkie partie z raportu rozładunku)
+    const batchesParam = queryParams.get('batches');
+    
     if (poNumber || quantity || unitPrice || orderId) {
       // Przygotuj obiekt z danymi początkowymi
       const data = {
@@ -56,20 +59,36 @@ const ReceiveInventoryPage = () => {
         data.orderNumber = orderNumber;
       }
       
-      // Obsłuż informacje o dacie ważności
-      if (noExpiryDate === 'true') {
-        // Jeśli w formularzu rozładunku zaznaczono "nie dotyczy"
-        data.noExpiryDate = true;
-        data.expiryDate = null;
-        console.log('Ustawiono "brak terminu ważności" z parametru URL');
-      } else if (expiryDate) {
-        // Jeśli jest określona data ważności
+      // Obsłuż partie z raportu rozładunku (nowy format z wieloma partiami)
+      if (batchesParam) {
         try {
-          data.expiryDate = new Date(expiryDate);
-          data.noExpiryDate = false;
-          console.log('Ustawiono datę ważności z parametru URL:', data.expiryDate);
+          const batches = JSON.parse(batchesParam);
+          data.batches = batches.map(batch => ({
+            batchNumber: batch.batchNumber || '',
+            quantity: batch.quantity || '',
+            expiryDate: batch.expiryDate ? new Date(batch.expiryDate) : null,
+            noExpiryDate: batch.noExpiryDate || false
+          }));
+          console.log('📦 Załadowano partie z URL:', data.batches);
         } catch (e) {
-          console.error('Błąd podczas parsowania daty ważności:', e);
+          console.error('Błąd parsowania partii z URL:', e);
+        }
+      } else {
+        // Stary format - obsłuż pojedyncze informacje o dacie ważności (kompatybilność wsteczna)
+        if (noExpiryDate === 'true') {
+          // Jeśli w formularzu rozładunku zaznaczono "nie dotyczy"
+          data.noExpiryDate = true;
+          data.expiryDate = null;
+          console.log('Ustawiono "brak terminu ważności" z parametru URL');
+        } else if (expiryDate) {
+          // Jeśli jest określona data ważności
+          try {
+            data.expiryDate = new Date(expiryDate);
+            data.noExpiryDate = false;
+            console.log('Ustawiono datę ważności z parametru URL:', data.expiryDate);
+          } catch (e) {
+            console.error('Błąd podczas parsowania daty ważności:', e);
+          }
         }
       }
       

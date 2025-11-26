@@ -808,10 +808,24 @@ const PurchaseOrderDetails = ({ orderId }) => {
       ? itemToReceive.unitPrice 
       : parseFloat(itemToReceive.unitPrice || 0);
     
+    // Pobierz informację z odpowiedzi formularza rozładunku (w tym partie)
+    const expiryInfo = getExpiryInfoFromUnloadingForms(itemToReceive);
+    
     const queryParams = new URLSearchParams();
     queryParams.append('poNumber', purchaseOrder.number);
     queryParams.append('orderId', orderId);
-    queryParams.append('quantity', itemToReceive.quantity);
+    
+    // Oblicz sumę ilości ze wszystkich partii lub użyj ilości z PO
+    let totalQuantity = itemToReceive.quantity;
+    if (expiryInfo.batches && expiryInfo.batches.length > 0) {
+      const batchesSum = expiryInfo.batches.reduce((sum, batch) => 
+        sum + parseFloat(batch.unloadedQuantity || 0), 0);
+      if (batchesSum > 0) {
+        totalQuantity = batchesSum;
+      }
+    }
+    queryParams.append('quantity', totalQuantity);
+    
     queryParams.append('unitPrice', unitPrice);
     queryParams.append('reason', 'purchase');
     queryParams.append('source', 'purchase'); 
@@ -831,20 +845,29 @@ const PurchaseOrderDetails = ({ orderId }) => {
     
     queryParams.append('returnTo', `/purchase-orders/${orderId}`);
     
-    // Pobierz informację o dacie ważności z odpowiedzi formularza rozładunku
-    const expiryInfo = getExpiryInfoFromUnloadingForms(itemToReceive);
-    
-    if (expiryInfo.noExpiryDate) {
-      // Jeśli zaznaczono "nie dotyczy" w formularzu rozładunku
-      queryParams.append('noExpiryDate', 'true');
-      console.log(`🚫 Przekazywanie informacji "brak terminu ważności" do formularza przyjmowania`);
-    } else if (expiryInfo.expiryDate) {
-      // Jeśli jest określona data ważności
-      const expiryDateString = expiryInfo.expiryDate instanceof Date 
-        ? expiryInfo.expiryDate.toISOString() 
-        : new Date(expiryInfo.expiryDate).toISOString();
-      queryParams.append('expiryDate', expiryDateString);
-      console.log(`📅 Przekazywanie daty ważności do formularza przyjmowania: ${expiryDateString}`);
+    // Przekaż WSZYSTKIE partie z raportu rozładunku jako JSON
+    if (expiryInfo.batches && expiryInfo.batches.length > 0) {
+      const batchesToPass = expiryInfo.batches.map(batch => ({
+        batchNumber: batch.batchNumber || '',
+        quantity: batch.unloadedQuantity || '',
+        expiryDate: batch.expiryDate instanceof Date ? batch.expiryDate.toISOString() : (batch.expiryDate || null),
+        noExpiryDate: batch.noExpiryDate || false
+      }));
+      
+      queryParams.append('batches', JSON.stringify(batchesToPass));
+      console.log(`📦 Przekazywanie ${batchesToPass.length} partii do formularza przyjmowania:`, batchesToPass);
+    } else {
+      // Stary format - przekaż pojedyncze dane (kompatybilność wsteczna)
+      if (expiryInfo.noExpiryDate) {
+        queryParams.append('noExpiryDate', 'true');
+        console.log(`🚫 Przekazywanie informacji "brak terminu ważności" do formularza przyjmowania`);
+      } else if (expiryInfo.expiryDate) {
+        const expiryDateString = expiryInfo.expiryDate instanceof Date 
+          ? expiryInfo.expiryDate.toISOString() 
+          : new Date(expiryInfo.expiryDate).toISOString();
+        queryParams.append('expiryDate', expiryDateString);
+        console.log(`📅 Przekazywanie daty ważności do formularza przyjmowania: ${expiryDateString}`);
+      }
     }
     
     localStorage.setItem('refreshPurchaseOrder', orderId);
