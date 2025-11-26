@@ -427,3 +427,4 @@ AI Assistant (Claude Sonnet 4.5) + User (mateu)
 **Projekt:** BGW-MRP System  
 **Data:** 25 listopada 2024
 
+

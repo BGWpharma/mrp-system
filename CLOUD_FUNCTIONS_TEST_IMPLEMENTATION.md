@@ -336,3 +336,4 @@ Admin → Zarządzanie systemem
 **Data:** 25 listopada 2025  
 **Wersja:** 1.0.0
 
+

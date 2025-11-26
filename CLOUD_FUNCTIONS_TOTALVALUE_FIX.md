@@ -418,3 +418,4 @@ AI Assistant (Claude Sonnet 4.5) + User (mateu)
 - ✅ Wartość zawiera wszystkie składniki (dostawa, dodatki, rabaty)
 - ✅ Wartość na liście = wartość w szczegółach
 
+

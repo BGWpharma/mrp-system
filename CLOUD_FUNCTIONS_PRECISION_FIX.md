@@ -373,3 +373,4 @@ AI Assistant (Claude Sonnet 4.5) + User (mateu)
 
 Cloud Function `onBatchPriceUpdate` jest teraz **w 100% zgodna** z logiką frontendu. Wszystkie obliczenia są precyzyjne, sprawdzanie tolerancji jest kompletne, a kod jest zoptymalizowany i czytelny.
 
+
