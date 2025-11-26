@@ -35,6 +35,7 @@ import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import pl from 'date-fns/locale/pl';
 import { format } from 'date-fns';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
@@ -51,10 +52,12 @@ import {
 import { getOrderById, getAllOrders, searchOrdersByNumber } from '../../../services/orderService';
 import { getCustomerById } from '../../../services/customerService';
 import { getCompanyData } from '../../../services/companyService';
+import { getAllCarriers, createCarrier, updateCarrier, deleteCarrier } from '../../../services/carrierService';
 import BatchSelector from '../../../components/cmr/BatchSelector';
 import WeightCalculationDialog from '../../../components/cmr/WeightCalculationDialog';
 import { calculatePalletWeights, calculateBoxWeights, calculateCmrItemWeight, getInventoryDataFromBatches } from '../../../utils/cmrWeightCalculator';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useAuth } from '../../../hooks/useAuth';
 
 /**
  * Komponent wyświetlający podsumowanie wagi i palet dla pojedynczej pozycji CMR
@@ -396,6 +399,7 @@ const ItemWeightSummary = ({ item, itemIndex, isCollapsed, onToggleCollapse }) =
 const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   const muiTheme = useMuiTheme();
   const { mode } = useTheme();
+  const { currentUser } = useAuth();
   const emptyItem = {
     description: '',
     quantity: '',
@@ -528,6 +532,28 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
   // Cache dla danych magazynowych z TTL (5 minut)
   const [inventoryDataCache, setInventoryDataCache] = useState(new Map());
   const CACHE_TTL = 5 * 60 * 1000; // 5 minut w milisekundach
+
+  // Stany dla przewoźników
+  const [carriers, setCarriers] = useState([]);
+  const [carriersLoading, setCarriersLoading] = useState(false);
+  const [selectedCarrier, setSelectedCarrier] = useState(null);
+  const [carrierDialogOpen, setCarrierDialogOpen] = useState(false);
+  const [carrierDialogMode, setCarrierDialogMode] = useState('add'); // 'add' lub 'edit'
+  const [editingCarrierId, setEditingCarrierId] = useState(null);
+  const [newCarrierData, setNewCarrierData] = useState({
+    name: '',
+    address: '',
+    postalCode: '',
+    city: '',
+    country: 'Polska',
+    nip: '',
+    phone: '',
+    email: ''
+  });
+  const [savingCarrier, setSavingCarrier] = useState(false);
+  const [deleteCarrierDialogOpen, setDeleteCarrierDialogOpen] = useState(false);
+  const [carrierToDelete, setCarrierToDelete] = useState(null);
+  const [deletingCarrier, setDeletingCarrier] = useState(false);
 
   // Funkcja do czyszczenia wygasłych wpisów z cache
   const cleanExpiredCache = () => {
@@ -1098,6 +1124,23 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Pobieranie listy przewoźników
+  useEffect(() => {
+    const fetchCarriers = async () => {
+      setCarriersLoading(true);
+      try {
+        const carriersList = await getAllCarriers();
+        setCarriers(carriersList);
+      } catch (error) {
+        console.error('Błąd podczas pobierania przewoźników:', error);
+      } finally {
+        setCarriersLoading(false);
+      }
+    };
+    
+    fetchCarriers();
+  }, []);
+
   // Załaduj powiązane zamówienia gdy są dostępne linkedOrderIds
   useEffect(() => {
     const loadLinkedOrders = async () => {
@@ -1286,6 +1329,193 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
       const updatedItems = [...prev.items];
       updatedItems.splice(index, 1);
       return { ...prev, items: updatedItems };
+    });
+  };
+
+  // Obsługa wyboru przewoźnika z dropdowna
+  const handleCarrierSelect = (event, newValue) => {
+    if (newValue && newValue.id === 'ADD_NEW') {
+      // Otwórz dialog dodawania nowego przewoźnika
+      setCarrierDialogMode('add');
+      setCarrierDialogOpen(true);
+      return;
+    }
+    
+    setSelectedCarrier(newValue);
+    
+    if (newValue) {
+      // Uzupełnij dane przewoźnika w formularzu
+      setFormData(prev => ({
+        ...prev,
+        carrier: newValue.name,
+        carrierAddress: newValue.address || '',
+        carrierPostalCode: newValue.postalCode || '',
+        carrierCity: newValue.city || '',
+        carrierCountry: newValue.country || ''
+      }));
+    } else {
+      // Wyczyść dane przewoźnika
+      setFormData(prev => ({
+        ...prev,
+        carrier: '',
+        carrierAddress: '',
+        carrierPostalCode: '',
+        carrierCity: '',
+        carrierCountry: ''
+      }));
+    }
+  };
+
+  // Obsługa zmiany pól w dialogu nowego przewoźnika
+  const handleNewCarrierChange = (e) => {
+    const { name, value } = e.target;
+    setNewCarrierData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Zapisanie nowego lub edytowanego przewoźnika
+  const handleSaveCarrier = async () => {
+    if (!newCarrierData.name.trim()) {
+      showMessage('Nazwa przewoźnika jest wymagana', 'error');
+      return;
+    }
+    
+    setSavingCarrier(true);
+    try {
+      let savedCarrier;
+      
+      if (carrierDialogMode === 'edit' && editingCarrierId) {
+        // Edycja istniejącego przewoźnika
+        savedCarrier = await updateCarrier(editingCarrierId, newCarrierData);
+        savedCarrier.id = editingCarrierId;
+        
+        // Zaktualizuj listę przewoźników
+        setCarriers(prev => 
+          prev.map(c => c.id === editingCarrierId ? { ...c, ...newCarrierData } : c)
+            .sort((a, b) => a.name.localeCompare(b.name))
+        );
+        
+        // Jeśli edytowany przewoźnik był wybrany, zaktualizuj dane w formularzu
+        if (selectedCarrier?.id === editingCarrierId) {
+          setSelectedCarrier({ ...selectedCarrier, ...newCarrierData });
+          setFormData(prev => ({
+            ...prev,
+            carrier: newCarrierData.name,
+            carrierAddress: newCarrierData.address || '',
+            carrierPostalCode: newCarrierData.postalCode || '',
+            carrierCity: newCarrierData.city || '',
+            carrierCountry: newCarrierData.country || ''
+          }));
+        }
+        
+        showMessage('Przewoźnik został zaktualizowany', 'success');
+      } else {
+        // Dodanie nowego przewoźnika
+        savedCarrier = await createCarrier(newCarrierData, currentUser?.uid);
+        
+        // Dodaj nowego przewoźnika do listy
+        setCarriers(prev => [...prev, savedCarrier].sort((a, b) => a.name.localeCompare(b.name)));
+        
+        // Wybierz nowo utworzonego przewoźnika
+        setSelectedCarrier(savedCarrier);
+        setFormData(prev => ({
+          ...prev,
+          carrier: savedCarrier.name,
+          carrierAddress: savedCarrier.address || '',
+          carrierPostalCode: savedCarrier.postalCode || '',
+          carrierCity: savedCarrier.city || '',
+          carrierCountry: savedCarrier.country || ''
+        }));
+        
+        showMessage('Przewoźnik został dodany', 'success');
+      }
+      
+      // Zamknij dialog i wyczyść formularz
+      handleCloseCarrierDialog();
+    } catch (error) {
+      console.error('Błąd podczas zapisywania przewoźnika:', error);
+      showMessage('Błąd podczas zapisywania przewoźnika', 'error');
+    } finally {
+      setSavingCarrier(false);
+    }
+  };
+
+  // Otwórz dialog edycji przewoźnika
+  const handleEditCarrier = (carrier, e) => {
+    e.stopPropagation(); // Zapobiegaj wyborowi opcji w dropdown
+    setCarrierDialogMode('edit');
+    setEditingCarrierId(carrier.id);
+    setNewCarrierData({
+      name: carrier.name || '',
+      address: carrier.address || '',
+      postalCode: carrier.postalCode || '',
+      city: carrier.city || '',
+      country: carrier.country || 'Polska',
+      nip: carrier.nip || '',
+      phone: carrier.phone || '',
+      email: carrier.email || ''
+    });
+    setCarrierDialogOpen(true);
+  };
+
+  // Otwórz dialog potwierdzenia usunięcia
+  const handleOpenDeleteCarrierDialog = (carrier, e) => {
+    e.stopPropagation(); // Zapobiegaj wyborowi opcji w dropdown
+    setCarrierToDelete(carrier);
+    setDeleteCarrierDialogOpen(true);
+  };
+
+  // Usunięcie przewoźnika
+  const handleConfirmDeleteCarrier = async () => {
+    if (!carrierToDelete) return;
+    
+    setDeletingCarrier(true);
+    try {
+      await deleteCarrier(carrierToDelete.id);
+      
+      // Usuń z listy
+      setCarriers(prev => prev.filter(c => c.id !== carrierToDelete.id));
+      
+      // Jeśli usunięty przewoźnik był wybrany, wyczyść selekcję
+      if (selectedCarrier?.id === carrierToDelete.id) {
+        setSelectedCarrier(null);
+        setFormData(prev => ({
+          ...prev,
+          carrier: '',
+          carrierAddress: '',
+          carrierPostalCode: '',
+          carrierCity: '',
+          carrierCountry: ''
+        }));
+      }
+      
+      showMessage('Przewoźnik został usunięty', 'success');
+      setDeleteCarrierDialogOpen(false);
+      setCarrierToDelete(null);
+    } catch (error) {
+      console.error('Błąd podczas usuwania przewoźnika:', error);
+      showMessage('Błąd podczas usuwania przewoźnika', 'error');
+    } finally {
+      setDeletingCarrier(false);
+    }
+  };
+
+  // Zamknij dialog przewoźnika i wyczyść dane
+  const handleCloseCarrierDialog = () => {
+    setCarrierDialogOpen(false);
+    setCarrierDialogMode('add');
+    setEditingCarrierId(null);
+    setNewCarrierData({
+      name: '',
+      address: '',
+      postalCode: '',
+      city: '',
+      country: 'Polska',
+      nip: '',
+      phone: '',
+      email: ''
     });
   };
   
@@ -2325,29 +2555,114 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                 <CardContent>
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
-                  <TextField
-                    label="Nazwa przewoźnika"
-                    name="carrier"
-                    value={formData.carrier}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                    error={formErrors.carrier}
-                    helperText={formErrors.carrier}
-                  />
+                      <Autocomplete
+                        value={selectedCarrier}
+                        onChange={handleCarrierSelect}
+                        options={[
+                          { id: 'ADD_NEW', name: 'Dodaj nowego przewoźnika' },
+                          ...carriers
+                        ]}
+                        getOptionLabel={(option) => option?.name || ''}
+                        loading={carriersLoading}
+                        isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                        renderOption={(props, option) => {
+                          const { key, ...otherProps } = props;
+                          if (option.id === 'ADD_NEW') {
+                            return (
+                              <Box
+                                key={key}
+                                component="li"
+                                {...otherProps}
+                                sx={{ 
+                                  fontWeight: 'bold', 
+                                  color: 'primary.main',
+                                  borderBottom: '1px solid',
+                                  borderColor: 'divider'
+                                }}
+                              >
+                                <AddIcon sx={{ mr: 1 }} />
+                                {option.name}
+                              </Box>
+                            );
+                          }
+                          return (
+                            <Box 
+                              key={key} 
+                              component="li" 
+                              {...otherProps}
+                              sx={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center',
+                                width: '100%'
+                              }}
+                            >
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="body1">{option.name}</Typography>
+                                {option.city && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {option.city}{option.country ? `, ${option.country}` : ''}
+                                  </Typography>
+                                )}
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => handleEditCarrier(option, e)}
+                                  sx={{ 
+                                    p: 0.5,
+                                    '&:hover': { color: 'primary.main' }
+                                  }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => handleOpenDeleteCarrierDialog(option, e)}
+                                  sx={{ 
+                                    p: 0.5,
+                                    '&:hover': { color: 'error.main' }
+                                  }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            </Box>
+                          );
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Wybierz przewoźnika"
+                            margin="normal"
+                            error={!!formErrors.carrier}
+                            helperText={formErrors.carrier}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <>
+                                  {carriersLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {params.InputProps.endAdornment}
+                                </>
+                              ),
+                            }}
+                          />
+                        )}
+                        fullWidth
+                      />
                     </Grid>
                     
                     <Grid item xs={12}>
-                  <TextField
-                    label="Adres przewoźnika"
-                    name="carrierAddress"
-                    value={formData.carrierAddress}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                    error={formErrors.carrierAddress}
-                    helperText={formErrors.carrierAddress}
-                  />
+                      <TextField
+                        label="Adres przewoźnika"
+                        name="carrierAddress"
+                        value={formData.carrierAddress}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                        error={!!formErrors.carrierAddress}
+                        helperText={formErrors.carrierAddress}
+                      />
                     </Grid>
                     
                     <Grid item xs={12} sm={4}>
@@ -2373,19 +2688,19 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
                     </Grid>
                     
                     <Grid item xs={12} sm={4}>
-                  <TextField
+                      <TextField
                         label="Kraj przewoźnika"
-                    name="carrierCountry"
-                    value={formData.carrierCountry}
-                    onChange={handleChange}
-                    fullWidth
-                    margin="normal"
-                  />
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
+                        name="carrierCountry"
+                        value={formData.carrierCountry}
+                        onChange={handleChange}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
         
         {/* Miejsce załadunku i rozładunku */}
         <Grid item xs={12}>
@@ -3206,6 +3521,144 @@ Pozycje z zamówienia będą dostępne do dodania w sekcji "Elementy dokumentu C
             {snackbarMessage}
           </Alert>
         </Snackbar>
+
+        {/* Dialog dodawania/edycji przewoźnika */}
+        <Dialog 
+          open={carrierDialogOpen} 
+          onClose={handleCloseCarrierDialog}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {carrierDialogMode === 'edit' ? 'Edytuj przewoźnika' : 'Dodaj nowego przewoźnika'}
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  label="Nazwa przewoźnika *"
+                  name="name"
+                  value={newCarrierData.name}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                  autoFocus
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Adres"
+                  name="address"
+                  value={newCarrierData.address}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Kod pocztowy"
+                  name="postalCode"
+                  value={newCarrierData.postalCode}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Miasto"
+                  name="city"
+                  value={newCarrierData.city}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  label="Kraj"
+                  name="country"
+                  value={newCarrierData.country}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="NIP"
+                  name="nip"
+                  value={newCarrierData.nip}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Telefon"
+                  name="phone"
+                  value={newCarrierData.phone}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Email"
+                  name="email"
+                  value={newCarrierData.email}
+                  onChange={handleNewCarrierChange}
+                  fullWidth
+                  type="email"
+                />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseCarrierDialog} disabled={savingCarrier}>
+              Anuluj
+            </Button>
+            <Button 
+              onClick={handleSaveCarrier} 
+              variant="contained" 
+              disabled={savingCarrier || !newCarrierData.name.trim()}
+              startIcon={savingCarrier ? <CircularProgress size={20} /> : null}
+            >
+              {savingCarrier ? 'Zapisywanie...' : (carrierDialogMode === 'edit' ? 'Zapisz zmiany' : 'Zapisz przewoźnika')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Dialog potwierdzenia usunięcia przewoźnika */}
+        <Dialog
+          open={deleteCarrierDialogOpen}
+          onClose={() => setDeleteCarrierDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Potwierdź usunięcie</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Czy na pewno chcesz usunąć przewoźnika <strong>{carrierToDelete?.name}</strong>?
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Ta operacja jest nieodwracalna.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => setDeleteCarrierDialogOpen(false)} 
+              disabled={deletingCarrier}
+            >
+              Anuluj
+            </Button>
+            <Button 
+              onClick={handleConfirmDeleteCarrier} 
+              variant="contained" 
+              color="error"
+              disabled={deletingCarrier}
+              startIcon={deletingCarrier ? <CircularProgress size={20} /> : <DeleteIcon />}
+            >
+              {deletingCarrier ? 'Usuwanie...' : 'Usuń'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Grid>
     </LocalizationProvider>
   );
