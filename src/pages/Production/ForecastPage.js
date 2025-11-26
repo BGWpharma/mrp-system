@@ -93,6 +93,14 @@ const ForecastPage = () => {
   const [sortField, setSortField] = useState('balance');
   const [sortDirection, setSortDirection] = useState('asc');
   
+  // State dla przyszłych dostaw nieużywanych materiałów
+  const [unusedMaterialsDeliveries, setUnusedMaterialsDeliveries] = useState({});
+  const [loadingUnusedDeliveries, setLoadingUnusedDeliveries] = useState(false);
+  
+  // State dla sortowania nieużywanych materiałów
+  const [unusedSortField, setUnusedSortField] = useState('name');
+  const [unusedSortDirection, setUnusedSortDirection] = useState('asc');
+  
   // State do formatowania liczb
   const formatNumber = (num) => {
     if (num === undefined || num === null) return '0';
@@ -517,7 +525,6 @@ const ForecastPage = () => {
         'Price Source',
         'Total Cost',
         'Supplier',
-        'Default Supplier',
         'Number of Tasks'
       ];
       
@@ -570,7 +577,6 @@ const ForecastPage = () => {
           item.priceSource === 'PO' ? 'Purchase Order (PO)' : item.priceSource === 'supplier' ? 'Supplier' : 'Inventory',
           item.cost || 0,
           item.supplier || '',
-          item.isDefaultSupplier ? 'YES' : 'NO',
           (item.tasks && item.tasks.length) || 0
         ];
       });
@@ -608,13 +614,35 @@ const ForecastPage = () => {
           ['Excluded categories: "Inne", "Gotowe produkty" | Excluded: materials with quantity 0'],
           ...filterInfo.map(info => [info]),
           [''],
-          ['Material Name', 'Category', 'Available Quantity', 'Unit'],
-          ...unusedMaterialsData.map(item => [
-            item.name || '',
-            item.category || '',
-            parseFloat(item.quantity) || 0,
-            item.unit || 'pcs'
-          ]),
+          ['Material Name', 'Category', 'Available Quantity', 'Unit', 'Pending Deliveries', 'ETA (Next Delivery)', 'Delivery Details', 'Available With Deliveries'],
+          ...unusedMaterialsData.map(item => {
+            const deliveryData = unusedMaterialsDeliveries[item.id];
+            const availableQty = parseFloat(item.quantity) || 0;
+            const pendingDeliveries = deliveryData?.total || 0;
+            const eta = deliveryData?.deliveries?.[0]?.expectedDeliveryDate 
+              ? formatDateDisplay(new Date(deliveryData.deliveries[0].expectedDeliveryDate))
+              : '—';
+            const deliveryDetails = deliveryData?.deliveries
+              ? deliveryData.deliveries.map(d => {
+                  const date = d.expectedDeliveryDate 
+                    ? formatDateDisplay(new Date(d.expectedDeliveryDate))
+                    : 'brak daty';
+                  return `${d.poNumber}: ${d.quantity} (${date})`;
+                }).join('; ')
+              : '';
+            const availableWithDeliveries = availableQty + pendingDeliveries;
+            
+            return [
+              item.name || '',
+              item.category || '',
+              availableQty,
+              item.unit || 'pcs',
+              pendingDeliveries,
+              eta,
+              deliveryDetails,
+              availableWithDeliveries
+            ];
+          }),
           [''],
           ['Total unused materials:', unusedMaterialsData.length]
         ];
@@ -799,8 +827,161 @@ const ForecastPage = () => {
       );
     }
     
+    // Sortowanie
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      // Pobierz dane o dostawach dla obu elementów
+      const deliveryA = unusedMaterialsDeliveries[a.id];
+      const deliveryB = unusedMaterialsDeliveries[b.id];
+      const quantityA = parseFloat(a.quantity) || 0;
+      const quantityB = parseFloat(b.quantity) || 0;
+      const deliveriesTotalA = deliveryA?.total || 0;
+      const deliveriesTotalB = deliveryB?.total || 0;
+      
+      switch (unusedSortField) {
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '');
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'availableQuantity':
+          comparison = quantityA - quantityB;
+          break;
+        case 'futureDeliveries':
+          comparison = deliveriesTotalA - deliveriesTotalB;
+          break;
+        case 'eta':
+          // Sortuj po dacie ETA - materiały bez daty na końcu
+          const etaA = deliveryA?.deliveries?.[0]?.expectedDeliveryDate;
+          const etaB = deliveryB?.deliveries?.[0]?.expectedDeliveryDate;
+          if (!etaA && !etaB) comparison = 0;
+          else if (!etaA) comparison = 1;
+          else if (!etaB) comparison = -1;
+          else comparison = new Date(etaA) - new Date(etaB);
+          break;
+        case 'availableWithDeliveries':
+          comparison = (quantityA + deliveriesTotalA) - (quantityB + deliveriesTotalB);
+          break;
+        default:
+          comparison = (a.name || '').localeCompare(b.name || '');
+      }
+      
+      return unusedSortDirection === 'asc' ? comparison : -comparison;
+    });
+    
     return filtered;
-  }, [getUnusedMaterials, categoryFilter, searchTerm]);
+  }, [getUnusedMaterials, categoryFilter, searchTerm, unusedSortField, unusedSortDirection, unusedMaterialsDeliveries]);
+  
+  // Obsługa zmiany sortowania dla nieużywanych materiałów
+  const handleUnusedSortChange = (field) => {
+    if (field === unusedSortField) {
+      setUnusedSortDirection(unusedSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setUnusedSortField(field);
+      setUnusedSortDirection('asc');
+    }
+  };
+  
+  // Renderowanie ikony sortowania dla nieużywanych materiałów
+  const renderUnusedSortIcon = (field) => {
+    if (field !== unusedSortField) return null;
+    return unusedSortDirection === 'asc' ? '▲' : '▼';
+  };
+  
+  // Funkcja pobierająca przyszłe dostawy dla nieużywanych materiałów
+  const fetchDeliveriesForUnusedMaterials = useCallback(async (unusedMaterials) => {
+    if (!unusedMaterials || unusedMaterials.length === 0) {
+      setUnusedMaterialsDeliveries({});
+      return;
+    }
+
+    setLoadingUnusedDeliveries(true);
+    
+    try {
+      const { getAwaitingOrdersForInventoryItem } = await import('../../services/inventory');
+      
+      const deliveriesMap = {};
+      
+      // Pobierz PO dla każdego nieużywanego materiału
+      const promises = unusedMaterials.map(async (material) => {
+        try {
+          const purchaseOrders = await getAwaitingOrdersForInventoryItem(material.id);
+          
+          if (purchaseOrders && purchaseOrders.length > 0) {
+            const deliveries = [];
+            let totalDeliveryQuantity = 0;
+            
+            for (const po of purchaseOrders) {
+              for (const item of po.items) {
+                if (item.inventoryItemId === material.id) {
+                  const quantity = parseFloat(item.quantityRemaining) || 0;
+                  
+                  // Filtrowanie: tylko dostawy w zakresie do endDate
+                  const deliveryDate = item.expectedDeliveryDate || po.expectedDeliveryDate;
+                  if (deliveryDate && endDate) {
+                    const deliveryDateObj = new Date(deliveryDate);
+                    const endDateObj = new Date(endDate);
+                    if (deliveryDateObj > endDateObj) {
+                      continue; // Pomijaj dostawy poza zakresem
+                    }
+                  }
+                  
+                  if (quantity > 0) {
+                    totalDeliveryQuantity += quantity;
+                    deliveries.push({
+                      poNumber: po.number || 'Brak numeru',
+                      poId: po.id,
+                      status: po.status,
+                      quantity: quantity,
+                      expectedDeliveryDate: deliveryDate,
+                      supplier: item.supplierName || po.supplierName || ''
+                    });
+                  }
+                }
+              }
+            }
+            
+            if (deliveries.length > 0) {
+              // Sortuj dostawy według daty
+              deliveries.sort((a, b) => {
+                if (!a.expectedDeliveryDate) return 1;
+                if (!b.expectedDeliveryDate) return -1;
+                return new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate);
+              });
+              
+              deliveriesMap[material.id] = {
+                deliveries: deliveries,
+                total: totalDeliveryQuantity
+              };
+            }
+          }
+        } catch (error) {
+          console.error(`Błąd pobierania PO dla materiału ${material.id}:`, error);
+        }
+      });
+      
+      await Promise.all(promises);
+      
+      setUnusedMaterialsDeliveries(deliveriesMap);
+      console.log(`Pobrano dostawy dla ${Object.keys(deliveriesMap).length} nieużywanych materiałów`);
+    } catch (error) {
+      console.error('Błąd podczas pobierania dostaw dla nieużywanych materiałów:', error);
+    } finally {
+      setLoadingUnusedDeliveries(false);
+    }
+  }, [endDate]);
+
+  // useEffect do pobierania dostaw dla nieużywanych materiałów po załadowaniu danych
+  useEffect(() => {
+    if (forecastData && forecastData.length > 0 && inventoryItems && inventoryItems.length > 0) {
+      const unusedMats = getUnusedMaterials();
+      if (unusedMats.length > 0) {
+        fetchDeliveriesForUnusedMaterials(unusedMats);
+      }
+    }
+  }, [forecastData, inventoryItems, getUnusedMaterials, fetchDeliveriesForUnusedMaterials]);
   
   // Filtrowanie danych
   const filteredData = useCallback(() => {
@@ -1871,6 +2052,9 @@ const ForecastPage = () => {
                   <Typography variant="h6" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                     <InfoIcon sx={{ mr: 1 }} color="info" />
                     Materiały nieużywane w żadnym zleceniu produkcyjnym ({filteredUnusedMaterials().length})
+                    {loadingUnusedDeliveries && (
+                      <CircularProgress size={16} sx={{ ml: 1 }} />
+                    )}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     Poniższe materiały znajdują się w magazynie, ale nie są wykorzystywane w żadnym MO w wybranym okresie
@@ -1882,77 +2066,219 @@ const ForecastPage = () => {
                     <TableHead sx={{ bgcolor: 'background.paper' }}>
                       <TableRow>
                         <TableCell 
-                          width="60%" 
+                          width="35%" 
+                          onClick={() => handleUnusedSortChange('name')}
                           sx={{ 
+                            cursor: 'pointer',
                             fontWeight: 'bold',
                             position: 'sticky',
                             top: 0,
                             bgcolor: (theme) => theme.palette.mode === 'dark' 
                               ? '#1e293b' 
                               : '#f5f5f5',
-                            zIndex: 1
+                            zIndex: 1,
+                            '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
                           }}
                         >
-                          Materiał
+                          Materiał {renderUnusedSortIcon('name')}
                         </TableCell>
                         <TableCell 
                           align="right" 
-                          width="40%" 
+                          width="15%" 
+                          onClick={() => handleUnusedSortChange('availableQuantity')}
                           sx={{ 
+                            cursor: 'pointer',
                             fontWeight: 'bold',
                             position: 'sticky',
                             top: 0,
                             bgcolor: (theme) => theme.palette.mode === 'dark' 
                               ? '#1e293b' 
                               : '#f5f5f5',
-                            zIndex: 1
+                            zIndex: 1,
+                            '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
                           }}
                         >
-                          Dostępna ilość
+                          Dostępna ilość {renderUnusedSortIcon('availableQuantity')}
+                        </TableCell>
+                        <TableCell 
+                          align="right" 
+                          width="15%" 
+                          onClick={() => handleUnusedSortChange('futureDeliveries')}
+                          sx={{ 
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1,
+                            '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
+                          }}
+                        >
+                          Oczekiwane dostawy {renderUnusedSortIcon('futureDeliveries')}
+                        </TableCell>
+                        <TableCell 
+                          align="center" 
+                          width="15%" 
+                          onClick={() => handleUnusedSortChange('eta')}
+                          sx={{ 
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1,
+                            '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
+                          }}
+                        >
+                          ETA {renderUnusedSortIcon('eta')}
+                        </TableCell>
+                        <TableCell 
+                          align="right" 
+                          width="20%" 
+                          onClick={() => handleUnusedSortChange('availableWithDeliveries')}
+                          sx={{ 
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            position: 'sticky',
+                            top: 0,
+                            bgcolor: (theme) => theme.palette.mode === 'dark' 
+                              ? '#1e293b' 
+                              : '#f5f5f5',
+                            zIndex: 1,
+                            '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
+                          }}
+                        >
+                          Dostępne z dostawami {renderUnusedSortIcon('availableWithDeliveries')}
                         </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {filteredUnusedMaterials().length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={2} align="center">
+                          <TableCell colSpan={5} align="center">
                             <Typography color="text.secondary" sx={{ py: 2 }}>
                               Nie znaleziono materiałów pasujących do filtrów
                             </Typography>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredUnusedMaterials().map((item, index) => (
-                          <Fade 
-                            key={item.id} 
-                            in={showResults} 
-                            timeout={1000} 
-                            style={{ 
-                              transitionDelay: showResults ? `${index * 30}ms` : '0ms' 
-                            }}
-                          >
-                            <TableRow hover>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                                  <CategoryIcon sx={{ mr: 1, mt: 0.5, fontSize: 'small', color: 'text.secondary' }} />
-                                  <Box>
-                                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                                      {item.name}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {item.category || 'Bez kategorii'}
-                                    </Typography>
+                        filteredUnusedMaterials().map((item, index) => {
+                          const deliveryData = unusedMaterialsDeliveries[item.id];
+                          const hasDeliveries = deliveryData && deliveryData.total > 0;
+                          const availableQuantity = parseFloat(item.quantity) || 0;
+                          const futureDeliveriesTotal = deliveryData?.total || 0;
+                          const availableWithDeliveries = availableQuantity + futureDeliveriesTotal;
+                          
+                          return (
+                            <Fade 
+                              key={item.id} 
+                              in={showResults} 
+                              timeout={1000} 
+                              style={{ 
+                                transitionDelay: showResults ? `${index * 30}ms` : '0ms' 
+                              }}
+                            >
+                              <TableRow hover>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                                    <CategoryIcon sx={{ mr: 1, mt: 0.5, fontSize: 'small', color: 'text.secondary' }} />
+                                    <Box>
+                                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                        {item.name}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.category || 'Bez kategorii'}
+                                      </Typography>
+                                    </Box>
                                   </Box>
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">
-                                <Typography variant="body2">
-                                  {formatNumber(parseFloat(item.quantity) || 0)} {item.unit || 'szt.'}
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          </Fade>
-                        ))
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="body2">
+                                    {formatNumber(availableQuantity)} {item.unit || 'szt.'}
+                                  </Typography>
+                                </TableCell>
+                                {/* Oczekiwane dostawy - jak w głównej prognozie */}
+                                <TableCell align="right">
+                                  {loadingUnusedDeliveries ? (
+                                    <Skeleton width={60} />
+                                  ) : hasDeliveries ? (
+                                    <Tooltip title={
+                                      deliveryData.deliveries.map(delivery => {
+                                        const formattedDate = delivery.expectedDeliveryDate 
+                                          ? formatDateDisplay(new Date(delivery.expectedDeliveryDate))
+                                          : 'brak daty';
+                                        const supplier = delivery.supplier ? ` | ${delivery.supplier}` : '';
+                                        return `${delivery.poNumber}: ${formatNumber(delivery.quantity)} ${item.unit || 'szt.'} (${formattedDate})${supplier}`;
+                                      }).join('\n')
+                                    }>
+                                      <Typography sx={{ cursor: 'pointer', fontWeight: 'medium', color: 'primary.main' }}>
+                                        {formatNumber(futureDeliveriesTotal)} {item.unit || 'szt.'}
+                                      </Typography>
+                                    </Tooltip>
+                                  ) : (
+                                    <Typography color="text.secondary">0 {item.unit || 'szt.'}</Typography>
+                                  )}
+                                </TableCell>
+                                {/* ETA - jak w głównej prognozie */}
+                                <TableCell align="center">
+                                  {loadingUnusedDeliveries ? (
+                                    <Skeleton width={80} />
+                                  ) : hasDeliveries ? (
+                                    <Tooltip title={
+                                      deliveryData.deliveries.length > 1 
+                                        ? `Najbliższa dostawa: ${deliveryData.deliveries[0].poNumber}\n\nWszystkie dostawy:\n${deliveryData.deliveries.map(d => 
+                                            `${d.poNumber}: ${d.expectedDeliveryDate ? formatDateDisplay(new Date(d.expectedDeliveryDate)) : 'brak daty'}`
+                                          ).join('\n')}`
+                                        : `${deliveryData.deliveries[0].poNumber}`
+                                    }>
+                                      <Box sx={{ cursor: 'pointer' }}>
+                                        <Typography 
+                                          variant="body2" 
+                                          sx={{ 
+                                            fontWeight: 'medium',
+                                            color: 'primary.main'
+                                          }}
+                                        >
+                                          {deliveryData.deliveries[0].expectedDeliveryDate 
+                                            ? formatDateDisplay(new Date(deliveryData.deliveries[0].expectedDeliveryDate))
+                                            : 'Brak daty'}
+                                        </Typography>
+                                        {deliveryData.deliveries.length > 1 && (
+                                          <Typography 
+                                            variant="caption" 
+                                            color="text.secondary"
+                                            sx={{ fontSize: '0.7rem' }}
+                                          >
+                                            +{deliveryData.deliveries.length - 1} więcej
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Tooltip>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">—</Typography>
+                                  )}
+                                </TableCell>
+                                {/* Dostępne z dostawami - jak w głównej prognozie */}
+                                <TableCell align="right">
+                                  {loadingUnusedDeliveries ? (
+                                    <Skeleton width={80} />
+                                  ) : (
+                                    <Typography 
+                                      color={hasDeliveries ? 'success.main' : 'text.primary'}
+                                      fontWeight={hasDeliveries ? 'medium' : 'normal'}
+                                    >
+                                      {formatNumber(availableWithDeliveries)} {item.unit || 'szt.'}
+                                    </Typography>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            </Fade>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
