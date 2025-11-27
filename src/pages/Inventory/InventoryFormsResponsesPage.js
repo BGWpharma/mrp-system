@@ -301,33 +301,49 @@ const InventoryFormsResponsesPage = () => {
     if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
       return (
         <Box>
-          {row.selectedItems.map((item, index) => (
-            <Box key={index} sx={{ mb: 1, fontSize: '0.875rem' }}>
-              <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
-                {item.productName || t('inventory.forms.noName')}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                {t('inventory.forms.ordered')}: {item.quantity ? `${item.quantity} ${item.unit || 'szt.'}` : t('inventory.forms.noData')}
-              </Typography>
-              {item.unloadedQuantity && (
-                <Typography variant="caption" color="primary" sx={{ fontSize: '0.75rem', display: 'block' }}>
-                  {t('inventory.forms.unloaded')}: {item.unloadedQuantity}
+          {row.selectedItems.map((item, index) => {
+            // Oblicz sumę ilości z partii (nowy format) lub użyj unloadedQuantity (stary format)
+            let totalUnloadedQuantity = '';
+            if (item.batches && Array.isArray(item.batches) && item.batches.length > 0) {
+              // Nowy format z partiami - suma ilości ze wszystkich partii
+              const sum = item.batches.reduce((acc, batch) => {
+                const qty = parseFloat(batch.unloadedQuantity) || 0;
+                return acc + qty;
+              }, 0);
+              totalUnloadedQuantity = sum > 0 ? sum.toString() : '';
+            } else if (item.unloadedQuantity) {
+              // Stary format - bezpośrednio unloadedQuantity
+              totalUnloadedQuantity = item.unloadedQuantity;
+            }
+            
+            return (
+              <Box key={index} sx={{ mb: 1, fontSize: '0.875rem' }}>
+                <Typography variant="body2" fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
+                  {item.productName || t('inventory.forms.noName')}
                 </Typography>
-              )}
-              {item.expiryDate && (
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block' }}>
-                  {t('inventory.forms.expiry')}: {(() => {
-                    try {
-                      const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
-                      return format(date, 'dd.MM.yyyy');
-                    } catch (error) {
-                      return t('inventory.forms.invalidDate');
-                    }
-                  })()}
+                <Typography variant="caption" color="primary" sx={{ fontSize: '0.75rem', fontWeight: 500 }}>
+                  {t('inventory.forms.unloaded')}: {totalUnloadedQuantity ? `${totalUnloadedQuantity} ${item.unit || 'szt.'}` : t('inventory.forms.noData')}
                 </Typography>
-              )}
-            </Box>
-          ))}
+                {item.batches && Array.isArray(item.batches) && item.batches.length > 1 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', display: 'block' }}>
+                    ({item.batches.length} partii)
+                  </Typography>
+                )}
+                {item.expiryDate && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', display: 'block' }}>
+                    {t('inventory.forms.expiry')}: {(() => {
+                      try {
+                        const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                        return format(date, 'dd.MM.yyyy');
+                      } catch (error) {
+                        return t('inventory.forms.invalidDate');
+                      }
+                    })()}
+                  </Typography>
+                )}
+              </Box>
+            );
+          })}
         </Box>
       );
     }
@@ -424,8 +440,20 @@ const InventoryFormsResponsesPage = () => {
           if (row.selectedItems && Array.isArray(row.selectedItems) && row.selectedItems.length > 0) {
             itemsText = row.selectedItems.map(item => {
               let itemText = item.productName || t('inventory.forms.noName');
-              if (item.quantity) itemText += ` (${t('inventory.forms.ordered')}: ${item.quantity} ${item.unit || 'szt.'})`;
-              if (item.unloadedQuantity) itemText += ` (${t('inventory.forms.unloaded')}: ${item.unloadedQuantity})`;
+              
+              // Oblicz sumę ilości z partii (nowy format) lub użyj unloadedQuantity (stary format)
+              let totalUnloadedQuantity = '';
+              if (item.batches && Array.isArray(item.batches) && item.batches.length > 0) {
+                const sum = item.batches.reduce((acc, batch) => {
+                  const qty = parseFloat(batch.unloadedQuantity) || 0;
+                  return acc + qty;
+                }, 0);
+                totalUnloadedQuantity = sum > 0 ? sum.toString() : '';
+              } else if (item.unloadedQuantity) {
+                totalUnloadedQuantity = item.unloadedQuantity;
+              }
+              
+              if (totalUnloadedQuantity) itemText += ` (${t('inventory.forms.unloaded')}: ${totalUnloadedQuantity} ${item.unit || 'szt.'})`;
               if (item.expiryDate) {
                 try {
                   const date = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
