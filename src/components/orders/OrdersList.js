@@ -1933,7 +1933,6 @@ const OrdersList = () => {
                                             <TableCell align="right">{t('orders.expandedDetails.reserved')}</TableCell>
                                             <TableCell align="right">{t('orders.expandedDetails.price')}</TableCell>
                                             <TableCell align="right">{t('orders.expandedDetails.value')}</TableCell>
-                                            <TableCell align="right">{t('orders.expandedDetails.productionCost')}</TableCell>
                                             <TableCell>{t('orders.expandedDetails.mo')}</TableCell>
                                           </TableRow>
                                         </TableHead>
@@ -2016,16 +2015,16 @@ const OrdersList = () => {
                                                 {formatCurrency(parseFloat(item.price) || 0)}
                                               </TableCell>
                                               <TableCell align="right">
-                                                {formatCurrency((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
-                                              </TableCell>
-                                              <TableCell align="right">
-                                                {item.productionTaskId && item.productionCost !== undefined ? (
-                                                  <Typography>
-                                                    {formatCurrency(item.productionCost)}
+                                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                                  <Typography variant="body2" fontWeight="medium">
+                                                    {formatCurrency((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0))}
                                                   </Typography>
-                                                ) : (
-                                                  <Typography variant="body2" color="text.secondary">-</Typography>
-                                                )}
+                                                  {item.productionTaskId && item.productionCost !== undefined && (
+                                                    <Typography variant="caption" color="text.secondary">
+                                                      (Prod: {formatCurrency(item.productionCost)})
+                                                    </Typography>
+                                                  )}
+                                                </Box>
                                               </TableCell>
                                               <TableCell>
                                                 {(() => {
