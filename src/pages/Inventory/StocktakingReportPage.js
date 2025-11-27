@@ -19,12 +19,18 @@ import {
   Divider,
   Card,
   CardContent,
-  TableSortLabel
+  TableSortLabel,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   GetApp as DownloadIcon,
-  Description as ReportIcon
+  Description as ReportIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import {
   getStocktakingById,
@@ -58,6 +64,7 @@ const StocktakingReportPage = () => {
   
   const [orderBy, setOrderBy] = useState('discrepancy');
   const [order, setOrder] = useState('desc');
+  const [acceptanceFilter, setAcceptanceFilter] = useState('all'); // 'all', 'accepted', 'pending'
   
   useEffect(() => {
     fetchData();
@@ -139,10 +146,21 @@ const StocktakingReportPage = () => {
     setOrderBy(property);
   };
   
-  const sortedItems = React.useMemo(() => {
+  // Filtrowane elementy według statusu akceptacji
+  const filteredItems = React.useMemo(() => {
     if (!items || items.length === 0) return [];
     
-    return [...items].sort((a, b) => {
+    if (acceptanceFilter === 'all') return items;
+    if (acceptanceFilter === 'accepted') return items.filter(item => item.accepted);
+    if (acceptanceFilter === 'pending') return items.filter(item => !item.accepted);
+    
+    return items;
+  }, [items, acceptanceFilter]);
+
+  const sortedItems = React.useMemo(() => {
+    if (!filteredItems || filteredItems.length === 0) return [];
+    
+    return [...filteredItems].sort((a, b) => {
       let aValue, bValue;
       
       switch (orderBy) {
@@ -183,7 +201,7 @@ const StocktakingReportPage = () => {
       
       return order === 'asc' ? aValue - bValue : bValue - aValue;
     });
-  }, [items, order, orderBy]);
+  }, [filteredItems, order, orderBy]);
   
   const getDiscrepancyColor = (discrepancy) => {
     if (discrepancy === 0) return 'success';
@@ -470,6 +488,42 @@ const StocktakingReportPage = () => {
         </Grid>
       </Paper>
       
+      {/* Filtr statusu akceptacji */}
+      <Paper sx={{ p: 2, mb: 2, display: 'flex', alignItems: 'center', gap: 2 }} className="no-print">
+        <Typography variant="subtitle1">
+          Filtruj pozycje:
+        </Typography>
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel>Status akceptacji</InputLabel>
+          <Select
+            value={acceptanceFilter}
+            onChange={(e) => setAcceptanceFilter(e.target.value)}
+            label="Status akceptacji"
+          >
+            <MenuItem value="all">Wszystkie ({items.length})</MenuItem>
+            <MenuItem value="accepted">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CheckCircleIcon fontSize="small" color="success" />
+                Zaakceptowane ({items.filter(i => i.accepted).length})
+              </Box>
+            </MenuItem>
+            <MenuItem value="pending">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CancelIcon fontSize="small" color="default" />
+                Oczekujące ({items.filter(i => !i.accepted).length})
+              </Box>
+            </MenuItem>
+          </Select>
+        </FormControl>
+        {acceptanceFilter !== 'all' && (
+          <Chip 
+            label={`Wyświetlono: ${filteredItems.length} z ${items.length}`}
+            color="info"
+            size="small"
+          />
+        )}
+      </Paper>
+
       {/* Tabela z produktami */}
       <Paper sx={{ mb: 3 }} className="print-visible">
         <TableContainer>
@@ -485,14 +539,18 @@ const StocktakingReportPage = () => {
                 {renderSortableTableCell(t('stocktaking.tableHeaders.countedQuantity'), 'countedQuantity')}
                 {renderSortableTableCell(t('stocktaking.tableHeaders.difference'), 'discrepancy')}
                 {renderSortableTableCell(t('stocktaking.tableHeaders.valueDifference'), 'value')}
+                <TableCell align="center">Status</TableCell>
                 <TableCell>{t('stocktaking.tableHeaders.notes')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {sortedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center">
-                    {t('stocktaking.reportSections.noProductsInStocktaking')}
+                  <TableCell colSpan={11} align="center">
+                    {acceptanceFilter !== 'all' 
+                      ? `Brak pozycji o statusie "${acceptanceFilter === 'accepted' ? 'Zaakceptowane' : 'Oczekujące'}"`
+                      : t('stocktaking.reportSections.noProductsInStocktaking')
+                    }
                   </TableCell>
                 </TableRow>
               ) : (
@@ -504,7 +562,7 @@ const StocktakingReportPage = () => {
                     <TableCell>{item.expiryDate ? formatDate(item.expiryDate) : '-'}</TableCell>
                     <TableCell>{item.location ? (warehouseNames[item.location] || item.location) : '-'}</TableCell>
                     <TableCell align="right">{item.systemQuantity} {item.unit}</TableCell>
-                    <TableCell align="right">{item.countedQuantity} {item.unit}</TableCell>
+                    <TableCell align="right">{item.countedQuantity !== null && item.countedQuantity !== undefined ? `${item.countedQuantity} ${item.unit}` : '-'}</TableCell>
                     <TableCell align="right">
                       <Chip 
                         label={item.discrepancy} 
@@ -514,6 +572,22 @@ const StocktakingReportPage = () => {
                     </TableCell>
                     <TableCell align="right">
                       {formatCurrency(item.discrepancy * (item.unitPrice || 0))}
+                    </TableCell>
+                    <TableCell align="center">
+                      {item.accepted ? (
+                        <Chip 
+                          icon={<CheckCircleIcon />}
+                          label="Zaakceptowana" 
+                          color="success" 
+                          size="small"
+                        />
+                      ) : (
+                        <Chip 
+                          label="Oczekuje" 
+                          color="default" 
+                          size="small"
+                        />
+                      )}
                     </TableCell>
                     <TableCell>{item.notes || '-'}</TableCell>
                   </TableRow>

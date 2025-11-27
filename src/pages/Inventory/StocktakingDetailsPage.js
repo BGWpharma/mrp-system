@@ -442,12 +442,25 @@ const StocktakingDetailsPage = () => {
       }, currentUser.uid);
       
       showSuccess('Przedmiot został zaktualizowany');
+      
+      // Aktualizuj lokalny stan zamiast pobierać wszystko od nowa (zachowuje scroll)
+      const newCountedQuantity = Number(countedQuantity);
+      setItems(prevItems => prevItems.map(item => {
+        if (item.id === editItemId) {
+          const discrepancy = newCountedQuantity - (item.systemQuantity || 0);
+          return {
+            ...item,
+            countedQuantity: newCountedQuantity,
+            discrepancy,
+            notes
+          };
+        }
+        return item;
+      }));
+      
       setEditItemId(null);
       setCountedQuantity('');
       setNotes('');
-      
-      // Refresh data
-      fetchStocktakingData();
     } catch (error) {
       console.error('Błąd podczas aktualizacji przedmiotu:', error);
       showError(`Błąd podczas aktualizacji: ${error.message}`);
@@ -471,8 +484,9 @@ const StocktakingDetailsPage = () => {
       showSuccess('Przedmiot został usunięty z inwentaryzacji');
       setDeleteDialogOpen(false);
       
-      // Refresh data
-      fetchStocktakingData();
+      // Aktualizuj lokalny stan zamiast pobierać wszystko od nowa (zachowuje scroll)
+      setItems(prevItems => prevItems.filter(item => item.id !== deleteItemId));
+      setDeleteItemId(null);
     } catch (error) {
       console.error('Błąd podczas usuwania przedmiotu:', error);
       showError(`Błąd podczas usuwania: ${error.message}`);
@@ -483,7 +497,13 @@ const StocktakingDetailsPage = () => {
     try {
       const result = await acceptStocktakingItem(itemId, true, currentUser.uid);
       showSuccess(result.message);
-      fetchStocktakingData(); // Odśwież dane
+      
+      // Aktualizuj lokalny stan zamiast pobierać wszystko od nowa (zachowuje scroll)
+      setItems(prevItems => prevItems.map(item => 
+        item.id === itemId 
+          ? { ...item, accepted: true, status: 'Zaakceptowana', adjustmentApplied: true }
+          : item
+      ));
     } catch (error) {
       console.error('Błąd podczas akceptowania pozycji:', error);
       
@@ -622,8 +642,12 @@ const StocktakingDetailsPage = () => {
           cancelReservations: true
         });
         
-        // Odśwież dane
-        fetchStocktakingData();
+        // Aktualizuj lokalny stan zamiast pobierać wszystko od nowa (zachowuje scroll)
+        setItems(prevItems => prevItems.map(item => 
+          item.id === itemId 
+            ? { ...item, accepted: true, status: 'Zaakceptowana', adjustmentApplied: true }
+            : item
+        ));
       } catch (error) {
         console.error('Błąd podczas akceptowania pozycji po anulowaniu rezerwacji:', error);
         showError(`Błąd: ${error.message}`);
@@ -638,7 +662,13 @@ const StocktakingDetailsPage = () => {
     try {
       const result = await unacceptStocktakingItem(itemId, true, currentUser.uid);
       showSuccess(result.message);
-      fetchStocktakingData();
+      
+      // Aktualizuj lokalny stan zamiast pobierać wszystko od nowa (zachowuje scroll)
+      setItems(prevItems => prevItems.map(item => 
+        item.id === itemId 
+          ? { ...item, accepted: false, status: 'Dodano', adjustmentApplied: false }
+          : item
+      ));
     } catch (error) {
       console.error('Błąd podczas cofania akceptacji:', error);
       showError(`Błąd: ${error.message}`);
