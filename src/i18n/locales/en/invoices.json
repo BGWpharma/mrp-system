@@ -271,11 +271,33 @@
     "actions": "Actions",
     "client": "Client",
     "seller": "Seller",
+    "buyer": "Buyer",
     "relatedOrder": "Related Order",
     "otherInvoicesForOrder": "Other invoices for this order",
     "amount": "Amount",
     "date": "Date",
     "proformaAmount": "Proforma Amount",
+    "summary": "Summary",
+    "netTotal": "Net",
+    "vat": "VAT",
+    "grossTotal": "Gross",
+    "paid": "Paid",
+    "paymentInfo": "Payment Information",
+    "bankAccount": "Bank Account",
+    "items": "Invoice Items",
+    "itemName": "Name",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "unitPrice": "Unit Price",
+    "vatRate": "VAT %",
+    "netValue": "Net",
+    "grossValue": "Gross",
+    "noItems": "No items",
+    "paymentHistory": "Payment History",
+    "paymentDate": "Date",
+    "paymentAmount": "Amount",
+    "paymentNote": "Notes",
+    "linkedProformas": "Linked Proformas",
     "totals": {
       "netTotal": "Net Total:",
       "vatTotal": "VAT Total:"
@@ -341,7 +363,8 @@
       "fetchInvoiceData": "Error fetching invoice data",
       "fetchProformaInfo": "Error fetching proforma usage information",
       "fetchRelatedInvoices": "Error fetching related invoices",
-      "fetchCompanyData": "Error fetching company data"
+      "fetchCompanyData": "Error fetching company data",
+      "fetchInvoiceDetails": "Error fetching invoice details"
     }
   }
 }

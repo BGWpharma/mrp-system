@@ -270,11 +270,33 @@
     "actions": "Akcje",
     "client": "Klient",
     "seller": "Sprzedawca",
+    "buyer": "Nabywca",
     "relatedOrder": "Powiązane zamówienie",
     "otherInvoicesForOrder": "Inne faktury dla tego zamówienia",
     "amount": "Kwota",
     "date": "Data",
     "proformaAmount": "Kwota proformy",
+    "summary": "Podsumowanie",
+    "netTotal": "Netto",
+    "vat": "VAT",
+    "grossTotal": "Brutto",
+    "paid": "Zapłacono",
+    "paymentInfo": "Informacje o płatności",
+    "bankAccount": "Numer konta",
+    "items": "Pozycje faktury",
+    "itemName": "Nazwa",
+    "quantity": "Ilość",
+    "unit": "Jedn.",
+    "unitPrice": "Cena jedn.",
+    "vatRate": "VAT %",
+    "netValue": "Netto",
+    "grossValue": "Brutto",
+    "noItems": "Brak pozycji",
+    "paymentHistory": "Historia płatności",
+    "paymentDate": "Data",
+    "paymentAmount": "Kwota",
+    "paymentNote": "Uwagi",
+    "linkedProformas": "Powiązane proformy",
     "totals": {
       "netTotal": "Razem netto:",
       "vatTotal": "Razem VAT:"
@@ -339,7 +361,8 @@
       "fetchInvoiceData": "Błąd podczas pobierania danych faktury",
       "fetchProformaInfo": "Błąd podczas pobierania informacji o wykorzystaniu proformy",
       "fetchRelatedInvoices": "Błąd podczas pobierania powiązanych faktur",
-      "fetchCompanyData": "Błąd podczas pobierania danych firmy"
+      "fetchCompanyData": "Błąd podczas pobierania danych firmy",
+      "fetchInvoiceDetails": "Błąd podczas pobierania szczegółów faktury"
     }
   }
 }

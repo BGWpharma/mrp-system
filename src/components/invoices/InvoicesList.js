@@ -46,14 +46,17 @@ import {
   People as CustomersIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
-  MoreVert as MoreVertIcon
+  MoreVert as MoreVertIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon
 } from '@mui/icons-material';
 import { 
   getAllInvoices, 
   updateInvoiceStatus, 
   deleteInvoice,
   getAvailableProformaAmount,
-  calculateRequiredAdvancePayment
+  calculateRequiredAdvancePayment,
+  getInvoiceById
 } from '../../services/invoiceService';
 import { preciseCompare } from '../../utils/mathUtils';
 import { getAllCustomers } from '../../services/customerService';
@@ -70,6 +73,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { format } from 'date-fns';
 import { useInvoiceListState } from '../../contexts/InvoiceListStateContext';
+import InvoiceExpandedDetails from './InvoiceExpandedDetails';
 
 const InvoicesList = () => {
   // Stan z kontekstu
@@ -86,6 +90,11 @@ const InvoicesList = () => {
 
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // Stany dla rozwijanych szczegółów
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState(null);
+  const [invoiceDetails, setInvoiceDetails] = useState({});
+  const [loadingDetails, setLoadingDetails] = useState({});
 
   // Stan dla menu dropdown akcji
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState(null);
@@ -476,6 +485,49 @@ const InvoicesList = () => {
   const resetFilters = () => {
     listActions.resetFilters();
     // setFilteredInvoices będzie ustawione automatycznie przez useEffect
+  };
+
+  // Funkcja do rozwijania/zwijania szczegółów faktury z pobieraniem danych onDemand
+  const toggleExpandInvoice = async (invoiceId) => {
+    // Jeśli klikamy na już rozwinięty wiersz - zwijamy
+    if (expandedInvoiceId === invoiceId) {
+      setExpandedInvoiceId(null);
+      return;
+    }
+    
+    // Rozwijamy nowy wiersz
+    setExpandedInvoiceId(invoiceId);
+    
+    // Jeśli już mamy pobrane szczegóły, nie pobieramy ponownie
+    if (invoiceDetails[invoiceId]) {
+      return;
+    }
+    
+    // Pobierz szczegóły faktury onDemand
+    setLoadingDetails(prev => ({ ...prev, [invoiceId]: true }));
+    try {
+      const details = await getInvoiceById(invoiceId);
+      setInvoiceDetails(prev => ({ ...prev, [invoiceId]: details }));
+    } catch (error) {
+      console.error('Błąd podczas pobierania szczegółów faktury:', error);
+      showError(t('invoices.notifications.errors.fetchInvoiceDetails') || 'Błąd podczas pobierania szczegółów faktury');
+    } finally {
+      setLoadingDetails(prev => ({ ...prev, [invoiceId]: false }));
+    }
+  };
+  
+  // Funkcja do odświeżania szczegółów faktury
+  const refreshInvoiceDetails = async (invoiceId) => {
+    setLoadingDetails(prev => ({ ...prev, [invoiceId]: true }));
+    try {
+      const details = await getInvoiceById(invoiceId);
+      setInvoiceDetails(prev => ({ ...prev, [invoiceId]: details }));
+    } catch (error) {
+      console.error('Błąd podczas odświeżania szczegółów faktury:', error);
+      showError(t('invoices.notifications.errors.fetchInvoiceDetails') || 'Błąd podczas odświeżania szczegółów faktury');
+    } finally {
+      setLoadingDetails(prev => ({ ...prev, [invoiceId]: false }));
+    }
   };
 
   const formatDate = (date) => {
@@ -875,6 +927,7 @@ const InvoicesList = () => {
             <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox" /> {/* Kolumna dla ikony rozwijania */}
                     <SortableTableCell id="number" label={t('invoices.table.invoiceNumber')} />
                     <SortableTableCell id="orderNumber" label={t('invoices.table.orderNumber')} />
                     <SortableTableCell id="customer" label={t('invoices.table.client')} />
@@ -889,7 +942,7 @@ const InvoicesList = () => {
                 <TableBody>
                   {filteredInvoices.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} align="center">
+                      <TableCell colSpan={10} align="center">
                         {t('invoices.noInvoicesFound')}
                       </TableCell>
                     </TableRow>
@@ -897,21 +950,38 @@ const InvoicesList = () => {
                     filteredInvoices
                       .slice(listState.page * listState.rowsPerPage, listState.page * listState.rowsPerPage + listState.rowsPerPage)
                       .map((invoice) => (
-                        <TableRow key={invoice.id}>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
-                              <Link
-                                component={RouterLink}
-                                to={`/invoices/${invoice.id}`}
-                                variant="body2"
-                                sx={{ 
-                                  lineHeight: 1.2,
-                                  textDecoration: 'none',
-                                  '&:hover': { textDecoration: 'underline' }
-                                }}
+                        <React.Fragment key={invoice.id}>
+                          <TableRow 
+                            hover
+                            sx={{ '& > *': { borderBottom: expandedInvoiceId === invoice.id ? 'unset' : undefined } }}
+                          >
+                            {/* Kolumna z ikoną rozwijania */}
+                            <TableCell padding="checkbox">
+                              <IconButton
+                                size="small"
+                                onClick={() => toggleExpandInvoice(invoice.id)}
                               >
-                                {invoice.number}
-                              </Link>
+                                {expandedInvoiceId === invoice.id ? (
+                                  <KeyboardArrowUpIcon />
+                                ) : (
+                                  <KeyboardArrowDownIcon />
+                                )}
+                              </IconButton>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                                <Link
+                                  component={RouterLink}
+                                  to={`/invoices/${invoice.id}`}
+                                  variant="body2"
+                                  sx={{ 
+                                    lineHeight: 1.2,
+                                    textDecoration: 'none',
+                                    '&:hover': { textDecoration: 'underline' }
+                                  }}
+                                >
+                                  {invoice.number}
+                                </Link>
                               {invoice.isProforma && (
                                 <Chip 
                                   label={t('invoices.proforma')} 
@@ -1152,7 +1222,30 @@ const InvoicesList = () => {
                               )}
                             </Box>
                           </TableCell>
-                        </TableRow>
+                          </TableRow>
+                          
+                          {/* Wiersz z rozwijanymi szczegółami */}
+                          <TableRow>
+                            <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={10}>
+                              <Collapse in={expandedInvoiceId === invoice.id} timeout="auto" unmountOnExit>
+                                <Box sx={{ py: 2, px: 2 }}>
+                                  {loadingDetails[invoice.id] ? (
+                                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                                      <CircularProgress size={24} />
+                                    </Box>
+                                  ) : invoiceDetails[invoice.id] ? (
+                                    <InvoiceExpandedDetails 
+                                      invoice={invoiceDetails[invoice.id]} 
+                                      onRefresh={() => refreshInvoiceDetails(invoice.id)}
+                                      formatCurrency={formatCurrency}
+                                      t={t}
+                                    />
+                                  ) : null}
+                                </Box>
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        </React.Fragment>
                       ))
                   )}
                 </TableBody>
