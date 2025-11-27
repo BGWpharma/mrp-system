@@ -52,7 +52,15 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme as useMuiTheme,
-  Slider
+  Slider,
+  Drawer,
+  Divider,
+  Collapse,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  ListItemButton
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -72,7 +80,13 @@ import {
   Search as SearchIcon,
   Edit as EditIcon,
   Lock as LockIcon,
-  Undo as UndoIcon
+  Undo as UndoIcon,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+  Tune as TuneIcon,
+  Palette as PaletteIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 import Timeline, {
   DateHeader,
@@ -548,6 +562,15 @@ const ProductionTimeline = React.memo(({
   const { t } = useTranslation('production');
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(muiTheme.breakpoints.down('lg'));
+  
+  // ✅ RESPONSYWNOŚĆ - Stany dla mobilnego interfejsu
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [mobileControlsExpanded, setMobileControlsExpanded] = useState({
+    timeScale: false,
+    zoom: false,
+    display: false
+  });
 
   // ✅ OPTYMALIZACJE WYDAJNOŚCI - Debounced tooltip update (poprawiona wydajność)
   const debouncedTooltipUpdate = useMemo(() => 
@@ -2430,63 +2453,265 @@ const ProductionTimeline = React.memo(({
     };
   }, []);
 
+  // ✅ RESPONSYWNOŚĆ - Komponent mobilnego drawera z kontrolkami
+  const renderMobileDrawer = () => (
+    <Drawer
+      anchor="right"
+      open={mobileDrawerOpen}
+      onClose={() => setMobileDrawerOpen(false)}
+      PaperProps={{
+        sx: {
+          width: { xs: '85vw', sm: 320 },
+          maxWidth: 360,
+          bgcolor: themeMode === 'dark' ? '#1e293b' : '#f8fafc',
+          borderLeft: themeMode === 'dark' ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid rgba(0,0,0,0.1)'
+        }
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            <TuneIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            {t('production.timeline.controls') || 'Ustawienia'}
+          </Typography>
+          <IconButton onClick={() => setMobileDrawerOpen(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+        
+        <Divider sx={{ mb: 2 }} />
+        
+        {/* Sekcja: Wyświetlanie */}
+        <List disablePadding>
+          <ListItemButton 
+            onClick={() => setMobileControlsExpanded(prev => ({ ...prev, display: !prev.display }))}
+            sx={{ borderRadius: 1, mb: 0.5 }}
+          >
+            <ListItemIcon><PaletteIcon /></ListItemIcon>
+            <ListItemText primary={t('production.timeline.display') || 'Wyświetlanie'} />
+            {mobileControlsExpanded.display ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </ListItemButton>
+          <Collapse in={mobileControlsExpanded.display}>
+            <Box sx={{ pl: 2, pr: 1, py: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useWorkstationColors}
+                    onChange={(e) => setUseWorkstationColors(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={t('production.timeline.workstationColors')}
+              />
+              {editMode && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={snapToPrevious}
+                      onChange={(e) => setSnapToPrevious(e.target.checked)}
+                      size="small"
+                      color="secondary"
+                    />
+                  }
+                  label={t('production.timeline.snapToPrevious')}
+                />
+              )}
+              <Box sx={{ mt: 1 }}>
+                <Button
+                  fullWidth
+                  variant={editMode ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => { handleEditModeToggle(); }}
+                  startIcon={editMode ? <EditIcon /> : <LockIcon />}
+                  color={editMode ? "primary" : "inherit"}
+                  sx={{ mb: 1 }}
+                >
+                  {editMode ? t('production.timeline.editMode') + ' ON' : t('production.timeline.editMode') + ' OFF'}
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  onClick={() => { setGroupBy(groupBy === 'workstation' ? 'order' : 'workstation'); }}
+                  startIcon={groupBy === 'workstation' ? <BusinessIcon /> : <WorkIcon />}
+                >
+                  {groupBy === 'workstation' ? t('production.timeline.groupByWorkstation') : t('production.timeline.groupByOrder')}
+                </Button>
+              </Box>
+            </Box>
+          </Collapse>
+          
+          {/* Sekcja: Skala czasowa */}
+          <ListItemButton 
+            onClick={() => setMobileControlsExpanded(prev => ({ ...prev, timeScale: !prev.timeScale }))}
+            sx={{ borderRadius: 1, mb: 0.5 }}
+          >
+            <ListItemIcon><HourlyIcon /></ListItemIcon>
+            <ListItemText primary={t('production.timeline.timeScale') || 'Skala czasowa'} />
+            {mobileControlsExpanded.timeScale ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </ListItemButton>
+          <Collapse in={mobileControlsExpanded.timeScale}>
+            <Box sx={{ pl: 2, pr: 1, py: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Button
+                variant={timeScale === 'hourly' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => { zoomToScale('hourly'); }}
+                startIcon={<HourlyIcon />}
+              >
+                {t('production.timeline.hourly')}
+              </Button>
+              <Button
+                variant={timeScale === 'daily' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => { zoomToScale('daily'); }}
+                startIcon={<DailyIcon />}
+              >
+                {t('production.timeline.daily')}
+              </Button>
+              <Button
+                variant={timeScale === 'weekly' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => { zoomToScale('weekly'); }}
+                startIcon={<WeeklyIcon />}
+              >
+                {t('production.timeline.weekly')}
+              </Button>
+              <Button
+                variant={timeScale === 'monthly' ? 'contained' : 'outlined'}
+                size="small"
+                onClick={() => { zoomToScale('monthly'); }}
+                startIcon={<MonthlyIcon />}
+              >
+                {t('production.timeline.monthly')}
+              </Button>
+            </Box>
+          </Collapse>
+          
+          {/* Sekcja: Zoom */}
+          <ListItemButton 
+            onClick={() => setMobileControlsExpanded(prev => ({ ...prev, zoom: !prev.zoom }))}
+            sx={{ borderRadius: 1, mb: 0.5 }}
+          >
+            <ListItemIcon><ZoomInIcon /></ListItemIcon>
+            <ListItemText primary={t('production.timeline.zoom.title') || 'Zoom'} />
+            {mobileControlsExpanded.zoom ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </ListItemButton>
+          <Collapse in={mobileControlsExpanded.zoom}>
+            <Box sx={{ pl: 2, pr: 1, py: 1, display: 'flex', gap: 1, justifyContent: 'center' }}>
+              <IconButton onClick={zoomIn} color="primary">
+                <ZoomInIcon />
+              </IconButton>
+              <IconButton onClick={zoomOut} color="primary">
+                <ZoomOutIcon />
+              </IconButton>
+              <IconButton onClick={resetZoom} color="secondary">
+                <ResetZoomIcon />
+              </IconButton>
+              {undoStack.length > 0 && (
+                <IconButton onClick={handleUndo} color="warning">
+                  <UndoIcon />
+                </IconButton>
+              )}
+            </Box>
+          </Collapse>
+        </List>
+        
+        <Divider sx={{ my: 2 }} />
+        
+        {/* Eksport i inne akcje */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <TimelineExport 
+            tasks={tasks}
+            workstations={workstations}
+            customers={customers}
+            startDate={visibleTimeStart}
+            endDate={visibleTimeEnd}
+            groupBy={groupBy}
+            filteredTasks={items.map(item => item.task)}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+        </Box>
+      </Box>
+    </Drawer>
+  );
+
   return (
     <Box sx={{ position: 'relative' }}>
+      {/* ✅ RESPONSYWNOŚĆ - Mobilny drawer */}
+      {(isMobile || isTablet) && renderMobileDrawer()}
+      
       <Paper 
-        sx={{ p: 2, height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}
+        sx={{ 
+          p: { xs: 1, sm: 1.5, md: 2 }, 
+          height: 'calc(100vh - 80px)', 
+          display: 'flex', 
+          flexDirection: 'column' 
+        }}
       >
-      {/* Nagłówek */}
+      {/* Nagłówek - Responsywna wersja */}
       <Box className="production-timeline-header" sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        mb: 2,
-        flexWrap: 'wrap'
+        mb: { xs: 1, md: 2 },
+        flexWrap: 'wrap',
+        gap: { xs: 1, md: 0 }
       }}>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-          <CalendarIcon sx={{ mr: 1 }} />
+        <Typography 
+          variant={isMobile ? "subtitle1" : "h6"} 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            fontWeight: 600,
+            fontSize: { xs: '1rem', sm: '1.1rem', md: '1.25rem' }
+          }}
+        >
+          <CalendarIcon sx={{ mr: 1, fontSize: { xs: '1.2rem', md: '1.5rem' } }} />
           {t('production.timeline.title')}
         </Typography>
         
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <FormControlLabel
-            className="timeline-switch"
-            control={
-              <Switch
-                checked={useWorkstationColors}
-                onChange={(e) => setUseWorkstationColors(e.target.checked)}
-                size="small"
-              />
-            }
-            label={t('production.timeline.workstationColors')}
-          />
+        {/* Desktop: pełne kontrolki */}
+        {!isMobile && !isTablet && (
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <FormControlLabel
+              className="timeline-switch"
+              control={
+                <Switch
+                  checked={useWorkstationColors}
+                  onChange={(e) => setUseWorkstationColors(e.target.checked)}
+                  size="small"
+                />
+              }
+              label={t('production.timeline.workstationColors')}
+            />
+            
+            {editMode && (
+              <Tooltip 
+                title={t('production.timeline.snapToPreviousTooltip')} 
+                arrow
+                disableInteractive
+                enterDelay={500}
+                leaveDelay={200}
+              >
+                <FormControlLabel
+                  className="timeline-switch"
+                  control={
+                    <Switch
+                      checked={snapToPrevious}
+                      onChange={(e) => setSnapToPrevious(e.target.checked)}
+                      size="small"
+                      color="secondary"
+                    />
+                  }
+                  label={t('production.timeline.snapToPrevious')}
+                  title=""
+                />
+              </Tooltip>
+            )}
           
-          {editMode && (
             <Tooltip 
-              title={t('production.timeline.snapToPreviousTooltip')} 
-              arrow
-              disableInteractive
-              enterDelay={500}
-              leaveDelay={200}
-            >
-              <FormControlLabel
-                className="timeline-switch"
-                control={
-                  <Switch
-                    checked={snapToPrevious}
-                    onChange={(e) => setSnapToPrevious(e.target.checked)}
-                    size="small"
-                    color="secondary"
-                  />
-                }
-                label={t('production.timeline.snapToPrevious')}
-                title=""
-              />
-            </Tooltip>
-          )}
-          
-          <Tooltip 
-            title={t('production.timeline.editModeTooltip')} 
+              title={t('production.timeline.editModeTooltip')} 
             arrow
             disableInteractive
             enterDelay={500}
@@ -2673,20 +2898,75 @@ const ProductionTimeline = React.memo(({
             <RefreshIcon />
           </IconButton>
           
-
-        </Box>
+          </Box>
+        )}
+        
+        {/* Mobile/Tablet: kompaktowe kontrolki */}
+        {(isMobile || isTablet) && (
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            {/* Tryb edycji - kompaktowy */}
+            <IconButton
+              size="small"
+              onClick={handleEditModeToggle}
+              color={editMode ? "primary" : "default"}
+              sx={{ 
+                bgcolor: editMode ? 'primary.main' : 'transparent',
+                color: editMode ? 'white' : 'inherit',
+                '&:hover': { bgcolor: editMode ? 'primary.dark' : 'action.hover' }
+              }}
+            >
+              {editMode ? <EditIcon /> : <LockIcon />}
+            </IconButton>
+            
+            {/* Filtr */}
+            <IconButton
+              size="small"
+              onClick={handleFilterMenuClick}
+              color={(advancedFilters.productName || advancedFilters.moNumber || advancedFilters.orderNumber || advancedFilters.poNumber) ? 'primary' : 'default'}
+            >
+              <FilterListIcon />
+            </IconButton>
+            
+            {/* Refresh */}
+            <IconButton size="small" onClick={fetchTasks}>
+              <RefreshIcon />
+            </IconButton>
+            
+            {/* Menu hamburger */}
+            <IconButton 
+              size="small" 
+              onClick={() => setMobileDrawerOpen(true)}
+              sx={{ 
+                bgcolor: themeMode === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(25, 118, 210, 0.1)',
+                '&:hover': { bgcolor: themeMode === 'dark' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(25, 118, 210, 0.2)' }
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+        )}
       </Box>
 
 
-      {/* Legenda */}
-      <Box className="timeline-legend-container">
+      {/* Legenda - responsywna */}
+      <Box 
+        className="timeline-legend-container" 
+        sx={{ 
+          display: { xs: 'none', sm: 'block' },
+          '&.mobile-legend': { display: 'block' }
+        }}
+      >
         <Box sx={{ 
           display: 'flex', 
           flexWrap: 'wrap', 
-          gap: 1, 
+          gap: { xs: 0.5, md: 1 }, 
           alignItems: 'center'
         }}>
-          <Typography className="timeline-legend-title" variant="caption">
+          <Typography 
+            className="timeline-legend-title" 
+            variant="caption"
+            sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+          >
             {t('production.timeline.legend')}
           </Typography>
         
@@ -2696,10 +2976,13 @@ const ProductionTimeline = React.memo(({
                 key={workstation.id}
                 className="timeline-legend-chip"
                 size="small"
-                label={workstation.name} 
+                label={isMobile ? workstation.name.substring(0, 10) + (workstation.name.length > 10 ? '...' : '') : workstation.name} 
                 sx={{ 
                   bgcolor: workstation.color || getWorkstationColor(workstation.id), 
-                  color: 'white'
+                  color: 'white',
+                  height: { xs: 20, md: 24 },
+                  fontSize: { xs: '0.6rem', md: '0.7rem' },
+                  '& .MuiChip-label': { px: { xs: 0.75, md: 1 } }
                 }} 
               />
             ))
@@ -3029,22 +3312,24 @@ const ProductionTimeline = React.memo(({
         </Timeline>
       </Box>
 
-      {/* Suwak poziomy do przewijania timeline */}
+      {/* Suwak poziomy do przewijania timeline - responsywny */}
       <Box sx={{ 
-        mt: 1, 
-        px: 2, 
-        pb: 1,
-        borderTop: '1px solid #e0e0e0'
+        mt: { xs: 0.5, md: 1 }, 
+        px: { xs: 1, md: 2 }, 
+        pb: { xs: 0.5, md: 1 },
+        borderTop: '1px solid',
+        borderColor: themeMode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
       }}>
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: 2 
+          gap: { xs: 1, md: 2 } 
         }}>
           <Typography variant="caption" sx={{ 
-            minWidth: '120px',
-            fontSize: '0.75rem',
-            color: 'text.secondary'
+            minWidth: { xs: '80px', sm: '100px', md: '120px' },
+            fontSize: { xs: '0.65rem', md: '0.75rem' },
+            color: 'text.secondary',
+            display: { xs: 'none', sm: 'block' }
           }}>
             Przewijanie poziome:
           </Typography>
@@ -3058,10 +3343,10 @@ const ProductionTimeline = React.memo(({
             disabled={!isFinite(sliderValue) || canvasTimeEnd <= canvasTimeStart}
             sx={{
               flex: 1,
-              height: 4,
+              height: { xs: 6, md: 4 },
               '& .MuiSlider-thumb': {
-                width: 16,
-                height: 16,
+                width: { xs: 20, md: 16 },
+                height: { xs: 20, md: 16 },
                 '&:hover, &.Mui-focusVisible': {
                   boxShadow: '0 3px 1px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.3)',
                 },
@@ -3070,11 +3355,11 @@ const ProductionTimeline = React.memo(({
                 },
               },
               '& .MuiSlider-track': {
-                height: 4,
+                height: { xs: 6, md: 4 },
                 border: 'none',
               },
               '& .MuiSlider-rail': {
-                height: 4,
+                height: { xs: 6, md: 4 },
                 opacity: 0.3,
                 backgroundColor: '#bfbfbf',
               },
@@ -3082,8 +3367,8 @@ const ProductionTimeline = React.memo(({
           />
           
           <Typography variant="caption" sx={{ 
-            minWidth: '40px',
-            fontSize: '0.75rem',
+            minWidth: { xs: '30px', md: '40px' },
+            fontSize: { xs: '0.65rem', md: '0.75rem' },
             color: 'text.secondary',
             textAlign: 'right'
           }}>
@@ -3091,21 +3376,21 @@ const ProductionTimeline = React.memo(({
           </Typography>
         </Box>
         
-        {/* Dodatkowe informacje */}
+        {/* Dodatkowe informacje - responsywne */}
         <Box sx={{ 
-          display: 'flex', 
+          display: { xs: 'none', sm: 'flex' }, 
           justifyContent: 'space-between',
           mt: 0.5,
-          fontSize: '0.7rem',
+          fontSize: { xs: '0.6rem', md: '0.7rem' },
           color: 'text.disabled'
         }}>
           <span>
             {canvasTimeStart ? format(new Date(canvasTimeStart), 'dd.MM.yyyy', { locale: pl }) : '---'}
           </span>
-          <span>
+          <span className="timeline-date-range">
             Widoczny zakres: {
               visibleTimeStart && visibleTimeEnd 
-                ? `${format(new Date(visibleTimeStart), 'dd.MM HH:mm', { locale: pl })} - ${format(new Date(visibleTimeEnd), 'dd.MM HH:mm', { locale: pl })}`
+                ? `${format(new Date(visibleTimeStart), isMobile ? 'dd.MM' : 'dd.MM HH:mm', { locale: pl })} - ${format(new Date(visibleTimeEnd), isMobile ? 'dd.MM' : 'dd.MM HH:mm', { locale: pl })}`
                 : '---'
             }
           </span>

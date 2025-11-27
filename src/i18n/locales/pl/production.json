@@ -456,10 +456,13 @@
     "exportTimeline": "Eksportuj harmonogram",
     "refresh": "Odśwież",
     "zoom": {
+      "title": "Zoom",
       "in": "Powiększ",
       "out": "Pomniejsz",
       "reset": "Resetuj zoom"
     },
+    "controls": "Ustawienia harmonogramu",
+    "display": "Wyświetlanie",
     "slider": {
       "timeRange": "Zakres czasu: {{start}} - {{end}}"
     },

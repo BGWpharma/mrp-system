@@ -482,16 +482,64 @@
   box-shadow: 0 8px 20px rgba(100, 116, 139, 0.4) !important;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
+/* ===== RESPONSYWNOŚĆ DLA URZĄDZEŃ MOBILNYCH ===== */
+
+/* Tablet (max 1024px) */
+@media (max-width: 1024px) {
   .production-timeline-header {
-    padding: 12px;
-    border-radius: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
   }
   
   .timeline-button-group {
     gap: 2px;
     border-radius: 10px;
+    padding: 3px;
+  }
+  
+  .timeline-icon-button {
+    min-width: 36px !important;
+    height: 36px !important;
+    padding: 8px !important;
+  }
+  
+  .timeline-action-button {
+    padding: 8px 14px !important;
+    font-size: 0.85rem !important;
+  }
+  
+  .timeline-legend-container {
+    padding: 12px 14px;
+    border-radius: 14px;
+    margin-bottom: 12px;
+  }
+  
+  .timeline-legend-chip {
+    height: 26px !important;
+    font-size: 0.7rem !important;
+    padding: 0 12px !important;
+  }
+}
+
+/* Mobile (max 768px) */
+@media (max-width: 768px) {
+  .production-timeline-header {
+    padding: 10px 12px;
+    border-radius: 12px;
+    margin-bottom: 8px !important;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .production-timeline-header::before {
+    height: 2px;
+  }
+  
+  .timeline-button-group {
+    gap: 2px;
+    border-radius: 8px;
+    padding: 2px;
   }
   
   .timeline-icon-button {
@@ -501,23 +549,143 @@
   }
   
   .timeline-action-button {
-    padding: 6px 12px !important;
-    font-size: 0.8rem !important;
+    padding: 6px 10px !important;
+    font-size: 0.75rem !important;
   }
   
   .timeline-legend-container {
-    padding: 10px 12px;
-    border-radius: 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    margin-bottom: 8px;
   }
   
   .timeline-legend-chip {
-    height: 24px !important;
-    font-size: 0.65rem !important;
+    height: 22px !important;
+    font-size: 0.6rem !important;
+    padding: 0 8px !important;
   }
   
   .timeline-legend-title {
-    font-size: 0.75rem !important;
-    margin-right: 8px !important;
+    font-size: 0.7rem !important;
+    margin-right: 6px !important;
+  }
+  
+  .timeline-legend-title::before {
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+  }
+  
+  /* Wyłącz efekty hover na urządzeniach dotykowych */
+  .timeline-icon-button:hover,
+  .timeline-action-button:hover,
+  .timeline-filter-button:hover,
+  .timeline-legend-chip:hover {
+    transform: none !important;
+  }
+  
+  /* Aktywny stan na dotyk */
+  .timeline-icon-button:active,
+  .timeline-action-button:active,
+  .timeline-filter-button:active,
+  .timeline-legend-chip:active {
+    transform: scale(0.95) !important;
+    transition: transform 0.1s ease !important;
+  }
+}
+
+/* Small Mobile (max 480px) */
+@media (max-width: 480px) {
+  .production-timeline-header {
+    padding: 8px 10px;
+    border-radius: 10px;
+    margin-bottom: 6px !important;
+  }
+  
+  .timeline-icon-button {
+    min-width: 28px !important;
+    height: 28px !important;
+    padding: 4px !important;
+  }
+  
+  .timeline-action-button {
+    padding: 4px 8px !important;
+    font-size: 0.7rem !important;
+  }
+  
+  .timeline-legend-container {
+    padding: 6px 8px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  
+  .timeline-legend-chip {
+    height: 20px !important;
+    font-size: 0.55rem !important;
+    padding: 0 6px !important;
+    border-radius: 10px !important;
+  }
+  
+  .timeline-legend-title {
+    font-size: 0.65rem !important;
+    margin-right: 4px !important;
+  }
+  
+  .timeline-legend-title::before {
+    width: 5px;
+    height: 5px;
+    margin-right: 4px;
+  }
+}
+
+/* Optymalizacje dla ekranów dotykowych */
+@media (hover: none) and (pointer: coarse) {
+  .timeline-icon-button,
+  .timeline-action-button,
+  .timeline-filter-button,
+  .timeline-refresh-button,
+  .timeline-undo-button,
+  .timeline-legend-chip {
+    /* Większe cele dotykowe */
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+  
+  .timeline-action-button,
+  .timeline-filter-button {
+    min-width: auto !important;
+    padding: 10px 16px !important;
+  }
+  
+  /* Wyłącz animacje hover dla urządzeń dotykowych */
+  .timeline-icon-button::before,
+  .timeline-action-button::before,
+  .timeline-filter-button::before,
+  .timeline-legend-chip::before {
+    display: none !important;
+  }
+  
+  .production-timeline-header:hover,
+  .timeline-legend-container:hover {
+    transform: none !important;
+  }
+}
+
+/* Tryb landscape na urządzeniach mobilnych */
+@media (max-height: 500px) and (orientation: landscape) {
+  .production-timeline-header {
+    padding: 6px 10px;
+    margin-bottom: 4px !important;
+  }
+  
+  .timeline-legend-container {
+    padding: 4px 8px;
+    margin-bottom: 4px;
+  }
+  
+  .timeline-legend-chip {
+    height: 18px !important;
+    font-size: 0.55rem !important;
   }
 }
 
@@ -968,4 +1136,187 @@
 
 [data-theme='dark'] .MuiTooltip-arrow {
   color: rgba(30, 41, 59, 0.95) !important;
+}
+
+/* ===== MOBILNY DRAWER TIMELINE ===== */
+
+/* Główny kontener drawera */
+.MuiDrawer-paper {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Lista w drawerze */
+.MuiDrawer-paper .MuiList-root {
+  padding: 0;
+}
+
+.MuiDrawer-paper .MuiListItemButton-root {
+  border-radius: var(--timeline-radius-md);
+  margin-bottom: 4px;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.MuiDrawer-paper .MuiListItemButton-root:hover {
+  background: var(--timeline-surface-hover);
+}
+
+.MuiDrawer-paper .MuiCollapse-root {
+  margin-left: 8px;
+  margin-bottom: 8px;
+}
+
+/* Przyciski w drawerze */
+.MuiDrawer-paper .MuiButton-root {
+  border-radius: var(--timeline-radius-md);
+  text-transform: none;
+  font-weight: 500;
+}
+
+/* ===== TIMELINE CALENDAR RESPONSYWNY ===== */
+
+/* Główny kontener timeline */
+.react-calendar-timeline {
+  font-size: 12px !important;
+}
+
+@media (max-width: 768px) {
+  .react-calendar-timeline {
+    font-size: 10px !important;
+  }
+  
+  .react-calendar-timeline .rct-header-root {
+    min-height: 50px !important;
+  }
+  
+  .react-calendar-timeline .rct-sidebar {
+    min-width: 100px !important;
+  }
+  
+  .react-calendar-timeline .rct-sidebar-row {
+    font-size: 10px !important;
+    padding: 4px 6px !important;
+  }
+  
+  .react-calendar-timeline .rct-dateHeader {
+    font-size: 9px !important;
+  }
+  
+  .react-calendar-timeline .rct-item {
+    font-size: 10px !important;
+  }
+  
+  .react-calendar-timeline .rct-item-content {
+    padding: 2px 4px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .react-calendar-timeline {
+    font-size: 9px !important;
+  }
+  
+  .react-calendar-timeline .rct-sidebar {
+    min-width: 80px !important;
+  }
+  
+  .react-calendar-timeline .rct-sidebar-row {
+    font-size: 9px !important;
+    padding: 2px 4px !important;
+  }
+  
+  .react-calendar-timeline .rct-dateHeader {
+    font-size: 8px !important;
+  }
+  
+  .react-calendar-timeline .rct-item {
+    font-size: 9px !important;
+  }
+}
+
+/* ===== SLIDER PRZEWIJANIA RESPONSYWNY ===== */
+
+@media (max-width: 768px) {
+  .MuiSlider-root {
+    height: 6px !important;
+  }
+  
+  .MuiSlider-thumb {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .MuiSlider-root {
+    height: 4px !important;
+  }
+  
+  .MuiSlider-thumb {
+    width: 16px !important;
+    height: 16px !important;
+  }
+}
+
+/* ===== MOBILNE GESTY DOTYKOWE ===== */
+
+@media (hover: none) and (pointer: coarse) {
+  /* Lepsze przewijanie na urządzeniach dotykowych */
+  .react-calendar-timeline {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+  
+  .react-calendar-timeline .rct-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Większe elementy do dotykania */
+  .react-calendar-timeline .rct-item {
+    min-height: 40px !important;
+  }
+  
+  .react-calendar-timeline .rct-sidebar-row {
+    min-height: 50px !important;
+  }
+}
+
+/* ===== UKRYCIE ZBĘDNYCH ELEMENTÓW NA MOBILE ===== */
+
+@media (max-width: 768px) {
+  /* Ukryj mniej ważne informacje */
+  .timeline-info-text {
+    display: none !important;
+  }
+  
+  /* Kompaktowy widok dat */
+  .timeline-date-range {
+    font-size: 0.7rem !important;
+  }
+}
+
+/* ===== ANIMACJE DLA MOBILNEGO DRAWERA ===== */
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.MuiDrawer-paper {
+  animation: slideInFromRight 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ===== STYL DLA ŁADOWANIA NA MOBILE ===== */
+
+@media (max-width: 768px) {
+  .MuiCircularProgress-root {
+    width: 32px !important;
+    height: 32px !important;
+  }
 }

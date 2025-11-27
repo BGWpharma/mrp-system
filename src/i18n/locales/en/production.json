@@ -385,10 +385,13 @@
     "exportTimeline": "Export Timeline",
     "refresh": "Refresh",
     "zoom": {
+      "title": "Zoom",
       "in": "Zoom In",
       "out": "Zoom Out",
       "reset": "Reset Zoom"
     },
+    "controls": "Schedule Settings",
+    "display": "Display",
     "slider": {
       "timeRange": "Time Range: {{start}} - {{end}}"
     },
