@@ -560,9 +560,23 @@ const PurchaseOrderDetails = ({ orderId }) => {
   
   // Funkcja znajdująca informację o dacie ważności dla pozycji PO w odpowiedziach formularzy rozładunku
   // Obsługuje zarówno nowy format z partiami (batches) jak i stary format (kompatybilność wsteczna)
+  // ✅ AGREGUJE partie ze WSZYSTKICH raportów rozładunku dla danej pozycji (obsługa wielu dostaw)
+  // ✅ FILTRUJE partie, które już zostały przyjęte na magazyn
   const getExpiryInfoFromUnloadingForms = (item) => {
     if (!unloadingFormResponses || unloadingFormResponses.length === 0) {
-      return { expiryDate: null, noExpiryDate: false, batches: [] };
+      return { expiryDate: null, noExpiryDate: false, batches: [], reportsCount: 0 };
+    }
+    
+    // ✅ Pobierz już przyjęte partie dla tej pozycji PO
+    const alreadyReceivedBatches = getBatchesByItemId(item.id);
+    const receivedBatchNumbers = new Set(
+      alreadyReceivedBatches
+        .map(batch => (batch.lotNumber || batch.batchNumber || '').toLowerCase().trim())
+        .filter(Boolean)
+    );
+    
+    if (receivedBatchNumbers.size > 0) {
+      console.log(`🔍 Już przyjęte partie dla pozycji "${item.name}":`, [...receivedBatchNumbers]);
     }
     
     // Pomocnicza funkcja do walidacji daty
@@ -584,7 +598,13 @@ const PurchaseOrderDetails = ({ orderId }) => {
       return null;
     };
     
-    // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku od najnowszych
+    // ✅ Zbierz partie ze WSZYSTKICH raportów rozładunku dla tej pozycji
+    const allBatches = [];
+    let hasNoExpiryDate = false;
+    let firstExpiryDate = null;
+    const matchedReportIds = new Set();
+    
+    // Sprawdzamy wszystkie odpowiedzi formularzy rozładunku
     for (const response of unloadingFormResponses) {
       if (response.selectedItems && response.selectedItems.length > 0) {
         // TYLKO DOKŁADNE DOPASOWANIE PO ID POZYCJI PO
@@ -594,60 +614,125 @@ const PurchaseOrderDetails = ({ orderId }) => {
         
         // Jeśli znaleziono pozycję po dokładnym ID
         if (foundItem) {
+          matchedReportIds.add(response.id);
+          
           // NOWY FORMAT: Sprawdź czy ma tablicę partii (batches)
           if (foundItem.batches && Array.isArray(foundItem.batches) && foundItem.batches.length > 0) {
-            const validBatches = foundItem.batches.map(batch => ({
-              batchNumber: batch.batchNumber || '',
-              unloadedQuantity: batch.unloadedQuantity || '',
-              expiryDate: validateDate(batch.expiryDate),
-              noExpiryDate: batch.noExpiryDate || false
-            }));
+            const validBatches = foundItem.batches
+              .map(batch => ({
+                batchNumber: batch.batchNumber || '',
+                unloadedQuantity: batch.unloadedQuantity || '',
+                expiryDate: validateDate(batch.expiryDate),
+                noExpiryDate: batch.noExpiryDate || false,
+                // Dodaj informację o źródłowym raporcie rozładunku
+                sourceReportId: response.id,
+                sourceReportDate: response.fillDate || response.createdAt
+              }))
+              // ✅ Filtruj partie, które już zostały przyjęte na magazyn
+              .filter(batch => {
+                const batchNumLower = (batch.batchNumber || '').toLowerCase().trim();
+                
+                // Jeśli partia nie ma numeru, nie możemy jej porównać - przepuść ją
+                if (!batchNumLower) {
+                  return true;
+                }
+                
+                // Sprawdź czy partia już została przyjęta
+                const isAlreadyReceived = receivedBatchNumbers.has(batchNumLower);
+                
+                if (isAlreadyReceived) {
+                  console.log(`⏭️ Pomijam już przyjętą partię "${batch.batchNumber}" dla pozycji "${item.name}"`);
+                }
+                
+                return !isAlreadyReceived;
+              });
             
-            // Zwróć pierwszą datę ważności dla kompatybilności wstecznej + wszystkie partie
-            const firstBatchWithDate = validBatches.find(b => b.expiryDate);
-            const firstBatchNoExpiry = validBatches.find(b => b.noExpiryDate);
+            // Dodaj przefiltrowane partie do agregowanej listy
+            allBatches.push(...validBatches);
             
-            console.log(`📦 Pozycja "${item.name}" ma ${validBatches.length} partii w nowym formacie`);
+            // Aktualizuj flagi daty ważności
+            const batchWithDate = validBatches.find(b => b.expiryDate);
+            const batchNoExpiry = validBatches.find(b => b.noExpiryDate);
             
-            return { 
-              expiryDate: firstBatchWithDate?.expiryDate || null, 
-              noExpiryDate: !firstBatchWithDate && firstBatchNoExpiry ? true : false,
-              batches: validBatches
-            };
+            if (batchWithDate && !firstExpiryDate) {
+              firstExpiryDate = batchWithDate.expiryDate;
+            }
+            if (batchNoExpiry) {
+              hasNoExpiryDate = true;
+            }
+            
+            if (validBatches.length > 0) {
+              console.log(`📦 Znaleziono ${validBatches.length} nieprzyjętych partii dla pozycji "${item.name}" w raporcie ${response.id}`);
+            }
           }
-          
           // STARY FORMAT: Sprawdź czy zaznaczono "nie dotyczy"
-          if (foundItem.noExpiryDate === true) {
-            console.log(`🚫 Pozycja "${item.name}" (ID: ${item.id}) ma zaznaczone "nie dotyczy" dla daty ważności`);
-            return { expiryDate: null, noExpiryDate: true, batches: [] };
+          else if (foundItem.noExpiryDate === true) {
+            console.log(`🚫 Pozycja "${item.name}" (ID: ${item.id}) ma zaznaczone "nie dotyczy" dla daty ważności w raporcie ${response.id}`);
+            hasNoExpiryDate = true;
+            // Dodaj jako pojedynczą partię (stary format)
+            allBatches.push({
+              batchNumber: '',
+              unloadedQuantity: foundItem.unloadedQuantity || '',
+              expiryDate: null,
+              noExpiryDate: true,
+              sourceReportId: response.id,
+              sourceReportDate: response.fillDate || response.createdAt
+            });
           }
-          
           // STARY FORMAT: Sprawdź czy ma datę ważności i czy jest prawidłowa
-          const validDate = validateDate(foundItem.expiryDate);
-          
-          if (validDate) {
-            console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}" (ID: ${item.id}):`, validDate);
-            // Zwróć w starym formacie jako jedną "partię" dla kompatybilności
-            return { 
-              expiryDate: validDate, 
-              noExpiryDate: false,
-              batches: [{
+          else {
+            const validDate = validateDate(foundItem.expiryDate);
+            
+            if (validDate) {
+              console.log(`📅 Znaleziono prawidłową datę ważności dla pozycji "${item.name}" (ID: ${item.id}) w raporcie ${response.id}:`, validDate);
+              if (!firstExpiryDate) {
+                firstExpiryDate = validDate;
+              }
+              // Dodaj jako pojedynczą partię (stary format)
+              allBatches.push({
                 batchNumber: '',
                 unloadedQuantity: foundItem.unloadedQuantity || '',
                 expiryDate: validDate,
-                noExpiryDate: false
-              }]
-            };
+                noExpiryDate: false,
+                sourceReportId: response.id,
+                sourceReportDate: response.fillDate || response.createdAt
+              });
+            } else if (foundItem.unloadedQuantity) {
+              // Pozycja bez daty ważności ale z ilością - też dodaj
+              allBatches.push({
+                batchNumber: '',
+                unloadedQuantity: foundItem.unloadedQuantity || '',
+                expiryDate: null,
+                noExpiryDate: false,
+                sourceReportId: response.id,
+                sourceReportDate: response.fillDate || response.createdAt
+              });
+            }
           }
-          
-          // Jeśli znaleziono pozycję ale bez daty ważności
-          return { expiryDate: null, noExpiryDate: false, batches: [] };
         }
       }
     }
     
-    // Nie znaleziono pozycji w żadnym formularzu rozładunku
-    return { expiryDate: null, noExpiryDate: false, batches: [] };
+    // Zwróć zagregowane wyniki ze wszystkich raportów (tylko nieprzyjęte partie)
+    if (allBatches.length > 0) {
+      const reportsCount = matchedReportIds.size;
+      if (reportsCount > 1) {
+        console.log(`📦 Łącznie ${allBatches.length} nieprzyjętych partii dla pozycji "${item.name}" z ${reportsCount} raportów rozładunku`);
+      } else {
+        console.log(`📦 ${allBatches.length} nieprzyjętych partii dla pozycji "${item.name}" z 1 raportu rozładunku`);
+      }
+      
+      return { 
+        expiryDate: firstExpiryDate, 
+        noExpiryDate: !firstExpiryDate && hasNoExpiryDate,
+        batches: allBatches,
+        reportsCount: reportsCount
+      };
+    }
+    
+    // Nie znaleziono pozycji w żadnym formularzu rozładunku LUB wszystkie partie już przyjęte
+    console.log(`ℹ️ Brak nieprzyjętych partii dla pozycji "${item.name}" (wszystkie mogły zostać już przyjęte)`);
+    return { expiryDate: null, noExpiryDate: false, batches: [], reportsCount: 0 };
   };
 
   // Kompatybilność wsteczna - funkcja zwracająca tylko datę ważności
@@ -816,12 +901,18 @@ const PurchaseOrderDetails = ({ orderId }) => {
     queryParams.append('orderId', orderId);
     
     // Oblicz sumę ilości ze wszystkich partii lub użyj ilości z PO
+    // Agreguje partie ze wszystkich dostaw (raportów rozładunku)
     let totalQuantity = itemToReceive.quantity;
     if (expiryInfo.batches && expiryInfo.batches.length > 0) {
       const batchesSum = expiryInfo.batches.reduce((sum, batch) => 
         sum + parseFloat(batch.unloadedQuantity || 0), 0);
       if (batchesSum > 0) {
         totalQuantity = batchesSum;
+      }
+      
+      // Log informacyjny gdy partie pochodzą z wielu dostaw
+      if (expiryInfo.reportsCount > 1) {
+        console.log(`📦 Agregacja z wielu dostaw: ${expiryInfo.batches.length} partii z ${expiryInfo.reportsCount} raportów rozładunku, łączna ilość: ${totalQuantity}`);
       }
     }
     queryParams.append('quantity', totalQuantity);
@@ -1706,13 +1797,26 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                   let tooltipText = "";
                                   if (itemInUnloadingForm) {
                                     tooltipText = t('purchaseOrders.details.itemReportedInUnloading');
+                                    
+                                    // Pokaż liczbę partii i dostaw
+                                    const batchCount = expiryInfo.batches?.length || 0;
+                                    const reportsCount = expiryInfo.reportsCount || 0;
+                                    
+                                    if (batchCount > 0) {
+                                      if (reportsCount > 1) {
+                                        tooltipText += ` (${batchCount} partii z ${reportsCount} dostaw)`;
+                                      } else {
+                                        tooltipText += ` (${batchCount} ${batchCount === 1 ? 'partia' : batchCount < 5 ? 'partie' : 'partii'})`;
+                                      }
+                                    }
+                                    
                                     if (expiryInfo.noExpiryDate) {
-                                      tooltipText += ` (brak terminu ważności)`;
+                                      tooltipText += ` • brak terminu ważności`;
                                     } else if (expiryInfo.expiryDate) {
                                       const expiryDateStr = expiryInfo.expiryDate instanceof Date 
                                         ? expiryInfo.expiryDate.toLocaleDateString('pl-PL')
                                         : new Date(expiryInfo.expiryDate).toLocaleDateString('pl-PL');
-                                      tooltipText += ` (data ważności: ${expiryDateStr})`;
+                                      tooltipText += ` • data ważności: ${expiryDateStr}`;
                                     }
                                   } else {
                                     tooltipText = t('purchaseOrders.details.itemNotReportedInUnloading');

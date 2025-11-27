@@ -68,8 +68,10 @@ import {
   cancelThreatenedReservations,
   saveCancelledReservationsToStocktaking,
   getInventoryCategories,
-  getInventoryItemsByCategory
+  getInventoryItemsByCategory,
+  updateStocktakingAttachments
 } from '../../services/inventory';
+import StocktakingAttachments from '../../components/stocktaking/StocktakingAttachments';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -777,6 +779,18 @@ const StocktakingDetailsPage = () => {
     
     return <Chip label={status} color={color} size="small" />;
   };
+
+  // Obsługa załączników
+  const handleAttachmentsChange = async (newAttachments) => {
+    try {
+      await updateStocktakingAttachments(id, newAttachments, currentUser.uid);
+      setStocktaking(prev => ({ ...prev, attachments: newAttachments }));
+      showSuccess(t('stocktaking.attachments.descriptionSaved'));
+    } catch (error) {
+      console.error('Błąd podczas aktualizacji załączników:', error);
+      showError(`Błąd aktualizacji załączników: ${error.message}`);
+    }
+  };
   
   const isCompleted = stocktaking && stocktaking.status === 'Zakończona';
   const isInCorrection = stocktaking && stocktaking.status === 'W korekcie';
@@ -916,6 +930,17 @@ const StocktakingDetailsPage = () => {
             </Box>
           </Grid>
         </Grid>
+      </Paper>
+
+      {/* Sekcja załączników */}
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <StocktakingAttachments
+          stocktakingId={id}
+          attachments={stocktaking.attachments || []}
+          onAttachmentsChange={handleAttachmentsChange}
+          disabled={isCompleted && !isInCorrection}
+          viewOnly={isCompleted && !isInCorrection}
+        />
       </Paper>
       
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>

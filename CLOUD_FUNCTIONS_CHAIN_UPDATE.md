@@ -545,3 +545,4 @@ Metryki dostępne w konsoli:
 **Status:** ✅ Gotowe do deployment
 
 
+

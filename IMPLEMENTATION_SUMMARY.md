@@ -485,3 +485,4 @@ https://console.firebase.google.com/project/bgw-mrp-system/functions
 **Wersja:** 1.0.0
 
 
+

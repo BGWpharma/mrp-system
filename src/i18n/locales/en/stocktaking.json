@@ -139,5 +139,29 @@
     "buttonCancelReservationsAndComplete": "Cancel reservations and complete",
     "cancellingReservations": "Cancelling reservations...",
     "checkingReservations": "Checking impact on reservations..."
+  },
+  "attachments": {
+    "title": "Attachments",
+    "dropzone": "Drag files here or click to select",
+    "dropzoneHint": "You can add photos, PDF documents, Excel or Word files",
+    "selectFiles": "Select files",
+    "uploading": "Uploading...",
+    "supportedFormats": "Supported formats: JPG, PNG, GIF, PDF, DOC, DOCX, XLS, XLSX (max 20 MB)",
+    "uploadSuccess": "File \"{{name}}\" has been uploaded",
+    "uploadError": "Error uploading file \"{{name}}\": {{error}}",
+    "deleteSuccess": "File \"{{name}}\" has been deleted",
+    "deleteError": "Error deleting file: {{error}}",
+    "unsupportedFileType": "Unsupported file type",
+    "fileTooLarge": "File is too large (max 20 MB)",
+    "noAttachments": "No attachments. Add your first attachment above.",
+    "noAttachmentsViewOnly": "No attachments for this stocktaking.",
+    "preview": "Preview",
+    "download": "Download",
+    "delete": "Delete",
+    "editDescription": "Edit description",
+    "editDescriptionTitle": "Edit attachment description",
+    "descriptionLabel": "Attachment description",
+    "descriptionSaved": "Description has been saved",
+    "previewNotAvailable": "Preview not available for this file type"
   }
 }

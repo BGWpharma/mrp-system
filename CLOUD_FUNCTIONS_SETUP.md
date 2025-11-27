@@ -240,3 +240,4 @@ Funkcja testowa `getRandomBatch` została zaimplementowana i zintegrowana z apli
 
 
 
+

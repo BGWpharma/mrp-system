@@ -419,3 +419,4 @@ AI Assistant (Claude Sonnet 4.5) + User (mateu)
 - ✅ Wartość na liście = wartość w szczegółach
 
 
+

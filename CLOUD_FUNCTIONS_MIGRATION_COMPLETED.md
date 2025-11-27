@@ -385,3 +385,4 @@ firebase functions:log --follow
 **Wersja:** 1.0.0
 
 
+

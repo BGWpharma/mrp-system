@@ -139,5 +139,29 @@
     "buttonCancelReservationsAndComplete": "Anuluj rezerwacje i zakończ",
     "cancellingReservations": "Anulowanie rezerwacji...",
     "checkingReservations": "Sprawdzanie wpływu na rezerwacje..."
+  },
+  "attachments": {
+    "title": "Załączniki",
+    "dropzone": "Przeciągnij pliki tutaj lub kliknij, aby wybrać",
+    "dropzoneHint": "Możesz dodać zdjęcia, dokumenty PDF, pliki Excel lub Word",
+    "selectFiles": "Wybierz pliki",
+    "uploading": "Przesyłanie...",
+    "supportedFormats": "Obsługiwane formaty: JPG, PNG, GIF, PDF, DOC, DOCX, XLS, XLSX (max 20 MB)",
+    "uploadSuccess": "Plik \"{{name}}\" został przesłany",
+    "uploadError": "Błąd przesyłania pliku \"{{name}}\": {{error}}",
+    "deleteSuccess": "Plik \"{{name}}\" został usunięty",
+    "deleteError": "Błąd usuwania pliku: {{error}}",
+    "unsupportedFileType": "Nieobsługiwany typ pliku",
+    "fileTooLarge": "Plik jest zbyt duży (max 20 MB)",
+    "noAttachments": "Brak załączników. Dodaj pierwszy załącznik powyżej.",
+    "noAttachmentsViewOnly": "Brak załączników dla tej inwentaryzacji.",
+    "preview": "Podgląd",
+    "download": "Pobierz",
+    "delete": "Usuń",
+    "editDescription": "Edytuj opis",
+    "editDescriptionTitle": "Edytuj opis załącznika",
+    "descriptionLabel": "Opis załącznika",
+    "descriptionSaved": "Opis został zapisany",
+    "previewNotAvailable": "Podgląd niedostępny dla tego typu pliku"
   }
 }

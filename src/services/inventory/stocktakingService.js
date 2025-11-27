@@ -2126,3 +2126,113 @@ const getTransactionReason = (type) => {
   
   return reasons[type] || 'Operacja inwentaryzacyjna';
 };
+
+// ===== FUNKCJE ZAŁĄCZNIKÓW INWENTARYZACJI =====
+
+/**
+ * Przesyła załącznik do inwentaryzacji
+ * @param {File} file - Plik do przesłania
+ * @param {string} stocktakingId - ID inwentaryzacji
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Dane przesłanego załącznika
+ * @throws {ValidationError} - Gdy dane są nieprawidłowe
+ * @throws {Error} - Gdy wystąpi błąd podczas operacji
+ */
+export const uploadStocktakingAttachment = async (file, stocktakingId, userId) => {
+  try {
+    const validatedId = validateId(stocktakingId, 'stocktakingId');
+    const validatedUserId = validateId(userId, 'userId');
+
+    // Dynamiczny import funkcji uploadFileToStorage
+    const { uploadFileToStorage } = await import('../firebase/config');
+
+    // Przygotuj ścieżkę w Storage
+    const storagePath = `stocktaking/${validatedId}/attachments`;
+    
+    // Prześlij plik do Firebase Storage
+    const uploadResult = await uploadFileToStorage(file, storagePath);
+    
+    // Utwórz obiekt załącznika
+    const attachment = {
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      fileName: file.name,
+      originalName: file.name,
+      size: file.size,
+      contentType: file.type,
+      storagePath: uploadResult.fullPath || uploadResult.name,
+      downloadURL: uploadResult.downloadUrl,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: validatedUserId,
+      description: ''
+    };
+    
+    console.log(`✅ Przesłano załącznik "${file.name}" do inwentaryzacji ${validatedId}`);
+    
+    return attachment;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas przesyłania załącznika inwentaryzacji:', error);
+    throw new Error(`Nie udało się przesłać załącznika: ${error.message}`);
+  }
+};
+
+/**
+ * Usuwa załącznik z inwentaryzacji
+ * @param {Object} attachment - Obiekt załącznika do usunięcia
+ * @returns {Promise<boolean>} - Czy usunięcie się powiodło
+ * @throws {Error} - Gdy wystąpi błąd podczas operacji
+ */
+export const deleteStocktakingAttachment = async (attachment) => {
+  try {
+    if (attachment.storagePath) {
+      // Dynamiczny import funkcji deleteFileFromStorage
+      const { deleteFileFromStorage } = await import('../firebase/config');
+      await deleteFileFromStorage(attachment.storagePath);
+      console.log(`🗑️ Usunięto załącznik "${attachment.fileName}" z Firebase Storage`);
+    }
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas usuwania załącznika inwentaryzacji:', error);
+    throw new Error(`Nie udało się usunąć załącznika: ${error.message}`);
+  }
+};
+
+/**
+ * Aktualizuje załączniki inwentaryzacji w bazie danych
+ * @param {string} stocktakingId - ID inwentaryzacji
+ * @param {Array} attachments - Lista załączników
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<void>}
+ * @throws {ValidationError} - Gdy dane są nieprawidłowe
+ * @throws {Error} - Gdy wystąpi błąd podczas operacji
+ */
+export const updateStocktakingAttachments = async (stocktakingId, attachments, userId) => {
+  try {
+    const validatedId = validateId(stocktakingId, 'stocktakingId');
+    const validatedUserId = validateId(userId, 'userId');
+
+    const stocktakingRef = FirebaseQueryBuilder.getDocRef(COLLECTIONS.INVENTORY_STOCKTAKING, validatedId);
+    
+    // Sprawdź czy inwentaryzacja istnieje
+    const stocktakingDoc = await getDoc(stocktakingRef);
+    if (!stocktakingDoc.exists()) {
+      throw new Error(`Nie znaleziono inwentaryzacji o ID ${validatedId}`);
+    }
+    
+    await updateDoc(stocktakingRef, {
+      attachments: attachments || [],
+      updatedAt: serverTimestamp(),
+      updatedBy: validatedUserId
+    });
+    
+    console.log(`✅ Zaktualizowano załączniki inwentaryzacji ${validatedId} (${attachments?.length || 0} załączników)`);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas aktualizacji załączników inwentaryzacji:', error);
+    throw new Error(`Nie udało się zaktualizować załączników: ${error.message}`);
+  }
+};
