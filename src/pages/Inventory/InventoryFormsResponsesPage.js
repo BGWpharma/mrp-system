@@ -29,13 +29,14 @@ import {
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from '../../hooks/useTranslation';
 import { 
   getInventoryFormResponsesWithPagination,
   deleteInventoryFormResponse,
+  getInventoryFormsStatistics,
   INVENTORY_FORM_TYPES
 } from '../../services/inventoryFormsService';
 
@@ -43,10 +44,21 @@ import {
 const InventoryFormsResponsesPage = () => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [tabValue, setTabValue] = useState(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Odczytaj parametr tab z URL (0 = loadingReport, 1 = unloadingReport)
+  const getInitialTab = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'loadingReport' || tabParam === '0') return 0;
+    if (tabParam === 'unloadingReport' || tabParam === '1') return 1;
+    return 0;
+  };
+  
+  const [tabValue, setTabValue] = useState(getInitialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
   
   // ✅ FIX: Cache kursorów dla każdej strony - umożliwia cofanie się
   const cursorsRef = useRef({
@@ -68,6 +80,12 @@ const InventoryFormsResponsesPage = () => {
   const [loadedTabs, setLoadedTabs] = useState({
     loadingReport: false,
     unloadingReport: false
+  });
+  
+  // Stan dla liczby odpowiedzi w każdej zakładce (pobierane na starcie)
+  const [tabCounts, setTabCounts] = useState({
+    loadingReport: null,
+    unloadingReport: null
   });
   
   // Stan dla dialogu potwierdzenia usunięcia
@@ -252,6 +270,22 @@ const InventoryFormsResponsesPage = () => {
   useEffect(() => {
     loadCurrentTabData();
   }, [loadCurrentTabData]);
+  
+  // Pobierz liczby odpowiedzi dla wszystkich zakładek na starcie
+  useEffect(() => {
+    const loadAllCounts = async () => {
+      try {
+        const stats = await getInventoryFormsStatistics();
+        setTabCounts({
+          loadingReport: stats.loadingReports,
+          unloadingReport: stats.unloadingReports
+        });
+      } catch (error) {
+        console.error('Błąd podczas pobierania liczby odpowiedzi:', error);
+      }
+    };
+    loadAllCounts();
+  }, []);
   
   // ✅ OPTYMALIZACJA: Reset pagination and cursors when changing tabs
   const handleTabChange = (event, newValue) => {
@@ -897,8 +931,8 @@ const InventoryFormsResponsesPage = () => {
           textColor="primary"
           variant="fullWidth"
         >
-          <Tab label={t('inventory.forms.loadingReport.title')} />
-          <Tab label={t('inventory.forms.unloadingReport.title')} />
+          <Tab label={`${t('inventory.forms.loadingReport.title')} (${tabCounts.loadingReport !== null ? tabCounts.loadingReport : '...'})`} />
+          <Tab label={`${t('inventory.forms.unloadingReport.title')} (${tabCounts.unloadingReport !== null ? tabCounts.unloadingReport : '...'})`} />
         </Tabs>
       </Paper>
       

@@ -118,6 +118,7 @@ const ProductionShiftForm = () => {
     thirdProductLoss: '',
     rawMaterialLoss: '', // Nowe pole: Straty surowca
     finishedProductLoss: '', // Nowe pole: Straty - produkt gotowy
+    lidLoss: '', // Nowe pole: Strata wieczek
     otherActivities: '',
     machineIssues: ''
   });
@@ -206,6 +207,7 @@ const ProductionShiftForm = () => {
           thirdProductLoss: editData.thirdProductLoss || '',
           rawMaterialLoss: editData.rawMaterialLoss || '',
           finishedProductLoss: editData.finishedProductLoss || '',
+          lidLoss: editData.lidLoss || '',
           otherActivities: editData.otherActivities || '',
           machineIssues: editData.machineIssues || ''
         });
@@ -387,6 +389,7 @@ const ProductionShiftForm = () => {
           thirdProductLoss: formData.thirdProductLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
           finishedProductLoss: formData.finishedProductLoss,
+          lidLoss: formData.lidLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
           createdAt: serverTimestamp(),
@@ -540,13 +543,14 @@ const ProductionShiftForm = () => {
           thirdProductLoss: '',
           rawMaterialLoss: '',
           finishedProductLoss: '',
+          lidLoss: '',
           otherActivities: '',
           machineIssues: ''
         });
         
         // Przekierowanie do strony odpowiedzi po 1.2 sekundach
         setTimeout(() => {
-          navigate('/production/forms/responses');
+          navigate('/production/forms/responses?tab=productionShift');
         }, 1200);
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza zmiany produkcyjnej:', error);
@@ -558,7 +562,7 @@ const ProductionShiftForm = () => {
   };
   
   const handleBack = () => {
-    navigate('/production/forms/responses');
+    navigate('/production/forms/responses?tab=productionShift');
   };
 
   return (
@@ -1068,6 +1072,20 @@ const ProductionShiftForm = () => {
                 onChange={handleChange}
                 placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
                 helperText="Pole opcjonalne - ilość strat produktu gotowego"
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Strata wieczek"
+                name="lidLoss"
+                type="number"
+                value={formData.lidLoss}
+                onChange={handleChange}
+                placeholder="Proszę podać tylko wartość liczbową!"
+                helperText="Pole opcjonalne - ilość straconych wieczek"
                 inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>

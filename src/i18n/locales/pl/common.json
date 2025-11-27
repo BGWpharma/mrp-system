@@ -189,6 +189,7 @@
   "thirdProductQuantity": "Ilość nadruku 3",
   "thirdProductLoss": "Straty nadruku 3",
   "finishedProductLoss": "Straty - produkt gotowy",
+  "lidLoss": "Strata wieczek",
   "netCapsuleWeight": "Waga netto kapsułek",
   "formsSummary": {
     "title": "Podsumowanie formularzy",
@@ -205,6 +206,7 @@
     "totalProductionQuantity": "Suma ilości produkcji",
     "totalRawMaterialLossShift": "Suma strat surowca",
     "totalFinishedProductLoss": "Suma strat produktu gotowego",
+    "totalLidLoss": "Suma strat wieczek",
     "note": "Podsumowanie obejmuje wszystkie formularze dla tego zadania produkcyjnego"
   },
   "otherActivities": "Inne czynności",

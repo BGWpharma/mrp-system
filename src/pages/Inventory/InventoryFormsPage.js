@@ -49,7 +49,7 @@ const InventoryFormsPage = () => {
               <Button 
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
-                to="/inventory/forms/responses"
+                to="/inventory/forms/responses?tab=loadingReport"
                 color="secondary" 
                 variant="outlined"
                 fullWidth
@@ -86,7 +86,7 @@ const InventoryFormsPage = () => {
               <Button 
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
-                to="/inventory/forms/responses"
+                to="/inventory/forms/responses?tab=unloadingReport"
                 color="secondary" 
                 variant="outlined"
                 fullWidth

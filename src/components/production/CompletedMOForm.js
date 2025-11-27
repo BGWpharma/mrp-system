@@ -433,7 +433,7 @@ const CompletedMOForm = () => {
         
         // Przekierowanie do strony odpowiedzi po 1.2 sekundach
         setTimeout(() => {
-          navigate('/production/forms/responses');
+          navigate('/production/forms/responses?tab=completedMO');
         }, 1200);
       } catch (error) {
         console.error('Błąd podczas zapisywania formularza:', error);
@@ -445,7 +445,7 @@ const CompletedMOForm = () => {
   };
 
   const handleBack = () => {
-    navigate('/production/forms/responses');
+    navigate('/production/forms/responses?tab=completedMO');
   };
 
   // Funkcja do generowania PDF szczegółów MO i dodawania jako załącznik

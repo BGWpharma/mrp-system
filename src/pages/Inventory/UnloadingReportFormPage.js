@@ -830,7 +830,7 @@ const UnloadingReportFormPage = () => {
       
       // Przekierowanie po 1.2 sekundach
       setTimeout(() => {
-        navigate('/inventory/forms/responses');
+        navigate('/inventory/forms/responses?tab=unloadingReport');
       }, 1200);
       
     } catch (error) {

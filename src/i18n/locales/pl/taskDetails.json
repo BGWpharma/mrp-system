@@ -450,6 +450,7 @@
             "print3Quantity": "Ilość nadruku 3",
             "print3Loss": "Straty nadruku 3",
             "finishedProductLoss": "Straty - produkt gotowy",
+            "lidLoss": "Strata wieczek",
             "machineIssues": "Problemy maszyn",
             "otherActivities": "Inne aktywności"
         }

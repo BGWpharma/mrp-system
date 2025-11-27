@@ -23,16 +23,28 @@ import {
   DialogTitle,
   Tooltip,
   TablePagination,
-  Chip
+  Chip,
+  Collapse,
+  Grid
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Delete as DeleteIcon, Edit as EditIcon, Build as BuildIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { 
+  Delete as DeleteIcon, 
+  Edit as EditIcon, 
+  Build as BuildIcon, 
+  ArrowBack as ArrowBackIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon
+} from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { 
   getHallDataFormResponsesWithPagination,
   deleteHallDataFormResponse,
+  getAllHallDataFormsCounts,
   HALL_DATA_FORM_TYPES
 } from '../../services/hallDataFormsService';
 
@@ -91,6 +103,17 @@ const HallDataFormsResponsesPage = () => {
   // Dialog usuwania
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteItemData, setDeleteItemData] = useState(null);
+  
+  // Stan dla rozwiniętych wierszy (przechowuje ID rozwiniętych odpowiedzi)
+  const [expandedRows, setExpandedRows] = useState({});
+  
+  // Stan dla liczby odpowiedzi w każdej zakładce (pobierane na starcie)
+  const [tabCounts, setTabCounts] = useState({
+    serviceReport: null,
+    monthlyServiceReport: null,
+    defectRegistry: null,
+    serviceRepairReport: null
+  });
 
   // Funkcja ładowania danych dla aktualnej zakładki
   const loadCurrentTabData = useCallback(async () => {
@@ -196,6 +219,15 @@ const HallDataFormsResponsesPage = () => {
     loadCurrentTabData();
   }, [loadCurrentTabData]);
   
+  // Pobierz liczby odpowiedzi dla wszystkich zakładek na starcie
+  useEffect(() => {
+    const loadAllCounts = async () => {
+      const counts = await getAllHallDataFormsCounts();
+      setTabCounts(counts);
+    };
+    loadAllCounts();
+  }, []);
+  
   // Resetuj paginację przy zmianie zakładki
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -234,6 +266,9 @@ const HallDataFormsResponsesPage = () => {
       setDeleteItemData(null);
       // Odśwież dane
       loadCurrentTabData();
+      // Odśwież liczby w zakładkach
+      const counts = await getAllHallDataFormsCounts();
+      setTabCounts(counts);
     } catch (error) {
       console.error('Błąd podczas usuwania odpowiedzi:', error);
       alert('Wystąpił błąd podczas usuwania odpowiedzi');
@@ -280,6 +315,43 @@ const HallDataFormsResponsesPage = () => {
     }
   };
   
+  // Funkcja do przełączania rozwinięcia wiersza
+  const toggleRowExpand = (id) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+  
+  // Definicje zadań serwisowych dla tygodniowego raportu
+  const weeklyServiceTasks = [
+    { key: 'filterCleaning', label: 'Czyszczenie filtrów' },
+    { key: 'actuatorCheck', label: 'Sprawdzenie siłowników' },
+    { key: 'sensorCleaning', label: 'Czyszczenie czujników' },
+    { key: 'pneumaticCheck', label: 'Sprawdzenie pneumatyki' },
+    { key: 'actuatorAirtightness', label: 'Szczelność siłowników' },
+    { key: 'oilLevelCheck', label: 'Sprawdzenie poziomu oleju' },
+    { key: 'controlChamberCleaning', label: 'Czyszczenie komory sterującej' },
+    { key: 'screwsNutsCheck', label: 'Sprawdzenie śrub i nakrętek' },
+    { key: 'rubberGasketCheck', label: 'Sprawdzenie uszczelek gumowych' }
+  ];
+  
+  // Definicje zadań serwisowych dla miesięcznego raportu
+  const monthlyServiceTasks = [
+    { key: 'dosingScrewCheck', label: 'Sprawdzenie ślimaka dozującego' },
+    { key: 'dosingMotorCheck', label: 'Sprawdzenie silnika dozującego' },
+    { key: 'filterCleaning', label: 'Czyszczenie filtrów' },
+    { key: 'sensorCleaning', label: 'Czyszczenie czujników' },
+    { key: 'chamberCleaning', label: 'Czyszczenie komory' },
+    { key: 'rubberGasketCheck', label: 'Sprawdzenie uszczelek gumowych' },
+    { key: 'vBeltCheck', label: 'Sprawdzenie pasków klinowych' },
+    { key: 'bhpSafetyCheck', label: 'Sprawdzenie zabezpieczeń BHP' },
+    { key: 'pneumaticCheck', label: 'Sprawdzenie pneumatyki' },
+    { key: 'actuatorAirtightness', label: 'Szczelność siłowników' },
+    { key: 'limitSwitchCheck', label: 'Sprawdzenie wyłączników krańcowych' },
+    { key: 'screwsNutsCheck', label: 'Sprawdzenie śrub i nakrętek' }
+  ];
+
   // Renderowanie tabeli dla raportów serwisowych
   const renderServiceReportsTable = () => {
     if (loading) {
@@ -303,6 +375,7 @@ const HallDataFormsResponsesPage = () => {
         <Table size="small">
           <TableHead>
             <TableRow>
+              <TableCell width={50}></TableCell>
               <TableCell>Data wypełnienia</TableCell>
               <TableCell>Pracownik</TableCell>
               <TableCell>Stanowisko</TableCell>
@@ -315,57 +388,109 @@ const HallDataFormsResponsesPage = () => {
           <TableBody>
             {serviceReportResponses.map((response) => {
               // Policz wykonane zadania
-              const tasks = [
-                response.filterCleaning,
-                response.actuatorCheck,
-                response.sensorCleaning,
-                response.pneumaticCheck,
-                response.actuatorAirtightness,
-                response.oilLevelCheck,
-                response.controlChamberCleaning,
-                response.screwsNutsCheck,
-                response.rubberGasketCheck
-              ];
+              const tasks = weeklyServiceTasks.map(t => response[t.key]);
               const completedCount = tasks.filter(t => t === 'Wykonano').length;
               const totalTasks = tasks.length;
+              const isExpanded = expandedRows[response.id];
               
               return (
-                <TableRow key={response.id}>
-                  <TableCell>{formatDate(response.fillDate)}</TableCell>
-                  <TableCell>{response.employeeName || '-'}</TableCell>
-                  <TableCell>{response.position || '-'}</TableCell>
-                  <TableCell>{formatDate(response.serviceDate)}</TableCell>
-                  <TableCell>
-                    {response.serviceTime ? formatDateTime(response.serviceTime) : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={`${completedCount}/${totalTasks}`}
-                      color={completedCount === totalTasks ? 'success' : 'warning'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="Edytuj">
-                      <IconButton 
-                        size="small" 
-                        color="primary"
-                        onClick={() => handleEditClick(response, HALL_DATA_FORM_TYPES.SERVICE_REPORT)}
-                      >
-                        <EditIcon fontSize="small" />
+                <React.Fragment key={response.id}>
+                  <TableRow 
+                    sx={{ 
+                      '& > *': { borderBottom: isExpanded ? 'unset' : undefined },
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: theme.palette.action.hover }
+                    }}
+                    onClick={() => toggleRowExpand(response.id)}
+                  >
+                    <TableCell>
+                      <IconButton size="small">
+                        {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                       </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Usuń">
-                      <IconButton 
-                        size="small" 
-                        color="error"
-                        onClick={() => handleDeleteClick(response, HALL_DATA_FORM_TYPES.SERVICE_REPORT)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell>{formatDate(response.fillDate)}</TableCell>
+                    <TableCell>{response.employeeName || '-'}</TableCell>
+                    <TableCell>{response.position || '-'}</TableCell>
+                    <TableCell>{formatDate(response.serviceDate)}</TableCell>
+                    <TableCell>
+                      {response.serviceTime ? formatDateTime(response.serviceTime) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={`${completedCount}/${totalTasks}`}
+                        color={completedCount === totalTasks ? 'success' : 'warning'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Tooltip title="Edytuj">
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          onClick={() => handleEditClick(response, HALL_DATA_FORM_TYPES.SERVICE_REPORT)}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Usuń">
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => handleDeleteClick(response, HALL_DATA_FORM_TYPES.SERVICE_REPORT)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        <Box sx={{ margin: 2 }}>
+                          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                            Szczegóły wykonanych zadań:
+                          </Typography>
+                          <Grid container spacing={1}>
+                            {weeklyServiceTasks.map((task) => {
+                              const isCompleted = response[task.key] === 'Wykonano';
+                              return (
+                                <Grid item xs={12} sm={6} md={4} key={task.key}>
+                                  <Box sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: 1,
+                                    p: 1,
+                                    borderRadius: 1,
+                                    backgroundColor: isCompleted 
+                                      ? theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.08)'
+                                      : theme.palette.mode === 'dark' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(244, 67, 54, 0.08)'
+                                  }}>
+                                    {isCompleted ? (
+                                      <CheckCircleIcon fontSize="small" color="success" />
+                                    ) : (
+                                      <CancelIcon fontSize="small" color="error" />
+                                    )}
+                                    <Typography variant="body2">
+                                      {task.label}
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+                              );
+                            })}
+                          </Grid>
+                          {response.notes && (
+                            <Box sx={{ mt: 2 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Uwagi:</Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {response.notes}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </React.Fragment>
               );
             })}
           </TableBody>
@@ -405,10 +530,10 @@ const HallDataFormsResponsesPage = () => {
           variant="fullWidth"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label={`Tygodniowy Serwis (${tabValue === 0 ? totalCount : 0})`} />
-          <Tab label={`Miesięczny Serwis (${tabValue === 1 ? totalCount : 0})`} />
-          <Tab label={`Rejestr Usterek (${tabValue === 2 ? totalCount : 0})`} />
-          <Tab label={`Raport Serwisu/Napraw (${tabValue === 3 ? totalCount : 0})`} />
+          <Tab label={`Tygodniowy Serwis (${tabCounts.serviceReport !== null ? tabCounts.serviceReport : '...'})`} />
+          <Tab label={`Miesięczny Serwis (${tabCounts.monthlyServiceReport !== null ? tabCounts.monthlyServiceReport : '...'})`} />
+          <Tab label={`Rejestr Usterek (${tabCounts.defectRegistry !== null ? tabCounts.defectRegistry : '...'})`} />
+          <Tab label={`Raport Serwisu/Napraw (${tabCounts.serviceRepairReport !== null ? tabCounts.serviceRepairReport : '...'})`} />
         </Tabs>
         
         {/* Tab Panel 0 - Service Reports */}
@@ -448,6 +573,7 @@ const HallDataFormsResponsesPage = () => {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
+                        <TableCell width={50}></TableCell>
                         <TableCell>Data wypełnienia</TableCell>
                         <TableCell>Pracownik</TableCell>
                         <TableCell>Stanowisko</TableCell>
@@ -459,50 +585,107 @@ const HallDataFormsResponsesPage = () => {
                     </TableHead>
                     <TableBody>
                       {monthlyServiceReportResponses.map((response) => {
-                        const tasks = [
-                          response.dosingScrewCheck, response.dosingMotorCheck, response.filterCleaning,
-                          response.sensorCleaning, response.chamberCleaning, response.rubberGasketCheck,
-                          response.vBeltCheck, response.bhpSafetyCheck, response.pneumaticCheck,
-                          response.actuatorAirtightness, response.limitSwitchCheck, response.screwsNutsCheck
-                        ];
+                        const tasks = monthlyServiceTasks.map(t => response[t.key]);
                         const completedCount = tasks.filter(t => t === 'Wykonano').length;
                         const totalTasks = tasks.length;
+                        const isExpanded = expandedRows[`monthly-${response.id}`];
                         
                         return (
-                          <TableRow key={response.id}>
-                            <TableCell>{formatDate(response.fillDate)}</TableCell>
-                            <TableCell>{response.employeeName || '-'}</TableCell>
-                            <TableCell>{response.position || '-'}</TableCell>
-                            <TableCell>{formatDate(response.serviceDate)}</TableCell>
-                            <TableCell>{response.serviceTime ? formatDateTime(response.serviceTime) : '-'}</TableCell>
-                            <TableCell>
-                              <Chip 
-                                label={`${completedCount}/${totalTasks}`}
-                                color={completedCount === totalTasks ? 'success' : 'warning'}
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Tooltip title="Edytuj">
-                                <IconButton 
-                                  size="small" 
-                                  color="primary"
-                                  onClick={() => handleEditClick(response, HALL_DATA_FORM_TYPES.MONTHLY_SERVICE_REPORT)}
-                                >
-                                  <EditIcon fontSize="small" />
+                          <React.Fragment key={response.id}>
+                            <TableRow 
+                              sx={{ 
+                                '& > *': { borderBottom: isExpanded ? 'unset' : undefined },
+                                cursor: 'pointer',
+                                '&:hover': { backgroundColor: theme.palette.action.hover }
+                              }}
+                              onClick={() => toggleRowExpand(`monthly-${response.id}`)}
+                            >
+                              <TableCell>
+                                <IconButton size="small">
+                                  {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                                 </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Usuń">
-                                <IconButton 
-                                  size="small" 
-                                  color="error"
-                                  onClick={() => handleDeleteClick(response, HALL_DATA_FORM_TYPES.MONTHLY_SERVICE_REPORT)}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
+                              </TableCell>
+                              <TableCell>{formatDate(response.fillDate)}</TableCell>
+                              <TableCell>{response.employeeName || '-'}</TableCell>
+                              <TableCell>{response.position || '-'}</TableCell>
+                              <TableCell>{formatDate(response.serviceDate)}</TableCell>
+                              <TableCell>{response.serviceTime ? formatDateTime(response.serviceTime) : '-'}</TableCell>
+                              <TableCell>
+                                <Chip 
+                                  label={`${completedCount}/${totalTasks}`}
+                                  color={completedCount === totalTasks ? 'success' : 'warning'}
+                                  size="small"
+                                />
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Tooltip title="Edytuj">
+                                  <IconButton 
+                                    size="small" 
+                                    color="primary"
+                                    onClick={() => handleEditClick(response, HALL_DATA_FORM_TYPES.MONTHLY_SERVICE_REPORT)}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Usuń">
+                                  <IconButton 
+                                    size="small" 
+                                    color="error"
+                                    onClick={() => handleDeleteClick(response, HALL_DATA_FORM_TYPES.MONTHLY_SERVICE_REPORT)}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                  <Box sx={{ margin: 2 }}>
+                                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                                      Szczegóły wykonanych zadań:
+                                    </Typography>
+                                    <Grid container spacing={1}>
+                                      {monthlyServiceTasks.map((task) => {
+                                        const isCompleted = response[task.key] === 'Wykonano';
+                                        return (
+                                          <Grid item xs={12} sm={6} md={4} key={task.key}>
+                                            <Box sx={{ 
+                                              display: 'flex', 
+                                              alignItems: 'center', 
+                                              gap: 1,
+                                              p: 1,
+                                              borderRadius: 1,
+                                              backgroundColor: isCompleted 
+                                                ? theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.08)'
+                                                : theme.palette.mode === 'dark' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(244, 67, 54, 0.08)'
+                                            }}>
+                                              {isCompleted ? (
+                                                <CheckCircleIcon fontSize="small" color="success" />
+                                              ) : (
+                                                <CancelIcon fontSize="small" color="error" />
+                                              )}
+                                              <Typography variant="body2">
+                                                {task.label}
+                                              </Typography>
+                                            </Box>
+                                          </Grid>
+                                        );
+                                      })}
+                                    </Grid>
+                                    {response.notes && (
+                                      <Box sx={{ mt: 2 }}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>Uwagi:</Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                          {response.notes}
+                                        </Typography>
+                                      </Box>
+                                    )}
+                                  </Box>
+                                </Collapse>
+                              </TableCell>
+                            </TableRow>
+                          </React.Fragment>
                         );
                       })}
                     </TableBody>

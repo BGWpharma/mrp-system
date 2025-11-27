@@ -442,6 +442,7 @@
             "print3Quantity": "Print 3 Quantity",
             "print3Loss": "Print 3 Loss",
             "finishedProductLoss": "Finished Product Loss",
+            "lidLoss": "Lid Loss",
             "machineIssues": "Machine Issues",
             "otherActivities": "Other Activities"
         }

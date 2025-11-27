@@ -1035,7 +1035,7 @@ const ProductionControlForm = ({
         
         // Przekierowanie do strony odpowiedzi po 1.2 sekundach
         setTimeout(() => {
-          navigate('/production/forms/responses');
+          navigate('/production/forms/responses?tab=productionControl');
         }, 1200);
       }
       } catch (error) {
@@ -1051,7 +1051,7 @@ const ProductionControlForm = ({
     if (isDialog && onClose) {
       onClose();
     } else {
-      navigate('/production/forms/responses');
+      navigate('/production/forms/responses?tab=productionControl');
     }
   };
 

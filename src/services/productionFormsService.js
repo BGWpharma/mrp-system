@@ -185,6 +185,34 @@ export const getFormResponsesWithPagination = async (
 };
 
 /**
+ * Pobiera liczbę odpowiedzi dla wszystkich typów formularzy produkcyjnych
+ * Używa getCountFromServer dla optymalnego pobierania tylko liczby dokumentów
+ * @returns {Object} - { completedMO, productionControl, productionShift }
+ */
+export const getAllProductionFormsCounts = async () => {
+  try {
+    const [completedMOCount, productionControlCount, productionShiftCount] = await Promise.all([
+      getCountFromServer(query(collection(db, PRODUCTION_FORMS_COLLECTIONS.COMPLETED_MO))),
+      getCountFromServer(query(collection(db, PRODUCTION_FORMS_COLLECTIONS.PRODUCTION_CONTROL))),
+      getCountFromServer(query(collection(db, PRODUCTION_FORMS_COLLECTIONS.PRODUCTION_SHIFT)))
+    ]);
+    
+    return {
+      completedMO: completedMOCount.data().count,
+      productionControl: productionControlCount.data().count,
+      productionShift: productionShiftCount.data().count
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania liczby odpowiedzi formularzy:', error);
+    return {
+      completedMO: 0,
+      productionControl: 0,
+      productionShift: 0
+    };
+  }
+};
+
+/**
  * Usuwa odpowiedź formularza wraz z załącznikami
  * @param {string} formType - Typ formularza
  * @param {string} responseId - ID odpowiedzi do usunięcia

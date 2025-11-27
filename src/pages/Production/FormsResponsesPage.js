@@ -35,13 +35,14 @@ import {
 } from '@mui/material';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Delete as DeleteIcon, Edit as EditIcon, Search as SearchIcon, FilterList as FilterListIcon, CheckCircle as CheckIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from '../../hooks/useTranslation';
 import { 
   getFormResponsesWithPagination, 
   deleteFormResponse, 
+  getAllProductionFormsCounts,
   FORM_TYPES 
 } from '../../services/productionFormsService';
 
@@ -49,10 +50,22 @@ import {
 const FormsResponsesPage = () => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [tabValue, setTabValue] = useState(0);
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Odczytaj parametr tab z URL (0 = completedMO, 1 = productionControl, 2 = productionShift)
+  const getInitialTab = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'completedMO' || tabParam === '0') return 0;
+    if (tabParam === 'productionControl' || tabParam === '1') return 1;
+    if (tabParam === 'productionShift' || tabParam === '2') return 2;
+    return 0;
+  };
+  
+  const [tabValue, setTabValue] = useState(getInitialTab);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
   
   // ✅ FIX: Cache kursorów dla każdej strony - umożliwia cofanie się
   const cursorsRef = useRef({
@@ -72,6 +85,13 @@ const FormsResponsesPage = () => {
   const [productionControlResponses, setProductionControlResponses] = useState([]);
   const [productionShiftResponses, setProductionShiftResponses] = useState([]);
   const [filteredShiftResponses, setFilteredShiftResponses] = useState([]);
+  
+  // Stan dla liczby odpowiedzi w każdej zakładce (pobierane na starcie)
+  const [tabCounts, setTabCounts] = useState({
+    completedMO: null,
+    productionControl: null,
+    productionShift: null
+  });
   
   // Filtry dla tabeli zmian produkcyjnych
   const [shiftFilters, setShiftFilters] = useState({
@@ -245,6 +265,19 @@ const FormsResponsesPage = () => {
   useEffect(() => {
     loadCurrentTabData();
   }, [tabValue, page, rowsPerPage]);
+  
+  // Pobierz liczby odpowiedzi dla wszystkich zakładek na starcie
+  useEffect(() => {
+    const loadAllCounts = async () => {
+      try {
+        const counts = await getAllProductionFormsCounts();
+        setTabCounts(counts);
+      } catch (error) {
+        console.error('Błąd podczas pobierania liczby odpowiedzi:', error);
+      }
+    };
+    loadAllCounts();
+  }, []);
   
   // Funkcja ładowania z filtrami dla Production Shift
   const loadShiftDataWithFilters = async () => {
@@ -1008,6 +1041,7 @@ const FormsResponsesPage = () => {
                   <TableCell align="right">{t('thirdProductLoss')}</TableCell>
                   <TableCell>{t('rawMaterialLoss')}</TableCell>
                   <TableCell>{t('finishedProductLoss')}</TableCell>
+                  <TableCell>{t('lidLoss')}</TableCell>
                   <TableCell>{t('otherActivities')}</TableCell>
                   <TableCell>{t('machineIssues')}</TableCell>
                   <TableCell align="center">Status historii</TableCell>
@@ -1039,6 +1073,7 @@ const FormsResponsesPage = () => {
                     <TableCell align="right">{row.thirdProduct !== 'BRAK' ? (row.thirdProductLoss || '0') : '-'}</TableCell>
                     <TableCell>{row.rawMaterialLoss || '-'}</TableCell>
                     <TableCell align="right">{row.finishedProductLoss || '-'}</TableCell>
+                    <TableCell align="right">{row.lidLoss || '-'}</TableCell>
                     <TableCell>{row.otherActivities}</TableCell>
                     <TableCell>{row.machineIssues}</TableCell>
                     <TableCell align="center">
@@ -1131,9 +1166,9 @@ const FormsResponsesPage = () => {
           textColor="primary"
           variant="fullWidth"
         >
-          <Tab label={t('productionForms.completedMO.tab')} />
-          <Tab label={t('productionForms.productionControl.tab')} />
-          <Tab label={t('productionForms.productionShift.tab')} />
+          <Tab label={`${t('productionForms.completedMO.tab')} (${tabCounts.completedMO !== null ? tabCounts.completedMO : '...'})`} />
+          <Tab label={`${t('productionForms.productionControl.tab')} (${tabCounts.productionControl !== null ? tabCounts.productionControl : '...'})`} />
+          <Tab label={`${t('productionForms.productionShift.tab')} (${tabCounts.productionShift !== null ? tabCounts.productionShift : '...'})`} />
         </Tabs>
       </Paper>
       

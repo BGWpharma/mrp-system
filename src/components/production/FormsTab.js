@@ -360,6 +360,7 @@ const FormsTab = ({
                             <TableCell>{t('forms.table.print3Loss')}</TableCell>
                             <TableCell>{t('forms.table.rawMaterialLoss')}</TableCell>
                             <TableCell>{t('forms.table.finishedProductLoss')}</TableCell>
+                            <TableCell>{t('forms.table.lidLoss')}</TableCell>
                             <TableCell>{t('forms.table.machineIssues')}</TableCell>
                             <TableCell>{t('forms.table.otherActivities')}</TableCell>
                             <TableCell>{t('forms.table.actions')}</TableCell>
@@ -397,6 +398,7 @@ const FormsTab = ({
                               <TableCell>{form.thirdProductLoss || '-'}</TableCell>
                               <TableCell>{form.rawMaterialLoss || '-'}</TableCell>
                               <TableCell>{form.finishedProductLoss || '-'}</TableCell>
+                              <TableCell>{form.lidLoss || '-'}</TableCell>
                               <TableCell>{form.machineIssues || '-'}</TableCell>
                               <TableCell>{form.otherActivities || '-'}</TableCell>
                               <TableCell>

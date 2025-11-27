@@ -117,12 +117,14 @@ const FormsSummaryCard = ({ formResponses }) => {
       totalProductionQuantity: 0,
       rawMaterialLossAnalysis: analyzeRawMaterialLossData(productionShift),
       totalFinishedProductLoss: 0,
+      totalLidLoss: 0,
       count: productionShift.length
     };
 
     productionShift.forEach(form => {
       summary.totalProductionQuantity += parseFloat(form.productionQuantity) || 0;
       summary.totalFinishedProductLoss += parseFloat(form.finishedProductLoss) || 0;
+      summary.totalLidLoss += parseFloat(form.lidLoss) || 0;
     });
 
     return summary;
@@ -302,6 +304,9 @@ const FormsSummaryCard = ({ formResponses }) => {
                   />
                   <Typography variant="body2">
                     <strong>{t('formsSummary.totalFinishedProductLoss', 'Suma strat produktu gotowego')}:</strong> {formatNumber(productionShiftSummary.totalFinishedProductLoss)}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{t('formsSummary.totalLidLoss', 'Suma strat wieczek')}:</strong> {formatNumber(productionShiftSummary.totalLidLoss)}
                   </Typography>
                 </Box>
               </Box>

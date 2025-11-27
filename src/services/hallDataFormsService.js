@@ -137,6 +137,37 @@ export const getHallDataFormResponsesWithPagination = async (
 };
 
 /**
+ * Pobiera liczbę odpowiedzi dla wszystkich typów formularzy parametrów hali
+ * Używa getCountFromServer dla optymalnego pobierania tylko liczby dokumentów
+ * @returns {Object} - { serviceReport, monthlyServiceReport, defectRegistry, serviceRepairReport }
+ */
+export const getAllHallDataFormsCounts = async () => {
+  try {
+    const [serviceCount, monthlyCount, defectCount, repairCount] = await Promise.all([
+      getCountFromServer(query(collection(db, HALL_DATA_FORMS_COLLECTIONS.SERVICE_REPORT))),
+      getCountFromServer(query(collection(db, HALL_DATA_FORMS_COLLECTIONS.MONTHLY_SERVICE_REPORT))),
+      getCountFromServer(query(collection(db, HALL_DATA_FORMS_COLLECTIONS.DEFECT_REGISTRY))),
+      getCountFromServer(query(collection(db, HALL_DATA_FORMS_COLLECTIONS.SERVICE_REPAIR_REPORT)))
+    ]);
+    
+    return {
+      serviceReport: serviceCount.data().count,
+      monthlyServiceReport: monthlyCount.data().count,
+      defectRegistry: defectCount.data().count,
+      serviceRepairReport: repairCount.data().count
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania liczby odpowiedzi formularzy:', error);
+    return {
+      serviceReport: 0,
+      monthlyServiceReport: 0,
+      defectRegistry: 0,
+      serviceRepairReport: 0
+    };
+  }
+};
+
+/**
  * Usuwa odpowiedź formularza parametrów hali
  * @param {string} formType - Typ formularza
  * @param {string} responseId - ID odpowiedzi do usunięcia

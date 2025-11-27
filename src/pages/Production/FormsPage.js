@@ -54,7 +54,7 @@ const FormsPage = () => {
               <Button 
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
-                to="/production/forms/responses"
+                to="/production/forms/responses?tab=completedMO"
                 color="secondary" 
                 variant="outlined"
                 fullWidth
@@ -91,7 +91,7 @@ const FormsPage = () => {
               <Button 
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
-                to="/production/forms/responses"
+                to="/production/forms/responses?tab=productionControl"
                 color="secondary" 
                 variant="outlined"
                 fullWidth
@@ -128,7 +128,7 @@ const FormsPage = () => {
               <Button 
                 startIcon={<ListIcon />} 
                 component={RouterLink} 
-                to="/production/forms/responses"
+                to="/production/forms/responses?tab=productionShift"
                 color="secondary" 
                 variant="outlined"
                 fullWidth

@@ -188,6 +188,7 @@
   "thirdProductQuantity": "Third product quantity",
   "thirdProductLoss": "Third product loss",
   "finishedProductLoss": "Finished product loss",
+  "lidLoss": "Lid loss",
   "netCapsuleWeight": "Net capsule weight",
   "formsSummary": {
     "title": "Forms Summary",
@@ -204,6 +205,7 @@
     "totalProductionQuantity": "Total production quantity",
     "totalRawMaterialLossShift": "Total raw material loss",
     "totalFinishedProductLoss": "Total finished product loss",
+    "totalLidLoss": "Total lid loss",
     "note": "Summary includes all forms for this production task"
   },
   "otherActivities": "Other activities",

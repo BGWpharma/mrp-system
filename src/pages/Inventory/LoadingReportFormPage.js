@@ -490,7 +490,7 @@ const LoadingReportFormPage = () => {
       
       // Przekierowanie po 1.2 sekundach
       setTimeout(() => {
-        navigate('/inventory/forms/responses');
+        navigate('/inventory/forms/responses?tab=loadingReport');
       }, 1200);
       
     } catch (error) {

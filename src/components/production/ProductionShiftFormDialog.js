@@ -112,6 +112,7 @@ const ProductionShiftFormDialog = ({
     thirdProductLoss: '',
     rawMaterialLoss: '', // Nowe pole: Straty surowca
     finishedProductLoss: '', // Nowe pole: Straty - produkt gotowy
+    lidLoss: '', // Nowe pole: Strata wieczek
     otherActivities: '',
     machineIssues: ''
   });
@@ -351,6 +352,7 @@ const ProductionShiftFormDialog = ({
           thirdProductLoss: formData.thirdProductLoss,
           rawMaterialLoss: formData.rawMaterialLoss,
           finishedProductLoss: formData.finishedProductLoss,
+          lidLoss: formData.lidLoss,
           otherActivities: formData.otherActivities,
           machineIssues: formData.machineIssues,
           createdAt: serverTimestamp(),
@@ -446,6 +448,7 @@ const ProductionShiftFormDialog = ({
       thirdProductLoss: '',
       rawMaterialLoss: '',
       finishedProductLoss: '',
+      lidLoss: '',
       otherActivities: '',
       machineIssues: ''
     });
@@ -1045,6 +1048,20 @@ const ProductionShiftFormDialog = ({
                 onChange={handleChange}
                 placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
                 helperText="Pole opcjonalne - ilość strat produktu gotowego"
+                inputProps={{ min: 0, step: 'any' }}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Strata wieczek"
+                name="lidLoss"
+                type="number"
+                value={formData.lidLoss}
+                onChange={handleChange}
+                placeholder="Proszę podać tylko wartość liczbową!"
+                helperText="Pole opcjonalne - ilość straconych wieczek"
                 inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
