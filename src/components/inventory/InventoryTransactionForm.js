@@ -49,6 +49,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { Timestamp } from 'firebase/firestore';
 import ConfirmDialog from '../common/ConfirmDialog';
+import { formatDate } from '../../utils/formatters';
 
 const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
   const [item, setItem] = useState(null);
@@ -1263,12 +1264,12 @@ const InventoryTransactionForm = ({ itemId, transactionType, initialData }) => {
                   </Typography>
                   {batchChoiceDialog.existingBatch.expiryDate && (
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      <strong>Data ważności:</strong> {new Date(batchChoiceDialog.existingBatch.expiryDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                      <strong>Data ważności:</strong> {formatDate(batchChoiceDialog.existingBatch.expiryDate)}
                     </Typography>
                   )}
                   {batchChoiceDialog.existingBatch.receivedDate && (
                     <Typography variant="body2" sx={{ mb: 0.5 }}>
-                      <strong>Data pierwszego przyjęcia:</strong> {new Date(batchChoiceDialog.existingBatch.receivedDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                      <strong>Data pierwszego przyjęcia:</strong> {formatDate(batchChoiceDialog.existingBatch.receivedDate)}
                     </Typography>
                   )}
                 </Box>

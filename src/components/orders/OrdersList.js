@@ -1536,15 +1536,6 @@ const OrdersList = () => {
             >
               {t('orders.filtersToggle')}
             </Button>
-            <Button 
-              variant="outlined" 
-              startIcon={<RefreshIcon />}
-              onClick={handleRefreshAll}
-              disabled={loading}
-              sx={{ minWidth: 150 }}
-            >
-              {loading ? t('orders.refreshing') : t('orders.refreshValues')}
-            </Button>
           </Box>
         </Box>
 

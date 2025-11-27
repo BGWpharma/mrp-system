@@ -13,6 +13,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Dialog,
   DialogActions,
@@ -144,6 +145,10 @@ const StocktakingDetailsPage = () => {
   // Stan dla filtra statusu akceptacji
   const [showAcceptedItems, setShowAcceptedItems] = useState('all'); // 'all', 'accepted', 'pending'
   
+  // Stany dla sortowania tabeli
+  const [orderBy, setOrderBy] = useState('name');
+  const [order, setOrder] = useState('asc');
+  
   // Stany dla multi-select funkcjonalności
   const [selectedBatches, setSelectedBatches] = useState([]); // Koszyk wybranych partii
   const [currentStep, setCurrentStep] = useState('category'); // 'category', 'product', 'batches'
@@ -155,7 +160,7 @@ const StocktakingDetailsPage = () => {
   
   useEffect(() => {
     filterItems();
-  }, [searchTerm, items, showOnlyIncomplete, showAcceptedItems]);
+  }, [searchTerm, items, showOnlyIncomplete, showAcceptedItems, orderBy, order]);
   
   
   const fetchStocktakingData = async () => {
@@ -313,7 +318,81 @@ const StocktakingDetailsPage = () => {
       filtered = filtered.filter(item => !item.accepted);
     }
     
+    // Sortuj wyniki
+    filtered = sortItems(filtered);
+    
     setFilteredItems(filtered);
+  };
+  
+  // Funkcja sortowania
+  const sortItems = (itemsToSort) => {
+    return [...itemsToSort].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (orderBy) {
+        case 'name':
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
+          break;
+        case 'lotNumber':
+          aValue = (a.lotNumber || a.batchNumber || '').toLowerCase();
+          bValue = (b.lotNumber || b.batchNumber || '').toLowerCase();
+          break;
+        case 'category':
+          aValue = (a.category || '').toLowerCase();
+          bValue = (b.category || '').toLowerCase();
+          break;
+        case 'systemQuantity':
+          aValue = parseFloat(a.systemQuantity) || 0;
+          bValue = parseFloat(b.systemQuantity) || 0;
+          break;
+        case 'countedQuantity':
+          aValue = a.countedQuantity !== null && a.countedQuantity !== undefined ? parseFloat(a.countedQuantity) : -Infinity;
+          bValue = b.countedQuantity !== null && b.countedQuantity !== undefined ? parseFloat(b.countedQuantity) : -Infinity;
+          break;
+        case 'discrepancy':
+          aValue = parseFloat(a.discrepancy) || 0;
+          bValue = parseFloat(b.discrepancy) || 0;
+          break;
+        case 'unitPrice':
+          aValue = parseFloat(a.unitPrice) || 0;
+          bValue = parseFloat(b.unitPrice) || 0;
+          break;
+        case 'valueDifference':
+          const aDisc = parseFloat(a.discrepancy) || 0;
+          const aPrice = parseFloat(a.unitPrice) || 0;
+          aValue = aDisc * aPrice;
+          const bDisc = parseFloat(b.discrepancy) || 0;
+          const bPrice = parseFloat(b.unitPrice) || 0;
+          bValue = bDisc * bPrice;
+          break;
+        case 'accepted':
+          aValue = a.accepted ? 1 : 0;
+          bValue = b.accepted ? 1 : 0;
+          break;
+        default:
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
+      }
+      
+      if (typeof aValue === 'string') {
+        const comparison = aValue.localeCompare(bValue, 'pl');
+        return order === 'asc' ? comparison : -comparison;
+      }
+      
+      if (order === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+  };
+  
+  // Funkcja obsługi zmiany sortowania
+  const handleRequestSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
   };
   
   // Funkcje obsługi multi-select
@@ -973,71 +1052,15 @@ const StocktakingDetailsPage = () => {
         />
       </Paper>
       
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography variant="h5">
           {t('stocktaking.products', { count: items.length })}
         </Typography>
-        <Box>
-          {(!isCompleted || isInCorrection) && (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={() => setAddItemDialogOpen(true)}
-              sx={{ mr: 1 }}
-            >
-              {t('stocktaking.addProduct')}
-            </Button>
-          )}
-          {items.length > 0 && (
-            <>
-              <Button
-                variant={showOnlyIncomplete ? "contained" : "outlined"}
-                color="warning"
-                startIcon={<FilterIcon />}
-                onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
-                sx={{ mr: 1 }}
-              >
-                Pozycje do uzupełnienia
-              </Button>
-              <FormControl size="small" sx={{ minWidth: 200, mr: 1 }}>
-                <InputLabel>Status akceptacji</InputLabel>
-                <Select
-                  value={showAcceptedItems}
-                  onChange={(e) => setShowAcceptedItems(e.target.value)}
-                  label="Status akceptacji"
-                >
-                  <MenuItem value="all">Wszystkie</MenuItem>
-                  <MenuItem value="pending">Oczekujące</MenuItem>
-                  <MenuItem value="accepted">Zaakceptowane</MenuItem>
-                </Select>
-              </FormControl>
-            </>
-          )}
-          {(!isCompleted || isInCorrection) && items.length > 0 && (
-            <Tooltip 
-              title={!canCompleteStocktaking ? 'Nie masz uprawnień do kończenia inwentaryzacji' : ''}
-              arrow
-            >
-              <span>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<DoneIcon />}
-                  onClick={handleCompleteStocktaking}
-                  disabled={!canCompleteStocktaking || permissionsLoading}
-                >
-                  {isInCorrection ? t('stocktaking.finishCorrections') : t('stocktaking.finishStocktaking')}
-                </Button>
-              </span>
-            </Tooltip>
-          )}
-        </Box>
       </Box>
       
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               variant="outlined"
@@ -1053,6 +1076,62 @@ const StocktakingDetailsPage = () => {
               }}
             />
           </Grid>
+          <Grid item xs={12} md={8}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              {(!isCompleted || isInCorrection) && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => setAddItemDialogOpen(true)}
+                >
+                  {t('stocktaking.addProduct')}
+                </Button>
+              )}
+              {items.length > 0 && (
+                <>
+                  <Button
+                    variant={showOnlyIncomplete ? "contained" : "outlined"}
+                    color="warning"
+                    startIcon={<FilterIcon />}
+                    onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
+                  >
+                    Pozycje do uzupełnienia
+                  </Button>
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel>Status akceptacji</InputLabel>
+                    <Select
+                      value={showAcceptedItems}
+                      onChange={(e) => setShowAcceptedItems(e.target.value)}
+                      label="Status akceptacji"
+                    >
+                      <MenuItem value="all">Wszystkie</MenuItem>
+                      <MenuItem value="pending">Oczekujące</MenuItem>
+                      <MenuItem value="accepted">Zaakceptowane</MenuItem>
+                    </Select>
+                  </FormControl>
+                </>
+              )}
+              {(!isCompleted || isInCorrection) && items.length > 0 && (
+                <Tooltip 
+                  title={!canCompleteStocktaking ? 'Nie masz uprawnień do kończenia inwentaryzacji' : ''}
+                  arrow
+                >
+                  <span>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      startIcon={<DoneIcon />}
+                      onClick={handleCompleteStocktaking}
+                      disabled={!canCompleteStocktaking || permissionsLoading}
+                    >
+                      {isInCorrection ? t('stocktaking.finishCorrections') : t('stocktaking.finishStocktaking')}
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+            </Box>
+          </Grid>
         </Grid>
       </Paper>
       
@@ -1065,16 +1144,88 @@ const StocktakingDetailsPage = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>{t('stocktaking.tableHeaders.productName')}</TableCell>
-                <TableCell>{t('stocktaking.tableHeaders.lotBatch')}</TableCell>
-                <TableCell>{t('stocktaking.tableHeaders.category')}</TableCell>
-                <TableCell align="right">{t('stocktaking.tableHeaders.systemQuantity')}</TableCell>
-                <TableCell align="right">{t('stocktaking.tableHeaders.countedQuantity')}</TableCell>
-                <TableCell align="right">{t('stocktaking.tableHeaders.difference')}</TableCell>
-                <TableCell align="right">{t('stocktaking.tableHeaders.unitPrice')}</TableCell>
-                <TableCell align="right">{t('stocktaking.tableHeaders.valueDifference')}</TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'name'}
+                    direction={orderBy === 'name' ? order : 'asc'}
+                    onClick={() => handleRequestSort('name')}
+                  >
+                    {t('stocktaking.tableHeaders.productName')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'lotNumber'}
+                    direction={orderBy === 'lotNumber' ? order : 'asc'}
+                    onClick={() => handleRequestSort('lotNumber')}
+                  >
+                    {t('stocktaking.tableHeaders.lotBatch')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'category'}
+                    direction={orderBy === 'category' ? order : 'asc'}
+                    onClick={() => handleRequestSort('category')}
+                  >
+                    {t('stocktaking.tableHeaders.category')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">
+                  <TableSortLabel
+                    active={orderBy === 'systemQuantity'}
+                    direction={orderBy === 'systemQuantity' ? order : 'asc'}
+                    onClick={() => handleRequestSort('systemQuantity')}
+                  >
+                    {t('stocktaking.tableHeaders.systemQuantity')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">
+                  <TableSortLabel
+                    active={orderBy === 'countedQuantity'}
+                    direction={orderBy === 'countedQuantity' ? order : 'asc'}
+                    onClick={() => handleRequestSort('countedQuantity')}
+                  >
+                    {t('stocktaking.tableHeaders.countedQuantity')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">
+                  <TableSortLabel
+                    active={orderBy === 'discrepancy'}
+                    direction={orderBy === 'discrepancy' ? order : 'asc'}
+                    onClick={() => handleRequestSort('discrepancy')}
+                  >
+                    {t('stocktaking.tableHeaders.difference')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">
+                  <TableSortLabel
+                    active={orderBy === 'unitPrice'}
+                    direction={orderBy === 'unitPrice' ? order : 'asc'}
+                    onClick={() => handleRequestSort('unitPrice')}
+                  >
+                    {t('stocktaking.tableHeaders.unitPrice')}
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell align="right">
+                  <TableSortLabel
+                    active={orderBy === 'valueDifference'}
+                    direction={orderBy === 'valueDifference' ? order : 'asc'}
+                    onClick={() => handleRequestSort('valueDifference')}
+                  >
+                    {t('stocktaking.tableHeaders.valueDifference')}
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell>{t('stocktaking.tableHeaders.notes')}</TableCell>
-                <TableCell align="center">Status</TableCell>
+                <TableCell align="center">
+                  <TableSortLabel
+                    active={orderBy === 'accepted'}
+                    direction={orderBy === 'accepted' ? order : 'asc'}
+                    onClick={() => handleRequestSort('accepted')}
+                  >
+                    Status
+                  </TableSortLabel>
+                </TableCell>
                 {(!isCompleted || isInCorrection) && <TableCell align="center">{t('stocktaking.tableHeaders.actions')}</TableCell>}
               </TableRow>
             </TableHead>
@@ -1109,7 +1260,7 @@ const StocktakingDetailsPage = () => {
                         {item.lotNumber || item.batchNumber || 'N/D'}
                         {item.expiryDate && (
                           <Typography variant="caption" display="block" color="textSecondary">
-                            Ważne do: {new Date(item.expiryDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                            Ważne do: {formatDate(item.expiryDate)}
                           </Typography>
                         )}
                       </TableCell>
@@ -1191,7 +1342,7 @@ const StocktakingDetailsPage = () => {
                         {item.lotNumber || item.batchNumber || 'N/D'}
                         {item.expiryDate && (
                           <Typography variant="caption" display="block" color="textSecondary">
-                            Ważne do: {new Date(item.expiryDate.seconds * 1000).toLocaleDateString('pl-PL')}
+                            Ważne do: {formatDate(item.expiryDate)}
                           </Typography>
                         )}
                       </TableCell>
@@ -1431,7 +1582,7 @@ const StocktakingDetailsPage = () => {
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
                             Ilość: {batch.quantity} {selectedItem.unit}
-                            {batch.expiryDate && ` | Ważne do: ${new Date(batch.expiryDate).toLocaleDateString('pl-PL')}`}
+                            {batch.expiryDate && ` | Ważne do: ${formatDate(batch.expiryDate)}`}
                             {batch.unitPrice > 0 && ` | Cena: ${batch.unitPrice.toFixed(2)} EUR`}
                           </Typography>
                         </Box>

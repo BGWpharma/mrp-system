@@ -1867,7 +1867,10 @@ export const getOrdersWithPagination = async (page = 1, limit = 10, sortField = 
       orders = orders.filter(order => 
         (order.orderNumber && order.orderNumber.toLowerCase().includes(searchLower)) ||
         (order.customer?.name && order.customer.name.toLowerCase().includes(searchLower)) ||
-        (order.items && order.items.some(item => item.name && item.name.toLowerCase().includes(searchLower)))
+        (order.items && order.items.some(item => 
+          (item.name && item.name.toLowerCase().includes(searchLower)) ||
+          (item.description && item.description.toLowerCase().includes(searchLower))
+        ))
       );
     }
     

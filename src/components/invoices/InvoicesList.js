@@ -119,9 +119,17 @@ const InvoicesList = () => {
     if (listState.searchTerm.trim()) {
       const searchTermLower = listState.searchTerm.toLowerCase();
       results = results.filter(invoice => 
+        // Wyszukiwanie po numerze faktury
         (invoice.number && invoice.number.toLowerCase().includes(searchTermLower)) ||
+        // Wyszukiwanie po nazwie klienta
         (invoice.customer?.name && invoice.customer.name.toLowerCase().includes(searchTermLower)) ||
-        (invoice.orderNumber && invoice.orderNumber.toLowerCase().includes(searchTermLower))
+        // Wyszukiwanie po numerze zamówienia
+        (invoice.orderNumber && invoice.orderNumber.toLowerCase().includes(searchTermLower)) ||
+        // Wyszukiwanie w pozycjach faktury (nazwa i opis)
+        (invoice.items && Array.isArray(invoice.items) && invoice.items.some(item => 
+          (item.name && item.name.toLowerCase().includes(searchTermLower)) ||
+          (item.description && item.description.toLowerCase().includes(searchTermLower))
+        ))
       );
     }
 

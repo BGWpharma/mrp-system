@@ -8636,7 +8636,7 @@ const TaskDetailsPage = () => {
                                 >
                                   {item.batches && item.batches.map((batch) => (
                                     <MenuItem key={batch.id} value={batch.id}>
-                                      {`LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'} - ${batch.quantity} ${item.unit}${batch.expiryDate ? ` (Ważne do: ${new Date(batch.expiryDate.seconds ? batch.expiryDate.toDate() : batch.expiryDate).toLocaleDateString()})` : ''}`}
+                                      {`LOT: ${batch.lotNumber || batch.batchNumber || 'Brak numeru'} - ${batch.quantity} ${item.unit}${batch.expiryDate ? ` (Ważne do: ${formatDate(batch.expiryDate)})` : ''}`}
                                     </MenuItem>
                                   ))}
                                 </Select>
