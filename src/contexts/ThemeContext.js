@@ -63,11 +63,6 @@ const commonValues = {
       fontWeight: 600,
       fontSize: '1.25rem',     // 20px (było 24px)
       lineHeight: 1.4,
-      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      backgroundClip: 'text',
-      textShadow: '0 0 30px rgba(59, 130, 246, 0.3)',
     },
     h5: {
       fontWeight: 600,
