@@ -350,6 +350,9 @@ class PurchaseOrderPdfGenerator {
     // Uwagi
     currentY = this.addNotesSection(doc, currentY + 15, pageWidth, pageHeight, template, leftMargin);
 
+    // Strona z GTC (General Terms and Conditions)
+    this.addGTCPage(doc, pageWidth, pageHeight, template);
+
     // Stopka
     this.addFooter(doc, pageWidth, pageHeight);
   }
@@ -752,6 +755,163 @@ class PurchaseOrderPdfGenerator {
     });
 
     return currentY;
+  }
+
+  /**
+   * Dodaje stronę z GTC (General Terms and Conditions)
+   */
+  addGTCPage(doc, pageWidth, pageHeight, template) {
+    // Dodaj nową stronę dla GTC
+    doc.addPage();
+    
+    // Dodaj szablon tła (jeśli dostępny)
+    if (template) {
+      doc.addImage(template, 'JPEG', 0, 0, pageWidth, pageHeight);
+    }
+    
+    const leftMargin = 15;
+    const rightMargin = 15;
+    const contentWidth = pageWidth - leftMargin - rightMargin;
+    let currentY = 50; // Rozpocznij poniżej logo szablonu
+    
+    // Tytuł GTC
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('GTC - BGW PHARMA (PO)', leftMargin, currentY);
+    currentY += 10;
+    
+    // Definicja sekcji GTC
+    const gtcSections = [
+      {
+        title: '1. Quality & Compliance',
+        content: [
+          'All products must comply with applicable EU law, including:',
+          '- Regulation (EC) 852/2004 (HACCP),',
+          '- Regulation (EC) 853/2004 (animal-origin rules),',
+          '- Regulation (EC) 2073/2005 (microbiological criteria),',
+          '- Regulation (EU) 2023/915 (contaminants incl. heavy metals),',
+          '- Regulation (EC) 396/2005 (pesticide residues),',
+          '- Regulation (EC) 1333/2008 / 1334/2008 (additives & flavorings),',
+          '- Regulation (EU) 1169/2011 (information requirements, if applicable),',
+          '- Regulation (EC) 1935/2004 (materials in contact with food).',
+          '',
+          'If no binding EU limits exist, products must meet recognized industry standards (EFSA guidance, Codex Alimentarius, standard supplement-grade specifications).',
+          '',
+          'Products must comply with:',
+          '- GMO regulations (Reg. 1829/2003 and 1830/2003),',
+          '- allergen control requirements,',
+          '- Novel Food Regulation (Reg. 2015/2283), if applicable,',
+          '- identity & authenticity standards (no dilution, substitution, or adulteration).',
+          '',
+          'Any deviation from specification or legal limits requires written pre-approval before dispatch.'
+        ]
+      },
+      {
+        title: '2. Non-Conformity',
+        content: [
+          'BGW PHARMA may reject or return any non-conforming batch. All related costs (analysis, logistics, disposal, product claims) may be charged to the Supplier.'
+        ]
+      },
+      {
+        title: '3. Delivery & Delays',
+        content: [
+          'All delays must be communicated immediately. If delays disrupt production or confirmed planning, BGW PHARMA may cancel the PO without penalty.'
+        ]
+      },
+      {
+        title: '4. Transport to BGW (DAP only)',
+        content: [
+          'Only vans and solo trucks may enter BGW PHARMA premises.',
+          'TIR / articulated trucks are not permitted.',
+          'Deliveries using non-compliant vehicles may be rejected at the Supplier\'s cost.'
+        ]
+      },
+      {
+        title: '5. Documentation & Invoicing',
+        content: [
+          'Each delivery must include: CoA, batch number, BBD/production date, and all required certificates (e.g., Organic, GMO, allergen, Halal/Kosher - if applicable).',
+          'Payment may be withheld until complete documentation is received.'
+        ]
+      },
+      {
+        title: '6. Legal',
+        content: [
+          'By confirming or executing this PO, the Supplier accepts these GTC.',
+          'Governing law and jurisdiction: BGW PHARMA registered office.'
+        ]
+      }
+    ];
+    
+    // Renderuj sekcje GTC
+    doc.setFontSize(9);
+    
+    gtcSections.forEach((section, sectionIndex) => {
+      // Sprawdź czy potrzebna nowa strona (min 20mm na sekcję)
+      if (currentY > pageHeight - 30) {
+        doc.addPage();
+        if (template) {
+          doc.addImage(template, 'JPEG', 0, 0, pageWidth, pageHeight);
+        }
+        currentY = 20;
+      }
+      
+      // Tytuł sekcji
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(section.title, leftMargin, currentY);
+      currentY += 5;
+      
+      // Treść sekcji
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      
+      section.content.forEach(line => {
+        // Sprawdź czy potrzebna nowa strona
+        if (currentY > pageHeight - 15) {
+          doc.addPage();
+          if (template) {
+            doc.addImage(template, 'JPEG', 0, 0, pageWidth, pageHeight);
+          }
+          currentY = 20;
+        }
+        
+        if (line === '') {
+          currentY += 2; // Mniejszy odstęp dla pustych linii
+        } else if (line.startsWith('-')) {
+          // Linie z myślnikiem - lekkie wcięcie
+          const wrappedLines = doc.splitTextToSize(line, contentWidth - 5);
+          wrappedLines.forEach((wrappedLine, idx) => {
+            if (currentY > pageHeight - 15) {
+              doc.addPage();
+              if (template) {
+                doc.addImage(template, 'JPEG', 0, 0, pageWidth, pageHeight);
+              }
+              currentY = 20;
+            }
+            doc.text(wrappedLine, leftMargin + 3, currentY);
+            currentY += 4;
+          });
+        } else {
+          // Normalne linie
+          const wrappedLines = doc.splitTextToSize(line, contentWidth);
+          wrappedLines.forEach(wrappedLine => {
+            if (currentY > pageHeight - 15) {
+              doc.addPage();
+              if (template) {
+                doc.addImage(template, 'JPEG', 0, 0, pageWidth, pageHeight);
+              }
+              currentY = 20;
+            }
+            doc.text(wrappedLine, leftMargin, currentY);
+            currentY += 4;
+          });
+        }
+      });
+      
+      // Odstęp między sekcjami
+      currentY += 4;
+    });
   }
 
   /**
