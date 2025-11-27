@@ -224,16 +224,80 @@ const StocktakingReportPage = () => {
     </TableCell>
   );
   
-  const handleExportCSV = async () => {
+  const handleExportCSV = () => {
     try {
-      const reportData = await generateStocktakingReport(id, { format: 'csv' });
+      // Generuj CSV na podstawie sortedItems (przefiltrowanych i posortowanych)
+      const headers = [
+        'Nazwa',
+        'Kategoria',
+        'LOT/Partia',
+        'Data ważności',
+        'Lokalizacja',
+        'Stan systemowy',
+        'Stan policzony',
+        'Różnica',
+        'Jednostka',
+        'Cena jednostkowa',
+        'Wartość różnicy',
+        'Status akceptacji',
+        'Uwagi'
+      ];
+
+      const escapeCSV = (value) => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const formatDateForCSV = (date) => {
+        if (!date) return '';
+        try {
+          const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
+          return d.toLocaleDateString('pl-PL');
+        } catch {
+          return '';
+        }
+      };
+
+      const csvRows = sortedItems.map(item => [
+        escapeCSV(item.name),
+        escapeCSV(item.category),
+        escapeCSV(item.batchNumber || item.lotNumber || ''),
+        escapeCSV(formatDateForCSV(item.expiryDate)),
+        escapeCSV(item.location ? (warehouseNames[item.location] || item.location) : ''),
+        item.systemQuantity || 0,
+        item.countedQuantity !== null && item.countedQuantity !== undefined ? item.countedQuantity : '',
+        item.discrepancy || 0,
+        escapeCSV(item.unit),
+        (item.unitPrice || 0).toFixed(2),
+        ((item.discrepancy || 0) * (item.unitPrice || 0)).toFixed(2),
+        item.accepted ? 'Zaakceptowana' : 'Oczekuje',
+        escapeCSV(item.notes)
+      ].join(','));
+
+      // Dodaj informację o filtrze jeśli aktywny
+      const filterInfo = acceptanceFilter !== 'all' 
+        ? `Filtr: ${acceptanceFilter === 'accepted' ? 'Zaakceptowane' : 'Oczekujące'} (${sortedItems.length} z ${items.length} pozycji)`
+        : `Wszystkie pozycje (${sortedItems.length})`;
+
+      const csvContent = [
+        `Raport inwentaryzacji: ${stocktaking.name}`,
+        `Status: ${stocktaking.status}`,
+        `Data wygenerowania: ${new Date().toLocaleDateString('pl-PL')}`,
+        filterInfo,
+        '',
+        headers.join(','),
+        ...csvRows
+      ].join('\n');
+
+      const fileName = `inwentaryzacja_${stocktaking.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
       
-      // Dla CSV reportData.content to string, nie blob
-      const csvContent = reportData.content;
-      const fileName = reportData.filename || `inwentaryzacja_${id}_raport.csv`;
-      
-      // Utwórz blob dla CSV
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      // Dodaj BOM dla poprawnego kodowania polskich znaków w Excelu
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
