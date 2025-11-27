@@ -29,9 +29,9 @@
         "consumeMaterials": "Konsumuj materiały",
         "table": {
             "name": "Nazwa",
-            "quantity": "Wygenerowana ilość",
+            "quantity": "Oryginalna ilość",
             "unit": "Jednostka",
-            "actualQuantity": "Zaplanowana ilość",
+            "actualQuantity": "Obecna ilość",
             "issuedQuantity": "Ilość wydana",
             "consumedQuantity": "Ilość skonsumowana",
             "unitPrice": "Cena jedn.",

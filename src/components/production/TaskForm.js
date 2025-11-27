@@ -749,20 +749,13 @@ const TaskForm = ({ taskId }) => {
       
       // Jeśli ilość się zmieniła i są materiały do przeliczenia
       if (Math.abs(currentQuantity - origQty) > 0.001 && recipe && taskData.materials?.length > 0) {
-        // Sprawdź czy zadanie ma rezerwacje lub konsumpcję (blokada przeliczania)
-        const hasReservations = taskData.materialBatches && 
-          Object.keys(taskData.materialBatches).length > 0 &&
-          Object.values(taskData.materialBatches).some(batches => 
-            batches && batches.length > 0 && 
-            batches.some(batch => batch.quantity > 0)
-          );
-
+        // Sprawdź czy zadanie ma potwierdzoną konsumpcję (blokada przeliczania)
         const hasConsumption = taskData.materialConsumptionConfirmed === true ||
           (taskData.consumedMaterials && taskData.consumedMaterials.length > 0) ||
           (taskData.status === 'Potwierdzenie zużycia');
 
-        // Jeśli NIE ma rezerwacji ani konsumpcji, pokaż dialog wyboru
-        if (!hasReservations && !hasConsumption) {
+        // Jeśli NIE ma konsumpcji, pokaż dialog wyboru (rezerwacje nie blokują)
+        if (!hasConsumption) {
           setPendingSubmitEvent(e);
           setQuantityChangeDialogOpen(true);
           return; // Przerwij - czekamy na decyzję użytkownika
@@ -784,24 +777,32 @@ const TaskForm = ({ taskId }) => {
       if (shouldRecalculate && recipe && taskData.quantity) {
         const newQuantity = parseFloat(taskData.quantity);
         
-        if (recipe.ingredients && recipe.ingredients.length > 0) {
-          const updatedMaterials = recipe.ingredients.map(ingredient => ({
-            id: ingredient.id,
-            name: ingredient.name,
-            category: ingredient.category || 'Surowce',
-            quantity: preciseMultiply(ingredient.quantity || 0, newQuantity),
-            unit: ingredient.unit || 'szt.',
-            inventoryItemId: ingredient.inventoryItemId || ingredient.id
-          }));
+        if (recipe.ingredients && recipe.ingredients.length > 0 && taskData.materials?.length > 0) {
+          // Przelicz obecną ilość (actualMaterialUsage) zamiast oryginalnej ilości (quantity)
+          const updatedActualUsage = { ...(taskData.actualMaterialUsage || {}) };
           
-          // Aktualizuj materiały przed zapisem
+          taskData.materials.forEach(material => {
+            // Znajdź odpowiadający składnik z receptury
+            const ingredientFromRecipe = recipe.ingredients.find(ing => 
+              ing.id === material.id || 
+              ing.inventoryItemId === material.inventoryItemId ||
+              ing.inventoryItemId === material.id
+            );
+            
+            if (ingredientFromRecipe) {
+              // Przelicz ilość na podstawie receptury i nowej ilości produktu
+              updatedActualUsage[material.id] = preciseMultiply(ingredientFromRecipe.quantity || 0, newQuantity);
+            }
+          });
+          
+          // Aktualizuj actualMaterialUsage przed zapisem
           setTaskData(prev => ({
             ...prev,
-            materials: updatedMaterials
+            actualMaterialUsage: updatedActualUsage
           }));
           
-          // Zaktualizuj taskData.materials bezpośrednio dla dalszej części funkcji
-          taskData.materials = updatedMaterials;
+          // Zaktualizuj taskData.actualMaterialUsage bezpośrednio dla dalszej części funkcji
+          taskData.actualMaterialUsage = updatedActualUsage;
         }
       }
       
@@ -1653,10 +1654,10 @@ const TaskForm = ({ taskId }) => {
                 />
                 <Box>
                   <Typography variant="subtitle1" fontWeight="bold">
-                    Przeliczyć materiały według receptury
+                    Przeliczyć obecne ilości materiałów
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Wszystkie materiały zostaną przeliczone proporcjonalnie do nowej ilości zgodnie z recepturą.
+                    Obecne ilości materiałów zostaną przeliczone proporcjonalnie do nowej ilości produktu zgodnie z recepturą.
                   </Typography>
                 </Box>
               </Box>
