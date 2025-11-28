@@ -62,6 +62,7 @@ import {
   getTasksForTimeAnalysis,
   formatMinutes
 } from '../../services/productionTimeAnalysisService';
+import { getRecipeById } from '../../services/recipeService';
 import ProductionGapAnalysisTab from './ProductionGapAnalysisTab';
 
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
@@ -78,6 +79,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
   const [productionHistory, setProductionHistory] = useState([]);
   const [timeAnalysis, setTimeAnalysis] = useState(null);
   const [tasksMap, setTasksMap] = useState({});
+  const [recipesMap, setRecipesMap] = useState({});
   const [selectedTask, setSelectedTask] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState('all');
   const [chartType, setChartType] = useState('daily');
@@ -108,11 +110,35 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
 
       // Pobierz zadania dla analizy
       const taskIds = Object.keys(analysis.sessionsByTask);
+      let tasks = {};
       if (taskIds.length > 0) {
-        const tasks = await getTasksForTimeAnalysis(taskIds);
+        tasks = await getTasksForTimeAnalysis(taskIds);
         setTasksMap(tasks);
+        
+        // Pobierz receptury dla zadań, które mają recipeId
+        const recipeIds = [...new Set(Object.values(tasks)
+          .map(task => task.recipeId)
+          .filter(Boolean))];
+        
+        if (recipeIds.length > 0) {
+          console.log('[ANALIZA CZASU TAB] Pobieranie receptur dla', recipeIds.length, 'zadań');
+          const recipes = {};
+          for (const recipeId of recipeIds) {
+            try {
+              const recipe = await getRecipeById(recipeId);
+              if (recipe) {
+                recipes[recipeId] = recipe;
+              }
+            } catch (err) {
+              console.warn(`Nie udało się pobrać receptury ${recipeId}:`, err);
+            }
+          }
+          setRecipesMap(recipes);
+          console.log('[ANALIZA CZASU TAB] Pobrano', Object.keys(recipes).length, 'receptur');
+        }
       } else {
         setTasksMap({});
+        setRecipesMap({});
       }
 
       console.log('[ANALIZA CZASU TAB] Analiza zakończona', {
@@ -296,6 +322,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           filteredAnalysis={filteredAnalysis}
           filteredSessions={filteredSessions}
           tasksMap={tasksMap}
+          recipesMap={recipesMap}
           chartData={chartData}
           tasksPieData={tasksPieData}
           chartColors={chartColors}
@@ -334,6 +361,7 @@ const TimeAnalysisContent = ({
   filteredAnalysis,
   filteredSessions,
   tasksMap,
+  recipesMap,
   chartData,
   tasksPieData,
   chartColors,
@@ -623,6 +651,7 @@ const TimeAnalysisContent = ({
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.endTime')}</TableCell>
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.timeSpent')}</TableCell>
                 <TableCell align="right">{t('productionReport.timeAnalysis.tableHeaders.quantity')}</TableCell>
+                <TableCell align="right">Koszt zakładu</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -691,6 +720,26 @@ const TimeAnalysisContent = ({
                   </TableCell>
                   <TableCell align="right">
                     {session.quantity} {tasksMap[session.taskId]?.unit || 'szt'}
+                  </TableCell>
+                  <TableCell align="right">
+                    {(() => {
+                      const task = tasksMap[session.taskId];
+                      const quantity = parseFloat(session.quantity) || 0;
+                      
+                      // Pobierz koszt procesowy: najpierw z task, potem z receptury
+                      let processingCostPerUnit = parseFloat(task?.processingCostPerUnit) || 0;
+                      
+                      // Jeśli task nie ma kosztu, sprawdź recepturę
+                      if (processingCostPerUnit === 0 && task?.recipeId && recipesMap[task.recipeId]) {
+                        processingCostPerUnit = parseFloat(recipesMap[task.recipeId]?.processingCostPerUnit) || 0;
+                      }
+                      
+                      const facilityCost = processingCostPerUnit * quantity;
+                      
+                      return facilityCost > 0 
+                        ? `${facilityCost.toFixed(2)} €` 
+                        : '—';
+                    })()}
                   </TableCell>
                 </TableRow>
               ))}
