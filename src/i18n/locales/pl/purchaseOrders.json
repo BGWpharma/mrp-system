@@ -299,5 +299,76 @@
     "paymentStatusUpdateError": "Błąd podczas aktualizacji statusu płatności",
     "deleteSuccess": "Zamówienie zostało usunięte",
     "deleteError": "Błąd podczas usuwania zamówienia"
+  },
+  "deliveryDocumentOcr": {
+    "title": "Skanuj dokument",
+    "scanButton": "Skanuj dokument",
+    "scanButtonTooltip": "Skanuj dokument dostawy lub fakturę za pomocą AI",
+    "uploadArea": {
+      "title": "Przeciągnij lub wybierz dokument",
+      "subtitle": "Obsługiwane: JPG, PNG, WEBP, PDF",
+      "maxSize": "Maksymalny rozmiar: 20MB"
+    },
+    "analyzing": "Analizuję dokument za pomocą AI...",
+    "results": {
+      "title": "Wynik analizy dokumentu",
+      "matchesFound": "Znaleziono {{count}} dopasowań",
+      "unmatchedItems": "{{count}} pozycji nie dopasowano",
+      "selectChanges": "Wybierz zmiany do zastosowania:",
+      "confidence": "Pewność: {{value}}%"
+    },
+    "fields": {
+      "quantity": "Ilość",
+      "lotNumber": "Numer partii (LOT)",
+      "expiryDate": "Data ważności",
+      "unitPrice": "Cena jednostkowa"
+    },
+    "actions": {
+      "apply": "Zastosuj wybrane",
+      "applyCount": "Zastosuj wybrane ({{count}})",
+      "cancel": "Anuluj",
+      "retry": "Spróbuj ponownie"
+    },
+    "success": "Zaktualizowano {{count}} pozycji z dokumentu dostawy",
+    "errors": {
+      "unsupportedFormat": "Nieobsługiwany format pliku. Dozwolone: JPG, PNG, WEBP, PDF",
+      "fileTooLarge": "Plik za duży. Maksymalny rozmiar: 20MB",
+      "noApiKey": "Brak klucza API Gemini. Skonfiguruj klucz w ustawieniach.",
+      "parseError": "Nie udało się przeanalizować dokumentu",
+      "noMatches": "Nie znaleziono dopasowań do pozycji zamówienia"
+    },
+    "warnings": {
+      "lowConfidence": "Niskie dopasowanie - sprawdź dane ręcznie",
+      "unmatchedItems": "Następujące pozycje nie zostały dopasowane:"
+    }
+  },
+  "invoiceOcr": {
+    "title": "Skanowanie faktury",
+    "scanButton": "Skanuj fakturę",
+    "scanButtonTooltip": "Skanuj fakturę za pomocą AI",
+    "analyzing": "Analizuję fakturę za pomocą AI...",
+    "results": {
+      "title": "Wynik analizy faktury",
+      "invoiceNumber": "Numer faktury",
+      "invoiceDate": "Data wystawienia",
+      "dueDate": "Termin płatności",
+      "totalNet": "Wartość netto",
+      "totalVat": "Kwota VAT",
+      "totalGross": "Wartość brutto"
+    },
+    "fields": {
+      "unitPriceNet": "Cena jednostkowa netto",
+      "vatRate": "Stawka VAT",
+      "totalNet": "Wartość netto",
+      "totalGross": "Wartość brutto"
+    },
+    "success": "Zaktualizowano {{count}} pozycji i dodano link do faktury {{invoice}}",
+    "errors": {
+      "parseError": "Nie udało się przeanalizować faktury",
+      "currencyMismatch": "Waluta faktury ({{invoiceCurrency}}) różni się od waluty PO ({{poCurrency}})"
+    },
+    "warnings": {
+      "amountMismatch": "Kwota faktury różni się od wartości zamówienia"
+    }
   }
 }

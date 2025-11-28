@@ -1028,6 +1028,138 @@ export const DATABASE_TOOLS = [
         description: "UWAGA: Musisz podać co najmniej jeden z parametrów: batchNumber, lotNumber lub moNumber"
       }
     }
+  },
+  // 🆕 NARZĘDZIE DO AKTUALIZACJI POZYCJI PO Z DOKUMENTU DOSTAWY LUB FAKTURY
+  {
+    type: "function",
+    function: {
+      name: "update_purchase_order_items",
+      description: "📦🧾 Aktualizuje pozycje zamówienia zakupowego (PO) na podstawie danych z dokumentu dostawy (WZ) lub faktury. Używane po przeanalizowaniu dokumentu przez Vision API. Dla WZ: aktualizuje received, lotNumber, expiryDate. Dla faktury: aktualizuje unitPrice, vatRate, dodaje link do faktury. WAŻNE: Przed wywołaniem upewnij się, że masz prawidłowe ID pozycji PO (itemId) - możesz użyć query_purchase_orders z odpowiednim numerem PO aby pobrać pozycje.",
+      parameters: {
+        type: "object",
+        properties: {
+          purchaseOrderId: {
+            type: "string",
+            description: "ID zamówienia zakupowego (np. 'abc123def') lub numer PO (np. 'PO-2024-0001'). System automatycznie rozpozna czy to ID czy numer."
+          },
+          poNumber: {
+            type: "string",
+            description: "Alternatywnie: Numer PO (np. 'PO-2024-0001'). Użyj jeśli nie znasz ID dokumentu."
+          },
+          documentType: {
+            type: "string",
+            enum: ["delivery_note", "invoice", "both"],
+            description: "Typ dokumentu źródłowego: 'delivery_note' = WZ/dokument dostawy, 'invoice' = faktura, 'both' = oba typy danych. Domyślnie: 'delivery_note'",
+            default: "delivery_note"
+          },
+          itemUpdates: {
+            type: "array",
+            description: "Lista aktualizacji dla poszczególnych pozycji PO",
+            items: {
+              type: "object",
+              properties: {
+                itemId: {
+                  type: "string",
+                  description: "ID pozycji w PO do aktualizacji (z pola items[].id)"
+                },
+                productName: {
+                  type: "string",
+                  description: "Nazwa produktu (jeśli nie znasz itemId, system spróbuje dopasować po nazwie)"
+                },
+                received: {
+                  type: "number",
+                  description: "Ilość dostarczona do dodania do aktualnej wartości received (z WZ)"
+                },
+                lotNumber: {
+                  type: "string",
+                  description: "Numer partii/LOT z dokumentu dostawy"
+                },
+                expiryDate: {
+                  type: "string",
+                  description: "Data ważności w formacie YYYY-MM-DD"
+                },
+                unitPrice: {
+                  type: "number",
+                  description: "Cena jednostkowa NETTO z faktury"
+                },
+                vatRate: {
+                  type: "number",
+                  description: "Stawka VAT w procentach (np. 23, 8, 5, 0) z faktury"
+                },
+                totalNet: {
+                  type: "number",
+                  description: "Wartość netto pozycji z faktury"
+                },
+                totalGross: {
+                  type: "number",
+                  description: "Wartość brutto pozycji z faktury"
+                },
+                batchNotes: {
+                  type: "string",
+                  description: "Notatki do partii (np. uwagi z dokumentu)"
+                }
+              }
+            }
+          },
+          deliveryDate: {
+            type: "string",
+            description: "Data dostawy z dokumentu WZ (YYYY-MM-DD) - zostanie zapisana jako actualDeliveryDate"
+          },
+          deliveryNoteNumber: {
+            type: "string",
+            description: "Numer dokumentu dostawy (WZ) - zostanie zapisany w notatkach"
+          },
+          invoiceData: {
+            type: "object",
+            description: "Dane z faktury do zapisania w zamówieniu",
+            properties: {
+              invoiceNumber: {
+                type: "string",
+                description: "Numer faktury (np. 'FV/2024/01/0001')"
+              },
+              invoiceDate: {
+                type: "string",
+                description: "Data wystawienia faktury (YYYY-MM-DD)"
+              },
+              dueDate: {
+                type: "string",
+                description: "Termin płatności (YYYY-MM-DD)"
+              },
+              totalNet: {
+                type: "number",
+                description: "Łączna wartość netto faktury"
+              },
+              totalVat: {
+                type: "number",
+                description: "Łączna kwota VAT"
+              },
+              totalGross: {
+                type: "number",
+                description: "Łączna wartość brutto faktury"
+              },
+              currency: {
+                type: "string",
+                description: "Waluta faktury (PLN, EUR, USD)"
+              },
+              paymentMethod: {
+                type: "string",
+                description: "Metoda płatności"
+              },
+              bankAccount: {
+                type: "string",
+                description: "Numer konta bankowego do przelewu"
+              }
+            }
+          },
+          dryRun: {
+            type: "boolean",
+            description: "Jeśli true, tylko symuluje zmiany i zwraca podgląd bez zapisywania. Domyślnie: false",
+            default: false
+          }
+        },
+        required: ["itemUpdates"]
+      }
+    }
   }
 ];
 

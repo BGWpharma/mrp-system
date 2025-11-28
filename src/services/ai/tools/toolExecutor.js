@@ -144,6 +144,10 @@ export class ToolExecutor {
         case 'calculate_batch_traceability':
           result = await this.calculateBatchTraceability(parameters);
           break;
+        // 🆕 NOWA FUNKCJA: Aktualizacja pozycji PO z dokumentu dostawy
+        case 'update_purchase_order_items':
+          result = await this.updatePurchaseOrderItems(parameters);
+          break;
         default:
           throw new Error(`Nieznana funkcja: ${functionName}`);
       }
@@ -3423,6 +3427,335 @@ export class ToolExecutor {
       isEmpty: traceability.chain.length === 0,
       warning: traceability.chain.length === 0 ? "⚠️ BRAK DANYCH - Nie można utworzyć łańcucha traceability." : null
     };
+  }
+  
+  /**
+   * 🆕 Aktualizuje pozycje zamówienia zakupowego na podstawie danych z dokumentu dostawy lub faktury
+   * @param {Object} params - Parametry aktualizacji
+   * @returns {Object} - Wynik aktualizacji z podsumowaniem zmian
+   */
+  static async updatePurchaseOrderItems(params) {
+    const { 
+      purchaseOrderId, 
+      poNumber, 
+      documentType = 'delivery_note',
+      itemUpdates = [], 
+      deliveryDate, 
+      deliveryNoteNumber,
+      invoiceData = null,
+      dryRun = false 
+    } = params;
+    
+    console.log('[ToolExecutor] 📦 Aktualizuję pozycje PO z dokumentu dostawy');
+    console.log('[ToolExecutor] Parametry:', { purchaseOrderId, poNumber, itemUpdatesCount: itemUpdates.length, dryRun });
+    
+    // Walidacja
+    if (!itemUpdates || itemUpdates.length === 0) {
+      return {
+        success: false,
+        error: "Brak aktualizacji pozycji (itemUpdates jest puste)",
+        isEmpty: true
+      };
+    }
+    
+    try {
+      // 1. Znajdź PO po ID lub numerze
+      let poDoc = null;
+      let poId = purchaseOrderId;
+      
+      if (purchaseOrderId) {
+        // Spróbuj bezpośrednio po ID
+        const directRef = doc(db, 'purchaseOrders', purchaseOrderId);
+        const directDoc = await getDoc(directRef);
+        
+        if (directDoc.exists()) {
+          poDoc = directDoc;
+          poId = directDoc.id;
+        } else {
+          // Może to numer PO? Szukaj po polu 'number'
+          const numberQuery = query(
+            collection(db, 'purchaseOrders'),
+            where('number', '==', purchaseOrderId),
+            firestoreLimit(1)
+          );
+          const snapshot = await getDocs(numberQuery);
+          if (!snapshot.empty) {
+            poDoc = snapshot.docs[0];
+            poId = poDoc.id;
+          }
+        }
+      }
+      
+      if (!poDoc && poNumber) {
+        // Szukaj po numerze PO
+        const numberQuery = query(
+          collection(db, 'purchaseOrders'),
+          where('number', '==', poNumber),
+          firestoreLimit(1)
+        );
+        const snapshot = await getDocs(numberQuery);
+        if (!snapshot.empty) {
+          poDoc = snapshot.docs[0];
+          poId = poDoc.id;
+        }
+      }
+      
+      if (!poDoc) {
+        return {
+          success: false,
+          error: `Nie znaleziono zamówienia zakupowego: ${purchaseOrderId || poNumber}`,
+          isEmpty: true
+        };
+      }
+      
+      const poData = poDoc.data();
+      const items = poData.items || [];
+      
+      console.log(`[ToolExecutor] ✅ Znaleziono PO: ${poData.number} z ${items.length} pozycjami`);
+      
+      // 2. Przygotuj aktualizacje
+      const updatedItems = [...items];
+      const appliedChanges = [];
+      const skippedItems = [];
+      
+      for (const update of itemUpdates) {
+        // Znajdź pozycję w PO
+        let itemIndex = -1;
+        let matchReason = '';
+        
+        // Najpierw szukaj po itemId
+        if (update.itemId) {
+          itemIndex = updatedItems.findIndex(item => item.id === update.itemId);
+          matchReason = 'itemId';
+        }
+        
+        // Jeśli nie znaleziono, szukaj po nazwie produktu
+        if (itemIndex === -1 && update.productName) {
+          const normalizedSearchName = update.productName.toLowerCase().trim();
+          
+          // Dokładne dopasowanie
+          itemIndex = updatedItems.findIndex(item => 
+            item.name?.toLowerCase().trim() === normalizedSearchName
+          );
+          
+          // Jeśli nie znaleziono, szukaj częściowego dopasowania
+          if (itemIndex === -1) {
+            itemIndex = updatedItems.findIndex(item => {
+              const itemName = item.name?.toLowerCase().trim() || '';
+              return itemName.includes(normalizedSearchName) || 
+                     normalizedSearchName.includes(itemName);
+            });
+          }
+          
+          matchReason = 'productName';
+        }
+        
+        if (itemIndex === -1) {
+          skippedItems.push({
+            searchCriteria: update.itemId || update.productName,
+            reason: 'Nie znaleziono pozycji w PO'
+          });
+          continue;
+        }
+        
+        // Przygotuj zmiany dla pozycji
+        const originalItem = updatedItems[itemIndex];
+        const changes = {};
+        
+        // Aktualizuj received (dodaj do istniejącej wartości)
+        if (update.received !== undefined && update.received !== null) {
+          const currentReceived = parseFloat(originalItem.received || 0);
+          const newReceived = currentReceived + parseFloat(update.received);
+          changes.received = newReceived;
+        }
+        
+        // Aktualizuj lotNumber
+        if (update.lotNumber) {
+          changes.lotNumber = update.lotNumber;
+        }
+        
+        // Aktualizuj expiryDate
+        if (update.expiryDate) {
+          changes.expiryDate = update.expiryDate;
+        }
+        
+        // Aktualizuj unitPrice (opcjonalnie - z faktury lub WZ)
+        if (update.unitPrice !== undefined && update.unitPrice !== null) {
+          changes.unitPrice = parseFloat(update.unitPrice);
+          // Przelicz totalPrice
+          const quantity = parseFloat(originalItem.quantity || 0);
+          const discount = parseFloat(originalItem.discount || 0);
+          const discountMultiplier = (100 - discount) / 100;
+          changes.totalPrice = (quantity * changes.unitPrice * discountMultiplier).toFixed(2);
+        }
+        
+        // Aktualizuj vatRate (z faktury)
+        if (update.vatRate !== undefined && update.vatRate !== null) {
+          changes.vatRate = parseFloat(update.vatRate);
+        }
+        
+        // Aktualizuj wartości netto/brutto z faktury
+        if (update.totalNet !== undefined) {
+          changes.invoiceTotalNet = parseFloat(update.totalNet);
+        }
+        if (update.totalGross !== undefined) {
+          changes.invoiceTotalGross = parseFloat(update.totalGross);
+        }
+        
+        // Aktualizuj actualDeliveryDate
+        if (deliveryDate) {
+          changes.actualDeliveryDate = deliveryDate;
+        }
+        
+        // Aktualizuj notatki
+        const notesParts = [];
+        if (deliveryNoteNumber) {
+          notesParts.push(`WZ: ${deliveryNoteNumber}`);
+        }
+        if (invoiceData?.invoiceNumber) {
+          notesParts.push(`FV: ${invoiceData.invoiceNumber}`);
+        }
+        if (update.batchNotes) {
+          notesParts.push(update.batchNotes);
+        }
+        
+        if (notesParts.length > 0) {
+          const existingNotes = originalItem.notes || '';
+          changes.notes = existingNotes ? 
+            `${existingNotes}\n${notesParts.join(', ')}` : 
+            notesParts.join(', ');
+        }
+        
+        // Zastosuj zmiany
+        updatedItems[itemIndex] = {
+          ...originalItem,
+          ...changes,
+          lastDeliveryUpdate: new Date().toISOString()
+        };
+        
+        appliedChanges.push({
+          itemId: originalItem.id,
+          itemName: originalItem.name,
+          matchedBy: matchReason,
+          changes: changes,
+          beforeValues: {
+            received: originalItem.received || 0,
+            lotNumber: originalItem.lotNumber || null,
+            expiryDate: originalItem.expiryDate || null
+          }
+        });
+      }
+      
+      // 3. Zapisz zmiany (jeśli nie dryRun)
+      if (!dryRun && appliedChanges.length > 0) {
+        const { updateDoc, arrayUnion } = await import('firebase/firestore');
+        const poRef = doc(db, 'purchaseOrders', poId);
+        
+        const updateData = {
+          items: updatedItems,
+          updatedAt: new Date()
+        };
+        
+        // Dodaj informacje o dostawie (jeśli to WZ)
+        if (documentType === 'delivery_note' || documentType === 'both') {
+          updateData.lastDeliveryUpdate = {
+            date: new Date().toISOString(),
+            deliveryNoteNumber: deliveryNoteNumber || null,
+            itemsUpdated: appliedChanges.length
+          };
+        }
+        
+        // Dodaj dane z faktury (jeśli to faktura)
+        if ((documentType === 'invoice' || documentType === 'both') && invoiceData) {
+          // Dodaj link do faktury
+          if (invoiceData.invoiceNumber) {
+            const newInvoiceLink = {
+              id: `inv-${Date.now()}`,
+              number: invoiceData.invoiceNumber,
+              date: invoiceData.invoiceDate || null,
+              dueDate: invoiceData.dueDate || null,
+              totalNet: invoiceData.totalNet || null,
+              totalVat: invoiceData.totalVat || null,
+              totalGross: invoiceData.totalGross || null,
+              currency: invoiceData.currency || poData.currency || 'PLN',
+              paymentMethod: invoiceData.paymentMethod || null,
+              bankAccount: invoiceData.bankAccount || null,
+              addedAt: new Date().toISOString(),
+              addedBy: 'AI-Vision'
+            };
+            
+            // Użyj arrayUnion aby dodać do istniejącej tablicy
+            updateData.invoiceLinks = arrayUnion(newInvoiceLink);
+          }
+          
+          // Zaktualizuj dane rozliczeniowe PO
+          if (invoiceData.totalGross) {
+            updateData.invoicedTotalGross = invoiceData.totalGross;
+          }
+          if (invoiceData.totalNet) {
+            updateData.invoicedTotalNet = invoiceData.totalNet;
+          }
+          
+          updateData.lastInvoiceUpdate = {
+            date: new Date().toISOString(),
+            invoiceNumber: invoiceData.invoiceNumber || null,
+            itemsUpdated: appliedChanges.length
+          };
+        }
+        
+        await updateDoc(poRef, updateData);
+        console.log(`[ToolExecutor] ✅ Zapisano ${appliedChanges.length} zmian do PO ${poData.number} (typ: ${documentType})`);
+      }
+      
+      // 4. Zwróć podsumowanie
+      const docTypeLabel = documentType === 'invoice' ? 'faktury' : 
+                           documentType === 'both' ? 'WZ i faktury' : 'WZ';
+      
+      return {
+        success: true,
+        dryRun: dryRun,
+        documentType: documentType,
+        purchaseOrder: {
+          id: poId,
+          number: poData.number,
+          supplier: poData.supplier?.name || poData.supplierName || 'Nieznany',
+          totalItems: items.length,
+          currency: poData.currency || 'PLN'
+        },
+        summary: {
+          totalUpdatesRequested: itemUpdates.length,
+          appliedChanges: appliedChanges.length,
+          skippedItems: skippedItems.length
+        },
+        appliedChanges: appliedChanges,
+        skippedItems: skippedItems,
+        deliveryInfo: (documentType === 'delivery_note' || documentType === 'both') ? {
+          deliveryDate: deliveryDate || null,
+          deliveryNoteNumber: deliveryNoteNumber || null
+        } : null,
+        invoiceInfo: (documentType === 'invoice' || documentType === 'both') && invoiceData ? {
+          invoiceNumber: invoiceData.invoiceNumber || null,
+          invoiceDate: invoiceData.invoiceDate || null,
+          dueDate: invoiceData.dueDate || null,
+          totalNet: invoiceData.totalNet || null,
+          totalVat: invoiceData.totalVat || null,
+          totalGross: invoiceData.totalGross || null,
+          currency: invoiceData.currency || null
+        } : null,
+        message: dryRun 
+          ? `🔍 Podgląd: ${appliedChanges.length} pozycji zostałoby zaktualizowanych z ${docTypeLabel}` 
+          : `✅ Zaktualizowano ${appliedChanges.length} pozycji w PO ${poData.number} na podstawie ${docTypeLabel}`,
+        isEmpty: appliedChanges.length === 0
+      };
+      
+    } catch (error) {
+      console.error('[ToolExecutor] ❌ Błąd aktualizacji PO:', error);
+      return {
+        success: false,
+        error: error.message,
+        isEmpty: true
+      };
+    }
   }
 }
 

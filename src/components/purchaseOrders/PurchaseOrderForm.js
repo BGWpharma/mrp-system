@@ -46,7 +46,8 @@ import {
   PlaylistAddCheck as PlaylistAddCheckIcon,
   Search as SearchIcon,
   Autorenew as AutorenewIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  DocumentScanner as DocumentScannerIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -79,6 +80,7 @@ import { getExchangeRate, getExchangeRates } from '../../services/exchangeRateSe
 import PurchaseOrderFileUpload from './PurchaseOrderFileUpload';
 import PurchaseOrderCategorizedFileUpload from './PurchaseOrderCategorizedFileUpload';
 import SavingOverlay from '../common/SavingOverlay';
+import PODocumentScanner from './PODocumentScanner';
 
 const PurchaseOrderForm = ({ orderId }) => {
   const { t, currentLanguage } = useTranslation();
@@ -102,6 +104,9 @@ const PurchaseOrderForm = ({ orderId }) => {
   const [supplierSuggestions, setSupplierSuggestions] = useState({});
   const [exchangeRates, setExchangeRates] = useState({});
   const [loadingRates, setLoadingRates] = useState(false);
+  
+  // Stan dla skanera dokumentów (WZ/Faktura)
+  const [documentScannerOpen, setDocumentScannerOpen] = useState(false);
   
   const [poData, setPoData] = useState({
     number: '',
@@ -2318,56 +2323,6 @@ const PurchaseOrderForm = ({ orderId }) => {
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
-  
-  // Funkcja dodająca nowy link do faktury
-  const handleAddInvoiceLink = () => {
-    const newInvoiceLink = {
-      id: `invoice-${Date.now()}`,
-      description: '',
-      url: ''
-    };
-    
-    setPoData(prev => ({
-      ...prev,
-      invoiceLinks: [...(prev.invoiceLinks || []), newInvoiceLink],
-      // Aktualizacja starego pola invoiceLink dla kompatybilności
-      // Jeśli jest to pierwsza faktura, ustawiamy też stare pole
-      invoiceLink: prev.invoiceLinks?.length === 0 ? newInvoiceLink.url : prev.invoiceLink
-    }));
-  };
-  
-  // Funkcja obsługująca zmianę danych linku do faktury
-  const handleInvoiceLinkChange = (id, field, value) => {
-    const updatedInvoiceLinks = (poData.invoiceLinks || []).map(link => {
-      if (link.id === id) {
-        const updatedLink = { ...link, [field]: value };
-        
-        // Jeśli aktualizujemy URL pierwszej faktury, zaktualizuj też stare pole invoiceLink dla kompatybilności
-        if (field === 'url' && poData.invoiceLinks.indexOf(link) === 0) {
-          setPoData(prev => ({
-            ...prev,
-            invoiceLink: value
-          }));
-        }
-        
-        return updatedLink;
-      }
-      return link;
-    });
-    
-    setPoData(prev => ({
-      ...prev,
-      invoiceLinks: updatedInvoiceLinks
-    }));
-  };
-  
-  // Funkcja usuwająca link do faktury
-  const handleRemoveInvoiceLink = (id) => {
-    setPoData(prev => ({
-      ...prev,
-      invoiceLinks: prev.invoiceLinks.filter(link => link.id !== id)
-    }));
-  };
 
   // Obsługa załączników (stary sposób - dla kompatybilności)
   const handleAttachmentsChange = (newAttachments) => {
@@ -2391,6 +2346,178 @@ const PurchaseOrderForm = ({ orderId }) => {
         ...(newAttachments.generalAttachments || [])
       ]
     }));
+  };
+
+  // Obsługa aktualizacji z dokumentu dostawy (WZ) - ze skanera OCR
+  const handleApplyDeliveryUpdates = async ({ updates, documentNumber, deliveryDate }) => {
+    console.log('[PurchaseOrderForm] 📦 Stosowanie aktualizacji z WZ:');
+    console.log('  - Updates:', JSON.stringify(updates, null, 2));
+    console.log('  - Numer dokumentu:', documentNumber);
+    console.log('  - Data dostawy:', deliveryDate);
+    
+    if (!updates || updates.length === 0) {
+      console.warn('[PurchaseOrderForm] ⚠️ Brak aktualizacji do zastosowania!');
+      return;
+    }
+    
+    setPoData(prev => {
+      const updatedItems = [...prev.items];
+      
+      for (const update of updates) {
+        console.log('[PurchaseOrderForm] 🔍 Szukam pozycji z ID:', update.itemId);
+        
+        const itemIndex = updatedItems.findIndex(item => item.id === update.itemId);
+        
+        if (itemIndex === -1) {
+          console.warn('[PurchaseOrderForm] ❌ Nie znaleziono pozycji z ID:', update.itemId);
+          console.log('[PurchaseOrderForm] Dostępne ID:', prev.items.map(i => i.id));
+          continue;
+        }
+        
+        const changes = update.changes || {};
+        console.log('[PurchaseOrderForm] ✅ Znaleziono na indexie:', itemIndex);
+        console.log('[PurchaseOrderForm] 📝 Zmiany do zastosowania:', changes);
+        
+        const currentItem = updatedItems[itemIndex];
+        
+        // Aktualizuj pozycję z danymi z WZ
+        const updatedItem = {
+          ...currentItem,
+          // Ilość zamówiona (aktualizuj na podstawie dostawy)
+          ...(changes.quantity !== undefined && { quantity: parseFloat(changes.quantity) || 0 }),
+          // Jednostka
+          ...(changes.unit && { unit: changes.unit }),
+          // Ilość dostarczona (dodaj do istniejącej)
+          ...(changes.received !== undefined && { received: changes.received }),
+          // Numer partii LOT
+          ...(changes.lotNumber && { lotNumber: changes.lotNumber }),
+          // Data ważności z dokumentu dostawy
+          ...(changes.expiryDate && { expiryDate: changes.expiryDate }),
+          // Data rzeczywistej dostawy
+          ...(deliveryDate && { actualDeliveryDate: deliveryDate }),
+          lastDeliveryUpdate: new Date().toISOString()
+        };
+        
+        // Przelicz totalPrice jeśli zmieniono quantity
+        if (changes.quantity !== undefined) {
+          const quantity = parseFloat(updatedItem.quantity) || 0;
+          const unitPrice = parseFloat(updatedItem.unitPrice) || 0;
+          const discount = parseFloat(updatedItem.discount) || 0;
+          const discountMultiplier = (100 - discount) / 100;
+          updatedItem.totalPrice = parseFloat((quantity * unitPrice * discountMultiplier).toFixed(2));
+        }
+        
+        updatedItems[itemIndex] = updatedItem;
+        
+        console.log('[PurchaseOrderForm] 📦 Pozycja po aktualizacji:', {
+          quantity: updatedItems[itemIndex].quantity,
+          unit: updatedItems[itemIndex].unit,
+          totalPrice: updatedItems[itemIndex].totalPrice,
+          expiryDate: updatedItems[itemIndex].expiryDate,
+          actualDeliveryDate: updatedItems[itemIndex].actualDeliveryDate,
+          lotNumber: updatedItems[itemIndex].lotNumber,
+          received: updatedItems[itemIndex].received
+        });
+      }
+      
+      // Dodaj informację o dokumencie WZ do notatek
+      const newNotes = documentNumber 
+        ? (prev.notes ? `${prev.notes}\n[WZ: ${documentNumber}]` : `[WZ: ${documentNumber}]`)
+        : prev.notes;
+      
+      return {
+        ...prev,
+        items: updatedItems,
+        notes: newNotes
+      };
+    });
+  };
+
+  // Obsługa aktualizacji z faktury - ze skanera OCR
+  const handleApplyInvoiceUpdates = async ({ updates, invoiceInfo }) => {
+    console.log('[PurchaseOrderForm] Stosowanie aktualizacji z faktury:', updates, invoiceInfo);
+    
+    setPoData(prev => {
+      const updatedItems = [...prev.items];
+      
+      for (const update of updates) {
+        const itemIndex = updatedItems.findIndex(item => item.id === update.itemId);
+        if (itemIndex === -1) continue;
+        
+        const changes = update.changes || {};
+        const currentItem = updatedItems[itemIndex];
+        
+        // Przygotuj zaktualizowaną pozycję
+        let updatedItem = { ...currentItem };
+        
+        // Aktualizuj ilość (zawsze jako liczba)
+        if (changes.quantity !== undefined) {
+          updatedItem.quantity = parseFloat(changes.quantity) || 0;
+        }
+        
+        // Aktualizuj jednostkę
+        if (changes.unit !== undefined) {
+          updatedItem.unit = changes.unit;
+        }
+        
+        // Aktualizuj cenę jednostkową (zawsze jako liczba)
+        if (changes.unitPrice !== undefined) {
+          updatedItem.unitPrice = parseFloat(changes.unitPrice) || 0;
+        }
+        
+        // Przelicz wartość pozycji (po aktualizacji ilości i ceny)
+        const quantity = parseFloat(updatedItem.quantity) || 0;
+        const unitPrice = parseFloat(updatedItem.unitPrice) || 0;
+        const discount = parseFloat(updatedItem.discount) || 0;
+        const discountMultiplier = (100 - discount) / 100;
+        updatedItem.totalPrice = parseFloat((quantity * unitPrice * discountMultiplier).toFixed(2));
+        
+        // Aktualizuj stawkę VAT
+        if (changes.vatRate !== undefined) {
+          updatedItem.vatRate = changes.vatRate;
+        }
+        
+        // Aktualizuj dane faktury na poziomie pozycji
+        if (invoiceInfo?.invoiceNumber) {
+          updatedItem.invoiceNumber = invoiceInfo.invoiceNumber;
+        }
+        if (invoiceInfo?.invoiceDate) {
+          updatedItem.invoiceDate = invoiceInfo.invoiceDate;
+        }
+        if (invoiceInfo?.dueDate) {
+          updatedItem.paymentDueDate = invoiceInfo.dueDate;
+        }
+        // Aktualizuj walutę pozycji na walutę z faktury
+        if (invoiceInfo?.currency) {
+          updatedItem.currency = invoiceInfo.currency;
+        }
+        
+        updatedItems[itemIndex] = updatedItem;
+      }
+      
+      // Dodaj link do faktury
+      let newInvoiceLinks = [...(prev.invoiceLinks || [])];
+      if (invoiceInfo?.invoiceNumber) {
+        newInvoiceLinks.push({
+          id: `inv-${Date.now()}`,
+          number: invoiceInfo.invoiceNumber,
+          date: invoiceInfo.invoiceDate || null,
+          dueDate: invoiceInfo.dueDate || null,
+          totalNet: invoiceInfo.totalNet || null,
+          totalVat: invoiceInfo.totalVat || null,
+          totalGross: invoiceInfo.totalGross || null,
+          currency: invoiceInfo.currency || prev.currency,
+          addedAt: new Date().toISOString(),
+          addedBy: 'AI-OCR'
+        });
+      }
+      
+      return {
+        ...prev,
+        items: updatedItems,
+        invoiceLinks: newInvoiceLinks
+      };
+    });
   };
 
   // Funkcja do ponownego przeliczenia wszystkich wartości walutowych
@@ -3210,6 +3337,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {t('purchaseOrders.form.orderItems.applyBestPrices')}
                 </Button>
               )}
+              
+              {/* Przycisk skanowania dokumentów (WZ/Faktura) */}
+              <Tooltip title={t('purchaseOrders.deliveryDocumentOcr.scanButtonTooltip', 'Skanuj dokument dostawy lub fakturę za pomocą AI')}>
+                <Button
+                  variant="outlined"
+                  color="success"
+                  startIcon={<DocumentScannerIcon />}
+                  onClick={() => setDocumentScannerOpen(true)}
+                  size="small"
+                  disabled={poData.items.length === 0}
+                >
+                  {t('purchaseOrders.deliveryDocumentOcr.scanButton', 'Skanuj dokument')}
+                </Button>
+              </Tooltip>
             </Box>
           </Box>
           
@@ -4026,69 +4167,48 @@ const PurchaseOrderForm = ({ orderId }) => {
           
           {/* Faktury - wielu linków */}
           <Grid container spacing={3}>
+            {/* Sekcja linków do faktur - tylko do odczytu dla starych PO */}
+            {poData.invoiceLinks && poData.invoiceLinks.length > 0 && (
             <Grid item xs={12}>
-              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle1">{t('purchaseOrders.form.invoices.title')}</Typography>
-                <Button
-                  startIcon={<AddIcon />}
-                  onClick={handleAddInvoiceLink}
-                  variant="outlined"
-                  size="small"
-                >
-                  {t('purchaseOrders.form.invoices.addInvoice')}
-                </Button>
               </Box>
               
-              {!poData.invoiceLinks || poData.invoiceLinks.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-                  {t('purchaseOrders.form.invoices.noInvoices')}
-                </Typography>
-              ) : (
-                <TableContainer component={Paper} sx={{ mb: 2 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>{t('purchaseOrders.form.invoices.description')}</TableCell>
-                        <TableCell>{t('purchaseOrders.form.invoices.link')}</TableCell>
-                        <TableCell width="100px"></TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {poData.invoiceLinks.map((invoice, index) => (
-                        <TableRow key={invoice.id}>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={invoice.description}
-                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'description', e.target.value)}
-                              placeholder={t('purchaseOrders.form.invoices.descriptionPlaceholder')}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={invoice.url}
-                              onChange={(e) => handleInvoiceLinkChange(invoice.id, 'url', e.target.value)}
-                              placeholder={t('purchaseOrders.form.invoices.linkPlaceholder')}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveInvoiceLink(invoice.id)}
-                              color="error"
+              <TableContainer component={Paper} sx={{ mb: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{t('purchaseOrders.form.invoices.description')}</TableCell>
+                      <TableCell>{t('purchaseOrders.form.invoices.link')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {poData.invoiceLinks.map((invoice) => (
+                      <TableRow key={invoice.id}>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {invoice.description || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {invoice.url ? (
+                            <a 
+                              href={invoice.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ color: 'inherit' }}
                             >
-                              <DeleteIcon />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
+                              {invoice.url}
+                            </a>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">-</Typography>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
               
               {/* Zachowujemy stare pole dla kompatybilności, ale ukrywamy je */}
               <input
@@ -4097,6 +4217,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                 value={poData.invoiceLink || ''}
               />
             </Grid>
+            )}
             
             {/* Załączniki - nowy skategoryzowany komponent */}
             <Grid item xs={12}>
@@ -4140,6 +4261,16 @@ const PurchaseOrderForm = ({ orderId }) => {
         open={saving} 
         message={savingMessage || 'Zapisuje...'} 
         subtitle={savingSubtitle}
+      />
+      
+      {/* Dialog skanera dokumentów (WZ/Faktura) */}
+      <PODocumentScanner
+        open={documentScannerOpen}
+        onClose={() => setDocumentScannerOpen(false)}
+        poItems={poData.items}
+        onApplyDeliveryUpdates={handleApplyDeliveryUpdates}
+        onApplyInvoiceUpdates={handleApplyInvoiceUpdates}
+        disabled={saving}
       />
     </Container>
   );

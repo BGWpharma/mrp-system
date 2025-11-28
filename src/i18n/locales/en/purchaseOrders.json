@@ -290,5 +290,76 @@
       "attachmentsToMigrate": "Attachments to migrate: {{count}}",
       "targetBatch": "Target batch: {{batch}}"
     }
+  },
+  "deliveryDocumentOcr": {
+    "title": "Scan Document",
+    "scanButton": "Scan Document",
+    "scanButtonTooltip": "Scan delivery document or invoice using AI",
+    "uploadArea": {
+      "title": "Drag or select document",
+      "subtitle": "Supported: JPG, PNG, WEBP, PDF",
+      "maxSize": "Maximum size: 20MB"
+    },
+    "analyzing": "Analyzing document with AI...",
+    "results": {
+      "title": "Document Analysis Result",
+      "matchesFound": "Found {{count}} matches",
+      "unmatchedItems": "{{count}} items not matched",
+      "selectChanges": "Select changes to apply:",
+      "confidence": "Confidence: {{value}}%"
+    },
+    "fields": {
+      "quantity": "Quantity",
+      "lotNumber": "Batch Number (LOT)",
+      "expiryDate": "Expiry Date",
+      "unitPrice": "Unit Price"
+    },
+    "actions": {
+      "apply": "Apply selected",
+      "applyCount": "Apply selected ({{count}})",
+      "cancel": "Cancel",
+      "retry": "Retry"
+    },
+    "success": "Updated {{count}} items from delivery document",
+    "errors": {
+      "unsupportedFormat": "Unsupported file format. Allowed: JPG, PNG, WEBP, PDF",
+      "fileTooLarge": "File too large. Maximum size: 20MB",
+      "noApiKey": "Missing Gemini API key. Configure key in settings.",
+      "parseError": "Failed to parse document",
+      "noMatches": "No matches found for order items"
+    },
+    "warnings": {
+      "lowConfidence": "Low confidence - verify data manually",
+      "unmatchedItems": "The following items were not matched:"
+    }
+  },
+  "invoiceOcr": {
+    "title": "Scan Invoice",
+    "scanButton": "Scan Invoice",
+    "scanButtonTooltip": "Scan invoice using AI",
+    "analyzing": "Analyzing invoice with AI...",
+    "results": {
+      "title": "Invoice Analysis Result",
+      "invoiceNumber": "Invoice Number",
+      "invoiceDate": "Invoice Date",
+      "dueDate": "Due Date",
+      "totalNet": "Net Total",
+      "totalVat": "VAT Amount",
+      "totalGross": "Gross Total"
+    },
+    "fields": {
+      "unitPriceNet": "Unit Price (Net)",
+      "vatRate": "VAT Rate",
+      "totalNet": "Net Total",
+      "totalGross": "Gross Total"
+    },
+    "success": "Updated {{count}} items and added invoice link {{invoice}}",
+    "errors": {
+      "parseError": "Failed to parse invoice",
+      "currencyMismatch": "Invoice currency ({{invoiceCurrency}}) differs from PO currency ({{poCurrency}})"
+    },
+    "warnings": {
+      "amountMismatch": "Invoice amount differs from order value"
+    }
   }
 }

@@ -11,13 +11,28 @@ import { ToolExecutor } from './tools/toolExecutor.js';
  * - Thinking Mode (rozumowanie przed odpowiedzią)
  * - 1M tokenów kontekstu
  * - Inteligentny wybór modelu
+ * - Vision API (obsługa obrazów i PDF) 🆕
  * 
  * Modele:
- * - gemini-2.5-pro (główny - thinking, 1M tokens)
- * - gemini-1.5-pro (fallback - 2M tokens)
+ * - gemini-2.5-pro (główny - thinking, 1M tokens, vision)
+ * - gemini-1.5-pro (fallback - 2M tokens, vision)
  * - gemini-2.0-flash-exp (szybki - 1M tokens, darmowy)
  */
 export class GeminiQueryOrchestrator {
+  
+  /**
+   * Obsługiwane typy MIME dla Vision API
+   */
+  static SUPPORTED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp'
+  ];
+  
+  static SUPPORTED_DOCUMENT_TYPES = [
+    'application/pdf'
+  ];
   
   /**
    * Konwertuje OpenAI tools format na Gemini function declarations
@@ -124,6 +139,11 @@ export class GeminiQueryOrchestrator {
   
   /**
    * Główna metoda przetwarzania zapytania
+   * @param {string} query - Zapytanie użytkownika
+   * @param {string} apiKey - Klucz API Gemini
+   * @param {Array} context - Historia konwersacji
+   * @param {Object} options - Opcje dodatkowe
+   * @param {Array} options.mediaAttachments - Załączniki obrazów/PDF [{mimeType, base64Data}]
    */
   static async processQuery(query, apiKey, context = [], options = {}) {
     console.log('[GeminiQueryOrchestrator] 🚀 Rozpoczynam przetwarzanie zapytania:', query);
@@ -132,9 +152,25 @@ export class GeminiQueryOrchestrator {
     const executedTools = [];
     let totalTokensUsed = 0;
     
+    // Sprawdź czy są załączniki multimedialne
+    const hasMediaAttachments = options.mediaAttachments && options.mediaAttachments.length > 0;
+    if (hasMediaAttachments) {
+      console.log(`[GeminiQueryOrchestrator] 🖼️ Wykryto ${options.mediaAttachments.length} załącznik(ów) multimedialnych`);
+    }
+    
     try {
-      // Wybierz najlepszy model
-      const modelSelection = this.selectBestModel(query, options);
+      // Wybierz najlepszy model (Vision wymaga 1.5 Pro lub 2.5 Pro)
+      let modelSelection = this.selectBestModel(query, options);
+      
+      // Jeśli są załączniki multimedialne, wymuś model z Vision
+      if (hasMediaAttachments && modelSelection.model === 'gemini-2.0-flash-exp') {
+        modelSelection = {
+          model: 'gemini-1.5-pro',
+          enableThinking: false,
+          reason: '🖼️ Załączniki multimedialne - używam 1.5 Pro z Vision API'
+        };
+      }
+      
       const { model, enableThinking, reason } = modelSelection;
       
       console.log(`[GeminiQueryOrchestrator] ${reason}`);
@@ -156,10 +192,20 @@ export class GeminiQueryOrchestrator {
         parts: [{ text: msg.content }]
       }));
       
-      // System instruction (zmieniony dla trybu konwersacyjnego)
+      // System instruction (zmieniony dla trybu konwersacyjnego lub Vision)
+      let systemPrompt = disableTools ? this.getConversationalSystemPrompt() : this.getSystemPrompt();
+      
+      // Dodaj instrukcje dla Vision jeśli są załączniki
+      if (hasMediaAttachments) {
+        systemPrompt += this.getVisionSystemPrompt();
+      }
+      
       const systemInstruction = {
-        parts: [{ text: disableTools ? this.getConversationalSystemPrompt() : this.getSystemPrompt() }]
+        parts: [{ text: systemPrompt }]
       };
+      
+      // Przygotuj parts dla zapytania użytkownika (tekst + opcjonalnie obrazy/PDF)
+      const userParts = this.buildUserParts(query, options.mediaAttachments);
       
       // Iteracyjne wywoływanie (max 5 rund dla tools, 1 runda dla konwersacji)
       const maxRounds = disableTools ? 1 : 5;
@@ -177,7 +223,7 @@ export class GeminiQueryOrchestrator {
             ...history,
             {
               role: 'user',
-              parts: [{ text: query }]
+              parts: userParts
             }
           ],
           systemInstruction: systemInstruction,
@@ -357,6 +403,160 @@ export class GeminiQueryOrchestrator {
         processingTime: performance.now() - startTime
       };
     }
+  }
+  
+  /**
+   * Buduje parts dla zapytania użytkownika (tekst + opcjonalnie media)
+   * @param {string} query - Zapytanie tekstowe
+   * @param {Array} mediaAttachments - Załączniki [{mimeType, base64Data}]
+   * @returns {Array} - Parts dla Gemini API
+   */
+  static buildUserParts(query, mediaAttachments = []) {
+    const parts = [];
+    
+    // Dodaj tekst zapytania
+    parts.push({ text: query });
+    
+    // Dodaj załączniki multimedialne (obrazy/PDF)
+    if (mediaAttachments && mediaAttachments.length > 0) {
+      for (const attachment of mediaAttachments) {
+        if (this.isValidMediaType(attachment.mimeType)) {
+          parts.push({
+            inline_data: {
+              mime_type: attachment.mimeType,
+              data: attachment.base64Data
+            }
+          });
+          console.log(`[GeminiQueryOrchestrator] 📎 Dodano załącznik: ${attachment.mimeType}`);
+        } else {
+          console.warn(`[GeminiQueryOrchestrator] ⚠️ Nieobsługiwany typ: ${attachment.mimeType}`);
+        }
+      }
+    }
+    
+    return parts;
+  }
+  
+  /**
+   * Sprawdza czy typ MIME jest obsługiwany przez Vision API
+   */
+  static isValidMediaType(mimeType) {
+    return [...this.SUPPORTED_IMAGE_TYPES, ...this.SUPPORTED_DOCUMENT_TYPES].includes(mimeType);
+  }
+  
+  /**
+   * Dodatkowy system prompt dla trybu Vision (OCR dokumentów)
+   */
+  static getVisionSystemPrompt() {
+    return `
+
+═══════════════════════════════════════════════════════════════
+🖼️ TRYB VISION - ANALIZA DOKUMENTÓW
+═══════════════════════════════════════════════════════════════
+
+Otrzymałeś załącznik(i) - obraz lub PDF dokumentu. Twoje zadanie:
+
+1. **ODCZYTAJ** tekst z dokumentu (OCR)
+2. **ZIDENTYFIKUJ** typ dokumentu (faktura, WZ, dowód dostawy, certyfikat, itp.)
+3. **WYCIĄGNIJ** kluczowe dane w strukturyzowanej formie
+
+═══════════════════════════════════════════════════════════════
+📦 DLA DOKUMENTÓW DOSTAWY (WZ / Delivery Note / Packing List):
+═══════════════════════════════════════════════════════════════
+Wyciągnij i zwróć w formacie JSON:
+\`\`\`json
+{
+  "documentType": "delivery_note",
+  "documentNumber": "numer dokumentu WZ",
+  "deliveryDate": "YYYY-MM-DD",
+  "supplier": "nazwa dostawcy",
+  "items": [
+    {
+      "productName": "nazwa produktu z dokumentu",
+      "deliveredQuantity": 100,
+      "unit": "kg",
+      "lotNumber": "numer partii/LOT",
+      "expiryDate": "YYYY-MM-DD",
+      "unitPrice": 12.50
+    }
+  ],
+  "totalWeight": "waga całkowita jeśli podana",
+  "notes": "dodatkowe uwagi"
+}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════
+🧾 DLA FAKTUR (Invoice / Faktura VAT):
+═══════════════════════════════════════════════════════════════
+Wyciągnij i zwróć w formacie JSON:
+\`\`\`json
+{
+  "documentType": "invoice",
+  "invoiceNumber": "numer faktury (np. FV/2024/01/0001)",
+  "invoiceDate": "YYYY-MM-DD (data wystawienia)",
+  "dueDate": "YYYY-MM-DD (termin płatności)",
+  "supplier": {
+    "name": "nazwa dostawcy",
+    "taxId": "NIP dostawcy",
+    "address": "adres dostawcy"
+  },
+  "buyer": {
+    "name": "nazwa nabywcy",
+    "taxId": "NIP nabywcy"
+  },
+  "currency": "PLN/EUR/USD",
+  "items": [
+    {
+      "productName": "nazwa produktu/usługi",
+      "quantity": 100,
+      "unit": "kg/szt/L",
+      "unitPriceNet": 10.00,
+      "vatRate": 23,
+      "totalNet": 1000.00,
+      "totalGross": 1230.00
+    }
+  ],
+  "summary": {
+    "totalNet": 1000.00,
+    "totalVat": 230.00,
+    "totalGross": 1230.00,
+    "vatBreakdown": [
+      { "rate": 23, "base": 1000.00, "amount": 230.00 }
+    ]
+  },
+  "paymentMethod": "przelew/gotówka",
+  "bankAccount": "numer konta bankowego",
+  "notes": "dodatkowe uwagi z faktury"
+}
+\`\`\`
+
+WAŻNE DLA FAKTUR:
+- Rozróżniaj ceny NETTO (bez VAT) i BRUTTO (z VAT)
+- Dokładnie odczytuj stawki VAT (0%, 5%, 8%, 23%, ZW, NP)
+- Zachowaj dokładną numerację faktury
+- Odczytaj termin płatności jeśli jest podany
+
+═══════════════════════════════════════════════════════════════
+📋 DLA CERTYFIKATÓW (CoA / Certificate of Analysis):
+═══════════════════════════════════════════════════════════════
+Wyciągnij: numer certyfikatu, numer partii, data produkcji, data ważności, parametry jakościowe
+
+═══════════════════════════════════════════════════════════════
+⚠️ WAŻNE ZASADY:
+═══════════════════════════════════════════════════════════════
+- Jeśli dane są nieczytelne lub brakuje ich, zaznacz to w odpowiedzi
+- Używaj formatu YYYY-MM-DD dla dat
+- Dla ilości używaj wartości liczbowych (bez jednostek w polu quantity)
+- Dopasuj nazwy produktów do pozycji PO jeśli użytkownik podał kontekst PO
+- Bądź precyzyjny - wyciągaj DOKŁADNE wartości z dokumentu
+- Dla kwot zachowuj 2 miejsca po przecinku
+- Jeśli waluta nie jest podana, załóż PLN dla polskich dokumentów
+
+Po wyciągnięciu danych, możesz użyć narzędzia update_purchase_order_items 
+aby zaktualizować zamówienie zakupowe danymi z dokumentu.
+
+═══════════════════════════════════════════════════════════════
+`;
   }
   
   /**

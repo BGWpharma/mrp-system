@@ -1091,6 +1091,94 @@ export const addMessageToConversation = async (conversationId, role, content, at
 };
 
 /**
+ * Obsługiwane typy MIME dla Gemini Vision
+ */
+const VISION_SUPPORTED_TYPES = [
+  'image/jpeg',
+  'image/png', 
+  'image/gif',
+  'image/webp',
+  'application/pdf'
+];
+
+/**
+ * Wyciąga załączniki obrazowe/PDF i konwertuje na format dla Gemini Vision
+ * @param {Array} attachments - Lista załączników z Firebase Storage
+ * @returns {Promise<Array>} - Lista załączników w formacie [{mimeType, base64Data}]
+ */
+const extractMediaAttachments = async (attachments) => {
+  const mediaAttachments = [];
+  
+  if (!attachments || attachments.length === 0) {
+    return mediaAttachments;
+  }
+  
+  for (const attachment of attachments) {
+    try {
+      // Sprawdź czy to obsługiwany typ
+      const mimeType = attachment.contentType || attachment.type;
+      if (!VISION_SUPPORTED_TYPES.includes(mimeType)) {
+        console.log(`[extractMediaAttachments] ⏭️ Pomijam nieobsługiwany typ: ${mimeType}`);
+        continue;
+      }
+      
+      // Pobierz plik jako blob
+      console.log(`[extractMediaAttachments] 📥 Pobieram: ${attachment.fileName} (${mimeType})`);
+      const response = await fetch(attachment.downloadURL);
+      
+      if (!response.ok) {
+        console.error(`[extractMediaAttachments] ❌ Błąd pobierania: ${response.status}`);
+        continue;
+      }
+      
+      const blob = await response.blob();
+      
+      // Sprawdź rozmiar (max 20MB dla inline_data)
+      const maxSize = 20 * 1024 * 1024; // 20MB
+      if (blob.size > maxSize) {
+        console.warn(`[extractMediaAttachments] ⚠️ Plik za duży: ${(blob.size / 1024 / 1024).toFixed(2)}MB > 20MB`);
+        continue;
+      }
+      
+      // Konwertuj na base64
+      const base64Data = await blobToBase64(blob);
+      
+      mediaAttachments.push({
+        mimeType: mimeType,
+        base64Data: base64Data,
+        fileName: attachment.fileName,
+        size: blob.size
+      });
+      
+      console.log(`[extractMediaAttachments] ✅ Dodano: ${attachment.fileName} (${(blob.size / 1024).toFixed(1)}KB)`);
+      
+    } catch (error) {
+      console.error(`[extractMediaAttachments] ❌ Błąd przetwarzania załącznika:`, error);
+    }
+  }
+  
+  return mediaAttachments;
+};
+
+/**
+ * Konwertuje Blob na base64 (bez prefixu data:...)
+ * @param {Blob} blob - Blob do konwersji
+ * @returns {Promise<string>} - Base64 string bez prefixu
+ */
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Usuń prefix "data:...;base64,"
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+/**
  * Funkcja przetwarzająca zapytanie użytkownika i zwracająca odpowiedź asystenta
  * Używa GPT-4o poprzez API OpenAI, wzbogacone o dane z bazy danych
  * @param {string} query - Zapytanie użytkownika
@@ -1187,8 +1275,60 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
       }
     } else {
       if (hasAttachments) {
-        console.log('[processAIQuery] 📎 Wykryto załączniki - używam standardowego systemu z pełnym kontekstem');
-        // Kontynuuj do standardowego systemu poniżej
+        // 🆕 VISION MODE: Sprawdź czy są załączniki obrazowe/PDF
+        const mediaAttachments = await extractMediaAttachments(attachments);
+        
+        if (mediaAttachments.length > 0) {
+          console.log(`[processAIQuery] 🖼️ Wykryto ${mediaAttachments.length} załącznik(ów) multimedialnych - używam Gemini Vision`);
+          
+          try {
+            const apiKey = await getGeminiApiKey(userId);
+            
+            if (!apiKey) {
+              return "❌ Nie znaleziono klucza API Gemini. Proszę skonfigurować klucz w ustawieniach systemu.\n\n" +
+                     "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
+            }
+            
+            // Użyj Gemini z Vision API
+            const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
+              query, 
+              apiKey, 
+              context,
+              {
+                mediaAttachments: mediaAttachments,
+                enableThinking: true  // Włącz thinking mode dla lepszej analizy dokumentów
+              }
+            );
+            
+            if (orchestratorResult.success) {
+              console.log(`[processAIQuery] ✅ Gemini Vision odpowiedział: ${orchestratorResult.response?.substring(0, 100)}...`);
+              
+              let response = orchestratorResult.response;
+              
+              // Dodaj informację o trybie Vision
+              const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
+              const modelEmoji = orchestratorResult.model.includes('2.5') ? '🧠' : 
+                                orchestratorResult.model.includes('1.5') ? '📚' : '⚡';
+              
+              response += `\n\n_🖼️ Tryb Vision - analiza ${mediaAttachments.length} dokumentów_`;
+              if (orchestratorResult.executedTools?.length > 0) {
+                response += `\n_🔧 Wykonano ${orchestratorResult.executedTools.length} zapytań do bazy_`;
+              }
+              response += `\n_${modelEmoji} Model: ${orchestratorResult.model} | Czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+              
+              return response;
+            } else {
+              console.error('[processAIQuery] ❌ Gemini Vision nie zdołał przetworzyć:', orchestratorResult.error);
+              return `❌ Nie udało się przeanalizować dokumentu: ${orchestratorResult.error}`;
+            }
+          } catch (visionError) {
+            console.error('[processAIQuery] ❌ Błąd w trybie Vision:', visionError);
+            return `❌ Wystąpił błąd podczas analizy dokumentu: ${visionError.message}`;
+          }
+        } else {
+          console.log('[processAIQuery] 📎 Załączniki nie są obrazami/PDF - używam standardowego systemu');
+          // Kontynuuj do standardowego systemu poniżej
+        }
       } else {
         // Zapytanie konwersacyjne - użyj Gemini bez narzędzi
         console.log('[processAIQuery] 💬 Zapytanie konwersacyjne - używam Gemini w trybie konwersacyjnym (bez dostępu do bazy)');
