@@ -59,6 +59,7 @@ const MaterialsAndCostsTab = ({
   consumedIncludeInCosts,
   consumedBatchPrices,
   deletingReservation,
+  costsSummary,
   
   // Funkcje obliczeniowe
   calculateWeightedUnitPrice,
@@ -333,7 +334,35 @@ const MaterialsAndCostsTab = ({
                           // Pokaż cenę jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
                           const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
                           
-                          return hasAnyReservations ? `${Number(unitPrice || 0).toFixed(4)} €` : '—';
+                          // NOWE: Sprawdź czy mamy szacunkową cenę z bazy lub z costsSummary
+                          const estimatedFromDb = task.estimatedMaterialCosts && task.estimatedMaterialCosts[materialId];
+                          const estimatedFromSummary = costsSummary?.reserved?.details?.[materialId];
+                          const hasEstimatedPrice = estimatedFromDb || (estimatedFromSummary?.isEstimated && estimatedFromSummary?.unitPrice > 0);
+                          const estimatedUnitPrice = estimatedFromSummary?.unitPrice || unitPrice;
+                          
+                          if (hasAnyReservations) {
+                            return `${Number(unitPrice || 0).toFixed(4)} €`;
+                          } else if (hasEstimatedPrice && estimatedUnitPrice > 0) {
+                            // Wyświetl szacunkową cenę z oznaczeniem
+                            return (
+                              <Tooltip title={getPriceBreakdownTooltip(material, materialId)}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <span style={{ fontStyle: 'italic', color: '#1976d2' }}>
+                                    ~{Number(estimatedUnitPrice || 0).toFixed(4)} €
+                                  </span>
+                                  <Chip 
+                                    label="szac."
+                                    size="small"
+                                    variant="outlined"
+                                    color="info"
+                                    sx={{ fontSize: '9px', height: '18px', '& .MuiChip-label': { px: 0.5 } }}
+                                  />
+                                </Box>
+                              </Tooltip>
+                            );
+                          } else {
+                            return '—';
+                          }
                         })()}
                       </TableCell>
                       <TableCell>
@@ -351,7 +380,24 @@ const MaterialsAndCostsTab = ({
                           // Pokaż koszt jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
                           const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
                           
-                          return hasAnyReservations ? `${Number(cost || 0).toFixed(2)} €` : '—';
+                          // NOWE: Sprawdź czy mamy szacunkową cenę z bazy lub z costsSummary
+                          const estimatedFromDb = task.estimatedMaterialCosts && task.estimatedMaterialCosts[materialId];
+                          const estimatedFromSummary = costsSummary?.reserved?.details?.[materialId];
+                          const hasEstimatedPrice = estimatedFromDb || (estimatedFromSummary?.isEstimated && estimatedFromSummary?.cost > 0);
+                          const estimatedCost = estimatedFromSummary?.cost || cost;
+                          
+                          if (hasAnyReservations) {
+                            return `${Number(cost || 0).toFixed(2)} €`;
+                          } else if (hasEstimatedPrice && estimatedCost > 0) {
+                            // Wyświetl szacunkowy koszt z oznaczeniem
+                            return (
+                              <span style={{ fontStyle: 'italic', color: '#1976d2' }}>
+                                ~{Number(estimatedCost || 0).toFixed(2)} €
+                              </span>
+                            );
+                          } else {
+                            return '—';
+                          }
                         })()}
                       </TableCell>
                       <TableCell>

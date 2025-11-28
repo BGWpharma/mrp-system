@@ -1401,7 +1401,7 @@ const TaskDetailsPage = () => {
     );
   };
 
-  // Funkcja helper do obliczania średniej ważonej ceny jednostkowej uwzględniającej rezerwacje PO
+  // Funkcja helper do obliczania średniej ważonej ceny jednostkowej uwzględniającej rezerwacje PO i szacunki
   const calculateWeightedUnitPrice = (material, materialId) => {
     const reservedBatches = task.materialBatches && task.materialBatches[materialId];
     const allPOReservations = getPOReservationsForMaterial(materialId);
@@ -1450,8 +1450,46 @@ const TaskDetailsPage = () => {
       return totalValue / totalQuantity;
     }
 
-    // Fallback na cenę materiału
-    return parseFloat(material.unitPrice || 0);
+    // NOWE: Sprawdź czy mamy szacunkową cenę z bazy danych
+    if (task.estimatedMaterialCosts && task.estimatedMaterialCosts[materialId]) {
+      const estimatedData = task.estimatedMaterialCosts[materialId];
+      if (estimatedData.unitPrice > 0) {
+        return parseFloat(estimatedData.unitPrice);
+      }
+    }
+
+    // NOWE: Sprawdź czy mamy dynamicznie obliczoną cenę w costsSummary
+    if (costsSummary?.reserved?.details?.[materialId]) {
+      const reservedData = costsSummary.reserved.details[materialId];
+      if (reservedData.unitPrice > 0) {
+        return parseFloat(reservedData.unitPrice);
+      }
+    }
+
+    // Brak rezerwacji i brak partii = cena 0 (NIE używamy fallbacku na material.unitPrice)
+    return 0;
+  };
+
+  // Funkcja helper do sprawdzenia czy cena jest szacunkowa
+  const isEstimatedPrice = (materialId) => {
+    const reservedBatches = task.materialBatches && task.materialBatches[materialId];
+    const allPOReservations = getPOReservationsForMaterial(materialId);
+    const activePOReservations = allPOReservations.filter(reservation => {
+      if (reservation.status === 'pending') return true;
+      if (reservation.status === 'delivered') {
+        const convertedQuantity = reservation.convertedQuantity || 0;
+        const reservedQuantity = reservation.reservedQuantity || 0;
+        return convertedQuantity < reservedQuantity;
+      }
+      return false;
+    });
+
+    // Brak rezerwacji = cena jest szacunkowa (jeśli mamy dane szacunkowe lub z costsSummary)
+    const hasReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
+    const hasEstimatedData = (task.estimatedMaterialCosts && task.estimatedMaterialCosts[materialId]) ||
+                             (costsSummary?.reserved?.details?.[materialId]?.isEstimated);
+    
+    return !hasReservations && hasEstimatedData;
   };
 
   // Funkcja helper do generowania tooltip z informacją o składzie ceny
@@ -1494,7 +1532,21 @@ const TaskDetailsPage = () => {
     }
 
     if (breakdown.length === 0) {
-      return `Brak rezerwacji - używana cena z katalogu: ${parseFloat(material.unitPrice || 0).toFixed(4)}€`;
+      // Sprawdź czy mamy szacunkową cenę z partii magazynowych (z bazy lub dynamicznie)
+      const estimatedData = task.estimatedMaterialCosts?.[materialId] || costsSummary?.reserved?.details?.[materialId];
+      
+      if (estimatedData && (estimatedData.unitPrice > 0 || estimatedData.averagePrice > 0)) {
+        const batchCount = estimatedData.batchCount || 0;
+        const unitPrice = estimatedData.unitPrice || estimatedData.averagePrice || 0;
+        const priceSource = (estimatedData.priceSource === 'batch-weighted-average' || 
+                            estimatedData.priceCalculationMethod === 'batch-weighted-average-estimated')
+          ? `średnia ważona z ${batchCount} partii` 
+          : batchCount > 0 ? `średnia ważona z ${batchCount} partii` : 'brak partii';
+        return `📊 CENA SZACUNKOWA\n\nŹródło: ${priceSource}\nCena jednostkowa: ${parseFloat(unitPrice).toFixed(4)}€\n\nBrak rezerwacji - cena obliczona na podstawie historycznych cen zakupu.`;
+      }
+      
+      // Brak partii - wyświetl 0€
+      return `Brak rezerwacji i brak partii w magazynie.\nCena jednostkowa: 0.0000€`;
     }
 
     return breakdown.join('\n');
@@ -5250,19 +5302,42 @@ const TaskDetailsPage = () => {
           await Promise.all(reservedBatchPromises);
         }
 
+        // NOWE: Dynamicznie pobierz szacunkowe ceny dla materiałów bez rezerwacji
+        // (gdy nie ma ich jeszcze w task.estimatedMaterialCosts)
+        const materialIdsWithoutReservationsOrEstimates = materials
+          .filter(material => {
+            const materialId = material.inventoryItemId || material.id;
+            const reservedBatches = currentMaterialBatches[materialId];
+            const poReservationsForMaterial = poReservationsByMaterial[materialId] || [];
+            const hasStandardReservations = reservedBatches && reservedBatches.length > 0;
+            const hasPOReservations = poReservationsForMaterial.length > 0;
+            const hasEstimatedData = task?.estimatedMaterialCosts?.[materialId];
+            
+            // Materiał bez rezerwacji i bez zapisanych danych szacunkowych
+            return !hasStandardReservations && !hasPOReservations && !hasEstimatedData;
+          })
+          .map(m => m.inventoryItemId || m.id)
+          .filter(Boolean);
+
+        let dynamicEstimatedPrices = {};
+        if (materialIdsWithoutReservationsOrEstimates.length > 0) {
+          try {
+            const { calculateEstimatedPricesForMultipleMaterials } = await import('../../services/inventory');
+            dynamicEstimatedPrices = await calculateEstimatedPricesForMultipleMaterials(materialIdsWithoutReservationsOrEstimates);
+            console.log(`[UI-COSTS] Pobrano dynamiczne szacunkowe ceny dla ${Object.keys(dynamicEstimatedPrices).length} materiałów bez rezerwacji`);
+          } catch (error) {
+            console.warn('[UI-COSTS] Błąd podczas pobierania dynamicznych szacunkowych cen:', error);
+          }
+        }
+
         // Teraz przetwórz każdy materiał uwzględniając zarówno standardowe rezerwacje jak i rezerwacje PO
         materials.forEach(material => {
           const materialId = material.inventoryItemId || material.id;
           const reservedBatches = currentMaterialBatches[materialId];
           const poReservationsForMaterial = poReservationsByMaterial[materialId] || [];
           
-          // Pomiń jeśli brak jakichkolwiek rezerwacji
           const hasStandardReservations = reservedBatches && reservedBatches.length > 0;
           const hasPOReservations = poReservationsForMaterial.length > 0;
-          
-          if (!hasStandardReservations && !hasPOReservations) {
-            return;
-          }
 
           // Oblicz ile zostało do skonsumowania z precyzyjnymi obliczeniami
           const consumedQuantity = currentConsumedMaterials
@@ -5276,6 +5351,59 @@ const TaskDetailsPage = () => {
             parseFloat(materialQuantities[material.id] || material.quantity) || 0
           );
           const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
+          
+          // NOWE: Dla materiałów bez rezerwacji użyj szacunkowej ceny
+          if (!hasStandardReservations && !hasPOReservations) {
+            if (remainingQuantity > 0) {
+              // Sprawdź czy mamy szacunkową cenę z bazy lub dynamicznie pobraną
+              const estimatedData = task?.estimatedMaterialCosts?.[materialId] || dynamicEstimatedPrices[materialId];
+              let unitPrice = 0;
+              let priceCalculationMethod = 'no-batches';
+              let batchCount = 0;
+              
+              if (estimatedData && estimatedData.unitPrice > 0) {
+                unitPrice = fixFloatingPointPrecision(estimatedData.unitPrice);
+                priceCalculationMethod = 'batch-weighted-average-estimated';
+                batchCount = estimatedData.batchCount || 0;
+                console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: szacunkowa cena ${unitPrice.toFixed(4)}€ (z ${batchCount} partii)`);
+              } else if (estimatedData && estimatedData.averagePrice > 0) {
+                // Dynamicznie pobrane dane mają averagePrice zamiast unitPrice
+                unitPrice = fixFloatingPointPrecision(estimatedData.averagePrice);
+                priceCalculationMethod = 'batch-weighted-average-estimated';
+                batchCount = estimatedData.batchCount || 0;
+                console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: dynamiczna szacunkowa cena ${unitPrice.toFixed(4)}€ (z ${batchCount} partii)`);
+              } else {
+                // Brak partii = cena 0 (nie używamy fallbacku na material.unitPrice)
+                unitPrice = 0;
+                priceCalculationMethod = 'no-batches';
+                console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: brak partii, cena=0€`);
+              }
+              
+              const materialCost = preciseMultiply(remainingQuantity, unitPrice);
+              
+              reservedCostDetails[materialId] = {
+                material,
+                quantity: remainingQuantity,
+                unitPrice,
+                cost: materialCost,
+                priceCalculationMethod,
+                batchesUsed: 0,
+                poReservationsUsed: 0,
+                isEstimated: true
+              };
+              
+              // Sprawdź czy materiał ma być wliczony do kosztów
+              const shouldIncludeInCosts = includeInCosts[material.id] !== false;
+              
+              if (shouldIncludeInCosts) {
+                totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
+              }
+              totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
+              
+              console.log(`[UI-COSTS-ESTIMATE] Materiał ${material.name}: ilość=${remainingQuantity}, koszt=${materialCost.toFixed(4)}€ (SZACUNEK)`);
+            }
+            return;
+          }
           
           if (remainingQuantity > 0) {
             let weightedPriceSum = 0;
@@ -8334,6 +8462,7 @@ const TaskDetailsPage = () => {
                 consumedIncludeInCosts={consumedIncludeInCosts}
                 consumedBatchPrices={consumedBatchPrices}
                 deletingReservation={deletingReservation}
+                costsSummary={costsSummary}
                 
                 // Funkcje obliczeniowe
                 calculateWeightedUnitPrice={calculateWeightedUnitPrice}

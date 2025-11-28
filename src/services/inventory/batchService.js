@@ -1298,3 +1298,128 @@ export const deleteBatch = async (batchId, userData) => {
     throw new Error(`Nie udało się usunąć partii: ${error.message}`);
   }
 };
+
+/**
+ * Oblicza średnią ważoną cenę ze wszystkich partii dla danego materiału
+ * Używa initialQuantity jako wagi (reprezentuje pełną wartość zakupową)
+ * Uwzględnia zarówno aktywne jak i wyczerpane partie
+ * 
+ * @param {string} materialId - ID materiału/pozycji magazynowej
+ * @returns {Promise<{averagePrice: number, totalQuantity: number, batchCount: number, priceSource: string}>}
+ */
+export const calculateEstimatedPriceFromBatches = async (materialId) => {
+  try {
+    if (!materialId) {
+      return { averagePrice: 0, totalQuantity: 0, batchCount: 0, priceSource: 'no-material-id' };
+    }
+
+    // Pobierz wszystkie partie dla materiału (włącznie z wyczerpanymi)
+    const batchesRef = collection(db, COLLECTIONS.INVENTORY_BATCHES);
+    const q = query(batchesRef, where('itemId', '==', materialId));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      return { averagePrice: 0, totalQuantity: 0, batchCount: 0, priceSource: 'no-batches' };
+    }
+
+    let weightedPriceSum = 0;
+    let totalQuantity = 0;
+    let batchCount = 0;
+
+    snapshot.docs.forEach(doc => {
+      const batch = doc.data();
+      const unitPrice = parseFloat(batch.unitPrice) || 0;
+      // Użyj initialQuantity jako wagi (reprezentuje oryginalną ilość zakupową)
+      const weight = parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0;
+
+      // Uwzględnij tylko partie z ceną > 0
+      if (unitPrice > 0 && weight > 0) {
+        weightedPriceSum += unitPrice * weight;
+        totalQuantity += weight;
+        batchCount++;
+      }
+    });
+
+    if (totalQuantity === 0) {
+      return { averagePrice: 0, totalQuantity: 0, batchCount: 0, priceSource: 'no-priced-batches' };
+    }
+
+    const averagePrice = weightedPriceSum / totalQuantity;
+
+    console.log(`📊 [ESTIMATED_PRICE] Materiał ${materialId}: średnia ważona ${averagePrice.toFixed(4)}€ z ${batchCount} partii (łączna ilość: ${totalQuantity})`);
+
+    return {
+      averagePrice,
+      totalQuantity,
+      batchCount,
+      priceSource: 'batch-weighted-average'
+    };
+  } catch (error) {
+    console.error(`Błąd podczas obliczania szacunkowej ceny dla materiału ${materialId}:`, error);
+    return { averagePrice: 0, totalQuantity: 0, batchCount: 0, priceSource: 'error' };
+  }
+};
+
+/**
+ * Grupowe pobieranie szacunkowych cen dla wielu materiałów
+ * Optymalizowane - używa jednego grupowego zapytania dla wszystkich materiałów
+ * 
+ * @param {Array<string>} materialIds - Lista ID materiałów
+ * @returns {Promise<Object>} - Mapa materialId -> {averagePrice, totalQuantity, batchCount, priceSource}
+ */
+export const calculateEstimatedPricesForMultipleMaterials = async (materialIds) => {
+  try {
+    if (!materialIds || materialIds.length === 0) {
+      return {};
+    }
+
+    const result = {};
+    
+    // Pobierz wszystkie partie dla wszystkich materiałów jednocześnie
+    // Używamy getBatchesForMultipleItems z excludeExhausted = false (domyślnie)
+    const batchesMap = await getBatchesForMultipleItems(materialIds, null, false);
+
+    for (const materialId of materialIds) {
+      const batches = batchesMap[materialId] || [];
+      
+      let weightedPriceSum = 0;
+      let totalQuantity = 0;
+      let batchCount = 0;
+
+      batches.forEach(batch => {
+        const unitPrice = parseFloat(batch.unitPrice) || 0;
+        const weight = parseFloat(batch.initialQuantity) || parseFloat(batch.quantity) || 0;
+
+        if (unitPrice > 0 && weight > 0) {
+          weightedPriceSum += unitPrice * weight;
+          totalQuantity += weight;
+          batchCount++;
+        }
+      });
+
+      if (totalQuantity > 0) {
+        result[materialId] = {
+          averagePrice: weightedPriceSum / totalQuantity,
+          totalQuantity,
+          batchCount,
+          priceSource: 'batch-weighted-average'
+        };
+      } else {
+        result[materialId] = {
+          averagePrice: 0,
+          totalQuantity: 0,
+          batchCount: 0,
+          priceSource: batches.length > 0 ? 'no-priced-batches' : 'no-batches'
+        };
+      }
+    }
+
+    const materialsWithPrices = Object.values(result).filter(r => r.averagePrice > 0).length;
+    console.log(`📊 [ESTIMATED_PRICES] Obliczono szacunkowe ceny dla ${materialsWithPrices}/${materialIds.length} materiałów`);
+
+    return result;
+  } catch (error) {
+    console.error('Błąd podczas grupowego obliczania szacunkowych cen:', error);
+    return {};
+  }
+};

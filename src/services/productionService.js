@@ -33,7 +33,8 @@ import {
     cancelBooking,
     getItemBatches,
     recalculateItemQuantity,
-    getInventoryBatch
+    getInventoryBatch,
+    calculateEstimatedPricesForMultipleMaterials
   } from './inventory';
   import { updateIngredientConsumption } from './mixingPlanReservationService';
   
@@ -5430,19 +5431,44 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       await Promise.all(reservedBatchPromises);
     }
     
+    // NOWE: Zidentyfikuj materiały bez rezerwacji i konsumpcji do szacunkowej kalkulacji
+    const materialIdsWithoutReservations = [];
+    task.materials.forEach(material => {
+      const materialId = material.inventoryItemId || material.id;
+      const reservedBatches = task.materialBatches ? task.materialBatches[materialId] : null;
+      const poReservationsForMaterial = poReservationsByMaterial[materialId] || [];
+      
+      const hasStandardReservations = reservedBatches && reservedBatches.length > 0;
+      const hasPOReservations = poReservationsForMaterial.length > 0;
+      const hasConsumption = task.consumedMaterials?.some(c => c.materialId === materialId);
+      
+      if (!hasStandardReservations && !hasPOReservations && !hasConsumption && materialId) {
+        materialIdsWithoutReservations.push(materialId);
+      }
+    });
+
+    // Pobierz szacunkowe ceny z partii magazynowych dla materiałów bez rezerwacji
+    let estimatedPricesMap = {};
+    if (materialIdsWithoutReservations.length > 0) {
+      try {
+        estimatedPricesMap = await calculateEstimatedPricesForMultipleMaterials(materialIdsWithoutReservations);
+        console.log(`[AUTO] Pobrano szacunkowe ceny dla ${Object.keys(estimatedPricesMap).length} materiałów bez rezerwacji`);
+      } catch (error) {
+        console.warn(`[AUTO] Błąd podczas pobierania szacunkowych cen:`, error);
+      }
+    }
+
+    // Obiekt do przechowywania szczegółów szacunkowych kosztów
+    const estimatedCostDetails = {};
+
     // Teraz przetwórz każdy materiał uwzględniając zarówno standardowe rezerwacje jak i rezerwacje PO
     task.materials.forEach(material => {
       const materialId = material.inventoryItemId || material.id;
       const reservedBatches = task.materialBatches ? task.materialBatches[materialId] : null;
       const poReservationsForMaterial = poReservationsByMaterial[materialId] || [];
       
-      // Pomiń jeśli brak jakichkolwiek rezerwacji
       const hasStandardReservations = reservedBatches && reservedBatches.length > 0;
       const hasPOReservations = poReservationsForMaterial.length > 0;
-      
-      if (!hasStandardReservations && !hasPOReservations) {
-        return;
-      }
 
       // Oblicz ile zostało do skonsumowania z precyzyjnymi obliczeniami
       const consumedQuantity = task.consumedMaterials ? 
@@ -5463,6 +5489,50 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       console.log(`[AUTO-DEBUG] Materiał ${material.name}: baseQuantity=${baseQuantity}, requiredQuantity=${requiredQuantity}, hasActualUsage=${actualUsage[material.inventoryItemId] !== undefined}`);
       const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
       console.log(`[AUTO-DEBUG] Materiał ${material.name}: consumedQuantity=${consumedQuantity}, remainingQuantity=${remainingQuantity}`);
+      
+      // ZMIANA: Dla materiałów bez rezerwacji oblicz szacunkowy koszt na podstawie partii
+      if (!hasStandardReservations && !hasPOReservations) {
+        if (remainingQuantity > 0) {
+          const estimatedData = estimatedPricesMap[materialId];
+          let unitPrice = 0;
+          let priceSource = 'fallback';
+          
+          if (estimatedData && estimatedData.averagePrice > 0) {
+            unitPrice = fixFloatingPointPrecision(estimatedData.averagePrice);
+            priceSource = 'batch-weighted-average';
+            console.log(`[AUTO-ESTIMATE] Materiał ${material.name}: szacunkowa cena ${unitPrice.toFixed(4)}€ (średnia z ${estimatedData.batchCount} partii)`);
+          } else {
+            // Brak partii = cena 0 (nie używamy fallbacku na material.unitPrice)
+            unitPrice = 0;
+            priceSource = 'no-batches';
+            console.log(`[AUTO-ESTIMATE] Materiał ${material.name}: brak partii, cena=0€`);
+          }
+          
+          const materialCost = preciseMultiply(remainingQuantity, unitPrice);
+          
+          // Zapisz szczegóły szacunkowego kosztu
+          estimatedCostDetails[materialId] = {
+            materialName: material.name,
+            quantity: remainingQuantity,
+            unitPrice,
+            cost: materialCost,
+            priceSource,
+            isEstimated: true,
+            batchCount: estimatedData?.batchCount || 0
+          };
+          
+          const shouldIncludeInCosts = task.materialInCosts ? 
+            task.materialInCosts[material.id] !== false : true;
+
+          if (shouldIncludeInCosts) {
+            totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
+          }
+          totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
+          
+          console.log(`[AUTO-ESTIMATE] Materiał ${material.name}: ilość=${remainingQuantity}, koszt=${materialCost.toFixed(4)}€ (SZACUNEK z ${priceSource})`);
+        }
+        return; // Przejdź do następnego materiału
+      }
       
       // Jeśli zostało coś do skonsumowania, oblicz koszt na podstawie średniej ważonej ceny
       if (remainingQuantity > 0) {
@@ -5566,10 +5636,11 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
     const hasConsumedMaterials = task.consumedMaterials && task.consumedMaterials.length > 0;
     const hasReservedMaterials = task.materialBatches && Object.keys(task.materialBatches).length > 0;
     const hasPOReservations = task.poReservationIds && task.poReservationIds.length > 0;
-    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || hasPOReservations || totalProcessingCost > 0;
+    const hasEstimatedCosts = Object.keys(estimatedCostDetails).length > 0; // NOWE: uwzględnij szacunkowe koszty
+    const hasDataForCalculation = hasConsumedMaterials || hasReservedMaterials || hasPOReservations || hasEstimatedCosts || totalProcessingCost > 0;
     
     if (!hasDataForCalculation) {
-      console.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji, rezerwacji PO i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);
+      console.log(`[AUTO] Zadanie ${taskId} nie ma danych do obliczenia kosztów (brak konsumpcji, rezerwacji, rezerwacji PO, szacunkowych kosztów i kosztu procesowego). Pomijam aktualizację aby nie wyzerować istniejących kosztów.`);
       return { 
         success: false, 
         message: 'Brak danych do obliczenia kosztów - zadanie nie ma konsumpcji ani rezerwacji materiałów' 
@@ -5620,7 +5691,9 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
 
     // 6. WYKONAJ AKTUALIZACJĘ W BAZIE DANYCH
     const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
-    await updateDoc(taskRef, {
+    
+    // Przygotuj dane do aktualizacji
+    const updateData = {
       totalMaterialCost: finalTotalMaterialCost,
       unitMaterialCost: finalUnitMaterialCost,
       totalFullProductionCost: finalTotalFullProductionCost,
@@ -5647,7 +5720,18 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
         tolerance: COST_TOLERANCE,
         maxChange: Math.max(...costChanges)
       })
-    });
+    };
+    
+    // NOWE: Dodaj szczegóły szacunkowych kosztów jeśli są
+    if (Object.keys(estimatedCostDetails).length > 0) {
+      updateData.estimatedMaterialCosts = estimatedCostDetails;
+      console.log(`[AUTO] Zapisano szacunkowe koszty dla ${Object.keys(estimatedCostDetails).length} materiałów bez rezerwacji`);
+    } else {
+      // Usuń stare szacunkowe koszty jeśli już nie ma materiałów bez rezerwacji
+      updateData.estimatedMaterialCosts = null;
+    }
+    
+    await updateDoc(taskRef, updateData);
 
     console.log(`[AUTO] Zunifikowana aktualizacja kosztów zadania ${taskId} zakończona pomyślnie:`);
     console.log(`[AUTO] - Nowy koszt materiałów: ${finalTotalMaterialCost.toFixed(4)}€ (${finalUnitMaterialCost.toFixed(4)}€/${task.unit || 'szt'})`);

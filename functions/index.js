@@ -504,19 +504,28 @@ exports.onBatchPriceUpdate = onDocumentWritten(
           }
 
           // Aktualizuj zadanie
-          updatePromises.push(
-              taskRef.update({
-                totalMaterialCost: newCosts.totalMaterialCost,
-                totalFullProductionCost: newCosts.totalFullProductionCost,
-                unitMaterialCost,
-                unitFullProductionCost,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedBy: "system",
-                lastCostUpdateReason: "Batch price update via Cloud Function",
-                costLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                costLastUpdatedBy: "system",
-              }),
-          );
+          const updateData = {
+            totalMaterialCost: newCosts.totalMaterialCost,
+            totalFullProductionCost: newCosts.totalFullProductionCost,
+            unitMaterialCost,
+            unitFullProductionCost,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: "system",
+            lastCostUpdateReason: "Batch price update via Cloud Function",
+            costLastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            costLastUpdatedBy: "system",
+          };
+
+          // NOWE: Dodaj szczegóły szacunkowych kosztów jeśli są
+          if (newCosts.estimatedCostDetails) {
+            updateData.estimatedMaterialCosts = newCosts.estimatedCostDetails;
+            logger.info(`Task ${taskData.moNumber || taskId}: saving estimated costs for ${Object.keys(newCosts.estimatedCostDetails).length} materials`);
+          } else {
+            // Usuń stare szacunkowe koszty
+            updateData.estimatedMaterialCosts = admin.firestore.FieldValue.delete();
+          }
+
+          updatePromises.push(taskRef.update(updateData));
 
           updatedTaskIds.push({
             taskId,
@@ -861,12 +870,98 @@ function hasCostChanged(oldCosts, newCosts, tolerance = 0.005) {
 }
 
 /**
+ * Oblicza średnią ważoną cenę ze wszystkich partii dla danych materiałów
+ * Używa initialQuantity jako wagi (reprezentuje pełną wartość zakupową)
+ * Uwzględnia zarówno aktywne jak i wyczerpane partie
+ *
+ * @param {FirebaseFirestore.Firestore} db - Firestore instance
+ * @param {Array<string>} materialIds - Lista ID materiałów
+ * @return {Promise<Object>} - Mapa materialId -> {averagePrice, batchCount, priceSource}
+ */
+async function calculateEstimatedPricesFromBatches(db, materialIds) {
+  const result = {};
+
+  if (!materialIds || materialIds.length === 0) return result;
+
+  // Firebase 'in' obsługuje maks 10 elementów na zapytanie
+  const batchSize = 10;
+  const batchesByMaterial = {};
+
+  // Podziel materialIds na batche po 10
+  for (let i = 0; i < materialIds.length; i += batchSize) {
+    const batch = materialIds.slice(i, i + batchSize);
+
+    try {
+      const batchesSnapshot = await db.collection("inventoryBatches")
+          .where("itemId", "in", batch)
+          .get();
+
+      batchesSnapshot.docs.forEach((doc) => {
+        const batchData = doc.data();
+        const materialId = batchData.itemId;
+        if (!batchesByMaterial[materialId]) {
+          batchesByMaterial[materialId] = [];
+        }
+        batchesByMaterial[materialId].push(batchData);
+      });
+    } catch (error) {
+      logger.warn(`Error fetching batches for materials ${batch.join(", ")}`, {
+        error: error.message,
+      });
+    }
+  }
+
+  // Oblicz średnią ważoną dla każdego materiału
+  for (const materialId of materialIds) {
+    const batches = batchesByMaterial[materialId] || [];
+
+    let weightedPriceSum = 0;
+    let totalQuantity = 0;
+    let batchCount = 0;
+
+    batches.forEach((batch) => {
+      const unitPrice = parseFloat(batch.unitPrice) || 0;
+      const weight = parseFloat(batch.initialQuantity) ||
+        parseFloat(batch.quantity) || 0;
+
+      if (unitPrice > 0 && weight > 0) {
+        weightedPriceSum += unitPrice * weight;
+        totalQuantity += weight;
+        batchCount++;
+      }
+    });
+
+    if (totalQuantity > 0) {
+      result[materialId] = {
+        averagePrice: weightedPriceSum / totalQuantity,
+        totalQuantity,
+        batchCount,
+        priceSource: "batch-weighted-average",
+      };
+    } else {
+      result[materialId] = {
+        averagePrice: 0,
+        totalQuantity: 0,
+        batchCount: 0,
+        priceSource: batches.length > 0 ? "no-priced-batches" : "no-batches",
+      };
+    }
+  }
+
+  const materialsWithPrices = Object.values(result)
+      .filter((r) => r.averagePrice > 0).length;
+  logger.info(`Calculated estimated prices for ${materialsWithPrices}/${materialIds.length} materials`);
+
+  return result;
+}
+
+/**
  * Kompleksowa kalkulacja kosztów zadania produkcyjnego
  * Uwzględnia: consumed materials, reserved batches, PO reservations,
- * processing cost
+ * processing cost, oraz SZACUNKOWE KOSZTY dla materiałów bez rezerwacji
  * @param {FirebaseFirestore.Firestore} db - Firestore instance
  * @param {Object} taskData - Dane zadania
- * @return {Promise<Object>} - {totalMaterialCost, totalFullProductionCost}
+ * @return {Promise<Object>} - {totalMaterialCost, totalFullProductionCost, estimatedCostDetails}
  */
 async function calculateTaskCosts(db, taskData) {
   const materials = taskData.materials || [];
@@ -1050,8 +1145,44 @@ async function calculateTaskCosts(db, taskData) {
   }
 
   // ============================================================
-  // KROK 4: KOSZTY ZAREZERWOWANYCH MATERIAŁÓW
-  // (z uwzględnieniem już skonsumowanych)
+  // KROK 4: IDENTYFIKACJA MATERIAŁÓW BEZ REZERWACJI
+  // ============================================================
+  const materialIdsWithoutReservations = [];
+  for (const material of materials) {
+    const materialId = material.inventoryItemId || material.id;
+    const reservedBatches = materialBatches[materialId] || [];
+    const poReservationsForMaterial =
+      poReservationsByMaterial[materialId] || [];
+    const hasConsumption = consumedMaterials.some(
+        (c) => c.materialId === materialId,
+    );
+
+    if (reservedBatches.length === 0 &&
+        poReservationsForMaterial.length === 0 &&
+        !hasConsumption &&
+        materialId) {
+      materialIdsWithoutReservations.push(materialId);
+    }
+  }
+
+  // Pobierz szacunkowe ceny z partii dla materiałów bez rezerwacji
+  let estimatedPricesMap = {};
+  if (materialIdsWithoutReservations.length > 0) {
+    try {
+      estimatedPricesMap = await calculateEstimatedPricesFromBatches(
+          db, materialIdsWithoutReservations,
+      );
+      logger.info(`Fetched estimated prices for ${Object.keys(estimatedPricesMap).length} materials without reservations`);
+    } catch (error) {
+      logger.warn("Error fetching estimated prices", {error: error.message});
+    }
+  }
+
+  // Obiekt do przechowywania szczegółów szacunkowych kosztów
+  const estimatedCostDetails = {};
+
+  // ============================================================
+  // KROK 5: KOSZTY ZAREZERWOWANYCH I SZACUNKOWYCH MATERIAŁÓW
   // ============================================================
   for (const material of materials) {
     const materialId = material.inventoryItemId || material.id;
@@ -1059,11 +1190,8 @@ async function calculateTaskCosts(db, taskData) {
     const poReservationsForMaterial =
       poReservationsByMaterial[materialId] || [];
 
-    // Pomiń jeśli brak rezerwacji
-    if (reservedBatches.length === 0 &&
-        poReservationsForMaterial.length === 0) {
-      continue;
-    }
+    const hasStandardReservations = reservedBatches.length > 0;
+    const hasPOReservations = poReservationsForMaterial.length > 0;
 
     // Oblicz ile już skonsumowano
     const consumedQuantity = consumedMaterials
@@ -1078,6 +1206,50 @@ async function calculateTaskCosts(db, taskData) {
 
     // Pozostała ilość do skonsumowania
     const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
+
+    // ZMIANA: Dla materiałów bez rezerwacji oblicz szacunkowy koszt
+    if (!hasStandardReservations && !hasPOReservations) {
+      if (remainingQuantity > 0) {
+        const estimatedData = estimatedPricesMap[materialId];
+        let unitPrice = 0;
+        let priceSource = "fallback";
+
+        if (estimatedData && estimatedData.averagePrice > 0) {
+          unitPrice = estimatedData.averagePrice;
+          priceSource = "batch-weighted-average";
+          logger.info(`Material ${material.name} (ESTIMATED): price ${unitPrice.toFixed(4)}€ from ${estimatedData.batchCount} batches`);
+        } else {
+          // Brak partii = cena 0 (nie używamy fallbacku na material.unitPrice)
+          unitPrice = 0;
+          priceSource = "no-batches";
+          logger.info(`Material ${material.name}: no batches, price=0€`);
+        }
+
+        const materialCost = preciseMultiply(remainingQuantity, unitPrice);
+
+        // Zapisz szczegóły szacunkowego kosztu
+        estimatedCostDetails[materialId] = {
+          materialName: material.name,
+          quantity: remainingQuantity,
+          unitPrice,
+          cost: materialCost,
+          priceSource,
+          isEstimated: true,
+          batchCount: estimatedData?.batchCount || 0,
+        };
+
+        const includeInCosts = taskData.materialInCosts ?
+          taskData.materialInCosts[material.id] !== false : true;
+
+        if (includeInCosts) {
+          totalMaterialCost = preciseAdd(totalMaterialCost, materialCost);
+        }
+        totalFullProductionCost = preciseAdd(totalFullProductionCost, materialCost);
+
+        logger.info(`  ESTIMATED cost: ${materialCost.toFixed(4)}€ (${priceSource})`);
+      }
+      continue; // Przejdź do następnego materiału
+    }
 
     if (remainingQuantity <= 0) {
       logger.info(`Material ${material.name}: fully consumed, skipping`);
@@ -1160,7 +1332,7 @@ async function calculateTaskCosts(db, taskData) {
   }
 
   // ============================================================
-  // KROK 5: KOSZT PROCESOWY
+  // KROK 6: KOSZT PROCESOWY
   // ============================================================
   const processingCostPerUnit =
     parseFloat(taskData.processingCostPerUnit) || 0;
@@ -1189,18 +1361,23 @@ async function calculateTaskCosts(db, taskData) {
   const finalTotalFullProductionCost =
     parseFloat(totalFullProductionCost.toFixed(4));
 
+  const hasEstimatedCosts = Object.keys(estimatedCostDetails).length > 0;
+
   logger.info("Task costs calculated", {
     totalMaterialCost: finalTotalMaterialCost,
     totalFullProductionCost: finalTotalFullProductionCost,
     unitMaterialCost: (finalTotalMaterialCost / taskQuantity).toFixed(4),
     unitFullProductionCost:
       (finalTotalFullProductionCost / taskQuantity).toFixed(4),
+    estimatedMaterialsCount: Object.keys(estimatedCostDetails).length,
   });
 
   return {
     totalMaterialCost: finalTotalMaterialCost,
     totalFullProductionCost: finalTotalFullProductionCost,
-    taskQuantity: taskQuantity, // Dodane dla sprawdzania tolerancji
+    taskQuantity: taskQuantity,
+    // Szczegóły szacunkowych kosztów dla materiałów bez rezerwacji
+    estimatedCostDetails: hasEstimatedCosts ? estimatedCostDetails : null,
   };
 }
 
