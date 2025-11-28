@@ -215,6 +215,12 @@ const UnreadCommentsBadge = styled(Badge)(({ theme }) => ({
   },
 }));
 
+// 🔧 Normalizuje ilość do 3 miejsc po przecinku - zapewnia spójność precyzji w całym systemie
+const normalizeQuantity = (value) => {
+  const num = Number(value) || 0;
+  return Math.round(num * 1000) / 1000;
+};
+
 const TaskDetailsPage = () => {
   const { t, currentLanguage } = useTranslation('taskDetails');
   const { id } = useParams();
@@ -6233,7 +6239,8 @@ const TaskDetailsPage = () => {
     
     setConsumeQuantities(prev => ({
       ...prev,
-      [batchKey]: isNaN(numericValue) ? 0 : numericValue
+      // ✅ PRECYZJA: Normalizuj do 3 miejsc po przecinku przy każdej zmianie
+      [batchKey]: isNaN(numericValue) ? 0 : normalizeQuantity(numericValue)
     }));
     
     // Wyczyść błędy dla tej partii
@@ -6268,7 +6275,8 @@ const TaskDetailsPage = () => {
             errors[batchKey] = 'Podaj ilość do konsumpcji';
             isValid = false;
           } else {
-            const numericQuantity = Number(quantity);
+            // ✅ PRECYZJA: Normalizuj wartość wpisaną przez użytkownika
+            const numericQuantity = normalizeQuantity(quantity);
             
             if (isNaN(numericQuantity)) {
               errors[batchKey] = 'Wartość musi być liczbą';
@@ -6281,9 +6289,14 @@ const TaskDetailsPage = () => {
               const reservedBatches = task.materialBatches[materialId] || [];
               const batch = reservedBatches.find(b => b.batchId === batchId);
               
-              if (batch && numericQuantity > batch.quantity) {
-                errors[batchKey] = `Nie można skonsumować więcej niż zarezerwowano (${batch.quantity})`;
-                isValid = false;
+              if (batch) {
+                // ✅ PRECYZJA: Normalizuj rezerwację do tej samej precyzji przed porównaniem
+                const reservedQuantity = normalizeQuantity(batch.quantity);
+                
+                if (numericQuantity > reservedQuantity) {
+                  errors[batchKey] = `Nie można skonsumować więcej niż zarezerwowano (${reservedQuantity})`;
+                  isValid = false;
+                }
               }
             }
           }
@@ -6310,7 +6323,8 @@ const TaskDetailsPage = () => {
         Object.entries(batches).forEach(([batchId, isSelected]) => {
           if (isSelected) {
             const batchKey = `${materialId}_${batchId}`;
-            const quantity = consumeQuantities[batchKey] || 0;
+            // ✅ PRECYZJA: Normalizuj ilość konsumpcji do 3 miejsc po przecinku
+            const quantity = normalizeQuantity(consumeQuantities[batchKey] || 0);
             
             if (quantity > 0) {
               if (!consumptionData[materialId]) {
@@ -6319,7 +6333,7 @@ const TaskDetailsPage = () => {
               
               consumptionData[materialId].push({
                 batchId,
-                quantity,
+                quantity, // Już znormalizowana wartość
                 timestamp: new Date().toISOString(),
                 userId: currentUser.uid
               });
@@ -6335,7 +6349,8 @@ const TaskDetailsPage = () => {
       for (const [materialId, batches] of Object.entries(consumptionData)) {
         for (const batchData of batches) {
           try {
-              const consumeQuantity = Number(batchData.quantity) || 0;
+            // ✅ PRECYZJA: Wartość już znormalizowana w consumptionData
+            const consumeQuantity = batchData.quantity;
             
             // 🔒 ATOMOWA TRANSAKCJA - zapobiega race condition
             await runTransaction(db, async (transaction) => {
@@ -6347,9 +6362,10 @@ const TaskDetailsPage = () => {
               }
               
               const batchDataFromDb = batchDoc.data();
-              const currentQuantity = Number(batchDataFromDb.quantity) || 0;
+              // ✅ PRECYZJA: Normalizuj ilość z bazy do tej samej precyzji (3 miejsca po przecinku)
+              const currentQuantity = normalizeQuantity(batchDataFromDb.quantity);
               
-              // ✅ WALIDACJA: Sprawdź czy wystarczająca ilość
+              // ✅ WALIDACJA: Sprawdź czy wystarczająca ilość (precyzyjne porównanie)
               if (currentQuantity < consumeQuantity) {
                 throw new Error(
                   `Niewystarczająca ilość w partii ${batchDataFromDb.batchNumber || batchData.batchId}. ` +
@@ -6357,7 +6373,8 @@ const TaskDetailsPage = () => {
                 );
               }
               
-              const newQuantity = Math.max(0, currentQuantity - consumeQuantity);
+              // ✅ PRECYZJA: Normalizuj wynik odejmowania
+              const newQuantity = normalizeQuantity(Math.max(0, currentQuantity - consumeQuantity));
               
               // 📊 AUDIT LOG - szczegółowe logowanie
               console.log('🔒 [ATOMOWA KONSUMPCJA]', {
@@ -6422,8 +6439,9 @@ const TaskDetailsPage = () => {
                   }
                   
                   const batchDataFromDb = batchDoc.data();
-                  const currentQuantity = Number(batchDataFromDb.quantity) || 0;
-                  const consumeQuantity = Number(batchData.quantity) || 0;
+                  // ✅ PRECYZJA: Normalizuj wartości przy retry
+                  const currentQuantity = normalizeQuantity(batchDataFromDb.quantity);
+                  const consumeQuantity = batchData.quantity; // Już znormalizowana w consumptionData
                   
                   if (currentQuantity < consumeQuantity) {
                     throw new Error(
@@ -6431,7 +6449,7 @@ const TaskDetailsPage = () => {
                     );
                   }
                   
-                  const newQuantity = Math.max(0, currentQuantity - consumeQuantity);
+                  const newQuantity = normalizeQuantity(Math.max(0, currentQuantity - consumeQuantity));
                   
                   transaction.update(batchRef, {
                     quantity: newQuantity,
@@ -6458,6 +6476,11 @@ const TaskDetailsPage = () => {
                   });
                 });
                 console.log(`✅ Retry konsumpcji zakończony pomyślnie dla partii ${batchData.batchId}`);
+                // ✅ Usuń błąd z listy jeśli retry się powiódł
+                const errorIndex = consumptionErrors.findIndex(e => e.batchId === batchData.batchId);
+                if (errorIndex > -1) {
+                  consumptionErrors.splice(errorIndex, 1);
+                }
               } catch (retryError) {
                 console.error(`❌ Retry konsumpcji nie powiódł się dla partii ${batchData.batchId}:`, retryError);
                 showError(`Nie udało się skonsumować partii ${batchData.batchId}: ${retryError.message}`);
@@ -6469,10 +6492,13 @@ const TaskDetailsPage = () => {
         }
       }
       
-      // Pokaż podsumowanie błędów jeśli wystąpiły
+      // ⚡ KLUCZOWE: Jeśli wystąpiły błędy konsumpcji, PRZERWIJ dalsze wykonanie
+      // Zapobiega niespójności danych (rezerwacja usunięta, ale stan magazynowy nie zmieniony)
       if (consumptionErrors.length > 0) {
         console.error('❌ Błędy konsumpcji:', consumptionErrors);
-        showError(`Wystąpiły błędy podczas konsumpcji ${consumptionErrors.length} partii. Sprawdź logi.`);
+        showError(`Wystąpiły błędy podczas konsumpcji ${consumptionErrors.length} partii. Operacja przerwana - sprawdź dostępność materiałów.`);
+        setConsumingMaterials(false);
+        return; // ⚡ PRZERWIJ - nie aktualizuj rezerwacji ani consumedMaterials!
       }
 
       // ✅ POPRAWKA: Aktualizuj rezerwacje atomowo - zmniejsz ilość zarezerwowaną o ilość skonsumowaną
@@ -6497,7 +6523,8 @@ const TaskDetailsPage = () => {
               
               if (!reservationSnapshot.empty) {
                 const reservationDoc = reservationSnapshot.docs[0];
-                const consumeQuantity = Number(batchData.quantity) || 0;
+                // ✅ PRECYZJA: Wartość już znormalizowana w consumptionData
+                const consumeQuantity = batchData.quantity;
                 
                 // 🔒 ATOMOWA aktualizacja rezerwacji i bookedQuantity
                 await runTransaction(db, async (transaction) => {
@@ -6514,27 +6541,28 @@ const TaskDetailsPage = () => {
                   }
                   
                   const reservation = freshReservationDoc.data();
-              const currentReservedQuantity = Number(reservation.quantity) || 0;
-              const newReservedQuantity = Math.max(0, currentReservedQuantity - consumeQuantity);
+                  // ✅ PRECYZJA: Normalizuj wartości z bazy
+                  const currentReservedQuantity = normalizeQuantity(reservation.quantity);
+                  const newReservedQuantity = normalizeQuantity(Math.max(0, currentReservedQuantity - consumeQuantity));
               
                   console.log('🔒 [ATOMOWA AKTUALIZACJA REZERWACJI]', {
-                reservationId: reservationDoc.id,
-                materialId,
-                batchId: batchData.batchId,
-                currentReservedQuantity,
-                consumeQuantity,
-                newReservedQuantity
-              });
+                    reservationId: reservationDoc.id,
+                    materialId,
+                    batchId: batchData.batchId,
+                    currentReservedQuantity,
+                    consumeQuantity,
+                    newReservedQuantity
+                  });
               
-              // ✅ Teraz wykonujemy wszystkie zapisy po odczytach
-              if (newReservedQuantity > 0) {
+                  // ✅ Teraz wykonujemy wszystkie zapisy po odczytach
+                  if (newReservedQuantity > 0) {
                     // Aktualizuj ilość rezerwacji
                     transaction.update(reservationRef, {
                       quantity: newReservedQuantity,
                       updatedAt: serverTimestamp(),
                       updatedBy: currentUser.uid
                     });
-              } else {
+                  } else {
                     // Usuń rezerwację jeśli ilość spadła do 0
                     transaction.delete(reservationRef);
                     console.log(`Usunięto rezerwację ${reservationDoc.id} (ilość spadła do 0)`);
@@ -6543,8 +6571,9 @@ const TaskDetailsPage = () => {
                   // 🔧 KLUCZOWE: Aktualizuj bookedQuantity w pozycji magazynowej
                   if (inventoryDoc.exists()) {
                     const inventoryData = inventoryDoc.data();
-                    const currentBookedQuantity = Number(inventoryData.bookedQuantity) || 0;
-                    const newBookedQuantity = Math.max(0, currentBookedQuantity - consumeQuantity);
+                    // ✅ PRECYZJA: Normalizuj wartości z bazy
+                    const currentBookedQuantity = normalizeQuantity(inventoryData.bookedQuantity);
+                    const newBookedQuantity = normalizeQuantity(Math.max(0, currentBookedQuantity - consumeQuantity));
                     
                     transaction.update(inventoryRef, {
                       bookedQuantity: newBookedQuantity,
@@ -6582,9 +6611,10 @@ const TaskDetailsPage = () => {
             );
             
             if (batchIndex >= 0) {
-              const currentReservedQuantity = Number(updatedMaterialBatches[materialId][batchIndex].quantity) || 0;
-              const consumeQuantity = Number(batchData.quantity) || 0;
-              const newReservedQuantity = Math.max(0, currentReservedQuantity - consumeQuantity);
+              // ✅ PRECYZJA: Normalizuj wszystkie wartości do 3 miejsc po przecinku
+              const currentReservedQuantity = normalizeQuantity(updatedMaterialBatches[materialId][batchIndex].quantity);
+              const consumeQuantity = batchData.quantity; // Już znormalizowana w consumptionData
+              const newReservedQuantity = normalizeQuantity(Math.max(0, currentReservedQuantity - consumeQuantity));
               
               if (newReservedQuantity > 0) {
                 // Zaktualizuj ilość zarezerwowaną
