@@ -217,11 +217,53 @@ const ReinvoicesList = () => {
     results.sort((a, b) => {
       let aValue, bValue;
       
+      // Specjalne sortowanie dla numerów faktur
+      // Format: PREFIX/numer/MM/RRRR (np. FS/1/01/2025, FPF/10/02/2025)
+      if (orderBy === 'number') {
+        const parseInvoiceNumber = (num) => {
+          if (!num) return { year: 0, month: 0, seq: 0 };
+          const parts = num.toString().split('/');
+          // Format: PREFIX/seq/MM/YYYY
+          if (parts.length >= 4) {
+            return {
+              year: parseInt(parts[3], 10) || 0,
+              month: parseInt(parts[2], 10) || 0,
+              seq: parseInt(parts[1], 10) || 0
+            };
+          }
+          // Format: PREFIX/seq/MM (bez roku) lub inne
+          if (parts.length >= 3) {
+            return {
+              year: 0,
+              month: parseInt(parts[2], 10) || 0,
+              seq: parseInt(parts[1], 10) || 0
+            };
+          }
+          // Fallback - wyciągnij pierwszą liczbę
+          const match = num.match(/(\d+)/);
+          return { year: 0, month: 0, seq: match ? parseInt(match[1], 10) : 0 };
+        };
+        
+        const aParsed = parseInvoiceNumber(a.number);
+        const bParsed = parseInvoiceNumber(b.number);
+        
+        // Sortuj: rok -> miesiąc -> numer kolejny
+        if (aParsed.year !== bParsed.year) {
+          return order === 'asc' 
+            ? aParsed.year - bParsed.year 
+            : bParsed.year - aParsed.year;
+        }
+        if (aParsed.month !== bParsed.month) {
+          return order === 'asc' 
+            ? aParsed.month - bParsed.month 
+            : bParsed.month - aParsed.month;
+        }
+        return order === 'asc' 
+          ? aParsed.seq - bParsed.seq 
+          : bParsed.seq - aParsed.seq;
+      }
+      
       switch (orderBy) {
-        case 'number':
-          aValue = a.number || '';
-          bValue = b.number || '';
-          break;
         case 'customer':
           aValue = a.customer?.name || '';
           bValue = b.customer?.name || '';

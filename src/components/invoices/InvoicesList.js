@@ -272,8 +272,54 @@ const InvoicesList = () => {
           bValue = parseFloat(bValue) || 0;
         }
 
-        // Obsługa stringów (number, status, orderNumber)
-        if (tableSort.field === 'number' || tableSort.field === 'status' || tableSort.field === 'orderNumber') {
+        // Obsługa numeru faktury - naturalne sortowanie
+        // Format: PREFIX/numer/MM/RRRR (np. FS/1/01/2025, FPF/10/02/2025)
+        if (tableSort.field === 'number') {
+          const parseInvoiceNumber = (num) => {
+            if (!num) return { year: 0, month: 0, seq: 0 };
+            const parts = num.toString().split('/');
+            // Format: PREFIX/seq/MM/YYYY
+            if (parts.length >= 4) {
+              return {
+                year: parseInt(parts[3], 10) || 0,
+                month: parseInt(parts[2], 10) || 0,
+                seq: parseInt(parts[1], 10) || 0
+              };
+            }
+            // Format: PREFIX/seq/MM (bez roku) lub inne
+            if (parts.length >= 3) {
+              return {
+                year: 0,
+                month: parseInt(parts[2], 10) || 0,
+                seq: parseInt(parts[1], 10) || 0
+              };
+            }
+            // Fallback - wyciągnij pierwszą liczbę
+            const match = num.match(/(\d+)/);
+            return { year: 0, month: 0, seq: match ? parseInt(match[1], 10) : 0 };
+          };
+          
+          const aParsed = parseInvoiceNumber(aValue);
+          const bParsed = parseInvoiceNumber(bValue);
+          
+          // Sortuj: rok -> miesiąc -> numer kolejny
+          if (aParsed.year !== bParsed.year) {
+            return tableSort.order === 'asc' 
+              ? aParsed.year - bParsed.year 
+              : bParsed.year - aParsed.year;
+          }
+          if (aParsed.month !== bParsed.month) {
+            return tableSort.order === 'asc' 
+              ? aParsed.month - bParsed.month 
+              : bParsed.month - aParsed.month;
+          }
+          return tableSort.order === 'asc' 
+            ? aParsed.seq - bParsed.seq 
+            : bParsed.seq - aParsed.seq;
+        }
+
+        // Obsługa stringów (status, orderNumber)
+        if (tableSort.field === 'status' || tableSort.field === 'orderNumber') {
           aValue = (aValue || '').toString().toLowerCase();
           bValue = (bValue || '').toString().toLowerCase();
         }
