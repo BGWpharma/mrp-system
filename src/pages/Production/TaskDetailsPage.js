@@ -5310,6 +5310,7 @@ const TaskDetailsPage = () => {
 
         // NOWE: Dynamicznie pobierz szacunkowe ceny dla materiałów bez rezerwacji
         // (gdy nie ma ich jeszcze w task.estimatedMaterialCosts)
+        // POPRAWKA: Pomijaj materiały z konsumpcjami - dla nich nie liczymy szacunkowych kosztów
         const materialIdsWithoutReservationsOrEstimates = materials
           .filter(material => {
             const materialId = material.inventoryItemId || material.id;
@@ -5318,9 +5319,11 @@ const TaskDetailsPage = () => {
             const hasStandardReservations = reservedBatches && reservedBatches.length > 0;
             const hasPOReservations = poReservationsForMaterial.length > 0;
             const hasEstimatedData = task?.estimatedMaterialCosts?.[materialId];
+            // POPRAWKA: Sprawdź czy materiał ma konsumpcje
+            const hasConsumption = currentConsumedMaterials.some(c => c.materialId === materialId);
             
-            // Materiał bez rezerwacji i bez zapisanych danych szacunkowych
-            return !hasStandardReservations && !hasPOReservations && !hasEstimatedData;
+            // Materiał bez rezerwacji, bez konsumpcji i bez zapisanych danych szacunkowych
+            return !hasStandardReservations && !hasPOReservations && !hasConsumption && !hasEstimatedData;
           })
           .map(m => m.inventoryItemId || m.id)
           .filter(Boolean);
@@ -5359,7 +5362,18 @@ const TaskDetailsPage = () => {
           const remainingQuantity = Math.max(0, preciseSubtract(requiredQuantity, consumedQuantity));
           
           // NOWE: Dla materiałów bez rezerwacji użyj szacunkowej ceny
+          // POPRAWKA: Pomijaj materiały z konsumpcjami - dla nich nie liczymy szacunkowych kosztów
+          // (zsynchronizowane z logiką Cloud Functions)
           if (!hasStandardReservations && !hasPOReservations) {
+            // Sprawdź czy materiał ma konsumpcje - jeśli tak, pomiń szacowanie kosztów
+            const hasConsumption = consumedQuantity > 0;
+            
+            if (hasConsumption) {
+              // Materiał ma konsumpcje - nie liczymy szacunkowych kosztów dla pozostałej ilości
+              console.log(`[UI-COSTS] Materiał ${material.name}: ma konsumpcje (${consumedQuantity}), pomijam szacunek dla pozostałej ilości (${remainingQuantity})`);
+              return;
+            }
+            
             if (remainingQuantity > 0) {
               // Sprawdź czy mamy szacunkową cenę z bazy lub dynamicznie pobraną
               const estimatedData = task?.estimatedMaterialCosts?.[materialId] || dynamicEstimatedPrices[materialId];

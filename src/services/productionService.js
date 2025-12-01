@@ -5491,7 +5491,18 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       console.log(`[AUTO-DEBUG] Materiał ${material.name}: consumedQuantity=${consumedQuantity}, remainingQuantity=${remainingQuantity}`);
       
       // ZMIANA: Dla materiałów bez rezerwacji oblicz szacunkowy koszt na podstawie partii
+      // POPRAWKA: Pomijaj materiały z konsumpcjami - dla nich nie liczymy szacunkowych kosztów
+      // (zsynchronizowane z logiką Cloud Functions)
       if (!hasStandardReservations && !hasPOReservations) {
+        // Sprawdź czy materiał ma konsumpcje - jeśli tak, pomiń szacowanie kosztów
+        const hasConsumption = consumedQuantity > 0;
+        
+        if (hasConsumption) {
+          // Materiał ma konsumpcje - nie liczymy szacunkowych kosztów dla pozostałej ilości
+          console.log(`[AUTO] Materiał ${material.name}: ma konsumpcje (${consumedQuantity}), pomijam szacunek dla pozostałej ilości (${remainingQuantity})`);
+          return; // Przejdź do następnego materiału
+        }
+        
         if (remainingQuantity > 0) {
           const estimatedData = estimatedPricesMap[materialId];
           let unitPrice = 0;

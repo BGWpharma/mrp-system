@@ -22,6 +22,51 @@ const INVOICES_COLLECTION = 'invoices';
 const INVOICE_ITEMS_COLLECTION = 'invoiceItems';
 
 /**
+ * Sprawdza czy obiekt jest specjalnym obiektem Firestore (FieldValue, serverTimestamp itp.)
+ */
+const isFirestoreFieldValue = (value) => {
+  if (!value || typeof value !== 'object') return false;
+  // FieldValue objects (jak serverTimestamp()) mają _methodName
+  if (value._methodName !== undefined) return true;
+  // Sprawdź też po nazwie konstruktora
+  const constructorName = value.constructor?.name || '';
+  if (constructorName.includes('FieldValue') || constructorName.includes('Sentinel')) return true;
+  return false;
+};
+
+/**
+ * Funkcja pomocnicza do usuwania wartości undefined z obiektu
+ * Firestore nie akceptuje undefined - muszą być zamienione na null lub usunięte
+ */
+const removeUndefinedValues = (obj) => {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefinedValues(item));
+  }
+  
+  const cleaned = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) {
+      // Zamień undefined na null (lub pomiń - tutaj zamieniamy na null dla zachowania struktury)
+      cleaned[key] = null;
+    } else if (
+      value !== null && 
+      typeof value === 'object' && 
+      !(value instanceof Timestamp) && 
+      !(value instanceof Date) &&
+      !isFirestoreFieldValue(value)  // Nie przetwarzaj FieldValue (serverTimestamp itp.)
+    ) {
+      // Rekurencyjnie czyść zagnieżdżone obiekty (ale nie Timestamp, Date ani FieldValue)
+      cleaned[key] = removeUndefinedValues(value);
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
+};
+
+/**
  * Pobiera wszystkie faktury
  * Możliwość filtrowania po statusie, kliencie, dacie
  */
@@ -89,11 +134,11 @@ export const getAllInvoices = async (filters = null) => {
       invoices.push({
         id: doc.id,
         ...data,
-        issueDate: data.issueDate?.toDate(),
-        dueDate: data.dueDate?.toDate(),
-        paymentDate: data.paymentDate?.toDate(),
-        createdAt: data.createdAt?.toDate(),
-        updatedAt: data.updatedAt?.toDate()
+        issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
+        dueDate: data.dueDate && typeof data.dueDate.toDate === 'function' ? data.dueDate.toDate() : data.dueDate,
+        paymentDate: data.paymentDate && typeof data.paymentDate.toDate === 'function' ? data.paymentDate.toDate() : data.paymentDate,
+        createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+        updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
       });
     });
     
@@ -119,11 +164,11 @@ export const getInvoiceById = async (invoiceId) => {
     return {
       id: invoiceDoc.id,
       ...data,
-      issueDate: data.issueDate?.toDate(),
-      dueDate: data.dueDate?.toDate(),
-      paymentDate: data.paymentDate?.toDate(),
-      createdAt: data.createdAt?.toDate(),
-      updatedAt: data.updatedAt?.toDate()
+      issueDate: data.issueDate && typeof data.issueDate.toDate === 'function' ? data.issueDate.toDate() : data.issueDate,
+      dueDate: data.dueDate && typeof data.dueDate.toDate === 'function' ? data.dueDate.toDate() : data.dueDate,
+      paymentDate: data.paymentDate && typeof data.paymentDate.toDate === 'function' ? data.paymentDate.toDate() : data.paymentDate,
+      createdAt: data.createdAt && typeof data.createdAt.toDate === 'function' ? data.createdAt.toDate() : data.createdAt,
+      updatedAt: data.updatedAt && typeof data.updatedAt.toDate === 'function' ? data.updatedAt.toDate() : data.updatedAt
     };
   } catch (error) {
     console.error('Błąd podczas pobierania faktury:', error);
@@ -249,7 +294,10 @@ export const createInvoice = async (invoiceData, userId) => {
         Timestamp.fromDate(new Date()) : null
     };
     
-    const docRef = await addDoc(collection(db, INVOICES_COLLECTION), newInvoice);
+    // Usuń wartości undefined - Firestore nie akceptuje undefined
+    const sanitizedInvoice = removeUndefinedValues(newInvoice);
+    
+    const docRef = await addDoc(collection(db, INVOICES_COLLECTION), sanitizedInvoice);
     const newInvoiceId = docRef.id;
     
     // Jeśli faktura wykorzystuje proformy jako zaliczki, zaktualizuj proformy
@@ -585,7 +633,10 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
         Timestamp.fromDate(new Date(invoiceData.paymentDate)) : null
     };
     
-    await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), updatedInvoice);
+    // Usuń wartości undefined - Firestore nie akceptuje undefined
+    const sanitizedInvoice = removeUndefinedValues(updatedInvoice);
+    
+    await updateDoc(doc(db, INVOICES_COLLECTION, invoiceId), sanitizedInvoice);
     
     // Jeśli faktura jest już wystawiona (status 'issued' lub wyżej), regeneruj PDF z nowymi danymi
     if (invoiceData.status && ['issued', 'paid', 'partially_paid', 'overdue'].includes(invoiceData.status)) {
@@ -1584,6 +1635,8 @@ export const removeProformaUsage = async (proformaId, usedAmount, targetInvoiceI
 
 /**
  * Pobiera dostępną kwotę do rozliczenia z proformy
+ * UWAGA: Wykorzystana kwota jest obliczana dynamicznie na podstawie proformAllocation w fakturach,
+ * a nie z pola usedAsAdvancePayment w proformie, które może być niezsynchronizowane.
  */
 export const getAvailableProformaAmount = async (proformaId) => {
   try {
@@ -1601,7 +1654,41 @@ export const getAvailableProformaAmount = async (proformaId) => {
     
     const total = parseFloat(proformaData.total || 0);
     const paid = parseFloat(proformaData.totalPaid || 0);
-    const used = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    
+    // POPRAWKA: Oblicz wykorzystaną kwotę dynamicznie na podstawie proformAllocation w fakturach
+    // zamiast polegać na zdenormalizowanym polu usedAsAdvancePayment, które może być niezsynchronizowane
+    let used = 0;
+    try {
+      const invoicesQuery = query(
+        collection(db, INVOICES_COLLECTION),
+        where('isProforma', '==', false)
+      );
+      const querySnapshot = await getDocs(invoicesQuery);
+      
+      querySnapshot.forEach((docSnap) => {
+        const invoiceData = docSnap.data();
+        
+        // Sprawdź proformAllocation (nowy system)
+        if (invoiceData.proformAllocation && Array.isArray(invoiceData.proformAllocation)) {
+          const allocation = invoiceData.proformAllocation.find(
+            alloc => alloc.proformaId === proformaId
+          );
+          if (allocation && allocation.amount > 0) {
+            used += parseFloat(allocation.amount);
+          }
+        }
+        // COMPATIBILITY: Sprawdź też stary system selectedProformaId
+        else if (invoiceData.selectedProformaId === proformaId && invoiceData.settledAdvancePayments > 0) {
+          used += parseFloat(invoiceData.settledAdvancePayments);
+        }
+      });
+      
+      console.log(`[getAvailableProformaAmount] Proforma ${proformaData.number}: total=${total.toFixed(2)}, dynamicUsed=${used.toFixed(2)}, storedUsed=${parseFloat(proformaData.usedAsAdvancePayment || 0).toFixed(2)}`);
+    } catch (queryError) {
+      console.warn('[getAvailableProformaAmount] Błąd podczas dynamicznego obliczania used, fallback do usedAsAdvancePayment:', queryError);
+      used = parseFloat(proformaData.usedAsAdvancePayment || 0);
+    }
+    
     const requiredAdvancePaymentPercentage = parseFloat(proformaData.requiredAdvancePaymentPercentage || 0);
     
     // Sprawdź czy proforma została wystarczająco opłacona
@@ -1865,12 +1952,12 @@ export const getInvoicePayments = async (invoiceId) => {
     const invoiceData = invoiceDoc.data();
     const payments = invoiceData.payments || [];
     
-    // Konwertuj daty Timestamp na obiekty Date
+    // Konwertuj daty Timestamp na obiekty Date (z zabezpieczeniem)
     return payments.map(payment => ({
       ...payment,
-      date: payment.date?.toDate(),
-      createdAt: payment.createdAt?.toDate(),
-      updatedAt: payment.updatedAt?.toDate()
+      date: payment.date && typeof payment.date.toDate === 'function' ? payment.date.toDate() : payment.date,
+      createdAt: payment.createdAt && typeof payment.createdAt.toDate === 'function' ? payment.createdAt.toDate() : payment.createdAt,
+      updatedAt: payment.updatedAt && typeof payment.updatedAt.toDate === 'function' ? payment.updatedAt.toDate() : payment.updatedAt
     })).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sortuj od najnowszych
   } catch (error) {
     console.error('Błąd podczas pobierania płatności faktury:', error);

@@ -979,12 +979,12 @@ const InvoiceForm = ({ invoiceId }) => {
             isCorrectionInvoice: true,
             customer: {
               id: customer.id,
-              name: customer.name || customer.companyName,
-              companyName: customer.companyName,
-              email: customer.email,
-              phone: customer.phone,
-              taxId: customer.taxId,
-              address: customer.address || {}
+              name: customer.name || customer.companyName || '',
+              companyName: customer.companyName || '',
+              email: customer.email || '',
+              phone: customer.phone || '',
+              taxId: customer.taxId || '',
+              address: customer.address || ''
             },
             orderId: preselectedOrder.id,
             orderNumber: preselectedOrder.orderNumber || preselectedOrder.number,
@@ -1855,29 +1855,29 @@ const InvoiceForm = ({ invoiceId }) => {
                 {invoice.customer?.id ? (
                   <Box>
                     <Typography variant="body1" fontWeight="bold" gutterBottom>
-                      {invoice.customer.name}
+                      {typeof invoice.customer.name === 'string' ? invoice.customer.name : 'Brak nazwy'}
                     </Typography>
-                    {invoice.customer?.email && (
+                    {invoice.customer?.email && typeof invoice.customer.email === 'string' && invoice.customer.email.trim() !== '' && (
                       <Typography variant="body2" gutterBottom>
                         Email: {invoice.customer.email}
                       </Typography>
                     )}
-                    {invoice.customer?.phone && (
+                    {invoice.customer?.phone && typeof invoice.customer.phone === 'string' && invoice.customer.phone.trim() !== '' && (
                       <Typography variant="body2" gutterBottom>
                         Telefon: {invoice.customer.phone}
                       </Typography>
                     )}
-                    {invoice.customer?.vatEu && (
+                    {invoice.customer?.vatEu && typeof invoice.customer.vatEu === 'string' && invoice.customer.vatEu.trim() !== '' && (
                       <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                         VAT-EU: {invoice.customer.vatEu}
                       </Typography>
                     )}
-                    {invoice.billingAddress && (
+                    {invoice.billingAddress && typeof invoice.billingAddress === 'string' && invoice.billingAddress.trim() !== '' && (
                       <Typography variant="body2" gutterBottom>
                         Adres do faktury: {invoice.billingAddress}
                       </Typography>
                     )}
-                    {invoice.shippingAddress && (
+                    {invoice.shippingAddress && typeof invoice.shippingAddress === 'string' && invoice.shippingAddress.trim() !== '' && (
                       <Typography variant="body2" gutterBottom>
                         Adres dostawy: {invoice.shippingAddress}
                       </Typography>

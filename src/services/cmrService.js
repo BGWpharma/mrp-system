@@ -826,10 +826,24 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           }
           
           if (ordersToUpdate.length > 0) {
-            console.log('Aktualizacja ilości wysłanych w zamówieniach przy zmianie statusu na "W transporcie"...');
+            console.log('🔄 Odświeżanie ilości wysłanych w zamówieniach przy zmianie statusu na "W transporcie"...');
             for (const orderId of ordersToUpdate) {
-              await updateLinkedOrderShippedQuantities(orderId, cmrData.items, cmrData.cmrNumber, userId);
-              console.log(`Zaktualizowano ilości wysłane w zamówieniu ${orderId} na podstawie CMR ${cmrData.cmrNumber}`);
+              // Używamy refreshShippedQuantitiesFromCMR zamiast updateLinkedOrderShippedQuantities
+              // Dzięki temu ilości będą zawsze spójne (reset + pełne przeliczenie wszystkich CMR)
+              try {
+                const { refreshShippedQuantitiesFromCMR } = await import('./orderService');
+                const refreshResult = await refreshShippedQuantitiesFromCMR(orderId, userId);
+                
+                if (refreshResult.success) {
+                  console.log(`✅ Odświeżono ilości wysłane w zamówieniu ${orderId}`);
+                  console.log(`   • Przetworzono ${refreshResult.stats?.processedCMRs || 0} CMR`);
+                  console.log(`   • Zaktualizowano ${refreshResult.stats?.shippedItems || 0} pozycji`);
+                } else {
+                  console.warn(`⚠️ Nie udało się odświeżyć ilości w zamówieniu ${orderId}`);
+                }
+              } catch (refreshError) {
+                console.error(`❌ Błąd podczas odświeżania ilości w zamówieniu ${orderId}:`, refreshError);
+              }
             }
             
             // Dodaj usługi transportowe na podstawie palet

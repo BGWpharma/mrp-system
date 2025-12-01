@@ -450,7 +450,7 @@ const InvoiceDetails = () => {
                     {t('invoices.details.paymentMethod')}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    {invoice.paymentMethod}
+                    {typeof invoice.paymentMethod === 'string' ? invoice.paymentMethod : '-'}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -526,7 +526,10 @@ const InvoiceDetails = () => {
                         {t('invoices.details.clientInfo.billingAddress')}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                        {invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address || t('invoices.details.clientInfo.noBillingAddress')}
+                        {(() => {
+                          const addr = invoice.billingAddress || invoice.customer?.billingAddress || invoice.customer?.address;
+                          return (typeof addr === 'string' && addr.trim()) ? addr : t('invoices.details.clientInfo.noBillingAddress');
+                        })()}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -538,7 +541,10 @@ const InvoiceDetails = () => {
                         {t('invoices.details.clientInfo.shippingAddress')}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                        {invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address || t('invoices.details.clientInfo.noShippingAddress')}
+                        {(() => {
+                          const addr = invoice.shippingAddress || invoice.customer?.shippingAddress || invoice.customer?.address;
+                          return (typeof addr === 'string' && addr.trim()) ? addr : t('invoices.details.clientInfo.noShippingAddress');
+                        })()}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -565,40 +571,40 @@ const InvoiceDetails = () => {
                 </Box>
                 
                 <Typography variant="body1" fontWeight="bold">
-                  {invoice.customer?.name || t('invoices.details.clientInfo.noClientName')}
+                  {(typeof invoice.customer?.name === 'string' && invoice.customer.name.trim()) ? invoice.customer.name : t('invoices.details.clientInfo.noClientName')}
                 </Typography>
                 
-                {invoice.customer?.vatEu && (
+                {invoice.customer?.vatEu && typeof invoice.customer.vatEu === 'string' && invoice.customer.vatEu.trim() !== '' && (
                   <Typography variant="body2" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                     {t('invoices.details.clientInfo.vatEu')}: {invoice.customer.vatEu}
                   </Typography>
                 )}
                 
-                {invoice.customer?.email && (
+                {invoice.customer?.email && typeof invoice.customer.email === 'string' && invoice.customer.email.trim() !== '' && (
                   <Typography variant="body2" gutterBottom>
                     {t('invoices.details.clientInfo.email')}: {invoice.customer.email}
                   </Typography>
                 )}
                 
-                {invoice.customer?.phone && (
+                {invoice.customer?.phone && typeof invoice.customer.phone === 'string' && invoice.customer.phone.trim() !== '' && (
                   <Typography variant="body2" gutterBottom>
                     {t('invoices.details.clientInfo.phone')}: {invoice.customer.phone}
                   </Typography>
                 )}
                 
-                {invoice.customer?.address && (
+                {invoice.customer?.address && typeof invoice.customer.address === 'string' && invoice.customer.address.trim() !== '' && (
                   <Typography variant="body2" gutterBottom>
                     {t('invoices.details.clientInfo.address')}: {invoice.customer.address}
                   </Typography>
                 )}
                 
-                {invoice.customer?.shippingAddress && (
+                {invoice.customer?.shippingAddress && typeof invoice.customer.shippingAddress === 'string' && invoice.customer.shippingAddress.trim() !== '' && (
                   <Typography variant="body2" gutterBottom>
                     {t('invoices.details.clientInfo.shippingAddress')}: {invoice.customer.shippingAddress}
                   </Typography>
                 )}
                 
-                {invoice.customer?.billingAddress && (
+                {invoice.customer?.billingAddress && typeof invoice.customer.billingAddress === 'string' && invoice.customer.billingAddress.trim() !== '' && (
                   <Typography variant="body2" gutterBottom>
                     {t('invoices.details.clientInfo.billingAddress')}: {invoice.customer.billingAddress}
                   </Typography>
@@ -653,7 +659,7 @@ const InvoiceDetails = () => {
                         </Typography>
                       )}
                       
-                      {invoice.correctionReason && (
+                      {invoice.correctionReason && typeof invoice.correctionReason === 'string' && invoice.correctionReason.trim() !== '' && (
                         <>
                           <Divider sx={{ my: 1.5 }} />
                           <Typography variant="body2" color="text.secondary">
@@ -679,13 +685,13 @@ const InvoiceDetails = () => {
                         </Typography>
                         <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
                           <Typography variant="body2">
-                            <strong>{t('invoices.details.proformaAmount')}:</strong> {proformaUsageInfo.total.toFixed(2)} {invoice.currency || 'EUR'}
+                            <strong>{t('invoices.details.proformaAmount')}:</strong> {proformaUsageInfo.total.toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                           </Typography>
                           <Typography variant="body2" color="error.main">
-                            <strong>Wykorzystane:</strong> {proformaUsageInfo.used.toFixed(2)} {invoice.currency || 'EUR'}
+                            <strong>Wykorzystane:</strong> {proformaUsageInfo.used.toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                           </Typography>
                           <Typography variant="body2" color="success.main">
-                            <strong>Dostępne:</strong> {proformaUsageInfo.available.toFixed(2)} {invoice.currency || 'EUR'}
+                            <strong>Dostępne:</strong> {proformaUsageInfo.available.toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                           </Typography>
                           {proformaUsageInfo.used > 0 && (
                             <Typography variant="caption" color="text.secondary">
@@ -757,7 +763,7 @@ const InvoiceDetails = () => {
                                 </Typography>
                               </Box>
                               <Typography variant="body2" fontWeight="bold" color="warning.dark">
-                                -{usedInvoice.usedAmount.toFixed(2)} {invoice.currency || 'EUR'}
+                                -{usedInvoice.usedAmount.toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                               </Typography>
                             </Box>
                             ))}
@@ -921,7 +927,7 @@ const InvoiceDetails = () => {
                             </Typography>
                           </Box>
                           <Typography variant="body2" fontWeight="bold" color="primary.main">
-                            -{allocation.amount.toFixed(2)} {invoice.currency || 'EUR'}
+                            -{allocation.amount.toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                           </Typography>
                         </Box>
                       ))}
@@ -935,7 +941,7 @@ const InvoiceDetails = () => {
                           Łączna kwota z proform: -
                           {invoice.proformAllocation
                             .reduce((sum, alloc) => sum + (alloc.amount || 0), 0)
-                            .toFixed(2)} {invoice.currency || 'EUR'}
+                            .toFixed(2)} {(typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}
                         </Typography>
                       </Box>
                       </Box>
@@ -1046,15 +1052,15 @@ const InvoiceDetails = () => {
                 
                 return (
                   <TableRow key={index}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.description || '-'}</TableCell>
-                    <TableCell>{item.cnCode || '-'}</TableCell>
+                    <TableCell>{typeof item.name === 'string' ? item.name : '-'}</TableCell>
+                    <TableCell>{(typeof item.description === 'string' && item.description.trim()) ? item.description : '-'}</TableCell>
+                    <TableCell>{(typeof item.cnCode === 'string' && item.cnCode.trim()) ? item.cnCode : '-'}</TableCell>
                     <TableCell align="right">{quantity}</TableCell>
-                    <TableCell>{item.unit}</TableCell>
-                    <TableCell align="right">{price.toFixed(4)} {invoice.currency}</TableCell>
+                    <TableCell>{typeof item.unit === 'string' ? item.unit : '-'}</TableCell>
+                    <TableCell align="right">{price.toFixed(4)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
                     <TableCell align="right">{vatRate}%</TableCell>
-                    <TableCell align="right">{netValue.toFixed(2)} {invoice.currency}</TableCell>
-                    <TableCell align="right">{grossValue.toFixed(2)} {invoice.currency}</TableCell>
+                    <TableCell align="right">{netValue.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
+                    <TableCell align="right">{grossValue.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
                   </TableRow>
                 );
               })}
@@ -1075,7 +1081,7 @@ const InvoiceDetails = () => {
                   const quantity = Number(item.quantity) || 0;
                   const price = Number(item.price) || 0;
                   return sum + (quantity * price);
-                }, 0).toFixed(2)} {invoice.currency}
+                }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
             <Grid item xs={6}>
@@ -1099,7 +1105,7 @@ const InvoiceDetails = () => {
                   // Dla "ZW" i "NP" vatRate pozostaje 0
                   
                   return sum + (quantity * price * (vatRate / 100));
-                }, 0).toFixed(2)} {invoice.currency}
+                }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
             
@@ -1113,7 +1119,7 @@ const InvoiceDetails = () => {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="body1" fontWeight="bold" align="right" color="secondary">
-                    -{parseFloat(invoice.settledAdvancePayments).toFixed(2)} {invoice.currency}
+                    -{parseFloat(invoice.settledAdvancePayments).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
                   </Typography>
                 </Grid>
               </>
@@ -1129,7 +1135,7 @@ const InvoiceDetails = () => {
                 </Grid>
                 <Grid item xs={6}>
                   <Typography variant="body1" fontWeight="bold" align="right">
-                    {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {invoice.currency}
+                    {parseFloat(invoice.shippingInfo.cost).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
                   </Typography>
                 </Grid>
               </>
@@ -1212,11 +1218,11 @@ const InvoiceDetails = () => {
                             {po.number || po.id}
                           </Button>
                         </TableCell>
-                        <TableCell>{po.supplier?.name || 'Nieznany wpłacający'}</TableCell>
-                        <TableCell align="right">{productsValue.toFixed(2)} {po.currency || invoice.currency}</TableCell>
-                        <TableCell align="right">{additionalCostsValue.toFixed(2)} {po.currency || invoice.currency}</TableCell>
-                        <TableCell align="right">{vatDisplay === "ZW" || vatDisplay === "NP" ? vatDisplay : `${vatValue.toFixed(2)} ${po.currency || invoice.currency}`}</TableCell>
-                        <TableCell align="right">{totalGross.toFixed(2)} {po.currency || invoice.currency}</TableCell>
+                        <TableCell>{(typeof po.supplier?.name === 'string' && po.supplier.name) ? po.supplier.name : 'Nieznany wpłacający'}</TableCell>
+                        <TableCell align="right">{productsValue.toFixed(2)} {typeof po.currency === 'string' ? po.currency : (typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}</TableCell>
+                        <TableCell align="right">{additionalCostsValue.toFixed(2)} {typeof po.currency === 'string' ? po.currency : (typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}</TableCell>
+                        <TableCell align="right">{vatDisplay === "ZW" || vatDisplay === "NP" ? vatDisplay : `${vatValue.toFixed(2)} ${typeof po.currency === 'string' ? po.currency : (typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}`}</TableCell>
+                        <TableCell align="right">{totalGross.toFixed(2)} {typeof po.currency === 'string' ? po.currency : (typeof invoice.currency === 'string' ? invoice.currency : 'EUR')}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -1253,7 +1259,7 @@ const InvoiceDetails = () => {
                   }
                   
                   return sum + poValue;
-                }, 0).toFixed(2)} {invoice.currency}
+                }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Box>
           </Box>
@@ -1303,7 +1309,7 @@ const InvoiceDetails = () => {
                   }
                   
                   const remaining = total - advancePayments;
-                  return `${remaining.toFixed(2)} ${invoice.currency}`;
+                  return `${remaining.toFixed(2)} ${typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}`;
                 })()}
               </Typography>
             </Grid>
@@ -1320,7 +1326,7 @@ const InvoiceDetails = () => {
         />
       </Paper>
       
-      {invoice.notes && (
+      {invoice.notes && typeof invoice.notes === 'string' && invoice.notes.trim() !== '' && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             {t('invoices.details.notes')}
