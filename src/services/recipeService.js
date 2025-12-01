@@ -303,8 +303,8 @@ import {
       yield: { quantity: 1, unit: 'szt.' },
       processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
       productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0,
-      // Sortuj składniki według ilości w ramach grup jednostek
-      ingredients: sortIngredientsByQuantity(recipeData.ingredients),
+      // Zachowaj kolejność składników ustawioną przez użytkownika (drag&drop)
+      ingredients: recipeData.ingredients || [],
       // Załączniki designu produktu - przechowywane w wersjonowaniu
       designAttachments: recipeData.designAttachments || []
     };
@@ -375,8 +375,8 @@ import {
         yield: { quantity: 1, unit: 'szt.' },
         processingCostPerUnit: parseFloat(recipeData.processingCostPerUnit) || 0,
         productionTimePerUnit: parseFloat(recipeData.productionTimePerUnit) || 0,
-        // Sortuj składniki według ilości w ramach grup jednostek
-        ingredients: sortIngredientsByQuantity(recipeData.ingredients),
+        // Zachowaj kolejność składników ustawioną przez użytkownika (drag&drop)
+        ingredients: recipeData.ingredients || [],
         // Załączniki designu produktu - przechowywane w wersjonowaniu
         designAttachments: recipeData.designAttachments || []
       };

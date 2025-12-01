@@ -321,6 +321,9 @@ const MaterialsAndCostsTab = ({
                         sx={{ cursor: 'help' }}
                       >
                         {(() => {
+                          // Sprawdź czy materiał ma konsumpcje - jeśli tak, nie pokazuj szacowanych cen
+                          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                          
                           const activePOReservations = getPOReservationsForMaterial(materialId).filter(reservation => {
                             if (reservation.status === 'pending') return true;
                             if (reservation.status === 'delivered') {
@@ -334,7 +337,7 @@ const MaterialsAndCostsTab = ({
                           // Pokaż cenę jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
                           const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
                           
-                          // NOWE: Sprawdź czy mamy szacunkową cenę z bazy lub z costsSummary
+                          // Sprawdź czy mamy szacunkową cenę z bazy lub z costsSummary
                           const estimatedFromDb = task.estimatedMaterialCosts && task.estimatedMaterialCosts[materialId];
                           const estimatedFromSummary = costsSummary?.reserved?.details?.[materialId];
                           const hasEstimatedPrice = estimatedFromDb || (estimatedFromSummary?.isEstimated && estimatedFromSummary?.unitPrice > 0);
@@ -342,8 +345,8 @@ const MaterialsAndCostsTab = ({
                           
                           if (hasAnyReservations) {
                             return `${Number(unitPrice || 0).toFixed(4)} €`;
-                          } else if (hasEstimatedPrice && estimatedUnitPrice > 0) {
-                            // Wyświetl szacunkową cenę z oznaczeniem
+                          } else if (hasEstimatedPrice && estimatedUnitPrice > 0 && consumedQuantity <= 0) {
+                            // Wyświetl szacunkową cenę TYLKO jeśli nie ma konsumpcji
                             return (
                               <Tooltip title={getPriceBreakdownTooltip(material, materialId)}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -367,6 +370,9 @@ const MaterialsAndCostsTab = ({
                       </TableCell>
                       <TableCell>
                         {(() => {
+                          // Sprawdź czy materiał ma konsumpcje - jeśli tak, nie pokazuj szacowanych kosztów
+                          const consumedQuantity = getConsumedQuantityForMaterial(task.consumedMaterials, materialId);
+                          
                           const activePOReservations = getPOReservationsForMaterial(materialId).filter(reservation => {
                             if (reservation.status === 'pending') return true;
                             if (reservation.status === 'delivered') {
@@ -380,7 +386,7 @@ const MaterialsAndCostsTab = ({
                           // Pokaż koszt jeśli są standardowe rezerwacje lub aktywne rezerwacje PO
                           const hasAnyReservations = (reservedBatches && reservedBatches.length > 0) || activePOReservations.length > 0;
                           
-                          // NOWE: Sprawdź czy mamy szacunkową cenę z bazy lub z costsSummary
+                          // Sprawdź czy mamy szacunkową cenę z bazy lub z costsSummary
                           const estimatedFromDb = task.estimatedMaterialCosts && task.estimatedMaterialCosts[materialId];
                           const estimatedFromSummary = costsSummary?.reserved?.details?.[materialId];
                           const hasEstimatedPrice = estimatedFromDb || (estimatedFromSummary?.isEstimated && estimatedFromSummary?.cost > 0);
@@ -388,8 +394,8 @@ const MaterialsAndCostsTab = ({
                           
                           if (hasAnyReservations) {
                             return `${Number(cost || 0).toFixed(2)} €`;
-                          } else if (hasEstimatedPrice && estimatedCost > 0) {
-                            // Wyświetl szacunkowy koszt z oznaczeniem
+                          } else if (hasEstimatedPrice && estimatedCost > 0 && consumedQuantity <= 0) {
+                            // Wyświetl szacunkowy koszt TYLKO jeśli nie ma konsumpcji
                             return (
                               <span style={{ fontStyle: 'italic', color: '#1976d2' }}>
                                 ~{Number(estimatedCost || 0).toFixed(2)} €

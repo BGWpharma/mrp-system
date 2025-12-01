@@ -50,7 +50,6 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Refresh as RefreshIcon,
-  People as CustomersIcon,
   ShoppingCart as ShoppingCartIcon,
   ArrowDropDown as ArrowDropDownIcon,
   Download as DownloadIcon
@@ -1467,30 +1466,10 @@ const OrdersList = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: { xs: 2, sm: 0 } }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1">
           {t('orders.title')}
         </Typography>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, width: { xs: '100%', sm: 'auto' } }}>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<CustomersIcon />}
-            onClick={() => navigate('/customers')}
-            sx={{ width: '100%' }}
-          >
-            {t('orders.manageCustomers')}
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleAddOrder}
-            sx={{ width: '100%' }}
-          >
-            {t('orders.newOrder')}
-          </Button>
-        </Box>
       </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
@@ -1519,6 +1498,14 @@ const OrdersList = () => {
           />
 
           <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleAddOrder}
+            >
+              {t('orders.newOrder')}
+            </Button>
             <Button 
               variant="outlined" 
               color="secondary" 

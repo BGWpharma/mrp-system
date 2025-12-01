@@ -2414,24 +2414,15 @@ const TaskForm = ({ taskId }) => {
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                    <TextField
-                      fullWidth
-                      label="Numer LOT"
-                      name="lotNumber"
-                      value={taskData.lotNumber || ''}
-                      onChange={handleChange}
-                      variant="outlined"
-                      helperText="Określ numer partii (LOT) dla produktu końcowego"
-                    />
-                    <Button 
-                      variant="contained" 
-                      onClick={generateLot}
-                      sx={{ mt: 2, ml: 1, height: 56 }}
-                    >
-                      Generuj
-                    </Button>
-                  </Box>
+                  <TextField
+                    fullWidth
+                    label="Numer LOT"
+                    name="lotNumber"
+                    value={taskData.lotNumber || ''}
+                    onChange={handleChange}
+                    variant="outlined"
+                    helperText="Określ numer partii (LOT) dla produktu końcowego"
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>

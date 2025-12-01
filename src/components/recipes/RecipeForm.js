@@ -54,8 +54,25 @@ import {
   Sync as SyncIcon,
   KeyboardArrowUp as ArrowUpIcon,
   KeyboardArrowDown as ArrowDownIcon,
-  PhotoCamera as PhotoCameraIcon
+  PhotoCamera as PhotoCameraIcon,
+  DragIndicator as DragIndicatorIcon
 } from '@mui/icons-material';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
 import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventory';
 import { getAllPriceLists, addPriceListItem } from '../../services/priceListService';
@@ -71,6 +88,169 @@ import { NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../uti
 import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
 import { addNutritionalComponent } from '../../services/nutritionalComponentsService';
 import RecipeDesignAttachments from './RecipeDesignAttachments';
+
+// Funkcja do generowania unikalnego ID składnika
+const generateIngredientId = () => {
+  return `ing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// Komponent dla sortowalnego wiersza składnika z drag-and-drop
+const SortableIngredientRow = ({ 
+  ingredient, 
+  index, 
+  showDisplayUnits,
+  displayUnits,
+  handleIngredientChange,
+  formatDisplayValue,
+  getDisplayValue,
+  getDisplayUnit,
+  canConvertUnit,
+  toggleIngredientUnit,
+  removeIngredient,
+  t
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: ingredient._sortId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    ...(isDragging && {
+      opacity: 0.5,
+      zIndex: 1000,
+    }),
+  };
+
+  return (
+    <TableRow 
+      ref={setNodeRef}
+      style={style}
+      hover 
+      sx={{ 
+        '&:nth-of-type(even)': { 
+          bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' 
+        },
+        ...(isDragging && {
+          bgcolor: 'action.selected',
+          boxShadow: 3
+        })
+      }}
+    >
+      {/* Uchwyt do przeciągania */}
+      <TableCell {...attributes} {...listeners} sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' }, width: '40px' }}>
+        <DragIndicatorIcon 
+          sx={{ 
+            color: 'action.active',
+          }} 
+        />
+      </TableCell>
+      <TableCell>
+        <TextField
+          fullWidth
+          variant="standard"
+          value={ingredient.name}
+          onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
+          disabled={!!ingredient.id}
+        />
+      </TableCell>
+      <TableCell>
+        <TextField
+          fullWidth
+          variant="standard"
+          type="number"
+          value={showDisplayUnits && displayUnits[index] 
+            ? formatDisplayValue(getDisplayValue(index, ingredient.quantity, ingredient.unit))
+            : ingredient.quantity}
+          onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
+          InputProps={{
+            endAdornment: showDisplayUnits && displayUnits[index] && (
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                (oryginalnie: {formatDisplayValue(ingredient.quantity)} {ingredient.unit})
+              </Typography>
+            )
+          }}
+        />
+      </TableCell>
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <TextField
+            fullWidth
+            variant="standard"
+            value={showDisplayUnits && displayUnits[index] 
+              ? getDisplayUnit(index, ingredient.unit)
+              : ingredient.unit}
+            onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
+            disabled={!!ingredient.id}
+          />
+          {canConvertUnit(ingredient.unit) && (
+            <Tooltip title={t('recipes.ingredients.switchUnit')}>
+              <IconButton 
+                size="small" 
+                color="primary" 
+                onClick={() => toggleIngredientUnit(index)}
+                sx={{ ml: 1 }}
+              >
+                <SwapIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </TableCell>
+      <TableCell>
+        <TextField
+          fullWidth
+          variant="standard"
+          value={ingredient.casNumber || ''}
+          onChange={(e) => handleIngredientChange(index, 'casNumber', e.target.value)}
+        />
+      </TableCell>
+      <TableCell>
+        <TextField
+          fullWidth
+          variant="standard"
+          value={ingredient.notes || ''}
+          onChange={(e) => handleIngredientChange(index, 'notes', e.target.value)}
+        />
+      </TableCell>
+      <TableCell>
+        {ingredient.id ? (
+          <Chip 
+            size="small" 
+            color="primary" 
+            label={t('recipes.ingredients.fromInventoryChip')} 
+            icon={<InventoryIcon />} 
+            title={t('recipes.ingredients.fromInventoryTooltip')} 
+            sx={{ borderRadius: '16px' }}
+          />
+        ) : (
+          <Chip 
+            size="small" 
+            color="default" 
+            label={t('recipes.ingredients.manualChip')} 
+            icon={<EditIcon />} 
+            title={t('recipes.ingredients.manualTooltip')} 
+            sx={{ borderRadius: '16px' }}
+          />
+        )}
+      </TableCell>
+      <TableCell>
+        <IconButton 
+          color="error" 
+          onClick={() => removeIngredient(index)}
+          size="small"
+        >
+          <DeleteIcon />
+        </IconButton>
+      </TableCell>
+    </TableRow>
+  );
+};
 
 const RecipeForm = ({ recipeId }) => {
   const { currentUser } = useAuth();
@@ -166,6 +346,33 @@ const RecipeForm = ({ recipeId }) => {
   
   // Stan dla załączników designu
   const [designAttachments, setDesignAttachments] = useState([]);
+
+  // Sensory dla drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Funkcja do obsługi zakończenia przeciągania składnika
+  const handleIngredientDragEnd = (event) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    setRecipeData((prev) => {
+      const oldIndex = prev.ingredients.findIndex((ing) => ing._sortId === active.id);
+      const newIndex = prev.ingredients.findIndex((ing) => ing._sortId === over.id);
+
+      return {
+        ...prev,
+        ingredients: arrayMove(prev.ingredients, oldIndex, newIndex),
+      };
+    });
+  };
 
   // Funkcje pomocnicze do konwersji jednostek
   const getUnitGroup = (unit) => {
@@ -335,6 +542,12 @@ const RecipeForm = ({ recipeId }) => {
             id: micronutrient.id || `existing-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`
           }));
           
+          // Upewnij się, że ingredients mają _sortId do drag-and-drop
+          const ingredientsWithSortIds = (recipe.ingredients || []).map((ingredient, index) => ({
+            ...ingredient,
+            _sortId: ingredient._sortId || generateIngredientId()
+          }));
+          
           // Upewnij się, że certifications istnieje z domyślnymi wartościami
           const certifications = recipe.certifications || {
             halal: false,
@@ -346,6 +559,7 @@ const RecipeForm = ({ recipeId }) => {
           
           const recipeWithMicronutrients = {
             ...recipe,
+            ingredients: ingredientsWithSortIds,
             micronutrients: micronutrientsWithIds,
             certifications: certifications
           };
@@ -470,9 +684,13 @@ const RecipeForm = ({ recipeId }) => {
         showInfo(t('recipes.messages.conversionInfo'));
       }
       
+      // Usuń pole _sortId ze składników przed zapisem (używane tylko do drag-and-drop)
+      const ingredientsForSave = recipeData.ingredients.map(({ _sortId, ...rest }) => rest);
+      
       // Dodaj załączniki designu do danych receptury
       const recipeDataWithAttachments = {
         ...recipeData,
+        ingredients: ingredientsForSave,
         designAttachments: designAttachments
       };
       
@@ -611,7 +829,14 @@ const RecipeForm = ({ recipeId }) => {
   const addIngredient = () => {
     setRecipeData(prev => ({
       ...prev,
-      ingredients: [...prev.ingredients, { name: '', quantity: '', unit: 'g', allergens: [], casNumber: '' }]
+      ingredients: [...prev.ingredients, { 
+        _sortId: generateIngredientId(),
+        name: '', 
+        quantity: '', 
+        unit: 'g', 
+        allergens: [], 
+        casNumber: '' 
+      }]
     }));
   };
 
@@ -640,6 +865,7 @@ const RecipeForm = ({ recipeId }) => {
     
     // Dodaj nowy składnik z danymi z magazynu
     const newIngredient = {
+      _sortId: generateIngredientId(),
       id: item.id,
       name: item.name,
       quantity: '',
@@ -1694,140 +1920,60 @@ const RecipeForm = ({ recipeId }) => {
           )}
           
           {recipeData.ingredients.length > 0 ? (
-            <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
-              <Table>
-                <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
-                  <TableRow>
-                    <TableCell width="25%"><Typography variant="subtitle2">{t('recipes.ingredients.ingredientSKU')}</Typography></TableCell>
-                    <TableCell width="19%"><Typography variant="subtitle2">{t('recipes.ingredients.quantity')}</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.unit')}</Typography></TableCell>
-                    <TableCell width="15%">
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="subtitle2">{t('recipes.ingredients.casNumber')}</Typography>
-                        <Tooltip title={t('recipes.ingredients.syncCAS')}>
-                          <IconButton 
-                            size="small" 
-                            color="primary" 
-                            onClick={syncCASNumbers}
-                            disabled={loading}
-                            sx={{ ml: 1 }}
-                          >
-                            <SyncIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                    <TableCell width="16%"><Typography variant="subtitle2">{t('recipes.ingredients.notes')}</Typography></TableCell>
-                    <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.source')}</Typography></TableCell>
-                    <TableCell width="5%"><Typography variant="subtitle2">{t('recipes.ingredients.actions')}</Typography></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recipeData.ingredients.map((ingredient, index) => (
-                    <TableRow key={index} hover sx={{ '&:nth-of-type(even)': { bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.2)' : 'rgba(245, 247, 250, 0.5)' } }}>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          variant="standard"
-                          value={ingredient.name}
-                          onChange={(e) => handleIngredientChange(index, 'name', e.target.value)}
-                          disabled={!!ingredient.id}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          variant="standard"
-                          type="number"
-                          value={showDisplayUnits && displayUnits[index] 
-                            ? formatDisplayValue(getDisplayValue(index, ingredient.quantity, ingredient.unit))
-                            : ingredient.quantity}
-                          onChange={(e) => handleIngredientChange(index, 'quantity', e.target.value)}
-                          InputProps={{
-                            endAdornment: showDisplayUnits && displayUnits[index] && (
-                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                (oryginalnie: {formatDisplayValue(ingredient.quantity)} {ingredient.unit})
-                              </Typography>
-                            )
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <TextField
-                            fullWidth
-                            variant="standard"
-                            value={showDisplayUnits && displayUnits[index] 
-                              ? getDisplayUnit(index, ingredient.unit)
-                              : ingredient.unit}
-                            onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
-                            disabled={!!ingredient.id}
-                          />
-                          {canConvertUnit(ingredient.unit) && (
-                            <Tooltip title={t('recipes.ingredients.switchUnit')}>
-                              <IconButton 
-                                size="small" 
-                                color="primary" 
-                                onClick={() => toggleIngredientUnit(index)}
-                                sx={{ ml: 1 }}
-                              >
-                                <SwapIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleIngredientDragEnd}>
+              <TableContainer sx={{ borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}>
+                <Table>
+                  <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
+                    <TableRow>
+                      <TableCell width="3%"></TableCell>
+                      <TableCell width="22%"><Typography variant="subtitle2">{t('recipes.ingredients.ingredientSKU')}</Typography></TableCell>
+                      <TableCell width="17%"><Typography variant="subtitle2">{t('recipes.ingredients.quantity')}</Typography></TableCell>
+                      <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.unit')}</Typography></TableCell>
+                      <TableCell width="15%">
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="subtitle2">{t('recipes.ingredients.casNumber')}</Typography>
+                          <Tooltip title={t('recipes.ingredients.syncCAS')}>
+                            <IconButton 
+                              size="small" 
+                              color="primary" 
+                              onClick={syncCASNumbers}
+                              disabled={loading}
+                              sx={{ ml: 1 }}
+                            >
+                              <SyncIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          variant="standard"
-                          value={ingredient.casNumber || ''}
-                          onChange={(e) => handleIngredientChange(index, 'casNumber', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          fullWidth
-                          variant="standard"
-                          value={ingredient.notes || ''}
-                          onChange={(e) => handleIngredientChange(index, 'notes', e.target.value)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {ingredient.id ? (
-                          <Chip 
-                            size="small" 
-                            color="primary" 
-                            label={t('recipes.ingredients.fromInventoryChip')} 
-                            icon={<InventoryIcon />} 
-                            title={t('recipes.ingredients.fromInventoryTooltip')} 
-                            sx={{ borderRadius: '16px' }}
-                          />
-                        ) : (
-                          <Chip 
-                            size="small" 
-                            color="default" 
-                            label={t('recipes.ingredients.manualChip')} 
-                            icon={<EditIcon />} 
-                            title={t('recipes.ingredients.manualTooltip')} 
-                            sx={{ borderRadius: '16px' }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <IconButton 
-                          color="error" 
-                          onClick={() => removeIngredient(index)}
-                          size="small"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
+                      <TableCell width="14%"><Typography variant="subtitle2">{t('recipes.ingredients.notes')}</Typography></TableCell>
+                      <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.source')}</Typography></TableCell>
+                      <TableCell width="5%"><Typography variant="subtitle2">{t('recipes.ingredients.actions')}</Typography></TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <SortableContext items={recipeData.ingredients.map(ing => ing._sortId)} strategy={verticalListSortingStrategy}>
+                    <TableBody>
+                      {recipeData.ingredients.map((ingredient, index) => (
+                        <SortableIngredientRow
+                          key={ingredient._sortId}
+                          ingredient={ingredient}
+                          index={index}
+                          showDisplayUnits={showDisplayUnits}
+                          displayUnits={displayUnits}
+                          handleIngredientChange={handleIngredientChange}
+                          formatDisplayValue={formatDisplayValue}
+                          getDisplayValue={getDisplayValue}
+                          getDisplayUnit={getDisplayUnit}
+                          canConvertUnit={canConvertUnit}
+                          toggleIngredientUnit={toggleIngredientUnit}
+                          removeIngredient={removeIngredient}
+                          t={t}
+                        />
+                      ))}
+                    </TableBody>
+                  </SortableContext>
+                </Table>
+              </TableContainer>
+            </DndContext>
           ) : (
             <Paper 
               sx={{ 
