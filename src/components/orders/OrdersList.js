@@ -472,6 +472,7 @@ const OrdersList = () => {
       case 'Nowe': return '#1976d2'; // oryginalny niebieski
       case 'W realizacji': return '#2196f3'; // oryginalny jasnoniebieski
       case 'Zakończone': return '#4caf50'; // oryginalny zielony
+      case 'Rozliczone': return '#9c27b0'; // fioletowy
       case 'Anulowane': return '#f44336'; // oryginalny czerwony
       default: return '#757575'; // oryginalny szary
     }

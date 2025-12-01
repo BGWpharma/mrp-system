@@ -908,7 +908,7 @@ export const DATABASE_TOOLS = [
           },
           status: {
             type: "string",
-            description: "Filtr po statusie zamówień: 'Nowe', 'W realizacji', 'Zakończone', 'Anulowane', 'Wstrzymane' - filtrowane po stronie klienta"
+            description: "Filtr po statusie zamówień: 'Nowe', 'W realizacji', 'Zakończone', 'Rozliczone', 'Anulowane', 'Wstrzymane' - filtrowane po stronie klienta"
           },
           includeDetails: {
             type: "boolean",

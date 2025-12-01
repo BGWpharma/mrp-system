@@ -731,7 +731,11 @@ export const getReportStatistics = (reportData) => {
   const averageMarginPercentage = totalSalesValue > 0 ? (totalMargin / totalSalesValue) * 100 : 0;
   
   // Zlicz statusy
-  const completedOrders = uniqueRows.filter(row => row.co_status === 'Zakończone' || row.co_status === 'Zrealizowane').length;
+  const completedOrders = uniqueRows.filter(row => 
+    row.co_status === 'Zakończone' || 
+    row.co_status === 'Zrealizowane' || 
+    row.co_status === 'Rozliczone'
+  ).length;
   const pendingOrders = uniqueRows.filter(row => row.co_status === 'W realizacji' || row.co_status === 'Nowe').length;
   const paidInvoices = uniqueRows.filter(row => row.invoice_payment_status === 'paid' || row.invoice_payment_status === 'Opłacona').length;
   const unpaidInvoices = uniqueRows.filter(row => 

@@ -1225,6 +1225,7 @@ export const ORDER_STATUSES = [
   { value: 'Nowe', label: 'Nowe' },
   { value: 'W realizacji', label: 'W realizacji' },
   { value: 'Zakończone', label: 'Zakończone' },
+  { value: 'Rozliczone', label: 'Rozliczone' },
   { value: 'Anulowane', label: 'Anulowane' }
 ];
 

@@ -843,6 +843,7 @@ const OrderDetails = () => {
       case 'Nowe': return 'primary';
       case 'W realizacji': return 'info';
       case 'Zakończone': return 'success';
+      case 'Rozliczone': return 'secondary'; // fioletowy w MUI
       case 'Anulowane': return 'error';
       default: return 'default';
     }

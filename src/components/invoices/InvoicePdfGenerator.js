@@ -80,6 +80,9 @@ class InvoicePdfGenerator {
    * Funkcja do tłumaczenia jednostek miary na angielski
    */
   translateUnit(unit) {
+    // Zabezpieczenie - upewnij się że unit jest stringiem
+    if (!unit || typeof unit !== 'string') return 'pcs';
+    
     const unitTranslations = {
       'szt.': 'pcs',
       'kg': 'kg',
@@ -106,7 +109,8 @@ class InvoicePdfGenerator {
    * Funkcja do konwersji polskich znaków
    */
   convertPolishChars(text) {
-    if (!text) return '';
+    // Zabezpieczenie - upewnij się że text jest stringiem
+    if (!text || typeof text !== 'string') return '';
     return text
       .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
       .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
@@ -120,7 +124,8 @@ class InvoicePdfGenerator {
    * Funkcja do tłumaczenia metod płatności na język angielski
    */
   translatePaymentMethod(paymentMethod) {
-    if (!paymentMethod) return '';
+    // Zabezpieczenie - upewnij się że paymentMethod jest stringiem
+    if (!paymentMethod || typeof paymentMethod !== 'string') return '';
     
     const paymentTranslations = {
       'Przelew': 'Bank Transfer',
@@ -356,25 +361,25 @@ class InvoicePdfGenerator {
     }
     
     // NIP/VAT ID odbiorcy
-    if (buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId || buyerInfo.vatEu) {
-      const vatNumber = buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId || buyerInfo.vatEu;
+    const vatNumber = buyerInfo.nip || buyerInfo.taxId || buyerInfo.vatId || buyerInfo.vatEu;
+    if (vatNumber && typeof vatNumber === 'string' && vatNumber.trim()) {
       doc.text(`NIP/VAT: ${vatNumber}`, rightColX, buyerY);
       buyerY += 5;
     }
     
     // Email i telefon odbiorcy
-    if (buyerInfo.email) {
+    if (buyerInfo.email && typeof buyerInfo.email === 'string' && buyerInfo.email.trim()) {
       doc.text(`${t.email} ${buyerInfo.email}`, rightColX, buyerY);
       buyerY += 5;
     }
     
-    if (buyerInfo.phone) {
+    if (buyerInfo.phone && typeof buyerInfo.phone === 'string' && buyerInfo.phone.trim()) {
       doc.text(`${t.phone} ${buyerInfo.phone}`, rightColX, buyerY);
       buyerY += 5;
     }
     
     // Dodatkowe informacje jeśli są dostępne
-    if (buyerInfo.supplierVatEu && buyerInfo.supplierVatEu !== buyerInfo.vatEu) {
+    if (buyerInfo.supplierVatEu && typeof buyerInfo.supplierVatEu === 'string' && buyerInfo.supplierVatEu.trim() && buyerInfo.supplierVatEu !== buyerInfo.vatEu) {
       doc.text(`VAT-EU dostawcy: ${buyerInfo.supplierVatEu}`, rightColX, buyerY);
       buyerY += 5;
     }
@@ -427,14 +432,14 @@ class InvoicePdfGenerator {
       totalNetto += netValue;
       
       // Przygotuj opis z nazwą i opisem w nawiasach
-      let fullDescription = item.name;
-      if (item.description && item.description.trim()) {
+      let fullDescription = typeof item.name === 'string' ? item.name : '-';
+      if (item.description && typeof item.description === 'string' && item.description.trim()) {
         fullDescription += `\n(${item.description.trim()})`;
       }
       
       tableRows.push({
         description: fullDescription,
-        cnCode: item.cnCode || '-',
+        cnCode: (typeof item.cnCode === 'string' && item.cnCode) ? item.cnCode : '-',
         quantity: `${this.formatNumberWithSeparators(quantity, quantity % 1 === 0 ? 0 : 2)} ${this.translateUnit(item.unit)}`,
         unitPrice: this.formatUnitPrice(price),
         vat: vatDisplay,
@@ -744,7 +749,7 @@ class InvoicePdfGenerator {
   addNotes(doc, summaryY) {
     const t = this.translations;
     
-    if (this.invoice.notes) {
+    if (this.invoice.notes && typeof this.invoice.notes === 'string' && this.invoice.notes.trim()) {
       summaryY += 15;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
@@ -823,7 +828,8 @@ class InvoicePdfGenerator {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(`${t.invoiceNumber}: ${this.invoice.number}`, 14, this.options.useTemplate ? 55 : 35);
+    const invoiceNumber = typeof this.invoice.number === 'string' ? this.invoice.number : '-';
+    doc.text(`${t.invoiceNumber}: ${invoiceNumber}`, 14, this.options.useTemplate ? 55 : 35);
     
     // Dane faktury - na lewej stronie
     let leftColumnY = this.options.useTemplate ? 65 : 45;
