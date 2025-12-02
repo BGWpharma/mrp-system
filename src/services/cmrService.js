@@ -2972,6 +2972,153 @@ export const deleteCmrAttachment = async (attachmentId, userId) => {
   }
 };
 
+// ========================
+// FUNKCJE FAKTUR CMR
+// ========================
+
+/**
+ * Przesyła fakturę do CMR
+ * @param {File} file - Plik faktury do przesłania
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} userId - ID użytkownika przesyłającego
+ * @returns {Promise<Object>} - Informacje o przesłanym pliku
+ */
+export const uploadCmrInvoice = async (file, cmrId, userId) => {
+  try {
+    if (!file || !cmrId || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Sprawdź rozmiar pliku (maksymalnie 20 MB)
+    const fileSizeInMB = file.size / (1024 * 1024);
+    if (fileSizeInMB > 20) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 20 MB.`);
+    }
+
+    // Dla faktur dozwolone są głównie PDF i dokumenty
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/png'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`Nieobsługiwany typ pliku dla faktury: ${file.type}. Dozwolone są: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG.`);
+    }
+
+    // Tworzymy ścieżkę do pliku w Firebase Storage - ODDZIELNA ŚCIEŻKA dla faktur
+    const timestamp = new Date().getTime();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `cmr-invoices/${cmrId}/${fileName}`; // Oddzielny folder dla faktur
+
+    // Przesyłamy plik do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
+
+    // Zapisujemy informacje o fakturze w Firestore - oddzielna kolekcja
+    const invoiceData = {
+      fileName: file.name,
+      originalFileName: file.name,
+      storagePath,
+      downloadURL,
+      contentType: file.type,
+      size: file.size,
+      cmrId,
+      type: 'invoice',
+      uploadedBy: userId,
+      uploadedAt: serverTimestamp()
+    };
+
+    const invoiceRef = await addDoc(collection(db, 'cmrInvoices'), invoiceData);
+
+    return {
+      id: invoiceRef.id,
+      ...invoiceData,
+      uploadedAt: new Date()
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania faktury CMR:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera wszystkie faktury dla danego CMR
+ * @param {string} cmrId - ID dokumentu CMR
+ * @returns {Promise<Array>} - Lista faktur
+ */
+export const getCmrInvoices = async (cmrId) => {
+  try {
+    const q = query(
+      collection(db, 'cmrInvoices'),
+      where('cmrId', '==', cmrId),
+      orderBy('uploadedAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    const invoices = [];
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      invoices.push({
+        id: doc.id,
+        ...data,
+        uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : null
+      });
+    });
+
+    return invoices;
+  } catch (error) {
+    console.error('Błąd podczas pobierania faktur CMR:', error);
+    return [];
+  }
+};
+
+/**
+ * Usuwa fakturę CMR
+ * @param {string} invoiceId - ID faktury w Firestore
+ * @param {string} userId - ID użytkownika usuwającego
+ * @returns {Promise<void>}
+ */
+export const deleteCmrInvoice = async (invoiceId, userId) => {
+  try {
+    // Pobierz informacje o fakturze
+    const invoiceDoc = await getDoc(doc(db, 'cmrInvoices', invoiceId));
+    
+    if (!invoiceDoc.exists()) {
+      throw new Error('Faktura nie została znaleziona');
+    }
+
+    const invoiceData = invoiceDoc.data();
+
+    // Usuń plik z Firebase Storage
+    if (invoiceData.storagePath) {
+      const fileRef = ref(storage, invoiceData.storagePath);
+      try {
+        await deleteObject(fileRef);
+      } catch (storageError) {
+        console.warn('Nie udało się usunąć pliku faktury z Storage (może już nie istnieć):', storageError);
+      }
+    }
+
+    // Usuń rekord z Firestore
+    await deleteDoc(doc(db, 'cmrInvoices', invoiceId));
+
+    console.log(`Faktura ${invoiceData.fileName} została usunięta przez użytkownika ${userId}`);
+  } catch (error) {
+    console.error('Błąd podczas usuwania faktury CMR:', error);
+    throw error;
+  }
+};
+
 // Cache dla zoptymalizowanej funkcji pobierania dokumentów CMR
 let cmrDocumentsCache = null;
 let cmrDocumentsCacheTimestamp = null;

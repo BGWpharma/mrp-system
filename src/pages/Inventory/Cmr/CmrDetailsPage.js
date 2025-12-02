@@ -54,7 +54,10 @@ import {
   migrateCmrToNewFormat,
   uploadCmrAttachment,
   getCmrAttachments,
-  deleteCmrAttachment
+  deleteCmrAttachment,
+  uploadCmrInvoice,
+  getCmrInvoices,
+  deleteCmrInvoice
 } from '../../../services/cmrService';
 import { getOrderById } from '../../../services/orderService';
 import { 
@@ -93,6 +96,7 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import WarningIcon from '@mui/icons-material/Warning';
 import CheckIcon from '@mui/icons-material/Check';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 
 // TabPanel component
 function TabPanel(props) {
@@ -255,6 +259,12 @@ const CmrDetailsPage = () => {
   const [attachments, setAttachments] = useState([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  
+  // Stany dla faktur
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  
   const menuOpen = Boolean(anchorEl);
   
   useEffect(() => {
@@ -1634,6 +1644,56 @@ const CmrDetailsPage = () => {
     }
   };
 
+  // Funkcja do pobierania faktur
+  const fetchInvoices = async () => {
+    try {
+      setInvoicesLoading(true);
+      const invoicesList = await getCmrInvoices(id);
+      setInvoices(invoicesList);
+    } catch (error) {
+      console.error('Błąd podczas pobierania faktur:', error);
+      showError('Nie udało się pobrać faktur');
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+
+  // Funkcja do przesyłania faktury
+  const handleInvoiceUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+
+    try {
+      setUploadingInvoice(true);
+      const newInvoice = await uploadCmrInvoice(file, id, currentUser.uid);
+      setInvoices(prev => [newInvoice, ...prev]);
+      showSuccess(`Faktura "${file.name}" została przesłana pomyślnie`);
+    } catch (error) {
+      console.error('Błąd podczas przesyłania faktury:', error);
+      showError(error.message || 'Nie udało się przesłać faktury');
+    } finally {
+      setUploadingInvoice(false);
+    }
+  };
+
+  // Funkcja do usuwania faktury
+  const handleInvoiceDelete = async (invoiceId, fileName) => {
+    if (!window.confirm(`Czy na pewno chcesz usunąć fakturę "${fileName}"?`)) {
+      return;
+    }
+
+    try {
+      await deleteCmrInvoice(invoiceId, currentUser.uid);
+      setInvoices(prev => prev.filter(inv => inv.id !== invoiceId));
+      showSuccess(`Faktura "${fileName}" została usunięta`);
+    } catch (error) {
+      console.error('Błąd podczas usuwania faktury:', error);
+      showError('Nie udało się usunąć faktury');
+    }
+  };
+
   // Funkcja formatowania rozmiaru pliku
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
@@ -1643,10 +1703,11 @@ const CmrDetailsPage = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Pobierz załączniki przy pierwszym załadowaniu
+  // Pobierz załączniki i faktury przy pierwszym załadowaniu
   useEffect(() => {
     if (id) {
       fetchAttachments();
+      fetchInvoices();
     }
   }, [id]);
   
@@ -3074,6 +3135,184 @@ const CmrDetailsPage = () => {
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                             {t('details.attachments.totalSize')}: {formatFileSize(attachments.reduce((sum, attachment) => sum + attachment.size, 0))}
+                          </Typography>
+                        </Box>
+                      </TableContainer>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Faktury CMR */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title={
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <ReceiptIcon sx={{ mr: 1, color: 'success.main' }} />
+                      Faktury ({invoices.length})
+                    </Box>
+                  }
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  {/* Sekcja przesyłania faktur */}
+                  <Box sx={{ mb: 3, p: 2, backgroundColor: 'success.50', borderRadius: 1, border: 1, borderColor: 'success.200', borderStyle: 'dashed' }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', color: 'success.dark' }}>
+                      <CloudUploadIcon sx={{ mr: 1 }} />
+                      Dodaj fakturę do CMR
+                    </Typography>
+                    
+                    <Box sx={{ mt: 2 }}>
+                      <input
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                        style={{ display: 'none' }}
+                        id="cmr-invoice-upload"
+                        type="file"
+                        onChange={handleInvoiceUpload}
+                        disabled={uploadingInvoice}
+                      />
+                      <label htmlFor="cmr-invoice-upload">
+                        <Button
+                          variant="outlined"
+                          component="span"
+                          color="success"
+                          startIcon={<ReceiptIcon />}
+                          disabled={uploadingInvoice}
+                          fullWidth
+                        >
+                          Wybierz fakturę
+                        </Button>
+                      </label>
+                    </Box>
+                    
+                    {uploadingInvoice && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                        <CircularProgress size={20} sx={{ mr: 1 }} color="success" />
+                        <Typography variant="caption" color="text.secondary">
+                          Przesyłanie faktury...
+                        </Typography>
+                      </Box>
+                    )}
+                    
+                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                      Dozwolone formaty: PDF, JPG, PNG, DOC, DOCX, XLS, XLSX (max 20MB)
+                    </Typography>
+                  </Box>
+
+                  {/* Lista faktur */}
+                  {invoicesLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress color="success" />
+                    </Box>
+                  ) : invoices.length === 0 ? (
+                    <Paper sx={{ p: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
+                      <Typography variant="body2" color="text.secondary" align="center">
+                        Brak faktur dla tego CMR
+                      </Typography>
+                      <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                        Możesz dodać faktury korzystając z przycisku powyżej
+                      </Typography>
+                    </Paper>
+                  ) : (
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                        <ReceiptIcon sx={{ mr: 1, color: 'success.main' }} />
+                        Lista faktur ({invoices.length})
+                      </Typography>
+                      
+                      <TableContainer component={Paper} sx={{ mt: 2 }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: 'success.50' }}>
+                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {invoices.map((invoice) => (
+                              <TableRow key={invoice.id} hover>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ bgcolor: 'success.light', color: 'success.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                      FV
+                                    </Box>
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontWeight: 500,
+                                      color: 'success.main',
+                                      cursor: 'pointer',
+                                      textDecoration: 'underline',
+                                      '&:hover': {
+                                        color: 'success.dark'
+                                      }
+                                    }}
+                                    onClick={() => window.open(invoice.downloadURL, '_blank')}
+                                    title="Kliknij, aby otworzyć w nowej karcie"
+                                  >
+                                    {invoice.fileName}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatFileSize(invoice.size)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {invoice.uploadedAt ? format(invoice.uploadedAt, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                    <IconButton
+                                      size="small"
+                                      color="success"
+                                      onClick={() => window.open(invoice.downloadURL, '_blank')}
+                                      title="Otwórz w nowej karcie"
+                                    >
+                                      <OpenInNewIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="secondary"
+                                      href={invoice.downloadURL}
+                                      component="a"
+                                      download={invoice.fileName}
+                                      title="Pobierz plik"
+                                    >
+                                      <DownloadIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleInvoiceDelete(invoice.id, invoice.fileName)}
+                                      title="Usuń fakturę"
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <Box sx={{ p: 2, backgroundColor: 'success.50', borderTop: 1, borderColor: 'divider' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                            Łącznie faktur: {invoices.length}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Całkowity rozmiar: {formatFileSize(invoices.reduce((sum, inv) => sum + inv.size, 0))}
                           </Typography>
                         </Box>
                       </TableContainer>
