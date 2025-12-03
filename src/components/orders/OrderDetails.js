@@ -354,7 +354,7 @@ const OrderDetails = () => {
   const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
   const [invoicedAmounts, setInvoicedAmounts] = useState({});
   const [proformaAmounts, setProformaAmounts] = useState({});
-  const [availableProformaAmount, setAvailableProformaAmount] = useState(0);
+  const [availableProformaAmounts, setAvailableProformaAmounts] = useState({}); // Map: proformaId -> availableAmount
   const [fullProductionTasks, setFullProductionTasks] = useState({});
   
   // State dla popover z listą faktur
@@ -560,10 +560,12 @@ const OrderDetails = () => {
           const availableProformasResult = results[resultIndex++];
           if (availableProformasResult.status === 'fulfilled') {
             const availableProformas = availableProformasResult.value;
-            const totalAvailable = availableProformas.reduce((sum, proforma) => 
-              sum + (proforma.amountInfo?.available || 0), 0
-            );
-            setAvailableProformaAmount(totalAvailable);
+            // Utwórz mapę proformaId -> availableAmount
+            const proformaAmountsMap = {};
+            availableProformas.forEach(proforma => {
+              proformaAmountsMap[proforma.id] = proforma.amountInfo?.available || 0;
+            });
+            setAvailableProformaAmounts(proformaAmountsMap);
           } else {
             console.error('Błąd podczas pobierania dostępnych proform:', availableProformasResult.reason);
           }
@@ -1983,11 +1985,11 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                             return `${percentage}%`;
                           })()}
                         </Typography>
-                        {availableProformaAmount > 0 && (
+                        {Object.values(availableProformaAmounts).reduce((sum, val) => sum + val, 0) > 0 && (
                           <Tooltip title="Kwota z proform dostępna do rozliczenia na fakturze końcowej">
                             <Chip 
                               size="small" 
-                              label={`Dostępne: ${formatCurrency(availableProformaAmount)}`}
+                              label={`Dostępne: ${formatCurrency(Object.values(availableProformaAmounts).reduce((sum, val) => sum + val, 0))}`}
                               color="success"
                               variant="outlined"
                               sx={{ fontSize: '0.65rem', height: 20 }}
@@ -2857,7 +2859,22 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                       {renderPaymentStatus(invoice.paymentStatus)}
                     </TableCell>
                     <TableCell align="right">
-                      {formatCurrency(invoice.total || 0, invoice.currency || 'EUR')}
+                      <Box>
+                        <Typography variant="body2">
+                          {formatCurrency(invoice.total || 0, invoice.currency || 'EUR')}
+                        </Typography>
+                        {invoice.isProforma && availableProformaAmounts[invoice.id] !== undefined && (
+                          <Tooltip title="Kwota dostępna do rozliczenia na fakturze końcowej">
+                            <Typography 
+                              variant="caption" 
+                              color={availableProformaAmounts[invoice.id] > 0 ? 'success.main' : 'text.secondary'}
+                              sx={{ display: 'block' }}
+                            >
+                              Dostępne: {formatCurrency(availableProformaAmounts[invoice.id])}
+                            </Typography>
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell align="right">
                       <Button
