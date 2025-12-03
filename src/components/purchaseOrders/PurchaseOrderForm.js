@@ -82,6 +82,22 @@ import PurchaseOrderCategorizedFileUpload from './PurchaseOrderCategorizedFileUp
 import SavingOverlay from '../common/SavingOverlay';
 import PODocumentScanner from './PODocumentScanner';
 
+// Opcje INCOTERMS 2020
+const INCOTERMS_OPTIONS = [
+  { value: '', label: '' },
+  { value: 'EXW', label: 'EXW - Ex Works' },
+  { value: 'FCA', label: 'FCA - Free Carrier' },
+  { value: 'CPT', label: 'CPT - Carriage Paid To' },
+  { value: 'CIP', label: 'CIP - Carriage and Insurance Paid To' },
+  { value: 'DAP', label: 'DAP - Delivered at Place' },
+  { value: 'DPU', label: 'DPU - Delivered at Place Unloaded' },
+  { value: 'DDP', label: 'DDP - Delivered Duty Paid' },
+  { value: 'FAS', label: 'FAS - Free Alongside Ship' },
+  { value: 'FOB', label: 'FOB - Free on Board' },
+  { value: 'CFR', label: 'CFR - Cost and Freight' },
+  { value: 'CIF', label: 'CIF - Cost, Insurance and Freight' }
+];
+
 const PurchaseOrderForm = ({ orderId }) => {
   const { t, currentLanguage } = useTranslation();
   const { poId } = useParams();
@@ -121,6 +137,7 @@ const PurchaseOrderForm = ({ orderId }) => {
     orderDate: formatDateForInput(new Date()),
     expectedDeliveryDate: '',
     deliveryAddress: '',
+    incoterms: '', // Warunki dostawy INCOTERMS
     notes: '',
     status: PURCHASE_ORDER_STATUSES.DRAFT,
     invoiceLink: '',
@@ -2830,8 +2847,28 @@ const PurchaseOrderForm = ({ orderId }) => {
               )}
             </Grid>
             
+            {/* INCOTERMS */}
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth>
+                <InputLabel id="incoterms-label">{t('purchaseOrders.form.incoterms')}</InputLabel>
+                <Select
+                  labelId="incoterms-label"
+                  name="incoterms"
+                  value={poData.incoterms || ''}
+                  onChange={handleChange}
+                  label={t('purchaseOrders.form.incoterms')}
+                >
+                  {INCOTERMS_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label || t('purchaseOrders.form.selectIncoterms')}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
             {/* Uwagi */}
-            <Grid item xs={12}>
+            <Grid item xs={12} md={6}>
               <TextField
                 name="notes"
                 label={t('purchaseOrders.form.notes')}
@@ -2842,8 +2879,6 @@ const PurchaseOrderForm = ({ orderId }) => {
                 rows={2}
               />
             </Grid>
-            
-
             
             {/* Dodatkowe koszty */}
             <Grid item xs={12}>

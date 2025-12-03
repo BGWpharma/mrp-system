@@ -85,6 +85,8 @@
     "selectSupplierAddress": "Select supplier address:",
     "mainAddress": "(main)",
     "notes": "Notes",
+    "incoterms": "INCOTERMS",
+    "selectIncoterms": "Select delivery terms",
     "additionalCosts": {
       "title": "Additional costs",
       "addCost": "Add cost",
@@ -177,6 +179,7 @@
     "orderDate": "Order date",
     "expectedDeliveryDate": "Expected delivery date",
     "deliveryDate": "Delivery date",
+    "incoterms": "INCOTERMS",
     "invoice": "Invoice",
     "invoices": "Invoices",
     "viewInvoice": "View invoice",

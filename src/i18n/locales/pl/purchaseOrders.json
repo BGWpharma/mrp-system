@@ -85,6 +85,8 @@
     "selectSupplierAddress": "Wybierz adres dostawcy:",
     "mainAddress": "(główny)",
     "notes": "Uwagi",
+    "incoterms": "INCOTERMS",
+    "selectIncoterms": "Wybierz warunki dostawy",
     "additionalCosts": {
       "title": "Dodatkowe koszty",
       "addCost": "Dodaj koszt",
@@ -178,6 +180,7 @@
     "orderDate": "Data zamówienia",
     "expectedDeliveryDate": "Oczekiwana data dostawy",
     "deliveryDate": "Data dostawy",
+    "incoterms": "INCOTERMS",
     "invoice": "Faktura",
     "invoices": "Faktury",
     "viewInvoice": "Zobacz fakturę",

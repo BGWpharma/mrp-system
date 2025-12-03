@@ -1585,6 +1585,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     <strong>{t('purchaseOrders.details.expectedDeliveryDate')}:</strong> {formatDate(purchaseOrder.expectedDeliveryDate)}
                   </Typography>
                   
+                  {purchaseOrder.incoterms && (
+                    <Typography variant="body1" gutterBottom>
+                      <strong>{t('purchaseOrders.details.incoterms')}:</strong> {purchaseOrder.incoterms}
+                    </Typography>
+                  )}
+                  
                   {purchaseOrder.status === PURCHASE_ORDER_STATUSES.DELIVERED && (
                     <Typography variant="body1" gutterBottom>
                       <strong>{t('purchaseOrders.details.deliveryDate')}:</strong> {formatDate(purchaseOrder.deliveredAt)}
