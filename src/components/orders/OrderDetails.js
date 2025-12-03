@@ -1585,9 +1585,9 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             size="small" 
             color="default"
             clickable
-            onClick={() => navigate('/production/create-from-order', {
-              state: { orderId: orderId }
-            })}
+            component={RouterLink}
+            to="/production/create-from-order"
+            state={{ orderId: orderId }}
             sx={{ cursor: 'pointer' }}
           />
         </Tooltip>
@@ -1633,11 +1633,6 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
       else if (task.status === 'W trakcie' || task.status === 'Wstrzymane') statusColor = 'warning';
       else if (task.status === 'Zaplanowane') statusColor = 'primary';
       
-      const handleClick = (e) => {
-        e.preventDefault();
-        navigate(`/production/tasks/${task.id}`);
-      };
-      
       return (
         <Tooltip title={`Przejdź do zadania produkcyjnego ${task.moNumber || task.id}`}>
           <Chip
@@ -1645,9 +1640,8 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
             size="small"
             color={statusColor}
             clickable
-            component="a"
-            href={`/production/tasks/${task.id}`}
-            onClick={handleClick}
+            component={RouterLink}
+            to={`/production/tasks/${task.id}`}
             sx={{ 
               cursor: 'pointer',
               textDecoration: 'none'
@@ -2658,13 +2652,11 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
               variant="contained"
               color="error"
               startIcon={<ReceiptIcon />}
-              onClick={() => {
-                navigate('/invoices/new', {
-                  state: {
-                    preselectedOrder: order,
-                    isCorrectionInvoice: true
-                  }
-                });
+              component={RouterLink}
+              to="/invoices/new"
+              state={{
+                preselectedOrder: order,
+                isCorrectionInvoice: true
               }}
             >
               Utwórz FK
@@ -2793,7 +2785,8 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                 variant="contained"
                 size="small"
                 startIcon={<AddIcon />}
-                onClick={() => navigate(`/invoices/new?customerId=${order.customer?.id || ''}&orderId=${orderId}`)}
+                component={RouterLink}
+                to={`/invoices/new?customerId=${order.customer?.id || ''}&orderId=${orderId}`}
                 sx={{ ml: 1 }}
               >
                 {t('orderDetails.invoicesTable.createInvoice')}
@@ -2909,7 +2902,8 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                 variant="contained"
                 size="small"
                 startIcon={<AddIcon />}
-                onClick={() => navigate(`/inventory/cmr/new`)}
+                component={RouterLink}
+                to="/inventory/cmr/new"
                 sx={{ ml: 1 }}
               >
                 {t('orderDetails.cmrTable.createCmr')}
