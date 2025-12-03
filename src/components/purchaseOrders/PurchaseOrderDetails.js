@@ -53,7 +53,7 @@ import {
 } from '../../services/purchaseOrderService';
 import { getBatchesByPurchaseOrderId, getInventoryBatch, getWarehouseById } from '../../services/inventory';
 import { getPOReservationsForItem } from '../../services/poReservationService';
-import { getInvoicesByOrderId } from '../../services/invoiceService';
+import { getInvoicesByOrderId, getReinvoicedAmountsByPOItems } from '../../services/invoiceService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../hooks/useNotification';
 import { db } from '../../services/firebase/config';
@@ -109,6 +109,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
   const [poReservationsByItem, setPOReservationsByItem] = useState({});
   const [loadingReservations, setLoadingReservations] = useState(false);
   
+  // Stan dla refakturowanych kwot
+  const [reinvoicedAmounts, setReinvoicedAmounts] = useState({ items: {}, additionalCosts: {} });
+  
   useEffect(() => {
     const fetchPurchaseOrder = async () => {
       try {
@@ -131,8 +134,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
           await loadPOReservations(orderId, data.items);
         }
         
-        // Pobierz refaktury powiązane z tym PO
-        await fetchRefInvoices(orderId);
+        // Pobierz refaktury powiązane z tym PO i oblicz refakturowane kwoty
+        await fetchRefInvoices(orderId, data);
         
         // Pobierz odpowiedzi formularzy rozładunku dla tego PO
         if (data && data.number) {
@@ -249,13 +252,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
   };
   
   // Funkcja do pobierania refaktur powiązanych z tym PO
-  const fetchRefInvoices = async (poId) => {
+  const fetchRefInvoices = async (poId, poData = null) => {
     try {
       setLoadingRefInvoices(true);
       const invoices = await getInvoicesByOrderId(poId);
       // Filtruj tylko refaktury (isRefInvoice === true)
       const refInvoices = invoices.filter(inv => inv.isRefInvoice === true);
       setRelatedRefInvoices(refInvoices);
+      
+      // Pobierz kwoty refakturowane dla pozycji i dodatkowych kosztów
+      const reinvoiced = await getReinvoicedAmountsByPOItems(poId, invoices, poData);
+      setReinvoicedAmounts(reinvoiced);
     } catch (error) {
       console.error('Błąd podczas pobierania refaktur:', error);
     } finally {
@@ -1708,6 +1715,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell align="right">{t('purchaseOrders.details.table.plannedDeliveryDate')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.actualDeliveryDate')}</TableCell>
                       <TableCell align="right">{t('purchaseOrders.details.table.received')}</TableCell>
+                      <TableCell align="right">Refakturowane</TableCell>
                       {/* Ukrywamy kolumnę akcji przy drukowaniu */}
                       <TableCell sx={{ '@media print': { display: 'none' } }}></TableCell>
                     </TableRow>
@@ -1786,6 +1794,51 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             <TableCell align="right">
                               {received} {received > 0 && `(${fulfilledPercentage.toFixed(0)}%)`}
                             </TableCell>
+                            {/* Kolumna refakturowane */}
+                            <TableCell align="right">
+                              {(() => {
+                                const itemId = item.id;
+                                const reinvoicedData = reinvoicedAmounts.items[itemId];
+                                const reinvoicedAmount = reinvoicedData?.totalReinvoiced || 0;
+                                const itemValue = parseFloat(item.totalPrice) || 0;
+                                const isFullyReinvoiced = reinvoicedAmount >= itemValue;
+                                
+                                if (reinvoicedAmount > 0) {
+                                  return (
+                                    <Tooltip 
+                                      title={
+                                        <Box>
+                                          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                                            Refakturowano do {reinvoicedData.invoices.length} {reinvoicedData.invoices.length === 1 ? 'faktury' : 'faktur'}:
+                                          </Typography>
+                                          {reinvoicedData.invoices.map((inv, i) => (
+                                            <Typography key={i} variant="body2">
+                                              • {inv.invoiceNumber} → {inv.customerName || 'Brak klienta'}: {formatCurrency(inv.itemValue, purchaseOrder.currency)}
+                                            </Typography>
+                                          ))}
+                                        </Box>
+                                      }
+                                    >
+                                      <Typography 
+                                        sx={{ 
+                                          color: isFullyReinvoiced ? 'success.main' : 'warning.main',
+                                          fontWeight: 'medium',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'flex-end',
+                                          gap: 0.5
+                                        }}
+                                      >
+                                        {isFullyReinvoiced ? '✅' : '⚠️'}
+                                        {formatCurrency(reinvoicedAmount, purchaseOrder.currency)}
+                                      </Typography>
+                                    </Tooltip>
+                                  );
+                                }
+                                return <Typography color="text.secondary">—</Typography>;
+                              })()}
+                            </TableCell>
                             {/* Ukrywamy przycisk akcji przy drukowaniu */}
                             <TableCell align="right" sx={{ '@media print': { display: 'none' } }}>
                               {canReceiveItems && item.inventoryItemId && 
@@ -1847,7 +1900,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           {/* LOTy powiązane z tą pozycją zamówienia */}
                           {expandedItems[item.id] && (
                             <TableRow>
-                              <TableCell colSpan={7} sx={{ py: 0, backgroundColor: 'rgba(0, 0, 0, 0.02)' }}>
+                              <TableCell colSpan={15} sx={{ py: 0, backgroundColor: 'rgba(0, 0, 0, 0.02)' }}>
                                 <Collapse in={expandedItems[item.id]} timeout="auto" unmountOnExit>
                                   <Box sx={{ m: 2 }}>
                                     <Typography variant="subtitle2" gutterBottom component="div">
@@ -2482,14 +2535,21 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       <TableCell align="right">Stawka VAT</TableCell>
                       <TableCell align="right">VAT</TableCell>
                       <TableCell align="right">Razem brutto</TableCell>
+                      <TableCell align="right">Refakturowane</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {purchaseOrder.additionalCostsItems.map((cost, index) => {
+                      const costId = cost.id || `additional-cost-${index}`;
                       const costValue = parseFloat(cost.value) || 0;
                       const vatRate = typeof cost.vatRate === 'number' ? cost.vatRate : 0;
                       const vatValue = (costValue * vatRate) / 100;
                       const grossValue = costValue + vatValue;
+                      
+                      // Dane o refakturowaniu
+                      const reinvoicedData = reinvoicedAmounts.additionalCosts[costId];
+                      const reinvoicedAmount = reinvoicedData?.totalReinvoiced || 0;
+                      const isFullyReinvoiced = reinvoicedAmount >= costValue;
                       
                       return (
                         <TableRow key={cost.id || index}>
@@ -2498,6 +2558,41 @@ const PurchaseOrderDetails = ({ orderId }) => {
                           <TableCell align="right">{vatRate > 0 ? `${vatRate}%` : ''}</TableCell>
                           <TableCell align="right">{formatCurrency(vatValue, purchaseOrder.currency)}</TableCell>
                           <TableCell align="right">{formatCurrency(grossValue, purchaseOrder.currency)}</TableCell>
+                          <TableCell align="right">
+                            {reinvoicedAmount > 0 ? (
+                              <Tooltip 
+                                title={
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                                      Refakturowano do {reinvoicedData.invoices.length} {reinvoicedData.invoices.length === 1 ? 'faktury' : 'faktur'}:
+                                    </Typography>
+                                    {reinvoicedData.invoices.map((inv, i) => (
+                                      <Typography key={i} variant="body2">
+                                        • {inv.invoiceNumber} → {inv.customerName || 'Brak klienta'}: {formatCurrency(inv.itemValue, purchaseOrder.currency)}
+                                      </Typography>
+                                    ))}
+                                  </Box>
+                                }
+                              >
+                                <Typography 
+                                  sx={{ 
+                                    color: isFullyReinvoiced ? 'success.main' : 'warning.main',
+                                    fontWeight: 'medium',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end',
+                                    gap: 0.5
+                                  }}
+                                >
+                                  {isFullyReinvoiced ? '✅' : '⚠️'}
+                                  {formatCurrency(reinvoicedAmount, purchaseOrder.currency)}
+                                </Typography>
+                              </Tooltip>
+                            ) : (
+                              <Typography color="text.secondary">—</Typography>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     })}

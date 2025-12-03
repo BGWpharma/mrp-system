@@ -2061,6 +2061,106 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
 };
 
 /**
+ * Oblicza kwoty refakturowane dla pozycji i dodatkowych kosztów zamówienia zakupowego
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {Array} [preloadedInvoices] - Opcjonalna lista już pobranych faktur
+ * @param {Object} [preloadedPOData] - Opcjonalne dane PO już pobrane
+ * @returns {Promise<Object>} Obiekt z kwotami refakturowanymi dla pozycji i kosztów
+ */
+export const getReinvoicedAmountsByPOItems = async (purchaseOrderId, preloadedInvoices = null, preloadedPOData = null) => {
+  try {
+    // Pobierz refaktury dla tego PO
+    let invoices = preloadedInvoices;
+    if (!invoices) {
+      invoices = await getInvoicesByOrderId(purchaseOrderId);
+    }
+    
+    // Filtruj tylko refaktury (nie proformy, nie korekty)
+    const refInvoices = invoices.filter(inv => inv.isRefInvoice === true && !inv.isProforma);
+    
+    // Pobierz dane PO jeśli nie przekazano
+    let poData = preloadedPOData;
+    if (!poData) {
+      const poDoc = await getDoc(doc(db, 'purchaseOrders', purchaseOrderId));
+      poData = poDoc.exists() ? poDoc.data() : null;
+    }
+    
+    const reinvoicedAmounts = {
+      items: {},           // Pozycje produktów
+      additionalCosts: {}  // Dodatkowe koszty
+    };
+    
+    refInvoices.forEach((invoice) => {
+      if (!invoice.items || !Array.isArray(invoice.items)) return;
+      
+      invoice.items.forEach((invoiceItem) => {
+        const itemValue = parseFloat(invoiceItem.netValue || invoiceItem.totalPrice || 0);
+        const quantity = parseFloat(invoiceItem.quantity || 0);
+        
+        if (invoiceItem.isAdditionalCost) {
+          // To jest dodatkowy koszt
+          const costId = invoiceItem.originalCostId || invoiceItem.id;
+          
+          if (!reinvoicedAmounts.additionalCosts[costId]) {
+            reinvoicedAmounts.additionalCosts[costId] = {
+              totalReinvoiced: 0,
+              invoices: []
+            };
+          }
+          
+          reinvoicedAmounts.additionalCosts[costId].totalReinvoiced += itemValue;
+          reinvoicedAmounts.additionalCosts[costId].invoices.push({
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.number,
+            itemValue: itemValue,
+            quantity: quantity,
+            customerId: invoice.customer?.id,
+            customerName: invoice.customer?.name
+          });
+        } else {
+          // To jest pozycja produktu
+          let itemId = invoiceItem.orderItemId || invoiceItem.id;
+          
+          // Próba dopasowania po nazwie jeśli brak ID
+          if (!itemId && poData && poData.items) {
+            const matchingItem = poData.items.find(poItem => 
+              poItem.name === invoiceItem.name
+            );
+            if (matchingItem) {
+              itemId = matchingItem.id;
+            }
+          }
+          
+          if (!itemId) return;
+          
+          if (!reinvoicedAmounts.items[itemId]) {
+            reinvoicedAmounts.items[itemId] = {
+              totalReinvoiced: 0,
+              invoices: []
+            };
+          }
+          
+          reinvoicedAmounts.items[itemId].totalReinvoiced += itemValue;
+          reinvoicedAmounts.items[itemId].invoices.push({
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.number,
+            itemValue: itemValue,
+            quantity: quantity,
+            customerId: invoice.customer?.id,
+            customerName: invoice.customer?.name
+          });
+        }
+      });
+    });
+    
+    return reinvoicedAmounts;
+  } catch (error) {
+    console.error('Błąd podczas obliczania refakturowanych kwot:', error);
+    return { items: {}, additionalCosts: {} };
+  }
+};
+
+/**
  * Oblicza kwoty zaliczek (proform) dla pozycji zamówienia
  * @param {string} orderId - ID zamówienia
  * @param {Array} [preloadedInvoices] - Opcjonalna lista już pobranych faktur (optymalizacja)
