@@ -457,6 +457,50 @@ export const getPurchaseOrdersWithPagination = async (page = 1, itemsPerPage = 1
             }
           }
           
+          // NOWE: Wyszukiwanie po wartości (gdy searchTerm jest liczbą)
+          const searchNumber = parseFloat(searchTerm.replace(',', '.').replace(/\s/g, ''));
+          const isNumericSearch = !isNaN(searchNumber) && searchNumber > 0;
+          
+          if (isNumericSearch) {
+            // Tolerancja dla porównania wartości (1% lub minimum 1 jednostka waluty)
+            const tolerance = Math.max(searchNumber * 0.01, 1);
+            
+            // Wyszukiwanie po wartości całkowitej PO
+            const totalGross = parseFloat(data.totalGross) || 0;
+            const totalValue = parseFloat(data.totalValue) || 0;
+            const totalNet = parseFloat(data.totalNet) || 0;
+            
+            if (Math.abs(totalGross - searchNumber) <= tolerance ||
+                Math.abs(totalValue - searchNumber) <= tolerance ||
+                Math.abs(totalNet - searchNumber) <= tolerance) {
+              console.log(`✓ Znaleziono dopasowanie w wartości PO: ${data.number} (totalGross: ${totalGross})`);
+              return true;
+            }
+            
+            // Wyszukiwanie po wartości pozycji zamówienia
+            if (data.items && Array.isArray(data.items) && data.items.some(item => {
+              const itemTotalPrice = parseFloat(item.totalPrice) || 0;
+              const itemUnitPrice = parseFloat(item.unitPrice) || 0;
+              const itemNetValue = parseFloat(item.netValue) || 0;
+              
+              return Math.abs(itemTotalPrice - searchNumber) <= tolerance ||
+                     Math.abs(itemUnitPrice - searchNumber) <= tolerance ||
+                     Math.abs(itemNetValue - searchNumber) <= tolerance;
+            })) {
+              console.log(`✓ Znaleziono dopasowanie w wartości pozycji: ${data.number}`);
+              return true;
+            }
+            
+            // Wyszukiwanie po wartości dodatkowych kosztów
+            if (data.additionalCostsItems && Array.isArray(data.additionalCostsItems) && data.additionalCostsItems.some(cost => {
+              const costValue = parseFloat(cost.value) || 0;
+              return Math.abs(costValue - searchNumber) <= tolerance;
+            })) {
+              console.log(`✓ Znaleziono dopasowanie w wartości kosztu dodatkowego: ${data.number}`);
+              return true;
+            }
+          }
+          
           return false;
         });
         
@@ -3687,6 +3731,10 @@ export const getPurchaseOrdersOptimized = async ({
       const searchLower = searchTerm.toLowerCase().trim();
       console.log('🔍 Filtrowanie po terminie wyszukiwania:', searchLower);
       
+      // Sprawdź czy searchTerm to liczba (obsługa wyszukiwania po wartości)
+      const searchNumber = parseFloat(searchTerm.replace(',', '.').replace(/\s/g, ''));
+      const isNumericSearch = !isNaN(searchNumber) && searchNumber > 0;
+      
       allOrders = allOrders.filter(order => {
         // Wyszukiwanie w numerze zamówienia
         if (order.number && order.number.toLowerCase().includes(searchLower)) {
@@ -3717,6 +3765,47 @@ export const getPurchaseOrdersOptimized = async ({
         // Wyszukiwanie w notatkach
         if (order.notes && order.notes.toLowerCase().includes(searchLower)) {
           return true;
+        }
+        
+        // NOWE: Wyszukiwanie po wartości (gdy searchTerm jest liczbą)
+        if (isNumericSearch) {
+          // Tolerancja dla porównania wartości (1% lub minimum 1 jednostka waluty)
+          const tolerance = Math.max(searchNumber * 0.01, 1);
+          
+          // Wyszukiwanie po wartości całkowitej PO
+          const totalGross = parseFloat(order.totalGross) || 0;
+          const totalValue = parseFloat(order.totalValue) || 0;
+          const totalNet = parseFloat(order.totalNet) || 0;
+          
+          if (Math.abs(totalGross - searchNumber) <= tolerance ||
+              Math.abs(totalValue - searchNumber) <= tolerance ||
+              Math.abs(totalNet - searchNumber) <= tolerance) {
+            console.log(`✓ Znaleziono dopasowanie w wartości PO: ${order.number} (totalGross: ${totalGross})`);
+            return true;
+          }
+          
+          // Wyszukiwanie po wartości pozycji zamówienia
+          if (order.items && order.items.some(item => {
+            const itemTotalPrice = parseFloat(item.totalPrice) || 0;
+            const itemUnitPrice = parseFloat(item.unitPrice) || 0;
+            const itemNetValue = parseFloat(item.netValue) || 0;
+            
+            return Math.abs(itemTotalPrice - searchNumber) <= tolerance ||
+                   Math.abs(itemUnitPrice - searchNumber) <= tolerance ||
+                   Math.abs(itemNetValue - searchNumber) <= tolerance;
+          })) {
+            console.log(`✓ Znaleziono dopasowanie w wartości pozycji: ${order.number}`);
+            return true;
+          }
+          
+          // Wyszukiwanie po wartości dodatkowych kosztów
+          if (order.additionalCostsItems && order.additionalCostsItems.some(cost => {
+            const costValue = parseFloat(cost.value) || 0;
+            return Math.abs(costValue - searchNumber) <= tolerance;
+          })) {
+            console.log(`✓ Znaleziono dopasowanie w wartości kosztu dodatkowego: ${order.number}`);
+            return true;
+          }
         }
         
         return false;
@@ -3896,14 +3985,17 @@ export const searchPurchaseOrdersByNumber = async (numberPrefix, maxResults = 15
 
     const searchTerm = numberPrefix.trim().toUpperCase();
     
-    // Sprawdź czy użytkownik wpisał sam numer (bez PO)
+    // Sprawdź czy użytkownik wpisał sam numer (bez PO) lub wartość
     const isNumericOnly = /^\d+$/.test(searchTerm);
+    
+    // Sprawdź czy to może być wyszukiwanie po wartości (liczba zmiennoprzecinkowa)
+    const searchNumber = parseFloat(numberPrefix.replace(',', '.').replace(/\s/g, ''));
+    const isValueSearch = !isNaN(searchNumber) && searchNumber > 100; // Wartości > 100 traktuj jako wyszukiwanie po wartości
     
     let querySnapshot;
     
-    if (isNumericOnly) {
-      // Użytkownik wpisał sam numer (np. "92") - musimy przeszukać po stronie klienta
-      // bo Firebase nie obsługuje "contains" - pobieramy ostatnie PO i filtrujemy
+    if (isNumericOnly || isValueSearch) {
+      // Użytkownik wpisał sam numer (np. "92") lub wartość (np. "1500") - przeszukaj po stronie klienta
       const q = query(
         collection(db, PURCHASE_ORDERS_COLLECTION),
         orderBy('createdAt', 'desc'),
@@ -3912,9 +4004,49 @@ export const searchPurchaseOrdersByNumber = async (numberPrefix, maxResults = 15
       
       const allResults = await getDocs(q);
       const filteredDocs = allResults.docs.filter(doc => {
-        const number = doc.data().number || '';
+        const data = doc.data();
+        const number = data.number || '';
+        
         // Szukaj numeru w dowolnym miejscu (np. "92" w "PO00092")
-        return number.includes(searchTerm);
+        if (number.includes(searchTerm)) {
+          return true;
+        }
+        
+        // NOWE: Wyszukiwanie po wartości (dla liczb > 100)
+        if (isValueSearch) {
+          const tolerance = Math.max(searchNumber * 0.01, 1); // 1% tolerancji
+          
+          // Wartość całkowita PO
+          const totalGross = parseFloat(data.totalGross) || 0;
+          const totalValue = parseFloat(data.totalValue) || 0;
+          
+          if (Math.abs(totalGross - searchNumber) <= tolerance ||
+              Math.abs(totalValue - searchNumber) <= tolerance) {
+            return true;
+          }
+          
+          // Wartość pozycji
+          if (data.items && Array.isArray(data.items)) {
+            const foundInItems = data.items.some(item => {
+              const itemTotalPrice = parseFloat(item.totalPrice) || 0;
+              const itemUnitPrice = parseFloat(item.unitPrice) || 0;
+              return Math.abs(itemTotalPrice - searchNumber) <= tolerance ||
+                     Math.abs(itemUnitPrice - searchNumber) <= tolerance;
+            });
+            if (foundInItems) return true;
+          }
+          
+          // Wartość dodatkowych kosztów
+          if (data.additionalCostsItems && Array.isArray(data.additionalCostsItems)) {
+            const foundInCosts = data.additionalCostsItems.some(cost => {
+              const costValue = parseFloat(cost.value) || 0;
+              return Math.abs(costValue - searchNumber) <= tolerance;
+            });
+            if (foundInCosts) return true;
+          }
+        }
+        
+        return false;
       }).slice(0, maxResults);
       
       querySnapshot = { docs: filteredDocs };
