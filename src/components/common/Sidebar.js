@@ -51,7 +51,9 @@ import {
   Assignment as FormIcon,
   TrendingUp as ForecastIcon
 } from '@mui/icons-material';
-import { getExpiringBatches, getExpiredBatches } from '../../services/inventory';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../services/firebase/config';
+import { refreshExpiryStats } from '../../services/cloudFunctionsService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
@@ -299,26 +301,42 @@ const Sidebar = ({ onToggle }) => {
   }, [currentUser?.uid]);
 
   useEffect(() => {
-    const fetchExpiringProducts = async () => {
-      try {
-        // Pobierz produkty zbliżające się do końca terminu ważności (domyślnie 365 dni - 12 miesięcy)
-        const expiringBatches = await getExpiringBatches(365);
-        // Pobierz produkty, które już są przeterminowane
-        const expiredBatches = await getExpiredBatches();
-        // Łączna ilość produktów wygasających i przeterminowanych
-        setExpiringItemsCount(expiringBatches.length + expiredBatches.length);
-      } catch (error) {
-        console.error('Błąd podczas pobierania danych o wygasających produktach:', error);
+    let hasTriggeredRefresh = false;
+    
+    // ✅ OPTYMALIZACJA: Nasłuchuj na dokument agregatów zamiast pobierać wszystkie partie
+    // Cloud Function updateExpiryStats aktualizuje ten dokument co godzinę
+    // To redukuje liczbę odczytów z setek do 1
+    const unsubscribe = onSnapshot(
+      doc(db, 'aggregates', 'expiryStats'),
+      async (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setExpiringItemsCount(data.totalCount || 0);
+        } else {
+          // Dokument jeszcze nie istnieje - wywołaj Cloud Function żeby go utworzyć
+          setExpiringItemsCount(0);
+          
+          // Wywołaj refreshExpiryStats tylko raz (unikaj wielokrotnych wywołań)
+          if (!hasTriggeredRefresh) {
+            hasTriggeredRefresh = true;
+            try {
+              console.log('📊 Dokument agregatów nie istnieje - tworzę początkowe dane...');
+              await refreshExpiryStats();
+              console.log('✅ Początkowe agregaty utworzone pomyślnie');
+            } catch (error) {
+              console.warn('⚠️ Nie udało się utworzyć początkowych agregatów:', error.message);
+              // Nie blokuj aplikacji - scheduled function utworzy je później
+            }
+          }
+        }
+      },
+      (error) => {
+        console.error('Błąd podczas nasłuchiwania na agregaty wygasających partii:', error);
         setExpiringItemsCount(0);
       }
-    };
+    );
 
-    fetchExpiringProducts();
-    
-    // Odświeżaj dane co 30 minut
-    const intervalId = setInterval(fetchExpiringProducts, 30 * 60 * 1000);
-    
-    return () => clearInterval(intervalId);
+    return () => unsubscribe();
   }, []);
   
   const isActive = (path) => {

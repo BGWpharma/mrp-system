@@ -25,6 +25,23 @@ export const getRandomBatch = async () => {
 };
 
 /**
+ * Ręczne odświeżenie agregatów wygasających partii
+ * Aktualizuje dokument aggregates/expiryStats używany przez Sidebar
+ * 
+ * @returns {Promise<Object>} Obiekt z liczbą wygasających i przeterminowanych partii
+ */
+export const refreshExpiryStats = async () => {
+  try {
+    const refreshExpiryStatsFn = httpsCallable(functions, 'refreshExpiryStats');
+    const result = await refreshExpiryStatsFn();
+    return result.data;
+  } catch (error) {
+    console.error('Error calling refreshExpiryStats:', error);
+    throw new Error(`Nie udało się odświeżyć statystyk wygasających partii: ${error.message}`);
+  }
+};
+
+/**
  * Template dla kolejnych funkcji:
  * 
  * export const functionName = async (params) => {
