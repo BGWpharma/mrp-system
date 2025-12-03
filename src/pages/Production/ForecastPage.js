@@ -249,24 +249,42 @@ const ForecastPage = () => {
         
         const taskQuantity = typeof task.quantity === 'number' ? task.quantity : parseFloat(task.quantity) || 1;
         
+        // POPRAWKA: Pobierz rzeczywiste ilości materiałów, jeśli zostały zmienione
+        const actualMaterialUsage = task.actualMaterialUsage || {};
+        
         for (const material of task.materials) {
           // Upewnij się, że materiał ma ID - akceptujemy zarówno id jak i inventoryItemId
           const materialId = material.id || material.inventoryItemId;
           
           if (!materialId) continue;
           
-          // Konwertuj ilości na liczby - upewnij się, że są poprawnie sparsowane
-          const materialQuantity = typeof material.quantity === 'number' 
-            ? material.quantity 
-            : parseFloat(material.quantity) || 0;
+          // POPRAWKA: Użyj rzeczywistej ilości z actualMaterialUsage, jeśli dostępna
+          // W przeciwnym razie użyj planowanej ilości z material.quantity
+          let totalRequiredForTask;
+          let materialQuantityPerUnit;
+          const actualQuantityForMaterial = actualMaterialUsage[material.id] ?? actualMaterialUsage[materialId];
+          
+          if (actualQuantityForMaterial !== undefined) {
+            // Zmieniona ilość - actualMaterialUsage zawiera już pełną ilość dla zadania
+            totalRequiredForTask = parseFloat(actualQuantityForMaterial) || 0;
+            // Oblicz ilość na jednostkę dla spójności danych
+            materialQuantityPerUnit = taskQuantity > 0 ? totalRequiredForTask / taskQuantity : totalRequiredForTask;
+          } else {
+            // Brak zmiany - użyj oryginalnej logiki z material.quantity
+            const materialQuantity = typeof material.quantity === 'number' 
+              ? material.quantity 
+              : parseFloat(material.quantity) || 0;
+              
+            if (materialQuantity <= 0) continue;
             
-          if (materialQuantity <= 0) continue;
+            // Wyciągnij ilość materiału na jednostkę produktu
+            materialQuantityPerUnit = correctMaterialQuantity(material, taskQuantity);
+            
+            // Oblicz całkowitą wymaganą ilość dla zadania
+            totalRequiredForTask = materialQuantityPerUnit * taskQuantity;
+          }
           
-          // Wyciągnij ilość materiału na jednostkę produktu
-          const materialQuantityPerUnit = correctMaterialQuantity(material, taskQuantity);
-          
-          // Oblicz całkowitą wymaganą ilość dla zadania
-          const totalRequiredForTask = materialQuantityPerUnit * taskQuantity;
+          if (totalRequiredForTask <= 0) continue;
           
           // Pobierz ilość już skonsumowaną dla tego materiału w tym zadaniu
           let consumedQuantity = 0;
@@ -2517,7 +2535,17 @@ const ForecastPage = () => {
                           if (!task) return null;
                           
                           const materialInTask = task.materials?.find(m => m.id === selectedMaterial.id);
-                          const quantityPerUnit = materialInTask?.quantity || 0;
+                          
+                          // POPRAWKA: Pobierz rzeczywistą ilość z actualMaterialUsage, jeśli jest dostępna
+                          const actualMaterialUsage = task.actualMaterialUsage || {};
+                          const materialId = materialInTask?.id || selectedMaterial.id;
+                          const inventoryItemId = materialInTask?.inventoryItemId;
+                          const actualTotalQuantity = actualMaterialUsage[materialId] ?? actualMaterialUsage[inventoryItemId];
+                          
+                          // Użyj rzeczywistej ilości jeśli dostępna, w przeciwnym razie oryginalną
+                          const quantityPerUnit = actualTotalQuantity !== undefined 
+                            ? parseFloat(actualTotalQuantity) 
+                            : (materialInTask?.quantity || 0);
                           
                           return (
                             <TableRow key={taskId}>

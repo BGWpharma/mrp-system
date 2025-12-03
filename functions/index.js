@@ -16,6 +16,7 @@
  * - onPurchaseOrderUpdate (trigger: purchaseOrders)
  * - onBatchPriceUpdate    (trigger: _systemEvents)
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
+ * - onProductionTaskScheduleUpdate (trigger: productionTasks)
  * - updateExpiryStats     (scheduled: every 1 hour)
  */
 
@@ -34,6 +35,7 @@ const {getRandomBatch} = require("./callable/randomBatch");
 const {onPurchaseOrderUpdate} = require("./triggers/purchaseOrder");
 const {onBatchPriceUpdate} = require("./triggers/batchPrice");
 const {onProductionTaskCostUpdate} = require("./triggers/productionTask");
+const {onProductionTaskScheduleUpdate} = require("./triggers/productionTaskSchedule");
 
 // ============================================================================
 // SCHEDULED FUNCTIONS - Zadania cron
@@ -48,6 +50,7 @@ exports.getRandomBatch = getRandomBatch;
 exports.onPurchaseOrderUpdate = onPurchaseOrderUpdate;
 exports.onBatchPriceUpdate = onBatchPriceUpdate;
 exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;
+exports.onProductionTaskScheduleUpdate = onProductionTaskScheduleUpdate;
 exports.updateExpiryStats = updateExpiryStats;
 
 // ============================================================================
