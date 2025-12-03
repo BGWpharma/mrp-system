@@ -4059,9 +4059,17 @@ const TaskDetailsPage = () => {
       const currentConsumedMaterials = updatedTask.consumedMaterials || [];
       const newConsumedMaterials = [...currentConsumedMaterials, ...consumptionData];
 
+      // Przygotuj zaktualizowane actualMaterialUsage - synchronizuj z materials.quantity
+      const updatedActualUsage = { ...(updatedTask.actualMaterialUsage || {}) };
+      updatedMaterials.forEach(material => {
+        // Synchronizuj actualMaterialUsage z quantity materiału
+        updatedActualUsage[material.id] = parseFloat(material.quantity) || 0;
+      });
+
       // Zaktualizuj zadanie w bazie danych - dodaj materiały i informacje o konsumpcji
       const updateData = {
         materials: updatedMaterials,
+        actualMaterialUsage: updatedActualUsage,
         updatedAt: serverTimestamp()
       };
       
@@ -4200,9 +4208,17 @@ const TaskDetailsPage = () => {
         }
       });
       
+      // Przygotuj zaktualizowane actualMaterialUsage - synchronizuj z materials.quantity
+      const updatedActualUsage = { ...(updatedTask.actualMaterialUsage || {}) };
+      updatedMaterials.forEach(material => {
+        // Synchronizuj actualMaterialUsage z quantity materiału
+        updatedActualUsage[material.id] = parseFloat(material.quantity) || 0;
+      });
+      
       // Zaktualizuj zadanie w bazie danych
       await updateDoc(doc(db, 'productionTasks', id), {
         materials: updatedMaterials,
+        actualMaterialUsage: updatedActualUsage,
         updatedAt: serverTimestamp()
       });
       

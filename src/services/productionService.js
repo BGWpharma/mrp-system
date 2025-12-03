@@ -6349,33 +6349,65 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
    */
   export const updateRelatedBatchesExpiryDate = async (taskId, currentTask, updatedTask, userId) => {
     try {
-      // Sprawdź czy data ważności została zmieniona
       const currentExpiryDate = currentTask.expiryDate;
       const newExpiryDate = updatedTask.expiryDate;
 
-      // Jeśli data nie została podana lub się nie zmieniła, nie rób nic
-      if (!newExpiryDate || !currentExpiryDate) {
-        return { success: true, updated: 0, message: 'Brak daty ważności do aktualizacji' };
+      // Jeśli nie ma nowej daty ważności, nie rób nic
+      if (!newExpiryDate) {
+        return { success: true, updated: 0, message: 'Brak nowej daty ważności do aktualizacji' };
       }
 
-      // Sprawdź czy data faktycznie się zmieniła
-      const currentDate = currentExpiryDate instanceof Date ? currentExpiryDate :
-                         currentExpiryDate.toDate ? currentExpiryDate.toDate() : new Date(currentExpiryDate);
+      // Konwertuj nową datę
       const newDate = newExpiryDate instanceof Date ? newExpiryDate :
                      newExpiryDate.toDate ? newExpiryDate.toDate() : new Date(newExpiryDate);
 
-      if (currentDate.getTime() === newDate.getTime()) {
-        return { success: true, updated: 0, message: 'Data ważności nie została zmieniona' };
+      // Sprawdź czy data faktycznie się zmieniła (tylko jeśli istnieje stara data)
+      if (currentExpiryDate) {
+        const currentDate = currentExpiryDate instanceof Date ? currentExpiryDate :
+                           currentExpiryDate.toDate ? currentExpiryDate.toDate() : new Date(currentExpiryDate);
+
+        if (currentDate.getTime() === newDate.getTime()) {
+          return { success: true, updated: 0, message: 'Data ważności nie została zmieniona' };
+        }
       }
 
       console.log(`[BATCH-EXPIRY-UPDATE] Aktualizacja daty ważności dla zadania ${taskId}`);
 
       // Znajdź wszystkie partie powiązane z tym zadaniem
       const batchesRef = collection(db, 'inventoryBatches');
-      const q = query(batchesRef, where('sourceId', '==', taskId));
-      const querySnapshot = await getDocs(q);
+      
+      // Metoda 1: przez sourceId (standardowe powiązanie)
+      const queryBySourceId = query(batchesRef, where('sourceId', '==', taskId));
+      const sourceIdSnapshot = await getDocs(queryBySourceId);
 
-      if (querySnapshot.empty) {
+      // Metoda 2: przez moNumber (jeśli istnieje)
+      let moNumberSnapshot = { docs: [] };
+      if (currentTask.moNumber || updatedTask.moNumber) {
+        const moNumber = updatedTask.moNumber || currentTask.moNumber;
+        const queryByMoNumber = query(batchesRef, where('moNumber', '==', moNumber));
+        moNumberSnapshot = await getDocs(queryByMoNumber);
+      }
+
+      // Metoda 3: przez inventoryBatchId (jeśli istnieje w zadaniu)
+      let directBatchDoc = null;
+      const inventoryBatchId = currentTask.inventoryBatchId || updatedTask.inventoryBatchId;
+      if (inventoryBatchId) {
+        const directBatchRef = doc(db, 'inventoryBatches', inventoryBatchId);
+        const directBatchSnapshot = await getDoc(directBatchRef);
+        if (directBatchSnapshot.exists()) {
+          directBatchDoc = directBatchSnapshot;
+        }
+      }
+
+      // Zbierz unikalne ID partii
+      const batchIdsToUpdate = new Set();
+      sourceIdSnapshot.forEach((docSnapshot) => batchIdsToUpdate.add(docSnapshot.id));
+      moNumberSnapshot.docs.forEach((docSnapshot) => batchIdsToUpdate.add(docSnapshot.id));
+      if (directBatchDoc) {
+        batchIdsToUpdate.add(directBatchDoc.id);
+      }
+
+      if (batchIdsToUpdate.size === 0) {
         console.log(`[BATCH-EXPIRY-UPDATE] Nie znaleziono partii powiązanych z zadaniem ${taskId}`);
         return { success: true, updated: 0, message: 'Brak partii do aktualizacji' };
       }
@@ -6383,8 +6415,8 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       // Przygotuj aktualizacje dla wszystkich partii
       const batch = writeBatch(db);
 
-      querySnapshot.forEach((doc) => {
-        const batchRef = doc.ref;
+      for (const batchId of batchIdsToUpdate) {
+        const batchRef = doc(db, 'inventoryBatches', batchId);
         batch.update(batchRef, {
           expiryDate: Timestamp.fromDate(newDate),
           updatedAt: serverTimestamp(),
@@ -6392,17 +6424,17 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
           expiryDateUpdatedFromTask: true,
           expiryDateUpdatedAt: serverTimestamp()
         });
-      });
+      }
 
       // Wykonaj aktualizację wszystkich partii w jednej transakcji
       await batch.commit();
 
-      console.log(`[BATCH-EXPIRY-UPDATE] Zaktualizowano datę ważności w ${querySnapshot.size} partiach dla zadania ${taskId}`);
+      console.log(`[BATCH-EXPIRY-UPDATE] Zaktualizowano datę ważności w ${batchIdsToUpdate.size} partiach dla zadania ${taskId}`);
 
       return {
         success: true,
-        updated: querySnapshot.size,
-        message: `Zaktualizowano datę ważności w ${querySnapshot.size} partiach`
+        updated: batchIdsToUpdate.size,
+        message: `Zaktualizowano datę ważności w ${batchIdsToUpdate.size} partiach`
       };
 
     } catch (error) {
