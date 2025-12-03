@@ -76,7 +76,7 @@ import { db } from '../../services/firebase/config';
 import { getDoc, doc } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
-import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds } from '../../services/invoiceService';
+import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds, getAvailableProformasForOrder } from '../../services/invoiceService';
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -354,6 +354,7 @@ const OrderDetails = () => {
   const [loadingCmrDocuments, setLoadingCmrDocuments] = useState(false);
   const [invoicedAmounts, setInvoicedAmounts] = useState({});
   const [proformaAmounts, setProformaAmounts] = useState({});
+  const [availableProformaAmount, setAvailableProformaAmount] = useState(0);
   const [fullProductionTasks, setFullProductionTasks] = useState({});
   
   // State dla popover z listą faktur
@@ -515,7 +516,11 @@ const OrderDetails = () => {
         const proformaAmountsPromise = getProformaAmountsByOrderItems(orderId, null, verifiedOrder);
         fetchPromises.push(proformaAmountsPromise);
         
-        // 2c. Pełne dane zadań produkcyjnych (z datami) zostały już pobrane podczas weryfikacji
+        // 2c. Pobierz dostępne kwoty z proform (niewykorzystane zaliczki)
+        const availableProformasPromise = getAvailableProformasForOrder(orderId);
+        fetchPromises.push(availableProformasPromise);
+        
+        // 2d. Pełne dane zadań produkcyjnych (z datami) zostały już pobrane podczas weryfikacji
         
         // 3. Faktury i CMR będą ładowane lazy loading przy scrollu - NIE pobieramy ich teraz!
         
@@ -549,6 +554,18 @@ const OrderDetails = () => {
             setProformaAmounts(proformaAmountsResult.value);
           } else {
             console.error('Błąd podczas pobierania kwot proform:', proformaAmountsResult.reason);
+          }
+          
+          // Pobierz dostępne kwoty z proform (niewykorzystane zaliczki)
+          const availableProformasResult = results[resultIndex++];
+          if (availableProformasResult.status === 'fulfilled') {
+            const availableProformas = availableProformasResult.value;
+            const totalAvailable = availableProformas.reduce((sum, proforma) => 
+              sum + (proforma.amountInfo?.available || 0), 0
+            );
+            setAvailableProformaAmount(totalAvailable);
+          } else {
+            console.error('Błąd podczas pobierania dostępnych proform:', availableProformasResult.reason);
           }
           
         } catch (error) {
@@ -1957,14 +1974,27 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
                       <Typography variant="h6" color="info.main" sx={{ fontWeight: 'bold', my: 0.5 }}>
                         {formatCurrency(calculateProformaTotal())}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {(() => {
-                          const totalValue = calculateOrderTotalValue();
-                          const proformaTotal = calculateProformaTotal();
-                          const percentage = totalValue > 0 ? ((proformaTotal / totalValue) * 100).toFixed(1) : 0;
-                          return `${percentage}%`;
-                        })()}
-                      </Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {(() => {
+                            const totalValue = calculateOrderTotalValue();
+                            const proformaTotal = calculateProformaTotal();
+                            const percentage = totalValue > 0 ? ((proformaTotal / totalValue) * 100).toFixed(1) : 0;
+                            return `${percentage}%`;
+                          })()}
+                        </Typography>
+                        {availableProformaAmount > 0 && (
+                          <Tooltip title="Kwota z proform dostępna do rozliczenia na fakturze końcowej">
+                            <Chip 
+                              size="small" 
+                              label={`Dostępne: ${formatCurrency(availableProformaAmount)}`}
+                              color="success"
+                              variant="outlined"
+                              sx={{ fontSize: '0.65rem', height: 20 }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Box>
                     </Paper>
                   </Grid>
                 </Grid>
