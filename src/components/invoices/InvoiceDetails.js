@@ -620,7 +620,10 @@ const InvoiceDetails = () => {
                       </Typography>
                       <IconButton 
                         size="small" 
-                        onClick={handleViewOrder}
+                        component={RouterLink}
+                        to={(invoice.isRefInvoice || invoice.originalOrderType === 'purchase') 
+                          ? `/purchase-orders/${invoice.orderId}` 
+                          : `/orders/${invoice.orderId}`}
                         title={t('orderDetails.tooltips.viewOrderDetails')}
                       >
                         <AssignmentIcon />
@@ -1213,7 +1216,8 @@ const InvoiceDetails = () => {
                           <Button 
                             variant="text" 
                             size="small" 
-                            onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                            component={RouterLink}
+                            to={`/purchase-orders/${po.id}`}
                           >
                             {po.number || po.id}
                           </Button>

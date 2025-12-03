@@ -650,14 +650,16 @@ const ReinvoicesList = () => {
                     <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                       <IconButton
                         size="small"
-                        onClick={() => navigate(`/invoices/${invoice.id}`)}
+                        component={RouterLink}
+                        to={`/invoices/${invoice.id}`}
                         title="Podgląd"
                       >
                         <ViewIcon fontSize="small" />
                       </IconButton>
                       <IconButton
                         size="small"
-                        onClick={() => navigate(`/invoices/${invoice.id}/edit`)}
+                        component={RouterLink}
+                        to={`/invoices/${invoice.id}/edit`}
                         title="Edytuj"
                       >
                         <EditIcon fontSize="small" />

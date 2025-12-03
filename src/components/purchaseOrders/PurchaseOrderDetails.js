@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, Link, Link as RouterLink, useLocation } from 'react-router-dom';
 import { 
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
@@ -2389,7 +2389,8 @@ const PurchaseOrderDetails = ({ orderId }) => {
                             <Button
                               size="small"
                               variant="outlined"
-                              onClick={() => navigate(`/invoices/${invoice.id}`)}
+                              component={RouterLink}
+                              to={`/invoices/${invoice.id}`}
                             >
                               Szczegóły
                             </Button>
