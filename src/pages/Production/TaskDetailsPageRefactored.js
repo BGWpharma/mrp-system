@@ -18,7 +18,7 @@
  */
 
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -75,6 +75,7 @@ const EndProductReportTab = lazy(() => import('../../components/production/EndPr
 const TaskDetailsPageRefactored = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
@@ -118,8 +119,10 @@ const TaskDetailsPageRefactored = () => {
     closeAllDialogs
   } = useTaskDialogs();
   
-  // ✅ Stan dla zakładek
-  const [mainTab, setMainTab] = useState(0);
+  // ✅ Stan dla zakładek (obsługa nawigacji z parametrem activeTab)
+  const [mainTab, setMainTab] = useState(() => {
+    return location.state?.activeTab ?? 0;
+  });
   const [loadedTabs, setLoadedTabs] = useState({
     productionPlan: false,
     forms: false,
@@ -371,6 +374,7 @@ const TaskDetailsPageRefactored = () => {
             task={task}
             getStatusColor={getStatusColor}
             getStatusActions={getStatusActions}
+            onTabChange={setMainTab}
           />
         )}
         

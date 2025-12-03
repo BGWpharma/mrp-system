@@ -60,7 +60,7 @@
 
 // React hooks and components
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   Typography,
   Paper,
@@ -225,6 +225,7 @@ const TaskDetailsPage = () => {
   const { t, currentLanguage } = useTranslation('taskDetails');
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
   const { currentUser } = useAuth();
   
@@ -477,8 +478,10 @@ const TaskDetailsPage = () => {
     setSelectedAllergens(filteredValue);
   };
 
-  // Stan dla głównej zakładki
-  const [mainTab, setMainTab] = useState(0);
+  // Stan dla głównej zakładki (obsługa nawigacji z parametrem activeTab)
+  const [mainTab, setMainTab] = useState(() => {
+    return location.state?.activeTab ?? 0;
+  });
   
   // Stan kontrolujący wyświetlanie wyczerpanych partii w dialogu rezerwacji
   const [showExhaustedBatches, setShowExhaustedBatches] = useState(false);
@@ -8483,6 +8486,7 @@ const TaskDetailsPage = () => {
                 task={task}
                 getStatusColor={getStatusColor}
                 getStatusActions={getStatusActions}
+                onTabChange={setMainTab}
               />
             </Suspense>
           )}

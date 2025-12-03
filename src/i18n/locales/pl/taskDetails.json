@@ -21,8 +21,22 @@
         "changeHistory": "Historia zmian",
         "finishedProductReport": "Raport gotowego produktu"
     },
+    "status": {
+        "changeTitle": "Zmień status zadania",
+        "selectNewStatus": "Wybierz nowy status dla zadania:",
+        "label": "Status",
+        "clickToChange": "Kliknij, aby zmienić status",
+        "updateSuccess": "Status zadania został zaktualizowany",
+        "updateError": "Błąd podczas aktualizacji statusu"
+    },
+    "common": {
+        "cancel": "Anuluj",
+        "update": "Aktualizuj",
+        "updating": "Aktualizowanie..."
+    },
     "materials": {
         "title": "Materiały",
+        "clickToNavigate": "Kliknij, aby przejść do zakładki materiałów",
         "addPackaging": "Dodaj opakowania",
         "addRawMaterials": "Dodaj surowce",
         "reserveMaterials": "Rezerwuj surowce",

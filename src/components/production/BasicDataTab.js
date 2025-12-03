@@ -20,21 +20,28 @@ import {
 } from '@mui/icons-material';
 
 import { useTranslation } from '../../hooks/useTranslation';
-import { 
-  calculateMaterialReservationStatus, 
-  getReservationStatusColors 
-} from '../../utils/productionUtils';
 import TaskDetails from './TaskDetails';
+import TaskStatusChip from './shared/TaskStatusChip';
+import MaterialReservationBadge from './shared/MaterialReservationBadge';
 
 const BasicDataTab = ({
   task,
   getStatusColor,
-  getStatusActions
+  getStatusActions,
+  onTabChange,
+  onStatusChange
 }) => {
   const { t } = useTranslation('taskDetails');
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Handler nawigacji do zakładki materiałów (index 1)
+  const handleNavigateToMaterials = () => {
+    if (onTabChange) {
+      onTabChange(1);
+    }
+  };
 
   return (
     <Grid container spacing={3}>
@@ -50,31 +57,21 @@ const BasicDataTab = ({
             <Typography variant="h5" component="h1" sx={{ mb: isMobile ? 2 : 0 }}>
               {task.name}
               <Chip label={task.moNumber || 'MO'} color="primary" size="small" sx={{ ml: 2 }} />
-              <Chip 
-                label={task.status} 
-                size="small" 
-                sx={{ 
-                  ml: 1,
-                  backgroundColor: getStatusColor(task.status),
-                  color: 'white'
-                }} 
+              
+              {/* Chip statusu z dialogiem zmiany */}
+              <TaskStatusChip 
+                task={task}
+                getStatusColor={getStatusColor}
+                onStatusChange={onStatusChange}
+                editable={true}
               />
-              {(() => {
-                const reservationStatus = calculateMaterialReservationStatus(task);
-                const statusColors = getReservationStatusColors(reservationStatus.status);
-                
-                return (
-                  <Chip 
-                    label={`${t('materialsLabel')}: ${reservationStatus.label}`} 
-                    size="small" 
-                    sx={{ 
-                      ml: 1,
-                      backgroundColor: statusColors.main,
-                      color: statusColors.contrastText
-                    }} 
-                  />
-                );
-              })()}
+              
+              {/* Badge rezerwacji z nawigacją do zakładki materiałów */}
+              <MaterialReservationBadge 
+                task={task}
+                onClick={handleNavigateToMaterials}
+                clickable={!!onTabChange}
+              />
             </Typography>
             <Box sx={{ width: isMobile ? '100%' : 'auto' }}>
               {getStatusActions()}

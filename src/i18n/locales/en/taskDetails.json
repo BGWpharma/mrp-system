@@ -21,8 +21,22 @@
         "changeHistory": "Change History",
         "finishedProductReport": "Finished Product Report"
     },
+    "status": {
+        "changeTitle": "Change Task Status",
+        "selectNewStatus": "Select new status for the task:",
+        "label": "Status",
+        "clickToChange": "Click to change status",
+        "updateSuccess": "Task status has been updated",
+        "updateError": "Error updating status"
+    },
+    "common": {
+        "cancel": "Cancel",
+        "update": "Update",
+        "updating": "Updating..."
+    },
     "materials": {
         "title": "Materials",
+        "clickToNavigate": "Click to navigate to materials tab",
         "addPackaging": "Add Packaging",
         "addRawMaterials": "Add Raw Materials",
         "reserveMaterials": "Reserve Materials",

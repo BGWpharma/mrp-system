@@ -87,6 +87,7 @@ import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 import { useTranslation } from '../../hooks/useTranslation';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
+import TaskStatusChip from './shared/TaskStatusChip';
 
 const TaskList = () => {
   const { t } = useTranslation();
@@ -1252,15 +1253,12 @@ const TaskList = () => {
               }}>
                 {task.name}
               </Typography>
-              <Chip 
-                label={task.status} 
-                size="small" 
-                sx={{ 
-                  fontSize: '0.7rem', 
-                  height: '24px',
-                  backgroundColor: getStatusColor(task.status),
-                  color: 'white'
-                }}
+              <TaskStatusChip 
+                task={task}
+                getStatusColor={getStatusColor}
+                onStatusChange={() => fetchTasksOptimized(null, null, true)}
+                editable={true}
+                size="small"
               />
             </Box>
             
@@ -1792,31 +1790,40 @@ const TaskList = () => {
                       {visibleColumns.statusAndMaterials && (
                         <TableCell>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            <Chip 
-                              label={task.status} 
+                            <TaskStatusChip 
+                              task={task}
+                              getStatusColor={getStatusColor}
+                              onStatusChange={() => fetchTasksOptimized(null, null, true)}
+                              editable={true}
                               size="small"
-                              sx={{
-                                backgroundColor: getStatusColor(task.status),
-                                color: 'white'
-                              }}
                             />
                             {(() => {
                               const reservationStatus = calculateMaterialReservationStatus(task);
                               const statusColors = getReservationStatusColors(reservationStatus.status);
                               
                               return (
-                                <Chip 
-                                  label={reservationStatus.label} 
-                                  size="small" 
-                                  variant="outlined"
-                                  sx={{
-                                    borderColor: statusColors.main,
-                                    color: statusColors.main,
-                                    '&:hover': {
-                                      backgroundColor: statusColors.light + '20',
-                                    }
-                                  }}
-                                />
+                                <Tooltip title={t('taskDetails.materials.clickToNavigate') || 'Przejdź do materiałów'}>
+                                  <Chip 
+                                    label={reservationStatus.label} 
+                                    size="small" 
+                                    variant="outlined"
+                                    clickable
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/production/tasks/${task.id}`, { state: { activeTab: 1 } });
+                                    }}
+                                    sx={{
+                                      borderColor: statusColors.main,
+                                      color: statusColors.main,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease-in-out',
+                                      '&:hover': {
+                                        backgroundColor: statusColors.light + '20',
+                                        transform: 'scale(1.03)'
+                                      }
+                                    }}
+                                  />
+                                </Tooltip>
                               );
                             })()}
                           </Box>
