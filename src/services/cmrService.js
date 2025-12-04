@@ -826,27 +826,11 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
           }
           
           if (ordersToUpdate.length > 0) {
-            console.log('🔄 Odświeżanie ilości wysłanych w zamówieniach przy zmianie statusu na "W transporcie"...');
-            for (const orderId of ordersToUpdate) {
-              // Używamy refreshShippedQuantitiesFromCMR zamiast updateLinkedOrderShippedQuantities
-              // Dzięki temu ilości będą zawsze spójne (reset + pełne przeliczenie wszystkich CMR)
-              try {
-                const { refreshShippedQuantitiesFromCMR } = await import('./orderService');
-                const refreshResult = await refreshShippedQuantitiesFromCMR(orderId, userId);
-                
-                if (refreshResult.success) {
-                  console.log(`✅ Odświeżono ilości wysłane w zamówieniu ${orderId}`);
-                  console.log(`   • Przetworzono ${refreshResult.stats?.processedCMRs || 0} CMR`);
-                  console.log(`   • Zaktualizowano ${refreshResult.stats?.shippedItems || 0} pozycji`);
-                } else {
-                  console.warn(`⚠️ Nie udało się odświeżyć ilości w zamówieniu ${orderId}`);
-                }
-              } catch (refreshError) {
-                console.error(`❌ Błąd podczas odświeżania ilości w zamówieniu ${orderId}:`, refreshError);
-              }
-            }
+            // WYŁĄCZONE - Cloud Function onCmrStatusUpdate automatycznie aktualizuje ilości wysłane
+            // Dzięki temu unikamy podwójnych aktualizacji i problemów z wyścigami
+            console.log('ℹ️ Cloud Function onCmrStatusUpdate zajmie się aktualizacją ilości wysłanych dla zamówień:', ordersToUpdate);
             
-            // Dodaj usługi transportowe na podstawie palet
+            // Dodaj usługi transportowe na podstawie palet (to nadal robimy po stronie klienta)
             console.log('🚚 Dodawanie usług transportowych na podstawie palet z CMR...');
             try {
               const transportResult = await addTransportServicesToOrders(
@@ -3438,3 +3422,6 @@ export const removeCmrDocumentFromCache = (documentId) => {
   }
 };
 
+
+// Eksport bezpiecznej funkcji aktualizacji ilości wysłanych
+export { updateLinkedOrderShippedQuantities };

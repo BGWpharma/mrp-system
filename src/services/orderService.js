@@ -1949,39 +1949,31 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
       }
     }
     
-    // POPRAWKA: Jeśli nie znaleziono CMR, resetuj wszystko do zera
+    // BEZPIECZNA LOGIKA: Jeśli nie znaleziono CMR, ZACHOWAJ ISTNIEJĄCE DANE
     if (linkedCMRs.length === 0) {
-      console.log('🧹 Brak powiązanych CMR - resetuję wszystkie ilości do zera');
-      
-      // Resetuj wszystkie pozycje do zera
-      const zeroedItems = items.map(item => ({
-        ...item,
-        shippedQuantity: 0,
-        lastShipmentDate: null,
-        lastCmrNumber: null,
-        cmrHistory: [], // CAŁKOWITE WYCZYSZCZENIE historii CMR
-        resetAt: new Date().toISOString(),
-        resetReason: 'no_cmr_found_refresh_operation'
-      }));
-      
-      // Zapisz resetowane dane do bazy
+      console.log('⚠️ Nie znaleziono powiązanych CMR - zachowuję istniejące dane ilości wysłanych');
+
+      // Nie resetuj - tylko zaktualizuj timestamp ostatniego sprawdzenia
       await updateDoc(orderRef, {
-        items: zeroedItems,
         updatedBy: userId,
         updatedAt: serverTimestamp(),
-        lastCmrRefreshReset: serverTimestamp()
+        lastCmrRefreshAttempt: serverTimestamp(),
+        lastCmrRefreshStatus: 'no_cmrs_found_preserved_existing_data'
       });
-      
-      console.log('✅ Wszystkie ilości zresetowane do zera - brak CMR');
-      
-      return { 
-        success: true, 
-        updatedItems: zeroedItems,
+
+      console.log('✅ Zachowano istniejące dane - brak CMR do przetworzenia');
+
+      return {
+        success: true,
+        updatedItems: items, // Zwróć oryginalne dane bez zmian
         stats: {
           processedCMRs: 0,
-          shippedItems: 0,
-          cmrReferences: 0,
-          message: 'Zresetowano wszystkie ilości - brak powiązanych CMR'
+          shippedItems: items.filter(item => (parseFloat(item.shippedQuantity) || 0) > 0).length,
+          cmrReferences: items.reduce((total, item) => total + (item.cmrHistory ? item.cmrHistory.length : 0), 0),
+          obsoleteConnections: stats.obsoleteConnections,
+          obsoleteItems: stats.obsoleteItems,
+          preservedExistingData: true,
+          message: 'Zachowano istniejące dane - brak powiązanych CMR'
         }
       };
     }
@@ -2337,6 +2329,84 @@ export const refreshShippedQuantitiesFromCMR = async (orderId, userId = 'system'
     };
   } catch (error) {
     console.error('Błąd podczas odświeżania ilości wysłanych:', error);
+    throw error;
+  }
+};
+
+/**
+ * NOWA FUNKCJA: Bezpieczne przeliczenie ilości wysłanych - może być wywołane przez użytkownika
+ * Wymusza pełne przeliczenie nawet jeśli nie znaleziono CMR (ale nie resetuje do zera)
+ */
+export const safeRecalculateShippedQuantities = async (orderId, userId) => {
+  try {
+    console.log(`🔄 Rozpoczęcie bezpiecznego przeliczenia ilości wysłanych dla zamówienia ${orderId}...`);
+
+    // Najpierw spróbuj normalne odświeżenie
+    const refreshResult = await refreshShippedQuantitiesFromCMR(orderId, userId);
+
+    if (refreshResult.success && refreshResult.stats?.processedCMRs > 0) {
+      console.log(`✅ Przeliczenie zakończone sukcesem - przetworzono ${refreshResult.stats.processedCMRs} CMR`);
+      return refreshResult;
+    }
+
+    // Jeśli nie znaleziono CMR, ale istnieją dane historyczne - zachowaj je
+    console.log('⚠️ Nie znaleziono CMR, ale sprawdzam czy istnieją dane historyczne do zachowania...');
+
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+
+    if (orderDoc.exists()) {
+      const orderData = orderDoc.data();
+      const items = orderData.items || [];
+
+      // Sprawdź czy jakieś pozycje mają historię CMR lub shippedQuantity > 0
+      const hasExistingData = items.some(item =>
+        (item.cmrHistory && item.cmrHistory.length > 0) ||
+        (parseFloat(item.shippedQuantity) || 0) > 0
+      );
+
+      if (hasExistingData) {
+        console.log('✅ Znaleziono istniejące dane historyczne - zachowuję je');
+
+        // Zaktualizuj tylko timestamp
+        await updateDoc(orderRef, {
+          updatedBy: userId,
+          updatedAt: serverTimestamp(),
+          lastSafeRecalculation: serverTimestamp(),
+          safeRecalculationStatus: 'preserved_existing_data'
+        });
+
+        return {
+          success: true,
+          updatedItems: items,
+          stats: {
+            processedCMRs: 0,
+            shippedItems: items.filter(item => (parseFloat(item.shippedQuantity) || 0) > 0).length,
+            cmrReferences: items.reduce((total, item) => total + (item.cmrHistory ? item.cmrHistory.length : 0), 0),
+            preservedExistingData: true,
+            safeRecalculation: true,
+            message: 'Zachowano istniejące dane historyczne'
+          }
+        };
+      }
+    }
+
+    console.log('ℹ️ Brak danych do zachowania - zamówienie nie ma jeszcze wysłanych ilości');
+    return {
+      success: true,
+      updatedItems: [],
+      stats: {
+        processedCMRs: 0,
+        shippedItems: 0,
+        cmrReferences: 0,
+        noDataToPreserve: true,
+        safeRecalculation: true,
+        message: 'Brak danych do zachowania'
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ Błąd podczas bezpiecznego przeliczenia ilości wysłanych:', error);
     throw error;
   }
 };

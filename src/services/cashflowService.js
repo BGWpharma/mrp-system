@@ -863,6 +863,11 @@ const getAllPurchaseOrdersInDateRange = async (dateFrom, dateTo) => {
         ...poData
       };
       
+      // Pomiń anulowane zamówienia zakupu
+      if (po.status === 'cancelled') {
+        continue;
+      }
+      
       // Sprawdź czy PO ma jakiekolwiek pozycje z datą dostawy w zakresie
       // lub ogólną datę dostawy w zakresie
       let hasDeliveryInRange = false;

@@ -73,7 +73,9 @@
       "deliveryCost": "Delivery Cost:",
       "totalValue": "Total Value:",
       "withoutPO": "(without PO value)",
-      "changeStatus": "Change Status:"
+      "changeStatus": "Change Status:",
+      "actions": "Actions",
+      "recalculateShippedQuantities": "Recalculate shipped quantities"
     },
     "dialogs": {
       "deleteConfirmation": {
@@ -205,7 +207,8 @@
       "refreshInvoicesList": "Refresh invoices list",
       "refreshCmrDocuments": "Refresh CMR documents list",
       "clickToSeeInvoiceDetails": "Click to see invoice details ({{count}})",
-      "clickToSeeAllInvoices": "Click to see all invoices"
+      "clickToSeeAllInvoices": "Click to see all invoices",
+      "recalculateShippedQuantities": "Recalculate shipped quantities based on all CMR documents"
     },
     "deliveryProof": {
       "altText": "Delivery proof",
@@ -279,7 +282,9 @@
       "addPurchaseOrder": "Add Purchase Order",
       "generateLabel": "Generate Label",
       "refreshProductionCosts": "Refresh production task data",
-      "changeOrderNumber": "Change CO Number"
+      "changeOrderNumber": "Change CO Number",
+      "recalculateShipped": "Recalculate shipped",
+      "recalculating": "Recalculating..."
     },
     "statusHistory": {
       "title": "Status Change History",

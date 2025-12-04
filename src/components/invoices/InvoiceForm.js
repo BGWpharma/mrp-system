@@ -232,16 +232,17 @@ const InvoiceForm = ({ invoiceId }) => {
   }, [companyInfo, invoiceId, invoice.selectedBankAccount]);
 
   // Efekt do sprawdzania czy wybrany rachunek bankowy nadal istnieje
+  // NIE resetuj automatycznie - tylko loguj ostrzeżenie dla debugowania
   useEffect(() => {
-    if (invoice.selectedBankAccount && companyInfo?.bankAccounts) {
+    if (invoice.selectedBankAccount && companyInfo?.bankAccounts && companyInfo.bankAccounts.length > 0) {
       const accountExists = companyInfo.bankAccounts.some(account => account.id === invoice.selectedBankAccount);
       
       if (!accountExists) {
-        console.warn(`Rachunek bankowy ${invoice.selectedBankAccount} nie istnieje w dostępnych rachunkach. Czyszczenie wartości.`);
-        setInvoice(prev => ({
-          ...prev,
-          selectedBankAccount: ''
-        }));
+        console.warn(`Rachunek bankowy ${invoice.selectedBankAccount} nie istnieje w dostępnych rachunkach. Dostępne rachunki:`, 
+          companyInfo.bankAccounts.map(a => ({ id: a.id, name: a.bankName }))
+        );
+        // NIE resetujemy automatycznie - użytkownik może wybrać inny bank ręcznie
+        // lub bank może być zapisany poprawnie ale jeszcze nie załadowany
       }
     }
   }, [invoice.selectedBankAccount, companyInfo?.bankAccounts]);
@@ -1798,12 +1799,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   <InputLabel>{t('invoices.form.fields.bankAccount')}</InputLabel>
                   <Select
                     name="selectedBankAccount"
-                    value={
-                      invoice.selectedBankAccount && 
-                      companyInfo?.bankAccounts?.some(account => account.id === invoice.selectedBankAccount)
-                        ? invoice.selectedBankAccount 
-                        : ''
-                    }
+                    value={invoice.selectedBankAccount || ''}
                     onChange={handleChange}
                     label={t('invoices.form.fields.bankAccount')}
                   >

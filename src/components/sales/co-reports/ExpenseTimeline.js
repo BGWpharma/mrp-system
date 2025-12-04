@@ -86,7 +86,7 @@ const ExpenseTimeline = ({ expenses, currency = 'EUR' }) => {
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
-                  <Typography variant="body2" fontWeight="medium" color="error.main">
+                  <Typography variant="body2" fontWeight="medium" color={expense.isPaid ? 'success.main' : 'error.main'}>
                     {formatCurrency(expense.amount, currency)}
                   </Typography>
                 </TableCell>

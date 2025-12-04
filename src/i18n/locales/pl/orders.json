@@ -73,7 +73,9 @@
       "deliveryCost": "Koszt dostawy:",
       "totalValue": "Łączna wartość:",
       "withoutPO": "(bez wartości PO)",
-      "changeStatus": "Zmień status:"
+      "changeStatus": "Zmień status:",
+      "actions": "Akcje",
+      "recalculateShippedQuantities": "Przelicz ilości wysłane"
     },
     "dialogs": {
       "deleteConfirmation": {
@@ -206,6 +208,7 @@
       "refreshCmrDocuments": "Odśwież listę dokumentów CMR",
       "clickToSeeInvoiceDetails": "Kliknij aby zobaczyć szczegóły faktur ({{count}})",
       "clickToSeeAllInvoices": "Kliknij aby zobaczyć wszystkie faktury",
+      "recalculateShippedQuantities": "Przelicz ilości wysłane na podstawie wszystkich dokumentów CMR",
       "viewOrderDetails": "Zobacz szczegóły zamówienia",
       "clickToChangeStatus": "Kliknij aby zmienić status zamówienia"
     },
@@ -281,7 +284,9 @@
       "addPurchaseOrder": "Dodaj zamówienie zakupu",
       "generateLabel": "Generuj etykietę",
       "refreshProductionCosts": "Odśwież dane zadań produkcyjnych",
-      "changeOrderNumber": "Zmień numer CO"
+      "changeOrderNumber": "Zmień numer CO",
+      "recalculateShipped": "Przelicz wysłane",
+      "recalculating": "Przeliczanie..."
     },
     "statusHistory": {
       "title": "Historia zmian statusu",

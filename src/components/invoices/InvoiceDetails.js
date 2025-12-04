@@ -991,12 +991,36 @@ const InvoiceDetails = () => {
                   )}
                 </Box>
                 <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    {t('invoices.details.sellerInfo.bank')}: {companyInfo.bankName}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
-                    {t('invoices.details.sellerInfo.accountNumber')}: {companyInfo.bankAccount}
-                  </Typography>
+                  {(() => {
+                    // Znajdź wybrany bank z faktury lub użyj domyślnych wartości
+                    const selectedBank = invoice.selectedBankAccount && companyInfo?.bankAccounts
+                      ? companyInfo.bankAccounts.find(acc => acc.id === invoice.selectedBankAccount)
+                      : null;
+                    
+                    const bankName = selectedBank?.bankName || companyInfo.bankName;
+                    const accountNumber = selectedBank?.accountNumber || companyInfo.bankAccount;
+                    const swift = selectedBank?.swift || companyInfo.swift;
+                    
+                    return (
+                      <>
+                        {bankName && (
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            {t('invoices.details.sellerInfo.bank')}: {bankName}
+                          </Typography>
+                        )}
+                        {accountNumber && (
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            {t('invoices.details.sellerInfo.accountNumber')}: {accountNumber}
+                          </Typography>
+                        )}
+                        {swift && (
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>
+                            SWIFT: {swift}
+                          </Typography>
+                        )}
+                      </>
+                    );
+                  })()}
                 </Box>
               </CardContent>
             </Card>

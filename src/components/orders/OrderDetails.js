@@ -962,37 +962,32 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
 
     try {
       setIsRefreshingCmr(true);
-      
-      const result = await refreshShippedQuantitiesFromCMR(order.id, currentUser.uid);
-      
-      if (result.success) {
-        const stats = result.stats || {};
-        const message = `✅ Pomyślnie odświeżono ilości wysłane
-        
-Statystyki:
-• Przetworzono dokumentów CMR: ${stats.processedCMRs || 0}
-• Zaktualizowano pozycji: ${stats.shippedItems || 0}
-• Referencji CMR: ${stats.cmrReferences || 0}
 
-${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
-        
-        showSuccess(message);
-        
+      // Wywołaj Cloud Function zamiast lokalnej funkcji
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functions = getFunctions();
+      const recalculateShipped = httpsCallable(functions, 'recalculateShippedQuantities');
+
+      const result = await recalculateShipped({ orderId: order.id });
+
+      if (result.data.success) {
+        showSuccess(result.data.message);
+
         // Odśwież dane zamówienia i wyczyść cache
         invalidateCache(order.id);
         await refreshOrderData();
-        
+
         // Odśwież też dokumenty CMR
         invalidateCache(`orderCmr_${order.id}`);
         setCmrDocuments([]);
         setLoadingCmrDocuments(false);
         await loadCmrDocuments();
       } else {
-        throw new Error('Nie udało się odświeżyć ilości');
+        throw new Error('Nie udało się przeliczyć ilości wysłanych');
       }
     } catch (error) {
-      console.error('❌ Błąd podczas odświeżania ilości:', error);
-      showError(`Nie udało się odświeżyć ilości: ${error.message}`);
+      console.error('❌ Błąd podczas przeliczania ilości wysłanych:', error);
+      showError(`Nie udało się przeliczyć ilości wysłanych: ${error.message}`);
     } finally {
       setIsRefreshingCmr(false);
     }
@@ -2019,15 +2014,28 @@ ${stats.message ? `\nℹ️ ${stats.message}` : ''}`;
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">{t('orderDetails.sections.products')}</Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleExportItemsToCSV}
-              disabled={!order || !order.items || order.items.length === 0}
-              sx={{ ml: 2 }}
-            >
-              Eksportuj do CSV
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Tooltip title={t('orderDetails.tooltips.recalculateShippedQuantities')}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleRefreshShippedQuantities}
+                  disabled={isRefreshingCmr || !order || !order.id}
+                  startIcon={isRefreshingCmr ? <CircularProgress size={16} /> : <RefreshIcon />}
+                  color="primary"
+                >
+                  {isRefreshingCmr ? t('orderDetails.actions.recalculating') : t('orderDetails.actions.recalculateShipped')}
+                </Button>
+              </Tooltip>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleExportItemsToCSV}
+                disabled={!order || !order.items || order.items.length === 0}
+              >
+                Eksportuj do CSV
+              </Button>
+            </Box>
           </Box>
           <Divider sx={{ mb: 2 }} />
           <Table>
