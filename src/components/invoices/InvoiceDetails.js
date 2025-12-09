@@ -1073,7 +1073,8 @@ const InvoiceDetails = () => {
                 }
                 // Dla "ZW" i "NP" vatRate pozostaje 0
                 
-                const netValue = quantity * price;
+                // Użyj zapisanej wartości netValue jeśli jest dostępna (spójność z formularzem i PDF)
+                const netValue = Number(item.netValue) || (quantity * price);
                 const vatValue = netValue * (vatRate / 100);
                 const grossValue = netValue + vatValue;
                 
@@ -1107,7 +1108,9 @@ const InvoiceDetails = () => {
                 {invoice.items.reduce((sum, item) => {
                   const quantity = Number(item.quantity) || 0;
                   const price = Number(item.price) || 0;
-                  return sum + (quantity * price);
+                  // Użyj zapisanej wartości netValue jeśli jest dostępna (spójność z formularzem i PDF)
+                  const netValue = Number(item.netValue) || (quantity * price);
+                  return sum + netValue;
                 }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
@@ -1121,6 +1124,8 @@ const InvoiceDetails = () => {
                 {invoice.items.reduce((sum, item) => {
                   const quantity = Number(item.quantity) || 0;
                   const price = Number(item.price) || 0;
+                  // Użyj zapisanej wartości netValue jeśli jest dostępna (spójność z formularzem i PDF)
+                  const netValue = Number(item.netValue) || (quantity * price);
                   
                   // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
                   let vatRate = 0;
@@ -1131,7 +1136,7 @@ const InvoiceDetails = () => {
                   }
                   // Dla "ZW" i "NP" vatRate pozostaje 0
                   
-                  return sum + (quantity * price * (vatRate / 100));
+                  return sum + (netValue * (vatRate / 100));
                 }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>

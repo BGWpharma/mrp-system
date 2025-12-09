@@ -156,6 +156,7 @@ class InvoicePdfGenerator {
 
   /**
    * Obliczanie całkowitej wartości netto
+   * Zaokrągla wartości do 2 miejsc dziesiętnych dla spójności z formularzem
    */
   calculateTotalNetto(items) {
     if (!items || !Array.isArray(items)) return 0;
@@ -163,12 +164,16 @@ class InvoicePdfGenerator {
     return items.reduce((sum, item) => {
       const netValue = Number(item.netValue) || 0;
       const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
-      return sum + (netValue || calculatedValue);
+      const baseValue = netValue || calculatedValue;
+      // Zaokrąglij do 2 miejsc dla spójności z formularzem
+      const roundedValue = Math.round(baseValue * 100) / 100;
+      return sum + roundedValue;
     }, 0);
   }
 
   /**
    * Obliczanie całkowitej wartości VAT
+   * Zaokrągla wartości do 2 miejsc dziesiętnych dla spójności z formularzem
    */
   calculateTotalVat(items, fixedVatRate = null) {
     if (!items || !Array.isArray(items)) return 0;
@@ -177,6 +182,9 @@ class InvoicePdfGenerator {
       const netValue = Number(item.netValue) || 0;
       const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
       const baseValue = netValue || calculatedValue;
+      
+      // Zaokrąglij wartość netto do 2 miejsc
+      const roundedNetValue = Math.round(baseValue * 100) / 100;
       
       let vatRate = 0;
       if (fixedVatRate !== null) {
@@ -189,7 +197,11 @@ class InvoicePdfGenerator {
         }
       }
       
-      return sum + (baseValue * (vatRate / 100));
+      // Oblicz VAT z zaokrąglonej wartości i zaokrąglij wynik
+      const vatValue = roundedNetValue * (vatRate / 100);
+      const roundedVatValue = Math.round(vatValue * 100) / 100;
+      
+      return sum + roundedVatValue;
     }, 0);
   }
 
@@ -198,7 +210,10 @@ class InvoicePdfGenerator {
    */
   addSellerInfo(doc, isPurchaseInvoice, currentY) {
     const t = this.translations;
-    const sellerInfo = isPurchaseInvoice ? this.invoice.customer : this.companyInfo;
+    // Dla refaktury: nasza firma jest sprzedawcą (wystawiamy fakturę klientowi)
+    // Dla zwykłej faktury zakupowej: dostawca jest sprzedawcą
+    const isRefInvoice = this.invoice.isRefInvoice === true;
+    const sellerInfo = (isPurchaseInvoice && !isRefInvoice) ? this.invoice.customer : this.companyInfo;
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
@@ -298,7 +313,10 @@ class InvoicePdfGenerator {
    */
   addBuyerInfo(doc, isPurchaseInvoice, rightColX, buyerY) {
     const t = this.translations;
-    const buyerInfo = isPurchaseInvoice ? this.companyInfo : this.invoice.customer;
+    // Dla refaktury: klient jest nabywcą (fakturujemy mu koszty)
+    // Dla zwykłej faktury zakupowej: nasza firma jest nabywcą
+    const isRefInvoice = this.invoice.isRefInvoice === true;
+    const buyerInfo = (isPurchaseInvoice && !isRefInvoice) ? this.companyInfo : this.invoice.customer;
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
@@ -412,6 +430,9 @@ class InvoicePdfGenerator {
       const price = Number(item.price) || 0;
       const netValue = Number(item.netValue) || (quantity * price);
       
+      // Zaokrąglij netValue do 2 miejsc dla spójności z formularzem
+      const roundedNetValue = Math.round(netValue * 100) / 100;
+      
       // Obsługa VAT - może być liczbą lub stringiem "ZW"/"NP"
       let vatRate = 0;
       let vatDisplay = '0%';
@@ -426,15 +447,17 @@ class InvoicePdfGenerator {
         vatDisplay = `${vatRate}%`;
       }
       
-      const vatValue = netValue * (vatRate / 100);
-      const grossValue = netValue + vatValue;
+      // Oblicz VAT i brutto z zaokrąglonych wartości
+      const vatValue = roundedNetValue * (vatRate / 100);
+      const roundedVatValue = Math.round(vatValue * 100) / 100;
+      const grossValue = roundedNetValue + roundedVatValue;
       
-      totalNetto += netValue;
+      totalNetto += roundedNetValue;
       
-      // Przygotuj opis z nazwą i opisem w nawiasach
-      let fullDescription = typeof item.name === 'string' ? item.name : '-';
+      // Przygotuj opis z nazwą i opisem w nawiasach (z konwersją polskich znaków)
+      let fullDescription = typeof item.name === 'string' ? this.convertPolishChars(item.name) : '-';
       if (item.description && typeof item.description === 'string' && item.description.trim()) {
-        fullDescription += `\n(${item.description.trim()})`;
+        fullDescription += `\n(${this.convertPolishChars(item.description.trim())})`;
       }
       
       tableRows.push({
@@ -443,7 +466,7 @@ class InvoicePdfGenerator {
         quantity: `${this.formatNumberWithSeparators(quantity, quantity % 1 === 0 ? 0 : 2)} ${this.translateUnit(item.unit)}`,
         unitPrice: this.formatUnitPrice(price),
         vat: vatDisplay,
-        netValue: this.formatCurrency(netValue),
+        netValue: this.formatCurrency(roundedNetValue),
         grossValue: this.formatCurrency(grossValue)
       });
     });
@@ -638,15 +661,9 @@ class InvoicePdfGenerator {
     // Oblicz sumy
     const totalVat = this.calculateTotalVat(this.invoice.items, isPurchaseInvoice ? null : this.invoice.vatRate);
     
-    // Dla faktur z zamówień zakupowych, dodaj dodatkowe koszty
-    let additionalCostsValue = 0;
-    if (isPurchaseInvoice && this.invoice.additionalCostsItems && Array.isArray(this.invoice.additionalCostsItems)) {
-      additionalCostsValue = this.invoice.additionalCostsItems.reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0);
-    } else if (isPurchaseInvoice) {
-      additionalCostsValue = parseFloat(this.invoice.additionalCosts) || 0;
-    }
-    
-    const totalBrutto = totalNetto + totalVat + additionalCostsValue;
+    // Koszty dodatkowe są już uwzględnione jako pozycje faktury (items z isAdditionalCost: true)
+    // więc nie dodajemy ich ponownie do sumy
+    const totalBrutto = totalNetto + totalVat;
 
     // Tabela podsumowania (po prawej stronie)
     const summaryX = 110;
@@ -663,13 +680,6 @@ class InvoicePdfGenerator {
     doc.text('VAT', summaryX, summaryY);
     doc.text(this.formatCurrency(totalVat), summaryX + summaryWidth, summaryY, { align: 'right' });
     summaryY += 6;
-    
-    // Dodatkowe koszty
-    if (additionalCostsValue > 0) {
-      doc.text(t.additionalCosts, summaryX, summaryY);
-      doc.text(this.formatCurrency(additionalCostsValue), summaryX + summaryWidth, summaryY, { align: 'right' });
-      summaryY += 6;
-    }
     
     // Koszty wysyłki
     if (this.invoice.shippingInfo && this.invoice.shippingInfo.cost > 0) {
