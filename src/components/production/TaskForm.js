@@ -40,6 +40,16 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { pl } from 'date-fns/locale';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexColumn, 
+  flexColumnCenter,
+  loadingContainer,
+  mb2,
+  mb3,
+  p2
+} from '../../styles/muiCommonStyles';
 import {
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
@@ -1642,9 +1652,9 @@ const TaskForm = ({ taskId }) => {
   if (loading) {
     return (
       <Container maxWidth="md">
-        <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
-            <CircularProgress size={40} sx={{ mb: 2 }} />
+        <Paper elevation={3} sx={{ p: 3, mt: 3, ...mb3 }}>
+          <Box sx={{ ...flexColumnCenter, py: 4 }}>
+            <CircularProgress size={40} sx={mb2} />
             <Typography variant="h6" color="text.secondary">
               {taskId && taskId !== 'new' ? 'Ładowanie zadania...' : 'Przygotowywanie formularza...'}
             </Typography>
@@ -1671,7 +1681,7 @@ const TaskForm = ({ taskId }) => {
         fullWidth
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ ...flexCenter, gap: 1 }}>
             <CalculateIcon color="primary" />
             <Typography variant="h6">Zmiana ilości produktu</Typography>
           </Box>
@@ -1859,20 +1869,20 @@ const TaskForm = ({ taskId }) => {
         )}
         
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+          <Box sx={loadingContainer}>
             <CircularProgress />
           </Box>
         ) : (
           <form onSubmit={handleSubmit}>
             {recipeYieldError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={mb2}>
                 <AlertTitle>Błąd wydajności receptury</AlertTitle>
                 Wybrana receptura ma nieprawidłową wydajność. Przejdź do edycji receptury i napraw wartość wydajności.
               </Alert>
             )}
             
             {/* Zakładki formularza */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', ...mb3 }}>
               <Tabs 
                 value={activeTab} 
                 onChange={(e, newValue) => setActiveTab(newValue)}
@@ -1891,8 +1901,8 @@ const TaskForm = ({ taskId }) => {
             {activeTab === 0 && (
               <Box>
             {/* Sekcja podstawowych informacji */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
+            <Paper elevation={1} sx={{ ...p2, ...mb3, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle1" sx={{ ...mb2, fontWeight: 'medium', color: 'primary.main' }}>
                 Podstawowe informacje
               </Typography>
               <Grid container spacing={2}>

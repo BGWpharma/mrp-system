@@ -44,6 +44,14 @@ import {
   FormHelperText,
   MenuItem
 } from '@mui/material';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexColumn, 
+  flexBetween,
+  mb1,
+  p2
+} from '../../styles/muiCommonStyles';
 import {
   Link as LinkIcon,
   Cancel as UnlinkIcon,
@@ -119,9 +127,9 @@ const ReservationLinkItem = memo(({
         willChange: 'transform',
       }}
     >
-      <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, gap: 0.25 }}>
+      <Box sx={{ ...flexColumn, flexGrow: 1, gap: 0.25 }}>
         {/* Linia 1: LOT + ilość powiązana */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ ...flexCenter, gap: 1 }}>
           <Chip
             size="small"
             label={`LOT: ${reservationFromSnapshot.batchNumber}`}
@@ -135,7 +143,7 @@ const ReservationLinkItem = memo(({
         </Box>
         
         {/* Linia 2: Lokalizacja + data ważności */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ ...flexCenter, gap: 2, flexWrap: 'wrap' }}>
           {reservationFromSnapshot.warehouseName && (
             <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
               📍 {reservationFromSnapshot.warehouseName}
@@ -150,7 +158,7 @@ const ReservationLinkItem = memo(({
         
         {/* Linia 3: Informacje o konsumpcji */}
         {link.consumedQuantity > 0 && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
+          <Box sx={{ ...flexCenter, gap: 1, mt: 0.25 }}>
             <Typography variant="caption" sx={{ 
               color: link.isFullyConsumed ? 'success.main' : 'warning.main',
               fontSize: '0.7rem'
@@ -158,7 +166,7 @@ const ReservationLinkItem = memo(({
               Użyto: {link.consumedQuantity} / Pozostało: {link.remainingQuantity}
             </Typography>
             {link.consumptionPercentage !== undefined && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ ...flexCenter, gap: 0.5 }}>
                 <Box sx={{ 
                   width: '30px', 
                   height: '3px', 
@@ -225,9 +233,9 @@ const IngredientLinkStatusMemo = memo(({
       : 0;
     
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: '100%' }}>
+      <Box sx={{ ...flexColumn, gap: 0.75, width: '100%' }}>
         {/* Nagłówek z sumarycznymi informacjami */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', ...mb1 }}>
           <Box>
             <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
               {links.length} rezerwacji → Razem: {totalLinkedQuantity} {links[0]?.batchSnapshot?.unit || 'szt.'}
@@ -270,7 +278,7 @@ const IngredientLinkStatusMemo = memo(({
   }
   
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box sx={{ ...flexCenter, gap: 1 }}>
       <LinkIcon fontSize="small" sx={{ color: colors.text.disabled }} />
       <Typography variant="caption" sx={{ color: colors.text.secondary, fontStyle: 'italic' }}>
         Kliknij wiersz aby powiązać z rezerwacją
@@ -317,9 +325,9 @@ const MobileIngredientCard = memo(({
       }}
       onClick={() => onLinkIngredient(ingredient)}
     >
-      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+      <CardContent sx={{ ...p2, '&:last-child': { pb: 2 } }}>
         {/* Nazwa składnika */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', ...mb1 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: colors.text.primary, flex: 1, pr: 1 }}>
             {ingredient.text}
           </Typography>

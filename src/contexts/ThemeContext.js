@@ -142,6 +142,73 @@ const commonValues = {
 
 // Wspólne style komponentów dla obu motywów
 const getCommonComponents = (theme) => ({
+  // ✅ OPTYMALIZACJA: Warianty Box dla często używanych layoutów
+  MuiBox: {
+    variants: [
+      {
+        props: { 'data-variant': 'flex-center' },
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+        },
+      },
+      {
+        props: { 'data-variant': 'flex-between' },
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        },
+      },
+      {
+        props: { 'data-variant': 'flex-end' },
+        style: {
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+        },
+      },
+      {
+        props: { 'data-variant': 'flex-column' },
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      },
+      {
+        props: { 'data-variant': 'loading' },
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: theme.spacing(3),
+        },
+      },
+      {
+        props: { 'data-variant': 'section-header' },
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: theme.spacing(2),
+        },
+      },
+      {
+        props: { 'data-variant': 'action-buttons' },
+        style: {
+          display: 'flex',
+          gap: theme.spacing(1),
+          alignItems: 'center',
+        },
+      },
+    ],
+  },
+  // ✅ OPTYMALIZACJA: Warianty Stack dla często używanych layoutów
+  MuiStack: {
+    defaultProps: {
+      useFlexGap: true,
+    },
+  },
   MuiCssBaseline: {
     styleOverrides: {
       body: {

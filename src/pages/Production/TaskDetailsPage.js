@@ -193,6 +193,28 @@ import { preciseMultiply } from '../../utils/mathUtils';
 import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 import { useUserNames } from '../../hooks/useUserNames';
 
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI (eliminuje tworzenie obiektów sx przy każdym renderze)
+import { 
+  flexCenter, 
+  flexBetween, 
+  loadingContainer, 
+  sectionHeader, 
+  actionButtons,
+  buttonRow,
+  mr1, 
+  ml1, 
+  mb1, 
+  mb2, 
+  mb3, 
+  mt1, 
+  mt2, 
+  mt3,
+  p2,
+  textRight,
+  mobileButton,
+  captionWithMargin
+} from '../../styles/muiCommonStyles';
+
 // ✅ Import hooków refaktoryzowanych
 import { useTaskDialogs } from '../../hooks/production/useTaskDialogs';
 import { useTaskComments } from '../../hooks/production/useTaskComments';
@@ -2400,7 +2422,7 @@ const TaskDetailsPage = () => {
         variant="outlined"
         startIcon={<PrintIcon />}
         onClick={handlePrintMODetails}
-        sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
+        sx={mobileButton(isMobile)}
       >
         {t('buttons.printMO')}
       </Button>
@@ -2413,7 +2435,7 @@ const TaskDetailsPage = () => {
         variant="outlined"
         startIcon={<PrintIcon />}
         onClick={handlePrintMaterialsAndLots}
-        sx={{ mr: 1, mb: isMobile ? 1 : 0 }}
+        sx={mobileButton(isMobile)}
       >
         {t('buttons.materialReport')}
       </Button>
@@ -3243,19 +3265,19 @@ const TaskDetailsPage = () => {
   const renderManualBatchSelection = () => {
     if (materialBatchesLoading) {
       return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <Box sx={loadingContainer}>
           <CircularProgress />
         </Box>
       );
     }
 
     return (
-      <Box sx={{ mt: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+      <Box sx={mt2}>
+        <Box sx={sectionHeader}>
           <Typography variant="subtitle1">
             Wybierz partie dla każdego materiału:
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Box sx={actionButtons}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -3349,7 +3371,7 @@ const TaskDetailsPage = () => {
               onChange={() => setExpandedMaterial(expandedMaterial === materialId ? null : materialId)}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                <Box sx={{ ...flexBetween, width: '100%' }}>
                   <Box>
                   <Typography>{material.name}</Typography>
                     {consumedQuantity > 0 && (
@@ -3358,19 +3380,19 @@ const TaskDetailsPage = () => {
                       </Typography>
                     )}
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Box sx={flexCenter}>
                     <Chip
                       label={`${totalSelectedQuantity.toFixed(3)} / ${parseFloat(requiredQuantity).toFixed(3)} ${material.unit}`}
                       color={isComplete ? "success" : requiredQuantity > 0 ? "warning" : "default"}
                       size="small"
-                      sx={{ mr: 1 }}
+                      sx={mr1}
                     />
                     {requiredQuantity <= 0 && task.materialConsumptionConfirmed && (
                       <Chip
                         label="W pełni skonsumowany"
                         color="success"
                         size="small"
-                        sx={{ mr: 1 }}
+                        sx={mr1}
                       />
                     )}
                     {totalSelectedQuantity > 0 && totalSelectedQuantity < requiredQuantity && requiredQuantity > 0 && (
@@ -3378,7 +3400,7 @@ const TaskDetailsPage = () => {
                         label="Częściowa rezerwacja"
                         color="warning"
                         size="small"
-                        sx={{ mr: 1 }}
+                        sx={mr1}
                         variant="outlined"
                       />
                     )}
@@ -3387,7 +3409,7 @@ const TaskDetailsPage = () => {
                         label="Zarezerwowany"
                         color="primary"
                         size="small"
-                        sx={{ mr: 1 }}
+                        sx={mr1}
                       />
                     )}
                   </Box>
@@ -5790,27 +5812,27 @@ const TaskDetailsPage = () => {
       Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
     
     return (
-      <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+      <Box sx={{ ...mt2, ...p2, bgcolor: 'background.default', borderRadius: 1 }}>
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">{t('materialsSummary.title')}</Typography>
             {costChanged && (
-              <Alert severity="info" sx={{ mt: 1 }}>
+              <Alert severity="info" sx={mt1}>
                 {t('materialsSummary.costChanged')}
               </Alert>
             )}
             {consumedCosts.totalCost > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={mt1}>
                 {t('materialsSummary.consumed')}: {consumedCosts.totalCost.toFixed(2)} € | 
                 {t('materialsSummary.reserved')}: {reservedCosts.totalCost.toFixed(2)} €
               </Typography>
             )}
           </Grid>
-          <Grid item xs={12} md={6} sx={{ textAlign: 'right' }}>
+          <Grid item xs={12} md={6} sx={textRight}>
             <Typography variant="body1">
               <strong>{t('materialsSummary.totalCost')}:</strong> {totalMaterialCost.toFixed(2)} €
               {task.totalMaterialCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
                   (W bazie: {task.totalMaterialCost.toFixed(2)} €)
                 </Typography>
               )}
@@ -5818,15 +5840,15 @@ const TaskDetailsPage = () => {
             <Typography variant="body1">
               <strong>{t('materialsSummary.unitCost')}:</strong> ~{unitMaterialCost.toFixed(4)} €/{task.unit}
               {task.unitMaterialCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
                   (W bazie: ~{task.unitMaterialCost.toFixed(4)} €/{task.unit})
                 </Typography>
               )}
             </Typography>
-            <Typography variant="body1" sx={{ mt: 1, color: 'primary.main' }}>
+            <Typography variant="body1" sx={{ ...mt1, color: 'primary.main' }}>
               <strong>{t('taskDetails:materialsSummary.totalFullProductionCost')}:</strong> {totalFullProductionCost.toFixed(2)} €
               {task.totalFullProductionCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
                   (W bazie: {task.totalFullProductionCost.toFixed(2)} €)
                 </Typography>
               )}
@@ -5834,12 +5856,12 @@ const TaskDetailsPage = () => {
             <Typography variant="body1" sx={{ color: 'primary.main' }}>
               <strong>{t('taskDetails:materialsSummary.unitFullProductionCost')}:</strong> ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
               {task.unitFullProductionCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
                   (W bazie: ~{task.unitFullProductionCost.toFixed(4)} €/{task.unit})
                 </Typography>
               )}
             </Typography>
-            <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ ...mt1, display: 'flex', flexDirection: 'column', gap: 1 }}>
               {costChanged && (
                 <Button 
                   variant="outlined" 
@@ -8405,27 +8427,39 @@ const TaskDetailsPage = () => {
   }, [mainTab, task?.id, task?.recipe?.ingredients, task?.consumedMaterials, materials, clinicalAttachments.length, additionalAttachments.length, ingredientBatchAttachments]);
 
   // Renderuj stronę
+    // ✅ OPTYMALIZACJA: Style poza renderem - nie tworzone przy każdym renderze
+    const skeletonStyle = { ...mb2, borderRadius: 1 };
+    const headerBoxStyle = {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      ...mb3
+    };
+    const actionsBoxStyle = {
+      display: 'flex',
+      flexDirection: 'row',
+      gap: 1,
+      justifyContent: isMobile ? 'flex-start' : 'flex-end',
+      width: isMobile ? '100%' : 'auto',
+      mb: isMobile ? 2 : 0
+    };
+
     return (
       <Container maxWidth="xl">
       {loading ? (
         // ⚡ OPTYMALIZACJA: Skeleton loading zamiast CircularProgress dla lepszego UX
         <Box sx={{ mt: 4 }}>
-          <Skeleton variant="rectangular" height={60} sx={{ mb: 2, borderRadius: 1 }} />
-          <Skeleton variant="rectangular" height={400} sx={{ mb: 2, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" height={60} sx={skeletonStyle} />
+          <Skeleton variant="rectangular" height={400} sx={skeletonStyle} />
           <Skeleton variant="text" width="60%" height={40} />
           <Skeleton variant="text" width="40%" height={40} />
-          <Skeleton variant="rectangular" height={200} sx={{ mt: 2, borderRadius: 1 }} />
+          <Skeleton variant="rectangular" height={200} sx={{ ...mt2, borderRadius: 1 }} />
         </Box>
       ) : task ? (
         <>
           {/* Pasek nawigacyjny i przyciski akcji (Edytuj, Usuń) - pozostaje na górze */}
-          <Box sx={{
-            display: 'flex',
-            flexDirection: isMobile ? 'column' : 'row',
-            justifyContent: 'space-between',
-            alignItems: isMobile ? 'flex-start' : 'center',
-            mb: 3
-          }}>
+          <Box sx={headerBoxStyle}>
             <Button
               component={Link}
               to="/production"
@@ -8435,20 +8469,13 @@ const TaskDetailsPage = () => {
               {t('backToTaskList')}
             </Button>
 
-            <Box sx={{
-              display: 'flex',
-              flexDirection: isMobile ? 'row' : 'row',
-              gap: 1,
-              justifyContent: isMobile ? 'flex-start' : 'flex-end',
-              width: isMobile ? '100%' : 'auto',
-              mb: isMobile ? 2 : 0
-            }}>
+            <Box sx={actionsBoxStyle}>
               <IconButton
                 color="primary"
                 component={Link}
                 to={`/production/tasks/${id}/edit?returnTo=details`}
                 title={t('editTask')}
-                sx={{ mr: isMobile ? 1 : 1 }}
+                sx={mr1}
               >
                 <EditIcon />
               </IconButton>
@@ -8737,7 +8764,7 @@ const TaskDetailsPage = () => {
           >
             <DialogTitle>Dodaj opakowania do zadania</DialogTitle>
             <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
+              <DialogContentText sx={mb2}>
                 Wybierz opakowania, które chcesz dodać do zadania produkcyjnego.
               </DialogContentText>
               
@@ -8756,7 +8783,7 @@ const TaskDetailsPage = () => {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ mb: 2 }}
+                sx={mb2}
               />
               
               {/* Opcja natychmiastowej konsumpcji */}
@@ -8769,11 +8796,11 @@ const TaskDetailsPage = () => {
                   />
                 }
                 label="Konsumuj opakowania natychmiast z wybranych partii"
-                sx={{ mb: 2 }}
+                sx={mb2}
               />
               
               {loadingPackaging ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <Box sx={loadingContainer}>
                   <CircularProgress />
                 </Box>
               ) : (
@@ -8893,7 +8920,7 @@ const TaskDetailsPage = () => {
           >
             <DialogTitle>Dodaj surowiec do zadania</DialogTitle>
             <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
+              <DialogContentText sx={mb2}>
                 Wybierz surowiec lub opakowanie jednostkowe, które chcesz dodać do zadania produkcyjnego.
                 <br />
                 <strong>Uwaga:</strong> Możesz dodać dowolną ilość - to jest tylko planowanie, nie rezerwacja materiałów.
@@ -8909,7 +8936,7 @@ const TaskDetailsPage = () => {
                   const targetCategory = newValue === 0 ? 'Surowce' : 'Opakowania jednostkowe';
                   await fetchAvailableRawMaterials(targetCategory);
                 }}
-                sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+                sx={{ ...mb2, borderBottom: 1, borderColor: 'divider' }}
               >
                 <Tab label="Surowce" />
                 <Tab label="Opakowania jednostkowe" />
@@ -8930,11 +8957,11 @@ const TaskDetailsPage = () => {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ mb: 2 }}
+                sx={mb2}
               />
               
               {loadingRawMaterials ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <Box sx={loadingContainer}>
                   <CircularProgress />
                 </Box>
               ) : (
@@ -9046,7 +9073,7 @@ const TaskDetailsPage = () => {
           >
             <DialogTitle>Konsumuj materiały</DialogTitle>
             <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
+              <DialogContentText sx={mb2}>
                 Wybierz partie materiałów i ilości, które chcesz skonsumować. Konsumpcja zmniejszy dostępną ilość w magazynie.
               </DialogContentText>
               
@@ -9060,7 +9087,7 @@ const TaskDetailsPage = () => {
                   const reservedBatches = task.materialBatches[materialId] || [];
                   
                   return (
-                    <Box key={materialId} sx={{ mb: 3 }}>
+                    <Box key={materialId} sx={mb3}>
                       <Typography variant="h6" gutterBottom>
                         {material.name} ({material.unit})
                       </Typography>
@@ -9155,11 +9182,11 @@ const TaskDetailsPage = () => {
           >
             <DialogTitle>Rezerwacja surowców</DialogTitle>
             <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
+              <DialogContentText sx={mb2}>
                 Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
               </DialogContentText>
               
-              <FormControl component="fieldset" sx={{ mb: 2 }}>
+              <FormControl component="fieldset" sx={mb2}>
                 <FormLabel component="legend">Metoda rezerwacji</FormLabel>
                 <RadioGroup 
                   row 
@@ -9183,7 +9210,7 @@ const TaskDetailsPage = () => {
               
               {reservationMethod === 'automatic' && (
                 <>
-                  <Alert severity="info" sx={{ mb: 2 }}>
+                  <Alert severity="info" sx={mb2}>
                     System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
                   </Alert>
                   
@@ -9205,7 +9232,7 @@ const TaskDetailsPage = () => {
                         </Typography>
                       </Box>
                     }
-                    sx={{ mb: 2, alignItems: 'flex-start' }}
+                    sx={{ ...mb2, alignItems: 'flex-start' }}
                   />
                 </>
               )}
