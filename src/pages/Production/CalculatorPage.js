@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Paper,
@@ -7,10 +7,6 @@ import {
   TextField,
   Button,
   Box,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   CircularProgress,
   Alert,
   Table,
@@ -20,26 +16,16 @@ import {
   TableHead,
   TableRow,
   Divider,
-  IconButton,
-  FormHelperText,
   Autocomplete,
   InputAdornment,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  FormLabel,
   ToggleButtonGroup,
   ToggleButton,
   Tooltip
 } from '@mui/material';
 import {
-  Add as AddIcon,
-  Remove as RemoveIcon,
   Download as DownloadIcon,
   Calculate as CalculateIcon,
-  Info as InfoIcon,
   RestartAlt as ResetIcon,
-  Assignment as AssignmentIcon,
   FileDownload as FileDownloadIcon,
   SaveAlt as SaveAltIcon,
   Search as SearchIcon,
@@ -47,10 +33,28 @@ import {
   Medication as MedicationIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../hooks/useNotification';
-import { getAllRecipes, getRecipeById } from '../../services/recipeService';
+import { getRecipeById, getRecipesWithPagination } from '../../services/recipeService';
+import { getTasksWithPagination } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { palettes, gradients } from '../../styles/colorConfig';
+
+// Debounce hook
+const useDebounce = (value, delay) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
 
 const CalculatorPage = () => {
   const { showSuccess, showError, showInfo } = useNotification();
@@ -64,93 +68,117 @@ const CalculatorPage = () => {
   const [calculationMode, setCalculationMode] = useState('pieces'); // 'pieces' lub 'capsules'
   
   // Stany pomocnicze
-  const [recipes, setRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [calculationResult, setCalculationResult] = useState(null);
   const [mixings, setMixings] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
-  const [productionTasks, setProductionTasks] = useState([]);
   const [selectedTaskId, setSelectedTaskId] = useState('');
+  
+  // Stany dla wyszukiwania receptur
+  const [recipeSearchQuery, setRecipeSearchQuery] = useState('');
+  const [recipeOptions, setRecipeOptions] = useState([]);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+  const debouncedRecipeSearch = useDebounce(recipeSearchQuery, 300);
   
   // Stany dla wyszukiwania MO
   const [moSearchQuery, setMoSearchQuery] = useState('');
-  const [filteredTasks, setFilteredTasks] = useState([]);
+  const [moOptions, setMoOptions] = useState([]);
+  const [moLoading, setMoLoading] = useState(false);
+  const debouncedMoSearch = useDebounce(moSearchQuery, 300);
   
-  // Funkcja do pobierania receptur
-  const fetchRecipes = async () => {
-    try {
-      setLoading(true);
-      const recipesData = await getAllRecipes();
-      setRecipes(recipesData);
-    } catch (error) {
-      console.error('Błąd podczas pobierania receptur:', error);
-      showError(t('calculator.errors.fetchRecipesFailed'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Ref do śledzenia czy ostatnie wyszukiwanie było aktywne
+  const lastRecipeSearchRef = useRef('');
+  const lastMoSearchRef = useRef('');
   
-  // Pobranie wszystkich receptur przy ładowaniu komponentu
+  // Wyszukiwanie receptur z debounce
   useEffect(() => {
-    fetchRecipes();
-  }, [showError]);
-  
-  // Funkcja do pobrania zadań produkcyjnych
-  const fetchProductionTasks = async () => {
-    try {
-      setLoading(true);
-      // Importujemy funkcję do pobierania zadań produkcyjnych z poprawnego modułu
-      const { getProductionTasks } = await import('../../services/aiDataService');
+    const searchRecipes = async () => {
+      // Nie wyszukuj jeśli fraza jest taka sama jak poprzednia
+      if (debouncedRecipeSearch === lastRecipeSearchRef.current) return;
+      lastRecipeSearchRef.current = debouncedRecipeSearch;
       
-      // Pobieramy zadania produkcyjne o statusie "Zaplanowane", "W trakcie" oraz "Wstrzymane"
-      const tasks = await getProductionTasks({
-        filters: [
-          { field: 'status', operator: 'in', value: ['Zaplanowane', 'W trakcie', 'Wstrzymane'] }
-        ],
-        orderBy: { field: 'createdAt', direction: 'desc' },
-        limit: 100
-      });
+      // Minimalna długość frazy do wyszukiwania
+      if (!debouncedRecipeSearch || debouncedRecipeSearch.length < 2) {
+        setRecipeOptions([]);
+        return;
+      }
       
-      setProductionTasks(tasks);
-    } catch (error) {
-      console.error('Błąd podczas pobierania zadań produkcyjnych:', error);
-      showError(t('calculator.errors.fetchTasksFailed'));
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Rozszerzamy useEffect o pobieranie zadań produkcyjnych
-  useEffect(() => {
-    fetchRecipes();
-    fetchProductionTasks(); // Dodano pobieranie zadań produkcyjnych
-  }, []);
-  
-  // Aktualizacja filtrowanej listy zadań produkcyjnych
-  useEffect(() => {
-    if (!moSearchQuery.trim()) {
-      setFilteredTasks(productionTasks);
-    } else {
-      const filtered = productionTasks.filter(task => {
-        const searchLower = moSearchQuery.toLowerCase();
-        return (
-          task.moNumber?.toLowerCase().includes(searchLower) ||
-          task.productName?.toLowerCase().includes(searchLower) ||
-          task.id?.toLowerCase().includes(searchLower)
+      try {
+        setRecipeLoading(true);
+        const result = await getRecipesWithPagination(
+          1,           // page
+          15,          // limit - pobieramy max 15 wyników
+          'name',      // sortField
+          'asc',       // sortOrder
+          null,        // customerId
+          debouncedRecipeSearch // searchTerm
         );
-      });
-      setFilteredTasks(filtered);
+        
+        setRecipeOptions(result.data || []);
+      } catch (error) {
+        console.error('Błąd podczas wyszukiwania receptur:', error);
+        setRecipeOptions([]);
+      } finally {
+        setRecipeLoading(false);
+      }
+    };
+    
+    searchRecipes();
+  }, [debouncedRecipeSearch]);
+  
+  // Wyszukiwanie MO z debounce
+  useEffect(() => {
+    const searchMO = async () => {
+      // Nie wyszukuj jeśli fraza jest taka sama jak poprzednia
+      if (debouncedMoSearch === lastMoSearchRef.current) return;
+      lastMoSearchRef.current = debouncedMoSearch;
+      
+      // Minimalna długość frazy do wyszukiwania
+      if (!debouncedMoSearch || debouncedMoSearch.length < 2) {
+        setMoOptions([]);
+        return;
+      }
+      
+      try {
+        setMoLoading(true);
+        const result = await getTasksWithPagination(
+          1,           // page
+          15,          // limit - pobieramy max 15 wyników
+          'moNumber',  // sortField
+          'desc',      // sortOrder
+          {
+            searchTerm: debouncedMoSearch,
+            statuses: ['Zaplanowane', 'W trakcie', 'Wstrzymane']
+          }
+        );
+        
+        setMoOptions(result.data || []);
+      } catch (error) {
+        console.error('Błąd podczas wyszukiwania MO:', error);
+        setMoOptions([]);
+      } finally {
+        setMoLoading(false);
+      }
+    };
+    
+    searchMO();
+  }, [debouncedMoSearch]);
+  
+  // Funkcja do obsługi wyboru receptury
+  const handleRecipeChange = (event, newValue) => {
+    if (newValue) {
+      setSelectedRecipeId(newValue.id);
+      setRecipeSearchQuery(newValue.name || '');
+    } else {
+      setSelectedRecipeId('');
+      setSelectedRecipe(null);
+      setRecipeSearchQuery('');
     }
-  }, [productionTasks, moSearchQuery]);
+  };
   
   // Funkcja do obsługi wyszukiwania MO
   const handleMoSearchChange = (event, newValue) => {
-    if (typeof newValue === 'string') {
-      setMoSearchQuery(newValue);
-    } else if (newValue && newValue.inputValue) {
-      // Utworzenie nowej wartości z inputValue
-      setMoSearchQuery(newValue.inputValue);
-    } else if (newValue) {
+    if (newValue) {
       // Wybrano istniejące zadanie
       setSelectedTaskId(newValue.id);
       setMoSearchQuery(newValue.moNumber || '');
@@ -926,8 +954,12 @@ const CalculatorPage = () => {
     setMainIngredientQuantity(100);
     setTargetAmount(1000);
     setSelectedRecipeId('');
+    setSelectedRecipe(null);
+    setRecipeSearchQuery('');
+    setRecipeOptions([]);
     setSelectedTaskId('');
     setMoSearchQuery('');
+    setMoOptions([]);
     setCalculationMode('pieces'); // Reset do domyślnego trybu
     setCalculationResult(null);
     setMixings([]);
@@ -971,12 +1003,10 @@ const CalculatorPage = () => {
       // Ustawiamy wybraną recepturę
       setSelectedRecipe(recipeDoc);
       setSelectedRecipeId(recipeDoc.id);
+      setRecipeSearchQuery(recipeDoc.name || ''); // Ustaw nazwę receptury w polu wyszukiwania
       
       // Ustawiamy ilość docelową na podstawie ilości z zadania produkcyjnego
       setTargetAmount(task.quantity);
-      
-      // Wywołujemy funkcję do obliczenia planu mieszań
-      calculateMixings();
       
       showSuccess(t('calculator.success.planGeneratedFromMo', { moNumber: task.moNumber }));
     } catch (error) {
@@ -1146,28 +1176,71 @@ const CalculatorPage = () => {
         {/* Pierwszy rząd - wybór receptury */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12}>
-            <FormControl fullWidth>
-              <InputLabel id="recipe-select-label">{t('calculator.selectRecipe')}</InputLabel>
-              <Select
-                labelId="recipe-select-label"
-                value={selectedRecipeId}
-                onChange={(e) => setSelectedRecipeId(e.target.value)}
-                label={t('calculator.selectRecipe')}
-                disabled={loading}
-              >
-                <MenuItem value="">
-                  <em>{t('calculator.selectRecipePlaceholder')}</em>
-                </MenuItem>
-                {recipes.map((recipe) => (
-                  <MenuItem key={recipe.id} value={recipe.id}>
-                    {recipe.name}
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText>
-                Najpierw wybierz recepturę
-              </FormHelperText>
-            </FormControl>
+            <Autocomplete
+              options={recipeOptions}
+              getOptionLabel={(option) => {
+                if (typeof option === 'string') return option;
+                return option.name || '';
+              }}
+              value={selectedRecipe}
+              onChange={handleRecipeChange}
+              onInputChange={(event, newInputValue, reason) => {
+                if (reason === 'input') {
+                  setRecipeSearchQuery(newInputValue);
+                }
+              }}
+              inputValue={recipeSearchQuery}
+              isOptionEqualToValue={(option, value) => option?.id === value?.id}
+              filterOptions={(x) => x} // Wyłączamy lokalne filtrowanie - filtrujemy na serwerze
+              loading={recipeLoading}
+              noOptionsText={recipeSearchQuery.length < 2 
+                ? t('calculator.typeToSearchRecipe') 
+                : t('calculator.noRecipesFound')
+              }
+              loadingText={t('calculator.loadingRecipes')}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('calculator.selectRecipe')}
+                  placeholder={t('calculator.searchRecipePlaceholder')}
+                  variant="outlined"
+                  helperText={t('calculator.searchRecipeHelper')}
+                  InputProps={{
+                    ...params.InputProps,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon color="action" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <>
+                        {recipeLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props} key={option.id}>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                      {option.name}
+                    </Typography>
+                    {option.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap',
+                        maxWidth: 400
+                      }}>
+                        {option.description}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+            />
           </Grid>
         </Grid>
 
@@ -1238,37 +1311,34 @@ const CalculatorPage = () => {
           {/* Wybór zadania produkcyjnego (MO) */}
           <Grid item xs={12} md={6}>
             <Autocomplete
-              options={filteredTasks}
+              options={moOptions}
               getOptionLabel={(option) => {
-                if (typeof option === 'string') {
-                  return option;
-                }
+                if (typeof option === 'string') return option;
                 return `${option.moNumber || ''} - ${option.productName || ''} (${option.quantity || 0} ${option.unit || ''})`;
               }}
-              value={selectedTaskId ? filteredTasks.find(task => task.id === selectedTaskId) || null : null}
+              value={selectedTaskId ? moOptions.find(task => task.id === selectedTaskId) || null : null}
               onChange={handleMoSearchChange}
-              onInputChange={(event, newInputValue) => {
-                setMoSearchQuery(newInputValue);
+              onInputChange={(event, newInputValue, reason) => {
+                if (reason === 'input') {
+                  setMoSearchQuery(newInputValue);
+                }
               }}
               inputValue={moSearchQuery}
-              filterOptions={(options, { inputValue }) => {
-                const filtered = options.filter(option => {
-                  const searchLower = inputValue.toLowerCase();
-                  return (
-                    option.moNumber?.toLowerCase().includes(searchLower) ||
-                    option.productName?.toLowerCase().includes(searchLower) ||
-                    option.id?.toLowerCase().includes(searchLower)
-                  );
-                });
-                return filtered;
-              }}
+              isOptionEqualToValue={(option, value) => option?.id === value?.id}
+              filterOptions={(x) => x} // Wyłączamy lokalne filtrowanie - filtrujemy na serwerze
+              loading={moLoading}
+              noOptionsText={moSearchQuery.length < 2 
+                ? t('calculator.typeToSearchMO') 
+                : t('calculator.noTasksFound')
+              }
+              loadingText={t('calculator.loadingTasks')}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label={t('calculator.searchTask')}
                   variant="outlined"
                   placeholder={t('calculator.searchTaskPlaceholder')}
-                  disabled={loading}
+                  helperText={t('calculator.searchTaskHelper')}
                   InputProps={{
                     ...params.InputProps,
                     startAdornment: (
@@ -1278,16 +1348,15 @@ const CalculatorPage = () => {
                     ),
                     endAdornment: (
                       <>
-                        {loading ? <CircularProgress color="inherit" size={20} /> : null}
+                        {moLoading ? <CircularProgress color="inherit" size={20} /> : null}
                         {params.InputProps.endAdornment}
                       </>
                     ),
                   }}
-                  helperText={t('calculator.searchTaskHelper')}
                 />
               )}
               renderOption={(props, option) => (
-                <Box component="li" {...props}>
+                <Box component="li" {...props} key={option.id}>
                   <Box>
                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                       {option.moNumber}
@@ -1298,13 +1367,6 @@ const CalculatorPage = () => {
                   </Box>
                 </Box>
               )}
-              freeSolo={false}
-              clearOnBlur={false}
-              selectOnFocus={true}
-              handleHomeEndKeys={true}
-              noOptionsText={t('calculator.noTasksFound')}
-              loadingText={t('calculator.loadingTasks')}
-              loading={loading}
             />
           </Grid>
           
