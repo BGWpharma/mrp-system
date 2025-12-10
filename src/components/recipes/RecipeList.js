@@ -1,5 +1,5 @@
 // src/components/recipes/RecipeList.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Table, 
@@ -70,6 +70,19 @@ import { formatDate } from '../../utils/formatters';
 import searchService from '../../services/searchService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { useRecipeListState } from '../../contexts/RecipeListStateContext';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 
 // UWAGA: Do poprawnego działania zapytań filtrowania wg. klienta wymagany jest
 // indeks złożony w Firestore dla kolekcji "recipes":
@@ -2207,7 +2220,7 @@ const RecipeList = () => {
                 onClick={() => handleMenuAction('refreshIndex')}
                 disabled={loading}
               >
-                <CachedIcon sx={{ mr: 1 }} />
+                <CachedIcon sx={mr1} />
                 {t('recipes.list.refreshIndex')}
               </MenuItem>
             )}
@@ -2215,7 +2228,7 @@ const RecipeList = () => {
               onClick={() => handleMenuAction('exportCSV')}
               disabled={loading || (tabValue === 0 ? filteredRecipes.length === 0 : (!expandedPanel || !customerRecipes[expandedPanel] || customerRecipes[expandedPanel].length === 0))}
             >
-              <DownloadIcon sx={{ mr: 1 }} />
+              <DownloadIcon sx={mr1} />
               {t('recipes.list.exportCSV')}
             </MenuItem>
             <MenuItem 
@@ -2229,14 +2242,14 @@ const RecipeList = () => {
               onClick={() => handleMenuAction('exportWithSuppliers')}
               disabled={loading || (tabValue === 0 ? filteredRecipes.length === 0 : (!expandedPanel || !customerRecipes[expandedPanel] || customerRecipes[expandedPanel].length === 0))}
             >
-              <DownloadIcon sx={{ mr: 1 }} />
+              <DownloadIcon sx={mr1} />
               {t('recipes.list.exportWithSuppliers')}
             </MenuItem>
             <MenuItem 
               onClick={() => handleMenuAction('syncCAS')}
               disabled={loading || syncingCAS}
             >
-              {syncingCAS ? <CircularProgress size={16} sx={{ mr: 1 }} /> : <SyncIcon sx={{ mr: 1 }} />}
+              {syncingCAS ? <CircularProgress size={16} sx={mr1} /> : <SyncIcon sx={mr1} />}
               {t('recipes.list.syncCAS')}
             </MenuItem>
           </Menu>
@@ -2603,7 +2616,7 @@ const RecipeList = () => {
             )}
             
             {importWarnings.length > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box sx={mt2}>
                 <Alert severity={importWarnings.some(w => w.type === 'error') ? 'error' : 'warning'}>
                   <Typography variant="subtitle2" gutterBottom>
                     {importWarnings.some(w => w.type === 'error') 
@@ -2634,7 +2647,7 @@ const RecipeList = () => {
             )}
             
             {importPreview.length > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box sx={mt2}>
                 <Typography variant="subtitle2" gutterBottom>
                   Podgląd zmian ({importPreview.filter(p => p.status === 'update').length} receptur do aktualizacji):
                 </Typography>
@@ -2694,8 +2707,8 @@ const RecipeList = () => {
                       )}
                       
                       {item.ingredientCorrections && item.ingredientCorrections.length > 0 && (
-                        <Box sx={{ mt: 2 }}>
-                          <Alert severity="info" sx={{ mb: 1 }}>
+                        <Box sx={mt2}>
+                          <Alert severity="info" sx={mb1}>
                             <Typography variant="subtitle2" gutterBottom>
                               <strong>Auto-korekcja składników:</strong> {item.ingredientCorrections.length} składnik(ów) został automatycznie poprawiony:
                             </Typography>
@@ -2797,7 +2810,7 @@ const RecipeList = () => {
                 <LinearProgress 
                   variant="determinate" 
                   value={(syncProgress.current / syncProgress.total) * 100} 
-                  sx={{ mt: 2 }}
+                  sx={mt2}
                 />
               </>
             )}
@@ -2806,7 +2819,7 @@ const RecipeList = () => {
                 <Typography variant="body2" gutterBottom>
                   {t('recipes.list.preparingSync')}
                 </Typography>
-                <LinearProgress sx={{ mt: 2 }} />
+                <LinearProgress sx={mt2} />
               </>
             )}
           </Box>

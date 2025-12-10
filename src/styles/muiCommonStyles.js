@@ -6,10 +6,38 @@
  * - Eliminuje tworzenie nowych obiektów sx przy każdym re-renderze
  * - Redukuje pressure na garbage collector
  * 
- * UŻYCIE:
- * import { flexCenter, flexBetween, spacingStyles } from '@/styles/muiCommonStyles';
+ * UŻYCIE SX:
+ * import { flexCenter, flexBetween, mb2 } from '@/styles/muiCommonStyles';
  * <Box sx={flexCenter}>...</Box>
  * <Box sx={{ ...flexCenter, mt: 2 }}>...</Box>
+ * 
+ * WARIANTY THEME (zdefiniowane w ThemeContext.js):
+ * 
+ * Box:
+ * <Box data-variant="flex-center">...</Box>
+ * <Box data-variant="flex-between">...</Box>
+ * <Box data-variant="flex-column">...</Box>
+ * <Box data-variant="loading">...</Box>
+ * <Box data-variant="section-header">...</Box>
+ * <Box data-variant="action-buttons">...</Box>
+ * 
+ * Typography:
+ * <Typography data-variant="section-title">...</Typography>
+ * <Typography data-variant="form-label">...</Typography>
+ * <Typography data-variant="caption-bold">...</Typography>
+ * <Typography data-variant="value-display">...</Typography>
+ * 
+ * Chip:
+ * <Chip data-variant="status" />
+ * <Chip data-variant="tag" />
+ * <Chip data-variant="info" />
+ * 
+ * Alert:
+ * <Alert data-variant="compact">...</Alert>
+ * 
+ * Paper:
+ * <Paper data-variant="section">...</Paper>
+ * <Paper data-variant="form-section">...</Paper>
  */
 
 // ============================================
@@ -210,6 +238,21 @@ export const formActions = {
 };
 
 // ============================================
+// SKELETON STYLES
+// ============================================
+
+/** Skeleton z marginesem i zaokrągleniem */
+export const skeletonStyle = {
+  mb: 2,
+  borderRadius: 1,
+};
+
+/** Skeleton bez marginesu */
+export const skeletonBase = {
+  borderRadius: 1,
+};
+
+// ============================================
 // DIALOG STYLES
 // ============================================
 
@@ -392,6 +435,248 @@ export const textSuccess = {
 };
 
 // ============================================
+// EMPTY STATE STYLES (puste stany, brak danych)
+// ============================================
+
+/** Empty state container (Paper z centrowaniem) */
+export const emptyStateContainer = {
+  p: 4,
+  textAlign: 'center',
+};
+
+/** Empty state icon */
+export const emptyStateIcon = {
+  fontSize: 80,
+  mb: 2,
+};
+
+/** Empty state title */
+export const emptyStateTitle = {
+  mb: 1,
+};
+
+/** Empty state subtitle */
+export const emptyStateSubtitle = {
+  mt: 1,
+};
+
+// ============================================
+// ICON COLOR STYLES
+// ============================================
+
+/** Icon primary color */
+export const iconPrimary = { 
+  color: 'primary.main' 
+};
+
+/** Icon error color */
+export const iconError = { 
+  color: 'error.main' 
+};
+
+/** Icon success color */
+export const iconSuccess = { 
+  color: 'success.main' 
+};
+
+/** Icon warning color */
+export const iconWarning = { 
+  color: 'warning.main' 
+};
+
+/** Icon disabled color */
+export const iconDisabled = { 
+  color: 'action.disabled' 
+};
+
+/** Responsive icon size */
+export const iconResponsive = {
+  fontSize: { xs: 20, md: 24 },
+};
+
+// ============================================
+// FIXED WIDTHS (często używane w tabelach/formularzach)
+// ============================================
+
+export const width80 = { width: '80px' };
+export const width100 = { width: '100px' };
+export const width120 = { width: '120px' };
+export const width130 = { width: '130px' };
+export const width140 = { width: '140px' };
+export const width150 = { width: '150px' };
+export const width200 = { width: '200px' };
+
+// ============================================
+// FONT SIZE STYLES
+// ============================================
+
+export const fontXSmall = { fontSize: '0.65rem' };
+export const fontSmall = { fontSize: '0.75rem' };
+export const fontMedium = { fontSize: '0.875rem' };
+export const fontLarge = { fontSize: '1rem' };
+
+// ============================================
+// FLEX END COMBINATIONS
+// ============================================
+
+/** Flex end z margin top 2 */
+export const flexEndMt2 = {
+  mt: 2,
+  display: 'flex',
+  justifyContent: 'flex-end',
+};
+
+/** Flex end z margin top 3 */
+export const flexEndMt3 = {
+  mt: 3,
+  display: 'flex',
+  justifyContent: 'flex-end',
+};
+
+// ============================================
+// PAPER / SECTION STYLES
+// ============================================
+
+/** Paper sekcja z padding i marginesem */
+export const paperSection = {
+  p: 2,
+  mb: 3,
+  bgcolor: 'background.default',
+};
+
+/** Paper sekcja formularza */
+export const paperFormSection = {
+  p: 3,
+  mt: 3,
+  mb: 3,
+};
+
+/** Paper z border i padding */
+export const paperBordered = {
+  p: 2,
+  borderRadius: 2,
+};
+
+// ============================================
+// DIALOG STYLES EXTENDED
+// ============================================
+
+/** Dialog actions z padding */
+export const dialogActionsStyled = {
+  px: 3,
+  pb: 2,
+};
+
+// ============================================
+// ALERT STYLES
+// ============================================
+
+/** Alert z marginem bottom */
+export const alertMb2 = {
+  mb: 2,
+};
+
+/** Alert z marginem top */
+export const alertMt1 = {
+  mt: 1,
+};
+
+/** Alert z marginem top 2 */
+export const alertMt2 = {
+  mt: 2,
+};
+
+// ============================================
+// BOX PADDING COMBINATIONS
+// ============================================
+
+/** Box z padding 2 */
+export const boxP2 = { p: 2 };
+
+/** Box z padding 3 */
+export const boxP3 = { p: 3 };
+
+/** Box z padding 4 */
+export const boxP4 = { p: 4 };
+
+// ============================================
+// TYPOGRAPHY COLOR COMBINATIONS
+// ============================================
+
+/** Text disabled color */
+export const textDisabled = {
+  color: 'text.disabled',
+};
+
+/** Caption z kolorem secondary */
+export const captionSecondary = {
+  color: 'text.secondary',
+};
+
+/** Typography z fontWeight bold */
+export const typographyBold = {
+  fontWeight: 'bold',
+};
+
+/** Typography z fontWeight medium */
+export const typographyMedium = {
+  fontWeight: 'medium',
+};
+
+/** Typography italic */
+export const typographyItalic = {
+  fontStyle: 'italic',
+};
+
+// ============================================
+// GAP COMBINATIONS
+// ============================================
+
+/** Flex center z gap 1 */
+export const flexCenterGap1 = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1,
+};
+
+/** Flex center z gap 2 */
+export const flexCenterGap2 = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 2,
+};
+
+/** Flex column z gap 1 */
+export const flexColumnGap1 = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 1,
+};
+
+/** Flex column z gap 2 */
+export const flexColumnGap2 = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+};
+
+// ============================================
+// BORDER STYLES
+// ============================================
+
+/** Border bottom */
+export const borderBottom = {
+  borderBottom: 1,
+  borderColor: 'divider',
+};
+
+/** Border top */
+export const borderTop = {
+  borderTop: 1,
+  borderColor: 'divider',
+};
+
+// ============================================
 // COMPOSITE STYLES (często używane kombinacje)
 // ============================================
 
@@ -482,6 +767,10 @@ export default {
   flexWrap,
   flexRowGap,
   flexColumnGap,
+  flexCenterGap1,
+  flexCenterGap2,
+  flexColumnGap1,
+  flexColumnGap2,
   
   // Spacing
   mb1, mb2, mb3,
@@ -501,6 +790,16 @@ export default {
   textCenter,
   fullWidth,
   
+  // Empty state
+  emptyStateContainer,
+  emptyStateIcon,
+  emptyStateTitle,
+  emptyStateSubtitle,
+  
+  // Skeleton
+  skeletonStyle,
+  skeletonBase,
+  
   // Table
   tableNowrap,
   tableHeaderCell,
@@ -514,6 +813,7 @@ export default {
   // Dialog
   dialogContent,
   dialogActions,
+  dialogActionsStyled,
   
   // Status
   badgeContainer,
@@ -524,6 +824,12 @@ export default {
   infoBox,
   warningBox,
   hoverCard,
+  paperSection,
+  paperFormSection,
+  paperBordered,
+  boxP2,
+  boxP3,
+  boxP4,
   
   // Responsive
   hideOnMobile,
@@ -536,6 +842,40 @@ export default {
   iconMl,
   iconSmall,
   iconMedium,
+  iconPrimary,
+  iconError,
+  iconSuccess,
+  iconWarning,
+  iconDisabled,
+  iconResponsive,
+  
+  // Fixed widths
+  width80,
+  width100,
+  width120,
+  width130,
+  width140,
+  width150,
+  width200,
+  
+  // Font sizes
+  fontXSmall,
+  fontSmall,
+  fontMedium,
+  fontLarge,
+  
+  // Flex end combinations
+  flexEndMt2,
+  flexEndMt3,
+  
+  // Alert
+  alertMb2,
+  alertMt1,
+  alertMt2,
+  
+  // Border
+  borderBottom,
+  borderTop,
   
   // Scroll
   scrollableY,
@@ -550,6 +890,11 @@ export default {
   textPrimary,
   textError,
   textSuccess,
+  textDisabled,
+  captionSecondary,
+  typographyBold,
+  typographyMedium,
+  typographyItalic,
   
   // Composite
   sectionTitle,

@@ -71,8 +71,348 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getUsersDisplayNames } from '../../services/userService';
 import { formatDateTime } from '../../utils/formatters';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  emptyStateContainer,
+  emptyStateIcon,
+  textSecondary,
+  textDisabled,
+  iconPrimary,
+  iconResponsive,
+  alertMb2,
+  boxP4,
+  mt1,
+  mt2,
+  mb2,
+  p2
+} from '../../styles/muiCommonStyles';
 
+// ============================================
+// ✅ OPTYMALIZACJA: Style wyniesione poza komponent
+// Eliminuje tworzenie nowych obiektów sx przy każdym renderze
+// ============================================
+
+// Bazowe style karty (stałe, nie zależą od props)
+const taskCardBaseStyles = {
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  borderRadius: 4,
+  cursor: 'pointer',
+  overflow: 'hidden',
+  position: 'relative',
+  transform: 'translateZ(0)', // Force GPU layer
+  backfaceVisibility: 'hidden', // Zapobiega flickerowi
+};
+
+// Generator stylów karty (zależnych od props)
+const getTaskCardStyles = (mode, colors, statusColors, isMobile) => ({
+  ...taskCardBaseStyles,
+  minHeight: { xs: 280, md: 320 },
+  border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+  bgcolor: colors.paper,
+  willChange: !isMobile ? 'transform, box-shadow' : 'auto',
+  '&:hover': !isMobile ? {
+    transform: 'translateY(-2px) translateZ(0)',
+    transition: 'transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out',
+    boxShadow: `0 12px 40px ${statusColors.main}20`,
+    borderColor: statusColors.main,
+    '&::before': { opacity: 1 }
+  } : {},
+  '&::before': !isMobile ? {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: `linear-gradient(135deg, ${statusColors.main}05 0%, transparent 50%)`,
+    opacity: 0,
+    transition: 'opacity 0.2s ease-out',
+    pointerEvents: 'none',
+    zIndex: 0,
+    willChange: 'opacity',
+    transform: 'translateZ(0)'
+  } : {}
+});
+
+// Generator stylów paska statusu
+const getStatusBarStyles = (statusColors) => ({
+  height: 6,
+  background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+  width: '100%',
+  position: 'relative',
+  zIndex: 1
+});
+
+// Style CardContent (stałe)
+const cardContentStyles = {
+  p: { xs: 2.5, md: 3 },
+  flexGrow: 1,
+  position: 'relative',
+  zIndex: 1
+};
+
+// Style nagłówka (stałe)
+const headerBoxStyles = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  mb: 2.5
+};
+
+// Generator stylów tytułu
+const getTitleStyles = (colors) => ({
+  color: colors.text.primary,
+  fontWeight: 700,
+  fontSize: { xs: '1.1rem', md: '1.2rem' },
+  lineHeight: 1.3,
+  flex: 1,
+  pr: 1
+});
+
+// Generator stylów chipa statusu
+const getStatusChipStyles = (statusColors) => ({
+  background: `linear-gradient(135deg, ${statusColors.main} 0%, ${statusColors.dark || statusColors.main} 100%)`,
+  color: 'white',
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  height: 28,
+  borderRadius: 2,
+  boxShadow: `0 2px 8px ${statusColors.main}40`,
+  ml: 1,
+  minWidth: 'auto'
+});
+
+// Generator stylów produktu
+const getProductStyles = (colors) => ({
+  color: colors.text.primary,
+  fontWeight: 600,
+  mb: 2,
+  fontSize: { xs: '0.95rem', md: '1rem' },
+  lineHeight: 1.4
+});
+
+// Style kontenera MO/Client
+const infoBoxContainerStyles = {
+  display: 'flex',
+  gap: 1.5,
+  mb: 2.5,
+  flexWrap: 'wrap'
+};
+
+// Generator stylów info box (MO, Client)
+const getInfoBoxStyles = (colors, mode, gradientColor) => ({
+  px: 2,
+  py: 0.75,
+  borderRadius: 2,
+  background: `linear-gradient(135deg, ${colors.background} 0%, ${gradientColor} 100%)`,
+  border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+});
+
+// Generator stylów caption w info box
+const getInfoCaptionStyles = (colors, isUppercase = false) => ({
+  color: colors.text.secondary,
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  ...(isUppercase && {
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  })
+});
+
+// Generator stylów sekcji postępu
+const getProgressSectionStyles = (statusColors) => ({
+  p: 2,
+  borderRadius: 3,
+  background: `linear-gradient(135deg, ${statusColors.main}05 0%, ${statusColors.main}02 100%)`,
+  border: `1px solid ${statusColors.main}15`,
+  mb: 2,
+  position: 'relative',
+  overflow: 'hidden',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+    opacity: 0.6
+  }
+});
+
+// Style row postępu
+const progressRowStyles = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  mb: 1.5
+};
+
+// Generator stylów LinearProgress
+const getLinearProgressStyles = (statusColors, isMobile) => ({
+  height: 8,
+  borderRadius: 4,
+  backgroundColor: `${statusColors.main}15`,
+  position: 'relative',
+  overflow: 'hidden',
+  '& .MuiLinearProgress-bar': {
+    background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
+    borderRadius: 4,
+    position: 'relative',
+    ...(!isMobile && {
+      '&::after': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
+        animation: 'shimmer 2s infinite linear'
+      }
+    })
+  },
+  ...(!isMobile && {
+    '@keyframes shimmer': {
+      '0%': { transform: 'translateX(-100%)' },
+      '100%': { transform: 'translateX(100%)' }
+    }
+  })
+});
+
+// Style pozostałej ilości
+const remainingQuantityStyles = {
+  color: 'warning.main',
+  fontWeight: 600,
+  display: 'block',
+  mt: 1,
+  fontSize: '0.8rem'
+};
+
+// Generator stylów sekcji daty
+const getDateSectionStyles = (colors, mode) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1,
+  p: 1.5,
+  borderRadius: 2,
+  background: `linear-gradient(135deg, ${colors.background} 0%, rgba(158, 158, 158, 0.02) 100%)`,
+  border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'}`
+});
+
+// ============================================
+// STYLE DLA GŁÓWNEGO KOMPONENTU KIOSKATASKLIST
+// ============================================
+
+// Generator stylów kontenera wyszukiwania
+const getSearchContainerStyles = (colors, mode) => ({
+  mb: 3,
+  p: { xs: 2, md: 2.5 },
+  borderRadius: 4,
+  background: mode === 'dark'
+    ? `linear-gradient(135deg, ${colors.paper} 0%, rgba(33, 150, 243, 0.03) 100%)`
+    : `linear-gradient(135deg, ${colors.paper} 0%, rgba(33, 150, 243, 0.01) 100%)`,
+  border: `1px solid ${mode === 'dark' ? 'rgba(33, 150, 243, 0.15)' : 'rgba(33, 150, 243, 0.08)'}`,
+  boxShadow: '0 4px 20px rgba(33, 150, 243, 0.08)',
+  position: 'relative',
+  overflow: 'hidden'
+});
+
+// Style dla decorative gradient
+const decorativeGradientStyles = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  height: 2,
+  background: 'linear-gradient(90deg, transparent 0%, rgba(33, 150, 243, 0.6) 50%, transparent 100%)',
+};
+
+// Style dla content box
+const searchContentBoxStyles = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: 2,
+  position: 'relative',
+  zIndex: 1
+};
+
+// Generator stylów search input wrapper
+const getSearchInputWrapperStyles = (isMobile) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 2,
+  width: isMobile ? '100%' : 'auto',
+  flex: 1,
+  flexWrap: 'wrap'
+});
+
+// Style dla ikony search
+const searchIconBoxStyles = {
+  p: 1.5,
+  borderRadius: 2,
+  background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: 'auto'
+};
+
+// Generator stylów TextField
+const getSearchFieldStyles = (colors, mode, isMobile) => ({
+  flex: 1,
+  maxWidth: isMobile ? '100%' : 400,
+  '& .MuiOutlinedInput-root': {
+    fontSize: { xs: '0.9rem', md: '1rem' },
+    backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 3,
+    border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    '&:hover': {
+      borderColor: 'primary.main',
+      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.95)',
+      boxShadow: '0 4px 12px rgba(33, 150, 243, 0.15)'
+    },
+    '&.Mui-focused': {
+      borderColor: 'primary.main',
+      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+      boxShadow: '0 6px 20px rgba(33, 150, 243, 0.2)'
+    },
+    '& fieldset': { border: 'none' }
+  },
+  '& .MuiOutlinedInput-input': {
+    py: { xs: 1.5, md: 2 },
+    px: 2,
+    fontWeight: 500,
+    '&::placeholder': {
+      color: colors.text?.secondary,
+      opacity: 0.8,
+      fontStyle: 'italic'
+    }
+  }
+});
+
+// Generator stylów filter box
+const getFilterBoxStyles = (isMobile) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1,
+  minWidth: isMobile ? '100%' : 200
+});
+
+// Style empty state paper
+const emptyStatePaperStyles = {
+  p: 4,
+  textAlign: 'center'
+};
+
+// ============================================
 // OPTYMALIZACJA: Memoizowany komponent karty zadania
+// ============================================
 const TaskCard = React.memo(({ 
   task, 
   isFullscreen, 
@@ -89,141 +429,132 @@ const TaskCard = React.memo(({
   const totalCompletedQuantity = task.totalCompletedQuantity || 0;
   const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
   
+  // ✅ OPTYMALIZACJA: useMemo dla stylów - tworzone tylko gdy dependencies się zmienią
+  const cardSx = useMemo(
+    () => getTaskCardStyles(mode, colors, statusColors, isMobile),
+    [mode, colors.paper, statusColors.main, statusColors.dark, statusColors.light, isMobile]
+  );
+  
+  const statusBarSx = useMemo(
+    () => getStatusBarStyles(statusColors),
+    [statusColors.main, statusColors.light]
+  );
+  
+  const titleSx = useMemo(
+    () => getTitleStyles(colors),
+    [colors.text?.primary]
+  );
+  
+  const statusChipSx = useMemo(
+    () => getStatusChipStyles(statusColors),
+    [statusColors.main, statusColors.dark]
+  );
+  
+  const productSx = useMemo(
+    () => getProductStyles(colors),
+    [colors.text?.primary]
+  );
+  
+  const moBoxSx = useMemo(
+    () => getInfoBoxStyles(colors, mode, 'rgba(33, 150, 243, 0.03)'),
+    [colors.background, mode]
+  );
+  
+  const clientBoxSx = useMemo(
+    () => getInfoBoxStyles(colors, mode, 'rgba(76, 175, 80, 0.03)'),
+    [colors.background, mode]
+  );
+  
+  const moCaptionSx = useMemo(
+    () => getInfoCaptionStyles(colors, true),
+    [colors.text?.secondary]
+  );
+  
+  const clientCaptionSx = useMemo(
+    () => getInfoCaptionStyles(colors, false),
+    [colors.text?.secondary]
+  );
+  
+  const progressSectionSx = useMemo(
+    () => getProgressSectionStyles(statusColors),
+    [statusColors.main, statusColors.light]
+  );
+  
+  const linearProgressSx = useMemo(
+    () => getLinearProgressStyles(statusColors, isMobile),
+    [statusColors.main, statusColors.light, isMobile]
+  );
+  
+  const dateSectionSx = useMemo(
+    () => getDateSectionStyles(colors, mode),
+    [colors.background, mode]
+  );
+  
+  // Style dla typografii (proste, stałe)
+  const progressLabelSx = useMemo(() => ({ 
+    color: colors.text?.primary,
+    fontWeight: 600,
+    fontSize: '0.9rem'
+  }), [colors.text?.primary]);
+  
+  const progressValueSx = useMemo(() => ({ 
+    color: statusColors.main,
+    fontWeight: 700,
+    fontSize: '0.9rem'
+  }), [statusColors.main]);
+  
+  const scheduleIconSx = useMemo(() => ({ 
+    fontSize: 16, 
+    color: colors.text?.secondary 
+  }), [colors.text?.secondary]);
+  
+  const dateTextSx = useMemo(() => ({ 
+    color: colors.text?.secondary,
+    fontSize: '0.85rem',
+    fontWeight: 500
+  }), [colors.text?.secondary]);
+  
   return (
     <Grid item xs={12} sm={6} md={isFullscreen ? 4 : 6} lg={isFullscreen ? 4 : 4} xl={isFullscreen ? 3 : 4}>
       <Card 
         elevation={0}
-        sx={{ 
-          height: '100%',
-          minHeight: { xs: 280, md: 320 },
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: 4,
-          border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-          bgcolor: colors.paper,
-          cursor: 'pointer',
-          overflow: 'hidden',
-          position: 'relative',
-          // ✅ OPTYMALIZACJA 4: GPU acceleration dla lepszej wydajności
-          willChange: !isMobile ? 'transform, box-shadow' : 'auto',
-          transform: 'translateZ(0)', // Force GPU layer
-          backfaceVisibility: 'hidden', // Zapobiega flickerowi
-          // OPTYMALIZACJA: Uproszczone animacje dla mobile
-          '&:hover': !isMobile ? {
-            transform: 'translateY(-2px) translateZ(0)', // Dodano translateZ
-            transition: 'transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out', // Skrócono i rozdzielono
-            boxShadow: `0 12px 40px ${statusColors.main}20`,
-            borderColor: statusColors.main,
-            '&::before': {
-              opacity: 1
-            }
-          } : {},
-          // Wyłączono ciężkie gradient animations dla mobile
-          '&::before': !isMobile ? {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: `linear-gradient(135deg, ${statusColors.main}05 0%, transparent 50%)`,
-            opacity: 0,
-            transition: 'opacity 0.2s ease-out',
-            pointerEvents: 'none',
-            zIndex: 0,
-            willChange: 'opacity',
-            transform: 'translateZ(0)'
-          } : {}
-        }}
+        sx={cardSx}
         onClick={() => onTaskClick && onTaskClick(task)}
       >
         {/* Status header bar */}
-        <Box sx={{ 
-          height: 6, 
-          background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
-          width: '100%',
-          position: 'relative',
-          zIndex: 1
-        }} />
+        <Box sx={statusBarSx} />
         
-        <CardContent sx={{ p: { xs: 2.5, md: 3 }, flexGrow: 1, position: 'relative', zIndex: 1 }}>
+        <CardContent sx={cardContentStyles}>
           {/* Header z nazwą i statusem */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-            <Typography variant="h6" sx={{ 
-              color: colors.text.primary,
-              fontWeight: 700,
-              fontSize: { xs: '1.1rem', md: '1.2rem' },
-              lineHeight: 1.3,
-              flex: 1,
-              pr: 1
-            }}>
+          <Box sx={headerBoxStyles}>
+            <Typography variant="h6" sx={titleSx}>
               {task.name}
             </Typography>
             <Chip 
               label={statusInfo.label} 
               size="small"
-              sx={{ 
-                background: `linear-gradient(135deg, ${statusColors.main} 0%, ${statusColors.dark || statusColors.main} 100%)`,
-                color: 'white',
-                fontWeight: 600,
-                fontSize: '0.75rem',
-                height: 28,
-                borderRadius: 2,
-                boxShadow: `0 2px 8px ${statusColors.main}40`,
-                ml: 1,
-                minWidth: 'auto'
-              }}
+              sx={statusChipSx}
             />
           </Box>
           
           {/* Produkt */}
-          <Typography variant="body1" sx={{ 
-            color: colors.text.primary,
-            fontWeight: 600,
-            mb: 2,
-            fontSize: { xs: '0.95rem', md: '1rem' },
-            lineHeight: 1.4
-          }}>
+          <Typography variant="body1" sx={productSx}>
             {task.productName}
           </Typography>
           
           {/* MO Number i Client w jednej linii */}
-          <Box sx={{ display: 'flex', gap: 1.5, mb: 2.5, flexWrap: 'wrap' }}>
+          <Box sx={infoBoxContainerStyles}>
             {task.moNumber && (
-              <Box sx={{ 
-                px: 2, 
-                py: 0.75, 
-                borderRadius: 2, 
-                background: `linear-gradient(135deg, ${colors.background} 0%, rgba(33, 150, 243, 0.03) 100%)`,
-                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-                boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
-              }}>
-                <Typography variant="caption" sx={{ 
-                  color: colors.text.secondary,
-                  fontSize: '0.75rem',
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                  letterSpacing: '0.5px'
-                }}>
+              <Box sx={moBoxSx}>
+                <Typography variant="caption" sx={moCaptionSx}>
                   MO: {task.moNumber}
                 </Typography>
               </Box>
             )}
             
             {task.clientName && (
-              <Box sx={{ 
-                px: 2, 
-                py: 0.75, 
-                borderRadius: 2, 
-                background: `linear-gradient(135deg, ${colors.background} 0%, rgba(76, 175, 80, 0.03) 100%)`,
-                border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-                boxShadow: `0 1px 3px rgba(0, 0, 0, 0.05)`
-              }}>
-                <Typography variant="caption" sx={{ 
-                  color: colors.text.secondary,
-                  fontSize: '0.75rem',
-                  fontWeight: 600
-                }}>
+              <Box sx={clientBoxSx}>
+                <Typography variant="caption" sx={clientCaptionSx}>
                   {task.clientName}
                 </Typography>
               </Box>
@@ -231,38 +562,12 @@ const TaskCard = React.memo(({
           </Box>
           
           {/* Postęp produkcji */}
-          <Box sx={{ 
-            p: 2, 
-            borderRadius: 3, 
-            background: `linear-gradient(135deg, ${statusColors.main}05 0%, ${statusColors.main}02 100%)`,
-            border: `1px solid ${statusColors.main}15`,
-            mb: 2,
-            position: 'relative',
-            overflow: 'hidden',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 2,
-              background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
-              opacity: 0.6
-            }
-          }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-              <Typography variant="body2" sx={{ 
-                color: colors.text.primary,
-                fontWeight: 600,
-                fontSize: '0.9rem'
-              }}>
+          <Box sx={progressSectionSx}>
+            <Box sx={progressRowStyles}>
+              <Typography variant="body2" sx={progressLabelSx}>
                 Postęp
               </Typography>
-              <Typography variant="body2" sx={{ 
-                color: statusColors.main,
-                fontWeight: 700,
-                fontSize: '0.9rem'
-              }}>
+              <Typography variant="body2" sx={progressValueSx}>
                 {totalCompletedQuantity} / {task.quantity} {task.unit}
               </Typography>
             </Box>
@@ -270,71 +575,20 @@ const TaskCard = React.memo(({
             <LinearProgress 
               variant="determinate" 
               value={Math.min((totalCompletedQuantity / task.quantity) * 100, 100)}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: `${statusColors.main}15`,
-                position: 'relative',
-                overflow: 'hidden',
-                '& .MuiLinearProgress-bar': {
-                  background: `linear-gradient(90deg, ${statusColors.main} 0%, ${statusColors.light || statusColors.main} 100%)`,
-                  borderRadius: 4,
-                  position: 'relative',
-                  // OPTYMALIZACJA: Wyłącz animację shimmer na mobile
-                  ...(!isMobile && {
-                    '&::after': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)',
-                      animation: 'shimmer 2s infinite linear'
-                    }
-                  })
-                },
-                ...(!isMobile && {
-                  '@keyframes shimmer': {
-                    '0%': { transform: 'translateX(-100%)' },
-                    '100%': { transform: 'translateX(100%)' }
-                  }
-                })
-              }}
+              sx={linearProgressSx}
             />
             
             {remainingQuantity > 0 && (
-              <Typography variant="caption" sx={{ 
-                color: 'warning.main',
-                fontWeight: 600,
-                display: 'block',
-                mt: 1,
-                fontSize: '0.8rem'
-              }}>
+              <Typography variant="caption" sx={remainingQuantityStyles}>
                 Pozostało: {remainingQuantity} {task.unit}
               </Typography>
             )}
           </Box>
           
           {/* Data rozpoczęcia */}
-          <Box sx={{ 
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            p: 1.5,
-            borderRadius: 2,
-            background: `linear-gradient(135deg, ${colors.background} 0%, rgba(158, 158, 158, 0.02) 100%)`,
-            border: `1px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'}`
-          }}>
-            <ScheduleIcon sx={{ 
-              fontSize: 16, 
-              color: colors.text.secondary 
-            }} />
-            <Typography variant="body2" sx={{ 
-              color: colors.text.secondary,
-              fontSize: '0.85rem',
-              fontWeight: 500
-            }}>
+          <Box sx={dateSectionSx}>
+            <ScheduleIcon sx={scheduleIconSx} />
+            <Typography variant="body2" sx={dateTextSx}>
               {formatDateTime(task.scheduledDate)}
             </Typography>
           </Box>
@@ -376,7 +630,26 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
   const usersCache = useRef(new Map()); // Cache dla nazw użytkowników
   const colors = baseColors[mode];
 
-
+  // ✅ OPTYMALIZACJA: useMemo dla stylów głównego kontenera
+  const searchContainerSx = useMemo(
+    () => getSearchContainerStyles(colors, mode),
+    [colors.paper, mode]
+  );
+  
+  const searchInputWrapperSx = useMemo(
+    () => getSearchInputWrapperStyles(isMobile),
+    [isMobile]
+  );
+  
+  const searchFieldSx = useMemo(
+    () => getSearchFieldStyles(colors, mode, isMobile),
+    [colors.text?.secondary, mode, isMobile]
+  );
+  
+  const filterBoxSx = useMemo(
+    () => getFilterBoxStyles(isMobile),
+    [isMobile]
+  );
 
   // Funkcja filtrowania zadań na podstawie wyszukiwania i statusu
   const filterTasks = useCallback((tasks, searchTerm, statusFilter) => {
@@ -611,62 +884,14 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
   return (
       <Box>
         {/* Pole wyszukiwania */}
-        <Box sx={{ 
-          mb: 3, 
-          p: { xs: 2, md: 2.5 },
-          borderRadius: 4,
-          background: mode === 'dark' 
-            ? `linear-gradient(135deg, ${colors.paper} 0%, rgba(33, 150, 243, 0.03) 100%)`
-            : `linear-gradient(135deg, ${colors.paper} 0%, rgba(33, 150, 243, 0.01) 100%)`,
-          border: `1px solid ${mode === 'dark' ? 'rgba(33, 150, 243, 0.15)' : 'rgba(33, 150, 243, 0.08)'}`,
-          boxShadow: `0 4px 20px rgba(33, 150, 243, 0.08)`,
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
+        <Box sx={searchContainerSx}>
           {/* Decorative gradient */}
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 2,
-              background: `linear-gradient(90deg, transparent 0%, rgba(33, 150, 243, 0.6) 50%, transparent 100%)`,
-            }}
-          />
+          <Box sx={decorativeGradientStyles} />
           
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            flexWrap: 'wrap', 
-            gap: 2,
-            position: 'relative',
-            zIndex: 1
-          }}>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 2, 
-              width: isMobile ? '100%' : 'auto',
-              flex: 1,
-              flexWrap: 'wrap'
-            }}>
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  background: `linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: 'auto'
-                }}
-              >
-                <SearchIcon sx={{ 
-                  color: 'primary.main', 
-                  fontSize: { xs: 20, md: 24 }
-                }} />
+          <Box sx={searchContentBoxStyles}>
+            <Box sx={searchInputWrapperSx}>
+              <Box sx={searchIconBoxStyles}>
+                <SearchIcon sx={{ ...iconPrimary, ...iconResponsive }} />
               </Box>
               
               <TextField
@@ -675,91 +900,18 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
                 placeholder="Wyszukaj zadania produkcyjne..."
                 value={searchTerm}
                 onChange={handleSearchChange}
-                sx={{ 
-                  flex: 1,
-                  maxWidth: isMobile ? '100%' : 400,
-                  '& .MuiOutlinedInput-root': {
-                    fontSize: { xs: '0.9rem', md: '1rem' },
-                    backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.8)',
-                    borderRadius: 3,
-                    border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.95)',
-                      boxShadow: `0 4px 12px rgba(33, 150, 243, 0.15)`
-                    },
-                    '&.Mui-focused': {
-                      borderColor: 'primary.main',
-                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                      boxShadow: `0 6px 20px rgba(33, 150, 243, 0.2)`
-                    },
-                    '& fieldset': {
-                      border: 'none'
-                    }
-                  },
-                  '& .MuiOutlinedInput-input': {
-                    py: { xs: 1.5, md: 2 },
-                    px: 2,
-                    fontWeight: 500,
-                    '&::placeholder': {
-                      color: colors.text.secondary,
-                      opacity: 0.8,
-                      fontStyle: 'italic'
-                    }
-                  }
-                }}
+                sx={searchFieldSx}
               />
 
               {/* Filtr statusu */}
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1,
-                minWidth: isMobile ? '100%' : 200
-              }}>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 2,
-                    background: `linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%)`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: 'auto'
-                  }}
-                >
-                  <SortIcon sx={{ 
-                    color: 'primary.main', 
-                    fontSize: { xs: 20, md: 24 }
-                  }} />
+              <Box sx={filterBoxSx}>
+                <Box sx={searchIconBoxStyles}>
+                  <SortIcon sx={{ ...iconPrimary, ...iconResponsive }} />
                 </Box>
                 
                 <FormControl 
                   size="medium"
-                  sx={{ 
-                    flex: 1,
-                    '& .MuiOutlinedInput-root': {
-                      fontSize: { xs: '0.9rem', md: '1rem' },
-                      backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.8)',
-                      borderRadius: 3,
-                      border: `2px solid ${mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      '&:hover': {
-                        borderColor: 'primary.main',
-                        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.95)',
-                        boxShadow: `0 4px 12px rgba(33, 150, 243, 0.15)`
-                      },
-                      '&.Mui-focused': {
-                        borderColor: 'primary.main',
-                        backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                        boxShadow: `0 6px 20px rgba(33, 150, 243, 0.2)`
-                      },
-                      '& fieldset': {
-                        border: 'none'
-                      }
-                    }
-                  }}
+                  sx={{ ...searchFieldSx, flex: 1, maxWidth: 'none' }}
                 >
                   <Select
                     value={statusFilter}
@@ -841,35 +993,35 @@ const KioskTaskList = ({ isFullscreen, onTaskClick, onLastUpdateChange }) => {
 
         {/* Warunkowe renderowanie zawartości */}
         {loading ? (
-          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
-            <CircularProgress size={60} sx={{ color: palettes.primary.main }} />
-            <Typography variant="h6" sx={{ mt: 2, color: colors.text.secondary }}>
+          <Paper elevation={2} sx={emptyStateContainer}>
+            <CircularProgress size={60} sx={iconPrimary} />
+            <Typography variant="h6" sx={{ ...mt2, ...textSecondary }}>
               Ładowanie zadań...
             </Typography>
           </Paper>
         ) : error ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={alertMb2}>
             {error}
           </Alert>
         ) : tasks.length === 0 ? (
-          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
-            <ProductionIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
-            <Typography variant="h6" sx={{ color: colors.text.secondary }}>
+          <Paper elevation={2} sx={emptyStateContainer}>
+            <ProductionIcon sx={{ ...emptyStateIcon, ...textDisabled }} />
+            <Typography variant="h6" sx={textSecondary}>
               Brak aktywnych zadań
             </Typography>
-            <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
+            <Typography variant="body2" sx={{ ...textDisabled, ...mt1 }}>
               Wszystkie zadania zostały zakończone
             </Typography>
           </Paper>
         ) : filteredTasks.length === 0 ? (
-          <Paper elevation={2} sx={{ p: 4, textAlign: 'center' }}>
-            <SearchIcon sx={{ fontSize: 80, color: colors.text.disabled, mb: 2 }} />
-            <Typography variant="h6" sx={{ color: colors.text.secondary }}>
+          <Paper elevation={2} sx={emptyStateContainer}>
+            <SearchIcon sx={{ ...emptyStateIcon, ...textDisabled }} />
+            <Typography variant="h6" sx={textSecondary}>
               {searchTerm && statusFilter ? 'Brak wyników dla podanych kryteriów' : 
                searchTerm ? 'Brak wyników wyszukiwania' : 
                statusFilter ? 'Brak zadań z wybranym statusem' : 'Brak wyników'}
             </Typography>
-            <Typography variant="body2" sx={{ color: colors.text.disabled, mt: 1 }}>
+            <Typography variant="body2" sx={{ ...textDisabled, ...mt1 }}>
               {searchTerm && statusFilter ? 'Sprawdź wpisane frazy i wybrany status' :
                searchTerm ? 'Sprawdź wpisane frazy lub wyczyść wyszukiwanie' :
                statusFilter ? 'Wybierz inny status lub wyczyść filtr' : 'Sprawdź filtry'}

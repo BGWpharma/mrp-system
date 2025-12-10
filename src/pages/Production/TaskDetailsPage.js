@@ -210,9 +210,21 @@ import {
   mt2, 
   mt3,
   p2,
+  p3,
+  boxP2,
   textRight,
   mobileButton,
-  captionWithMargin
+  captionWithMargin,
+  skeletonStyle,
+  flexEndMt2,
+  flexEndMt3,
+  width130,
+  width140,
+  borderBottom,
+  iconPrimary,
+  iconError,
+  textSecondary,
+  fontMedium
 } from '../../styles/muiCommonStyles';
 
 // ✅ Import hooków refaktoryzowanych
@@ -233,6 +245,9 @@ import {
 // ✅ Import komponentów dialogów refaktoryzowanych
 import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, RawMaterialsDialog } from '../../components/production/dialogs';
 import { CommentsDrawer } from '../../components/production/shared';
+
+// ✅ Dodatkowy styl mt4 (nie ma w common styles)
+const mt4 = { mt: 4 };
 
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
@@ -3301,7 +3316,7 @@ const TaskDetailsPage = () => {
             </Button>
           </Box>
         </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={mb2}>
           💡 Możesz zarezerwować mniejszą ilość niż wymagana. Niezarezerwowane materiały można uzupełnić później.
         </Typography>
         
@@ -3510,7 +3525,7 @@ const TaskDetailsPage = () => {
                                       step: 'any'
                                     }}
                                     size="small"
-                                    sx={{ width: '130px' }} // Poszerzony z 100px do 130px
+                                    sx={width130} // Poszerzony z 100px do 130px
                                     error={effectiveQuantity <= 0}
                                     helperText={effectiveQuantity <= 0 ? "Brak dostępnej ilości" : ""}
                                     disabled={effectiveQuantity <= 0}
@@ -3526,10 +3541,10 @@ const TaskDetailsPage = () => {
                 )}
                 
                 {/* Sekcja z oczekiwanymi zamówieniami - wydzielona poza warunek sprawdzający partie */}
-                <Box sx={{ mt: 3 }}>
+                <Box sx={mt3}>
                   <Typography variant="subtitle2" gutterBottom>Oczekiwane zamówienia:</Typography>
                   {awaitingOrdersLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                    <Box sx={{ ...loadingContainer, p: 2 }}>
                       <CircularProgress size={24} />
                     </Box>
                   ) : (
@@ -3666,7 +3681,7 @@ const TaskDetailsPage = () => {
                   )}
                 </Box>
                     
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                <Box sx={flexEndMt2}>
                   <Button 
                     variant="contained" 
                     color="primary"
@@ -7688,9 +7703,9 @@ const TaskDetailsPage = () => {
   // Funkcja do uzyskania ikony pliku
   const getClinicalFileIcon = (contentType) => {
     if (contentType.startsWith('image/')) {
-      return <ImageIcon sx={{ color: 'primary.main' }} />;
+      return <ImageIcon sx={iconPrimary} />;
     } else if (contentType === 'application/pdf') {
-      return <PdfIcon sx={{ color: 'error.main' }} />;
+      return <PdfIcon sx={iconError} />;
     } else {
       return <DescriptionIcon sx={{ color: 'action.active' }} />;
     }
@@ -8449,7 +8464,7 @@ const TaskDetailsPage = () => {
       <Container maxWidth="xl">
       {loading ? (
         // ⚡ OPTYMALIZACJA: Skeleton loading zamiast CircularProgress dla lepszego UX
-        <Box sx={{ mt: 4 }}>
+        <Box sx={mt4}>
           <Skeleton variant="rectangular" height={60} sx={skeletonStyle} />
           <Skeleton variant="rectangular" height={400} sx={skeletonStyle} />
           <Skeleton variant="text" width="60%" height={40} />
@@ -8543,8 +8558,8 @@ const TaskDetailsPage = () => {
           {/* Zawartość zakładek */}
           {mainTab === 0 && ( // Zakładka "Dane podstawowe"
             <Suspense fallback={
-              <Box sx={{ p: 2 }}>
-                <Skeleton variant="rectangular" height={200} sx={{ mb: 2, borderRadius: 1 }} />
+              <Box sx={boxP2}>
+                <Skeleton variant="rectangular" height={200} sx={skeletonStyle} />
                 <Skeleton variant="text" width="80%" height={40} />
                 <Skeleton variant="text" width="60%" height={40} />
               </Box>
@@ -8560,8 +8575,8 @@ const TaskDetailsPage = () => {
 
           {mainTab === 1 && ( // Zakładka "Materiały i Koszty"
             <Suspense fallback={
-              <Box sx={{ p: 2 }}>
-                <Skeleton variant="rectangular" height={300} sx={{ mb: 2, borderRadius: 1 }} />
+              <Box sx={boxP2}>
+                <Skeleton variant="rectangular" height={300} sx={skeletonStyle} />
                 <Skeleton variant="text" width="70%" height={40} />
                 <Skeleton variant="text" width="50%" height={40} />
               </Box>
@@ -8619,8 +8634,8 @@ const TaskDetailsPage = () => {
 
           {mainTab === 2 && ( // Zakładka "Produkcja i Plan"
             <Suspense fallback={
-              <Box sx={{ p: 2 }}>
-                <Skeleton variant="rectangular" height={400} sx={{ mb: 2, borderRadius: 1 }} />
+              <Box sx={boxP2}>
+                <Skeleton variant="rectangular" height={400} sx={skeletonStyle} />
                 <Skeleton variant="text" width="90%" height={40} />
                 <Skeleton variant="text" width="75%" height={40} />
               </Box>
@@ -8657,8 +8672,8 @@ const TaskDetailsPage = () => {
 
           {mainTab === 3 && ( // Zakładka "Formularze"
             <Suspense fallback={
-              <Box sx={{ p: 2 }}>
-                <Skeleton variant="rectangular" height={350} sx={{ mb: 2, borderRadius: 1 }} />
+              <Box sx={boxP2}>
+                <Skeleton variant="rectangular" height={350} sx={skeletonStyle} />
                 <Skeleton variant="text" width="85%" height={40} />
                 <Skeleton variant="text" width="65%" height={40} />
               </Box>
@@ -8678,8 +8693,8 @@ const TaskDetailsPage = () => {
 
           {mainTab === 4 && ( // Zakładka "Historia zmian"
             <Suspense fallback={
-              <Box sx={{ p: 2 }}>
-                <Skeleton variant="rectangular" height={300} sx={{ mb: 2, borderRadius: 1 }} />
+              <Box sx={boxP2}>
+                <Skeleton variant="rectangular" height={300} sx={skeletonStyle} />
                 <Skeleton variant="text" width="80%" height={40} />
                 <Skeleton variant="text" width="60%" height={40} />
               </Box>
@@ -8690,8 +8705,8 @@ const TaskDetailsPage = () => {
 
           {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
             <Suspense fallback={
-              <Box sx={{ p: 2 }}>
-                <Skeleton variant="rectangular" height={500} sx={{ mb: 2, borderRadius: 1 }} />
+              <Box sx={boxP2}>
+                <Skeleton variant="rectangular" height={500} sx={skeletonStyle} />
                 <Skeleton variant="text" width="95%" height={40} />
                 <Skeleton variant="text" width="80%" height={40} />
               </Box>
@@ -8870,7 +8885,7 @@ const TaskDetailsPage = () => {
                                   step: 'any' 
                                 }}
                                 size="small"
-                                sx={{ width: '130px' }} // Poszerzony z 100px do 130px
+                                sx={width130} // Poszerzony z 100px do 130px
                                 placeholder={item.selectedBatch ? `Max: ${item.selectedBatch.quantity}` : '0'}
                               />
                             </TableCell>
@@ -9140,7 +9155,7 @@ const TaskDetailsPage = () => {
                                       helperText={consumeErrors[batchKey]}
                                       inputProps={{ min: 0, max: batch.quantity, step: 'any' }}
                                       size="small"
-                                      sx={{ width: '140px' }} // Poszerzony z 120px do 140px
+                                      sx={width140} // Poszerzony z 120px do 140px
                                       InputProps={{
                                         endAdornment: <Typography variant="caption">{material.unit}</Typography>
                                       }}

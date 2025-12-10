@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -97,6 +97,19 @@ import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatUtils';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 import { formatDateForInput, formatDate, safeParseDate, ensureDateInputFormat } from '../../utils/dateUtils';
 import { getAllRecipes, getRecipeById } from '../../services/recipeService';
 import { storage } from '../../services/firebase/config';
@@ -2343,7 +2356,7 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <PersonIcon sx={{ mr: 1 }} /> {t('orderForm.sections.basicData')}
+              <PersonIcon sx={mr1} /> {t('orderForm.sections.basicData')}
             </Typography>
             <FormControl sx={{ minWidth: 200 }}>
               <InputLabel>{t('orderForm.labels.orderStatus')}</InputLabel>
@@ -2363,7 +2376,7 @@ const OrderForm = ({ orderId }) => {
             </FormControl>
           </Box>
           
-          <Divider sx={{ mb: 3 }} />
+          <Divider sx={mb3} />
           
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
@@ -2479,7 +2492,7 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <ShoppingCartIcon sx={{ mr: 1 }} /> {t('orderForm.sections.products')}
+              <ShoppingCartIcon sx={mr1} /> {t('orderForm.sections.products')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button 
@@ -2504,7 +2517,7 @@ const OrderForm = ({ orderId }) => {
             </Box>
           </Box>
           
-          <Divider sx={{ mb: 3 }} />
+          <Divider sx={mb3} />
           
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <TableContainer component={Paper} sx={{ mb: 2, boxShadow: 1, borderRadius: 1, overflow: 'auto' }}>
@@ -2584,7 +2597,7 @@ const OrderForm = ({ orderId }) => {
         </Paper>
 
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>{t('orderForm.sections.notes')}</Typography>
+          <Typography variant="h6" sx={mb2}>{t('orderForm.sections.notes')}</Typography>
           <TextField
             name="notes"
             value={orderData.notes || ''}
@@ -2603,7 +2616,7 @@ const OrderForm = ({ orderId }) => {
             <Typography variant="h6">{t('orderForm.sections.orderSummary')}</Typography>
           </Box>
           
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={mb2} />
           
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
@@ -2652,7 +2665,7 @@ const OrderForm = ({ orderId }) => {
         <Paper sx={{ p: 3, mb: 3, boxShadow: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center' }}>
-              <ReceiptIcon sx={{ mr: 1 }} /> {t('orderForm.sections.invoices')}
+              <ReceiptIcon sx={mr1} /> {t('orderForm.sections.invoices')}
             </Typography>
             <Button
               startIcon={<AddIcon />}
@@ -2664,7 +2677,7 @@ const OrderForm = ({ orderId }) => {
                               {t('orderForm.buttons.addInvoice')}
             </Button>
           </Box>
-          <Divider sx={{ mb: 3 }} />
+          <Divider sx={mb3} />
           {invoices.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
               {t('orderForm.messages.noInvoices')}
@@ -2752,7 +2765,7 @@ const OrderForm = ({ orderId }) => {
       <Dialog open={isCustomerDialogOpen} onClose={handleCloseCustomerDialog} maxWidth="md" fullWidth>
         <DialogTitle>{t('orderForm.dialogs.addClient.title')}</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 3 }}>
+          <DialogContentText sx={mb3}>
             Wprowadź dane nowego klienta. Klient zostanie dodany do bazy danych.
           </DialogContentText>
           <Grid container spacing={3}>

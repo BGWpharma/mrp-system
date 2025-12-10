@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Container, 
   Typography, 
@@ -38,6 +38,17 @@ import {
   ListItemIcon,
   ListItemText
 } from '@mui/material';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween, 
+  flexColumn,
+  loadingContainer, 
+  mb2, 
+  mb3,
+  p2,
+  p3
+} from '../../../styles/muiCommonStyles';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
 import pl from 'date-fns/locale/pl';
@@ -1714,7 +1725,7 @@ const CmrDetailsPage = () => {
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <Box sx={{ ...loadingContainer, mt: 4 }}>
           <CircularProgress />
         </Box>
       </Container>
@@ -2288,7 +2299,7 @@ const CmrDetailsPage = () => {
                 <Divider />
                 <CardContent>
                   {weightDetailsLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <Box sx={loadingContainer}>
                       <CircularProgress />
                       <Typography variant="body1" sx={{ ml: 2 }}>
                         {t('details.loading.weights')}
@@ -2766,7 +2777,7 @@ const CmrDetailsPage = () => {
                 <Divider />
                 <CardContent>
                   {loadingFormResponsesLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <Box sx={loadingContainer}>
                       <CircularProgress />
                     </Box>
                   ) : loadingFormResponses.length === 0 ? (
@@ -3009,7 +3020,7 @@ const CmrDetailsPage = () => {
 
                   {/* Lista załączników */}
                   {attachmentsLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <Box sx={loadingContainer}>
                       <CircularProgress />
                     </Box>
                   ) : attachments.length === 0 ? (
@@ -3205,7 +3216,7 @@ const CmrDetailsPage = () => {
 
                   {/* Lista faktur */}
                   {invoicesLoading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                    <Box sx={loadingContainer}>
                       <CircularProgress color="success" />
                     </Box>
                   ) : invoices.length === 0 ? (

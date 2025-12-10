@@ -49,8 +49,17 @@ import {
   flexCenter, 
   flexColumn, 
   flexBetween,
+  flexCenterGap1,
+  flexCenterGap2,
   mb1,
-  p2
+  mt1,
+  p2,
+  fontSmall,
+  fontXSmall,
+  textSecondary,
+  textDisabled,
+  typographyBold,
+  typographyItalic
 } from '../../styles/muiCommonStyles';
 import {
   Link as LinkIcon,
@@ -129,7 +138,7 @@ const ReservationLinkItem = memo(({
     >
       <Box sx={{ ...flexColumn, flexGrow: 1, gap: 0.25 }}>
         {/* Linia 1: LOT + ilość powiązana */}
-        <Box sx={{ ...flexCenter, gap: 1 }}>
+        <Box sx={flexCenterGap1}>
           <Chip
             size="small"
             label={`LOT: ${reservationFromSnapshot.batchNumber}`}
@@ -137,20 +146,20 @@ const ReservationLinkItem = memo(({
             variant="outlined"
             icon={<AssignmentIcon />}
           />
-          <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+          <Typography variant="caption" sx={{ color: colors.text.primary, ...typographyBold, ...fontSmall }}>
             {link.linkedQuantity || link.quantity} {reservationFromSnapshot.unit}
           </Typography>
         </Box>
         
         {/* Linia 2: Lokalizacja + data ważności */}
-        <Box sx={{ ...flexCenter, gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ ...flexCenterGap2, flexWrap: 'wrap' }}>
           {reservationFromSnapshot.warehouseName && (
-            <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+            <Typography variant="caption" sx={{ color: colors.text.secondary, ...fontXSmall, display: 'flex', alignItems: 'center', gap: 0.25 }}>
               📍 {reservationFromSnapshot.warehouseName}
             </Typography>
           )}
           {reservationFromSnapshot.expiryDateString && (
-            <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+            <Typography variant="caption" sx={{ color: colors.text.secondary, ...fontXSmall, display: 'flex', alignItems: 'center', gap: 0.25 }}>
               📅 {reservationFromSnapshot.expiryDateString}
             </Typography>
           )}
@@ -181,7 +190,7 @@ const ReservationLinkItem = memo(({
                     // 🚀 USUNIĘTO transition - powodowało miganie na mobile
                   }} />
                 </Box>
-                <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem' }}>
+                <Typography variant="caption" sx={{ color: colors.text.secondary, ...fontXSmall }}>
                   {link.consumptionPercentage}%
                 </Typography>
               </Box>
@@ -237,10 +246,10 @@ const IngredientLinkStatusMemo = memo(({
         {/* Nagłówek z sumarycznymi informacjami */}
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', ...mb1 }}>
           <Box>
-            <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+            <Typography variant="caption" sx={{ color: colors.text.primary, ...typographyBold, ...fontSmall }}>
               {links.length} rezerwacji → Razem: {totalLinkedQuantity} {links[0]?.batchSnapshot?.unit || 'szt.'}
             </Typography>
-            <Typography variant="caption" sx={{ color: colors.text.secondary, display: 'block', fontStyle: 'italic', fontSize: '0.65rem' }}>
+            <Typography variant="caption" sx={{ color: colors.text.secondary, display: 'block', ...typographyItalic, ...fontXSmall }}>
               Kliknij wiersz aby dodać kolejną
             </Typography>
           </Box>
@@ -278,7 +287,7 @@ const IngredientLinkStatusMemo = memo(({
   }
   
   return (
-    <Box sx={{ ...flexCenter, gap: 1 }}>
+    <Box sx={flexCenterGap1}>
       <LinkIcon fontSize="small" sx={{ color: colors.text.disabled }} />
       <Typography variant="caption" sx={{ color: colors.text.secondary, fontStyle: 'italic' }}>
         Kliknij wiersz aby powiązać z rezerwacją
@@ -1242,10 +1251,10 @@ const EnhancedMixingPlan = ({
           {/* Nagłówek z sumarycznymi informacjami */}
           <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
             <Box>
-              <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+              <Typography variant="caption" sx={{ color: colors.text.primary, ...typographyBold, ...fontSmall }}>
                 {links.length} rezerwacji → Razem: {totalLinkedQuantity} {links[0]?.batchSnapshot?.unit || 'szt.'}
               </Typography>
-              <Typography variant="caption" sx={{ color: colors.text.secondary, display: 'block', fontStyle: 'italic', fontSize: '0.65rem' }}>
+              <Typography variant="caption" sx={{ color: colors.text.secondary, display: 'block', ...typographyItalic, ...fontXSmall }}>
                 Kliknij wiersz aby dodać kolejną
               </Typography>
             </Box>
@@ -1282,7 +1291,7 @@ const EnhancedMixingPlan = ({
                   {/* Linia 1: LOT + ilość powiązana */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     {renderReservationChip({ ...reservationFromSnapshot, type: link.reservationType })}
-                    <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+                    <Typography variant="caption" sx={{ color: colors.text.primary, ...typographyBold, ...fontSmall }}>
                       {link.linkedQuantity || link.quantity} {reservationFromSnapshot.unit}
                     </Typography>
                   </Box>
@@ -1290,12 +1299,12 @@ const EnhancedMixingPlan = ({
                   {/* Linia 2: Lokalizacja + data ważności (w jednej linii) */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                     {reservationFromSnapshot.warehouseName && (
-                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: colors.text.secondary, ...fontXSmall, display: 'flex', alignItems: 'center', gap: 0.25 }}>
                         📍 {reservationFromSnapshot.warehouseName}
                       </Typography>
                     )}
                     {reservationFromSnapshot.expiryDateString && (
-                      <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                      <Typography variant="caption" sx={{ color: colors.text.secondary, ...fontXSmall, display: 'flex', alignItems: 'center', gap: 0.25 }}>
                         📅 {reservationFromSnapshot.expiryDateString}
                       </Typography>
                     )}
@@ -1326,7 +1335,7 @@ const EnhancedMixingPlan = ({
                               // 🚀 USUNIĘTO transition - powodowało miganie na mobile
                             }} />
                           </Box>
-                          <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem' }}>
+                          <Typography variant="caption" sx={{ color: colors.text.secondary, ...fontXSmall }}>
                             {link.consumptionPercentage}%
                           </Typography>
                         </Box>

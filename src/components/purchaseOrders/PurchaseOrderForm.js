@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 import { parseISO, isValid, format } from 'date-fns';
@@ -81,6 +81,19 @@ import PurchaseOrderFileUpload from './PurchaseOrderFileUpload';
 import PurchaseOrderCategorizedFileUpload from './PurchaseOrderCategorizedFileUpload';
 import SavingOverlay from '../common/SavingOverlay';
 import PODocumentScanner from './PODocumentScanner';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 
 // Opcje INCOTERMS 2020
 const INCOTERMS_OPTIONS = [
@@ -2649,14 +2662,14 @@ const PurchaseOrderForm = ({ orderId }) => {
   
   return (
     <Container maxWidth="xl">
-      <Box sx={{ mb: 3 }}>
+      <Box sx={mb3}>
         <Typography variant="h5">
           {currentOrderId && currentOrderId !== 'new' ? t('purchaseOrders.form.editTitle') : t('purchaseOrders.form.createTitle')}
         </Typography>
         
         {/* Wyświetlanie numeru PO w trybie edycji */}
         {currentOrderId && currentOrderId !== 'new' && poData.number && (
-          <Alert severity="info" sx={{ mt: 2 }}>
+          <Alert severity="info" sx={mt2}>
             <Typography variant="h6" component="span" sx={{ fontWeight: 'bold' }}>
               {t('purchaseOrders.form.poNumber', { number: poData.number })}
             </Typography>
@@ -2819,7 +2832,7 @@ const PurchaseOrderForm = ({ orderId }) => {
               
               {/* Lista adresów dostawcy */}
               {poData.supplier && poData.supplier.addresses && poData.supplier.addresses.length > 0 && (
-                <Box sx={{ mt: 2 }}>
+                <Box sx={mt2}>
                   <Typography variant="subtitle2" gutterBottom>
                     {t('purchaseOrders.form.selectSupplierAddress')}
                   </Typography>
@@ -2903,7 +2916,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   {t('purchaseOrders.form.additionalCosts.noCosts')}
                 </Typography>
               ) : (
-                <TableContainer component={Paper} sx={{ mb: 2 }}>
+                <TableContainer component={Paper} sx={mb2}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
@@ -3463,7 +3476,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
                           {supplierSuggestions[item.inventoryItemId]?.isDefault && (
                             <Tooltip title={t('purchaseOrders.form.orderItems.defaultSupplierPrice')}>
-                              <StarIcon color="primary" sx={{ mr: 1 }} />
+                              <StarIcon color="primary" sx={mr1} />
                             </Tooltip>
                           )}
                           <TextField
@@ -4034,7 +4047,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   </Typography>
                   
                   {/* Sekcja produktów */}
-                  <Box sx={{ mb: 2 }}>
+                  <Box sx={mb2}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
                       {t('purchaseOrders.form.summary.itemsValue')}: <strong>{formatNumberClean(poData.items.reduce((sum, item) => sum + (parseFloat(item.totalPrice) || 0), 0))} {poData.currency}</strong>
                     </Typography>
@@ -4065,7 +4078,7 @@ const PurchaseOrderForm = ({ orderId }) => {
                   
                   {/* Sekcja dodatkowych kosztów */}
                   {poData.additionalCostsItems.length > 0 && (
-                    <Box sx={{ mb: 2 }}>
+                    <Box sx={mb2}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: 'text.primary' }}>
                         {t('purchaseOrders.form.summary.additionalCostsNet')}: <strong>{formatNumberClean(poData.additionalCostsNetTotal || 0)} {poData.currency}</strong>
                       </Typography>
@@ -4117,20 +4130,20 @@ const PurchaseOrderForm = ({ orderId }) => {
                   
                   {/* Podsumowanie końcowe */}
                   {parseFloat(poData.globalDiscount || 0) > 0 && (
-                    <Box sx={{ mb: 1 }}>
+                    <Box sx={mb1}>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         {t('purchaseOrders.form.summary.beforeDiscount')}: <strong>{formatNumberClean(poData.totalGrossBeforeDiscount || 0)} {poData.currency}</strong>
                       </Typography>
                     </Box>
                   )}
                   
-                  <Box sx={{ mb: 1 }}>
+                  <Box sx={mb1}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
                       {t('purchaseOrders.form.summary.netValueTotal')}: <strong>{formatNumberClean(poData.totalValue || 0)} {poData.currency}</strong>
                     </Typography>
                   </Box>
                   
-                  <Box sx={{ mb: 2 }}>
+                  <Box sx={mb2}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>
                       {t('purchaseOrders.form.summary.vatTotal')}: <strong>{formatNumberClean(poData.totalVat || 0)} {poData.currency}</strong>
                     </Typography>
@@ -4205,11 +4218,11 @@ const PurchaseOrderForm = ({ orderId }) => {
             {/* Sekcja linków do faktur - tylko do odczytu dla starych PO */}
             {poData.invoiceLinks && poData.invoiceLinks.length > 0 && (
             <Grid item xs={12}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={mb2}>
                 <Typography variant="subtitle1">{t('purchaseOrders.form.invoices.title')}</Typography>
               </Box>
               
-              <TableContainer component={Paper} sx={{ mb: 2 }}>
+              <TableContainer component={Paper} sx={mb2}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>

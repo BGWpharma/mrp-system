@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -76,6 +76,19 @@ import { preciseCompare } from '../../utils/mathUtils';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
 import { useTranslation } from '../../hooks/useTranslation';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 
 const InvoiceForm = ({ invoiceId }) => {
   const [searchParams] = useSearchParams();
@@ -1884,7 +1897,7 @@ const InvoiceForm = ({ invoiceId }) => {
                     <Autocomplete
                       fullWidth
                       size="small"
-                      sx={{ mb: 2 }}
+                      sx={mb2}
                       options={selectedOrderType === 'customer' ? filteredOrders : poSearchResults}
                       getOptionLabel={(option) => {
                         if (selectedOrderType === 'customer') {
@@ -1964,7 +1977,7 @@ const InvoiceForm = ({ invoiceId }) => {
                             variant="contained"
                             size="small"
                             color="secondary"
-                            sx={{ mt: 2 }}
+                            sx={mt2}
                             onClick={() => {
                               // Automatycznie dodaj wszystkie pozycje z PO
                               const poItems = selectedOrder.items.map(item => ({
@@ -2035,7 +2048,7 @@ const InvoiceForm = ({ invoiceId }) => {
                     )}
                     
                     {selectedOrderId && selectedOrderType === 'customer' && (
-                        <Typography variant="body2" color="primary" sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="primary" sx={mt2}>
                           {t('invoices.form.fields.relatedOrderInfo', { orderNumber: invoice.orderNumber || selectedOrderId })}
                         </Typography>
                       )}
@@ -2531,7 +2544,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   <CircularProgress size={20} />
                 ) : (
                   relatedInvoices.map((relInvoice) => (
-                    <Box key={relInvoice.id} sx={{ mb: 1 }}>
+                    <Box key={relInvoice.id} sx={mb1}>
                       <Typography variant="body2">
                         {relInvoice.isProforma ? '📋 Proforma' : '📄 Faktura'} {relInvoice.number}
                         {relInvoice.isProforma && (
@@ -2720,7 +2733,7 @@ const InvoiceForm = ({ invoiceId }) => {
           />
           
           {!customersLoading && customers.length === 0 && (
-            <Typography variant="body1" align="center" sx={{ mt: 2 }}>
+            <Typography variant="body1" align="center" sx={mt2}>
               Brak klientów. Dodaj klientów w module zarządzania klientami.
             </Typography>
           )}

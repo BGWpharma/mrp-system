@@ -45,10 +45,25 @@ import {
   flexCenter, 
   flexColumn, 
   flexColumnCenter,
+  flexCenterGap1,
+  flexCenterGap2,
   loadingContainer,
   mb2,
   mb3,
-  p2
+  mt1,
+  mt2,
+  p2,
+  p3,
+  borderBottom,
+  textPrimary,
+  typographyBold,
+  typographyMedium,
+  alertMt1,
+  alertMt2,
+  paperSection,
+  paperFormSection,
+  dialogActionsStyled,
+  width150
 } from '../../styles/muiCommonStyles';
 import {
   Save as SaveIcon,
@@ -1658,7 +1673,7 @@ const TaskForm = ({ taskId }) => {
             <Typography variant="h6" color="text.secondary">
               {taskId && taskId !== 'new' ? 'Ładowanie zadania...' : 'Przygotowywanie formularza...'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={mt1}>
               Może to potrwać chwilę
             </Typography>
           </Box>
@@ -1687,7 +1702,7 @@ const TaskForm = ({ taskId }) => {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
+          <Alert severity="info" sx={mb2}>
             <AlertTitle>Wykryto zmianę ilości</AlertTitle>
             <Typography variant="body2">
               Ilość produktu zmieniła się z <strong>{originalQuantity}</strong> na <strong>{taskData.quantity}</strong> {taskData.unit}.
@@ -1754,7 +1769,7 @@ const TaskForm = ({ taskId }) => {
             </Paper>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={dialogActionsStyled}>
           <Button
             onClick={() => {
               setQuantityChangeDialogOpen(false);
@@ -1788,7 +1803,7 @@ const TaskForm = ({ taskId }) => {
       </Dialog>
 
       <Container maxWidth="md">
-        <Paper elevation={3} sx={{ p: 3, mt: 3, mb: 3 }}>
+        <Paper elevation={3} sx={paperFormSection}>
           <Typography variant="h5" component="h1" gutterBottom sx={{ mb: 3, color: 'primary.main', fontWeight: 'bold' }}>
             {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : t('production.taskList.newTask') + ' produkcyjne'}
           </Typography>
@@ -1882,7 +1897,7 @@ const TaskForm = ({ taskId }) => {
             )}
             
             {/* Zakładki formularza */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', ...mb3 }}>
+            <Box sx={{ ...borderBottom, ...mb3 }}>
               <Tabs 
                 value={activeTab} 
                 onChange={(e, newValue) => setActiveTab(newValue)}
@@ -1933,7 +1948,7 @@ const TaskForm = ({ taskId }) => {
             </Paper>
             
             {/* Sekcja produktu i receptury */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Produkt i receptura
               </Typography>
@@ -1982,7 +1997,7 @@ const TaskForm = ({ taskId }) => {
                               }));
                             }}
                             size="small"
-                            sx={{ width: 150 }}
+                            sx={width150}
                             inputProps={{ min: 1 }}
                             helperText={
                               !taskData.recipeVersion ? 
@@ -2015,7 +2030,7 @@ const TaskForm = ({ taskId }) => {
                     
                     {/* Alert o braku wersji receptury */}
                     {!taskData.recipeVersion && (
-                      <Alert severity="warning" sx={{ mt: 1 }}>
+                      <Alert severity="warning" sx={mt1}>
                         <Typography variant="body2">
                           <strong>Uwaga:</strong> To MO nie ma przypisanej wersji receptury. 
                           Prawdopodobnie zostało utworzone przed wprowadzeniem wersjonowania. 
@@ -2029,7 +2044,7 @@ const TaskForm = ({ taskId }) => {
                     
                     {/* Komunikat o ograniczeniach aktualizacji */}
                     {!canUpdateRecipeVersion() && taskId && taskId !== 'new' && (
-                      <Alert severity="info" sx={{ mt: 1 }}>
+                      <Alert severity="info" sx={mt1}>
                         <Typography variant="body2">
                           {(() => {
                             const hasReservations = taskData.materialBatches && 
@@ -2179,13 +2194,13 @@ const TaskForm = ({ taskId }) => {
               <Box>
             {/* Sekcja powiązania z zamówieniem klienta - tylko w trybie edycji */}
             {taskId && taskId !== 'new' && (
-              <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+              <Paper elevation={1} sx={paperSection}>
                 <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                   Powiązanie z zamówieniem klienta (CO)
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <Alert severity="info" sx={{ mb: 2 }}>
+                    <Alert severity="info" sx={mb2}>
                       <Typography variant="body2">
                         <strong>Zmiana powiązania MO z CO:</strong> Możesz zmienić zamówienie klienta, do którego przypisane jest to zadanie produkcyjne. 
                         System automatycznie zaktualizuje powiązania w obu zamówieniach (starym i nowym).
@@ -2300,7 +2315,7 @@ const TaskForm = ({ taskId }) => {
                           z zamówienia CO {selectedCustomerOrder.orderNumber}
                         </Typography>
                         {originalOrderId && selectedCustomerOrder.id !== originalOrderId && (
-                          <Typography variant="body2" sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={mt1}>
                             ⚠️ Po zapisaniu powiązanie zostanie przeniesione z CO {taskData.orderNumber} do CO {selectedCustomerOrder.orderNumber}
                           </Typography>
                         )}
@@ -2317,7 +2332,7 @@ const TaskForm = ({ taskId }) => {
             {activeTab === 1 && (
               <Box>
             {/* Sekcja harmonogramu */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Harmonogram produkcji
               </Typography>
@@ -2394,7 +2409,7 @@ const TaskForm = ({ taskId }) => {
                   </Box>
                                     {/* Wyświetl dodatkowe informacje o przeliczeniu */}
                   {taskData.productionTimePerUnit && taskData.quantity && (
-                    <Alert severity="info" sx={{ mt: 1 }}>
+                    <Alert severity="info" sx={mt1}>
                       <Typography variant="body2">
                         Szacowany całkowity czas produkcji: {(taskData.productionTimePerUnit * taskData.quantity).toFixed(2)} minut
                         ({((taskData.productionTimePerUnit * taskData.quantity) / 60).toFixed(2)} godzin)
@@ -2455,7 +2470,7 @@ const TaskForm = ({ taskId }) => {
                     </Button>
                   </Box>
                   {taskData.processingCostPerUnit > 0 && taskData.quantity && (
-                    <Alert severity="info" sx={{ mt: 1 }}>
+                    <Alert severity="info" sx={mt1}>
                       <Typography variant="body2">
                         Całkowity koszt procesowy: {(parseFloat(taskData.processingCostPerUnit) * parseFloat(taskData.quantity)).toFixed(2)} EUR
                         {recipe && recipe.processingCostPerUnit && (
@@ -2482,7 +2497,7 @@ const TaskForm = ({ taskId }) => {
             </Paper>
             
             {/* Sekcja statusu i priorytetów */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Status i priorytet
               </Typography>
@@ -2537,7 +2552,7 @@ const TaskForm = ({ taskId }) => {
             </Paper>
             
             {/* Sekcja partii produktu końcowego */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Dane partii produktu końcowego
               </Typography>
@@ -2589,7 +2604,7 @@ const TaskForm = ({ taskId }) => {
             {activeTab === 4 && (
               <Box>
             {/* Sekcja dodatkowych informacji */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Dodatkowe informacje
               </Typography>
@@ -2616,7 +2631,7 @@ const TaskForm = ({ taskId }) => {
             {activeTab === 2 && (
               <Box>
             {/* Sekcja kosztów produkcji */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Koszty produkcji
               </Typography>
@@ -2795,7 +2810,7 @@ const TaskForm = ({ taskId }) => {
             {activeTab === 3 && (
               <Box>
             {/* Sekcja powiązanych zamówień zakupowych */}
-            <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: 'background.default' }}>
+            <Paper elevation={1} sx={paperSection}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'medium', color: 'primary.main' }}>
                 Powiązane zamówienia komponentów
               </Typography>
@@ -2925,13 +2940,13 @@ const TaskForm = ({ taskId }) => {
         fullWidth
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={flexCenterGap1}>
             <HistoryIcon />
             Wybierz wersję receptury
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={mb2}>
             Aktualna wersja: <strong>{taskData.recipeVersion || 1}</strong>
           </Typography>
           

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Container,
@@ -39,6 +39,20 @@ import {
   Grow,
   Skeleton
 } from '@mui/material';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2,
+  p3
+} from '../../styles/muiCommonStyles';
 import {
   Refresh as RefreshIcon,
   ShoppingCart as OrderIcon,
@@ -1199,9 +1213,9 @@ const ForecastPage = () => {
   
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: { xs: 'column', md: 'row' } }}>
+      <Box sx={{ ...mb3, ...flexBetween, flexDirection: { xs: 'column', md: 'row' } }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: { xs: 2, md: 0 } }}>
-          <FilterIcon sx={{ mr: 1 }} color="primary" />
+          <FilterIcon sx={mr1} color="primary" />
           Prognoza zapotrzebowania materiałów
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', md: 'auto' }, gap: 1 }}>
@@ -1238,7 +1252,7 @@ const ForecastPage = () => {
       <Paper sx={{ p: 3, mb: 3, borderRadius: 2, boxShadow: 3 }}>
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth variant="outlined" sx={{ mb: 1 }}>
+            <FormControl fullWidth variant="outlined" sx={mb1}>
               <InputLabel>Zakres czasowy</InputLabel>
               <Select
                 value={timeRange}
@@ -1397,7 +1411,7 @@ const ForecastPage = () => {
       ) : (
         <>
           {forecastData.length > 0 && (
-            <Box sx={{ mb: 2 }}>
+            <Box sx={mb2}>
               <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                 <InfoIcon sx={{ mr: 1 }} color="info" />
                 Prognoza na okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
@@ -1420,7 +1434,7 @@ const ForecastPage = () => {
                             flexDirection: 'column',
                             justifyContent: 'center'
                           }}>
-                            <Skeleton variant="text" width="80%" height={20} sx={{ mb: 1 }} />
+                            <Skeleton variant="text" width="80%" height={20} sx={mb1} />
                             <Skeleton variant="text" width="60%" height={32} />
                           </Paper>
                         </Grid>
@@ -2426,11 +2440,11 @@ const ForecastPage = () => {
           {selectedMaterial && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="h6">{selectedMaterial.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={mb2}>
                 Kategoria: {selectedMaterial.category}
               </Typography>
               
-              <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid container spacing={2} sx={mb3}>
                 <Grid item xs={6} md={3}>
                   <Typography variant="body2" color="text.secondary">Dostępna ilość:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
@@ -2462,7 +2476,7 @@ const ForecastPage = () => {
                   <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
                     Oczekiwane dostawy ({formatNumber(selectedMaterial.futureDeliveriesTotal)} {selectedMaterial.unit})
                   </Typography>
-                  <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+                  <TableContainer component={Paper} variant="outlined" sx={mb2}>
                     <Table size="small">
                       <TableHead>
                         <TableRow>

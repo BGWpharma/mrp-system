@@ -78,6 +78,19 @@ import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/formatters';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 // At the beginning of the file, add CSS import
 import '../../styles/calendar.css';
 
@@ -3421,7 +3434,7 @@ const ProductionCalendar = () => {
       </Collapse>
       
       {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, bgcolor: 'rgba(255,255,255,0.7)' }}>
+        <Box sx={{ ...loadingContainer, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, bgcolor: 'rgba(255,255,255,0.7)' }}>
           <CircularProgress />
         </Box>
       )}
@@ -4377,7 +4390,7 @@ const ProductionCalendar = () => {
       >
         <DialogTitle>Edytuj daty zamówienia produkcyjnego</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Zmień daty rozpoczęcia i zakończenia zamówienia produkcyjnego.
           </DialogContentText>
           

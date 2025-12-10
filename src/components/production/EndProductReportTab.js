@@ -26,6 +26,19 @@ import {
   Refresh as RefreshIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween, 
+  flexColumn,
+  loadingContainer,
+  mb1,
+  mb2, 
+  mb3,
+  mt1,
+  mt2,
+  p2
+} from '../../styles/muiCommonStyles';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -347,10 +360,10 @@ const EndProductReportTab = ({
       <Grid item xs={12}>
         <Paper sx={{ p: 3 }}>
           <Box sx={{ mb: 3, textAlign: 'center' }}>
-            <Typography variant="h5" component="h1" sx={{ mb: 1 }}>
+            <Typography variant="h5" component="h1" sx={mb1}>
               {t('endProductReport.title')}
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body1" color="text.secondary" sx={mb2}>
               {t('endProductReport.subtitle')}
             </Typography>
             
@@ -368,13 +381,13 @@ const EndProductReportTab = ({
           
           {/* Product identification */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={mb2}>
               {t('endProductReport.productIdentification')}
             </Typography>
             
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     {t('endProductReport.sku')}
                   </Typography>
@@ -523,7 +536,7 @@ const EndProductReportTab = ({
                   </TableContainer>
                 ) : (
                   <Paper sx={{ p: 2, ...getAdaptiveBackgroundStyle('warning', 0.7), border: 1, borderColor: 'warning.main', borderStyle: 'dashed' }}>
-                    <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary" align="center" sx={mb1}>
                       Brak danych o mikroelementach w recepturze
                     </Typography>
                     <Typography variant="caption" color="text.secondary" align="center" display="block">
@@ -667,7 +680,7 @@ const EndProductReportTab = ({
               </TableContainer>
             ) : (
               <Paper sx={{ p: 2, backgroundColor: 'warning.light', border: 1, borderColor: 'warning.main', borderStyle: 'dashed', opacity: 0.7 }}>
-                <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 1 }}>
+                <Typography variant="body2" color="text.secondary" align="center" sx={mb1}>
                   Brak składników w recepturze
                 </Typography>
                 <Typography variant="caption" color="text.secondary" align="center" display="block">
@@ -680,7 +693,7 @@ const EndProductReportTab = ({
           {/* 3.2 Expiration date of materials */}
           {task?.consumedMaterials && task.consumedMaterials.length > 0 && (
             <Paper sx={{ p: 3, mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={mb2}>
                 {t('endProductReport.sections.expirationDateMaterials')}
               </Typography>
                 
@@ -748,7 +761,7 @@ const EndProductReportTab = ({
 
           {/* 3.3 Certificates */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={mb2}>
               {t('endProductReport.sections.certificates')}
             </Typography>
             
@@ -886,7 +899,7 @@ const EndProductReportTab = ({
               </Button>
             </Box>
             
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body2" color="text.secondary" sx={mb3}>
               Certyfikaty analiz (CoA) składników z załączników wykorzystanych partii.
             </Typography>
             
@@ -1012,12 +1025,12 @@ const EndProductReportTab = ({
                 ⚠️ Wykryto problem z danymi receptury
               </Typography>
               
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={mb2}>
                 To zadanie zostało utworzone przed wprowadzeniem systemu automatycznego pobierania pełnych danych receptury. 
                 Brak jest składników, mikroelementów i innych szczegółowych danych receptury.
               </Typography>
               
-              <Typography variant="body2" sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={mb2}>
                 <strong>Wykryte informacje o recepturze:</strong><br/>
                 • ID Receptury: {task.recipeId}<br/>
                 • Nazwa Receptury: {task.recipeName || 'Nie określono'}<br/>
@@ -1043,14 +1056,14 @@ const EndProductReportTab = ({
           
           {/* 5. Production */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={mb2}>
               {t('endProductReport.sections.production')}
             </Typography>
             
             <Grid container spacing={3}>
               {/* Start date i End date */}
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     Start date
                   </Typography>
@@ -1073,7 +1086,7 @@ const EndProductReportTab = ({
               </Grid>
               
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     End date
                   </Typography>
@@ -1097,7 +1110,7 @@ const EndProductReportTab = ({
               
               {/* MO number */}
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     MO number
                   </Typography>
@@ -1117,7 +1130,7 @@ const EndProductReportTab = ({
               
               {/* Company name */}
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     Company name
                   </Typography>
@@ -1137,7 +1150,7 @@ const EndProductReportTab = ({
               
               {/* Company address */}
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     Address
                   </Typography>
@@ -1159,7 +1172,7 @@ const EndProductReportTab = ({
               
               {/* Workstation */}
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     Workstation
                   </Typography>
@@ -1185,7 +1198,7 @@ const EndProductReportTab = ({
               
               {/* Time per unit */}
               <Grid item xs={12} md={6}>
-                <Box sx={{ mb: 1 }}>
+                <Box sx={mb1}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
                     Time per unit
                   </Typography>
@@ -1412,7 +1425,7 @@ const EndProductReportTab = ({
           
           {/* 6. Quality control */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={mb2}>
               {t('endProductReport.sections.qualityControl')}
             </Typography>
             
@@ -1819,11 +1832,11 @@ const EndProductReportTab = ({
           
           {/* 7. Allergens */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={mb2}>
               {t('endProductReport.sections.allergens')}
             </Typography>
             
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body1" color="text.secondary" sx={mb3}>
               Wybierz wszystkie alergeny obecne w produkcie:
             </Typography>
             
@@ -1854,12 +1867,12 @@ const EndProductReportTab = ({
                   />
                 ))
               }
-              sx={{ mb: 2 }}
+              sx={mb2}
             />
             
             {/* Podsumowanie wybranych alergenów */}
             <Box sx={{ mt: 3, p: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" sx={mb1}>
                 {t('endProductReport.sections.selectedAllergens')} ({selectedAllergens.length}):
               </Typography>
               {selectedAllergens.length > 0 ? (
@@ -1940,11 +1953,11 @@ const EndProductReportTab = ({
           
           {/* 9. Additional Attachments */}
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={mb2}>
               {t('endProductReport.sections.additionalAttachments')}
             </Typography>
             
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body1" color="text.secondary" sx={mb3}>
               Dodaj dodatkowe załączniki związane z tym produktem lub procesem produkcyjnym:
             </Typography>
             

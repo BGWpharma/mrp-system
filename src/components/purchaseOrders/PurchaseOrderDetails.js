@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link, Link as RouterLink, useLocation } from 'react-router-dom';
 import { 
   Container, Typography, Paper, Button, Box, Chip, Grid, Divider, 
@@ -7,6 +7,18 @@ import {
   FormControl, InputLabel, Select, MenuItem, TextField, CircularProgress, IconButton,
   List, ListItem, ListItemText, ListItemIcon, Collapse, Tooltip, Menu, ButtonGroup
 } from '@mui/material';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mr1,
+  p2,
+  p3
+} from '../../styles/muiCommonStyles';
 import { useTranslation } from '../../hooks/useTranslation';
 import { 
   Edit as EditIcon, 
@@ -1415,12 +1427,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
   return (
     <Container maxWidth="lg" sx={{ my: 4 }}>
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <Box sx={{ ...loadingContainer, height: '50vh' }}>
           <CircularProgress />
         </Box>
       ) : purchaseOrder ? (
         <>
-          <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ mb: 4, ...flexBetween }}>
             <Button
               component={Link}
               to="/purchase-orders"
@@ -1468,11 +1480,11 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 }}
               >
                 <MenuItem onClick={() => handlePdfDownload(false)}>
-                  <PdfIcon sx={{ mr: 1 }} />
+                  <PdfIcon sx={mr1} />
                   PDF standardowy (z cenami)
                 </MenuItem>
                 <MenuItem onClick={() => handlePdfDownload(true)}>
-                  <PdfIcon sx={{ mr: 1 }} />
+                  <PdfIcon sx={mr1} />
                   PDF bez cen i kosztów
                 </MenuItem>
               </Menu>
@@ -1530,27 +1542,27 @@ const PurchaseOrderDetails = ({ orderId }) => {
               >
                 {hasDynamicFields && (
                   <MenuItem onClick={handleUpdateBatchPricesFromMenu}>
-                    <RefreshIcon sx={{ mr: 1 }} />
+                    <RefreshIcon sx={mr1} />
                     Aktualizuj ceny partii
                   </MenuItem>
                 )}
                 
                 {purchaseOrder?.items?.length > 0 && (
                   <MenuItem onClick={handleUpdateBasePrices}>
-                    <RefreshIcon sx={{ mr: 1 }} />
+                    <RefreshIcon sx={mr1} />
                     Aktualizuj ceny bazowe
                   </MenuItem>
                 )}
 
                 {purchaseOrder?.items?.length > 0 && purchaseOrder?.supplier?.id && (
                   <MenuItem onClick={handleUpdateSupplierPrices}>
-                    <RefreshIcon sx={{ mr: 1 }} />
+                    <RefreshIcon sx={mr1} />
                     Aktualizuj ceny dostawcy
                   </MenuItem>
                 )}
                 
                 <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
-                  <DeleteIcon sx={{ mr: 1 }} />
+                  <DeleteIcon sx={mr1} />
                   {t('purchaseOrders.details.deleteOrder')}
                 </MenuItem>
               </Menu>
@@ -1565,7 +1577,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
             <Paper sx={{ p: 3, mb: 3 }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <Box sx={{ mb: 2 }}>
+                  <Box sx={mb2}>
                     <Typography variant="h5" component="h1">
                       {t('purchaseOrders.details.orderNumber', { number: purchaseOrder.number })}
                       <Box component="span" sx={{ ml: 2 }}>
@@ -1705,7 +1717,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
             <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="h6" gutterBottom>{t('purchaseOrders.details.orderElements')}</Typography>
               
-              <TableContainer sx={{ mb: 3 }}>
+              <TableContainer sx={mb3}>
                 <Table>
                   <TableHead>
                     <TableRow>
@@ -2310,7 +2322,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                   sx={{ ml: 1 }} 
                 />
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={mb2}>
                 Faktury wystawione na podstawie tego zamówienia zakupowego
               </Typography>
               
@@ -2618,7 +2630,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           {/* Sekcja załączników - skategoryzowane */}
           <Paper sx={{ mb: 3, p: 3, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-              <AttachFileIcon sx={{ mr: 1 }} />
+              <AttachFileIcon sx={mr1} />
               {t('purchaseOrders.details.attachments')}
             </Typography>
             
@@ -2712,7 +2724,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                 return (
                   <Box>
                     {/* Certyfikaty analizy (CoA) */}
-                    <Box sx={{ mb: 3 }}>
+                    <Box sx={mb3}>
                       <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           <AssignmentIcon sx={{ mr: 1, color: 'success.main' }} />
@@ -2739,7 +2751,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </Box>
 
                     {/* Faktury */}
-                    <Box sx={{ mb: 3 }}>
+                    <Box sx={mb3}>
                       <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                         <LocalShippingIcon sx={{ mr: 1, color: 'warning.main' }} />
                         {t('purchaseOrders.details.invoiceAttachments.title')}
@@ -2753,7 +2765,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                     </Box>
 
                     {/* Inne załączniki */}
-                    <Box sx={{ mb: 1 }}>
+                    <Box sx={mb1}>
                       <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                         <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
                         {t('purchaseOrders.details.generalAttachments.title')}
@@ -2795,7 +2807,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           {/* Sekcja odpowiedzi formularzy rozładunku */}
           <Paper sx={{ mb: 3, p: 2, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-              <LocalShippingIcon sx={{ mr: 1 }} />
+              <LocalShippingIcon sx={mr1} />
               {t('purchaseOrders.details.unloadingReports')}
               {unloadingFormResponsesLoading && (
                 <CircularProgress size={20} sx={{ ml: 2 }} />
@@ -3210,7 +3222,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       >
         <DialogTitle>Zmień status zamówienia</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Wybierz nowy status zamówienia:
           </DialogContentText>
           <FormControl fullWidth>
@@ -3243,7 +3255,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       >
         <DialogTitle>Zmień status płatności</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Wybierz nowy status płatności zamówienia:
           </DialogContentText>
           <FormControl fullWidth>
@@ -3341,7 +3353,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
           Linki do faktur
         </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Zarządzaj linkami do faktur dla tego zamówienia. Możesz dodać wiele faktur, np. główną fakturę i dodatkowe faktury za transport, ubezpieczenie itp.
           </DialogContentText>
           
@@ -3451,7 +3463,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
       >
         <DialogTitle>Ostrzeżenie - Krótkie daty ważności</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Następujące pozycje mają datę ważności krótszą niż 16 miesięcy od daty zamówienia:
           </DialogContentText>
           

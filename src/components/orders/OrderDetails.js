@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -79,6 +79,19 @@ import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '..
 import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds, getAvailableProformasForOrder } from '../../services/invoiceService';
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
 import { useTranslation } from '../../hooks/useTranslation';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mr1,
+  mr2,
+  p2,
+  p3
+} from '../../styles/muiCommonStyles';
 
 // 🚀 CACHE SYSTEM dla optymalizacji zapytań
 const orderCache = new Map();
@@ -1169,10 +1182,10 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-          <ScheduleIcon sx={{ mr: 1 }} />
+          <ScheduleIcon sx={mr1} />
           {t('orderDetails.sections.statusHistory')}
         </Typography>
-        <Divider sx={{ mb: 2 }} />
+        <Divider sx={mb2} />
         
         <Table size="small" sx={{ '& .MuiTableCell-root': { py: 1.5 } }}>
           <TableHead>
@@ -1770,7 +1783,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
           return (
             <Alert 
               severity="warning" 
-              sx={{ mb: 2 }}
+              sx={mb2}
               action={
                 <Button 
                   color="inherit" 
@@ -1795,7 +1808,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ mr: 2 }}>{t('orderDetails.sections.status')}:</Typography>
+                <Typography variant="h6" sx={mr2}>{t('orderDetails.sections.status')}:</Typography>
                 <Tooltip title={t('orderDetails.tooltips.clickToChangeStatus')}>
                   <Chip 
                     label={order.status} 
@@ -1808,18 +1821,18 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                 </Tooltip>
               </Box>
               <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <EventNoteIcon sx={{ mr: 1 }} fontSize="small" />
+                <EventNoteIcon sx={mr1} fontSize="small" />
                 {t('orderDetails.orderDate')}: {formatTimestamp(order.orderDate, true)}
               </Typography>
               {order.expectedDeliveryDate && (
                 <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <ScheduleIcon sx={{ mr: 1 }} fontSize="small" />
+                  <ScheduleIcon sx={mr1} fontSize="small" />
                   {t('orderDetails.expectedDelivery')}: {formatTimestamp(order.expectedDeliveryDate, true)}
                 </Typography>
               )}
               {order.deliveryDate && (
                 <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <LocalShippingIcon sx={{ mr: 1 }} fontSize="small" />
+                  <LocalShippingIcon sx={mr1} fontSize="small" />
                   {t('orderDetails.completed')}: {formatTimestamp(order.deliveryDate, true)}
                 </Typography>
               )}
@@ -1830,7 +1843,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                   <Typography variant="subtitle1" sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                    <PersonIcon sx={{ mr: 1 }} fontSize="small" />
+                    <PersonIcon sx={mr1} fontSize="small" />
                     {t('orderDetails.sections.customerData')}
                   </Typography>
                   <Tooltip title="Wyślij email do klienta">
@@ -2037,7 +2050,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
               </Button>
             </Box>
           </Box>
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={mb2} />
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
@@ -2675,8 +2688,8 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         {/* Uwagi */}
         {order.notes && (
           <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>{t('orderDetails.sections.comments')}</Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Typography variant="h6" sx={mb2}>{t('orderDetails.sections.comments')}</Typography>
+            <Divider sx={mb2} />
             <Typography variant="body1">
               {order.notes}
             </Typography>
@@ -2694,7 +2707,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
               <RefreshIcon />
             </IconButton>
           </Box>
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={mb2} />
           
           {!order.productionTasks || order.productionTasks.length === 0 ? (
             <Typography variant="body1" color="text.secondary">
@@ -3029,7 +3042,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
             >
               {isUpdatingOrderNumber ? (
                 <>
-                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  <CircularProgress size={20} sx={mr1} />
                   Aktualizuję...
                 </>
               ) : (
@@ -3058,11 +3071,11 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         >
           {selectedInvoiceData && (
             <Box sx={{ p: 2, minWidth: 300 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
+              <Typography variant="h6" sx={mb1}>
                 {t('orderDetails.invoicePopover.title', { itemName: selectedInvoiceData.itemName })}
               </Typography>
-              <Divider sx={{ mb: 1 }} />
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Divider sx={mb1} />
+              <Typography variant="body2" color="text.secondary" sx={mb2}>
                 {t('orderDetails.invoicePopover.totalInvoiced')} {formatCurrency(selectedInvoiceData.totalInvoiced)}
               </Typography>
               <List dense>
@@ -3120,7 +3133,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         >
           <DialogTitle>{t('orderDetails.dialogs.statusChange.title')}</DialogTitle>
           <DialogContent>
-            <DialogContentText sx={{ mb: 2 }}>
+            <DialogContentText sx={mb2}>
               {t('orderDetails.dialogs.statusChange.selectStatus')}
               <br />
               {t('orderDetails.dialogs.statusChange.orderNumber')} {order?.orderNumber || order?.id?.substring(0, 8).toUpperCase()}

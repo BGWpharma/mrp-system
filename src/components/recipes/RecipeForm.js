@@ -1,5 +1,5 @@
 // src/components/recipes/RecipeForm.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -87,6 +87,19 @@ import { UNIT_GROUPS, UNIT_CONVERSION_FACTORS } from '../../utils/constants';
 import { NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../utils/constants';
 import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
 import { addNutritionalComponent } from '../../services/nutritionalComponentsService';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 import RecipeDesignAttachments from './RecipeDesignAttachments';
 import RecipeRulesAttachments from './RecipeRulesAttachments';
 import { Gavel as GavelIcon } from '@mui/icons-material';
@@ -1818,7 +1831,7 @@ const RecipeForm = ({ recipeId }) => {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <InventoryIcon color="primary" sx={{ mr: 1 }} />
+            <InventoryIcon color="primary" sx={mr1} />
             <Typography variant="h6" fontWeight="500">{t('recipes.ingredients.title')}</Typography>
           </Box>
           
@@ -1864,7 +1877,7 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
         
         <Box sx={{ p: 3 }}>
-          <Box sx={{ mb: 3 }}>
+          <Box sx={mb3}>
             <Autocomplete
               options={inventoryItems}
               getOptionLabel={(option) => option.name || ''}
@@ -1886,7 +1899,7 @@ const RecipeForm = ({ recipeId }) => {
                         {params.InputProps.endAdornment}
                       </>
                     ),
-                    startAdornment: <InventoryIcon color="action" sx={{ mr: 1 }} />
+                    startAdornment: <InventoryIcon color="action" sx={mr1} />
                   }}
                 />
               )}
@@ -2029,7 +2042,7 @@ const RecipeForm = ({ recipeId }) => {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ScienceIcon color="secondary" sx={{ mr: 1 }} />
+            <ScienceIcon color="secondary" sx={mr1} />
             <Typography variant="h6" fontWeight="500">{t('recipes.nutrients.title')}</Typography>
           </Box>
           
@@ -2058,7 +2071,7 @@ const RecipeForm = ({ recipeId }) => {
         
         <Box sx={{ p: 3 }}>
           {/* Pole dla podstawy składników odżywczych */}
-          <Box sx={{ mb: 3 }}>
+          <Box sx={mb3}>
             <TextField
               label={t('recipes.nutrients.nutritionalBasis')}
               name="nutritionalBasis"
@@ -2536,8 +2549,8 @@ const RecipeForm = ({ recipeId }) => {
           <DialogTitle sx={{ p: 0 }}>Dodaj produkt do stanów</DialogTitle>
         </Box>
         
-        <DialogContent sx={{ mt: 2 }}>
-          <DialogContentText sx={{ mb: 2 }}>
+        <DialogContent sx={mt2}>
+          <DialogContentText sx={mb2}>
             Uzupełnij poniższe dane, aby dodać produkt z receptury do stanów. 
             Koszt produkcji zostanie obliczony na podstawie kosztów składników.
           </DialogContentText>
@@ -2728,8 +2741,8 @@ const RecipeForm = ({ recipeId }) => {
           <DialogTitle sx={{ p: 0 }}>Dodaj nowy składnik odżywczy</DialogTitle>
         </Box>
         
-        <DialogContent sx={{ mt: 2 }}>
-          <DialogContentText sx={{ mb: 2 }}>
+        <DialogContent sx={mt2}>
+          <DialogContentText sx={mb2}>
             Dodaj nowy składnik odżywczy do bazy danych. Po dodaniu będzie automatycznie dodany do receptury.
           </DialogContentText>
           
@@ -2870,8 +2883,8 @@ const RecipeForm = ({ recipeId }) => {
           <DialogTitle sx={{ p: 0 }}>Dodaj recepturę do listy cenowej</DialogTitle>
         </Box>
         
-        <DialogContent sx={{ mt: 2 }}>
-          <DialogContentText sx={{ mb: 2 }}>
+        <DialogContent sx={mt2}>
+          <DialogContentText sx={mb2}>
             Receptura "{recipeData.name}" została pomyślnie utworzona. Czy chcesz dodać ją do listy cenowej?
           </DialogContentText>
           
@@ -2893,7 +2906,7 @@ const RecipeForm = ({ recipeId }) => {
                 >
                   {loadingPriceLists ? (
                     <MenuItem disabled>
-                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      <CircularProgress size={20} sx={mr1} />
                       Ładowanie list cenowych...
                     </MenuItem>
                   ) : priceLists.length > 0 ? (

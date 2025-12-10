@@ -209,6 +209,113 @@ const getCommonComponents = (theme) => ({
       useFlexGap: true,
     },
   },
+  // ✅ OPTYMALIZACJA: Warianty Typography dla często używanych stylów tekstu
+  MuiTypography: {
+    variants: [
+      {
+        props: { 'data-variant': 'section-title' },
+        style: {
+          marginBottom: theme.spacing(2),
+          fontWeight: 500,
+          color: theme.palette.primary.main,
+        },
+      },
+      {
+        props: { 'data-variant': 'form-label' },
+        style: {
+          marginBottom: theme.spacing(1),
+          fontWeight: 600,
+          fontSize: '0.875rem',
+        },
+      },
+      {
+        props: { 'data-variant': 'caption-bold' },
+        style: {
+          fontWeight: 600,
+          fontSize: '0.75rem',
+        },
+      },
+      {
+        props: { 'data-variant': 'value-display' },
+        style: {
+          fontWeight: 700,
+          fontSize: '1rem',
+        },
+      },
+    ],
+  },
+  // ✅ OPTYMALIZACJA: Warianty Chip dla często używanych stylów
+  MuiChip: {
+    variants: [
+      {
+        props: { 'data-variant': 'status' },
+        style: {
+          fontWeight: 600,
+          fontSize: '0.75rem',
+          height: 28,
+          borderRadius: 8,
+        },
+      },
+      {
+        props: { 'data-variant': 'tag' },
+        style: {
+          fontWeight: 500,
+          fontSize: '0.7rem',
+          height: 24,
+          borderRadius: 6,
+        },
+      },
+      {
+        props: { 'data-variant': 'info' },
+        style: {
+          fontWeight: 500,
+          fontSize: '0.75rem',
+          backgroundColor: theme.palette.mode === 'dark' 
+            ? 'rgba(33, 150, 243, 0.15)' 
+            : 'rgba(33, 150, 243, 0.1)',
+          color: theme.palette.info.main,
+          border: `1px solid ${theme.palette.info.main}20`,
+        },
+      },
+    ],
+  },
+  // ✅ OPTYMALIZACJA: Warianty Alert dla spójnego stylowania
+  MuiAlert: {
+    variants: [
+      {
+        props: { 'data-variant': 'compact' },
+        style: {
+          padding: theme.spacing(1, 2),
+          '& .MuiAlert-icon': {
+            padding: theme.spacing(0.5, 0),
+          },
+          '& .MuiAlert-message': {
+            padding: theme.spacing(0.5, 0),
+          },
+        },
+      },
+    ],
+  },
+  // ✅ OPTYMALIZACJA: Warianty Paper dla spójnego stylowania
+  MuiPaper: {
+    variants: [
+      {
+        props: { 'data-variant': 'section' },
+        style: {
+          padding: theme.spacing(2),
+          marginBottom: theme.spacing(3),
+        },
+      },
+      {
+        props: { 'data-variant': 'form-section' },
+        style: {
+          padding: theme.spacing(2),
+          marginBottom: theme.spacing(2),
+          backgroundColor: theme.palette.background.default,
+        },
+      },
+    ],
+  },
   MuiCssBaseline: {
     styleOverrides: {
       body: {

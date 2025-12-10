@@ -1,5 +1,5 @@
 // src/components/inventory/InventoryList.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
   Table, 
@@ -85,6 +85,19 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useInventoryListState } from '../../contexts/InventoryListStateContext';
 import { INVENTORY_CATEGORIES } from '../../utils/constants';
 import { useTranslation } from '../../hooks/useTranslation';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween,
+  loadingContainer,
+  mb1,
+  mb2,
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2
+} from '../../styles/muiCommonStyles';
 
 // Importy komponentów dla zakładek
 import ExpiryDatesPage from '../../pages/Inventory/ExpiryDatesPage';
@@ -2152,7 +2165,7 @@ const InventoryList = () => {
                 size="small"
                 sx={{ flexGrow: 1, minWidth: '200px' }}
                 InputProps={{
-                  startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                  startAdornment: <SearchIcon color="action" sx={mr1} />,
                 }}
               />
               <FormControl sx={{ flexGrow: 1, minWidth: '200px' }}>
@@ -2920,7 +2933,7 @@ const InventoryList = () => {
       {/* Zakładka Rezerwacje */}
       {currentTab === 5 && (
         <>
-          <Box sx={{ mb: 3 }}>
+          <Box sx={mb3}>
             <Typography variant="h6" component="h2" gutterBottom>
               {t('inventory.states.reservationsTab.title')}
             </Typography>
@@ -2938,7 +2951,7 @@ const InventoryList = () => {
               value={moFilter}
               onChange={handleMoFilterChange}
               InputProps={{
-                startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
+                startAdornment: <SearchIcon color="action" sx={mr1} />,
               }}
             />
             <Button 
@@ -3138,7 +3151,7 @@ const InventoryList = () => {
                             color="secondary"
                             size="small" 
                             variant="outlined"
-                            sx={{ mr: 1 }}
+                            sx={mr1}
                           />
                           {reservation.taskName && (
                             <Tooltip title={reservation.taskName}>
@@ -3448,7 +3461,7 @@ const InventoryList = () => {
             )}
             
             {importWarnings.length > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box sx={mt2}>
                 <Box 
                   sx={{ 
                     p: 2, 
@@ -3475,7 +3488,7 @@ const InventoryList = () => {
             )}
             
             {importPreview.length > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box sx={mt2}>
                 <Typography variant="subtitle2" gutterBottom fontWeight="bold">
                   Podgląd zmian ({importPreview.filter(p => p.status === 'update').length} pozycji do aktualizacji):
                 </Typography>
