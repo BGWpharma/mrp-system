@@ -1,5 +1,5 @@
 // src/components/production/ProductionGapAnalysisTab.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -68,6 +68,24 @@ import plLocale from 'date-fns/locale/pl';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../../hooks/useTranslation';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween, 
+  flexCenterGap1,
+  flexCenterGap2,
+  loadingContainer,
+  mb1,
+  mb2, 
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2,
+  p3,
+  textCenter,
+  textSecondary
+} from '../../styles/muiCommonStyles';
 import { useNotification } from '../../hooks/useNotification';
 import { analyzeProductionGaps, formatMinutes } from '../../services/productionTimeAnalysisService';
 
@@ -775,7 +793,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
     <Box sx={{ spacing: 2 }}>
       {/* Panel konfiguracji analizy */}
       <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
           <AssessmentIcon />
           {t('productionReport.timeAnalysis.gapAnalysis.title')}
         </Typography>
@@ -897,7 +915,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
         <>
           {/* Podsumowanie */}
           <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
               <TrendingUpIcon />
               {t('productionReport.timeAnalysis.gapAnalysis.summary.title')}
             </Typography>
@@ -1155,7 +1173,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
           {/* Lista luk */}
           {gapAnalysis.gaps.length > 0 && (
             <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
                 <WarningIcon />
                 {t('productionReport.timeAnalysis.gapAnalysis.gaps.title')}
               </Typography>
@@ -1238,7 +1256,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
           {/* Zalecenia */}
           {gapAnalysis.recommendations && gapAnalysis.recommendations.length > 0 && (
             <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
                 <CheckCircleIcon />
                 {t('productionReport.timeAnalysis.gapAnalysis.recommendations.title')}
               </Typography>
@@ -1246,7 +1264,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
               {gapAnalysis.recommendations.map((recommendation, index) => (
                 <Accordion key={index}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={flexCenterGap2}>
                       {getRecommendationIcon(recommendation.severity)}
                       <Box>
                         <Typography variant="subtitle1">

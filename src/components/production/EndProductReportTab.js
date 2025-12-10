@@ -31,13 +31,26 @@ import {
   flexCenter, 
   flexBetween, 
   flexColumn,
+  flexCenterGap1,
+  flexCenterGap2,
   loadingContainer,
   mb1,
   mb2, 
   mb3,
   mt1,
   mt2,
-  p2
+  mr1,
+  p2,
+  p3,
+  textCenter,
+  textSecondary,
+  textPrimary,
+  typographyBold,
+  iconPrimary,
+  iconError,
+  borderBottom,
+  paperSection,
+  emptyStateContainer
 } from '../../styles/muiCommonStyles';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
@@ -495,7 +508,7 @@ const EndProductReportTab = ({
                 </Box>
                 
                 {task?.recipe?.micronutrients && task.recipe.micronutrients.length > 0 ? (
-                  <TableContainer component={Paper} sx={{ mt: 2 }}>
+                  <TableContainer component={Paper} sx={mt2}>
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -634,7 +647,7 @@ const EndProductReportTab = ({
             </Typography>
             
             {task?.recipe?.ingredients && task.recipe.ingredients.length > 0 ? (
-              <TableContainer component={Paper} sx={{ mt: 2 }}>
+              <TableContainer component={Paper} sx={mt2}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -697,7 +710,7 @@ const EndProductReportTab = ({
                 {t('endProductReport.sections.expirationDateMaterials')}
               </Typography>
                 
-                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                <TableContainer component={Paper} sx={mt2}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -768,7 +781,7 @@ const EndProductReportTab = ({
             {/* Sekcja przesyłania plików */}
             <Box sx={{ mb: 3, p: 2, backgroundColor: 'info.light', borderRadius: 1, border: 1, borderColor: 'info.main', borderStyle: 'dashed', opacity: 0.8 }}>
               <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-                <CloudUploadIcon sx={{ mr: 1 }} />
+                <CloudUploadIcon sx={mr1} />
                 {t('endProductReport.sections.addCertificates')}
               </Typography>
               
@@ -787,7 +800,7 @@ const EndProductReportTab = ({
                   component="span"
                   startIcon={uploadingClinical ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
                   disabled={uploadingClinical}
-                  sx={{ mt: 1 }}
+                  sx={mt1}
                 >
                   {uploadingClinical ? 'Przesyłanie...' : 'Wybierz pliki'}
                 </Button>
@@ -801,12 +814,12 @@ const EndProductReportTab = ({
             {/* Lista załączników */}
             {clinicalAttachments.length > 0 ? (
               <Box>
-                                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                  <AttachFileIcon sx={{ mr: 1 }} />
+                                  <Typography variant="subtitle2" gutterBottom sx={{ ...flexCenter, ...typographyBold }}>
+                  <AttachFileIcon sx={mr1} />
                   {t('endProductReport.sections.attachedCertificates')} ({clinicalAttachments.length})
                 </Typography>
 
-                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                <TableContainer component={Paper} sx={mt2}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -1043,7 +1056,7 @@ const EndProductReportTab = ({
                 onClick={onFixRecipeData}
                 disabled={fixingRecipeData}
                 startIcon={fixingRecipeData ? <CircularProgress size={20} color="inherit" /> : null}
-                sx={{ mt: 1 }}
+                sx={mt1}
               >
                 {fixingRecipeData ? 'Naprawiam dane...' : 'Napraw dane receptury'}
               </Button>
@@ -1229,7 +1242,7 @@ const EndProductReportTab = ({
             </Typography>
             
             {productionHistory && productionHistory.length > 0 ? (
-              <TableContainer component={Paper} sx={{ mt: 2 }}>
+              <TableContainer component={Paper} sx={mt2}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -1383,7 +1396,7 @@ const EndProductReportTab = ({
                         {/* Załącznik - Raport z planu mieszań */}
                         {report.mixingPlanReportUrl && (
                           <Grid item xs={12}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={flexCenterGap1}>
                               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                                 Raport z planu mieszań:
                               </Typography>
@@ -1485,7 +1498,7 @@ const EndProductReportTab = ({
                         </Grid>
                         
                         {/* Protokół kontroli produkcji */}
-                        <Grid item xs={12} sx={{ mt: 2 }}>
+                        <Grid item xs={12} sx={mt2}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             {t('endProductReport.sections.productionControlProtocol')}:
                           </Typography>
@@ -1569,7 +1582,7 @@ const EndProductReportTab = ({
                         </Grid>
                         
                         {/* Dane produktu */}
-                        <Grid item xs={12} sx={{ mt: 2 }}>
+                        <Grid item xs={12} sx={mt2}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             {t('endProductReport.sections.productData')}:
                           </Typography>
@@ -1631,7 +1644,7 @@ const EndProductReportTab = ({
                         </Grid>
                         
                         {/* Warunki atmosferyczne */}
-                        <Grid item xs={12} sx={{ mt: 2 }}>
+                        <Grid item xs={12} sx={mt2}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             {t('endProductReport.sections.atmosphericConditions')}:
                           </Typography>
@@ -1682,7 +1695,7 @@ const EndProductReportTab = ({
                         </Grid>
                         
                         {/* Kontrola jakości */}
-                        <Grid item xs={12} sx={{ mt: 2 }}>
+                        <Grid item xs={12} sx={mt2}>
                           <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                             {t('endProductReport.sections.qualityControlDetails')}:
                           </Typography>
@@ -1754,7 +1767,7 @@ const EndProductReportTab = ({
                         
                         {/* Załączniki */}
                         {(report.documentScansUrl || report.productPhoto1Url || report.productPhoto2Url || report.productPhoto3Url) && (
-                          <Grid item xs={12} sx={{ mt: 2 }}>
+                          <Grid item xs={12} sx={mt2}>
                             <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                               {t('endProductReport.sections.attachments')}:
                             </Typography>
@@ -1964,7 +1977,7 @@ const EndProductReportTab = ({
             {/* Sekcja przesyłania plików */}
             <Box sx={{ mb: 3, p: 2, backgroundColor: 'secondary.light', borderRadius: 1, border: 1, borderColor: 'secondary.main', borderStyle: 'dashed', opacity: 0.8 }}>
               <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-                <CloudUploadIcon sx={{ mr: 1 }} />
+                <CloudUploadIcon sx={mr1} />
                 {t('endProductReport.sections.addAdditionalAttachments')}
               </Typography>
               
@@ -1983,7 +1996,7 @@ const EndProductReportTab = ({
                   component="span"
                   startIcon={uploadingAdditional ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
                   disabled={uploadingAdditional}
-                  sx={{ mt: 1 }}
+                  sx={mt1}
                 >
                   {uploadingAdditional ? 'Przesyłanie...' : 'Wybierz pliki'}
                 </Button>
@@ -1997,12 +2010,12 @@ const EndProductReportTab = ({
             {/* Lista załączników */}
             {additionalAttachments.length > 0 ? (
               <Box>
-                                <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                  <AttachFileIcon sx={{ mr: 1 }} />
+                                <Typography variant="subtitle2" gutterBottom sx={{ ...flexCenter, ...typographyBold }}>
+                  <AttachFileIcon sx={mr1} />
                   {t('endProductReport.sections.additionalAttachments')} ({additionalAttachments.length})
                 </Typography>
 
-                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                <TableContainer component={Paper} sx={mt2}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: 'action.hover' }}>

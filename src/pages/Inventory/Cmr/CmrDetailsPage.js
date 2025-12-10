@@ -43,11 +43,22 @@ import {
   flexCenter, 
   flexBetween, 
   flexColumn,
+  flexCenterGap1,
+  flexCenterGap2,
   loadingContainer, 
+  emptyStateContainer,
+  mb1,
   mb2, 
   mb3,
+  mt1,
+  mt2,
+  mr1,
   p2,
-  p3
+  p3,
+  textCenter,
+  textSecondary,
+  typographyBold,
+  alertMb2
 } from '../../../styles/muiCommonStyles';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -1742,7 +1753,7 @@ const CmrDetailsPage = () => {
           variant="outlined"
           startIcon={<ArrowBackIcon />}
           onClick={handleBack}
-          sx={{ mt: 2 }}
+          sx={mt2}
         >
           {t('details.backToList')}
         </Button>
@@ -1922,7 +1933,7 @@ const CmrDetailsPage = () => {
 
       
       {/* Nawigacja kartami */}
-      <Paper sx={{ mb: 3 }} className="no-print">
+      <Paper sx={mb3} className="no-print">
         <Tabs 
           value={activeTab} 
           onChange={handleTabChange} 
@@ -1946,7 +1957,7 @@ const CmrDetailsPage = () => {
         {/* Lewa kolumna - Informacje podstawowe i powiązane zamówienia */}
         <Grid item xs={12} lg={8}>
           {/* Informacje podstawowe */}
-          <Card sx={{ mb: 3 }}>
+          <Card sx={mb3}>
             <CardHeader 
               title={t('details.basicInfo.title')} 
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
@@ -1993,7 +2004,7 @@ const CmrDetailsPage = () => {
 
           {/* Powiązane zamówienia klienta */}
           {linkedOrders.length > 0 && (
-            <Card sx={{ mb: 3 }}>
+            <Card sx={mb3}>
               <CardHeader 
                 title={t('details.linkedOrders.title', { count: linkedOrders.length })}
                 titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
@@ -2077,7 +2088,7 @@ const CmrDetailsPage = () => {
         {/* Prawa kolumna - Strony, transport, płatności */}
         <Grid item xs={12} lg={4}>
           {/* Strony */}
-          <Card sx={{ mb: 3 }}>
+          <Card sx={mb3}>
             <CardHeader 
               title={t('details.parties.title')} 
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
@@ -2085,7 +2096,7 @@ const CmrDetailsPage = () => {
             />
             <Divider />
             <CardContent>
-              <Box sx={{ mb: 3 }}>
+              <Box sx={mb3}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                   {t('details.parties.sender')}
                 </Typography>
@@ -2103,7 +2114,7 @@ const CmrDetailsPage = () => {
                 </Typography>
               </Box>
               
-              <Box sx={{ mb: 3 }}>
+              <Box sx={mb3}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                   {t('details.parties.recipient')}
                 </Typography>
@@ -2156,7 +2167,7 @@ const CmrDetailsPage = () => {
                 <CardContent>
                   <Grid container spacing={3}>
                     <Grid item xs={12} md={4}>
-                      <Box sx={{ mb: 3 }}>
+                      <Box sx={mb3}>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                           {t('details.parties.sender')}
                         </Typography>
@@ -2176,7 +2187,7 @@ const CmrDetailsPage = () => {
                     </Grid>
                     
                     <Grid item xs={12} md={4}>
-                      <Box sx={{ mb: 3 }}>
+                      <Box sx={mb3}>
                         <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                           {t('details.parties.recipient')}
                         </Typography>
@@ -2223,7 +2234,7 @@ const CmrDetailsPage = () => {
                 />
                 <Divider />
                 <CardContent>
-                  <Box sx={{ mb: 3 }}>
+                  <Box sx={mb3}>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                       {t('details.transport.loadingPlace')}
                     </Typography>
@@ -2399,7 +2410,7 @@ const CmrDetailsPage = () => {
                                     <Box>
                                       {/* Szczegóły palet */}
                                       {weightDetail.pallets && weightDetail.pallets.length > 0 && (
-                                        <Box sx={{ mb: 1 }}>
+                                        <Box sx={mb1}>
                                           <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                                             {t('details.palletDetails.title')}:
                                           </Typography>
@@ -2600,7 +2611,7 @@ const CmrDetailsPage = () => {
                     </Grid>
 
                     {/* Informacje o metodzie obliczania */}
-                    <Alert severity="info" sx={{ mt: 2 }}>
+                    <Alert severity="info" sx={mt2}>
                       <Typography variant="body2">
                         <strong>Informacje o obliczeniach:</strong><br />
                         • Szczegółowe wyliczenia są dostępne dla pozycji z powiązanymi partiami magazynowymi<br />
@@ -2628,7 +2639,7 @@ const CmrDetailsPage = () => {
                 />
                 <Divider />
                 <CardContent>
-                  <Box sx={{ mb: 3 }}>
+                  <Box sx={mb3}>
                     <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                       {t('details.documentsInstructions.attachedDocuments')}
                     </Typography>
@@ -2696,7 +2707,7 @@ const CmrDetailsPage = () => {
                       </Typography>
                     </Grid>
                     
-                    <Grid item xs={12} sx={{ mt: 1 }}>
+                    <Grid item xs={12} sx={mt1}>
                       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 600 }}>
                         {t('details.feesPayments.paymentMethod')}
                       </Typography>
@@ -2978,11 +2989,11 @@ const CmrDetailsPage = () => {
                   {/* Sekcja przesyłania plików */}
                   <Box sx={{ mb: 3, p: 2, backgroundColor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
                     <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-                      <CloudUploadIcon sx={{ mr: 1 }} />
+                      <CloudUploadIcon sx={mr1} />
                       Dodaj załącznik do CMR
                     </Typography>
                     
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={mt2}>
                       <input
                         accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt,.xls,.xlsx,.bmp,.tiff"
                         style={{ display: 'none' }}
@@ -3006,7 +3017,7 @@ const CmrDetailsPage = () => {
                     
                     {uploadingAttachment && (
                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                        <CircularProgress size={20} sx={mr1} />
                         <Typography variant="caption" color="text.secondary">
                           Przesyłanie pliku...
                         </Typography>
@@ -3035,11 +3046,11 @@ const CmrDetailsPage = () => {
                   ) : (
                     <Box>
                       <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                        <AttachFileIcon sx={{ mr: 1 }} />
+                        <AttachFileIcon sx={mr1} />
                         {t('details.attachments.attachmentsList', { count: attachments.length })}
                       </Typography>
                       
-                      <TableContainer component={Paper} sx={{ mt: 2 }}>
+                      <TableContainer component={Paper} sx={mt2}>
                         <Table size="small">
                           <TableHead>
                             <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -3173,11 +3184,11 @@ const CmrDetailsPage = () => {
                   {/* Sekcja przesyłania faktur */}
                   <Box sx={{ mb: 3, p: 2, backgroundColor: 'success.50', borderRadius: 1, border: 1, borderColor: 'success.200', borderStyle: 'dashed' }}>
                     <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', color: 'success.dark' }}>
-                      <CloudUploadIcon sx={{ mr: 1 }} />
+                      <CloudUploadIcon sx={mr1} />
                       Dodaj fakturę do CMR
                     </Typography>
                     
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={mt2}>
                       <input
                         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                         style={{ display: 'none' }}
@@ -3202,7 +3213,7 @@ const CmrDetailsPage = () => {
                     
                     {uploadingInvoice && (
                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                        <CircularProgress size={20} sx={{ mr: 1 }} color="success" />
+                        <CircularProgress size={20} sx={mr1} color="success" />
                         <Typography variant="caption" color="text.secondary">
                           Przesyłanie faktury...
                         </Typography>
@@ -3235,7 +3246,7 @@ const CmrDetailsPage = () => {
                         Lista faktur ({invoices.length})
                       </Typography>
                       
-                      <TableContainer component={Paper} sx={{ mt: 2 }}>
+                      <TableContainer component={Paper} sx={mt2}>
                         <Table size="small">
                           <TableHead>
                             <TableRow sx={{ backgroundColor: 'success.50' }}>
@@ -3421,7 +3432,7 @@ const CmrDetailsPage = () => {
             <Box className="print-grid-item">
               <Typography className="print-label">Miejsce załadunku</Typography>
               <Typography className="print-value">{cmrData.loadingPlace || '-'}</Typography>
-              <Typography className="print-label" sx={{ mt: 1 }}>Data załadunku</Typography>
+              <Typography className="print-label" sx={mt1}>Data załadunku</Typography>
               <Typography className="print-value">{formatDate(cmrData.loadingDate)}</Typography>
             </Box>
             
@@ -3602,7 +3613,7 @@ const CmrDetailsPage = () => {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 3 }}>
+          <DialogContentText sx={mb3}>
             Znaleziono {loadingFormResponses.length} odpowiedzi z formularza załadunku towaru dla tego CMR. 
             Sprawdź poniższe dane przed rozpoczęciem transportu:
           </DialogContentText>
@@ -3852,7 +3863,7 @@ const CmrDetailsPage = () => {
       >
         <DialogTitle>Zmień status płatności</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Wybierz nowy status płatności dokumentu CMR:
           </DialogContentText>
           <FormControl fullWidth>

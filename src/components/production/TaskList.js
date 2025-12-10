@@ -107,6 +107,26 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useTaskListState } from '../../contexts/TaskListStateContext';
 import { exportToCSV } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween, 
+  flexCenterGap1,
+  flexCenterGap2,
+  loadingContainer,
+  emptyStateContainer,
+  mb1,
+  mb2, 
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2,
+  p3,
+  textCenter,
+  textSecondary,
+  alertMb2
+} from '../../styles/muiCommonStyles';
 import { useTranslation } from '../../hooks/useTranslation';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 import TaskStatusChip from './shared/TaskStatusChip';
@@ -2267,12 +2287,12 @@ const TaskList = () => {
       >
         <DialogTitle>Rozpocznij produkcję</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Data ważności gotowego produktu jest wymagana do rozpoczęcia produkcji.
           </DialogContentText>
           
           {startProductionError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={mb2}>
               {startProductionError}
             </Alert>
           )}
@@ -2328,12 +2348,12 @@ const TaskList = () => {
       >
         <DialogTitle>{t('production.taskListLabels.stopProduction')}</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Wprowadź informacje o zakończonej sesji produkcyjnej
           </DialogContentText>
           
           {productionError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={mb2}>
               {productionError}
             </Alert>
           )}
@@ -2416,7 +2436,7 @@ const TaskList = () => {
               </Typography>
               
               {stopProductionInventoryError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
+                <Alert severity="error" sx={mb2}>
                   {stopProductionInventoryError}
                 </Alert>
               )}
@@ -2525,12 +2545,12 @@ const TaskList = () => {
       >
         <DialogTitle>Dodaj produkt do magazynu</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={mb2}>
             Wprowadź informacje o partii produktu przed dodaniem do magazynu
           </DialogContentText>
           
           {inventoryError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={mb2}>
               {inventoryError}
             </Alert>
           )}
@@ -2620,7 +2640,7 @@ const TaskList = () => {
       {/* Komponent Pagination z nowymi optymalizacjami */}
       <Fade in={showContent && !mainTableLoading} timeout={300}>
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, flexDirection: 'column', alignItems: 'center' }}>
-          <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ ...mb1, ...flexCenterGap2 }}>
             <Typography variant="body2" color="textSecondary">
               Wyświetlanie {tasks.length > 0 ? (page - 1) * pageSize + 1 : 0} - {Math.min(page * pageSize, totalItems)} z {totalItems} zadań
             </Typography>

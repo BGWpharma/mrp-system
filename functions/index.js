@@ -19,7 +19,7 @@
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
  * - onProductionTaskScheduleUpdate (trigger: productionTasks)
  * - onCmrStatusUpdate         (trigger: cmrDocuments)
- * - updateExpiryStats         (scheduled: every 1 hour)
+ * - updateExpiryStats         (scheduled: every day 01:00)
  */
 
 // Initialize config (must be first!)

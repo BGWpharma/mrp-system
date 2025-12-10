@@ -1,7 +1,7 @@
 /**
  * Update Expiry Stats - Scheduled Function
  * Aktualizuje statystyki wygasających partii
- * Uruchamiana co godzinę
+ * Uruchamiana raz dziennie o 01:00
  *
  * Zapisuje agregaty do: aggregates/expiryStats
  * Sidebar nasłuchuje na ten dokument zamiast pobierać wszystkie partie
@@ -16,7 +16,7 @@ const {admin} = require("../config");
 
 const updateExpiryStats = onSchedule(
     {
-      schedule: "every 1 hours",
+      schedule: "every day 01:00",
       region: "europe-central2",
       timeZone: "Europe/Warsaw",
       memory: "256MiB",

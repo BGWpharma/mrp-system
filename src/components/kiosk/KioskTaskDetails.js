@@ -1,5 +1,5 @@
 // src/components/kiosk/KioskTaskDetails.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Paper,
   Typography,
@@ -35,6 +35,29 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils/formatters';
 import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween, 
+  flexColumn,
+  flexCenterGap1,
+  flexCenterGap2,
+  loadingContainer,
+  emptyStateContainer,
+  mb1,
+  mb2, 
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  p2,
+  p3,
+  textCenter,
+  textSecondary,
+  textDisabled,
+  typographyBold,
+  iconPrimary
+} from '../../styles/muiCommonStyles';
 
 const KioskTaskDetails = ({ taskId, onBack }) => {
   const { mode } = useThemeContext();
@@ -223,7 +246,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ mb: 2 }}>
+      <Alert severity="error" sx={mb2}>
         {error}
       </Alert>
     );
@@ -231,7 +254,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
 
   if (!task) {
     return (
-      <Alert severity="warning" sx={{ mb: 2 }}>
+      <Alert severity="warning" sx={mb2}>
         Nie znaleziono zadania
       </Alert>
     );
@@ -259,7 +282,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
   return (
     <Box>
       {/* Nagłówek z przyciskiem powrotu i wskaźnikiem synchronizacji */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ ...flexCenter, ...mb2 }}>
         <IconButton
           onClick={onBack}
           sx={{
@@ -666,7 +689,7 @@ const KioskTaskDetails = ({ taskId, onBack }) => {
                                                   >
                                                     <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, gap: 0.25 }}>
                                                       {/* Linia 1: LOT + ilość powiązana */}
-                                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                      <Box sx={flexCenterGap1}>
                                                         <Chip
                                                           size="small"
                                                           label={`LOT: ${reservationFromSnapshot.batchNumber}`}
