@@ -96,13 +96,9 @@ import {
   Divider,
   List,
   ListItem,
-  ListItemIcon,
   ListItemText,
-  ListItemButton,
   Card,
   CardContent,
-  CardActions,
-  Collapse,
   Tabs,
   Tab,
   Stack,
@@ -116,12 +112,11 @@ import {
   useMediaQuery,
   useTheme,
   Switch,
-  Autocomplete,
-  Drawer,
   Badge,
   styled,
   Skeleton,
 } from '@mui/material';
+// ✅ REFAKTORYZACJA: Usunięto nieużywane importy: Drawer, Autocomplete, ListItemButton, ListItemIcon, CardActions, Collapse
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -198,6 +193,25 @@ import { preciseMultiply } from '../../utils/mathUtils';
 import { getIngredientReservationLinks } from '../../services/mixingPlanReservationService';
 import { useUserNames } from '../../hooks/useUserNames';
 
+// ✅ Import hooków refaktoryzowanych
+import { useTaskDialogs } from '../../hooks/production/useTaskDialogs';
+import { useTaskComments } from '../../hooks/production/useTaskComments';
+import { useTaskActions } from '../../hooks/production/useTaskActions';
+
+// ✅ FAZA 1: Import hooków konsolidujących stany
+import { 
+  usePackagingState,
+  useRawMaterialsState,
+  useReservationState,
+  useConsumptionState,
+  useProductionHistoryState,
+  useAttachmentsState
+} from '../../hooks/production';
+
+// ✅ Import komponentów dialogów refaktoryzowanych
+import { StartProductionDialog, AddHistoryDialog, DeleteConfirmDialog, RawMaterialsDialog } from '../../components/production/dialogs';
+import { CommentsDrawer } from '../../components/production/shared';
+
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
 const ChangeHistoryTab = lazy(() => import('../../components/production/ChangeHistoryTab'));
@@ -229,15 +243,23 @@ const TaskDetailsPage = () => {
   const { showSuccess, showError, showInfo, showWarning } = useNotification();
   const { currentUser } = useAuth();
   
+  // ✅ REFAKTORYZACJA: Inicjalizacja hooków zarządzających dialogami
+  const {
+    dialogs,
+    dialogContext,
+    openDialog,
+    closeDialog,
+    closeAllDialogs,
+    isDialogOpen,
+    updateDialogContext
+  } = useTaskDialogs();
+  
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [alert, setAlert] = useState({ open: false, severity: 'success', message: '' });
-  const [consumptionDialogOpen, setConsumptionDialogOpen] = useState(false);
-  const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
+  // ✅ REFAKTORYZACJA: Usunięto nieużywane stany dialogów
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [materials, setMaterials] = useState([]);
   const [batches, setBatches] = useState({});
-  const [stopProductionDialogOpen, setStopProductionDialogOpen] = useState(false);
   const [productionData, setProductionData] = useState({
     completedQuantity: '',
     timeSpent: '',
@@ -246,22 +268,143 @@ const TaskDetailsPage = () => {
     error: null
   });
   const [materialQuantities, setMaterialQuantities] = useState({});
-  const [selectedBatches, setSelectedBatches] = useState({});
-  const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
+  // ✅ FAZA 1: selectedBatches przeniesione do useReservationState
+  // ✅ REFAKTORYZACJA: receiveDialogOpen usunięty - nieużywany
   const [editMode, setEditMode] = useState(false);
   const [errors, setErrors] = useState({});
-  const [reserveDialogOpen, setReserveDialogOpen] = useState(false);
-  const [reservationMethod, setReservationMethod] = useState('automatic');
-  const [autoCreatePOReservations, setAutoCreatePOReservations] = useState(true); // Automatyczne tworzenie rezerwacji PO
-  const [manualBatchQuantities, setManualBatchQuantities] = useState({});
-  const [reservationErrors, setReservationErrors] = useState({});
-  const [packagingDialogOpen, setPackagingDialogOpen] = useState(false);
-  const [packagingItems, setPackagingItems] = useState([]);
-  const [loadingPackaging, setLoadingPackaging] = useState(false);
-  const [selectedPackaging, setSelectedPackaging] = useState({});
-  const [packagingQuantities, setPackagingQuantities] = useState({});
-  const [searchPackaging, setSearchPackaging] = useState('');
-  const [consumePackagingImmediately, setConsumePackagingImmediately] = useState(true);
+  // ✅ FAZA 1: Hook konsolidujący stany opakowań (7 stanów → 1 hook)
+  const {
+    packagingDialogOpen,
+    packagingItems,
+    loadingPackaging,
+    selectedPackaging,
+    packagingQuantities,
+    searchPackaging,
+    consumePackagingImmediately,
+    setPackagingDialogOpen,
+    setPackagingItems,
+    setLoadingPackaging,
+    setSelectedPackaging,
+    setPackagingQuantities,
+    setSearchPackaging,
+    setConsumePackagingImmediately
+  } = usePackagingState();
+  
+  // ✅ FAZA 1: Hook konsolidujący stany rezerwacji (11 stanów → 1 hook)
+  const {
+    reserveDialogOpen,
+    reservationMethod,
+    reservingMaterials,
+    autoCreatePOReservations,
+    manualBatchQuantities,
+    reservationErrors,
+    selectedBatches,
+    manualBatchSelectionActive,
+    expandedMaterial,
+    showExhaustedBatches,
+    deletingReservation,
+    setReserveDialogOpen,
+    setReservationMethod,
+    setReservingMaterials,
+    setAutoCreatePOReservations,
+    setManualBatchQuantities,
+    setReservationErrors,
+    setSelectedBatches,
+    setManualBatchSelectionActive,
+    setExpandedMaterial,
+    setShowExhaustedBatches,
+    setDeletingReservation
+  } = useReservationState();
+  
+  // ✅ FAZA 1: Hook konsolidujący stany surowców (5 stanów → 1 hook)
+  const {
+    rawMaterialsDialogOpen,
+    rawMaterialsItems,
+    loadingRawMaterials,
+    searchRawMaterials,
+    materialCategoryTab,
+    setRawMaterialsDialogOpen,
+    setRawMaterialsItems,
+    setLoadingRawMaterials,
+    setSearchRawMaterials,
+    setMaterialCategoryTab
+  } = useRawMaterialsState();
+  
+  // ✅ FAZA 1: Hook konsolidujący stany konsumpcji (14 stanów → 1 hook)
+  const {
+    consumeMaterialsDialogOpen,
+    consumedMaterials,
+    selectedBatchesToConsume,
+    consumeQuantities,
+    consumeErrors,
+    consumingMaterials,
+    editConsumptionDialogOpen,
+    deleteConsumptionDialogOpen,
+    selectedConsumption,
+    editedQuantity,
+    restoreReservation,      // ✅ POPRAWKA: dodane z hooka
+    deletingConsumption,     // ✅ POPRAWKA: dodane z hooka
+    setConsumeMaterialsDialogOpen,
+    setConsumedMaterials,
+    setSelectedBatchesToConsume,
+    setConsumeQuantities,
+    setConsumeErrors,
+    setConsumingMaterials,
+    setEditConsumptionDialogOpen,
+    setDeleteConsumptionDialogOpen,
+    setSelectedConsumption,
+    setEditedQuantity,
+    setRestoreReservation,   // ✅ POPRAWKA: dodane z hooka
+    setDeletingConsumption   // ✅ POPRAWKA: dodane z hooka
+  } = useConsumptionState();
+  
+  // ✅ FAZA 1: Hook konsolidujący stany załączników (8 stanów → 1 hook)
+  const {
+    ingredientAttachments,
+    ingredientBatchAttachments,
+    clinicalAttachments,
+    additionalAttachments,
+    uploadingClinical,
+    uploadingAdditional,
+    loadingReportAttachments,
+    refreshingBatchAttachments,
+    setIngredientAttachments,
+    setIngredientBatchAttachments,
+    setClinicalAttachments,
+    setAdditionalAttachments,
+    setUploadingClinical,
+    setUploadingAdditional,
+    setLoadingReportAttachments,
+    setRefreshingBatchAttachments
+  } = useAttachmentsState();
+  
+  // ✅ POPRAWKA: Hook konsolidujący stany historii produkcji (12 stanów → 1 hook)
+  const {
+    productionHistory,
+    enrichedProductionHistory,
+    editingHistoryItem,
+    editedHistoryItem,
+    editedHistoryNote,
+    editedHistoryQuantity,
+    addHistoryDialogOpen,
+    deleteHistoryDialogOpen,
+    deleteHistoryItem,
+    historyItemToDelete,
+    availableMachines,
+    selectedMachineId,
+    setProductionHistory,
+    setEnrichedProductionHistory,
+    setEditingHistoryItem,
+    setEditedHistoryItem,
+    setEditedHistoryNote,
+    setEditedHistoryQuantity,
+    setAddHistoryDialogOpen,
+    setDeleteHistoryDialogOpen,
+    setDeleteHistoryItem,
+    setHistoryItemToDelete,
+    setAvailableMachines,
+    setSelectedMachineId
+  } = useProductionHistoryState();
   
   // Hook do zarządzania nazwami użytkowników
   const { userNames, getUserName, fetchUserNames } = useUserNames();
@@ -283,26 +426,11 @@ const TaskDetailsPage = () => {
     console.log('🗑️ [CACHE] Wymuszono odświeżenie cache kosztów');
   }, []);
   
-  const [productionHistory, setProductionHistory] = useState([]);
-  const [editingHistoryItem, setEditingHistoryItem] = useState(null);
-  const [editedHistoryItem, setEditedHistoryItem] = useState({
-    quantity: 0,
-    startTime: new Date(),
-    endTime: new Date(),
-  });
+  // ✅ POPRAWKA: productionHistory, editingHistoryItem, editedHistoryItem, availableMachines,
+  // selectedMachineId, enrichedProductionHistory, addHistoryDialogOpen, deleteHistoryItem,
+  // deleteHistoryDialogOpen przeniesione do useProductionHistoryState
   
-  // Nowe stany dla danych z maszyn
-  const [availableMachines, setAvailableMachines] = useState([]);
-  const [selectedMachineId, setSelectedMachineId] = useState('');
-  const [enrichedProductionHistory, setEnrichedProductionHistory] = useState([]);
-  const [addHistoryDialogOpen, setAddHistoryDialogOpen] = useState(false);
-  const [reservingMaterials, setReservingMaterials] = useState(false);
-
   const [materialBatchesLoading, setMaterialBatchesLoading] = useState(false);
-  const [manualBatchSelectionActive, setManualBatchSelectionActive] = useState(false);
-  const [expandedMaterial, setExpandedMaterial] = useState(null);
-  const [deleteHistoryItem, setDeleteHistoryItem] = useState(null);
-  const [deleteHistoryDialogOpen, setDeleteHistoryDialogOpen] = useState(false);
   const [includeInCosts, setIncludeInCosts] = useState({});
 
   // Stany dla komentarzy
@@ -318,12 +446,8 @@ const TaskDetailsPage = () => {
   const [poReservations, setPOReservations] = useState([]);
   const [poRefreshTrigger, setPoRefreshTrigger] = useState(0);
   
-  // Stan edycji pozycji historii
-  const [editedHistoryNote, setEditedHistoryNote] = useState('');
-  const [editedHistoryQuantity, setEditedHistoryQuantity] = useState('');
-  
-  // Stan do zarządzania usuwaniem pozycji historii
-  const [historyItemToDelete, setHistoryItemToDelete] = useState(null);
+  // ✅ POPRAWKA: editedHistoryNote, editedHistoryQuantity, historyItemToDelete 
+  // przeniesione do useProductionHistoryState
   
   // Stan komunikatu błędu
   const [errorMessage, setErrorMessage] = useState(null);
@@ -347,12 +471,10 @@ const TaskDetailsPage = () => {
   const [productionShiftDialogOpen, setProductionShiftDialogOpen] = useState(false);
   const [formTab, setFormTab] = useState(0);
 
-  // Stany dla dialogu ustawiania daty ważności przy starcie produkcji
-  const [startProductionDialogOpen, setStartProductionDialogOpen] = useState(false);
-  const [startProductionData, setStartProductionData] = useState({
-    expiryDate: null
-  });
-  const [startProductionError, setStartProductionError] = useState(null);
+  // ✅ REFAKTORYZACJA: startProductionDialog przeniesiony do useTaskDialogs
+  // Stan startProductionDialogOpen zastąpiony przez: dialogs.startProduction
+  // Otwieranie: openDialog('startProduction')
+  // Zamykanie: closeDialog('startProduction')
 
   // Nowe stany dla opcji dodawania do magazynu w dialogu historii produkcji
   const [addToInventoryOnHistory, setAddToInventoryOnHistory] = useState(true); // domyślnie włączone
@@ -366,12 +488,7 @@ const TaskDetailsPage = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
 
-  // Nowe stany dla funkcjonalności dodawania surowców
-  const [rawMaterialsDialogOpen, setRawMaterialsDialogOpen] = useState(false);
-  const [rawMaterialsItems, setRawMaterialsItems] = useState([]);
-  const [loadingRawMaterials, setLoadingRawMaterials] = useState(false);
-  const [searchRawMaterials, setSearchRawMaterials] = useState('');
-  const [materialCategoryTab, setMaterialCategoryTab] = useState(0); // 0 = Surowce, 1 = Opakowania jednostkowe
+  // ✅ FAZA 1: Stany surowców przeniesione do useRawMaterialsState
 
   // Stany dla sekcji 5. Production w raporcie
   const [companyData, setCompanyData] = useState(null);
@@ -381,44 +498,18 @@ const TaskDetailsPage = () => {
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
 
-  // Nowe stany dla funkcjonalności konsumpcji materiałów
-  const [consumeMaterialsDialogOpen, setConsumeMaterialsDialogOpen] = useState(false);
-  const [consumedMaterials, setConsumedMaterials] = useState([]);
-  const [selectedBatchesToConsume, setSelectedBatchesToConsume] = useState({});
-  const [consumeQuantities, setConsumeQuantities] = useState({});
-  const [consumeErrors, setConsumeErrors] = useState({});
-  const [consumingMaterials, setConsumingMaterials] = useState(false); // Stan ładowania dla konsumpcji materiałów
-
-  // Nowe stany dla korekty i usunięcia konsumpcji
-  const [editConsumptionDialogOpen, setEditConsumptionDialogOpen] = useState(false);
-  const [deleteConsumptionDialogOpen, setDeleteConsumptionDialogOpen] = useState(false);
-  const [selectedConsumption, setSelectedConsumption] = useState(null);
-  const [editedQuantity, setEditedQuantity] = useState(0);
+  // ✅ FAZA 1: Stany konsumpcji przeniesione do useConsumptionState
+  // ✅ POPRAWKA: restoreReservation i deletingConsumption teraz z hooka useConsumptionState
+  
+  // Pozostałe stany konsumpcji (specyficzne dla TaskDetailsPage - ceny partii)
   const [consumedBatchPrices, setConsumedBatchPrices] = useState({});
   const [consumedIncludeInCosts, setConsumedIncludeInCosts] = useState({});
-  const [restoreReservation, setRestoreReservation] = useState(true); // Domyślnie włączone
-  const [deletingConsumption, setDeletingConsumption] = useState(false); // Stan ładowania dla usuwania konsumpcji
-  const [deletingReservation, setDeletingReservation] = useState(false); // Stan ładowania dla usuwania rezerwacji
   const [fixingRecipeData, setFixingRecipeData] = useState(false);
   
-  // Stan dla załączników z powiązanych PO
-  const [ingredientAttachments, setIngredientAttachments] = useState({});
-  
-  // Stan dla załączników z partii składników
-  const [ingredientBatchAttachments, setIngredientBatchAttachments] = useState({});
-  const [refreshingBatchAttachments, setRefreshingBatchAttachments] = useState(false);
-  const [loadingReportAttachments, setLoadingReportAttachments] = useState(false);
+  // ✅ FAZA 1: Stany załączników (clinicalAttachments, additionalAttachments, uploading*, loading*) przeniesione do useAttachmentsState
   
   // Stan dla powiązań składników z rezerwacjami w planie mieszań
   const [ingredientReservationLinks, setIngredientReservationLinks] = useState({});
-  
-  // Stan dla załączników badań klinicznych
-  const [clinicalAttachments, setClinicalAttachments] = useState([]);
-  const [uploadingClinical, setUploadingClinical] = useState(false);
-
-  // Stan dla dodatkowych załączników
-  const [additionalAttachments, setAdditionalAttachments] = useState([]);
-  const [uploadingAdditional, setUploadingAdditional] = useState(false);
 
   // Stan dla generowania raportu PDF
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -483,8 +574,7 @@ const TaskDetailsPage = () => {
     return location.state?.activeTab ?? 0;
   });
   
-  // Stan kontrolujący wyświetlanie wyczerpanych partii w dialogu rezerwacji
-  const [showExhaustedBatches, setShowExhaustedBatches] = useState(false);
+  // ✅ FAZA 1: showExhaustedBatches przeniesione do useReservationState
 
   // ✅ Selective Data Loading - tracking załadowanych danych dla każdej zakładki
   const [loadedTabs, setLoadedTabs] = useState({
@@ -2059,8 +2149,9 @@ const TaskDetailsPage = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
+      // ✅ REFAKTORYZACJA: Sprawdzenie konsumpcji materiałów - wyświetl ostrzeżenie zamiast dialogu
       if (newStatus === 'Zakończone' && !task.materialConsumptionConfirmed && task.materials && task.materials.length > 0) {
-        setConsumptionDialogOpen(true);
+        showWarning('Przed zakończeniem zadania potwierdź zużycie materiałów w zakładce "Materiały i koszty"');
         return;
       }
 
@@ -2175,10 +2266,9 @@ const TaskDetailsPage = () => {
     }
   };
   
+  // ✅ REFAKTORYZACJA: Funkcja potwierdzania konsumpcji - usunięto nieużywane odniesienia do dialogów
   const handleConfirmConsumption = async () => {
     try {
-      setConfirmationDialogOpen(false);
-      
       await confirmMaterialConsumption(id);
       showSuccess('Zużycie materiałów potwierdzone. Stany magazynowe zostały zaktualizowane.');
       
@@ -2188,29 +2278,28 @@ const TaskDetailsPage = () => {
       // Odśwież dane zadania
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);
-      
-      // Zamknij dialog konsumpcji po pomyślnym potwierdzeniu
-      setConsumptionDialogOpen(false);
     } catch (error) {
       console.error('Błąd podczas potwierdzania zużycia:', error);
       showError('Nie udało się potwierdzić zużycia materiałów: ' + error.message);
     }
   };
 
-  const handleDelete = async () => {
+  // ✅ REFAKTORYZACJA: Callback dla DeleteConfirmDialog
+  const handleDelete = useCallback(async () => {
     try {
-      setDeleteDialog(false);
       setLoading(true);
       await deleteTask(id);
       showSuccess('Zadanie zostało usunięte');
       navigate('/production');
+      return { success: true };
     } catch (error) {
       showError('Błąd podczas usuwania zadania: ' + error.message);
       console.error('Error deleting task:', error);
+      return { success: false, error };
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate, showSuccess, showError]);
 
   // Obsługa komentarzy
   // Oblicz liczbę nieodczytanych komentarzy
@@ -2345,16 +2434,15 @@ const TaskDetailsPage = () => {
     );
   };
 
-  // Funkcja otwierająca dialog przyjęcia do magazynu
+  // ✅ REFAKTORYZACJA: Funkcja otwierająca dodawanie do magazynu - bezpośrednio wywołuje handleReceiveItem
   const handleReceiveClick = () => {
-    setReceiveDialogOpen(true);
+    handleReceiveItem();
   };
   
   // Funkcja obsługująca dodanie produktu do magazynu
   const handleReceiveItem = async () => {
     try {
       setLoading(true);
-      setReceiveDialogOpen(false);
       
       // Sprawdź czy zadanie ma pozycję magazynową, jeśli nie - spróbuj znaleźć przez recepturę
       let inventoryProductId = task.inventoryProductId;
@@ -2461,11 +2549,8 @@ const TaskDetailsPage = () => {
         // Jeśli nie ma powiązanej pozycji magazynowej, użyj standardowej funkcji
         await addTaskProductToInventory(id, currentUser.uid);
         
-        setAlert({
-          open: true,
-          severity: 'success',
-          message: 'Produkt został pomyślnie dodany do magazynu jako partia'
-        });
+        // ✅ REFAKTORYZACJA: Używamy showSuccess zamiast setAlert
+        showSuccess('Produkt został pomyślnie dodany do magazynu jako partia');
         
         // Odśwież dane zadania
         const updatedTask = await getTaskById(id);
@@ -2473,11 +2558,8 @@ const TaskDetailsPage = () => {
       }
     } catch (error) {
       console.error('Błąd podczas dodawania produktu do magazynu:', error);
-      setAlert({
-        open: true,
-        severity: 'error',
-        message: `Błąd podczas dodawania produktu do magazynu: ${error.message}`
-      });
+      // ✅ REFAKTORYZACJA: Używamy showError zamiast setAlert
+      showError(`Błąd podczas dodawania produktu do magazynu: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -2492,11 +2574,8 @@ const TaskDetailsPage = () => {
     try {
       // Sprawdź czy zadanie ma już ustawioną datę ważności
       if (!task?.expiryDate) {
-        // Otwórz dialog do ustawienia daty ważności
-        setStartProductionData({
-          expiryDate: null
-        });
-        setStartProductionDialogOpen(true);
+        // ✅ REFAKTORYZACJA: Używamy hooka useTaskDialogs
+        openDialog('startProduction');
         return;
       }
       
@@ -2523,18 +2602,11 @@ const TaskDetailsPage = () => {
     }
   };
 
-  // Funkcja obsługująca start produkcji z datą ważności
-  const handleStartProductionWithExpiry = async () => {
+  // ✅ REFAKTORYZACJA: Callback dla komponentu StartProductionDialog
+  const handleStartProductionWithExpiry = useCallback(async (expiryDate) => {
     try {
-      if (!startProductionData.expiryDate) {
-        setStartProductionError('Podaj datę ważności gotowego produktu');
-        return;
-      }
-
-      setStartProductionError(null);
-      
       // Rozpocznij produkcję z datą ważności
-      const result = await startProduction(id, currentUser.uid, startProductionData.expiryDate);
+      const result = await startProduction(id, currentUser.uid, expiryDate);
       
       // Wyświetl komunikat na podstawie wyniku tworzenia partii
       if (result.batchResult) {
@@ -2549,20 +2621,16 @@ const TaskDetailsPage = () => {
         showSuccess('Produkcja rozpoczęta');
       }
       
-      // Zamknij dialog
-      setStartProductionDialogOpen(false);
-      setStartProductionData({
-        expiryDate: null
-      });
-      
       // Odśwież dane zadania
       const updatedTask = await getTaskById(id);
       setTask(updatedTask);
+      
+      return { success: true };
     } catch (error) {
-      setStartProductionError('Błąd podczas rozpoczynania produkcji: ' + error.message);
       console.error('Error starting production:', error);
+      return { success: false, error };
     }
-  };
+  }, [id, currentUser?.uid, showSuccess]);
 
   const handleStopProduction = async () => {
     if (!productionData.completedQuantity) {
@@ -2592,7 +2660,7 @@ const TaskDetailsPage = () => {
         }
       );
       
-      setStopProductionDialogOpen(false);
+      // ✅ REFAKTORYZACJA: Usunięto setStopProductionDialogOpen - nieużywany
       
       if (result.isCompleted) {
         showSuccess('Zadanie zostało zakończone');
@@ -4162,17 +4230,16 @@ const TaskDetailsPage = () => {
     ));
   };
   
-  // Dodanie wybranych surowców do materiałów zadania
-  const handleAddRawMaterialsToTask = async () => {
+  // ✅ REFAKTORYZACJA: Callback dla RawMaterialsDialog
+  const handleAddRawMaterialsSubmit = useCallback(async (formData) => {
     try {
       setLoadingRawMaterials(true);
       
-      // Filtrujemy wybrane surowce
-      const rawMaterialsToAdd = rawMaterialsItems.filter(item => item.selected && item.quantity > 0);
+      const { items } = formData;
       
-      if (rawMaterialsToAdd.length === 0) {
+      if (!items || items.length === 0) {
         showError('Nie wybrano żadnych materiałów do dodania');
-        return;
+        return { success: false };
       }
       
       // Pobierz aktualne zadanie
@@ -4180,7 +4247,7 @@ const TaskDetailsPage = () => {
       const currentMaterials = updatedTask.materials || [];
       
       // Przygotuj nowe materiały do dodania
-      const newMaterials = rawMaterialsToAdd.map(item => ({
+      const newMaterials = items.map(item => ({
         id: item.id,
         name: item.name,
         quantity: item.quantity,
@@ -4225,14 +4292,15 @@ const TaskDetailsPage = () => {
       // ✅ Real-time listener automatycznie odświeży dane
       
       showSuccess('Materiały zostały dodane do zadania produkcyjnego');
-      setRawMaterialsDialogOpen(false);
+      return { success: true };
     } catch (error) {
       console.error('Błąd podczas dodawania materiałów:', error);
       showError('Nie udało się dodać materiałów do zadania: ' + error.message);
+      return { success: false, error };
     } finally {
       setLoadingRawMaterials(false);
     }
-  };
+  }, [id, showSuccess, showError]);
 
   // Funkcja obsługująca rozpoczęcie edycji sesji produkcyjnej
   const handleEditHistoryItem = (item) => {
@@ -4319,84 +4387,48 @@ const TaskDetailsPage = () => {
     setEditingHistoryItem(null);
   };
 
-  // Funkcja do ręcznego dodawania sesji produkcyjnej
-  const handleAddHistoryItem = async () => {
+  // ✅ REFAKTORYZACJA: Callback dla komponentu AddHistoryDialog
+  const handleAddHistorySubmit = useCallback(async (formData) => {
     try {
       setLoading(true);
-      setHistoryInventoryError(null);
       
-      // Walidacja danych
-      if (editedHistoryItem.endTime < editedHistoryItem.startTime) {
-        showError('Czas zakończenia nie może być wcześniejszy niż czas rozpoczęcia');
-        return;
-      }
-      
-      if (isNaN(editedHistoryItem.quantity) || editedHistoryItem.quantity <= 0) {
-        showError('Nieprawidłowa ilość');
-        return;
-      }
+      const { quantity, startTime, endTime, machineId, note, addToInventory, inventoryData } = formData;
       
       // Obliczenie czasu trwania w minutach
-      const durationMs = editedHistoryItem.endTime.getTime() - editedHistoryItem.startTime.getTime();
+      const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
       const durationMinutes = Math.round(durationMs / (1000 * 60));
-      
-      if (durationMinutes <= 0) {
-        showError('Przedział czasowy musi być dłuższy niż 0 minut');
-        return;
-      }
-
-      // Jeśli użytkownik wybrał opcję dodania do magazynu, waliduj dane magazynowe
-      if (addToInventoryOnHistory) {
-        if (!historyInventoryData.expiryDate) {
-          setHistoryInventoryError('Podaj datę ważności produktu');
-          return;
-        }
-
-        if (!historyInventoryData.lotNumber.trim()) {
-          setHistoryInventoryError('Podaj numer partii (LOT)');
-          return;
-        }
-        
-        if (!historyInventoryData.warehouseId) {
-          setHistoryInventoryError('Wybierz magazyn docelowy');
-          return;
-        }
-
-        const inventoryQuantity = parseFloat(historyInventoryData.finalQuantity);
-        if (isNaN(inventoryQuantity) || inventoryQuantity <= 0) {
-          setHistoryInventoryError('Nieprawidłowa ilość końcowa');
-          return;
-        }
-      }
       
       // Przygotuj dane do zapisania nowej sesji
       const sessionData = {
-        quantity: parseFloat(editedHistoryItem.quantity),
+        quantity: parseFloat(quantity),
         timeSpent: durationMinutes,
-        startTime: editedHistoryItem.startTime.toISOString(),
-        endTime: editedHistoryItem.endTime.toISOString(),
-        userId: currentUser.uid
+        startTime: new Date(startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
+        userId: currentUser.uid,
+        machineId: machineId || null,
+        note: note || ''
       };
       
       // Wywołaj funkcję dodającą nową sesję produkcyjną
-      // Jeśli użytkownik zaznaczył opcję dodania do magazynu, pomiń automatyczną aktualizację partii
-      // aby uniknąć podwójnego dodawania ilości
-      await addProductionSession(task.id, sessionData, addToInventoryOnHistory);
+      await addProductionSession(task.id, sessionData, addToInventory);
       
       // Jeśli użytkownik wybrał opcję dodania do magazynu, dodaj produkt do magazynu
-      if (addToInventoryOnHistory) {
+      if (addToInventory && inventoryData) {
         try {
           const result = await addTaskProductToInventory(task.id, currentUser.uid, {
-            expiryDate: historyInventoryData.expiryDate.toISOString(),
-            lotNumber: historyInventoryData.lotNumber,
-            finalQuantity: parseFloat(historyInventoryData.finalQuantity),
-            warehouseId: historyInventoryData.warehouseId
+            expiryDate: inventoryData.expiryDate instanceof Date 
+              ? inventoryData.expiryDate.toISOString() 
+              : inventoryData.expiryDate,
+            lotNumber: inventoryData.lotNumber,
+            finalQuantity: parseFloat(inventoryData.finalQuantity),
+            warehouseId: inventoryData.warehouseId
           });
           
           showSuccess(`Sesja produkcyjna została dodana i ${result.message}`);
         } catch (inventoryError) {
           console.error('Błąd podczas dodawania produktu do magazynu:', inventoryError);
           showError('Sesja produkcyjna została dodana, ale wystąpił błąd podczas dodawania produktu do magazynu: ' + inventoryError.message);
+          return { success: true }; // Sesja dodana, tylko magazyn nie
         }
       } else {
         showSuccess('Sesja produkcyjna została dodana');
@@ -4417,25 +4449,15 @@ const TaskDetailsPage = () => {
         console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
       }
       
-      // ✅ Real-time listener automatycznie odświeży dane zadania
-      
-      // Zamknij dialog i resetuj formularz
-      setAddHistoryDialogOpen(false);
-      setAddToInventoryOnHistory(true); // domyślnie włączone dla następnego użycia
-      setHistoryInventoryData({
-        expiryDate: null,
-        lotNumber: '',
-        finalQuantity: '',
-        warehouseId: warehouses.length > 0 ? warehouses[0].id : ''
-      });
-      setHistoryInventoryError(null);
+      return { success: true };
     } catch (error) {
       console.error('Błąd podczas dodawania sesji produkcyjnej:', error);
       showError('Nie udało się dodać sesji produkcyjnej: ' + error.message);
+      return { success: false, error };
     } finally {
       setLoading(false);
     }
-  };
+  }, [task?.id, currentUser?.uid, fetchProductionHistory, id, showSuccess, showError]);
 
   // Funkcja do drukowania szczegółów MO
   const handlePrintMODetails = () => {
@@ -5842,14 +5864,14 @@ const TaskDetailsPage = () => {
     setDeleteHistoryDialogOpen(true);
   };
   
-  // Funkcja do obsługi potwierdzenia usunięcia
-  const handleConfirmDeleteHistoryItem = async () => {
+  // ✅ REFAKTORYZACJA: Callback dla DeleteConfirmDialog
+  const handleConfirmDeleteHistoryItem = useCallback(async () => {
     try {
       setLoading(true);
       
       if (!deleteHistoryItem || !deleteHistoryItem.id) {
         showError('Nie można usunąć sesji produkcyjnej: brak identyfikatora');
-        return;
+        return { success: false };
       }
       
       // Wywołaj funkcję usuwającą sesję produkcyjną
@@ -5861,15 +5883,16 @@ const TaskDetailsPage = () => {
       await fetchProductionHistory();
       // ✅ Real-time listener automatycznie odświeży dane zadania
       
+      setDeleteHistoryItem(null);
+      return { success: true };
     } catch (error) {
       console.error('Błąd podczas usuwania sesji produkcyjnej:', error);
       showError('Nie udało się usunąć sesji produkcyjnej: ' + error.message);
+      return { success: false, error };
     } finally {
       setLoading(false);
-      setDeleteHistoryDialogOpen(false);
-      setDeleteHistoryItem(null);
     }
-  };
+  }, [deleteHistoryItem, currentUser?.uid, fetchProductionHistory, showSuccess, showError]);
 
   // Funkcja do filtrowania opakowań na podstawie wyszukiwania
   const filteredPackagingItems = packagingItems.filter(item => 
@@ -6194,14 +6217,14 @@ const TaskDetailsPage = () => {
     setDeleteMaterialDialogOpen(true);
   };
 
-  // Funkcja do potwierdzenia usunięcia materiału
-  const handleConfirmDeleteMaterial = async () => {
+  // ✅ REFAKTORYZACJA: Callback dla DeleteConfirmDialog
+  const handleConfirmDeleteMaterial = useCallback(async () => {
     try {
       setLoading(true);
       
       if (!materialToDelete) {
         showError('Nie wybrano materiału do usunięcia');
-        return;
+        return { success: false };
       }
       
       // Pobierz aktualne zadanie
@@ -6221,15 +6244,16 @@ const TaskDetailsPage = () => {
       // ✅ Real-time listener automatycznie odświeży dane
       
       showSuccess(`Materiał "${materialToDelete.name}" został usunięty z zadania`);
-      setDeleteMaterialDialogOpen(false);
       setMaterialToDelete(null);
+      return { success: true };
     } catch (error) {
       console.error('Błąd podczas usuwania materiału:', error);
       showError('Nie udało się usunąć materiału: ' + error.message);
+      return { success: false, error };
     } finally {
       setLoading(false);
     }
-  };
+  }, [materialToDelete, id, currentUser?.uid, showSuccess, showError]);
 
   // Funkcje obsługi konsumpcji materiałów
   const handleOpenConsumeMaterialsDialog = () => {
@@ -8682,56 +8706,27 @@ const TaskDetailsPage = () => {
             </Suspense>
           )}
 
-          {/* Wszystkie dialogi pozostają bez zmian na końcu komponentu */}
-          {/* Dialog potwierdzenia */}
-          <Dialog
+          {/* Wszystkie dialogi */}
+          {/* Dialog usuwania historii */}
+          <DeleteConfirmDialog
             open={deleteHistoryDialogOpen}
             onClose={() => setDeleteHistoryDialogOpen(false)}
-          >
-            <DialogTitle>Potwierdź usunięcie</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna.
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDeleteHistoryDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleConfirmDeleteHistoryItem} 
-                variant="contained" 
-                color="error"
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Usuń wpis'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-          {/* Dialog usuwania zadania */}
-          <Dialog
+            onConfirm={handleConfirmDeleteHistoryItem}
+            title="Potwierdź usunięcie"
+            message="Czy na pewno chcesz usunąć wybrany wpis z historii produkcji? Ta operacja jest nieodwracalna."
+            confirmText="Usuń wpis"
+            loading={loading}
+          />
+          {/* ✅ REFAKTORYZACJA: Dialog usuwania zadania - wydzielony komponent */}
+          <DeleteConfirmDialog
             open={deleteDialog}
             onClose={() => setDeleteDialog(false)}
-          >
-            <DialogTitle>Potwierdź usunięcie</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: {task?.moNumber})? Ta operacja jest nieodwracalna.
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDeleteDialog(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleDelete} 
-                variant="contained" 
-                color="error"
-              >
-                Usuń zadanie
-              </Button>
-            </DialogActions>
-          </Dialog>
+            onConfirm={handleDelete}
+            title="Potwierdź usunięcie"
+            message={`Czy na pewno chcesz usunąć to zadanie produkcyjne (MO: ${task?.moNumber})? Ta operacja jest nieodwracalna.`}
+            confirmText="Usuń zadanie"
+            loading={loading}
+          />
           
           {/* Dialog wyboru opakowań */}
           <Dialog
@@ -8875,263 +8870,19 @@ const TaskDetailsPage = () => {
             </DialogActions>
           </Dialog>
           
-          {/* Dialog rezerwacji surowców */}
-          <Dialog
-            open={reserveDialogOpen}
-            onClose={() => setReserveDialogOpen(false)}
-            maxWidth="lg"
-            fullWidth
-          >
-            <DialogTitle>Rezerwacja surowców</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
-                Wybierz partie materiałów, które chcesz zarezerwować dla tego zadania produkcyjnego.
-              </DialogContentText>
-              
-              <FormControl component="fieldset" sx={{ mb: 2 }}>
-                <FormLabel component="legend">Metoda rezerwacji</FormLabel>
-                <RadioGroup 
-                  row 
-                  value={reservationMethod} 
-                  onChange={handleReservationMethodChange}
-                >
-                  <FormControlLabel 
-                    value="automatic" 
-                    control={<Radio />} 
-                    label="Automatyczna (FIFO)" 
-                  />
-                  <FormControlLabel 
-                    value="manual" 
-                    control={<Radio />} 
-                    label="Ręczna (wybór partii)" 
-                  />
-                </RadioGroup>
-              </FormControl>
-              
-              {reservationMethod === 'manual' && renderManualBatchSelection()}
-              
-              {reservationMethod === 'automatic' && (
-                <>
-                  <Alert severity="info" sx={{ mb: 2 }}>
-                    System automatycznie zarezerwuje najstarsze dostępne partie materiałów (FIFO).
-                  </Alert>
-                  
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={autoCreatePOReservations}
-                        onChange={(e) => setAutoCreatePOReservations(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          Automatycznie twórz rezerwacje z zamówień zakupu (PO)
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Jeśli braknie partii magazynowych, system automatycznie zarezerwuje brakującą ilość z otwartych zamówień zakupowych
-                        </Typography>
-                      </Box>
-                    }
-                    sx={{ mb: 2, alignItems: 'flex-start' }}
-                  />
-                </>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setReserveDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleReserveMaterials} 
-                variant="contained" 
-                color="primary"
-                disabled={reservingMaterials}
-              >
-                {reservingMaterials ? <CircularProgress size={24} /> : 'Rezerwuj materiały'}
-              </Button>
-            </DialogActions>
-          </Dialog>
+          {/* ✅ USUNIĘTO DUPLIKAT: Dialog rezerwacji surowców - przeniesiony niżej w pliku */}
           
-          {/* Dialog dodawania wpisu historii produkcji */}
-          <Dialog
+          {/* ✅ REFAKTORYZACJA: Dialog dodawania wpisu historii produkcji - wydzielony komponent */}
+          <AddHistoryDialog
             open={addHistoryDialogOpen}
             onClose={() => setAddHistoryDialogOpen(false)}
-            maxWidth="md"
-            fullWidth
-          >
-            <DialogTitle>{t('dialogs.addProductionHistory.title')}</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
-                {t('dialogs.addProductionHistory.description')}
-              </DialogContentText>
-              
-              {historyInventoryError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {historyInventoryError}
-                </Alert>
-              )}
-              
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12}>
-                  <TextField
-                    label={t('dialogs.addProductionHistory.producedQuantity')}
-                    type="number"
-                    value={editedHistoryItem.quantity}
-                    onChange={(e) => setEditedHistoryItem(prev => ({ 
-                      ...prev, 
-                      quantity: e.target.value === '' ? '' : parseFloat(e.target.value) 
-                    }))}
-                    inputProps={{ min: 0, step: 'any' }}
-                    fullWidth
-                    required
-                    InputProps={{
-                      endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label={t('dialogs.addProductionHistory.startDateTime')}
-                    type="datetime-local"
-                    value={editedHistoryItem.startTime instanceof Date 
-                      ? toLocalDateTimeString(editedHistoryItem.startTime) 
-                      : ''}
-                    onChange={(e) => {
-                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
-                      setEditedHistoryItem(prev => ({ 
-                        ...prev, 
-                        startTime: newDate
-                      }));
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    required
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label={t('dialogs.addProductionHistory.endDateTime')}
-                    type="datetime-local"
-                    value={editedHistoryItem.endTime instanceof Date 
-                      ? toLocalDateTimeString(editedHistoryItem.endTime) 
-                      : ''}
-                    onChange={(e) => {
-                      const newDate = e.target.value ? fromLocalDateTimeString(e.target.value) : new Date();
-                      setEditedHistoryItem(prev => ({ 
-                        ...prev, 
-                        endTime: newDate
-                      }));
-                    }}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    required
-                  />
-                </Grid>
-                
-                {/* Sekcja dodawania do magazynu */}
-                <Grid item xs={12}>
-                  <Divider sx={{ my: 2 }} />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={addToInventoryOnHistory}
-                        onChange={(e) => setAddToInventoryOnHistory(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label={t('dialogs.addProductionHistory.addToInventory')}
-                  />
-                </Grid>
-                
-                {addToInventoryOnHistory && (
-                  <>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Data ważności"
-                        type="date"
-                        value={historyInventoryData.expiryDate ? 
-                          historyInventoryData.expiryDate.toISOString().split('T')[0] : ''}
-                        onChange={(e) => {
-                          const date = e.target.value ? new Date(e.target.value) : null;
-                          setHistoryInventoryData(prev => ({ ...prev, expiryDate: date }));
-                        }}
-                        InputLabelProps={{ shrink: true }}
-                        fullWidth
-                        required
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Numer partii (LOT)"
-                        value={historyInventoryData.lotNumber}
-                        onChange={(e) => setHistoryInventoryData(prev => ({ 
-                          ...prev, 
-                          lotNumber: e.target.value 
-                        }))}
-                        fullWidth
-                        required
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        label="Ilość końcowa"
-                        type="number"
-                        value={historyInventoryData.finalQuantity}
-                        onChange={(e) => setHistoryInventoryData(prev => ({ 
-                          ...prev, 
-                          finalQuantity: e.target.value 
-                        }))}
-                        inputProps={{ min: 0, step: 'any' }}
-                        fullWidth
-                        required
-                        InputProps={{
-                          endAdornment: <Typography variant="body2">{task?.unit || 'szt.'}</Typography>
-                        }}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth required>
-                        <InputLabel>Magazyn docelowy</InputLabel>
-                        <Select
-                          value={historyInventoryData.warehouseId}
-                          onChange={(e) => setHistoryInventoryData(prev => ({ 
-                            ...prev, 
-                            warehouseId: e.target.value 
-                          }))}
-                          label="Magazyn docelowy"
-                          disabled={warehousesLoading}
-                        >
-                          {warehouses.map(warehouse => (
-                            <MenuItem key={warehouse.id} value={warehouse.id}>
-                              {warehouse.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </>
-                )}
-              </Grid>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setAddHistoryDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleAddHistoryItem} 
-                variant="contained" 
-                color="primary"
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : (addToInventoryOnHistory ? t('dialogs.addProductionHistory.addSessionAndInventory') : t('dialogs.addProductionHistory.addSession'))}
-              </Button>
-            </DialogActions>
-          </Dialog>
+            onSubmit={handleAddHistorySubmit}
+            task={task}
+            machines={availableMachines}
+            warehouses={warehouses}
+            loading={loading}
+            t={t}
+          />
           
           {/* Dialog wyboru surowców */}
           <Dialog
@@ -9259,7 +9010,13 @@ const TaskDetailsPage = () => {
                 Anuluj
               </Button>
               <Button 
-                onClick={handleAddRawMaterialsToTask} 
+                onClick={async () => {
+                  const selectedItems = rawMaterialsItems.filter(item => item.selected && item.quantity > 0);
+                  const result = await handleAddRawMaterialsSubmit({ items: selectedItems });
+                  if (result?.success) {
+                    setRawMaterialsDialogOpen(false);
+                  }
+                }}
                 variant="contained" 
                 color="secondary"
                 disabled={loadingRawMaterials || rawMaterialsItems.filter(item => item.selected && item.quantity > 0).length === 0}
@@ -9269,31 +9026,16 @@ const TaskDetailsPage = () => {
             </DialogActions>
           </Dialog>
 
-          {/* Dialog usuwania materiału */}
-          <Dialog
+          {/* ✅ REFAKTORYZACJA: Dialog usuwania materiału - wydzielony komponent */}
+          <DeleteConfirmDialog
             open={deleteMaterialDialogOpen}
             onClose={() => setDeleteMaterialDialogOpen(false)}
-          >
-            <DialogTitle>Potwierdź usunięcie materiału</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Czy na pewno chcesz usunąć materiał "{materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDeleteMaterialDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleConfirmDeleteMaterial} 
-                variant="contained" 
-                color="error"
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Usuń materiał'}
-              </Button>
-            </DialogActions>
-          </Dialog>
+            onConfirm={handleConfirmDeleteMaterial}
+            title="Potwierdź usunięcie materiału"
+            message={`Czy na pewno chcesz usunąć materiał "${materialToDelete?.name}" z zadania produkcyjnego? Ta operacja jest nieodwracalna.`}
+            confirmText="Usuń materiał"
+            loading={loading}
+          />
 
           {/* Dialog konsumpcji materiałów */}
           <Dialog
@@ -9562,66 +9304,14 @@ const TaskDetailsPage = () => {
             </DialogActions>
           </Dialog>
 
-          {/* Dialog ustawiania daty ważności przy starcie produkcji */}
-          <Dialog
-            open={startProductionDialogOpen}
-            onClose={() => setStartProductionDialogOpen(false)}
-            maxWidth="sm"
-            fullWidth
-          >
-            <DialogTitle>Rozpocznij produkcję</DialogTitle>
-            <DialogContent>
-              <DialogContentText sx={{ mb: 2 }}>
-                Data ważności gotowego produktu jest wymagana do rozpoczęcia produkcji.
-              </DialogContentText>
-              
-              {startProductionError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {startProductionError}
-                </Alert>
-              )}
-
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={currentLanguage === 'pl' ? pl : enUS}>
-                <Box sx={{ my: 2 }}>
-                  <DateTimePicker
-                    label="Data ważności gotowego produktu *"
-                    value={startProductionData.expiryDate}
-                    onChange={(newValue) => setStartProductionData({
-                      ...startProductionData, 
-                      expiryDate: newValue
-                    })}
-                    views={['year', 'month', 'day']}
-                    format="dd-MM-yyyy"
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        margin: 'dense',
-                        variant: 'outlined',
-                        helperText: "Data ważności produktu jest wymagana",
-                        error: !startProductionData.expiryDate,
-                        required: true
-                      },
-                      actionBar: {
-                        actions: ['clear', 'today']
-                      }
-                    }}
-                  />
-                </Box>
-              </LocalizationProvider>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setStartProductionDialogOpen(false)}>
-                Anuluj
-              </Button>
-              <Button 
-                onClick={handleStartProductionWithExpiry} 
-                variant="contained"
-                disabled={!startProductionData.expiryDate}
-              >
-                Rozpocznij produkcję
-              </Button>
-            </DialogActions>
-          </Dialog>
+          {/* ✅ REFAKTORYZACJA: Dialog rozpoczęcia produkcji - wydzielony komponent */}
+          <StartProductionDialog
+            open={dialogs.startProduction}
+            onClose={() => closeDialog('startProduction')}
+            onStart={handleStartProductionWithExpiry}
+            loading={loading}
+            t={t}
+          />
 
           {/* Dialog formularza kontroli produkcji */}
           <ProductionControlFormDialog
@@ -9647,106 +9337,19 @@ const TaskDetailsPage = () => {
             onSuccess={handleProductionShiftFormSuccess}
           />
 
-          {/* Drawer komentarzy */}
-          <Drawer
-            anchor="right"
+          {/* ✅ REFAKTORYZACJA: Drawer komentarzy - wydzielony komponent */}
+          <CommentsDrawer
             open={commentsDrawerOpen}
             onClose={handleCloseCommentsDrawer}
-            PaperProps={{
-              sx: { width: { xs: '100%', sm: 500 } }
-            }}
-          >
-            <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6">
-                  {t('comments.drawerTitle', { moNumber: task?.moNumber || '' })}
-                </Typography>
-                <IconButton onClick={handleCloseCommentsDrawer}>
-                  <CloseIcon />
-                </IconButton>
-              </Box>
-
-              <Divider sx={{ mb: 2 }} />
-
-              {/* Lista komentarzy */}
-              <Box sx={{ flex: 1, overflowY: 'auto', mb: 3 }}>
-                {task?.comments && task.comments.length > 0 ? (
-                  <Stack spacing={2}>
-                    {task.comments
-                      .sort((a, b) => {
-                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-                        return dateB - dateA;
-                      })
-                      .map((comment) => {
-                        const commentDate = comment.createdAt?.toDate 
-                          ? comment.createdAt.toDate() 
-                          : new Date(comment.createdAt);
-                        
-                        return (
-                          <Paper key={comment.id} variant="outlined" sx={{ p: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
-                              <Box>
-                                <Typography variant="subtitle2" color="primary">
-                                  {comment.createdByName || t('comments.user')}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {formatDateTime(commentDate)}
-                                </Typography>
-                              </Box>
-                              {comment.createdBy === currentUser?.uid && (
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => handleDeleteComment(comment.id)}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              )}
-                            </Box>
-                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                              {comment.text}
-                            </Typography>
-                          </Paper>
-                        );
-                      })}
-                  </Stack>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <CommentIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                    <Typography variant="body2" color="text.secondary">
-                      {t('comments.noComments')}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-
-              <Divider sx={{ mb: 2 }} />
-
-              {/* Formularz dodawania komentarza */}
-              <Box>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  placeholder={t('comments.placeholder')}
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  disabled={addingComment}
-                  sx={{ mb: 2 }}
-                />
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={addingComment ? <CircularProgress size={20} /> : <CommentIcon />}
-                  onClick={handleAddComment}
-                  disabled={addingComment || !newComment.trim()}
-                >
-                  {addingComment ? t('comments.adding') : t('comments.addComment')}
-                </Button>
-              </Box>
-            </Box>
-          </Drawer>
+            comments={task?.comments || []}
+            newComment={newComment}
+            onNewCommentChange={setNewComment}
+            onAddComment={handleAddComment}
+            onDeleteComment={(comment) => handleDeleteComment(comment.id)}
+            addingComment={addingComment}
+            currentUserId={currentUser?.uid}
+            t={t}
+          />
         </>
       ) : (
         <Typography variant="body1" color="textSecondary">

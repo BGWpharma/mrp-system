@@ -1,25 +1,28 @@
 /**
  * Index file - eksportuje wszystkie komponenty dialogów produkcyjnych
  * 
- * UWAGA: Komponenty dialogów należy stopniowo migrować z TaskDetailsPage.js
- * Na razie to placeholdery - docelowo każdy dialog powinien być osobnym komponentem
+ * 🚀 OPTYMALIZACJA: Centralizacja dialogów
+ * - Każdy dialog to osobny, memoizowany komponent
+ * - Lazy loading przez React.lazy() w TaskDetailsPage
+ * - Czytelniejsza struktura kodu
  */
 
-// TODO: Wydzielić te dialogi z TaskDetailsPage.js:
-// - ConsumptionDialog - dialog konsumpcji materiałów
-// - ReservationDialog - dialog rezerwacji materiałów
-// - PackagingDialog - dialog dodawania opakowań
-// - RawMaterialsDialog - dialog dodawania surowców
-// - StartProductionDialog - dialog rozpoczęcia produkcji
-// - StopProductionDialog - dialog zakończenia produkcji
-// - AddHistoryDialog - dialog dodawania wpisu historii
-// - EditConsumptionDialog - dialog edycji konsumpcji
-// - DeleteConsumptionDialog - dialog usuwania konsumpcji
-// - DeleteMaterialDialog - dialog usuwania materiału
-// - ConfirmationDialog - uniwersalny dialog potwierdzenia
-// - DeleteDialog - uniwersalny dialog usunięcia
+// Dialogi produkcji
+export { default as StartProductionDialog } from './StartProductionDialog';
+export { default as AddHistoryDialog } from './AddHistoryDialog';
 
-export const DialogsPlaceholder = () => {
-  return null;
-};
+// Dialogi materiałów
+export { default as ReserveMaterialsDialog } from './ReserveMaterialsDialog';
+export { default as PackagingDialog } from './PackagingDialog';
+export { default as RawMaterialsDialog } from './RawMaterialsDialog';
 
+// Dialogi uniwersalne
+export { default as DeleteConfirmDialog } from './DeleteConfirmDialog';
+
+// Komponenty pomocnicze
+export { default as ManualBatchSelectionContent } from './ManualBatchSelectionContent';
+
+// TODO: Dodać w przyszłości:
+// export { default as ConsumeMaterialsDialog } from './ConsumeMaterialsDialog';
+// export { default as EditConsumptionDialog } from './EditConsumptionDialog';
+// export { default as StopProductionDialog } from './StopProductionDialog';

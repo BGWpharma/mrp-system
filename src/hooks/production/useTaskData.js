@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { db } from '../../services/firebase/config';
 import { getTaskById } from '../../services/productionService';
 import { useNotification } from '../useNotification';
 
