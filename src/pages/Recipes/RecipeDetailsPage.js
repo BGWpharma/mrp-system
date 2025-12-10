@@ -49,6 +49,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import RecipeVersionComparison from '../../components/recipes/RecipeVersionComparison';
 import RecipeDesignAttachments from '../../components/recipes/RecipeDesignAttachments';
+import RecipeRulesAttachments from '../../components/recipes/RecipeRulesAttachments';
 import PdfMiniaturePreview from '../../components/common/PdfMiniaturePreview';
 import { createInventoryItem, getAllInventoryItems, getInventoryItemByRecipeId } from '../../services/inventory';
 import { db } from '../../services/firebase/config';
@@ -887,6 +888,23 @@ const RecipeDetailsPage = () => {
             showTitle={false}
             viewOnly={true}
           />
+
+          {/* Sekcja załączników zasad */}
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h6" gutterBottom>{t('recipes.rulesAttachments.title')}</Typography>
+            
+            <RecipeRulesAttachments
+              recipeId={id}
+              attachments={recipe.rulesAttachments || []}
+              onAttachmentsChange={() => {
+                // Odśwież dane receptury po zmianie załączników
+                fetchRecipe();
+              }}
+              disabled={true}
+              showTitle={false}
+              viewOnly={true}
+            />
+          </Box>
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>

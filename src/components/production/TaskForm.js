@@ -67,6 +67,7 @@ import { getOrderById, getAllOrders, updateOrder } from '../../services/orderSer
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { getAllWorkstations } from '../../services/workstationService';
+import { getAllMONumbers } from '../../services/moService';
 import { generateLOTNumber } from '../../utils/numberGenerators';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateWithWorkingHours, calculateProductionTimeWithWorkingHours } from '../../utils/dateUtils';
 import { preciseMultiply } from '../../utils/mathUtils';
@@ -150,6 +151,11 @@ const TaskForm = ({ taskId }) => {
   const [selectedCustomerOrder, setSelectedCustomerOrder] = useState(null);
   const [selectedOrderItemId, setSelectedOrderItemId] = useState('');
   const [originalOrderId, setOriginalOrderId] = useState(null); // Do śledzenia zmian powiązania
+
+  // Stany dla edycji numeru MO
+  const [editingMO, setEditingMO] = useState(false);
+  const [newMONumber, setNewMONumber] = useState('');
+  const [moValidationError, setMOValidationError] = useState('');
 
   // Funkcja do cache'owania danych w sessionStorage
   const getCachedData = useCallback((key) => {
@@ -734,6 +740,53 @@ const TaskForm = ({ taskId }) => {
     } catch (error) {
       console.error('Błąd podczas aktualizacji zamówień klientów:', error);
       throw error;
+    }
+  };
+
+  // Funkcja walidacji i aktualizacji numeru MO
+  const validateAndUpdateMO = async (newMO) => {
+    setMOValidationError('');
+    
+    // Walidacja formatu
+    if (!newMO.match(/^MO\d{5}$/)) {
+      setMOValidationError('Numer MO musi być w formacie MO00000 (np. MO00123)');
+      return false;
+    }
+    
+    // Sprawdź duplikaty
+    try {
+      const allMO = await getAllMONumbers();
+      const isDuplicate = allMO.some(mo => mo.moNumber === newMO && mo.id !== taskId);
+      
+      if (isDuplicate) {
+        setMOValidationError(`Numer ${newMO} już istnieje w systemie`);
+        return false;
+      }
+      
+      // Zaktualizuj numer MO w stanie
+      const oldMO = taskData.moNumber;
+      const oldMONumericPart = oldMO.replace('MO', '');
+      const newMONumericPart = newMO.replace('MO', '');
+      
+      // Jeśli lotNumber bazował na starym MO, zaproponuj aktualizację
+      let newLotNumber = taskData.lotNumber;
+      if (taskData.lotNumber === `SN${oldMONumericPart}`) {
+        newLotNumber = `SN${newMONumericPart}`;
+      }
+      
+      setTaskData(prev => ({
+        ...prev,
+        moNumber: newMO,
+        lotNumber: newLotNumber
+      }));
+      
+      setEditingMO(false);
+      showSuccess(`Numer MO zmieniony na ${newMO}. Pamiętaj o zapisaniu zmian.`);
+      return true;
+    } catch (error) {
+      console.error('Błąd podczas walidacji MO:', error);
+      setMOValidationError('Błąd podczas sprawdzania numeru MO');
+      return false;
     }
   };
 
@@ -1730,13 +1783,79 @@ const TaskForm = ({ taskId }) => {
             {taskId && taskId !== 'new' ? 'Edytuj zadanie produkcyjne' : t('production.taskList.newTask') + ' produkcyjne'}
           </Typography>
         
-        {/* Wyświetlanie numeru MO w trybie edycji */}
+        {/* Wyświetlanie/edycja numeru MO w trybie edycji */}
         {taskId && taskId !== 'new' && taskData.moNumber && (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="h6" component="span" sx={{ fontWeight: 'bold' }}>
-              Numer MO: {taskData.moNumber}
-            </Typography>
-          </Alert>
+          <Paper elevation={1} sx={{ p: 2, mb: 3, bgcolor: editingMO ? 'warning.light' : 'info.light' }}>
+            {!editingMO ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h6" component="span" sx={{ fontWeight: 'bold' }}>
+                  Numer MO: {taskData.moNumber}
+                </Typography>
+                <Tooltip title="Zmień numer MO (w przypadku duplikatów)">
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    onClick={() => {
+                      setNewMONumber(taskData.moNumber);
+                      setEditingMO(true);
+                      setMOValidationError('');
+                    }}
+                  >
+                    Zmień numer MO
+                  </Button>
+                </Tooltip>
+              </Box>
+            ) : (
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.dark', fontWeight: 'bold' }}>
+                  ⚠️ Edycja numeru MO
+                </Typography>
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Nowy numer MO"
+                      value={newMONumber}
+                      onChange={(e) => {
+                        setNewMONumber(e.target.value.toUpperCase());
+                        setMOValidationError('');
+                      }}
+                      placeholder="MO00000"
+                      error={!!moValidationError}
+                      helperText={moValidationError || 'Format: MO00000 (np. MO00150)'}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button 
+                        variant="contained" 
+                        color="warning"
+                        onClick={() => validateAndUpdateMO(newMONumber)}
+                        disabled={!newMONumber || newMONumber === taskData.moNumber}
+                      >
+                        Zatwierdź
+                      </Button>
+                      <Button 
+                        variant="outlined"
+                        onClick={() => {
+                          setEditingMO(false);
+                          setMOValidationError('');
+                        }}
+                      >
+                        Anuluj
+                      </Button>
+                    </Box>
+                  </Grid>
+                </Grid>
+                {taskData.lotNumber && taskData.lotNumber.includes(taskData.moNumber.replace('MO', '')) && (
+                  <Alert severity="info" sx={{ mt: 2 }}>
+                    Numer LOT ({taskData.lotNumber}) zostanie automatycznie zaktualizowany wraz z numerem MO.
+                  </Alert>
+                )}
+              </Box>
+            )}
+          </Paper>
         )}
         
         {loading ? (

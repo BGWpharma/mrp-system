@@ -112,6 +112,38 @@
       "unsupportedFileType": "Unsupported file type: {{type}}. Allowed are images (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) and PDF documents."
     }
   },
+  "rulesAttachments": {
+    "title": "Rules Attachments",
+    "upload": "Add Rules",
+    "description": "Drag rules documents here or select from disk",
+    "supportedFormats": "Allowed: PDF, JPG, PNG, GIF, WebP, DOC, DOCX (max 20 MB)",
+    "selectFile": "Select file",
+    "uploading": "Uploading...",
+    "noAttachments": "No rules attachments. Add the first rules document above.",
+    "noAttachmentsViewOnly": "No rules attachments for this recipe.",
+    "preview": "Preview",
+    "download": "Download",
+    "delete": "Delete",
+    "editDescription": "Edit description",
+    "editDescriptionTitle": "Edit rules document description",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Add description for this document (e.g. rules version, effective date...)",
+    "rulesDocument": "Rules document",
+    "previewTitle": "Preview",
+    "previewNotAvailable": "Preview not available",
+    "downloadPdf": "Download PDF",
+    "openInNewTab": "Open in new tab",
+    "downloadAndOpen": "Download and open file",
+    "messages": {
+      "uploadSuccess": "Document \"{{fileName}}\" uploaded successfully",
+      "uploadError": "Error uploading file \"{{fileName}}\": {{error}}",
+      "deleteSuccess": "Document \"{{fileName}}\" was deleted",
+      "deleteError": "Error deleting file: {{error}}",
+      "descriptionUpdated": "Attachment description updated",
+      "fileTooLarge": "File is too large ({{size}} MB). Maximum size is 20 MB.",
+      "unsupportedFileType": "Unsupported file type: {{type}}. Allowed are PDF, images (JPG, PNG, GIF, WebP) and Word documents."
+    }
+  },
   "buttons": {
     "save": "Save",
     "saving": "Saving...",
@@ -141,7 +173,7 @@
   },
   "tabs": {
     "ingredientsAndInstructions": "Ingredients and Instructions",
-    "designAttachments": "Design Attachments",
+    "designAttachments": "Attachments",
     "versionHistory": "Version History"
   },
   "list": {

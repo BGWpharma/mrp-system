@@ -88,6 +88,8 @@ import { NUTRITIONAL_CATEGORIES, DEFAULT_NUTRITIONAL_COMPONENT } from '../../uti
 import { useNutritionalComponents } from '../../hooks/useNutritionalComponents';
 import { addNutritionalComponent } from '../../services/nutritionalComponentsService';
 import RecipeDesignAttachments from './RecipeDesignAttachments';
+import RecipeRulesAttachments from './RecipeRulesAttachments';
+import { Gavel as GavelIcon } from '@mui/icons-material';
 
 // Funkcja do generowania unikalnego ID składnika
 const generateIngredientId = () => {
@@ -346,6 +348,8 @@ const RecipeForm = ({ recipeId }) => {
   
   // Stan dla załączników designu
   const [designAttachments, setDesignAttachments] = useState([]);
+  // Stan dla załączników zasad
+  const [rulesAttachments, setRulesAttachments] = useState([]);
 
   // Sensory dla drag-and-drop
   const sensors = useSensors(
@@ -578,6 +582,8 @@ const RecipeForm = ({ recipeId }) => {
           
           // Ustaw załączniki designu jeśli istnieją
           setDesignAttachments(recipe.designAttachments || []);
+          // Ustaw załączniki zasad jeśli istnieją
+          setRulesAttachments(recipe.rulesAttachments || []);
           
           // Sprawdź czy mamy otworzyć okno dodawania produktu
           if (location.state?.openProductDialog) {
@@ -687,11 +693,12 @@ const RecipeForm = ({ recipeId }) => {
       // Usuń pole _sortId ze składników przed zapisem (używane tylko do drag-and-drop)
       const ingredientsForSave = recipeData.ingredients.map(({ _sortId, ...rest }) => rest);
       
-      // Dodaj załączniki designu do danych receptury
+      // Dodaj załączniki designu i zasad do danych receptury
       const recipeDataWithAttachments = {
         ...recipeData,
         ingredients: ingredientsForSave,
-        designAttachments: designAttachments
+        designAttachments: designAttachments,
+        rulesAttachments: rulesAttachments
       };
       
       if (recipeId) {
@@ -2412,6 +2419,45 @@ const RecipeForm = ({ recipeId }) => {
             recipeId={recipeId || 'temp'}
             attachments={designAttachments}
             onAttachmentsChange={setDesignAttachments}
+            disabled={saving}
+            showTitle={false}
+            compact={true}
+          />
+        </Box>
+      </Paper>
+
+      {/* Sekcja załączników zasad */}
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          p: 0, 
+          mb: 3, 
+          borderRadius: '12px', 
+          overflow: 'hidden' 
+        }}
+      >
+        <Box 
+          sx={{ 
+            p: 1.5, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            bgcolor: theme => theme.palette.mode === 'dark' 
+              ? 'rgba(25, 35, 55, 0.5)' 
+              : 'rgba(245, 247, 250, 0.8)'
+          }}
+        >
+          <GavelIcon color="primary" sx={{ fontSize: 20 }} />
+          <Typography variant="subtitle1" fontWeight="500">{t('recipes.rulesAttachments.title')}</Typography>
+        </Box>
+        
+        <Box sx={{ p: 2 }}>
+          <RecipeRulesAttachments
+            recipeId={recipeId || 'temp'}
+            attachments={rulesAttachments}
+            onAttachmentsChange={setRulesAttachments}
             disabled={saving}
             showTitle={false}
             compact={true}

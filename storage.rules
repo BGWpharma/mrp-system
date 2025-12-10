@@ -1,6 +1,24 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    
+    // === FUNKCJE POMOCNICZE ===
+    
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.email.matches('.*@bgwpharma\\.com$');
+    }
+    
+    function isPortalUser() {
+      return request.auth != null && 
+             request.auth.token.isPortalUser == true &&
+             'portalId' in request.auth.token &&
+             'accountId' in request.auth.token &&
+             'customerId' in request.auth.token;
+    }
+
+    // === WSZYSTKIE OBECNE REGUŁY (bez zmian) ===
+    
     // Reguła dla katalogu z raportami błędów - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
     match /bugReports/{reportId}/{fileName} {
       allow read: if request.auth != null;
@@ -63,9 +81,17 @@ service firebase.storage {
       allow write: if request.auth != null;
     }
     
-    // Reguła dla załączników CMR - pozwala na pobieranie plików przez portale klientów (tylko odczyt)
+    // === NAPRAWIONE REGUŁY DLA CMR I FAKTUR ===
+    
+    // NAPRAWKA: Załączniki CMR - dodano list permission + lepsze bezpieczeństwo
     match /cmr-attachments/{cmrId}/{fileName} {
-      allow read: if true; // Publiczny dostęp do odczytu załączników CMR dla portali klientów
+      allow read: if isAdmin() || isPortalUser(); // Wymagaj uwierzytelnienia portalu
+      allow list: if isAdmin() || isPortalUser(); // WAŻNE: Pozwól na listAll()
+      allow write: if isAdmin(); // Tylko administratorzy mogą przesyłać
+    }
+    // Reguła dla FAKTUR CMR - oddzielna ścieżka dla faktur, publiczny odczyt dla portali klientów
+    match /cmr-invoices/{cmrId}/{fileName} {
+      allow read: if true; // Publiczny dostęp do odczytu faktur CMR dla portali klientów
       allow write: if request.auth != null; // Tylko uwierzytelnieni użytkownicy mogą przesyłać
     }
     
@@ -74,17 +100,18 @@ service firebase.storage {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
     }
-    
-    // Reguła dla PDF faktur - pozwala na pobieranie plików przez portale klientów (tylko odczyt)
-    match /invoices/{invoiceId}/{fileName} {
-      allow read: if true; // Publiczny dostęp do odczytu PDF faktur dla portali klientów
-      allow write: if request.auth != null; // Tylko uwierzytelnieni użytkownicy mogą przesyłać
-    }
-    
-    // Reguła dla załączników inwentaryzacji - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
-    match /stocktaking/{stocktakingId}/attachments/{fileName} {
+
+    // Reguła dla załączników zasad receptur - pozwala autoryzowanym użytkownikom na przesyłanie i pobieranie
+    match /recipe-rules-attachments/{recipeId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+    }
+    
+    // NAPRAWKA: PDF faktur - dodano list permission + lepsze bezpieczeństwo  
+    match /invoices/{invoiceId}/{fileName} {
+      allow read: if isAdmin() || isPortalUser(); // Wymagaj uwierzytelnienia portalu
+      allow list: if isAdmin() || isPortalUser(); // WAŻNE: Pozwól na listAll()
+      allow write: if isAdmin(); // Tylko administratorzy mogą przesyłać
     }
     
     // Domyślna reguła - blokuje dostęp bez szczegółowych uprawnień
@@ -92,4 +119,4 @@ service firebase.storage {
       allow read, write: if false;
     }
   }
-} 
+}

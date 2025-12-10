@@ -884,3 +884,111 @@ export const getRecipeDesignAttachmentsByVersion = async (recipeId, version) => 
     return [];
   }
 };
+
+// ========================
+// FUNKCJE ZAŁĄCZNIKÓW ZASAD
+// ========================
+
+/**
+ * Przesyła załącznik zasad receptury
+ * @param {File} file - Plik do przesłania
+ * @param {string} recipeId - ID receptury
+ * @param {string} userId - ID użytkownika przesyłającego
+ * @returns {Promise<Object>} - Informacje o przesłanym pliku
+ */
+export const uploadRecipeRulesAttachment = async (file, recipeId, userId) => {
+  try {
+    if (!file || !recipeId || !userId) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Sprawdź rozmiar pliku (maksymalnie 20 MB)
+    const fileSizeInMB = file.size / (1024 * 1024);
+    if (fileSizeInMB > 20) {
+      throw new Error(`Plik jest zbyt duży (${fileSizeInMB.toFixed(2)} MB). Maksymalny rozmiar to 20 MB.`);
+    }
+
+    // Sprawdź typ pliku - dozwolone są dokumenty PDF, obrazy i Word
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`Nieobsługiwany typ pliku: ${file.type}. Dozwolone są PDF, obrazy (JPG, PNG, GIF, WebP) i dokumenty Word.`);
+    }
+
+    // Tworzymy ścieżkę do pliku w Firebase Storage
+    const timestamp = new Date().getTime();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `recipe-rules-attachments/${recipeId}/${fileName}`;
+
+    // Przesyłamy plik do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
+
+    return {
+      id: `${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+      fileName: file.name,
+      storagePath,
+      downloadURL,
+      contentType: file.type,
+      size: file.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: userId
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania załącznika zasad:', error);
+    throw error;
+  }
+};
+
+/**
+ * Usuwa załącznik zasad receptury z Firebase Storage
+ * @param {Object} attachment - Obiekt załącznika z właściwością storagePath
+ * @returns {Promise<void>}
+ */
+export const deleteRecipeRulesAttachment = async (attachment) => {
+  try {
+    if (!attachment || !attachment.storagePath) {
+      throw new Error('Brak wymaganych parametrów');
+    }
+
+    // Usuń plik z Firebase Storage
+    const fileRef = ref(storage, attachment.storagePath);
+    await deleteObject(fileRef);
+  } catch (error) {
+    // Jeśli plik nie istnieje, traktujemy to jako sukces
+    if (error.code === 'storage/object-not-found') {
+      console.warn('Plik nie istnieje w Storage, kontynuuję usuwanie z bazy');
+      return;
+    }
+    console.error('Błąd podczas usuwania załącznika zasad:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera załączniki zasad dla konkretnej wersji receptury
+ * @param {string} recipeId - ID receptury
+ * @param {number} version - Numer wersji receptury
+ * @returns {Promise<Array>} - Lista załączników zasad
+ */
+export const getRecipeRulesAttachmentsByVersion = async (recipeId, version) => {
+  try {
+    const versionData = await getRecipeVersion(recipeId, version);
+    return versionData.data?.rulesAttachments || [];
+  } catch (error) {
+    console.error('Błąd podczas pobierania załączników zasad dla wersji:', error);
+    return [];
+  }
+};

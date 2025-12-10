@@ -112,6 +112,38 @@
       "unsupportedFileType": "Nieobsługiwany typ pliku: {{type}}. Dozwolone są obrazy (JPG, PNG, GIF, WebP, BMP, TIFF, SVG) i dokumenty PDF."
     }
   },
+  "rulesAttachments": {
+    "title": "Załączniki zasad",
+    "upload": "Dodaj zasady",
+    "description": "Przeciągnij dokumenty z zasadami tutaj lub wybierz z dysku",
+    "supportedFormats": "Dozwolone: PDF, JPG, PNG, GIF, WebP, DOC, DOCX (maks. 20 MB)",
+    "selectFile": "Wybierz plik",
+    "uploading": "Przesyłanie...",
+    "noAttachments": "Brak załączników zasad. Dodaj pierwszy dokument z zasadami powyżej.",
+    "noAttachmentsViewOnly": "Brak załączników zasad dla tej receptury.",
+    "preview": "Podgląd",
+    "download": "Pobierz",
+    "delete": "Usuń",
+    "editDescription": "Edytuj opis",
+    "editDescriptionTitle": "Edytuj opis dokumentu zasad",
+    "descriptionLabel": "Opis",
+    "descriptionPlaceholder": "Dodaj opis tego dokumentu (np. wersja zasad, data obowiązywania...)",
+    "rulesDocument": "Dokument zasad",
+    "previewTitle": "Podgląd",
+    "previewNotAvailable": "Podgląd niedostępny",
+    "downloadPdf": "Pobierz PDF",
+    "openInNewTab": "Otwórz w nowej karcie",
+    "downloadAndOpen": "Pobierz i otwórz plik",
+    "messages": {
+      "uploadSuccess": "Dokument \"{{fileName}}\" został przesłany pomyślnie",
+      "uploadError": "Błąd podczas przesyłania pliku \"{{fileName}}\": {{error}}",
+      "deleteSuccess": "Dokument \"{{fileName}}\" został usunięty",
+      "deleteError": "Błąd podczas usuwania pliku: {{error}}",
+      "descriptionUpdated": "Opis załącznika został zaktualizowany",
+      "fileTooLarge": "Plik jest zbyt duży ({{size}} MB). Maksymalny rozmiar to 20 MB.",
+      "unsupportedFileType": "Nieobsługiwany typ pliku: {{type}}. Dozwolone są PDF, obrazy (JPG, PNG, GIF, WebP) i dokumenty Word."
+    }
+  },
   "buttons": {
     "save": "Zapisz",
     "saving": "Zapisywanie...",
@@ -141,7 +173,7 @@
   },
   "tabs": {
     "ingredientsAndInstructions": "Składniki i instrukcje",
-    "designAttachments": "Załączniki designu",
+    "designAttachments": "Załączniki",
     "versionHistory": "Historia wersji"
   },
   "list": {
