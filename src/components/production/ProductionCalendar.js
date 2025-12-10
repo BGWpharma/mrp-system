@@ -82,6 +82,9 @@ import { formatDate } from '../../utils/formatters';
 import { 
   flexCenter, 
   flexBetween,
+  flexCenterGap1,
+  flexCenterGap2,
+  flexColumn,
   loadingContainer,
   mb1,
   mb2,
@@ -89,7 +92,12 @@ import {
   mt1,
   mt2,
   mr1,
-  p2
+  mr2,
+  p2,
+  p3,
+  textSecondary,
+  alertMb2,
+  borderBottom
 } from '../../styles/muiCommonStyles';
 // At the beginning of the file, add CSS import
 import '../../styles/calendar.css';
@@ -3111,7 +3119,7 @@ const ProductionCalendar = () => {
                 sx={{ px: isMobile ? 0.5 : 1, minWidth: 40 }}
               >
                 <Tooltip title="Wykres Gantta">
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Box sx={flexCenter}>
                     <GanttIcon fontSize="small" />
                     <ArrowDropDownIcon fontSize="small" />
                   </Box>
@@ -4039,7 +4047,7 @@ const ProductionCalendar = () => {
                 const minute = date.getMinutes();
                 
                 return (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box sx={{ ...flexCenter, justifyContent: 'center' }}>
                     <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '0.8rem' }}>
                       {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
                     </Typography>
@@ -4286,7 +4294,7 @@ const ProductionCalendar = () => {
         open={Boolean(dateRangeMenuAnchor)}
         onClose={handleDateRangeMenuClose}
       >
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 250 }}>
+        <Box sx={{ ...p2, ...flexColumn, gap: 2, minWidth: 250 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
             Wybierz zakres dat
           </Typography>
@@ -4466,7 +4474,7 @@ const ProductionCalendar = () => {
           },
         }}
       >
-        <Box sx={{ p: 2 }}>
+        <Box sx={p2}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
             Filtruj według klientów
           </Typography>

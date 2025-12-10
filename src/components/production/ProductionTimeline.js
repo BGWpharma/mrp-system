@@ -117,11 +117,41 @@ import { useTranslation } from '../../hooks/useTranslation';
 import TimelineExport from './TimelineExport';
 import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
+// ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
+import { 
+  flexCenter, 
+  flexBetween, 
+  flexColumn,
+  flexWrap,
+  flexCenterGap1,
+  flexCenterGap2,
+  flexColumnGap1,
+  loadingContainer,
+  mb1,
+  mb2, 
+  mb3,
+  mt1,
+  mt2,
+  mr1,
+  mr2,
+  ml1,
+  my2,
+  p2,
+  p3,
+  py1,
+  textSecondary,
+  typographyBold,
+  fontSmall,
+  alertMb2
+} from '../../styles/muiCommonStyles';
 
 // Import stylów dla react-calendar-timeline
 import 'react-calendar-timeline/dist/style.css';
 // Import enhanced styles dla ProductionTimeline
 import './ProductionTimeline.css';
+
+// Dodatkowy lokalny styl pt1 (padding-top: 1)
+const pt1 = { pt: 1 };
 
 // ✅ OPTYMALIZACJE WYDAJNOŚCI - Helper functions
 const debounce = (func, delay) => {
@@ -2468,9 +2498,9 @@ const ProductionTimeline = React.memo(({
         }
       }}
     >
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+      <Box sx={p2}>
+        <Box sx={{ ...flexBetween, ...mb2 }}>
+          <Typography variant="h6" sx={typographyBold}>
             <TuneIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
             {t('production.timeline.controls') || 'Ustawienia'}
           </Typography>
@@ -2479,7 +2509,7 @@ const ProductionTimeline = React.memo(({
           </IconButton>
         </Box>
         
-        <Divider sx={{ mb: 2 }} />
+        <Divider sx={mb2} />
         
         {/* Sekcja: Wyświetlanie */}
         <List disablePadding>
@@ -2492,7 +2522,7 @@ const ProductionTimeline = React.memo(({
             {mobileControlsExpanded.display ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </ListItemButton>
           <Collapse in={mobileControlsExpanded.display}>
-            <Box sx={{ pl: 2, pr: 1, py: 1 }}>
+            <Box sx={{ pl: 2, pr: 1, ...py1 }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -2516,7 +2546,7 @@ const ProductionTimeline = React.memo(({
                   label={t('production.timeline.snapToPrevious')}
                 />
               )}
-              <Box sx={{ mt: 1 }}>
+              <Box sx={mt1}>
                 <Button
                   fullWidth
                   variant={editMode ? "contained" : "outlined"}
@@ -2524,7 +2554,7 @@ const ProductionTimeline = React.memo(({
                   onClick={() => { handleEditModeToggle(); }}
                   startIcon={editMode ? <EditIcon /> : <LockIcon />}
                   color={editMode ? "primary" : "inherit"}
-                  sx={{ mb: 1 }}
+                  sx={mb1}
                 >
                   {editMode ? t('production.timeline.editMode') + ' ON' : t('production.timeline.editMode') + ' OFF'}
                 </Button>
@@ -2551,7 +2581,7 @@ const ProductionTimeline = React.memo(({
             {mobileControlsExpanded.timeScale ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </ListItemButton>
           <Collapse in={mobileControlsExpanded.timeScale}>
-            <Box sx={{ pl: 2, pr: 1, py: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ pl: 2, pr: 1, ...py1, ...flexWrap, gap: 1 }}>
               <Button
                 variant={timeScale === 'hourly' ? 'contained' : 'outlined'}
                 size="small"
@@ -2597,7 +2627,7 @@ const ProductionTimeline = React.memo(({
             {mobileControlsExpanded.zoom ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </ListItemButton>
           <Collapse in={mobileControlsExpanded.zoom}>
-            <Box sx={{ pl: 2, pr: 1, py: 1, display: 'flex', gap: 1, justifyContent: 'center' }}>
+            <Box sx={{ pl: 2, pr: 1, ...py1, display: 'flex', gap: 1, justifyContent: 'center' }}>
               <IconButton onClick={zoomIn} color="primary">
                 <ZoomInIcon />
               </IconButton>
@@ -2616,10 +2646,10 @@ const ProductionTimeline = React.memo(({
           </Collapse>
         </List>
         
-        <Divider sx={{ my: 2 }} />
+        <Divider sx={my2} />
         
         {/* Eksport i inne akcje */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={flexColumnGap1}>
           <TimelineExport 
             tasks={tasks}
             workstations={workstations}
@@ -2673,7 +2703,7 @@ const ProductionTimeline = React.memo(({
         
         {/* Desktop: pełne kontrolki */}
         {!isMobile && !isTablet && (
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Box sx={flexCenterGap1}>
             <FormControlLabel
               className="timeline-switch"
               control={
@@ -3412,8 +3442,8 @@ const ProductionTimeline = React.memo(({
           },
         }}
       >
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+        <Box sx={p2}>
+          <Typography variant="subtitle1" sx={{ ...typographyBold, ...mb1 }}>
             Filtry
           </Typography>
           
@@ -3423,16 +3453,16 @@ const ProductionTimeline = React.memo(({
             variant="outlined"
             startIcon={<SearchIcon />}
             onClick={handleAdvancedFilterOpen}
-            sx={{ mb: 2 }}
+            sx={mb2}
           >
             Zaawansowane filtrowanie
           </Button>
           
-          <Typography variant="body2" sx={{ mb: 1 }}>
+          <Typography variant="body2" sx={mb1}>
             Stanowiska:
           </Typography>
           {workstations.map(workstation => (
-            <Box key={workstation.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            <Box key={workstation.id} sx={{ ...flexCenter, mb: 0.5 }}>
               <input
                 type="checkbox"
                 checked={selectedWorkstations[workstation.id] || false}
@@ -3443,13 +3473,13 @@ const ProductionTimeline = React.memo(({
                   }));
                 }}
               />
-              <Typography variant="body2" sx={{ ml: 1, fontSize: '0.85rem' }}>
+              <Typography variant="body2" sx={{ ...ml1, fontSize: '0.85rem' }}>
                 {workstation.name}
               </Typography>
             </Box>
           ))}
           
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+          <Box sx={{ ...flexCenter, mb: 0.5 }}>
             <input
               type="checkbox"
               checked={selectedWorkstations['no-workstation'] || false}
@@ -3460,16 +3490,16 @@ const ProductionTimeline = React.memo(({
                 }));
               }}
             />
-            <Typography variant="body2" sx={{ ml: 1, fontSize: '0.85rem' }}>
+            <Typography variant="body2" sx={{ ...ml1, fontSize: '0.85rem' }}>
               Bez stanowiska
             </Typography>
           </Box>
           
-          <Typography variant="body2" sx={{ mb: 1, mt: 2 }}>
+          <Typography variant="body2" sx={{ ...mb1, ...mt2 }}>
             Klienci:
           </Typography>
           {customers.map(customer => (
-            <Box key={customer.id} sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            <Box key={customer.id} sx={{ ...flexCenter, mb: 0.5 }}>
               <input
                 type="checkbox"
                 checked={selectedCustomers[customer.id] || false}
@@ -3480,7 +3510,7 @@ const ProductionTimeline = React.memo(({
                   }));
                 }}
               />
-              <Typography variant="body2" sx={{ ml: 1, fontSize: '0.85rem' }}>
+              <Typography variant="body2" sx={{ ...ml1, fontSize: '0.85rem' }}>
                 {customer.name}
               </Typography>
             </Box>
@@ -3498,7 +3528,7 @@ const ProductionTimeline = React.memo(({
         <DialogTitle>{t('production.timeline.edit.title')}</DialogTitle>
         <DialogContent>
           <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid container spacing={2} sx={mt1}>
               <Grid item xs={12}>
                 <DateTimePicker
                   label={t('production.timeline.edit.scheduledDate')}
@@ -3545,7 +3575,7 @@ const ProductionTimeline = React.memo(({
       >
         <DialogTitle>{t('production.timeline.advancedFilters.title')}</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 1 }}>
+          <Box sx={pt1}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <TextField
@@ -3597,7 +3627,7 @@ const ProductionTimeline = React.memo(({
               
               {/* Sekcja filtrowania po datach */}
               <Grid item xs={12}>
-                <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: 'bold', color: 'primary.main' }}>
+                <Typography variant="subtitle2" sx={{ ...mb1, ...mt2, ...typographyBold, color: 'primary.main' }}>
                   Filtrowanie po zakresie dat:
                 </Typography>
               </Grid>
@@ -3646,35 +3676,35 @@ const ProductionTimeline = React.memo(({
                 borderRadius: 1,
                 border: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : 'none'
               }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+                <Typography variant="subtitle2" sx={{ ...mb1, ...typographyBold }}>
                   Aktywne filtry:
                 </Typography>
                 {advancedFilters.productName && (
                   <Chip 
                     label={`Produkt: ${advancedFilters.productName}`} 
                     size="small" 
-                    sx={{ mr: 1, mb: 1 }} 
+                    sx={{ ...mr1, ...mb1 }} 
                   />
                 )}
                 {advancedFilters.moNumber && (
                   <Chip 
                     label={`MO: ${advancedFilters.moNumber}`} 
                     size="small" 
-                    sx={{ mr: 1, mb: 1 }} 
+                    sx={{ ...mr1, ...mb1 }} 
                   />
                 )}
                 {advancedFilters.orderNumber && (
                   <Chip 
                     label={`Zamówienie: ${advancedFilters.orderNumber}`} 
                     size="small" 
-                    sx={{ mr: 1, mb: 1 }} 
+                    sx={{ ...mr1, ...mb1 }} 
                   />
                 )}
                 {advancedFilters.poNumber && (
                   <Chip 
                     label={`PO: ${advancedFilters.poNumber}`} 
                     size="small" 
-                    sx={{ mr: 1, mb: 1 }} 
+                    sx={{ ...mr1, ...mb1 }} 
                   />
                 )}
                 {advancedFilters.startDate && (() => {
@@ -3685,7 +3715,7 @@ const ProductionTimeline = React.memo(({
                       <Chip 
                         label={`Od: ${format(date, 'dd.MM.yyyy', { locale: pl })}`} 
                         size="small" 
-                        sx={{ mr: 1, mb: 1 }} 
+                        sx={{ ...mr1, ...mb1 }} 
                         color="primary"
                       />
                     );
@@ -3702,7 +3732,7 @@ const ProductionTimeline = React.memo(({
                       <Chip 
                         label={`Do: ${format(date, 'dd.MM.yyyy', { locale: pl })}`} 
                         size="small" 
-                        sx={{ mr: 1, mb: 1 }} 
+                        sx={{ ...mr1, ...mb1 }} 
                         color="primary"
                       />
                     );
