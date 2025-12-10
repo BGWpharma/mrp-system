@@ -50,7 +50,8 @@ export const useTranslation = (namespace) => {
         'interactionDetails': 'interactions',
         'sidebar': 'sidebar',
         'productionForms': 'forms',
-        'inventoryForms': 'forms'
+        'inventoryForms': 'forms',
+        'taskDetails': 'taskDetails'
       };
       
       // Sprawdź czy pierwszy część klucza pasuje do namespace'u

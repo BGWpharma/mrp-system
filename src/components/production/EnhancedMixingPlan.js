@@ -9,6 +9,8 @@
  */
 
 import React, { useState, useEffect, memo, useMemo, useCallback, useRef } from 'react';
+// 🚀 OPTYMALIZACJA: react-window dostępne dla przyszłej wirtualizacji bardzo długich list
+// import { VariableSizeList as VirtualList } from 'react-window';
 import {
   Box,
   Typography,
@@ -75,6 +77,399 @@ import {
 } from '../../services/mixingPlanReservationService';
 import { debounce } from 'lodash';
 
+// ===============================================
+// 🚀 OPTYMALIZACJA: Wydzielone zmemoizowane komponenty
+// Zapobiegają re-renderom przy aktualizacji stanu rodzica
+// ===============================================
+
+/**
+ * Zmemoizowany komponent pojedynczego powiązania rezerwacji
+ */
+const ReservationLinkItem = memo(({ 
+  link, 
+  colors, 
+  mode, 
+  borderColor, 
+  onUnlink 
+}) => {
+  const reservationFromSnapshot = useMemo(() => ({
+    id: link.reservationId,
+    batchNumber: link.batchSnapshot?.batchNumber || 'Brak numeru',
+    unit: link.batchSnapshot?.unit || 'szt.',
+    materialName: link.batchSnapshot?.materialName || 'Nieznany materiał',
+    warehouseName: link.batchSnapshot?.warehouseName,
+    warehouseAddress: link.batchSnapshot?.warehouseAddress,
+    expiryDateString: link.batchSnapshot?.expiryDateString
+  }), [link.reservationId, link.batchSnapshot]);
+  
+  return (
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        alignItems: 'flex-start', 
+        gap: 1,
+        p: 0.75,
+        border: '1px solid',
+        borderColor: borderColor,
+        borderRadius: 1,
+        bgcolor: colors.background,
+        minHeight: 'auto',
+        // 🚀 GPU acceleration
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+      }}
+    >
+      <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, gap: 0.25 }}>
+        {/* Linia 1: LOT + ilość powiązana */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Chip
+            size="small"
+            label={`LOT: ${reservationFromSnapshot.batchNumber}`}
+            color="secondary"
+            variant="outlined"
+            icon={<AssignmentIcon />}
+          />
+          <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+            {link.linkedQuantity || link.quantity} {reservationFromSnapshot.unit}
+          </Typography>
+        </Box>
+        
+        {/* Linia 2: Lokalizacja + data ważności */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          {reservationFromSnapshot.warehouseName && (
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+              📍 {reservationFromSnapshot.warehouseName}
+            </Typography>
+          )}
+          {reservationFromSnapshot.expiryDateString && (
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+              📅 {reservationFromSnapshot.expiryDateString}
+            </Typography>
+          )}
+        </Box>
+        
+        {/* Linia 3: Informacje o konsumpcji */}
+        {link.consumedQuantity > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25 }}>
+            <Typography variant="caption" sx={{ 
+              color: link.isFullyConsumed ? 'success.main' : 'warning.main',
+              fontSize: '0.7rem'
+            }}>
+              Użyto: {link.consumedQuantity} / Pozostało: {link.remainingQuantity}
+            </Typography>
+            {link.consumptionPercentage !== undefined && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ 
+                  width: '30px', 
+                  height: '3px', 
+                  bgcolor: mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'grey.200', 
+                  borderRadius: 2,
+                  overflow: 'hidden'
+                }}>
+                  <Box sx={{
+                    width: `${link.consumptionPercentage}%`,
+                    height: '100%',
+                    bgcolor: link.consumptionPercentage === 100 ? 'success.main' : 'primary.main',
+                    // 🚀 USUNIĘTO transition - powodowało miganie na mobile
+                  }} />
+                </Box>
+                <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem' }}>
+                  {link.consumptionPercentage}%
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+      </Box>
+      
+      {/* Przycisk odłączenia */}
+      {!link.isFullyConsumed && (
+        <IconButton
+          size="small"
+          onClick={() => onUnlink(link.id)}
+          color="error"
+          sx={{ alignSelf: 'flex-start' }}
+        >
+          <UnlinkIcon fontSize="small" />
+        </IconButton>
+      )}
+      
+      {link.isFullyConsumed && (
+        <Tooltip title="Powiązanie zostało w pełni skonsumowane">
+          <InfoIcon fontSize="small" color="success" sx={{ alignSelf: 'flex-start' }} />
+        </Tooltip>
+      )}
+    </Box>
+  );
+});
+
+ReservationLinkItem.displayName = 'ReservationLinkItem';
+
+/**
+ * Zmemoizowany komponent statusu powiązań składnika
+ */
+const IngredientLinkStatusMemo = memo(({ 
+  ingredientId, 
+  links, 
+  colors, 
+  mode, 
+  borderColor, 
+  onUnlinkSpecificReservation
+}) => {
+  if (links && links.length > 0) {
+    const totalLinkedQuantity = links.reduce((sum, link) => sum + (link.linkedQuantity || 0), 0);
+    const totalConsumedQuantity = links.reduce((sum, link) => sum + (link.consumedQuantity || 0), 0);
+    const totalRemainingQuantity = links.reduce((sum, link) => sum + (link.remainingQuantity || 0), 0);
+    const averageConsumptionPercentage = links.length > 0 
+      ? Math.round(links.reduce((sum, link) => sum + (link.consumptionPercentage || 0), 0) / links.length)
+      : 0;
+    
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, width: '100%' }}>
+        {/* Nagłówek z sumarycznymi informacjami */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
+          <Box>
+            <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.75rem' }}>
+              {links.length} rezerwacji → Razem: {totalLinkedQuantity} {links[0]?.batchSnapshot?.unit || 'szt.'}
+            </Typography>
+            <Typography variant="caption" sx={{ color: colors.text.secondary, display: 'block', fontStyle: 'italic', fontSize: '0.65rem' }}>
+              Kliknij wiersz aby dodać kolejną
+            </Typography>
+          </Box>
+        </Box>
+        
+        {/* Lista wszystkich powiązań */}
+        {links.map((link) => (
+          <ReservationLinkItem
+            key={link.id}
+            link={link}
+            colors={colors}
+            mode={mode}
+            borderColor={borderColor}
+            onUnlink={onUnlinkSpecificReservation}
+          />
+        ))}
+        
+        {/* Sumaryczne informacje o konsumpcji */}
+        {totalConsumedQuantity > 0 && (
+          <Box sx={{ 
+            mt: 0.5, 
+            p: 0.5, 
+            bgcolor: colors.primary + '0a', 
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: colors.primary + '20'
+          }}>
+            <Typography variant="caption" sx={{ color: colors.text.primary, fontWeight: 'bold', fontSize: '0.7rem' }}>
+              📊 Łącznie użyto: {totalConsumedQuantity} / Pozostało: {totalRemainingQuantity} / Avg: {averageConsumptionPercentage}%
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+  
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <LinkIcon fontSize="small" sx={{ color: colors.text.disabled }} />
+      <Typography variant="caption" sx={{ color: colors.text.secondary, fontStyle: 'italic' }}>
+        Kliknij wiersz aby powiązać z rezerwacją
+      </Typography>
+    </Box>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparator - sprawdź tylko istotne zmiany
+  return (
+    prevProps.ingredientId === nextProps.ingredientId &&
+    JSON.stringify(prevProps.links) === JSON.stringify(nextProps.links) &&
+    prevProps.mode === nextProps.mode
+  );
+});
+
+IngredientLinkStatusMemo.displayName = 'IngredientLinkStatusMemo';
+
+/**
+ * Zmemoizowany komponent pojedynczego składnika (mobile card)
+ */
+const MobileIngredientCard = memo(({ 
+  ingredient, 
+  links,
+  colors, 
+  mode, 
+  borderColor,
+  onLinkIngredient,
+  onEditQuantity,
+  onUnlinkSpecificReservation
+}) => {
+  return (
+    <Card 
+      variant="outlined"
+      sx={{
+        cursor: 'pointer',
+        // 🚀 GPU acceleration i izolacja renderowania
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+        contain: 'layout style paint',
+        '&:hover': {
+          bgcolor: mode === 'dark' ? 'rgba(25, 118, 210, 0.15)' : 'primary.light',
+          opacity: 0.9
+        }
+      }}
+      onClick={() => onLinkIngredient(ingredient)}
+    >
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        {/* Nazwa składnika */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: colors.text.primary, flex: 1, pr: 1 }}>
+            {ingredient.text}
+          </Typography>
+          <IconButton 
+            size="medium"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditQuantity(ingredient);
+            }}
+            sx={{ 
+              color: 'primary.main',
+              minWidth: 44,
+              minHeight: 44,
+              ml: 1
+            }}
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        
+        {/* Ilość */}
+        <Box sx={{ mb: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+            Ilość:
+          </Typography>
+          <Typography variant="body2" sx={{ color: colors.text.primary, fontWeight: 500 }}>
+            {ingredient.details}
+          </Typography>
+        </Box>
+        
+        {/* Rezerwacje */}
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5, display: 'block' }}>
+            Rezerwacje:
+          </Typography>
+          <IngredientLinkStatusMemo
+            ingredientId={ingredient.id}
+            links={links}
+            colors={colors}
+            mode={mode}
+            borderColor={borderColor}
+            onUnlinkSpecificReservation={onUnlinkSpecificReservation}
+          />
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.ingredient.id === nextProps.ingredient.id &&
+    prevProps.ingredient.text === nextProps.ingredient.text &&
+    prevProps.ingredient.details === nextProps.ingredient.details &&
+    JSON.stringify(prevProps.links) === JSON.stringify(nextProps.links) &&
+    prevProps.mode === nextProps.mode
+  );
+});
+
+MobileIngredientCard.displayName = 'MobileIngredientCard';
+
+/**
+ * Zmemoizowany komponent pojedynczego wiersza składnika (desktop)
+ */
+const DesktopIngredientRow = memo(({ 
+  ingredient, 
+  isLast,
+  links,
+  colors, 
+  mode, 
+  borderColor,
+  onLinkIngredient,
+  onEditQuantity,
+  onUnlinkSpecificReservation
+}) => {
+  return (
+    <Box 
+      sx={{ 
+        display: 'grid', 
+        gridTemplateColumns: '2fr 1fr 2fr 60px',
+        gap: 2,
+        p: 1.5,
+        borderBottom: !isLast ? '1px solid' : 'none',
+        borderColor: borderColor,
+        cursor: 'pointer',
+        // 🚀 GPU acceleration
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+        contain: 'layout style',
+        '&:hover': {
+          bgcolor: mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'primary.light',
+          opacity: 0.8
+        }
+      }}
+      onClick={() => onLinkIngredient(ingredient)}
+    >
+      <Box>
+        <Typography variant="body2" sx={{ fontWeight: 600, color: colors.text.primary }}>
+          {ingredient.text}
+        </Typography>
+      </Box>
+      
+      <Box>
+        <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+          {ingredient.details}
+        </Typography>
+      </Box>
+      
+      <Box>
+        <IngredientLinkStatusMemo
+          ingredientId={ingredient.id}
+          links={links}
+          colors={colors}
+          mode={mode}
+          borderColor={borderColor}
+          onUnlinkSpecificReservation={onUnlinkSpecificReservation}
+        />
+      </Box>
+      
+      <Box>
+        <Tooltip title="Edytuj ilość">
+          <IconButton 
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditQuantity(ingredient);
+            }}
+            sx={{ color: 'primary.main' }}
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </Box>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.ingredient.id === nextProps.ingredient.id &&
+    prevProps.ingredient.text === nextProps.ingredient.text &&
+    prevProps.ingredient.details === nextProps.ingredient.details &&
+    prevProps.isLast === nextProps.isLast &&
+    JSON.stringify(prevProps.links) === JSON.stringify(nextProps.links) &&
+    prevProps.mode === nextProps.mode
+  );
+});
+
+DesktopIngredientRow.displayName = 'DesktopIngredientRow';
+
+// ===============================================
+// GŁÓWNY KOMPONENT
+// ===============================================
+
 const EnhancedMixingPlan = ({ 
   task, 
   isMobile = false,
@@ -136,16 +531,44 @@ const EnhancedMixingPlan = ({
   // Ref dla kontenera planu mieszań (przewijanie)
   const mixingPlanContainerRef = useRef(null);
 
-  // Oblicz statystyki powiązań i postępu
-  const totalIngredients = task?.mixingPlanChecklist
-    ? task.mixingPlanChecklist.filter(item => item.type === 'ingredient').length
-    : 0;
-  const linkedIngredients = Object.keys(ingredientLinks).filter(key =>
-    ingredientLinks[key] && ingredientLinks[key].length > 0
-  ).length;
-  const linkagePercentage = totalIngredients > 0
-    ? Math.round((linkedIngredients / totalIngredients) * 100)
-    : 0;
+  // 🚀 OPTYMALIZACJA: Zmemoizowane obliczenia statystyk
+  const { totalIngredients, linkedIngredients, linkagePercentage } = useMemo(() => {
+    const total = task?.mixingPlanChecklist
+      ? task.mixingPlanChecklist.filter(item => item.type === 'ingredient').length
+      : 0;
+    const linked = Object.keys(ingredientLinks).filter(key =>
+      ingredientLinks[key] && ingredientLinks[key].length > 0
+    ).length;
+    const percentage = total > 0 ? Math.round((linked / total) * 100) : 0;
+    
+    return { totalIngredients: total, linkedIngredients: linked, linkagePercentage: percentage };
+  }, [task?.mixingPlanChecklist, ingredientLinks]);
+  
+  // 🚀 OPTYMALIZACJA: Przygotuj dane dla wirtualizacji
+  const headers = useMemo(() => 
+    task?.mixingPlanChecklist?.filter(item => item.type === 'header') || [],
+    [task?.mixingPlanChecklist]
+  );
+
+  const ingredientsByHeader = useMemo(() => {
+    const map = {};
+    headers.forEach(header => {
+      map[header.id] = task?.mixingPlanChecklist?.filter(
+        item => item.parentId === header.id && item.type === 'ingredient'
+      ) || [];
+    });
+    return map;
+  }, [headers, task?.mixingPlanChecklist]);
+
+  const checkItemsByHeader = useMemo(() => {
+    const map = {};
+    headers.forEach(header => {
+      map[header.id] = task?.mixingPlanChecklist?.filter(
+        item => item.parentId === header.id && item.type === 'check'
+      ) || [];
+    });
+    return map;
+  }, [headers, task?.mixingPlanChecklist]);
 
   // Pobierz materiały z zadania produkcyjnego dla autouzupełniania
   useEffect(() => {
@@ -892,7 +1315,7 @@ const EnhancedMixingPlan = ({
                               width: `${link.consumptionPercentage}%`,
                               height: '100%',
                               bgcolor: link.consumptionPercentage === 100 ? 'success.main' : 'primary.main',
-                              transition: 'width 0.3s ease'
+                              // 🚀 USUNIĘTO transition - powodowało miganie na mobile
                             }} />
                           </Box>
                           <Typography variant="caption" sx={{ color: colors.text.secondary, fontSize: '0.65rem' }}>
@@ -973,7 +1396,18 @@ const EnhancedMixingPlan = ({
   }
 
   return (
-    <Paper ref={mixingPlanContainerRef} sx={{ p: isMobile ? 2 : 1.5, mb: 1.5 }}>
+    <Paper 
+      ref={mixingPlanContainerRef} 
+      sx={{ 
+        p: isMobile ? 2 : 1.5, 
+        mb: 1.5,
+        // 🚀 GPU acceleration dla płynnego przewijania
+        transform: 'translateZ(0)',
+        willChange: 'scroll-position',
+        WebkitOverflowScrolling: 'touch', // iOS smooth scroll
+        contain: 'layout style', // Izolacja re-renderów
+      }}
+    >
       {/* Nagłówek z przyciskami - responsywny */}
       <Box sx={{ 
         display: 'flex', 
@@ -1004,25 +1438,12 @@ const EnhancedMixingPlan = ({
           gap: 1,
           width: isMobile ? '100%' : 'auto'
         }}>
-          {/* Wskaźnik synchronizacji powiązań - ukryj na mobile jeśli brak miejsca */}
+          {/* 🚀 OPTYMALIZACJA: Wskaźnik synchronizacji - CircularProgress zamiast pulse animation */}
           {isLinksUpdating && !isVerySmall && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box
-                sx={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  backgroundColor: 'success.main',
-                  animation: 'pulse 1.5s infinite',
-                  '@keyframes pulse': {
-                    '0%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                    '100%': { opacity: 1 }
-                  }
-                }}
-              />
+              <CircularProgress size={10} color="success" />
               <Typography variant="caption" sx={{ color: 'success.main', fontSize: '0.7rem' }}>
-                {isLinksUpdating ? 'Aktualizacja...' : 'Synchronizacja...'}
+                Aktualizacja...
               </Typography>
             </Box>
           )}
@@ -1074,14 +1495,11 @@ const EnhancedMixingPlan = ({
 
 
 
-      {/* Lista mieszań - dane synchronizowane przez TaskDetailsPage */}
-      {task.mixingPlanChecklist.filter(item => item.type === 'header').map(headerItem => {
-        const ingredients = task.mixingPlanChecklist.filter(
-          item => item.parentId === headerItem.id && item.type === 'ingredient'
-        );
-        const checkItems = task.mixingPlanChecklist.filter(
-          item => item.parentId === headerItem.id && item.type === 'check'
-        );
+      {/* 🚀 OPTYMALIZACJA: Lista mieszań - używa przygotowanych danych zamiast filtrowania przy każdym renderze */}
+      {headers.map(headerItem => {
+        // Używamy zmemoizowanych danych zamiast filtrowania
+        const ingredients = ingredientsByHeader[headerItem.id] || [];
+        const checkItems = checkItemsByHeader[headerItem.id] || [];
         
 
         
@@ -1175,79 +1593,30 @@ const EnhancedMixingPlan = ({
                   Składniki i rezerwacje
                 </Typography>
                 
+                {/* 🚀 OPTYMALIZACJA: Użycie zmemoizowanych komponentów */}
                 {ingredients.length === 0 ? (
                   <Alert severity="info" sx={{ mt: 1 }}>
                     Brak składników w tym mieszaniu
                   </Alert>
                 ) : isMobile ? (
-                  // 📱 Widok mobilny - Cards zamiast Grid
+                  // 📱 Widok mobilny - Zmemoizowane Cards
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {ingredients.map((ingredient, index) => {
-                      const link = ingredientLinks[ingredient.id];
-                      const isLinked = !!link;
-                      
-                      return (
-                        <Card 
-                          key={ingredient.id} 
-                          variant="outlined"
-                          sx={{
-                            cursor: 'pointer',
-                            '&:hover': {
-                              bgcolor: mode === 'dark' ? 'rgba(25, 118, 210, 0.15)' : 'primary.light',
-                              opacity: 0.9
-                            }
-                          }}
-                          onClick={() => handleLinkIngredient(ingredient)}
-                        >
-                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                            {/* Nazwa składnika */}
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: colors.text.primary, flex: 1, pr: 1 }}>
-                                {ingredient.text}
-                              </Typography>
-                              <Tooltip title="">
-                                <IconButton 
-                                  size="medium"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditQuantity(ingredient);
-                                  }}
-                                  sx={{ 
-                                    color: 'primary.main',
-                                    minWidth: 44,
-                                    minHeight: 44,
-                                    ml: 1
-                                  }}
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                            
-                            {/* Ilość */}
-                            <Box sx={{ mb: 1.5 }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                                Ilość:
-                              </Typography>
-                              <Typography variant="body2" sx={{ color: colors.text.primary, fontWeight: 500 }}>
-                                {ingredient.details}
-                              </Typography>
-                            </Box>
-                            
-                            {/* Rezerwacje */}
-                            <Box>
-                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', mb: 0.5, display: 'block' }}>
-                                Rezerwacje:
-                              </Typography>
-                              {renderIngredientLinkStatus(ingredient)}
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                    {ingredients.map((ingredient) => (
+                      <MobileIngredientCard
+                        key={ingredient.id}
+                        ingredient={ingredient}
+                        links={ingredientLinks[ingredient.id] || []}
+                        colors={colors}
+                        mode={mode}
+                        borderColor={borderColor}
+                        onLinkIngredient={handleLinkIngredient}
+                        onEditQuantity={handleEditQuantity}
+                        onUnlinkSpecificReservation={handleUnlinkSpecificReservation}
+                      />
+                    ))}
                   </Box>
                 ) : (
-                  // 💻 Widok desktop - Grid jak było
+                  // 💻 Widok desktop - Zmemoizowane wiersze
                   <Box sx={{ 
                     border: '1px solid',
                     borderColor: borderColor,
@@ -1278,64 +1647,21 @@ const EnhancedMixingPlan = ({
                       </Typography>
                     </Box>
                     
-                    {/* Wiersze składników */}
-                    {ingredients.map((ingredient, index) => {
-                      const link = ingredientLinks[ingredient.id];
-                      const isLinked = !!link;
-                      
-                      return (
-                      <Box 
-                        key={ingredient.id} 
-                        sx={{ 
-                          display: 'grid', 
-                          gridTemplateColumns: '2fr 1fr 2fr 60px',
-                          gap: 2,
-                          p: 1.5,
-                          borderBottom: index < ingredients.length - 1 ? '1px solid' : 'none',
-                          borderColor: borderColor,
-                          cursor: 'pointer',
-                          '&:hover': {
-                            bgcolor: mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'primary.light',
-                            opacity: 0.8
-                          }
-                        }}
-                        onClick={() => handleLinkIngredient(ingredient)}
-                      >
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: colors.text.primary }}>
-                            {ingredient.text}
-                          </Typography>
-                        </Box>
-                        
-                        <Box>
-                          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                            {ingredient.details}
-                          </Typography>
-                        </Box>
-                        
-                        <Box>
-                          {renderIngredientLinkStatus(ingredient)}
-                        </Box>
-                        
-                        <Box>
-                          <Tooltip title="Edytuj ilość">
-                            <IconButton 
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditQuantity(ingredient);
-                              }}
-                              sx={{ 
-                                color: 'primary.main'
-                              }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </Box>
-                      );
-                    })}
+                    {/* Wiersze składników - zmemoizowane komponenty */}
+                    {ingredients.map((ingredient, index) => (
+                      <DesktopIngredientRow
+                        key={ingredient.id}
+                        ingredient={ingredient}
+                        isLast={index === ingredients.length - 1}
+                        links={ingredientLinks[ingredient.id] || []}
+                        colors={colors}
+                        mode={mode}
+                        borderColor={borderColor}
+                        onLinkIngredient={handleLinkIngredient}
+                        onEditQuantity={handleEditQuantity}
+                        onUnlinkSpecificReservation={handleUnlinkSpecificReservation}
+                      />
+                    ))}
                   </Box>
                 )}
               </Grid>
