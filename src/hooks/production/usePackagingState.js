@@ -43,7 +43,10 @@ export const usePackagingState = () => {
 
   // Ustawianie elementów opakowań
   const setPackagingItems = useCallback((items) => {
-    setPackagingState(prev => ({ ...prev, items }));
+    setPackagingState(prev => ({ 
+      ...prev, 
+      items: typeof items === 'function' ? items(prev.items) : items 
+    }));
   }, []);
 
   // Ustawianie stanu ładowania

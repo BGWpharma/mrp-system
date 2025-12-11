@@ -37,7 +37,10 @@ export const useRawMaterialsState = () => {
 
   // Ustawianie elementów surowców
   const setRawMaterialsItems = useCallback((items) => {
-    setRawMaterialsState(prev => ({ ...prev, items }));
+    setRawMaterialsState(prev => ({ 
+      ...prev, 
+      items: typeof items === 'function' ? items(prev.items) : items 
+    }));
   }, []);
 
   // Ustawianie stanu ładowania

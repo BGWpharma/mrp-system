@@ -34,7 +34,6 @@ const AddHistoryDialog = memo(({
   onClose,
   onSubmit,
   task,
-  machines = [],
   warehouses = [],
   loading = false,
   t = (key) => key
@@ -44,7 +43,6 @@ const AddHistoryDialog = memo(({
     quantity: '',
     startTime: new Date(),
     endTime: new Date(),
-    machineId: '',
     note: ''
   });
   
@@ -68,7 +66,6 @@ const AddHistoryDialog = memo(({
         quantity: '',
         startTime: now,
         endTime: now,
-        machineId: '',
         note: ''
       });
       
@@ -221,25 +218,6 @@ const AddHistoryDialog = memo(({
                 inputProps={{ min: 0, step: 0.001 }}
                 required
               />
-            </Grid>
-
-            {/* Wybór maszyny */}
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Maszyna (opcjonalnie)</InputLabel>
-                <Select
-                  value={formData.machineId}
-                  onChange={(e) => handleFormChange('machineId', e.target.value)}
-                  label="Maszyna (opcjonalnie)"
-                >
-                  <MenuItem value="">Brak</MenuItem>
-                  {machines.map((machine) => (
-                    <MenuItem key={machine.id} value={machine.id}>
-                      {machine.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
             </Grid>
 
             {/* Czas rozpoczęcia */}
