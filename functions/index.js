@@ -14,6 +14,9 @@
  * - refreshExpiryStats        (callable)
  * - getRandomBatch            (callable)
  * - recalculateShippedQuantities (callable)
+ * - bookMaterialForTask       (callable) - Atomowa rezerwacja materiału
+ * - cancelMaterialBooking     (callable) - Atomowe anulowanie rezerwacji
+ * - confirmMaterialConsumption (callable) - Atomowa konsumpcja materiałów
  * - onPurchaseOrderUpdate     (trigger: purchaseOrders)
  * - onBatchPriceUpdate        (trigger: _systemEvents)
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
@@ -31,6 +34,13 @@ require("./config");
 const {refreshExpiryStats} = require("./callable/expiryStats");
 const {getRandomBatch} = require("./callable/randomBatch");
 const {recalculateShippedQuantities} = require("./callable/recalculateShipped");
+
+// Atomowe operacje rezerwacji i konsumpcji
+const {
+  bookMaterialForTask,
+  cancelMaterialBooking,
+  confirmMaterialConsumption,
+} = require("./callable/reservationOperations");
 
 // ============================================================================
 // FIRESTORE TRIGGERS - Automatyczne aktualizacje danych
@@ -58,6 +68,11 @@ exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;
 exports.onProductionTaskScheduleUpdate = onProductionTaskScheduleUpdate;
 exports.onCmrStatusUpdate = onCmrStatusUpdate;
 exports.updateExpiryStats = updateExpiryStats;
+
+// Atomowe operacje rezerwacji i konsumpcji
+exports.bookMaterialForTask = bookMaterialForTask;
+exports.cancelMaterialBooking = cancelMaterialBooking;
+exports.confirmMaterialConsumption = confirmMaterialConsumption;
 
 // ============================================================================
 // FUTURE FUNCTIONS (commented out)
