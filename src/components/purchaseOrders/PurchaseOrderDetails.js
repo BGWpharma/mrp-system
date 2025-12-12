@@ -1197,6 +1197,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
       case PURCHASE_ORDER_PAYMENT_STATUSES.PAID:
         color = '#4caf50'; // zielony - opłacone
         break;
+      case PURCHASE_ORDER_PAYMENT_STATUSES.PARTIALLY_PAID:
+        color = '#2196f3'; // niebieski - częściowo opłacone
+        break;
       case PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID:
         color = '#ff9800'; // pomarańczowy - do zapłaty
         break;
@@ -3267,6 +3270,12 @@ const PurchaseOrderDetails = ({ orderId }) => {
             >
               <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID}>
                 {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.UNPAID)}
+              </MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.TO_BE_PAID)}
+              </MenuItem>
+              <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.PARTIALLY_PAID}>
+                {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.PARTIALLY_PAID)}
               </MenuItem>
               <MenuItem value={PURCHASE_ORDER_PAYMENT_STATUSES.PAID}>
                 {translatePaymentStatus(PURCHASE_ORDER_PAYMENT_STATUSES.PAID)}

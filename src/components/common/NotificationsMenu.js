@@ -31,7 +31,6 @@ import {
   Receipt as InvoiceIcon,
   LocalShipping as WaybillIcon,
   Description as CmrIcon,
-  Refresh as RefreshIcon,
   Inventory as InventoryIcon,
   History as HistoryIcon,
   Announcement as AnnouncementIcon
@@ -462,17 +461,6 @@ const NotificationsMenu = () => {
           <StyledBadge badgeContent={unreadCount} max={99}>
             <NotificationsIcon />
           </StyledBadge>
-        </IconButton>
-      </Tooltip>
-      
-      <Tooltip title={t('common.navbar.refreshNotificationsTooltip')}>
-        <IconButton 
-          color="inherit" 
-          onClick={handleRefreshUnreadCount} 
-          size="small" 
-          sx={{ ml: 0.5 }}
-        >
-          <RefreshIcon fontSize="small" />
         </IconButton>
       </Tooltip>
       

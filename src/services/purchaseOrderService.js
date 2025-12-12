@@ -1600,6 +1600,7 @@ export const PURCHASE_ORDER_STATUSES = {
 export const PURCHASE_ORDER_PAYMENT_STATUSES = {
   UNPAID: 'unpaid',
   TO_BE_PAID: 'to_be_paid',
+  PARTIALLY_PAID: 'partially_paid',
   PAID: 'paid'
 };
 
@@ -1626,6 +1627,7 @@ export const translatePaymentStatus = (status) => {
   switch (status) {
     case 'unpaid': return 'Nie opłacone';
     case 'to_be_paid': return 'Do zapłaty';
+    case 'partially_paid': return 'Częściowo opłacone';
     case 'paid': return 'Opłacone';
     default: return status;
   }

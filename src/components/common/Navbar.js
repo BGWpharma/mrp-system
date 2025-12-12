@@ -42,7 +42,10 @@ import {
   BugReport as BugReportIcon,
   Cancel as CancelIcon,
   Menu as MenuIcon,
-  Computer as KioskIcon
+  Computer as KioskIcon,
+  Badge as HrmIcon,
+  Language as PortalIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -849,11 +852,6 @@ const Navbar = () => {
                   }
                 }}
               >
-                <MenuItem component={Link} to="/profile" onClick={handleClose}>
-                  <ListItemIcon><Person fontSize="small" /></ListItemIcon>
-                  {isAdmin ? 'Profil administratora' : 'Profil'}
-                </MenuItem>
-                
                 {isAdmin && (
                   <Box component="div">
                     <Divider />
@@ -889,6 +887,30 @@ const Navbar = () => {
                 <MenuItem component={Link} to="/kiosk" onClick={handleClose}>
                   <ListItemIcon><KioskIcon fontSize="small" /></ListItemIcon>
                   Kiosk
+                </MenuItem>
+                
+                <MenuItem 
+                  component="a" 
+                  href="https://bgw-hrm.web.app/login" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={handleClose}
+                >
+                  <ListItemIcon><HrmIcon fontSize="small" /></ListItemIcon>
+                  HRM
+                  <OpenInNewIcon sx={{ ml: 'auto', fontSize: 16, opacity: 0.6 }} />
+                </MenuItem>
+                
+                <MenuItem 
+                  component="a" 
+                  href="https://bgw-portal.web.app/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={handleClose}
+                >
+                  <ListItemIcon><PortalIcon fontSize="small" /></ListItemIcon>
+                  Portal
+                  <OpenInNewIcon sx={{ ml: 'auto', fontSize: 16, opacity: 0.6 }} />
                 </MenuItem>
                 
                 <MenuItem onClick={handleLogout}>
