@@ -43,24 +43,61 @@ const recalculateShippedQuantities = onCall(
           db.collection("cmrDocuments").where("linkedOrderId", "==", orderId).get(),
         ]);
 
-        const allCmrs = [];
+        const allCmrDocs = [];
         cmrSnapshot1.forEach((doc) => {
-          if (!allCmrs.find((cmr) => cmr.id === doc.id)) {
-            allCmrs.push({id: doc.id, ...doc.data()});
+          if (!allCmrDocs.find((cmr) => cmr.id === doc.id)) {
+            allCmrDocs.push({id: doc.id, ...doc.data()});
           }
         });
         cmrSnapshot2.forEach((doc) => {
-          if (!allCmrs.find((cmr) => cmr.id === doc.id)) {
-            allCmrs.push({id: doc.id, ...doc.data()});
+          if (!allCmrDocs.find((cmr) => cmr.id === doc.id)) {
+            allCmrDocs.push({id: doc.id, ...doc.data()});
           }
         });
 
         // Przefiltruj tylko CMR w odpowiednich statusach
-        const validCmrs = allCmrs.filter((cmr) =>
+        const filteredCmrs = allCmrDocs.filter((cmr) =>
           ["W transporcie", "Dostarczone", "Zakończone"].includes(cmr.status),
         );
 
+        // Pobierz pozycje dla każdego CMR z kolekcji cmrItems
+        const validCmrs = await Promise.all(
+            filteredCmrs.map(async (cmrDoc) => {
+              try {
+                const itemsSnapshot = await db.collection("cmrItems")
+                    .where("cmrId", "==", cmrDoc.id)
+                    .get();
+
+                const items = itemsSnapshot.docs.map((itemDoc) => ({
+                  id: itemDoc.id,
+                  ...itemDoc.data(),
+                }));
+
+                return {
+                  ...cmrDoc,
+                  items: items,
+                };
+              } catch (error) {
+                logger.warn(`Error fetching items for CMR ${cmrDoc.cmrNumber}:`, error);
+                return {
+                  ...cmrDoc,
+                  items: [],
+                };
+              }
+            }),
+        );
+
         logger.info(`Found ${validCmrs.length} valid CMR documents for order ${orderId}`);
+
+        // Log order items for debugging
+        logger.info("Order items:", {
+          orderNumber: orderData.orderNumber,
+          items: orderData.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            productId: item.productId,
+          })),
+        });
 
         // Resetuj wszystkie ilości do zera
         const resetItems = orderData.items.map((item) => ({
@@ -75,10 +112,36 @@ const recalculateShippedQuantities = onCall(
         let finalItems = [...resetItems];
 
         for (const cmr of validCmrs) {
-          if (!cmr.items || cmr.items.length === 0) continue;
+          if (!cmr.items || cmr.items.length === 0) {
+            logger.info(`CMR ${cmr.cmrNumber} has no items, skipping`);
+            continue;
+          }
+
+          logger.info(`Processing CMR ${cmr.cmrNumber} with ${cmr.items.length} items`, {
+            cmrItems: cmr.items.map((item) => ({
+              description: item.description,
+              orderItemId: item.orderItemId,
+              orderId: item.orderId,
+              orderNumber: item.orderNumber,
+              quantity: item.quantity,
+            })),
+          });
 
           finalItems = finalItems.map((orderItem) => {
-            const matchingCmrItems = findMatchingCmrItems(orderItem, cmr.items);
+            const matchingCmrItems = findMatchingCmrItems(
+                orderItem,
+                cmr.items,
+                orderId,
+                orderData.orderNumber,
+            );
+
+            if (matchingCmrItems.length > 0) {
+              logger.info(`Found ${matchingCmrItems.length} matches for order item`, {
+                orderItemName: orderItem.name,
+                orderItemId: orderItem.id,
+                matches: matchingCmrItems.map((m) => m.description),
+              });
+            }
 
             if (matchingCmrItems.length > 0) {
               const totalQuantity = matchingCmrItems.reduce(
@@ -88,20 +151,34 @@ const recalculateShippedQuantities = onCall(
               const currentShipped = parseFloat(orderItem.shippedQuantity) || 0;
 
               const cmrHistory = orderItem.cmrHistory || [];
-              const newHistoryEntries = matchingCmrItems.map((item) => ({
-                cmrNumber: cmr.cmrNumber,
-                quantity: parseFloat(item.quantity) || 0,
-                unit: item.unit || "szt.",
-                shipmentDate: item.shipmentDate || new Date().toISOString(),
-                itemId: item.itemId,
-                description: item.description,
-              }));
+              const newHistoryEntries = matchingCmrItems.map((item) => {
+                // Buduj obiekt bez undefined wartości
+                const entry = {
+                  cmrNumber: cmr.cmrNumber || "",
+                  cmrId: cmr.id || "",
+                  quantity: parseFloat(item.quantity) || 0,
+                  unit: item.unit || "szt.",
+                  shipmentDate: item.shipmentDate || cmr.shipmentDate || new Date().toISOString(),
+                  orderItemId: item.orderItemId || orderItem.id || "",
+                  description: item.description || "",
+                };
+                // Dodaj itemId tylko jeśli istnieje
+                if (item.itemId) {
+                  entry.itemId = item.itemId;
+                }
+                // Dodaj productId jeśli istnieje
+                if (item.productId) {
+                  entry.productId = item.productId;
+                }
+                return entry;
+              });
 
               return {
                 ...orderItem,
                 shippedQuantity: currentShipped + totalQuantity,
-                lastShipmentDate: new Date().toISOString(),
+                lastShipmentDate: cmr.shipmentDate || new Date().toISOString(),
                 lastCmrNumber: cmr.cmrNumber,
+                lastCmrId: cmr.id,
                 cmrHistory: [...cmrHistory, ...newHistoryEntries],
               };
             }
@@ -147,29 +224,56 @@ const recalculateShippedQuantities = onCall(
  * Funkcja dopasowywania pozycji CMR do pozycji zamówienia
  * @param {Object} orderItem - Pozycja zamówienia
  * @param {Array} cmrItems - Lista pozycji CMR
+ * @param {string} orderId - ID zamówienia
+ * @param {string} orderNumber - Numer zamówienia
  * @return {Array} Pasujące pozycje CMR
  */
-function findMatchingCmrItems(orderItem, cmrItems) {
+function findMatchingCmrItems(orderItem, cmrItems, orderId, orderNumber) {
   const matches = [];
 
   for (const cmrItem of cmrItems) {
     const quantity = parseFloat(cmrItem.quantity) || parseFloat(cmrItem.numberOfPackages) || 0;
     if (quantity <= 0) continue;
 
-    // 1. Dokładne dopasowanie nazwy
+    // Sprawdź czy pozycja CMR należy do tego zamówienia
+    const belongsToThisOrder =
+      cmrItem.orderId === orderId ||
+      (!cmrItem.orderId && cmrItem.orderNumber === orderNumber);
+
+    // 1. PRIORYTET: Dopasowanie przez orderItemId (najdokładniejsze)
+    if (cmrItem.orderItemId && belongsToThisOrder) {
+      // Jeśli CMR ma orderItemId - dopasuj TYLKO przez orderItemId
+      // NIE używaj fallbacków (nazwy) dla pozycji z orderItemId
+      if (cmrItem.orderItemId === orderItem.id) {
+        matches.push(cmrItem);
+      }
+      // Niezależnie czy pasuje czy nie - przejdź do następnej pozycji CMR
+      // (nie próbuj dopasować przez nazwę)
+      continue;
+    }
+
+    // Jeśli pozycja CMR ma orderItemId ale dla innego zamówienia - pomiń
+    if (cmrItem.orderItemId) {
+      continue;
+    }
+
+    // Poniższe fallbacki TYLKO dla pozycji CMR BEZ orderItemId
+    // (starsze CMR bez precyzyjnego powiązania)
+
+    // 2. Dokładne dopasowanie nazwy
     if (orderItem.name && cmrItem.description &&
         orderItem.name.trim().toLowerCase() === cmrItem.description.trim().toLowerCase()) {
       matches.push(cmrItem);
       continue;
     }
 
-    // 2. Dopasowanie przez ID produktu
-    if (orderItem.id && cmrItem.itemId && orderItem.id === cmrItem.itemId) {
+    // 3. Dopasowanie przez ID produktu (productId)
+    if (orderItem.productId && cmrItem.productId && orderItem.productId === cmrItem.productId) {
       matches.push(cmrItem);
       continue;
     }
 
-    // 3. Normalizacja nazw i porównanie
+    // 4. Normalizacja nazw i porównanie
     const normalizedOrderName = normalizeProductName(orderItem.name || "");
     const normalizedCmrName = normalizeProductName(cmrItem.description || "");
 
@@ -178,7 +282,7 @@ function findMatchingCmrItems(orderItem, cmrItems) {
       continue;
     }
 
-    // 4. Częściowe dopasowanie
+    // 5. Częściowe dopasowanie (fallback)
     if (orderItem.name && cmrItem.description) {
       const orderName = orderItem.name.trim().toLowerCase();
       const cmrDesc = cmrItem.description.trim().toLowerCase();

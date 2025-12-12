@@ -17,17 +17,20 @@ import {
  * KARTY I KONTENERY
  */
 
-// Karta z lepszym cieniowaniem i zaokrąglonymi rogami
+// Karta - Clean Design
 export const EnhancedCard = styled(Card)(({ theme }) => ({
-  borderRadius: theme.shape.borderRadius,
-  transition: 'transform 0.2s, box-shadow 0.2s',
+  borderRadius: 8,
+  // Clean Design - subtelniejsze transitions
+  transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
   overflow: 'hidden',
   height: '100%',
+  border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
   '&:hover': {
-    transform: 'translateY(-4px)',
+    // Clean Design - bez transform
+    borderColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
     boxShadow: theme.palette.mode === 'dark' 
-      ? '0 8px 24px rgba(0, 0, 0, 0.4)' 
-      : '0 8px 24px rgba(0, 0, 0, 0.15)',
+      ? '0 4px 12px rgba(0, 0, 0, 0.2)' 
+      : '0 4px 12px rgba(0, 0, 0, 0.08)',
   },
 }));
 

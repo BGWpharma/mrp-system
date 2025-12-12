@@ -9,25 +9,25 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
+// Clean Design - bez glassmorphism
 const StyledBackdrop = styled(Backdrop)(({ theme }) => ({
-  zIndex: 999, // Niższy od dropdown wyszukiwania (1000) ale wyższy od zawartości strony
-  backdropFilter: 'blur(8px)',
-  background: 'rgba(0, 0, 0, 0.3)',
+  zIndex: 999,
+  backgroundColor: theme.palette.mode === 'dark' 
+    ? 'rgba(0, 0, 0, 0.6)' 
+    : 'rgba(0, 0, 0, 0.4)',
 }));
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
-  borderRadius: theme.spacing(2),
-  background: theme.palette.mode === 'dark' 
-    ? 'rgba(30, 30, 30, 0.95)'
-    : 'rgba(255, 255, 255, 0.95)',
-  backdropFilter: 'blur(20px)',
+  borderRadius: theme.spacing(1),
+  // Clean Design - solidne tło
+  background: theme.palette.mode === 'dark' ? '#1e293b' : '#ffffff',
   border: theme.palette.mode === 'dark'
-    ? '1px solid rgba(255, 255, 255, 0.1)'
-    : '1px solid rgba(0, 0, 0, 0.1)',
+    ? '1px solid rgba(255, 255, 255, 0.08)'
+    : '1px solid rgba(0, 0, 0, 0.08)',
   boxShadow: theme.palette.mode === 'dark'
-    ? '0 20px 60px rgba(0, 0, 0, 0.5)'
-    : '0 20px 60px rgba(0, 0, 0, 0.2)',
+    ? '0 25px 50px rgba(0, 0, 0, 0.4)'
+    : '0 25px 50px rgba(0, 0, 0, 0.15)',
   minWidth: 320,
   maxWidth: 480,
   textAlign: 'center',

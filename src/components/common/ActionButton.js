@@ -42,15 +42,14 @@ const StyledActionButton = styled(Button)(({ theme, colorvariant = 'primary', im
     backgroundColor: isLight ? alpha(color.main, 0.1) : color.main,
     color: isLight ? color.main : color.contrastText,
     border: isLight ? `1px solid ${alpha(color.main, 0.5)}` : 'none',
+    // Clean Design - bez transform
     '&:hover': {
-      backgroundColor: isLight ? alpha(color.main, 0.2) : color.dark,
-      boxShadow: isHigh ? theme.shadows[4] : isLight ? 'none' : theme.shadows[1],
-      transform: isHigh ? 'translateY(-2px)' : 'none',
+      backgroundColor: isLight ? alpha(color.main, 0.15) : color.dark,
+      boxShadow: isHigh ? theme.shadows[2] : 'none',
       border: isLight ? `1px solid ${color.main}` : 'none',
     },
     '&:active': {
       boxShadow: 'none',
-      transform: isHigh ? 'translateY(0)' : 'none',
     },
     '&.Mui-disabled': {
       backgroundColor: isLight 
@@ -91,12 +90,9 @@ const StyledIconButton = styled(IconButton)(({ theme, colorvariant = 'primary', 
     ], {
       duration: 150,
     }),
+    // Clean Design - bez transform
     '&:hover': {
-      backgroundColor: alpha(color.main, 0.1),
-      transform: 'translateY(-2px)',
-    },
-    '&:active': {
-      transform: 'translateY(0)',
+      backgroundColor: alpha(color.main, 0.08),
     },
   };
 });

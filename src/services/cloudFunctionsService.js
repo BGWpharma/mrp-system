@@ -42,6 +42,22 @@ export const refreshExpiryStats = async () => {
 };
 
 /**
+ * Przelicza ilości wysłane dla zamówienia na podstawie CMR
+ * @param {string} orderId - ID zamówienia
+ * @returns {Promise<Object>} Obiekt z wynikiem przeliczenia
+ */
+export const recalculateShippedQuantities = async (orderId) => {
+  try {
+    const recalculateShippedFn = httpsCallable(functions, 'recalculateShippedQuantities');
+    const result = await recalculateShippedFn({ orderId });
+    return result.data;
+  } catch (error) {
+    console.error('Error calling recalculateShippedQuantities:', error);
+    throw new Error(`Nie udało się przeliczyć ilości wysłanych: ${error.message}`);
+  }
+};
+
+/**
  * Template dla kolejnych funkcji:
  * 
  * export const functionName = async (params) => {

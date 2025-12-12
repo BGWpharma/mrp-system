@@ -78,6 +78,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
 import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds, getAvailableProformasForOrder } from '../../services/invoiceService';
 import { getCmrDocumentsByOrderId, CMR_STATUSES } from '../../services/cmrService';
+import { recalculateShippedQuantities } from '../../services/cloudFunctionsService';
 import { useTranslation } from '../../hooks/useTranslation';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
@@ -976,15 +977,11 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     try {
       setIsRefreshingCmr(true);
 
-      // Wywołaj Cloud Function zamiast lokalnej funkcji
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions();
-      const recalculateShipped = httpsCallable(functions, 'recalculateShippedQuantities');
+      // Wywołaj Cloud Function przez serwis (z prawidłowym regionem europe-central2)
+      const result = await recalculateShippedQuantities(order.id);
 
-      const result = await recalculateShipped({ orderId: order.id });
-
-      if (result.data.success) {
-        showSuccess(result.data.message);
+      if (result.success) {
+        showSuccess(result.message);
 
         // Odśwież dane zamówienia i wyczyść cache
         invalidateCache(order.id);

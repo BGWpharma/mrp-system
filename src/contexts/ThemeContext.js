@@ -372,63 +372,285 @@ const getCommonComponents = (theme) => ({
       },
     },
   },
+    // =============================================
+    // MuiButton - Clean Design (globalne style)
+    // =============================================
     MuiButton: {
-    defaultProps: {
-      disableElevation: true,
-    },
+      defaultProps: {
+        disableElevation: true,
+      },
       styleOverrides: {
         root: {
           textTransform: 'none',
-          borderRadius: 8,
-          padding: '8px 16px',
-        fontWeight: 500,
+          borderRadius: 6,
+          fontWeight: 500,
+          fontSize: '0.875rem',
+          lineHeight: 1.5,
+          // Clean Design - szybkie, subtelne transitions
+          transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease',
+          '&:focus-visible': {
+            outline: 'none',
+            boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+          },
         },
+        // Contained - solidne tło
         contained: {
+          padding: '8px 16px',
           boxShadow: 'none',
           '&:hover': {
-          boxShadow: `0px 3px 6px ${
-            theme.palette.mode === 'dark' 
-              ? 'rgba(0, 0, 0, 0.2)' 
-              : 'rgba(0, 0, 0, 0.1)'
-          }`,
+            boxShadow: 'none',
+          },
+          '&:active': {
+            boxShadow: 'none',
+          },
+          '&.Mui-disabled': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.12)' 
+              : 'rgba(0, 0, 0, 0.12)',
+            color: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.3)' 
+              : 'rgba(0, 0, 0, 0.26)',
+          },
         },
-      },
-      outlined: {
-        borderWidth: '1px',
-        '&:hover': {
+        containedPrimary: {
+          backgroundColor: theme.palette.primary.main,
+          '&:hover': {
+            backgroundColor: theme.palette.primary.dark,
+          },
+        },
+        containedSecondary: {
+          backgroundColor: theme.palette.secondary.main,
+          '&:hover': {
+            backgroundColor: theme.palette.secondary.dark,
+          },
+        },
+        containedSuccess: {
+          backgroundColor: theme.palette.success.main,
+          color: '#ffffff',
+          '&:hover': {
+            backgroundColor: theme.palette.success.dark,
+          },
+        },
+        containedError: {
+          backgroundColor: theme.palette.error.main,
+          color: '#ffffff',
+          '&:hover': {
+            backgroundColor: theme.palette.error.dark,
+          },
+        },
+        containedWarning: {
+          backgroundColor: theme.palette.warning.main,
+          color: 'rgba(0, 0, 0, 0.87)',
+          '&:hover': {
+            backgroundColor: theme.palette.warning.dark,
+          },
+        },
+        containedInfo: {
+          backgroundColor: theme.palette.info.main,
+          color: '#ffffff',
+          '&:hover': {
+            backgroundColor: theme.palette.info.dark,
+          },
+        },
+        // Outlined - przezroczyste z ramką
+        outlined: {
+          padding: '7px 15px',
           borderWidth: '1px',
+          borderColor: theme.palette.mode === 'dark' 
+            ? 'rgba(255, 255, 255, 0.23)' 
+            : 'rgba(0, 0, 0, 0.23)',
+          '&:hover': {
+            borderWidth: '1px',
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.05)' 
+              : 'rgba(0, 0, 0, 0.04)',
+          },
+          '&.Mui-disabled': {
+            borderColor: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.12)' 
+              : 'rgba(0, 0, 0, 0.12)',
+          },
         },
-      },
-      text: {
-        '&:hover': {
-          backgroundColor: theme.palette.mode === 'dark' 
-            ? alpha(theme.palette.primary.main, 0.1)
-            : alpha(theme.palette.primary.main, 0.05),
+        outlinedPrimary: {
+          borderColor: alpha(theme.palette.primary.main, 0.5),
+          '&:hover': {
+            borderColor: theme.palette.primary.main,
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+          },
         },
-      },
-      sizeSmall: {
-        padding: '6px 12px',
-        fontSize: '0.8125rem',
-      },
-      sizeLarge: {
-        padding: '10px 20px',
-        fontSize: '1rem',
+        outlinedSecondary: {
+          borderColor: alpha(theme.palette.secondary.main, 0.5),
+          '&:hover': {
+            borderColor: theme.palette.secondary.main,
+            backgroundColor: alpha(theme.palette.secondary.main, 0.08),
+          },
+        },
+        outlinedSuccess: {
+          color: theme.palette.success.main,
+          borderColor: alpha(theme.palette.success.main, 0.5),
+          '&:hover': {
+            borderColor: theme.palette.success.main,
+            backgroundColor: alpha(theme.palette.success.main, 0.08),
+          },
+        },
+        outlinedError: {
+          color: theme.palette.error.main,
+          borderColor: alpha(theme.palette.error.main, 0.5),
+          '&:hover': {
+            borderColor: theme.palette.error.main,
+            backgroundColor: alpha(theme.palette.error.main, 0.08),
+          },
+        },
+        outlinedWarning: {
+          color: theme.palette.warning.main,
+          borderColor: alpha(theme.palette.warning.main, 0.5),
+          '&:hover': {
+            borderColor: theme.palette.warning.main,
+            backgroundColor: alpha(theme.palette.warning.main, 0.08),
+          },
+        },
+        outlinedInfo: {
+          color: theme.palette.info.main,
+          borderColor: alpha(theme.palette.info.main, 0.5),
+          '&:hover': {
+            borderColor: theme.palette.info.main,
+            backgroundColor: alpha(theme.palette.info.main, 0.08),
+          },
+        },
+        // Text - tylko tekst bez ramki
+        text: {
+          padding: '8px 12px',
+          '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.05)' 
+              : 'rgba(0, 0, 0, 0.04)',
+          },
+        },
+        textPrimary: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+          },
+        },
+        textSecondary: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.secondary.main, 0.08),
+          },
+        },
+        textSuccess: {
+          color: theme.palette.success.main,
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.success.main, 0.08),
+          },
+        },
+        textError: {
+          color: theme.palette.error.main,
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.error.main, 0.08),
+          },
+        },
+        textWarning: {
+          color: theme.palette.warning.main,
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.warning.main, 0.08),
+          },
+        },
+        textInfo: {
+          color: theme.palette.info.main,
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.info.main, 0.08),
+          },
+        },
+        // Rozmiary
+        sizeSmall: {
+          padding: '4px 10px',
+          fontSize: '0.8125rem',
+          borderRadius: 4,
+        },
+        sizeMedium: {
+          padding: '6px 14px',
+        },
+        sizeLarge: {
+          padding: '10px 22px',
+          fontSize: '0.9375rem',
+          borderRadius: 8,
+        },
+        // Ikona start/end
+        startIcon: {
+          marginRight: 6,
+          '& > *:first-of-type': {
+            fontSize: 18,
+          },
+        },
+        endIcon: {
+          marginLeft: 6,
+          '& > *:first-of-type': {
+            fontSize: 18,
+          },
+        },
       },
     },
-  },
-  MuiIconButton: {
-    styleOverrides: {
-      root: {
-        borderRadius: 8,
-        padding: 8,
-        '&:hover': {
-          backgroundColor: theme.palette.mode === 'dark' 
-            ? alpha(theme.palette.common.white, 0.1)
-            : alpha(theme.palette.common.black, 0.05),
+    
+    // =============================================
+    // MuiIconButton - Clean Design (globalne style)
+    // =============================================
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 6,
+          padding: 8,
+          transition: 'background-color 0.15s ease',
+          '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.08)' 
+              : 'rgba(0, 0, 0, 0.04)',
+          },
+          '&:focus-visible': {
+            outline: 'none',
+            boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+          },
+          '&.Mui-disabled': {
+            color: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.3)' 
+              : 'rgba(0, 0, 0, 0.26)',
+          },
         },
-      },
-      sizeSmall: {
-        padding: 4,
+        sizeSmall: {
+          padding: 4,
+          borderRadius: 4,
+        },
+        sizeLarge: {
+          padding: 12,
+          borderRadius: 8,
+        },
+        colorPrimary: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.primary.main, 0.08),
+          },
+        },
+        colorSecondary: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.secondary.main, 0.08),
+          },
+        },
+        colorError: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.error.main, 0.08),
+          },
+        },
+        colorSuccess: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.success.main, 0.08),
+          },
+        },
+        colorWarning: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.warning.main, 0.08),
+          },
+        },
+        colorInfo: {
+          '&:hover': {
+            backgroundColor: alpha(theme.palette.info.main, 0.08),
+          },
         },
       },
     },

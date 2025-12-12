@@ -11,6 +11,7 @@ const LoadingScreen = ({
 }) => {
   const { mode } = useTheme();
   
+  // Clean Design - spójne kolory tła
   const containerStyles = fullScreen ? {
     position: 'fixed',
     top: 0,
@@ -21,7 +22,7 @@ const LoadingScreen = ({
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: mode === 'dark' ? '#111827' : '#f5f5f5',
+    backgroundColor: mode === 'dark' ? '#0f172a' : '#f8fafc',
     zIndex: 9999,
     gap: 3
   } : {
@@ -115,28 +116,21 @@ const LoadingScreen = ({
           </svg>
         </Box>
 
-        {/* Komunikat ładowania */}
+        {/* Komunikat ładowania - Clean Design */}
         {showMessage && (
-                      <Typography 
-            variant="h6" 
+          <Typography 
+            variant="body1" 
             sx={{ 
-              color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
-              fontWeight: 300,
+              color: mode === 'dark' ? '#94a3b8' : '#64748b',
+              fontWeight: 400,
               textAlign: 'center',
-              animation: 'fadeInOut 2s ease-in-out infinite',
+              letterSpacing: '0.3px',
             }}
           >
             {message}
           </Typography>
         )}
 
-        {/* Dodatkowe style CSS dla animacji */}
-        <style>{`
-          @keyframes fadeInOut {
-            0%, 100% { opacity: 0.7; }
-            50% { opacity: 1; }
-          }
-        `}</style>
       </Box>
     </Fade>
   );

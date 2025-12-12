@@ -214,12 +214,11 @@ const DragTimeDisplay = React.memo(({ dragInfo, themeMode }) => {
     lineHeight: '1.4',
     zIndex: 10001,
     pointerEvents: 'none',
+    // Clean Design - bez blur
     boxShadow: themeMode === 'dark' 
-      ? '0px 8px 24px rgba(0, 0, 0, 0.4)' 
-      : '0px 8px 24px rgba(0, 0, 0, 0.15)',
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)',
-    fontFamily: 'Roboto, sans-serif'
+      ? '0px 4px 16px rgba(0, 0, 0, 0.3)' 
+      : '0px 4px 16px rgba(0, 0, 0, 0.1)',
+    fontFamily: 'Inter, Roboto, sans-serif'
   };
 
   return (
@@ -337,17 +336,16 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
     border: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)',
     borderRadius: '8px',
     padding: '12px',
+    // Clean Design - bez blur
     boxShadow: themeMode === 'dark' 
-      ? '0px 8px 24px rgba(0, 0, 0, 0.4)' 
-      : '0px 8px 24px rgba(0, 0, 0, 0.15)',
+      ? '0px 4px 16px rgba(0, 0, 0, 0.3)' 
+      : '0px 4px 16px rgba(0, 0, 0, 0.1)',
     fontSize: '0.875rem',
     lineHeight: '1.4',
     maxWidth: '320px',
     minWidth: '240px',
     zIndex: 10000,
-    pointerEvents: 'none',
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)'
+    pointerEvents: 'none'
   };
 
   const getStatusColor = (status) => {

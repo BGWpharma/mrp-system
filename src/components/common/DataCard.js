@@ -17,7 +17,7 @@ import { styled, alpha } from '@mui/material/styles';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
-// Stylizowana karta danych
+// Stylizowana karta danych - Clean Design
 const StyledDataCard = styled(Card)(({ theme, hoverable = false, bordered = false, coloraccent = 'primary' }) => {
   const getColor = () => {
     switch (coloraccent) {
@@ -36,11 +36,12 @@ const StyledDataCard = styled(Card)(({ theme, hoverable = false, bordered = fals
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    borderRadius: theme.shape.borderRadius,
-    transition: 'transform 0.3s, box-shadow 0.3s',
+    borderRadius: 8,
+    // Clean Design - subtelniejsze transitions
+    transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
     position: 'relative',
     overflow: 'hidden',
-    border: bordered ? `1px solid ${theme.palette.divider}` : 'none',
+    border: bordered ? `1px solid ${theme.palette.divider}` : `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
     ...(bordered && {
       borderLeft: `3px solid ${color.main}`,
     }),
@@ -50,17 +51,18 @@ const StyledDataCard = styled(Card)(({ theme, hoverable = false, bordered = fals
       top: 0,
       left: 0,
       width: '100%',
-      height: '4px',
-      background: theme.palette.mode === 'dark' 
-        ? color.dark 
-        : color.main,
+      height: '3px',
+      background: color.main,
     },
+    // Clean Design - bez transform, subtelny hover
     ...(hoverable && {
       '&:hover': {
-        transform: 'translateY(-4px)',
+        borderColor: theme.palette.mode === 'dark' 
+          ? 'rgba(255,255,255,0.12)'
+          : 'rgba(0,0,0,0.12)',
         boxShadow: theme.palette.mode === 'dark' 
-          ? '0 8px 24px rgba(0, 0, 0, 0.3)'
-          : '0 8px 24px rgba(0, 0, 0, 0.1)',
+          ? '0 4px 12px rgba(0, 0, 0, 0.2)'
+          : '0 4px 12px rgba(0, 0, 0, 0.08)',
       },
     }),
   };
