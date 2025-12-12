@@ -203,49 +203,9 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ 
-      minHeight: '100vh',
-      bgcolor: 'background.default',
-      position: 'relative',
-      overflow: 'hidden'
+      minHeight: '100vh'
     }}>
-      {/* Animowane tło */}
-      <Box sx={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
-        pointerEvents: 'none'
-      }}>
-        <Box sx={{
-          position: 'absolute',
-          top: '20%',
-          left: '10%',
-          width: '400px',
-          height: '400px',
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #667eea, #764ba2)',
-          filter: 'blur(120px)',
-          opacity: 0.08,
-          animation: 'float 15s ease-in-out infinite'
-        }} />
-        <Box sx={{
-          position: 'absolute',
-          top: '60%',
-          right: '10%',
-          width: '350px',
-          height: '350px',
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #f093fb, #f5576c)',
-          filter: 'blur(120px)',
-          opacity: 0.06,
-          animation: 'float 18s ease-in-out infinite',
-          animationDelay: '-7s'
-        }} />
-      </Box>
-
-      <Container maxWidth="md" sx={{ pt: 4, pb: 4, position: 'relative', zIndex: 1 }}>
+      <Container maxWidth="md" sx={{ pt: 4, pb: 4 }}>
         {/* Logo Animowane */}
         <Fade in timeout={1000}>
           <Box sx={{ 
@@ -304,28 +264,25 @@ const Dashboard = () => {
           </Typography>
         </Fade>
 
-        {/* Sekcja Ogłoszeń */}
+        {/* Sekcja Ogłoszeń - Clean Design */}
         <Fade in timeout={1600}>
           <Paper 
             elevation={0}
             sx={{ 
               p: 4, 
-              background: isDarkMode 
-                ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(236, 72, 153, 0.05) 100%)'
-                : 'linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(236, 72, 153, 0.03) 100%)',
-              borderRadius: 4, 
-              border: '2px solid',
-              borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
+              bgcolor: 'background.paper',
+              borderRadius: 2, 
+              border: '1px solid',
+              borderColor: 'divider',
               boxShadow: isDarkMode 
-                ? '0 8px 32px rgba(139, 92, 246, 0.15)'
-                : '0 8px 24px rgba(139, 92, 246, 0.1)',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(10px)',
+                ? '0 1px 3px rgba(0, 0, 0, 0.12)'
+                : '0 1px 3px rgba(0, 0, 0, 0.06)',
+              transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
               '&:hover': {
-                transform: 'translateY(-2px)',
+                borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
                 boxShadow: isDarkMode 
-                  ? '0 12px 40px rgba(139, 92, 246, 0.2)'
-                  : '0 12px 32px rgba(139, 92, 246, 0.15)',
+                  ? '0 4px 12px rgba(0, 0, 0, 0.15)'
+                  : '0 4px 12px rgba(0, 0, 0, 0.08)',
               }
             }}
           >
@@ -334,17 +291,13 @@ const Dashboard = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 48,
-                height: 48,
-                borderRadius: 2,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(236, 72, 153, 0.15) 100%)'
-                  : 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%)',
+                width: 40,
+                height: 40,
+                borderRadius: 1.5,
+                bgcolor: isDarkMode ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.08)',
                 mr: 2,
-                border: '1px solid',
-                borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
               }}>
-                <AnnouncementIcon sx={{ color: 'primary.main', fontSize: 26 }} />
+                <AnnouncementIcon sx={{ color: 'primary.main', fontSize: 22 }} />
               </Box>
               <Typography variant="h5" sx={{ fontWeight: 600, flex: 1 }}>
                 {t('dashboard.announcements')}
@@ -355,9 +308,9 @@ const Dashboard = () => {
                   onClick={startEditingAnnouncement}
                   sx={{ 
                     ml: 'auto',
-                    bgcolor: isDarkMode ? 'rgba(139, 92, 246, 0.1)' : 'rgba(139, 92, 246, 0.08)',
+                    bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
                     '&:hover': {
-                      bgcolor: isDarkMode ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.15)',
+                      bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
                     }
                   }}
                   title={t('dashboard.editAnnouncement')}
@@ -389,14 +342,6 @@ const Dashboard = () => {
                     variant="outlined" 
                     startIcon={<CancelIcon />}
                     onClick={cancelEditingAnnouncement}
-                    sx={{
-                      borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.4)',
-                      color: 'primary.main',
-                      '&:hover': {
-                        borderColor: 'primary.main',
-                        bgcolor: isDarkMode ? 'rgba(139, 92, 246, 0.1)' : 'rgba(139, 92, 246, 0.08)',
-                      }
-                    }}
                   >
                     {t('dashboard.cancel')}
                   </Button>
@@ -404,15 +349,6 @@ const Dashboard = () => {
                     variant="contained" 
                     startIcon={<SaveIcon />}
                     onClick={saveAnnouncement}
-                    sx={{
-                      background: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
-                      boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)',
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #7c3aed 0%, #db2777 100%)',
-                        boxShadow: '0 6px 20px rgba(139, 92, 246, 0.4)',
-                        transform: 'translateY(-1px)',
-                      }
-                    }}
                   >
                     {t('dashboard.save')}
                   </Button>
@@ -423,10 +359,10 @@ const Dashboard = () => {
                 <Box sx={{
                   mt: 2,
                   p: 3,
-                  borderRadius: 2,
-                  bgcolor: isDarkMode ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.6)',
+                  borderRadius: 1.5,
+                  bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
                   border: '1px solid',
-                  borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)',
+                  borderColor: 'divider',
                 }}>
                   <Typography 
                     variant="body1" 
@@ -447,13 +383,13 @@ const Dashboard = () => {
                 <Box sx={{
                   mt: 2,
                   p: 3,
-                  borderRadius: 2,
-                  bgcolor: isDarkMode ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.5)',
+                  borderRadius: 1.5,
+                  bgcolor: isDarkMode ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
                   border: '1px dashed',
-                  borderColor: isDarkMode ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.15)',
+                  borderColor: 'divider',
                   textAlign: 'center'
                 }}>
-                  <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary', opacity: 0.7 }}>
+                  <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
                     {t('dashboard.noAnnouncements')}
                   </Typography>
                 </Box>
@@ -481,22 +417,6 @@ const Dashboard = () => {
         </Alert>
       </Snackbar>
 
-      {/* Animacja float */}
-      <style>
-        {`
-          @keyframes float {
-            0%, 100% {
-              transform: translateY(0) translateX(0);
-            }
-            33% {
-              transform: translateY(-20px) translateX(10px);
-            }
-            66% {
-              transform: translateY(10px) translateX(-10px);
-            }
-          }
-        `}
-      </style>
     </Box>
   );
 };

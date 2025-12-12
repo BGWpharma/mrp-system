@@ -61,56 +61,49 @@ import { useSidebar } from '../../contexts/SidebarContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs } from '../../services/userService';
 
-// Styled components - customer-portal style
+// Styled components - Clean Design
 const StyledListItemButton = styled(ListItemButton)(({ theme }) => ({
-  borderRadius: '12px',
+  borderRadius: '6px',
   margin: '2px 8px',
   padding: '8px 12px',
   border: 'none',
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  transition: 'background-color 0.15s ease',
   '&.Mui-selected': {
-    background: theme.palette.mode === 'dark'
-      ? 'linear-gradient(to right, #3b82f6, #8b5cf6)' // blue-500 to purple-500 dla dark
-      : 'linear-gradient(to right, #1d4ed8, #6d28d9)', // blue-700 to purple-700 dla light - lepszy kontrast
-    color: '#ffffff',
-    fontWeight: 'bold',
+    // Clean Design - solidny kolor zamiast gradient
+    backgroundColor: theme.palette.mode === 'dark'
+      ? 'rgba(59, 130, 246, 0.15)'
+      : 'rgba(25, 118, 210, 0.12)',
+    color: theme.palette.mode === 'dark' ? '#93c5fd' : '#1d4ed8',
+    fontWeight: 600,
     border: 'none',
-    boxShadow: theme.palette.mode === 'dark'
-      ? '0 4px 12px rgba(59, 130, 246, 0.3)'
-      : '0 4px 12px rgba(29, 78, 216, 0.4)',
     '&:hover': {
-      background: theme.palette.mode === 'dark'
-        ? 'linear-gradient(to right, #2563eb, #7c3aed)' // blue-600 to purple-600 dla dark
-        : 'linear-gradient(to right, #1e3a8a, #581c87)', // blue-800 to purple-800 dla light
-      transform: 'translateY(-1px)',
+      backgroundColor: theme.palette.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.2)'
+        : 'rgba(25, 118, 210, 0.16)',
       border: 'none',
-      boxShadow: theme.palette.mode === 'dark'
-        ? '0 6px 16px rgba(59, 130, 246, 0.4)'
-        : '0 6px 16px rgba(29, 78, 216, 0.5)',
     },
   },
   '&:hover': {
     backgroundColor: theme.palette.mode === 'dark' 
-      ? 'rgba(55, 65, 81, 0.8)'
-      : 'rgba(241, 245, 249, 0.8)',
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(0, 0, 0, 0.04)',
     color: theme.palette.mode === 'dark' 
       ? 'inherit' 
-      : '#1e293b', // slate-800 dla lepszego kontrastu hover w jasnym motywie
-    transform: 'translateX(4px)',
+      : '#1e293b',
     border: 'none',
-    backdropFilter: 'blur(4px)',
   },
 }));
 
+// Clean Design - uproszczony StyledListItem
 const StyledListItem = styled(ListItem)(({ theme }) => ({
-  borderRadius: '8px',
+  borderRadius: '6px',
   margin: '1px 12px',
   padding: '4px 8px',
   border: 'none !important',
   outline: 'none !important',
   boxShadow: 'none !important',
-  backgroundColor: 'transparent !important', // Przezroczyste tło domyślnie
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  backgroundColor: 'transparent !important',
+  transition: 'background-color 0.15s ease',
   '&::before': {
     display: 'none !important',
   },
@@ -119,24 +112,23 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   },
   '&.Mui-selected': {
     backgroundColor: theme.palette.mode === 'dark'
-      ? 'rgba(59, 130, 246, 0.2)'
-      : 'rgba(29, 78, 216, 0.15)', // ciemniejszy blue-700 dla lepszego kontrastu
+      ? 'rgba(59, 130, 246, 0.12) !important'
+      : 'rgba(25, 118, 210, 0.1) !important',
     borderLeft: theme.palette.mode === 'dark' 
-      ? '3px solid #3b82f6' 
-      : '3px solid #1d4ed8', // blue-700 dla light mode
+      ? '2px solid #3b82f6' 
+      : '2px solid #1976d2',
     borderRight: 'none !important',
     borderTop: 'none !important',
     borderBottom: 'none !important',
     outline: 'none !important',
     boxShadow: 'none !important',
     color: theme.palette.mode === 'dark' 
-      ? 'inherit' 
-      : '#1e293b', // slate-800 dla lepszego kontrastu w jasnym motywie
+      ? '#93c5fd' 
+      : '#1d4ed8',
     '&:hover': {
       backgroundColor: theme.palette.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.3)'
-        : 'rgba(29, 78, 216, 0.2)', // ciemniejszy dla lepszego kontrastu
-      transform: 'translateX(2px)',
+        ? 'rgba(59, 130, 246, 0.18) !important'
+        : 'rgba(25, 118, 210, 0.14) !important',
       borderRight: 'none !important',
       borderTop: 'none !important',
       borderBottom: 'none !important',
@@ -146,9 +138,8 @@ const StyledListItem = styled(ListItem)(({ theme }) => ({
   },
   '&:hover': {
     backgroundColor: theme.palette.mode === 'dark' 
-      ? 'rgba(55, 65, 81, 0.6)'
-      : 'rgba(241, 245, 249, 0.6)',
-    transform: 'translateX(2px)',
+      ? 'rgba(255, 255, 255, 0.04) !important'
+      : 'rgba(0, 0, 0, 0.03) !important',
     border: 'none !important',
     outline: 'none !important',
     boxShadow: 'none !important',
@@ -482,45 +473,26 @@ const Sidebar = ({ onToggle }) => {
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'width 0.2s ease',
           overflowX: 'hidden',
-          background: mode === 'dark' 
-            ? 'rgba(31, 41, 55, 0.9)' // bg-gray-800/90 jak w customer-portal
-            : 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(8px)',
+          // Clean Design - solidne tło bez glassmorphism
+          background: mode === 'dark' ? '#1e293b' : '#ffffff',
           backgroundImage: 'none',
           borderRight: '1px solid',
           borderColor: mode === 'dark' 
-            ? 'rgba(55, 65, 81, 0.5)' // border-gray-700/50
-            : 'rgba(148, 163, 184, 0.3)', // border-slate-400/30
-          boxShadow: mode === 'dark'
-            ? '0 10px 25px rgba(0, 0, 0, 0.25)'
-            : '0 4px 12px rgba(0, 0, 0, 0.1)',
+            ? 'rgba(255, 255, 255, 0.06)'
+            : 'rgba(0, 0, 0, 0.06)',
           height: '100vh',
           top: 0,
           left: 0, 
           display: 'flex',
           flexDirection: 'column',
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          // Gradient overlay podobny do Navbar
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: mode === 'dark'
-              ? 'linear-gradient(to bottom, rgba(31, 41, 55, 0.3), rgba(55, 65, 81, 0.1))'
-              : 'linear-gradient(to bottom, rgba(248, 250, 252, 0.3), rgba(226, 232, 240, 0.1))',
-            pointerEvents: 'none',
-            zIndex: -1,
-          },
         },
         ...(isMobile && {
           '& .MuiBackdrop-root': {
             zIndex: (theme) => theme.zIndex.drawer,
-            backdropFilter: 'blur(4px)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
           },
           zIndex: (theme) => theme.zIndex.drawer + 2,
           position: 'relative'
@@ -535,7 +507,7 @@ const Sidebar = ({ onToggle }) => {
           alignItems: 'center',
           p: 1.5,
           borderBottom: '1px solid',
-          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+          borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
           flexShrink: 0,
         }}
       >
@@ -544,9 +516,9 @@ const Sidebar = ({ onToggle }) => {
             variant="subtitle1"
             component="div"
             sx={{
-              fontWeight: 'bold',
-              fontSize: '0.875rem',
-              color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+              fontWeight: 600,
+              fontSize: '0.75rem',
+              color: mode === 'dark' ? '#94a3b8' : '#64748b',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               ml: 1,
@@ -559,15 +531,13 @@ const Sidebar = ({ onToggle }) => {
           onClick={toggleDrawer}
           sx={{ 
             p: 0.5, 
-            color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            borderRadius: '8px',
+            color: mode === 'dark' ? '#94a3b8' : '#64748b',
+            transition: 'background-color 0.15s ease',
+            borderRadius: '6px',
             '&:hover': {
-              transform: 'scale(1.1)',
-              background: mode === 'dark'
-                ? 'rgba(55, 65, 81, 0.8)'
-                : 'rgba(241, 245, 249, 0.8)',
-              color: mode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.8)',
+              backgroundColor: mode === 'dark'
+                ? 'rgba(255, 255, 255, 0.06)'
+                : 'rgba(0, 0, 0, 0.04)',
             }
           }}
         >

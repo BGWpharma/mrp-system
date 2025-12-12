@@ -444,29 +444,13 @@ const Navbar = () => {
         position="static" 
         elevation={0}
         sx={{ 
-          background: mode === 'dark' 
-            ? 'rgba(31, 41, 55, 0.9)' // bg-gray-800/90 jak w customer-portal
-            : 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(8px)', // backdrop-blur-sm
+          // Clean Design - solidne tło bez glassmorphism
+          background: mode === 'dark' ? '#1e293b' : '#ffffff',
           borderBottom: '1px solid',
           borderColor: mode === 'dark' 
-            ? 'rgba(55, 65, 81, 0.5)' // border-gray-700/50
-            : 'rgba(148, 163, 184, 0.3)', // border-slate-400/30
-          color: mode === 'dark' ? '#ffffff' : 'rgba(15, 23, 42, 0.9)',
-          position: 'relative',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: mode === 'dark'
-              ? 'linear-gradient(to right, rgba(31, 41, 55, 0.5), rgba(55, 65, 81, 0.3))'
-              : 'linear-gradient(to right, rgba(248, 250, 252, 0.5), rgba(226, 232, 240, 0.3))',
-            pointerEvents: 'none',
-            zIndex: -1,
-          },
+            ? 'rgba(255, 255, 255, 0.06)'
+            : 'rgba(0, 0, 0, 0.06)',
+          color: mode === 'dark' ? '#f1f5f9' : '#1e293b',
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', position: 'relative', zIndex: 10 }}>
@@ -483,12 +467,11 @@ const Navbar = () => {
                   mr: 1,
                   zIndex: 1201,
                   display: isOpen ? 'none' : 'flex',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'background-color 0.15s ease',
                   '&:hover': {
-                    transform: 'scale(1.05)',
-                    background: mode === 'dark'
-                      ? 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))'
-                      : 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+                    backgroundColor: mode === 'dark'
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.04)',
                   }
                 }}
               >
@@ -517,10 +500,9 @@ const Navbar = () => {
                       padding: '3px 0',
                       objectFit: 'contain',
                       ml: 2,
-                      transition: 'all 0.3s ease',
+                      transition: 'opacity 0.15s ease',
                       '&:hover': {
-                        transform: 'scale(1.05)',
-                        filter: 'brightness(1.1)',
+                        opacity: 0.8,
                       }
                     }}
                   />
@@ -540,12 +522,8 @@ const Navbar = () => {
           }} ref={searchContainerRef}>
             <SearchIconWrapper>
               <SearchIcon sx={{ 
-                color: mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(51, 65, 85, 0.8)', // slate-700/80 - ciemniejszy dla lepszego kontrastu
-                transition: 'color 0.3s ease',
-                fontSize: '1.25rem', // upewniamy się, że ikona ma odpowiedni rozmiar
-                '&:hover': {
-                  color: mode === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 1)', // slate-800 dla lepszego kontrastu on hover
-                }
+                color: mode === 'dark' ? '#94a3b8' : '#64748b',
+                fontSize: '1.25rem',
               }} />
             </SearchIconWrapper>
             <StyledInputBase
@@ -557,36 +535,28 @@ const Navbar = () => {
               onKeyPress={handleSearchKeyPress}
               sx={{
                 width: '100%',
+                // Clean Design - bez blur
                 background: mode === 'dark'
-                  ? 'rgba(55, 65, 81, 0.3)' // gray-700/30
-                  : 'rgba(241, 245, 249, 0.8)', // slate-100/80
-                backdropFilter: 'blur(4px)',
-                borderRadius: '12px',
+                  ? 'rgba(255, 255, 255, 0.05)'
+                  : 'rgba(0, 0, 0, 0.03)',
+                borderRadius: '6px',
                 border: '1px solid',
                 borderColor: mode === 'dark'
-                  ? 'rgba(75, 85, 99, 0.4)' // gray-600/40
-                  : 'rgba(203, 213, 225, 0.6)', // slate-300/60
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'rgba(0, 0, 0, 0.08)',
+                transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                 '&:hover': {
                   borderColor: mode === 'dark'
-                    ? 'rgba(59, 130, 246, 0.4)' // blue-500/40
-                    : 'rgba(29, 78, 216, 0.4)', // blue-700/40
-                  background: mode === 'dark'
-                    ? 'rgba(55, 65, 81, 0.5)'
-                    : 'rgba(255, 255, 255, 0.9)',
-                  transform: 'scale(1.01)',
+                    ? 'rgba(255, 255, 255, 0.15)'
+                    : 'rgba(0, 0, 0, 0.15)',
                 },
                 '&:focus-within': {
                   borderColor: mode === 'dark'
-                    ? 'rgba(59, 130, 246, 0.6)'
-                    : 'rgba(29, 78, 216, 0.6)',
-                  background: mode === 'dark'
-                    ? 'rgba(55, 65, 81, 0.6)'
-                    : 'rgba(255, 255, 255, 0.95)',
-                  transform: 'scale(1.02)',
+                    ? 'rgba(59, 130, 246, 0.5)'
+                    : 'rgba(25, 118, 210, 0.5)',
                   boxShadow: mode === 'dark'
-                    ? '0 0 20px rgba(59, 130, 246, 0.2)'
-                    : '0 0 20px rgba(29, 78, 216, 0.15)',
+                    ? '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                    : '0 0 0 3px rgba(25, 118, 210, 0.08)',
                 },
                 '& .MuiInputBase-input': {
                   paddingRight: (searchQuery.length > 0 || isSearching) ? '42px' : '8px',
@@ -638,8 +608,14 @@ const Navbar = () => {
                     zIndex: 10002,
                     maxHeight: '80vh',
                     overflow: 'auto',
-                    boxShadow: 3,
-                    bgcolor: mode === 'dark' ? '#1a2235' : '#ffffff',
+                    // Clean Design
+                    bgcolor: mode === 'dark' ? '#1e293b' : '#ffffff',
+                    border: '1px solid',
+                    borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+                    boxShadow: mode === 'dark' 
+                      ? '0 4px 20px rgba(0, 0, 0, 0.25)' 
+                      : '0 4px 20px rgba(0, 0, 0, 0.1)',
+                    borderRadius: '8px',
                   }}
                 >
                 <List>
@@ -730,12 +706,11 @@ const Navbar = () => {
                 color="inherit" 
                 sx={{ 
                   ml: isMobile ? 0.5 : 1,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'background-color 0.15s ease',
                   '&:hover': {
-                    transform: 'scale(1.05)',
-                    background: mode === 'dark'
-                      ? 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))'
-                      : 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
+                    backgroundColor: mode === 'dark'
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.04)',
                   }
                 }}
                 onClick={toggleTheme}
@@ -760,24 +735,16 @@ const Navbar = () => {
                 onClick={handleMenu} 
                 color="inherit" 
                 sx={{ 
-                  border: '2px solid',
+                  border: '1px solid',
                   borderColor: mode === 'dark' 
-                    ? 'rgba(59, 130, 246, 0.3)' // blue-500/30
-                    : 'rgba(29, 78, 216, 0.3)', // blue-700/30
+                    ? 'rgba(255, 255, 255, 0.1)'
+                    : 'rgba(0, 0, 0, 0.1)',
                   padding: isMobile ? '2px' : '4px',
-                  background: mode === 'dark'
-                    ? 'rgba(55, 65, 81, 0.3)' // gray-700/30
-                    : 'rgba(241, 245, 249, 0.8)', // slate-100/80
-                  backdropFilter: 'blur(4px)',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'border-color 0.15s ease',
                   '&:hover': {
-                    transform: 'scale(1.05)',
                     borderColor: mode === 'dark'
-                      ? 'rgba(59, 130, 246, 0.6)'
-                      : 'rgba(29, 78, 216, 0.6)',
-                    boxShadow: mode === 'dark'
-                      ? '0 0 20px rgba(59, 130, 246, 0.3)'
-                      : '0 0 20px rgba(29, 78, 216, 0.2)',
+                      ? 'rgba(255, 255, 255, 0.2)'
+                      : 'rgba(0, 0, 0, 0.2)',
                   }
                 }}
               >
@@ -797,7 +764,7 @@ const Navbar = () => {
                       position: 'absolute',
                       bottom: -4,
                       right: -4,
-                      background: 'linear-gradient(to right, #3b82f6, #8b5cf6)', // blue to purple gradient
+                      backgroundColor: '#3b82f6',
                       borderRadius: '50%',
                       width: 16,
                       height: 16,
@@ -805,8 +772,7 @@ const Navbar = () => {
                       alignItems: 'center',
                       justifyContent: 'center',
                       border: '2px solid',
-                      borderColor: mode === 'dark' ? '#1f2937' : '#fff',
-                      boxShadow: '0 0 10px rgba(59, 130, 246, 0.4)',
+                      borderColor: mode === 'dark' ? '#1e293b' : '#fff',
                     }}
                   >
                     <AdminIcon fontSize="inherit" sx={{ fontSize: 10, color: '#fff' }} />
@@ -824,29 +790,26 @@ const Navbar = () => {
                   elevation: 0,
                   sx: {
                     mt: 1.5,
-                    background: mode === 'dark'
-                      ? 'rgba(31, 41, 55, 0.95)' // gray-800/95
-                      : 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(8px)',
+                    // Clean Design - solidne tło
+                    background: mode === 'dark' ? '#1e293b' : '#ffffff',
                     backgroundImage: 'none',
                     border: '1px solid',
                     borderColor: mode === 'dark'
-                      ? 'rgba(55, 65, 81, 0.5)'
-                      : 'rgba(148, 163, 184, 0.3)',
-                    borderRadius: '12px',
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.08)',
+                    borderRadius: '8px',
                     boxShadow: mode === 'dark'
-                      ? '0 25px 50px rgba(0, 0, 0, 0.25)'
-                      : '0 10px 25px rgba(0, 0, 0, 0.1)',
+                      ? '0 4px 20px rgba(0, 0, 0, 0.25)'
+                      : '0 4px 20px rgba(0, 0, 0, 0.1)',
                     minWidth: 200,
                     '& .MuiMenuItem-root': {
-                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                      borderRadius: '8px',
-                      margin: '4px 8px',
+                      transition: 'background-color 0.15s ease',
+                      borderRadius: '6px',
+                      margin: '2px 6px',
                       '&:hover': {
-                        background: mode === 'dark'
-                          ? 'linear-gradient(to right, rgba(55, 65, 81, 0.8), rgba(75, 85, 99, 0.8))'
-                          : 'linear-gradient(to right, rgba(241, 245, 249, 0.8), rgba(226, 232, 240, 0.8))',
-                        transform: 'translateX(4px)',
+                        backgroundColor: mode === 'dark'
+                          ? 'rgba(255, 255, 255, 0.06)'
+                          : 'rgba(0, 0, 0, 0.04)',
                       }
                     }
                   }

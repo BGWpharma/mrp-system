@@ -92,7 +92,7 @@
      TYPOGRAPHY SCALE
      ======================================== */
   
-  --font-family-base: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-base: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-family-mono: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   
   /* Font Sizes - Zoptymalizowane dla aplikacji biznesowych */
@@ -125,29 +125,30 @@
      BORDER RADIUS
      ======================================== */
   
+  /* Clean Design - mniejsze zaokrąglenia */
   --radius-none: 0;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 16px;
   --radius-full: 9999px;
   
   /* ========================================
-     SHADOWS (Light Theme)
+     SHADOWS - Clean Design (subtelniejsze)
      ======================================== */
   
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.04);
-  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.25);
-  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.15);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.04);
   
-  /* Glassmorphism shadows */
-  --shadow-glass-light: 0 8px 32px rgba(31, 38, 135, 0.1), 0 1px 0px rgba(255, 255, 255, 0.8) inset;
+  /* Focus ring */
+  --shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.15);
   
   /* ========================================
      TRANSITIONS & ANIMATIONS
@@ -228,7 +229,7 @@
   --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.8);
   --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.4);
   
-  /* Glassmorphism shadows dark */
-  --shadow-glass-dark: 0 8px 32px rgba(0, 0, 0, 0.3), 0 1px 0px rgba(255, 255, 255, 0.1) inset;
+  /* Focus ring dark */
+  --shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
