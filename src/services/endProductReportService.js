@@ -1,6 +1,9 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PDFDocument, rgb } from 'pdf-lib';
+import { storage, db } from './firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 
 // Helper function to translate quality control values to English
 const translateQualityValue = (value) => {
@@ -267,6 +270,8 @@ export const generateEndProductReportPDF = async (task, additionalData = {}) => 
       enableCompression: true,        // Enable PDF compression
       precision: 2,                   // Limit precision to 2 decimal places
       compressLevel: 9,               // Maximum compression level (1-9)
+      returnBlob: false,              // Return blob instead of downloading
+      skipDownload: false,            // Skip automatic download
       ...options
     };
 
@@ -1645,6 +1650,11 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
           // Create blob from the modified PDF bytes
           const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
           
+          // If returnBlob is true, return the blob without downloading
+          if (pdfOptions.returnBlob || pdfOptions.skipDownload) {
+            return { success: true, fileName, withAttachments: true, blob };
+          }
+          
           // Create download URL
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
@@ -1655,7 +1665,7 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
           document.body.removeChild(link);
           window.URL.revokeObjectURL(url);
           
-          return { success: true, fileName, withAttachments: true };
+          return { success: true, fileName, withAttachments: true, blob };
         }
       } catch (error) {
         console.error('Error processing attachments, saving PDF without attachments:', error);
@@ -1680,9 +1690,18 @@ By purchasing the product, the Buyer accepts the conditions outlined in this doc
 
     // Save the PDF (without attachments)
     const fileName = `End_Product_Report_MO_${task.moNumber || task.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    
+    // Get PDF as blob
+    const blob = doc.output('blob');
+    
+    // If returnBlob is true, return the blob without downloading
+    if (pdfOptions.returnBlob || pdfOptions.skipDownload) {
+      return { success: true, fileName, withAttachments: false, blob };
+    }
+    
     doc.save(fileName);
 
-    return { success: true, fileName, withAttachments: false };
+    return { success: true, fileName, withAttachments: false, blob };
 
   } catch (error) {
     console.error('Error generating End Product Report PDF:', error);
@@ -1939,6 +1958,115 @@ const formatDateOnly = (dateTime) => {
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'Date error';
+  }
+};
+
+/**
+ * Zapisuje wygenerowany raport PDF jako załącznik do zadania produkcyjnego w Firebase Storage
+ * @param {string} taskId - ID zadania produkcyjnego
+ * @param {Blob} pdfBlob - Blob z PDF raportu
+ * @param {string} fileName - Nazwa pliku
+ * @param {string} userId - ID użytkownika zapisującego raport
+ * @returns {Promise<Object>} - Informacje o zapisanym załączniku
+ */
+export const saveEndProductReportToStorage = async (taskId, pdfBlob, fileName, userId) => {
+  try {
+    if (!taskId || !pdfBlob || !fileName) {
+      throw new Error('Missing required parameters: taskId, pdfBlob, or fileName');
+    }
+
+    // Utwórz ścieżkę w Storage
+    const timestamp = Date.now();
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `end-product-reports/${taskId}/${timestamp}_${sanitizedFileName}`;
+    
+    // Upload do Firebase Storage
+    const storageRef = ref(storage, storagePath);
+    const uploadResult = await uploadBytes(storageRef, pdfBlob, {
+      contentType: 'application/pdf',
+      customMetadata: {
+        taskId,
+        uploadedBy: userId || 'unknown',
+        originalFileName: fileName
+      }
+    });
+    
+    // Pobierz URL do pobrania
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+    
+    // Utwórz obiekt załącznika
+    const attachment = {
+      id: `report_${timestamp}`,
+      fileName: fileName,
+      storagePath: storagePath,
+      downloadURL: downloadURL,
+      contentType: 'application/pdf',
+      size: pdfBlob.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: userId || 'unknown',
+      type: 'end_product_report'
+    };
+    
+    // Zaktualizuj dokument zadania - dodaj załącznik do tablicy endProductReports
+    const taskRef = doc(db, 'productionTasks', taskId);
+    await updateDoc(taskRef, {
+      endProductReports: arrayUnion(attachment),
+      updatedAt: serverTimestamp()
+    });
+    
+    return {
+      success: true,
+      attachment,
+      downloadURL
+    };
+  } catch (error) {
+    console.error('Error saving end product report to storage:', error);
+    throw new Error(`Failed to save report: ${error.message}`);
+  }
+};
+
+/**
+ * Generuje i zapisuje raport PDF do Firebase Storage
+ * @param {Object} task - Dane zadania produkcyjnego
+ * @param {Object} additionalData - Dodatkowe dane do raportu
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik generowania i zapisu
+ */
+export const generateAndSaveEndProductReport = async (task, additionalData = {}, userId) => {
+  try {
+    // Wygeneruj PDF z opcją returnBlob
+    const result = await generateEndProductReportPDF(task, {
+      ...additionalData,
+      options: {
+        ...(additionalData.options || {}),
+        returnBlob: true,
+        skipDownload: true
+      }
+    });
+    
+    if (!result.success || !result.blob) {
+      throw new Error('Failed to generate PDF blob');
+    }
+    
+    // Zapisz do Firebase Storage
+    const saveResult = await saveEndProductReportToStorage(
+      task.id,
+      result.blob,
+      result.fileName,
+      userId
+    );
+    
+    return {
+      success: true,
+      fileName: result.fileName,
+      withAttachments: result.withAttachments,
+      savedToStorage: true,
+      downloadURL: saveResult.downloadURL,
+      attachment: saveResult.attachment
+    };
+  } catch (error) {
+    console.error('Error generating and saving end product report:', error);
+    throw error;
   }
 };
 

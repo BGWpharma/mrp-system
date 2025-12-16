@@ -23,7 +23,13 @@
     "save": "Save",
     "saving": "Saving...",
     "add": "Add",
-    "back": "Back to list"
+    "back": "Back to list",
+    "export": "Export",
+    "import": "Import",
+    "template": "Template",
+    "exportCSV": "Export to CSV",
+    "importCSV": "Import from CSV",
+    "downloadTemplate": "Download CSV template"
   },
   "confirmDelete": {
     "title": "Confirm deletion",
@@ -76,6 +82,25 @@
     "saveFailed": "Failed to save supplier",
     "loadFailed": "Failed to load suppliers list",
     "dataLoadFailed": "Failed to load supplier data",
-    "nipVerified": "Successfully verified Tax ID and updated data"
+    "nipVerified": "Successfully verified Tax ID and updated data",
+    "exportSuccess": "Suppliers exported successfully",
+    "exportFailed": "Failed to export suppliers",
+    "templateDownloaded": "CSV template has been downloaded",
+    "importResults": "Import completed: {{created}} created, {{updated}} updated, {{skipped}} skipped",
+    "importFailed": "Failed to import suppliers"
+  },
+  "import": {
+    "title": "Import suppliers from CSV",
+    "description": "Select a CSV file with suppliers. Required columns: COMPANY NAME, CONTACT PERSON, EMAIL, PHONE, VAT EU, NOTES",
+    "selectFile": "Select CSV file",
+    "toCreate": "To create",
+    "toUpdate": "To update",
+    "unchanged": "Unchanged",
+    "updateExisting": "Update existing suppliers",
+    "newSuppliers": "New suppliers",
+    "toUpdateList": "To update",
+    "unchangedList": "Unchanged",
+    "importing": "Importing...",
+    "import": "Import"
   }
 }

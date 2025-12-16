@@ -58,19 +58,21 @@ export const recalculateShippedQuantities = async (orderId) => {
 };
 
 /**
- * Template dla kolejnych funkcji:
+ * Ręczne wywołanie generowania cotygodniowego raportu konsumpcji MO
+ * Generuje raport analizy konsumpcji z wykorzystaniem AI
  * 
- * export const functionName = async (params) => {
- *   try {
- *     const functionNameFn = httpsCallable(functions, 'functionName');
- *     const result = await functionNameFn(params);
- *     return result.data;
- *   } catch (error) {
- *     console.error('Error calling functionName:', error);
- *     throw error;
- *   }
- * };
+ * @returns {Promise<Object>} Obiekt z wynikami generowania raportu
  */
+export const triggerWeeklyConsumptionReport = async () => {
+  try {
+    const triggerReportFn = httpsCallable(functions, 'triggerWeeklyConsumptionReport');
+    const result = await triggerReportFn();
+    return result.data;
+  } catch (error) {
+    console.error('Error calling triggerWeeklyConsumptionReport:', error);
+    throw new Error(`Nie udało się wygenerować raportu: ${error.message}`);
+  }
+};
 
 
 

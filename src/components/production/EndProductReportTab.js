@@ -56,7 +56,8 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDateTime } from '../../utils/formatters';
-import { generateEndProductReportPDF } from '../../services/endProductReportService';
+import { generateEndProductReportPDF, generateAndSaveEndProductReport } from '../../services/endProductReportService';
+import SaveIcon from '@mui/icons-material/Save';
 
 // Helper function to format quantity with specified precision
 const formatQuantityPrecision = (value, precision = 3) => {
@@ -109,6 +110,7 @@ const EndProductReportTab = ({
 }) => {
   const { showSuccess, showError, showInfo } = useNotification();
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
   const { currentUser } = useAuth();
   const { t } = useTranslation('taskDetails');
 
@@ -368,6 +370,118 @@ const EndProductReportTab = ({
     }
   };
 
+  // Funkcja do zapisywania raportu jako załącznika w Firebase Storage
+  const handleSaveReportToStorage = async () => {
+    if (!task) {
+      showError(t('endProductReport.noTaskData'));
+      return;
+    }
+
+    try {
+      setSavingReport(true);
+      showInfo('Generowanie i zapisywanie raportu...');
+
+      // Przygotowanie załączników (ta sama logika co w handleGenerateEndProductReport)
+      const attachments = [];
+      
+      // Dodaj załączniki badań klinicznych
+      if (clinicalAttachments && clinicalAttachments.length > 0) {
+        clinicalAttachments.forEach(attachment => {
+          if (attachment.downloadURL && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL
+            });
+          }
+        });
+      }
+      
+      // Dodaj załączniki CoA z partii składników
+      if (ingredientBatchAttachments && Object.keys(ingredientBatchAttachments).length > 0) {
+        Object.values(ingredientBatchAttachments).flat().forEach(attachment => {
+          if ((attachment.downloadURL || attachment.fileUrl) && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL || attachment.fileUrl
+            });
+          }
+        });
+      }
+      
+      // Dodaj dodatkowe załączniki
+      if (additionalAttachments && additionalAttachments.length > 0) {
+        additionalAttachments.forEach(attachment => {
+          if (attachment.downloadURL && attachment.fileName) {
+            const fileExtension = attachment.fileName.split('.').pop().toLowerCase();
+            const fileType = ['pdf', 'png', 'jpg', 'jpeg'].includes(fileExtension) ? fileExtension : 'pdf';
+            attachments.push({
+              fileName: attachment.fileName,
+              fileType: fileType,
+              fileUrl: attachment.downloadURL
+            });
+          }
+        });
+      }
+
+      // Usunięcie duplikatów
+      const uniqueAttachments = attachments.filter((attachment, index, self) => 
+        index === self.findIndex(a => a.fileName === attachment.fileName)
+      );
+
+      // Przygotowanie danych do PDF
+      const productData = {
+        companyData,
+        workstationData,
+        productionHistory,
+        formResponses,
+        clinicalAttachments,
+        additionalAttachments,
+        ingredientBatchAttachments,
+        materials,
+        currentUser,
+        selectedAllergens,
+        productionHistory: productionHistory || [],
+        consumedMaterials: task.consumedMaterials || [],
+        attachments: uniqueAttachments,
+        options: {
+          useTemplate: true,
+          imageQuality: 0.75,
+          enableCompression: true,
+          precision: 2,
+          returnBlob: true,
+          skipDownload: true,
+          attachmentCompression: {
+            enabled: true,
+            imageQuality: 0.75,
+            maxImageWidth: 1200,
+            maxImageHeight: 1600,
+            convertPngToJpeg: true
+          }
+        },
+        allergens: selectedAllergens || [],
+        completedMOReports: formResponses?.completedMO || [],
+        productionControlReports: formResponses?.productionControl || [],
+        userName: currentUser?.displayName || currentUser?.email || t('endProductReport.unknownUser')
+      };
+
+      // Generuj i zapisz raport
+      const result = await generateAndSaveEndProductReport(task, productData, currentUser?.uid);
+      
+      showSuccess(`Raport "${result.fileName}" został zapisany jako załącznik do zadania`);
+    } catch (error) {
+      console.error('Błąd podczas zapisywania raportu:', error);
+      showError('Błąd podczas zapisywania raportu: ' + error.message);
+    } finally {
+      setSavingReport(false);
+    }
+  };
+
   return (
     <Grid container spacing={3}>
       <Grid item xs={12}>
@@ -380,16 +494,52 @@ const EndProductReportTab = ({
               {t('endProductReport.subtitle')}
             </Typography>
             
-            {/* Przycisk generowania PDF */}
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={generatingPDF ? <CircularProgress size={20} color="inherit" /> : <PdfIcon />}
-              onClick={handleGenerateEndProductReport}
-              disabled={generatingPDF}
-            >
-              {generatingPDF ? t('endProductReport.generatingPDF') : t('endProductReport.generatePDF')}
-            </Button>
+            {/* Przyciski generowania i zapisywania PDF */}
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={generatingPDF ? <CircularProgress size={20} color="inherit" /> : <PdfIcon />}
+                onClick={handleGenerateEndProductReport}
+                disabled={generatingPDF || savingReport}
+              >
+                {generatingPDF ? t('endProductReport.generatingPDF') : t('endProductReport.generatePDF')}
+              </Button>
+              
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={savingReport ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                onClick={handleSaveReportToStorage}
+                disabled={generatingPDF || savingReport}
+              >
+                {savingReport ? 'Zapisywanie...' : 'Zapisz jako załącznik'}
+              </Button>
+            </Box>
+            
+            {/* Zapisane raporty */}
+            {task?.endProductReports && task.endProductReports.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Zapisane raporty ({task.endProductReports.length})
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {task.endProductReports.map((report, index) => (
+                    <Chip
+                      key={report.id || index}
+                      icon={<PdfIcon />}
+                      label={report.fileName}
+                      onClick={() => window.open(report.downloadURL, '_blank')}
+                      onDelete={() => window.open(report.downloadURL, '_blank')}
+                      deleteIcon={<DownloadIcon />}
+                      variant="outlined"
+                      color="primary"
+                      sx={{ maxWidth: 300 }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
           </Box>
           
           {/* Product identification */}
@@ -964,9 +1114,17 @@ const EndProductReportTab = ({
                                                      <Box sx={{ display: 'flex', gap: 1 }}>
                              <Chip 
                                size="small" 
-                               label={attachment.source === 'batch_certificate' ? 'CoA' : 'Załącznik'}
+                               label={
+                                 attachment.source === 'batch_certificate' ? 'CoA' : 
+                                 attachment.source === 'po_coa' ? 'CoA (PO)' : 
+                                 'Załącznik'
+                               }
                                variant="filled"
-                               color={attachment.source === 'batch_certificate' ? 'success' : 'default'}
+                               color={
+                                 attachment.source === 'batch_certificate' || attachment.source === 'po_coa' 
+                                   ? 'success' 
+                                   : 'default'
+                               }
                                sx={{ fontSize: '0.70rem' }}
                              />
                              <Chip 
@@ -976,6 +1134,15 @@ const EndProductReportTab = ({
                                color="info"
                                sx={{ fontSize: '0.75rem' }}
                              />
+                             {attachment.poNumber && (
+                               <Chip 
+                                 size="small" 
+                                 label={attachment.poNumber}
+                                 variant="outlined"
+                                 color="secondary"
+                                 sx={{ fontSize: '0.70rem' }}
+                               />
+                             )}
                            </Box>
                           
                           <Box sx={{ display: 'flex', gap: 1 }}>

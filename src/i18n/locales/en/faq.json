@@ -1,0 +1,40 @@
+{
+  "title": "Frequently Asked Questions (FAQ)",
+  "description": "Below you will find answers to the most frequently asked questions about the MRP system.",
+  "close": "Close",
+  "questions": {
+    "general1": {
+      "question": "How can I change the interface language?",
+      "answer": "You can change the interface language in user settings. Click on your avatar in the top right corner and select your preferred language from the available options."
+    },
+    "general2": {
+      "question": "How do I report a bug in the system?",
+      "answer": "To report a bug, click the \"Report Bug\" button at the bottom of the sidebar menu. You can describe the problem, attach a screenshot, and include console logs to help resolve the issue faster."
+    },
+    "production1": {
+      "question": "How do I create a new production task?",
+      "answer": "Go to Production → Production Tasks and click the \"New Task\" button. Fill out the form by selecting a recipe, quantity, and planned completion date."
+    },
+    "production2": {
+      "question": "How do I edit a recipe?",
+      "answer": "Go to Production → Recipes, find the recipe in the list, and click the edit icon. You can modify ingredients, their proportions, and production instructions."
+    },
+    "inventory1": {
+      "question": "How do I check inventory levels?",
+      "answer": "Go to Inventory → Stock to see the current inventory status of all materials. You can filter by category, location, or search for a specific product."
+    },
+    "inventory2": {
+      "question": "How do I add a new purchase order (PO)?",
+      "answer": "Go to Inventory → Component Orders and click \"New Order\". Select a supplier, add items from the catalog or manually, set dates, and confirm the order."
+    },
+    "orders1": {
+      "question": "How do I create a customer order (CO)?",
+      "answer": "Go to Sales → Customer Orders and click \"New Order\". Select a customer, add products, set quantities and delivery dates, then save the order."
+    },
+    "orders2": {
+      "question": "How do I generate an invoice?",
+      "answer": "Go to Sales → Invoices. You can generate an invoice based on a customer order or create one manually by filling in all required fields."
+    }
+  }
+}
+

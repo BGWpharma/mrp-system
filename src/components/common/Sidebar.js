@@ -48,6 +48,7 @@ import {
   Factory as FactoryIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
   BugReport as BugReportIcon,
+  HelpOutline as FaqIcon,
   Assignment as FormIcon,
   TrendingUp as ForecastIcon
 } from '@mui/icons-material';
@@ -57,6 +58,7 @@ import { refreshExpiryStats } from '../../services/cloudFunctionsService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import BugReportDialog from './BugReportDialog';
+import FaqDialog from './FaqDialog';
 import { useSidebar } from '../../contexts/SidebarContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import { getUserHiddenSidebarTabs, getUserHiddenSidebarSubtabs } from '../../services/userService';
@@ -164,6 +166,7 @@ const Sidebar = ({ onToggle }) => {
   const [expiringItemsCount, setExpiringItemsCount] = useState(0);
   const { currentUser } = useAuth();
   const [bugReportDialogOpen, setBugReportDialogOpen] = useState(false);
+  const [faqDialogOpen, setFaqDialogOpen] = useState(false);
   const [hiddenTabs, setHiddenTabs] = useState([]);
   const [hiddenSubtabs, setHiddenSubtabs] = useState([]);
   
@@ -801,6 +804,49 @@ const Sidebar = ({ onToggle }) => {
         <StyledListItem 
           component="div"
           sx={{
+            color: 'info.main',
+            borderRadius: '8px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              background: 'linear-gradient(to right, rgba(33, 150, 243, 0.1), rgba(25, 118, 210, 0.1))',
+              transform: 'translateX(4px)',
+              boxShadow: '0 4px 12px rgba(33, 150, 243, 0.2)',
+            },
+            cursor: 'pointer',
+            mb: 0.5
+          }}
+          onClick={() => setFaqDialogOpen(true)}
+        >
+          <Tooltip title={t('faq')} placement="right" arrow>
+            <ListItemIcon sx={{ minWidth: 36, color: 'info.main' }}>
+              <FaqIcon />
+            </ListItemIcon>
+          </Tooltip>
+          {isDrawerOpen && (
+            <ListItemText 
+              primary={t('faq')} 
+              primaryTypographyProps={{ 
+                fontSize: '0.875rem',
+                fontWeight: 'medium',
+                color: 'info.main',
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                lineHeight: 1.3,
+                whiteSpace: 'normal'
+              }}
+              sx={{
+                pr: 2,
+                '& .MuiTypography-root': {
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word'
+                }
+              }}
+            />
+          )}
+        </StyledListItem>
+        <StyledListItem 
+          component="div"
+          sx={{
             color: 'error.main',
             borderRadius: '8px',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -845,6 +891,10 @@ const Sidebar = ({ onToggle }) => {
       <BugReportDialog 
         open={bugReportDialogOpen} 
         onClose={() => setBugReportDialogOpen(false)} 
+      />
+      <FaqDialog 
+        open={faqDialogOpen} 
+        onClose={() => setFaqDialogOpen(false)} 
       />
     </Drawer>
   );

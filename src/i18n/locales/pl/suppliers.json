@@ -23,7 +23,13 @@
     "save": "Zapisz",
     "saving": "Zapisywanie...",
     "add": "Dodaj",
-    "back": "Wróć do listy"
+    "back": "Wróć do listy",
+    "export": "Eksport",
+    "import": "Import",
+    "template": "Szablon",
+    "exportCSV": "Eksportuj do CSV",
+    "importCSV": "Importuj z CSV",
+    "downloadTemplate": "Pobierz szablon CSV"
   },
   "confirmDelete": {
     "title": "Potwierdź usunięcie",
@@ -76,6 +82,25 @@
     "saveFailed": "Nie udało się zapisać dostawcy",
     "loadFailed": "Nie udało się załadować listy dostawców",
     "dataLoadFailed": "Nie udało się pobrać danych dostawcy",
-    "nipVerified": "Pomyślnie zweryfikowano NIP i zaktualizowano dane"
+    "nipVerified": "Pomyślnie zweryfikowano NIP i zaktualizowano dane",
+    "exportSuccess": "Eksport dostawców zakończony pomyślnie",
+    "exportFailed": "Błąd podczas eksportu dostawców",
+    "templateDownloaded": "Szablon CSV został pobrany",
+    "importResults": "Import zakończony: {{created}} utworzonych, {{updated}} zaktualizowanych, {{skipped}} pominiętych",
+    "importFailed": "Błąd podczas importu dostawców"
+  },
+  "import": {
+    "title": "Import dostawców z CSV",
+    "description": "Wybierz plik CSV z dostawcami. Wymagane kolumny: COMPANY NAME, CONTACT PERSON, EMAIL, PHONE, VAT EU, NOTES",
+    "selectFile": "Wybierz plik CSV",
+    "toCreate": "Do utworzenia",
+    "toUpdate": "Do aktualizacji",
+    "unchanged": "Bez zmian",
+    "updateExisting": "Aktualizuj istniejących dostawców",
+    "newSuppliers": "Nowi dostawcy",
+    "toUpdateList": "Do aktualizacji",
+    "unchangedList": "Bez zmian",
+    "importing": "Importowanie...",
+    "import": "Importuj"
   }
 }

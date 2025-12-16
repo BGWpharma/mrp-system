@@ -6,6 +6,7 @@
   "production": "Produkcja",
   "inventory": "Stany",
   "reportBug": "Zgłoś błąd",
+  "faq": "FAQ",
   "submenu": {
     "dashboard": {
       "main": "Główny",

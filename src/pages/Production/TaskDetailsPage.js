@@ -695,26 +695,105 @@ const TaskDetailsPage = () => {
     if (loadedTabs.endProductReport) return;
     
     try {
-      // Ładowanie raportu produktu końcowego
+      console.log('⚡ [LAZY-LOAD] Ładowanie danych raportu gotowego produktu...');
+      
+      const loadPromises = [];
       
       // Dane firmy (jeśli nie zostały załadowane)
       if (!companyData) {
-        const company = await getCompanyData();
-        setCompanyData(company);
+        loadPromises.push(
+          getCompanyData().then(company => setCompanyData(company))
+        );
       }
       
       // Dane stanowiska pracy (jeśli nie zostały załadowane)
       if (!workstationData && task?.workstationId) {
-        const workstation = await getWorkstationById(task.workstationId);
-        setWorkstationData(workstation);
+        loadPromises.push(
+          getWorkstationById(task.workstationId).then(workstation => setWorkstationData(workstation))
+        );
       }
       
+      // ✅ Prefetch historii produkcji (potrzebne do raportu)
+      if (!loadedTabs.productionPlan && task?.id) {
+        loadPromises.push(
+          getProductionHistory(task.id).then(async (history) => {
+            setProductionHistory(history || []);
+            setLoadedTabs(prev => ({ ...prev, productionPlan: true }));
+            // Pobierz nazwy użytkowników z historii produkcji
+            const userIds = [...new Set(history?.map(s => s.userId).filter(Boolean))];
+            if (userIds.length > 0) {
+              await fetchUserNames(userIds);
+            }
+          })
+        );
+      }
+      
+      // ✅ Prefetch formularzy (potrzebne do raportu) - inline logika
+      if (!loadedTabs.forms && task?.moNumber) {
+        loadPromises.push((async () => {
+          const moNumber = task.moNumber;
+          const [completedMOSnapshot, controlSnapshot, shiftSnapshot] = await Promise.all([
+            getDocs(query(
+              collection(db, 'Forms/SkonczoneMO/Odpowiedzi'), 
+              where('moNumber', '==', moNumber),
+              orderBy('date', 'desc'),
+              limit(50)
+            )),
+            getDocs(query(
+              collection(db, 'Forms/KontrolaProdukcji/Odpowiedzi'), 
+              where('manufacturingOrder', '==', moNumber),
+              orderBy('fillDate', 'desc'),
+              limit(50)
+            )),
+            getDocs(query(
+              collection(db, 'Forms/ZmianaProdukcji/Odpowiedzi'), 
+              where('moNumber', '==', moNumber),
+              orderBy('fillDate', 'desc'),
+              limit(50)
+            ))
+          ]);
+
+          const completedMOData = completedMOSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            date: doc.data().date?.toDate(),
+            formType: 'completedMO'
+          }));
+
+          const controlData = controlSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            fillDate: doc.data().fillDate?.toDate(),
+            productionStartDate: doc.data().productionStartDate?.toDate(),
+            productionEndDate: doc.data().productionEndDate?.toDate(),
+            formType: 'productionControl'
+          }));
+
+          const shiftData = shiftSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            fillDate: doc.data().fillDate?.toDate(),
+            formType: 'productionShift'
+          }));
+
+          setFormResponses({
+            completedMO: completedMOData,
+            productionControl: controlData,
+            productionShift: shiftData
+          });
+          setLoadedTabs(prev => ({ ...prev, forms: true }));
+        })());
+      }
+      
+      // Wykonaj wszystkie zapytania równolegle
+      await Promise.all(loadPromises);
+      
       setLoadedTabs(prev => ({ ...prev, endProductReport: true }));
-      // Raport produktu końcowego załadowany
+      console.log('✅ [LAZY-LOAD] Dane raportu gotowego produktu załadowane');
     } catch (error) {
       console.error('❌ Error loading End Product Report data:', error);
     }
-  }, [loadedTabs.endProductReport, companyData, workstationData, task?.workstationId]);
+  }, [loadedTabs.endProductReport, loadedTabs.productionPlan, loadedTabs.forms, companyData, workstationData, task?.workstationId, task?.id, task?.moNumber, fetchUserNames]);
 
   // Funkcja do zmiany głównej zakładki z selective loading
   const handleMainTabChange = (event, newValue) => {
@@ -7527,24 +7606,17 @@ const TaskDetailsPage = () => {
                 const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
                 const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
                 
-                // Dla właściwości fizykochemicznych używamy tylko certyfikatów CoA
+                // Pobierz TYLKO certyfikaty CoA z PO (nie wszystkie załączniki)
                 const coaAttachments = poData.coaAttachments || [];
                 
-                // Jeśli nie ma CoA, sprawdź stare załączniki (kompatybilność wsteczna)
-                let attachmentsToProcess = coaAttachments;
-                if (coaAttachments.length === 0 && poData.attachments && poData.attachments.length > 0) {
-                  console.log('Brak CoA, używam starych załączników dla kompatybilności:', poData.attachments);
-                  attachmentsToProcess = poData.attachments;
-                }
-                
-                if (attachmentsToProcess.length > 0) {
+                if (coaAttachments.length > 0) {
                   // Dodaj załączniki CoA z informacją o źródle
-                  const poAttachments = attachmentsToProcess.map(attachment => ({
+                  const poAttachments = coaAttachments.map(attachment => ({
                     ...attachment,
                     poNumber: poData.number,
                     poId: poData.id,
                     lotNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
-                    category: coaAttachments.length > 0 ? 'CoA' : 'Legacy' // Oznacz czy to CoA czy stare załączniki
+                    category: 'CoA'
                   }));
                   
                   ingredientAttachments.push(...poAttachments);
@@ -7909,10 +7981,10 @@ const TaskDetailsPage = () => {
               const hasAttachments = (batchData.attachments && batchData.attachments.length > 0);
               const hasCertificate = (batchData.certificateFileName && batchData.certificateDownloadURL);
               
+              const batchAttachments = [];
+              
               if (hasAttachments || hasCertificate) {
-                const batchAttachments = [];
-                
-                // Dodaj standardowe załączniki (jeśli istnieją)
+                // Dodaj standardowe załączniki z partii (jeśli istnieją)
                 if (hasAttachments) {
                   const attachments = batchData.attachments.map(attachment => ({
                     ...attachment,
@@ -7940,7 +8012,35 @@ const TaskDetailsPage = () => {
                   };
                   batchAttachments.push(certificateAttachment);
                 }
-                
+              }
+              
+              // Fallback: Jeśli partia nie ma własnych załączników, pobierz CoA z powiązanego PO
+              if (batchAttachments.length === 0 && batchData && batchData.purchaseOrderDetails && batchData.purchaseOrderDetails.id) {
+                try {
+                  const { getPurchaseOrderById } = await import('../../services/purchaseOrderService');
+                  const poData = await getPurchaseOrderById(batchData.purchaseOrderDetails.id);
+                  
+                  // Pobierz TYLKO certyfikaty CoA z PO (nie wszystkie załączniki)
+                  const coaAttachments = poData.coaAttachments || [];
+                  
+                  if (coaAttachments.length > 0) {
+                    const poAttachments = coaAttachments.map(attachment => ({
+                      ...attachment,
+                      batchNumber: consumed.batchNumber || batchData.lotNumber || batchData.batchNumber,
+                      batchId: consumed.batchId,
+                      materialName: consumed.materialName || 'Nieznany materiał',
+                      poNumber: poData.number,
+                      poId: poData.id,
+                      source: 'po_coa'
+                    }));
+                    batchAttachments.push(...poAttachments);
+                  }
+                } catch (poError) {
+                  console.warn(`Nie udało się pobrać załączników z PO dla partii ${consumed.batchId}:`, poError);
+                }
+              }
+              
+              if (batchAttachments.length > 0) {
                 ingredientAttachments.push(...batchAttachments);
               }
             } catch (error) {

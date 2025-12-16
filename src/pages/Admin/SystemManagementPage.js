@@ -23,7 +23,9 @@ import {
   Refresh as RefreshIcon,
   CleaningServices as CleaningIcon,
   Search as SearchIcon,
-  LocalShipping as LocalShippingIcon
+  LocalShipping as LocalShippingIcon,
+  SmartToy as AIIcon,
+  Assessment as ReportIcon
 } from '@mui/icons-material';
 import {
   Dialog,
@@ -51,6 +53,7 @@ import {
   checkInventoryIntegrityAndFix,
   bulkUpdateSupplierPricesFromCompletedPOs
 } from '../../services/inventory';
+import { triggerWeeklyConsumptionReport } from '../../services/cloudFunctionsService';
 
 /**
  * Strona dla administratorów z narzędziami do zarządzania systemem
@@ -84,6 +87,31 @@ const SystemManagementPage = () => {
   const [cfTestResults, setCfTestResults] = useState(null);
   const [cfTestStep, setCfTestStep] = useState('');
   
+  // Stany dla generowania raportu konsumpcji MO
+  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
+  const [weeklyReportResults, setWeeklyReportResults] = useState(null);
+  
+  // Funkcja do wywołania cotygodniowego raportu konsumpcji MO
+  const handleTriggerWeeklyReport = async () => {
+    try {
+      setWeeklyReportLoading(true);
+      setWeeklyReportResults(null);
+      
+      showNotification('Rozpoczynam generowanie raportu konsumpcji MO...', 'info');
+      
+      const result = await triggerWeeklyConsumptionReport();
+      
+      setWeeklyReportResults(result);
+      showSuccess(`Raport wygenerowany pomyślnie! Przeanalizowano ${result.tasksAnalyzed} zadań, znaleziono ${result.issuesFound} problemów.`);
+      
+    } catch (error) {
+      console.error('Błąd podczas generowania raportu:', error);
+      showError(`Błąd podczas generowania raportu: ${error.message}`);
+    } finally {
+      setWeeklyReportLoading(false);
+    }
+  };
+
   // Funkcja do testowania Cloud Functions łańcucha PO → Batch → MO → CO
   const handleTestCloudFunctionsChain = async () => {
     try {
@@ -495,6 +523,84 @@ const SystemManagementPage = () => {
         {/* Zarządzanie składnikami odżywczymi */}
         <NutritionalComponentsManager />
         
+        {/* SEKCJA: Raport AI - Cotygodniowa analiza konsumpcji MO */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <AIIcon sx={{ mr: 1, color: 'primary.main' }} />
+              Raport AI - Cotygodniowa analiza konsumpcji MO
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Ręczne wywołanie Cloud Function generującej raport analizy konsumpcji MO.
+              Raport automatycznie generowany jest w każdą niedzielę o 06:00.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Raport analizuje:
+            </Typography>
+            <Box component="ul" sx={{ mt: 1, mb: 2, pl: 2 }}>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Konsumpcje MO i porównanie z planem (odchylenia)
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Historię transakcji magazynowych
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Niewykorzystane pozostałości partii
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Partie zamrożone (z rezerwacjami bez konsumpcji)
+              </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                Wydajność produkcji i błędy konsumpcji
+              </Typography>
+            </Box>
+            
+            {weeklyReportResults && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="success">
+                  Raport wygenerowany pomyślnie!
+                </Alert>
+                <List dense>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Przeanalizowano zadań: ${weeklyReportResults.tasksAnalyzed}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Wykryto problemów: ${weeklyReportResults.issuesFound}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Odchyleń od planu: ${weeklyReportResults.deviationsFound}`} 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText 
+                      primary={`Analiza AI: ${weeklyReportResults.hasAiAnalysis ? '✅ Wygenerowana' : '❌ Brak (sprawdź klucz API Gemini)'}`} 
+                    />
+                  </ListItem>
+                </List>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Raport jest dostępny w: <strong>Produkcja → Raport MO → Raport AI</strong>
+                </Alert>
+              </Box>
+            )}
+          </CardContent>
+          <CardActions>
+            <Button 
+              startIcon={weeklyReportLoading ? <CircularProgress size={20} /> : <ReportIcon />}
+              variant="contained" 
+              color="primary"
+              onClick={handleTriggerWeeklyReport}
+              disabled={weeklyReportLoading}
+            >
+              {weeklyReportLoading ? 'Generowanie raportu...' : 'Wygeneruj raport teraz'}
+            </Button>
+          </CardActions>
+        </Card>
+
         {/* NOWA SEKCJA: Test Cloud Functions - Łańcuch aktualizacji */}
         <Card sx={{ mb: 3 }}>
           <CardContent>

@@ -1,0 +1,40 @@
+{
+  "title": "Często zadawane pytania (FAQ)",
+  "description": "Poniżej znajdziesz odpowiedzi na najczęściej zadawane pytania dotyczące systemu MRP.",
+  "close": "Zamknij",
+  "questions": {
+    "general1": {
+      "question": "Jak mogę zmienić język interfejsu?",
+      "answer": "Język interfejsu można zmienić w ustawieniach użytkownika. Kliknij na swój avatar w prawym górnym rogu i wybierz preferowany język z dostępnych opcji."
+    },
+    "general2": {
+      "question": "Jak zgłosić błąd w systemie?",
+      "answer": "Aby zgłosić błąd, kliknij przycisk \"Zgłoś błąd\" w dolnej części menu bocznego. Możesz opisać problem, załączyć zrzut ekranu oraz logi konsoli, które pomogą w szybszym rozwiązaniu problemu."
+    },
+    "production1": {
+      "question": "Jak utworzyć nowe zadanie produkcyjne?",
+      "answer": "Przejdź do sekcji Produkcja → Zadania produkcyjne i kliknij przycisk \"Nowe zadanie\". Wypełnij formularz, wybierając recepturę, ilość i planowaną datę realizacji."
+    },
+    "production2": {
+      "question": "Jak edytować recepturę?",
+      "answer": "Przejdź do sekcji Produkcja → Receptury, znajdź recepturę na liście i kliknij ikonę edycji. Możesz modyfikować składniki, ich proporcje oraz instrukcje produkcyjne."
+    },
+    "inventory1": {
+      "question": "Jak sprawdzić stany magazynowe?",
+      "answer": "Przejdź do sekcji Stany → Status, aby zobaczyć aktualny stan magazynowy wszystkich materiałów. Możesz filtrować według kategorii, lokalizacji lub szukać konkretnego produktu."
+    },
+    "inventory2": {
+      "question": "Jak dodać nowe zamówienie zakupu (PO)?",
+      "answer": "Przejdź do sekcji Stany → Zamówienia komponentów i kliknij \"Nowe zamówienie\". Wybierz dostawcę, dodaj pozycje z katalogu lub ręcznie, ustaw daty i zatwierdź zamówienie."
+    },
+    "orders1": {
+      "question": "Jak utworzyć zamówienie klienta (CO)?",
+      "answer": "Przejdź do sekcji Sprzedaż → Zamówienia klientów i kliknij \"Nowe zamówienie\". Wybierz klienta, dodaj produkty, ustaw ilości i daty dostawy, a następnie zapisz zamówienie."
+    },
+    "orders2": {
+      "question": "Jak wygenerować fakturę?",
+      "answer": "Przejdź do sekcji Sprzedaż → Faktury. Możesz wygenerować fakturę na podstawie zamówienia klienta lub utworzyć ją ręcznie, wypełniając wszystkie wymagane pola."
+    }
+  }
+}
+
