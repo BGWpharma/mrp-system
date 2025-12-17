@@ -1305,21 +1305,34 @@ const BatchesPage = () => {
                                             }
                                           </Typography>
                                         )}
+                                        <Typography variant="caption" sx={{ mt: 0.5, display: 'block', fontStyle: 'italic' }}>
+                                          Kliknij numer PO aby przejść do zamówienia
+                                        </Typography>
                                       </Box>
                                     }
                                     arrow
                                   >
-                                    <Box sx={{ cursor: 'pointer' }}>
+                                    <Box>
                                       <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
                                         Z zamówienia zakupu
                                       </Typography>
-                                      <Typography variant="body2" color="primary" sx={{ 
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap'
-                                      }}>
-                                        PO: {po.number || '-'}
-                                      </Typography>
+                                      <Link 
+                                        to={`/purchase-orders/${po.id}`}
+                                        style={{ textDecoration: 'none' }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <Typography variant="body2" color="primary" sx={{ 
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          whiteSpace: 'nowrap',
+                                          cursor: 'pointer',
+                                          '&:hover': {
+                                            textDecoration: 'underline'
+                                          }
+                                        }}>
+                                          PO: {po.number || '-'}
+                                        </Typography>
+                                      </Link>
                                       {po.supplier && (
                                         <Typography variant="caption" color="text.secondary" sx={{ 
                                           display: 'block',
@@ -1339,6 +1352,7 @@ const BatchesPage = () => {
                               else if (batch.source === 'purchase' || (batch.sourceDetails && batch.sourceDetails.sourceType === 'purchase')) {
                                 let poNumber = batch.orderNumber || (batch.sourceDetails && batch.sourceDetails.orderNumber);
                                 let supplierName = batch.sourceDetails && batch.sourceDetails.supplierName;
+                                let poId = batch.sourceDetails && batch.sourceDetails.orderId;
                                 
                                 return (
                                   <Tooltip 
@@ -1354,15 +1368,38 @@ const BatchesPage = () => {
                                             <strong>Dostawca:</strong> {supplierName}
                                           </Typography>
                                         )}
+                                        {poId && (
+                                          <Typography variant="caption" sx={{ mt: 0.5, display: 'block', fontStyle: 'italic' }}>
+                                            Kliknij numer PO aby przejść do zamówienia
+                                          </Typography>
+                                        )}
                                       </Box>
                                     }
                                     arrow
                                   >
-                                    <Box sx={{ cursor: 'pointer' }}>
+                                    <Box>
                                       <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
                                         Z zamówienia zakupu
                                       </Typography>
-                                      {poNumber && (
+                                      {poNumber && poId ? (
+                                        <Link 
+                                          to={`/purchase-orders/${poId}`}
+                                          style={{ textDecoration: 'none' }}
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <Typography variant="body2" color="primary" sx={{ 
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                              textDecoration: 'underline'
+                                            }
+                                          }}>
+                                            PO: {poNumber}
+                                          </Typography>
+                                        </Link>
+                                      ) : poNumber ? (
                                         <Typography variant="body2" color="primary" sx={{ 
                                           overflow: 'hidden',
                                           textOverflow: 'ellipsis',
@@ -1370,7 +1407,7 @@ const BatchesPage = () => {
                                         }}>
                                           PO: {poNumber}
                                         </Typography>
-                                      )}
+                                      ) : null}
                                       {supplierName && (
                                         <Typography variant="caption" color="text.secondary" sx={{ 
                                           display: 'block',
@@ -1483,20 +1520,6 @@ const BatchesPage = () => {
                                 <InfoIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-
-                            {/* Link do PO jeśli dostępny */}
-                            {(batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId) && (
-                              <Tooltip title="Zobacz zamówienie zakupu">
-                                <IconButton
-                                  size="small"
-                                  component={Link}
-                                  to={`/purchase-orders/${batch.purchaseOrderDetails?.id || batch.sourceDetails?.orderId}`}
-                                  color="primary"
-                                >
-                                  <InsertDriveFileIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            )}
 
                             <Tooltip title={t('inventory.batches.printBatchLabel')}>
                               <IconButton

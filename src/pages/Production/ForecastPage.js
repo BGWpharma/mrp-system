@@ -81,6 +81,7 @@ import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateTime } from '../../utils/formatters';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { toast } from 'react-hot-toast';
+import ExcelJS from 'exceljs';
 
 const ForecastPage = () => {
   const navigate = useNavigate();
@@ -527,7 +528,7 @@ const ForecastPage = () => {
     fetchData();
   };
   
-  // Generowanie raportu CSV
+  // Generowanie raportu Excel z formatowaniem
   const handleGenerateReport = async () => {
     try {
       // Użyj przefiltrowanych i posortowanych danych z listy
@@ -538,174 +539,358 @@ const ForecastPage = () => {
         return;
       }
       
-      // Przygotuj nagłówki CSV (English)
-      const headers = [
-        'Material ID',
-        'Material Name',
-        'Category',
-        'Unit',
-        'Required Quantity (Remaining)',
-        'Already Consumed',
-        'Available Quantity',
-        'Balance',
-        'Pending Deliveries (Total)',
-        'ETA (Next Delivery)',
-        'Delivery Details',
-        'Balance After Deliveries',
-        'Status',
-        'Unit Price',
-        'Price Source',
-        'Total Cost',
-        'Supplier',
-        'Number of Tasks'
-      ];
+      // Utwórz nowy workbook
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'BGW MRP System';
+      workbook.created = new Date();
       
-      // Funkcja pomocnicza do określenia statusu (English)
-      const getStatus = (item) => {
-        const balanceWithDeliveries = item.balanceWithFutureDeliveries || 0;
-        const balance = item.balance || 0;
-        
-        if (balanceWithDeliveries < 0) {
-          return '❌ SHORTAGE (after deliveries)';
-        }
-        if (balance < 0) {
-          return '⚠️ Requires ordering';
-        }
-        if (balance === 0) {
-          return '✓ Sufficient';
-        }
-        return '✓ Surplus';
+      // ==================== ARKUSZ 1: MATERIAL FORECAST ====================
+      const forecastSheet = workbook.addWorksheet('Material Forecast', {
+        views: [{ state: 'frozen', xSplit: 0, ySplit: 7 }] // Zamroź nagłówki
+      });
+      
+      // Kolory (dark theme jak w aplikacji)
+      const colors = {
+        headerBg: '1E293B',        // Ciemny niebieski nagłówek
+        headerText: 'FFFFFF',      // Biały tekst nagłówka
+        errorBg: 'FEE2E2',         // Jasny czerwony (shortage)
+        errorText: 'DC2626',       // Czerwony tekst
+        warningBg: 'FEF3C7',       // Jasny żółty (warning)
+        warningText: 'D97706',     // Pomarańczowy tekst
+        successBg: 'D1FAE5',       // Jasny zielony (sufficient)
+        successText: '059669',     // Zielony tekst
+        infoBg: 'DBEAFE',          // Jasny niebieski (info)
+        infoText: '2563EB',        // Niebieski tekst
+        borderColor: 'E5E7EB',     // Szary border
+        titleBg: '0F172A',         // Bardzo ciemny bg dla tytułu
+        subtitleBg: '334155'       // Ciemny szary dla podtytułów
       };
       
-      // Przygotuj wiersze danych - używamy przefiltrowanych i posortowanych danych
-      const rows = dataToExport.map(item => {
-        // Przygotuj ETA i szczegóły dostaw
+      // Oblicz statystyki
+      const totalCost = dataToExport.reduce((sum, item) => sum + (item.cost || 0), 0);
+      const shortageValue = dataToExport
+        .filter(item => item.balance < 0)
+        .reduce((sum, item) => sum + (Math.abs(item.balance) * (item.price || 0)), 0);
+      const shortageValueAfterDeliveries = dataToExport
+        .filter(item => item.balanceWithFutureDeliveries < 0)
+        .reduce((sum, item) => sum + (Math.abs(item.balanceWithFutureDeliveries) * (item.price || 0)), 0);
+      const materialsWithShortage = dataToExport.filter(item => item.balance < 0).length;
+      const materialsWithShortageAfterDeliveries = dataToExport.filter(item => item.balanceWithFutureDeliveries < 0).length;
+      
+      // Szerokości kolumn
+      forecastSheet.columns = [
+        { header: '', key: 'material', width: 40 },
+        { header: '', key: 'available', width: 18 },
+        { header: '', key: 'required', width: 18 },
+        { header: '', key: 'balance', width: 18 },
+        { header: '', key: 'deliveries', width: 18 },
+        { header: '', key: 'eta', width: 16 },
+        { header: '', key: 'balanceWithDeliveries', width: 22 },
+        { header: '', key: 'price', width: 14 },
+        { header: '', key: 'cost', width: 16 },
+        { header: '', key: 'status', width: 24 }
+      ];
+      
+      // TYTUŁ RAPORTU (wiersz 1)
+      forecastSheet.mergeCells('A1:J1');
+      const titleRow = forecastSheet.getRow(1);
+      titleRow.getCell(1).value = 'MATERIAL DEMAND FORECAST REPORT';
+      titleRow.getCell(1).font = { bold: true, size: 16, color: { argb: 'FFFFFF' } };
+      titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.titleBg } };
+      titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      titleRow.height = 30;
+      
+      // INFO (wiersz 2)
+      forecastSheet.mergeCells('A2:J2');
+      const infoRow = forecastSheet.getRow(2);
+      infoRow.getCell(1).value = `Period: ${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}  |  Generated: ${formatDateDisplay(new Date())} at ${format(new Date(), 'HH:mm')}`;
+      infoRow.getCell(1).font = { size: 10, color: { argb: 'FFFFFF' } };
+      infoRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.subtitleBg } };
+      infoRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      infoRow.height = 22;
+      
+      // STATYSTYKI (wiersze 3-5)
+      forecastSheet.mergeCells('A3:E3');
+      forecastSheet.mergeCells('F3:J3');
+      const statsRow1 = forecastSheet.getRow(3);
+      statsRow1.getCell(1).value = `📊 Total materials: ${dataToExport.length}  |  ⚠️ Requiring purchase: ${materialsWithShortage}  |  ❌ Shortage after deliveries: ${materialsWithShortageAfterDeliveries}`;
+      statsRow1.getCell(1).font = { size: 10, bold: true };
+      statsRow1.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
+      statsRow1.getCell(6).value = `💰 Shortage value: ${shortageValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} €  |  After deliveries: ${shortageValueAfterDeliveries.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`;
+      statsRow1.getCell(6).font = { size: 10, bold: true };
+      statsRow1.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
+      statsRow1.height = 24;
+      
+      // Pusty wiersz 4
+      forecastSheet.getRow(4).height = 8;
+      
+      // LEGENDA (wiersz 5)
+      forecastSheet.mergeCells('A5:J5');
+      const legendRow = forecastSheet.getRow(5);
+      legendRow.getCell(1).value = '🔴 Shortage  |  🟡 Replenished by deliveries  |  🟢 Sufficient';
+      legendRow.getCell(1).font = { size: 9, italic: true };
+      legendRow.getCell(1).alignment = { horizontal: 'center' };
+      legendRow.height = 20;
+      
+      // Pusty wiersz 6
+      forecastSheet.getRow(6).height = 6;
+      
+      // NAGŁÓWKI TABELI (wiersz 7)
+      const headers = ['MATERIAL', 'AVAILABLE QTY', 'REQUIRED', 'BALANCE', 'PENDING DELIVERIES', 'ETA', 'BALANCE W/ DELIVERIES', 'PRICE', 'ESTIMATED COST', 'STATUS'];
+      const headerRow = forecastSheet.getRow(7);
+      headers.forEach((header, index) => {
+        const cell = headerRow.getCell(index + 1);
+        cell.value = header;
+        cell.font = { bold: true, size: 10, color: { argb: colors.headerText } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.headerBg } };
+        cell.alignment = { horizontal: index === 0 ? 'left' : 'center', vertical: 'middle' };
+        cell.border = {
+          bottom: { style: 'medium', color: { argb: colors.borderColor } }
+        };
+      });
+      headerRow.height = 26;
+      
+      // DANE MATERIAŁÓW (od wiersza 8)
+      dataToExport.forEach((item, index) => {
+        const rowNum = 8 + index;
+        const row = forecastSheet.getRow(rowNum);
+        
+        const balance = item.balance || 0;
+        const balanceWithDeliveries = item.balanceWithFutureDeliveries || 0;
+        const unit = item.unit || 'pcs';
+        
+        // Przygotuj ETA
         const eta = item.futureDeliveries && item.futureDeliveries.length > 0 && item.futureDeliveries[0].expectedDeliveryDate
           ? formatDateDisplay(new Date(item.futureDeliveries[0].expectedDeliveryDate))
           : '—';
+        const deliveriesCount = item.futureDeliveries?.length || 0;
+        const etaWithMore = deliveriesCount > 1 ? `${eta} (+${deliveriesCount - 1})` : eta;
         
-        const deliveryDetails = item.futureDeliveries && item.futureDeliveries.length > 0
-          ? item.futureDeliveries.map(d => {
-              const date = d.expectedDeliveryDate ? formatDateDisplay(new Date(d.expectedDeliveryDate)) : 'no date';
-              return `${d.poNumber}: ${d.quantity} ${item.unit} (${date})`;
-            }).join('; ')
-          : 'None';
-        
-        return [
-          item.id || '',
-          item.name || '',
-          item.category || '',
-          item.unit || 'pcs',
-          item.requiredQuantity || 0,
-          item.consumedQuantity || 0,
-          item.availableQuantity || 0,
-          item.balance || 0,
-          item.futureDeliveriesTotal || 0,
-          eta,
-          deliveryDetails,
-          item.balanceWithFutureDeliveries || 0,
-          getStatus(item),
-          item.price || 0,
-          item.priceSource === 'PO' ? 'Purchase Order (PO)' : item.priceSource === 'supplier' ? 'Supplier' : 'Inventory',
-          item.cost || 0,
-          item.supplier || '',
-          (item.tasks && item.tasks.length) || 0
-        ];
-      });
-      
-      // Dodaj informacje o zakresie dat na początku (English)
-      const dateRangeInfo = [
-        ['MATERIAL DEMAND FORECAST REPORT'],
-        ['Period:', `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`],
-        ['Generated on:', formatDateDisplay(new Date())],
-        [''],
-        ['STATISTICS:'],
-        ['Total number of materials:', dataToExport.length],
-        ['Materials with shortage:', dataToExport.filter(item => item.balance < 0).length],
-        ['Materials with shortage after deliveries:', dataToExport.filter(item => item.balanceWithFutureDeliveries < 0).length],
-        ['Total materials cost:', dataToExport.reduce((sum, item) => sum + (item.cost || 0), 0).toFixed(2) + ' PLN'],
-        [''],
-        ['DETAILED DATA:'],
-        []
-      ];
-      
-      // Przygotuj dane nieużywanych materiałów do eksportu (z zastosowanymi filtrami)
-      const unusedMaterialsData = filteredUnusedMaterials();
-      let unusedMaterialsRows = [];
-      
-      if (unusedMaterialsData.length > 0) {
-        const filterInfo = [];
-        if (searchTerm || categoryFilter) {
-          filterInfo.push(`Applied filters: ${searchTerm ? `Search="${searchTerm}"` : ''}${searchTerm && categoryFilter ? ', ' : ''}${categoryFilter ? `Category="${categoryFilter}"` : ''}`);
+        // Określ status i kolory
+        let statusText, statusColor, rowBgColor;
+        if (balanceWithDeliveries < 0) {
+          statusText = '❌ Shortage';
+          statusColor = colors.errorText;
+          rowBgColor = colors.errorBg;
+        } else if (balance < 0 && balanceWithDeliveries >= 0) {
+          statusText = '⏱️ Replenished';
+          statusColor = colors.warningText;
+          rowBgColor = colors.warningBg;
+        } else {
+          statusText = '✅ Sufficient';
+          statusColor = colors.successText;
+          rowBgColor = null; // Bez tła
         }
         
-        unusedMaterialsRows = [
-          [''],
-          [''],
-          ['UNUSED MATERIALS (NOT IN ANY MO):'],
-          ['Excluded categories: "Inne", "Gotowe produkty" | Excluded: materials with quantity 0'],
-          ...filterInfo.map(info => [info]),
-          [''],
-          ['Material Name', 'Category', 'Available Quantity', 'Unit', 'Pending Deliveries', 'ETA (Next Delivery)', 'Delivery Details', 'Available With Deliveries'],
-          ...unusedMaterialsData.map(item => {
-            const deliveryData = unusedMaterialsDeliveries[item.id];
-            const availableQty = parseFloat(item.quantity) || 0;
-            const pendingDeliveries = deliveryData?.total || 0;
-            const eta = deliveryData?.deliveries?.[0]?.expectedDeliveryDate 
-              ? formatDateDisplay(new Date(deliveryData.deliveries[0].expectedDeliveryDate))
-              : '—';
-            const deliveryDetails = deliveryData?.deliveries
-              ? deliveryData.deliveries.map(d => {
-                  const date = d.expectedDeliveryDate 
-                    ? formatDateDisplay(new Date(d.expectedDeliveryDate))
-                    : 'brak daty';
-                  return `${d.poNumber}: ${d.quantity} (${date})`;
-                }).join('; ')
-              : '';
-            const availableWithDeliveries = availableQty + pendingDeliveries;
-            
-            return [
-              item.name || '',
-              item.category || '',
-              availableQty,
-              item.unit || 'pcs',
-              pendingDeliveries,
-              eta,
-              deliveryDetails,
-              availableWithDeliveries
-            ];
-          }),
-          [''],
-          ['Total unused materials:', unusedMaterialsData.length]
+        // Wartości komórek
+        const values = [
+          `${item.name || ''}\n${item.category || 'Other'}`,
+          `${(item.availableQuantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+          `${(item.requiredQuantity || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+          `${balance.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+          `${(item.futureDeliveriesTotal || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+          etaWithMore,
+          `${balanceWithDeliveries.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+          item.price ? `${item.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €` : '—',
+          item.cost ? `${item.cost.toLocaleString('en-US', { minimumFractionDigits: 2 })} €` : '—',
+          statusText
         ];
+        
+        values.forEach((value, colIndex) => {
+          const cell = row.getCell(colIndex + 1);
+          cell.value = value;
+          cell.alignment = { 
+            horizontal: colIndex === 0 ? 'left' : 'center', 
+            vertical: 'middle',
+            wrapText: colIndex === 0 
+          };
+          
+          // Kolorowanie tła dla wierszy z problemami
+          if (rowBgColor) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBgColor } };
+          }
+          
+          // Specjalne formatowanie dla niektórych kolumn
+          if (colIndex === 3 && balance < 0) { // Balance
+            cell.font = { bold: true, color: { argb: colors.errorText } };
+          }
+          if (colIndex === 6 && balanceWithDeliveries < 0) { // Balance w/ deliveries
+            cell.font = { bold: true, color: { argb: colors.errorText } };
+          }
+          if (colIndex === 9) { // Status
+            cell.font = { bold: true, color: { argb: statusColor } };
+          }
+          
+          // Obramowania
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: colors.borderColor } }
+          };
+        });
+        
+        row.height = 32;
+      });
+      
+      // ==================== ARKUSZ 2: UNUSED MATERIALS ====================
+      const unusedMaterialsData = filteredUnusedMaterials();
+      
+      if (unusedMaterialsData.length > 0) {
+        const unusedSheet = workbook.addWorksheet('Unused Materials', {
+          views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }]
+        });
+        
+        unusedSheet.columns = [
+          { header: '', key: 'material', width: 40 },
+          { header: '', key: 'available', width: 20 },
+          { header: '', key: 'deliveries', width: 20 },
+          { header: '', key: 'eta', width: 18 },
+          { header: '', key: 'total', width: 22 }
+        ];
+        
+        // Tytuł
+        unusedSheet.mergeCells('A1:E1');
+        const unusedTitleRow = unusedSheet.getRow(1);
+        unusedTitleRow.getCell(1).value = 'UNUSED MATERIALS (NOT IN ANY MANUFACTURING ORDER)';
+        unusedTitleRow.getCell(1).font = { bold: true, size: 14, color: { argb: 'FFFFFF' } };
+        unusedTitleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.titleBg } };
+        unusedTitleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        unusedTitleRow.height = 28;
+        
+        // Info
+        unusedSheet.mergeCells('A2:E2');
+        const unusedInfoRow = unusedSheet.getRow(2);
+        unusedInfoRow.getCell(1).value = `Total: ${unusedMaterialsData.length} materials  |  Excluded: "Inne", "Gotowe produkty" categories and materials with quantity 0`;
+        unusedInfoRow.getCell(1).font = { size: 10, color: { argb: 'FFFFFF' } };
+        unusedInfoRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.subtitleBg } };
+        unusedInfoRow.getCell(1).alignment = { horizontal: 'center' };
+        unusedInfoRow.height = 22;
+        
+        // Pusty wiersz
+        unusedSheet.getRow(3).height = 6;
+        
+        // Nagłówki
+        const unusedHeaders = ['MATERIAL', 'AVAILABLE QTY', 'PENDING DELIVERIES', 'ETA', 'TOTAL AVAILABLE'];
+        const unusedHeaderRow = unusedSheet.getRow(4);
+        unusedHeaders.forEach((header, index) => {
+          const cell = unusedHeaderRow.getCell(index + 1);
+          cell.value = header;
+          cell.font = { bold: true, size: 10, color: { argb: colors.headerText } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.headerBg } };
+          cell.alignment = { horizontal: index === 0 ? 'left' : 'center', vertical: 'middle' };
+        });
+        unusedHeaderRow.height = 24;
+        
+        // Dane
+        unusedMaterialsData.forEach((item, index) => {
+          const rowNum = 5 + index;
+          const row = unusedSheet.getRow(rowNum);
+          
+          const deliveryData = unusedMaterialsDeliveries[item.id];
+          const availableQty = parseFloat(item.quantity) || 0;
+          const pendingDeliveries = deliveryData?.total || 0;
+          const unit = item.unit || 'pcs';
+          const eta = deliveryData?.deliveries?.[0]?.expectedDeliveryDate 
+            ? formatDateDisplay(new Date(deliveryData.deliveries[0].expectedDeliveryDate))
+            : '—';
+          const deliveriesCount = deliveryData?.deliveries?.length || 0;
+          const etaWithMore = deliveriesCount > 1 ? `${eta} (+${deliveriesCount - 1})` : eta;
+          const totalAvailable = availableQty + pendingDeliveries;
+          
+          const values = [
+            `${item.name || ''}\n${item.category || 'Other'}`,
+            `${availableQty.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+            `${pendingDeliveries.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`,
+            etaWithMore,
+            `${totalAvailable.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`
+          ];
+          
+          values.forEach((value, colIndex) => {
+            const cell = row.getCell(colIndex + 1);
+            cell.value = value;
+            cell.alignment = { 
+              horizontal: colIndex === 0 ? 'left' : 'center', 
+              vertical: 'middle',
+              wrapText: colIndex === 0
+            };
+            cell.border = {
+              bottom: { style: 'thin', color: { argb: colors.borderColor } }
+            };
+            
+            // Podświetl jeśli są dostawy w drodze
+            if (pendingDeliveries > 0 && colIndex === 2) {
+              cell.font = { color: { argb: colors.infoText }, bold: true };
+            }
+          });
+          
+          row.height = 30;
+        });
       }
       
-      // Połącz wszystkie wiersze
-      const allRows = [...dateRangeInfo, headers, ...rows, ...unusedMaterialsRows];
+      // ==================== ARKUSZ 3: SUMMARY ====================
+      const summarySheet = workbook.addWorksheet('Summary');
       
-      // Konwertuj do formatu CSV
-      const csvContent = allRows.map(row => {
-        return row.map(cell => {
-          // Obsłuż wartości zawierające przecinki, cudzysłowy lub nowe linie
-          const cellValue = String(cell);
-          if (cellValue.includes(',') || cellValue.includes('"') || cellValue.includes('\n')) {
-            return `"${cellValue.replace(/"/g, '""')}"`;
-          }
-          return cellValue;
-        }).join(',');
-      }).join('\n');
+      summarySheet.columns = [
+        { header: '', key: 'label', width: 40 },
+        { header: '', key: 'value', width: 30 }
+      ];
       
-      // Dodaj BOM dla poprawnego wyświetlania polskich znaków w Excel
-      const BOM = '\uFEFF';
-      const csvWithBOM = BOM + csvContent;
+      // Tytuł
+      summarySheet.mergeCells('A1:B1');
+      const summaryTitleRow = summarySheet.getRow(1);
+      summaryTitleRow.getCell(1).value = 'FORECAST SUMMARY';
+      summaryTitleRow.getCell(1).font = { bold: true, size: 16, color: { argb: 'FFFFFF' } };
+      summaryTitleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.titleBg } };
+      summaryTitleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      summaryTitleRow.height = 30;
       
-      // Utwórz blob i pobierz plik
-      const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+      // Dane podsumowania
+      const summaryData = [
+        ['', ''],
+        ['📅 REPORT DETAILS', ''],
+        ['Forecast Period', `${formatDateDisplay(startDate)} - ${formatDateDisplay(endDate)}`],
+        ['Generated On', `${formatDateDisplay(new Date())} at ${format(new Date(), 'HH:mm')}`],
+        ['', ''],
+        ['📊 MATERIALS STATISTICS', ''],
+        ['Total Materials in Forecast', dataToExport.length],
+        ['Materials Requiring Purchase', materialsWithShortage],
+        ['Materials with Shortage After Deliveries', materialsWithShortageAfterDeliveries],
+        ['Materials with Sufficient Stock', dataToExport.length - materialsWithShortage],
+        ['', ''],
+        ['💰 FINANCIAL SUMMARY', ''],
+        ['Total Shortage Value', `${shortageValue.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`],
+        ['Shortage After Deliveries', `${shortageValueAfterDeliveries.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`],
+        ['Total Estimated Cost', `${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })} €`],
+        ['', ''],
+        ['📦 UNUSED MATERIALS', ''],
+        ['Total Unused Materials', unusedMaterialsData.length]
+      ];
+      
+      summaryData.forEach((rowData, index) => {
+        const rowNum = 2 + index;
+        const row = summarySheet.getRow(rowNum);
+        
+        row.getCell(1).value = rowData[0];
+        row.getCell(2).value = rowData[1];
+        
+        // Formatowanie sekcji
+        if (rowData[0].includes('📅') || rowData[0].includes('📊') || rowData[0].includes('💰') || rowData[0].includes('📦')) {
+          row.getCell(1).font = { bold: true, size: 12, color: { argb: colors.infoText } };
+          row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
+          row.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.infoBg } };
+          row.height = 24;
+        } else if (rowData[0]) {
+          row.getCell(1).font = { size: 11 };
+          row.getCell(2).font = { size: 11, bold: true };
+          row.getCell(2).alignment = { horizontal: 'right' };
+        }
+      });
+      
+      // Generuj plik Excel i pobierz
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       
-      // Nazwa pliku z datą (English)
-      const fileName = `material_demand_forecast_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
+      const fileName = `material_demand_forecast_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.xlsx`;
       
       link.setAttribute('href', url);
       link.setAttribute('download', fileName);
@@ -713,11 +898,12 @@ const ForecastPage = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
-      showSuccess('Raport CSV został wygenerowany i pobrany pomyślnie');
+      showSuccess('Excel report generated and downloaded successfully');
     } catch (error) {
-      console.error('Błąd podczas generowania raportu:', error);
-      showError('Nie udało się wygenerować raportu: ' + error.message);
+      console.error('Błąd podczas generowania raportu Excel:', error);
+      showError('Failed to generate Excel report: ' + error.message);
     }
   };
   
@@ -1229,7 +1415,7 @@ const ForecastPage = () => {
           >
             Odśwież
           </Button>
-          <Tooltip title="Generuje szczegółowy raport CSV ze wszystkimi danymi o zapotrzebowaniu materiałów, w tym statusach, kosztach i dostawach">
+          <Tooltip title="Generuje szczegółowy raport Excel z kolorami i formatowaniem - 3 arkusze: prognoza materiałów, nieużywane materiały, podsumowanie">
             <Button 
               variant="contained"
               startIcon={<DownloadIcon />}
@@ -1238,7 +1424,7 @@ const ForecastPage = () => {
               color="secondary"
               sx={{ display: 'flex', alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}
             >
-              Generuj raport CSV
+              Export Excel
               <Badge 
                 color="info" 
                 variant="dot" 
@@ -2592,8 +2778,25 @@ const ForecastPage = () => {
                               <TableCell align="right">
                                 {task.scheduledDate && task.scheduledDate !== ''
                                   ? (() => {
-                                      const formatted = formatDateDisplay(new Date(task.scheduledDate));
-                                      return formatted || 'Brak daty';
+                                      try {
+                                        let taskDate;
+                                        // Obsługa Firestore Timestamp
+                                        if (task.scheduledDate?.toDate) {
+                                          taskDate = task.scheduledDate.toDate();
+                                        } else if (typeof task.scheduledDate === 'string') {
+                                          taskDate = new Date(task.scheduledDate);
+                                        } else if (task.scheduledDate instanceof Date) {
+                                          taskDate = task.scheduledDate;
+                                        } else {
+                                          return 'Brak daty';
+                                        }
+                                        
+                                        const formatted = formatDateDisplay(taskDate);
+                                        return formatted || 'Brak daty';
+                                      } catch (error) {
+                                        console.error('Błąd formatowania daty zadania:', error);
+                                        return 'Brak daty';
+                                      }
                                     })()
                                   : 'Brak daty'
                                 }

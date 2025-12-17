@@ -2236,3 +2236,537 @@ export const updateStocktakingAttachments = async (stocktakingId, attachments, u
     throw new Error(`Nie udało się zaktualizować załączników: ${error.message}`);
   }
 };
+
+// ===== ARKUSZ SPISU Z NATURY - PDF =====
+
+/**
+ * Wzbogaca pozycje inwentaryzacji o kursy walut z NBP i przeliczone wartości PLN
+ * @param {Array} items - Pozycje inwentaryzacji
+ * @returns {Promise<Array>} - Pozycje wzbogacone o dane kursowe
+ * @private
+ */
+const enrichStocktakingItemsWithExchangeRates = async (items) => {
+  try {
+    const { getPurchaseOrderById } = await import('../purchaseOrderService');
+    const { getExchangeRate } = await import('../exchangeRateService');
+    const { getBatchById } = await import('./batchService');
+    
+    // Cache dla kursów (unikalne daty) - klucz: "currency_YYYY-MM-DD"
+    const exchangeRatesCache = {};
+    // Cache dla danych PO
+    const poDataCache = {};
+    
+    const enrichedItems = [];
+    
+    for (const item of items) {
+      let enrichedItem = { ...item };
+      
+      // Domyślne wartości dla kolumn PLN
+      enrichedItem.currency = 'EUR';
+      enrichedItem.exchangeRate = null;
+      enrichedItem.exchangeRateDate = null;
+      enrichedItem.unitPricePLN = null;
+      enrichedItem.valuePLN = null;
+      enrichedItem.poNumber = null;
+      
+      // Tylko dla pozycji z batchId
+      if (item.batchId) {
+        try {
+          // 1. Pobierz dane partii
+          const batch = await getBatchById(item.batchId);
+          const poId = batch?.purchaseOrderDetails?.id || batch?.sourceDetails?.orderId;
+          
+          if (poId) {
+            // 2. Pobierz dane PO (z cache)
+            if (!poDataCache[poId]) {
+              try {
+                poDataCache[poId] = await getPurchaseOrderById(poId);
+              } catch (poError) {
+                console.warn(`Nie udało się pobrać PO ${poId}:`, poError.message);
+                poDataCache[poId] = null;
+              }
+            }
+            const po = poDataCache[poId];
+            
+            if (po) {
+              // 3. Ustal datę dla kursu - dzień POPRZEDZAJĄCY datę zamówienia/faktury
+              // Zgodnie z polskim prawem podatkowym: kurs średni NBP z ostatniego dnia roboczego
+              // poprzedzającego dzień wystawienia faktury (art. 31a ust. 1 ustawy o VAT)
+              let invoiceDate = new Date();
+              if (po.orderDate) {
+                invoiceDate = typeof po.orderDate === 'string' 
+                  ? new Date(po.orderDate) 
+                  : (po.orderDate.toDate ? po.orderDate.toDate() : new Date(po.orderDate));
+              }
+              
+              // Kurs z dnia poprzedzającego datę faktury
+              const rateDate = new Date(invoiceDate);
+              rateDate.setDate(rateDate.getDate() - 1);
+              
+              const currency = po.currency || 'EUR';
+              enrichedItem.currency = currency;
+              enrichedItem.poNumber = po.number || null;
+              
+              // 4. Pobierz kurs EUR/PLN (z cache) - tylko jeśli waluta != PLN
+              // exchangeRateService automatycznie znajdzie ostatni dostępny kurs
+              // jeśli podana data przypada na weekend/święto
+              if (currency !== 'PLN') {
+                const dateStr = rateDate.toISOString().split('T')[0];
+                const cacheKey = `${currency}_${dateStr}`;
+                
+                if (exchangeRatesCache[cacheKey] === undefined) {
+                  try {
+                    exchangeRatesCache[cacheKey] = await getExchangeRate(currency, 'PLN', rateDate);
+                    console.log(`📈 Pobrano kurs ${currency}/PLN dla ${dateStr}: ${exchangeRatesCache[cacheKey]}`);
+                  } catch (rateError) {
+                    console.warn(`Nie udało się pobrać kursu ${currency}/PLN dla ${dateStr}:`, rateError.message);
+                    exchangeRatesCache[cacheKey] = null;
+                  }
+                }
+                
+                const exchangeRate = exchangeRatesCache[cacheKey];
+                
+                if (exchangeRate !== null) {
+                  // 5. Przelicz wartości
+                  const unitPriceEUR = item.unitPrice || 0;
+                  const unitPricePLN = unitPriceEUR * exchangeRate;
+                  const countedQty = item.countedQuantity || 0;
+                  const valuePLN = countedQty * unitPricePLN;
+                  
+                  enrichedItem.exchangeRate = exchangeRate;
+                  enrichedItem.exchangeRateDate = rateDate;
+                  enrichedItem.unitPricePLN = unitPricePLN;
+                  enrichedItem.valuePLN = valuePLN;
+                }
+              } else {
+                // Waluta już jest PLN - kurs 1:1
+                enrichedItem.exchangeRate = 1;
+                enrichedItem.exchangeRateDate = rateDate;
+                enrichedItem.unitPricePLN = item.unitPrice || 0;
+                enrichedItem.valuePLN = (item.countedQuantity || 0) * (item.unitPrice || 0);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Nie udało się wzbogacić pozycji ${item.name} o dane kursowe:`, error.message);
+        }
+      }
+      
+      enrichedItems.push(enrichedItem);
+    }
+    
+    console.log(`✅ Wzbogacono ${enrichedItems.length} pozycji o dane kursowe NBP`);
+    return enrichedItems;
+    
+  } catch (error) {
+    console.error('Błąd podczas wzbogacania pozycji o kursy walut:', error);
+    // W przypadku błędu zwróć oryginalne pozycje
+    return items;
+  }
+};
+
+/**
+ * Generuje PDF "Arkusz spisu z natury" zgodny z polskim wzorem
+ * @param {Object} stocktaking - Dane inwentaryzacji
+ * @param {Array} items - Pozycje inwentaryzacji
+ * @param {Object} options - Opcje raportu
+ * @returns {Promise<Object>} - Blob PDF i nazwa pliku
+ */
+export const generateStocktakingSheetPDF = async (stocktaking, items, options = {}) => {
+  const { jsPDF } = await import('jspdf');
+  const autoTable = (await import('jspdf-autotable')).default;
+  
+  const {
+    companyData = {},
+    stocktakingArea = '',       // Nazwa lub numer pola spisowego
+    stocktakingSubject = '',    // Przedmiot spisu
+    responsiblePerson = '',     // Osoba odpowiedzialna materialnie
+    committeeMembers = [],      // Skład zespołu spisowego
+    otherPersons = [],          // Inne osoby obecne przy spisie
+    stocktakingDate = null,     // Spis z natury na dzień
+    startDate = null,           // Spis rozpoczęto dnia
+    startTime = '',             // o godz.
+    endDate = null,             // Spis zakończono dnia
+    endTime = '',               // o godz.
+    valuedBy = ''               // Wycenił
+  } = options;
+  
+  // Wzbogać pozycje o kursy walut NBP i wartości w PLN
+  console.log('📊 Rozpoczynam wzbogacanie pozycji o kursy walut NBP...');
+  const enrichedItems = await enrichStocktakingItemsWithExchangeRates(items);
+  
+  // Utwórz dokument A4 poziomy (landscape) dla lepszego dopasowania tabeli z kolumną Uwagi
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+    compress: true
+  });
+  
+  const pageWidth = doc.internal.pageSize.getWidth();   // 297mm w landscape
+  const pageHeight = doc.internal.pageSize.getHeight(); // 210mm w landscape
+  const margin = 10;
+  const contentWidth = pageWidth - 2 * margin; // 277mm dostępne
+  
+  // Funkcja do poprawiania polskich znaków (fallback gdy nie ma fontu)
+  const fixPolishChars = (text) => {
+    if (!text) return '';
+    return text.toString()
+      .replace(/ą/g, 'a').replace(/ć/g, 'c').replace(/ę/g, 'e')
+      .replace(/ł/g, 'l').replace(/ń/g, 'n').replace(/ó/g, 'o')
+      .replace(/ś/g, 's').replace(/ź/g, 'z').replace(/ż/g, 'z')
+      .replace(/Ą/g, 'A').replace(/Ć/g, 'C').replace(/Ę/g, 'E')
+      .replace(/Ł/g, 'L').replace(/Ń/g, 'N').replace(/Ó/g, 'O')
+      .replace(/Ś/g, 'S').replace(/Ź/g, 'Z').replace(/Ż/g, 'Z');
+  };
+  
+  // Funkcja formatowania daty
+  const formatDateValue = (date) => {
+    if (!date) return '....................';
+    try {
+      const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
+      return d.toLocaleDateString('pl-PL');
+    } catch {
+      return '....................';
+    }
+  };
+  
+  // Funkcja do rysowania linii przerywanej
+  const drawDottedLine = (x1, y, x2) => {
+    doc.setDrawColor(100);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(x1, y, x2, y);
+    doc.setLineDashPattern([], 0);
+  };
+  
+  // Funkcja do rysowania pola z etykietą i linią
+  const drawField = (label, value, x, y, width) => {
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.text(fixPolishChars(label), x, y);
+    const labelWidth = doc.getTextWidth(fixPolishChars(label));
+    if (value && value !== '....................') {
+      doc.text(fixPolishChars(value), x + labelWidth + 2, y);
+    }
+    drawDottedLine(x + labelWidth + 2 + (value && value !== '....................' ? doc.getTextWidth(fixPolishChars(value)) + 2 : 0), y + 0.5, x + width);
+    return y + 7;
+  };
+  
+  // Oblicz liczbę stron (pozycje na stronę) - landscape ma mniej wysokości
+  // Limity pozycji na stronę (10 kolumn z EUR i PLN)
+  const itemsPerFirstPage = 6;  // Mniej pozycji na pierwszej stronie (sekcja info)
+  const itemsPerNextPage = 16;  // Więcej pozycji na kolejnych stronach
+  
+  let totalPages = 1;
+  if (enrichedItems.length > itemsPerFirstPage) {
+    totalPages = 1 + Math.ceil((enrichedItems.length - itemsPerFirstPage) / itemsPerNextPage);
+  }
+  
+  // Funkcja do rysowania nagłówka strony
+  const drawPageHeader = (pageNum) => {
+    let y = margin;
+    
+    // Linia 1: Nazwa jednostki i numer strony
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'normal');
+    
+    // Nazwa firmy po lewej
+    if (companyData?.name) {
+      doc.text(fixPolishChars(companyData.name), margin, y + 4);
+    }
+    drawDottedLine(margin, y + 5, margin + 70);
+    doc.text('(nazwa jednostki)', margin + 20, y + 9);
+    
+    doc.setFontSize(10);
+    doc.text(fixPolishChars(`strona nr ${pageNum}`), pageWidth - margin - 25, y + 4);
+    
+    y += 18;
+    
+    // Tytuł: Arkusz spisu z natury nr
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    const sheetNumber = stocktaking.name || stocktaking.id?.substring(0, 8) || '...........';
+    doc.text(fixPolishChars(`Arkusz spisu z natury nr ${sheetNumber}`), pageWidth / 2, y, { align: 'center' });
+    
+    y += 12;
+    
+    return y;
+  };
+  
+  // Funkcja do rysowania sekcji informacyjnej (tylko na pierwszej stronie)
+  const drawInfoSection = (startY) => {
+    let y = startY;
+    const halfWidth = contentWidth / 2 - 5;
+    
+    // Nazwa lub numer pola spisowego
+    const areaValue = stocktakingArea || stocktaking.location || '';
+    y = drawField('Nazwa lub numer pola spisowego ', areaValue, margin, y, contentWidth);
+    
+    // Przedmiot spisu
+    const subjectValue = stocktakingSubject || stocktaking.description || '';
+    y = drawField('Przedmiot spisu ', subjectValue, margin, y, contentWidth);
+    
+    // Osoba odpowiedzialna materialnie
+    y = drawField('Osoba odpowiedzialna materialnie ', responsiblePerson, margin, y, contentWidth);
+    
+    y += 3;
+    
+    // Dwie kolumny: Skład zespołu i Inne osoby
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'bold');
+    doc.text(fixPolishChars('Sklad zespolu spisowego:'), margin, y);
+    doc.text(fixPolishChars('Inne osoby obecne przy spisie:'), margin + halfWidth + 10, y);
+    
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'italic');
+    doc.text('(imie, nazwisko)', margin, y + 4);
+    doc.text('(imie, nazwisko)', margin + halfWidth + 10, y + 4);
+    
+    y += 8;
+    
+    // Linie na podpisy (4 linie dla każdej kolumny)
+    for (let i = 0; i < 4; i++) {
+      // Wypełnij danymi jeśli są
+      if (committeeMembers[i]) {
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text(fixPolishChars(committeeMembers[i]), margin, y + 3);
+      }
+      if (otherPersons[i]) {
+        doc.setFontSize(8);
+        doc.setFont(undefined, 'normal');
+        doc.text(fixPolishChars(otherPersons[i]), margin + halfWidth + 10, y + 3);
+      }
+      drawDottedLine(margin, y + 5, margin + halfWidth);
+      drawDottedLine(margin + halfWidth + 10, y + 5, pageWidth - margin);
+      y += 8;
+    }
+    
+    // Spis z natury na dzień
+    y += 3;
+    const stockDateValue = formatDateValue(stocktakingDate || stocktaking.scheduledDate);
+    y = drawField('Spis z natury na dzien ', stockDateValue, margin, y, contentWidth);
+    
+    // Dwie kolumny: rozpoczęto/zakończono
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    
+    const startDateValue = formatDateValue(startDate || stocktaking.createdAt);
+    const endDateValue = formatDateValue(endDate || stocktaking.completedAt);
+    
+    doc.text(fixPolishChars('Spis rozpoczeto dnia '), margin, y);
+    const startLabel = doc.getTextWidth(fixPolishChars('Spis rozpoczeto dnia '));
+    doc.text(startDateValue !== '....................' ? startDateValue : '', margin + startLabel, y);
+    drawDottedLine(margin + startLabel + (startDateValue !== '....................' ? doc.getTextWidth(startDateValue) + 2 : 0), y + 0.5, margin + halfWidth - 30);
+    doc.text(fixPolishChars(' o godz. '), margin + halfWidth - 30, y);
+    doc.text(startTime || '', margin + halfWidth - 10, y);
+    drawDottedLine(margin + halfWidth - 10 + (startTime ? doc.getTextWidth(startTime) + 2 : 0), y + 0.5, margin + halfWidth);
+    
+    doc.text(fixPolishChars('Spis zakonczono dnia '), margin + halfWidth + 10, y);
+    const endLabel = doc.getTextWidth(fixPolishChars('Spis zakonczono dnia '));
+    doc.text(endDateValue !== '....................' ? endDateValue : '', margin + halfWidth + 10 + endLabel, y);
+    drawDottedLine(margin + halfWidth + 10 + endLabel + (endDateValue !== '....................' ? doc.getTextWidth(endDateValue) + 2 : 0), y + 0.5, pageWidth - margin - 40);
+    doc.text(fixPolishChars(' o godz. '), pageWidth - margin - 40, y);
+    doc.text(endTime || '', pageWidth - margin - 20, y);
+    drawDottedLine(pageWidth - margin - 20 + (endTime ? doc.getTextWidth(endTime) + 2 : 0), y + 0.5, pageWidth - margin);
+    
+    y += 10;
+    
+    return y;
+  };
+  
+  // Funkcja do rysowania stopki strony
+  const drawPageFooter = (isLastPage, lastItemNumber) => {
+    let y = pageHeight - 62; // Przesunięte wyżej dla landscape (210mm wysokości)
+    const halfWidth = contentWidth / 2 - 5;
+    
+    if (isLastPage) {
+      // Spis zakończono na pozycji
+      y = drawField('Spis zakonczono na pozycji ', lastItemNumber.toString(), margin, y, halfWidth);
+      
+      y += 3;
+      
+      // Dwie kolumny: Podpisy zespołu i Podpis osoby odpowiedzialnej
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      doc.text(fixPolishChars('Podpisy czlonkow zespolu spisowego:'), margin, y);
+      doc.text(fixPolishChars('Podpis osoby odpowiedzialnej materialnie oraz jej'), margin + halfWidth + 10, y);
+      y += 3;
+      doc.text(fixPolishChars('ewentualne uwagi (zastrzezenia):'), margin + halfWidth + 10, y);
+      
+      y += 4;
+      
+      // Linie na podpisy (3 linie dla każdej kolumny - zmniejszone z 4)
+      for (let i = 0; i < 3; i++) {
+        drawDottedLine(margin, y + 4, margin + halfWidth);
+        drawDottedLine(margin + halfWidth + 10, y + 4, pageWidth - margin);
+        y += 7;
+      }
+      
+      y += 3;
+      
+      // Wycenił
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      doc.text(fixPolishChars('Wycenil:'), margin, y);
+      if (valuedBy) {
+        doc.setFont(undefined, 'normal');
+        doc.text(fixPolishChars(valuedBy), margin + 20, y);
+      }
+      y += 5;
+      drawDottedLine(margin, y, margin + halfWidth);
+    }
+  };
+  
+  // Generuj strony
+  let itemIndex = 0;
+  let pageNum = 0;
+  
+  while (itemIndex < enrichedItems.length || pageNum === 0) {
+    if (pageNum > 0) {
+      doc.addPage();
+    }
+    
+    pageNum++;
+    let y = drawPageHeader(pageNum);
+    
+    // Sekcja informacyjna tylko na pierwszej stronie
+    if (pageNum === 1) {
+      y = drawInfoSection(y);
+    }
+    
+    // Oblicz ile pozycji na tej stronie
+    const itemsOnThisPage = pageNum === 1 ? itemsPerFirstPage : itemsPerNextPage;
+    const startIdx = itemIndex;
+    const endIdx = Math.min(startIdx + itemsOnThisPage, enrichedItems.length);
+    const pageItems = enrichedItems.slice(startIdx, endIdx);
+    
+    // Przygotuj dane tabeli z kolumnami EUR i PLN
+    const tableData = pageItems.map((item, idx) => [
+      startIdx + idx + 1, // Poz.
+      fixPolishChars(item.lotNumber || item.batchNumber || '-'), // Symbol/LOT
+      fixPolishChars(item.name || ''), // Nazwa składnika
+      fixPolishChars(item.unit || 'szt.'), // J.m.
+      item.countedQuantity !== null && item.countedQuantity !== undefined 
+        ? item.countedQuantity.toString() 
+        : '', // Ilość
+      item.unitPrice ? item.unitPrice.toFixed(2) : '-', // Cena EUR
+      item.countedQuantity !== null && item.unitPrice 
+        ? (item.countedQuantity * item.unitPrice).toFixed(2) 
+        : '', // Wartość EUR
+      item.unitPricePLN !== null ? item.unitPricePLN.toFixed(2) : '-', // Cena PLN
+      item.valuePLN !== null ? item.valuePLN.toFixed(2) : '-', // Wartość PLN
+      fixPolishChars(item.notes || '') // Uwagi
+    ]);
+    
+    // Rysuj tabelę tylko jeśli są pozycje
+    if (tableData.length > 0) {
+      autoTable(doc, {
+        head: [[
+          { content: 'Poz.', styles: { halign: 'center' } },
+          { content: fixPolishChars('Symbol/LOT'), styles: { halign: 'center' } },
+          { content: fixPolishChars('Nazwa skladnika'), styles: { halign: 'left' } },
+          { content: 'J.m.', styles: { halign: 'center' } },
+          { content: fixPolishChars('Ilosc'), styles: { halign: 'right' } },
+          { content: fixPolishChars('Cena EUR'), styles: { halign: 'right' } },
+          { content: fixPolishChars('Wart. EUR'), styles: { halign: 'right' } },
+          { content: fixPolishChars('Cena PLN'), styles: { halign: 'right' } },
+          { content: fixPolishChars('Wart. PLN'), styles: { halign: 'right' } },
+          { content: 'Uwagi', styles: { halign: 'left' } }
+        ]],
+        body: tableData,
+        startY: y,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [240, 240, 240],
+          textColor: [0, 0, 0],
+          fontSize: 6,
+          fontStyle: 'bold',
+          lineWidth: 0.3,
+          lineColor: [0, 0, 0]
+        },
+        bodyStyles: {
+          fontSize: 6,
+          textColor: [0, 0, 0],
+          lineWidth: 0.2,
+          lineColor: [100, 100, 100],
+          minCellHeight: 5
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },   // Poz.
+          1: { cellWidth: 32, halign: 'center' },   // Symbol/LOT
+          2: { cellWidth: 55, halign: 'left' },     // Nazwa składnika
+          3: { cellWidth: 14, halign: 'center' },   // J.m.
+          4: { cellWidth: 20, halign: 'right' },    // Ilość
+          5: { cellWidth: 24, halign: 'right' },    // Cena EUR
+          6: { cellWidth: 26, halign: 'right' },    // Wartość EUR
+          7: { cellWidth: 24, halign: 'right' },    // Cena PLN
+          8: { cellWidth: 26, halign: 'right' },    // Wartość PLN
+          9: { cellWidth: 46, halign: 'left' }      // Uwagi
+        },
+        margin: { left: margin, right: margin },
+        tableWidth: 'auto',
+        tableLineWidth: 0.2,
+        tableLineColor: [0, 0, 0]
+      });
+    }
+    
+    itemIndex = endIdx;
+    
+    // Stopka na ostatniej stronie
+    const isLastPage = itemIndex >= enrichedItems.length;
+    if (isLastPage) {
+      drawPageFooter(true, enrichedItems.length);
+    }
+    
+    // Wyjście z pętli jeśli wszystkie pozycje przetworzone
+    if (isLastPage) break;
+  }
+  
+  // Jeśli nie ma pozycji, dodaj pustą tabelę
+  if (enrichedItems.length === 0) {
+    const y = drawInfoSection(drawPageHeader(1));
+    
+    autoTable(doc, {
+      head: [[
+        { content: 'Poz.', styles: { halign: 'center' } },
+        { content: fixPolishChars('Symbol/LOT'), styles: { halign: 'center' } },
+        { content: fixPolishChars('Nazwa skladnika'), styles: { halign: 'left' } },
+        { content: 'J.m.', styles: { halign: 'center' } },
+        { content: fixPolishChars('Ilosc'), styles: { halign: 'right' } },
+        { content: fixPolishChars('Cena EUR'), styles: { halign: 'right' } },
+        { content: fixPolishChars('Wart. EUR'), styles: { halign: 'right' } },
+        { content: fixPolishChars('Cena PLN'), styles: { halign: 'right' } },
+        { content: fixPolishChars('Wart. PLN'), styles: { halign: 'right' } },
+        { content: 'Uwagi', styles: { halign: 'left' } }
+      ]],
+      body: [['', '', '', '', '', '', '', '', '', '']],
+      startY: y,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [240, 240, 240],
+        textColor: [0, 0, 0],
+        fontSize: 6,
+        fontStyle: 'bold',
+        lineWidth: 0.3,
+        lineColor: [0, 0, 0]
+      },
+      bodyStyles: {
+        fontSize: 6,
+        minCellHeight: 10
+      },
+      margin: { left: margin, right: margin }
+    });
+    
+    drawPageFooter(true, 0);
+  }
+  
+  // Zwróć PDF
+  const fileName = `arkusz_spisu_z_natury_${(stocktaking.name || 'inwentaryzacja').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  
+  return {
+    content: doc.output('blob'),
+    filename: fileName,
+    type: 'application/pdf'
+  };
+};

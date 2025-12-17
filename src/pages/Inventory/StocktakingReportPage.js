@@ -30,14 +30,17 @@ import {
   GetApp as DownloadIcon,
   Description as ReportIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import {
   getStocktakingById,
   getStocktakingItems,
-  generateStocktakingReport
+  generateStocktakingReport,
+  generateStocktakingSheetPDF
 } from '../../services/inventory';
 import { getAllWarehouses } from '../../services/inventory/warehouseService';
+import { getCompanyData } from '../../services/companyService';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatCurrency } from '../../utils/formatters';
 
@@ -65,6 +68,7 @@ const StocktakingReportPage = () => {
   const [orderBy, setOrderBy] = useState('discrepancy');
   const [order, setOrder] = useState('desc');
   const [acceptanceFilter, setAcceptanceFilter] = useState('all'); // 'all', 'accepted', 'pending'
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   
   useEffect(() => {
     fetchData();
@@ -224,6 +228,39 @@ const StocktakingReportPage = () => {
     </TableCell>
   );
   
+  const handleExportPDF = async () => {
+    try {
+      setGeneratingPDF(true);
+      
+      // Pobierz dane firmy
+      const companyData = await getCompanyData();
+      
+      // Wygeneruj PDF "Arkusz spisu z natury"
+      const result = await generateStocktakingSheetPDF(stocktaking, sortedItems, {
+        companyData,
+        stocktakingSubject: stocktaking.description || '',
+        stocktakingDate: stocktaking.scheduledDate,
+        startDate: stocktaking.createdAt,
+        endDate: stocktaking.completedAt
+      });
+      
+      // Pobierz plik
+      const url = URL.createObjectURL(result.content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Błąd podczas generowania PDF:', error);
+      setError('Nie udało się wygenerować raportu PDF');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+  
   const handleExportCSV = () => {
     try {
       // Generuj CSV na podstawie sortedItems (przefiltrowanych i posortowanych)
@@ -373,7 +410,7 @@ const StocktakingReportPage = () => {
         <Typography variant="h4" component="h1">
           {t('stocktaking.reportTitle')}
         </Typography>
-        <Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="contained"
             color="primary"
@@ -381,6 +418,15 @@ const StocktakingReportPage = () => {
             onClick={handleExportCSV}
           >
             {t('stocktaking.exportCSV') || 'Eksportuj CSV'}
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={generatingPDF ? <CircularProgress size={20} color="inherit" /> : <PdfIcon />}
+            onClick={handleExportPDF}
+            disabled={generatingPDF}
+          >
+            {generatingPDF ? 'Generowanie...' : 'Arkusz spisu z natury (PDF)'}
           </Button>
         </Box>
       </Box>

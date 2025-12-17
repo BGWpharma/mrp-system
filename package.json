@@ -1,6 +1,6 @@
 {
   "name": "mrp-system",
-  "version": "0.1.229",
+  "version": "0.1.230",
   "private": true,
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -39,6 +39,7 @@
     "chartjs-adapter-date-fns": "^2.0.0",
     "date-fns": "^2.30.0",
     "eu-vat-validation": "^1.0.17",
+    "exceljs": "^4.4.0",
     "firebase": "^10.7.1",
     "html2canvas": "^1.4.1",
     "i18next": "^25.3.2",
