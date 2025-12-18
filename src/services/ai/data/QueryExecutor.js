@@ -985,14 +985,25 @@ export class QueryExecutor {
         
       // Jednostki inne niż waga/objętość - nie konwertujemy
       case 'szt':
+      case 'szt.':
       case 'sztuki':
+      case 'sztuka':
       case 'pcs':
       case 'pieces':
-        return 0; // Nie uwzględniamy w wadze
+      case 'caps':
+      case 'kaps':
+      case 'kapsułki':
+      case 'kapsułka':
+      case 'tab':
+      case 'tabl':
+      case 'tabletki':
+      case 'tabletka':
+        return 0; // Nie uwzględniamy w wadze - to jednostki liczone
         
       default:
-        // Dla nieznanych jednostek zakładamy gramy
-        return quantity;
+        // Dla nieznanych jednostek pomijamy (bezpieczniejsze niż zakładać gramy)
+        console.log(`[convertToGrams] Nieznana jednostka: "${unit}" - pomijam`);
+        return 0;
     }
   }
 

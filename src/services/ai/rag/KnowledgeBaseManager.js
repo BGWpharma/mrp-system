@@ -383,12 +383,43 @@ export class KnowledgeBaseManager {
   static calculateRecipeWeight(recipe) {
     if (!recipe.ingredients) return 0;
     
+    // Jednostki które NIE są wagą - pomijamy je
+    const NON_WEIGHT_UNITS = ['szt.', 'szt', 'caps', 'kaps', 'tab', 'tabl', 'pcs', 'pieces'];
+    
     return recipe.ingredients.reduce((sum, ingredient) => {
+      const unit = (ingredient.unit || 'g').toLowerCase().trim();
+      
+      // Pomijaj jednostki liczone (sztuki, kapsułki, tabletki)
+      if (NON_WEIGHT_UNITS.some(u => unit.includes(u))) {
+        return sum; // Nie dodawaj do wagi
+      }
+      
       let quantity = parseFloat(ingredient.quantity) || 0;
       
       // Konwertuj jednostki na gramy
-      if (ingredient.unit === 'kg') {
-        quantity *= 1000;
+      switch(unit) {
+        case 'kg':
+          quantity *= 1000;
+          break;
+        case 'l':
+        case 'litr':
+          quantity *= 1000; // Przyjmij gęstość ~1
+          break;
+        case 'mg':
+          quantity /= 1000;
+          break;
+        case 'µg':
+        case 'ug':
+        case 'mcg':
+          quantity /= 1000000;
+          break;
+        case 'ml':
+        case 'g':
+          // Bez konwersji
+          break;
+        default:
+          // Nieznana jednostka - pomijaj
+          return sum;
       }
       
       return sum + quantity;

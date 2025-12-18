@@ -270,6 +270,20 @@ export const createInvoice = async (invoiceData, userId) => {
     // Walidacja danych faktury (teraz już z numerem)
     await validateInvoiceData(invoiceData);
     
+    // POPRAWKA: Walidacja dostępności proform PRZED zapisem faktury
+    // Zapobiega podwójnemu użyciu tej samej proformy przez różne faktury
+    if (!invoiceData.isProforma && invoiceData.proformAllocation && invoiceData.proformAllocation.length > 0) {
+      console.log(`[createInvoice] Walidacja dostępności ${invoiceData.proformAllocation.length} proform przed zapisem...`);
+      const validationResult = await validateProformaAllocationsBeforeSave(invoiceData.proformAllocation, null);
+      
+      if (!validationResult.valid) {
+        const errorMessages = validationResult.errors.map(e => e.message).join('; ');
+        console.error(`[createInvoice] ❌ Walidacja proform nie powiodła się:`, validationResult.errors);
+        throw new Error(`Walidacja proform nie powiodła się: ${errorMessages}`);
+      }
+      console.log(`[createInvoice] ✅ Walidacja proform zakończona pomyślnie`);
+    }
+    
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
     const linkedPurchaseOrders = invoiceData.linkedPurchaseOrders || [];
     const settledAdvancePayments = parseFloat(invoiceData.settledAdvancePayments || 0);
@@ -615,6 +629,20 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     
     // Walidacja danych faktury
     await validateInvoiceData(invoiceData, invoiceId);
+    
+    // POPRAWKA: Walidacja dostępności proform PRZED zapisem faktury
+    // Przy edycji wykluczamy bieżącą fakturę z obliczeń wykorzystania
+    if (!invoiceData.isProforma && invoiceData.proformAllocation && invoiceData.proformAllocation.length > 0) {
+      console.log(`[updateInvoice] Walidacja dostępności ${invoiceData.proformAllocation.length} proform przed zapisem...`);
+      const validationResult = await validateProformaAllocationsBeforeSave(invoiceData.proformAllocation, invoiceId);
+      
+      if (!validationResult.valid) {
+        const errorMessages = validationResult.errors.map(e => e.message).join('; ');
+        console.error(`[updateInvoice] ❌ Walidacja proform nie powiodła się:`, validationResult.errors);
+        throw new Error(`Walidacja proform nie powiodła się: ${errorMessages}`);
+      }
+      console.log(`[updateInvoice] ✅ Walidacja proform zakończona pomyślnie`);
+    }
     
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
     const linkedPurchaseOrders = invoiceData.linkedPurchaseOrders || [];
@@ -1548,7 +1576,144 @@ export const recalculatePaymentStatus = async (invoiceId, userId) => {
 };
 
 /**
+ * Oblicza dynamicznie wykorzystaną kwotę z proformy na podstawie proformAllocation w fakturach
+ * @param {string} proformaId - ID proformy
+ * @param {string|null} excludeInvoiceId - ID faktury do wykluczenia z obliczeń (przy edycji)
+ * @returns {Promise<number>} - Kwota już wykorzystana z proformy
+ */
+export const calculateDynamicProformaUsage = async (proformaId, excludeInvoiceId = null) => {
+  let used = 0;
+  
+  const invoicesQuery = query(
+    collection(db, INVOICES_COLLECTION),
+    where('isProforma', '==', false)
+  );
+  const querySnapshot = await getDocs(invoicesQuery);
+  
+  querySnapshot.forEach((docSnap) => {
+    // Pomiń wykluczaną fakturę (przy edycji)
+    if (excludeInvoiceId && docSnap.id === excludeInvoiceId) {
+      return;
+    }
+    
+    const invoiceData = docSnap.data();
+    
+    // Sprawdź proformAllocation (nowy system)
+    if (invoiceData.proformAllocation && Array.isArray(invoiceData.proformAllocation)) {
+      const allocation = invoiceData.proformAllocation.find(
+        alloc => alloc.proformaId === proformaId
+      );
+      if (allocation && allocation.amount > 0) {
+        used += parseFloat(allocation.amount);
+      }
+    }
+    // COMPATIBILITY: Sprawdź też stary system selectedProformaId
+    else if (invoiceData.selectedProformaId === proformaId && invoiceData.settledAdvancePayments > 0) {
+      used += parseFloat(invoiceData.settledAdvancePayments);
+    }
+  });
+  
+  return used;
+};
+
+/**
+ * Waliduje dostępność proform przed zapisem faktury
+ * Sprawdza dynamicznie aktualne wykorzystanie każdej proformy
+ * @param {Array} proformAllocation - Tablica alokacji proform [{proformaId, amount, proformaNumber}]
+ * @param {string|null} excludeInvoiceId - ID faktury do wykluczenia (przy edycji)
+ * @returns {Promise<{valid: boolean, errors: Array}>}
+ */
+export const validateProformaAllocationsBeforeSave = async (proformAllocation, excludeInvoiceId = null) => {
+  if (!proformAllocation || proformAllocation.length === 0) {
+    return { valid: true, errors: [] };
+  }
+  
+  const errors = [];
+  
+  for (const allocation of proformAllocation) {
+    if (!allocation.proformaId || allocation.amount <= 0) {
+      continue;
+    }
+    
+    try {
+      // Pobierz dane proformy
+      const proformaDoc = await getDoc(doc(db, INVOICES_COLLECTION, allocation.proformaId));
+      
+      if (!proformaDoc.exists()) {
+        errors.push({
+          proformaId: allocation.proformaId,
+          proformaNumber: allocation.proformaNumber,
+          message: `Proforma ${allocation.proformaNumber} nie została znaleziona`
+        });
+        continue;
+      }
+      
+      const proformaData = proformaDoc.data();
+      const proformaTotal = parseFloat(proformaData.total || 0);
+      const proformaPaid = parseFloat(proformaData.totalPaid || 0);
+      const requiredAdvancePaymentPercentage = parseFloat(proformaData.requiredAdvancePaymentPercentage || 0);
+      
+      // Oblicz dynamicznie aktualne wykorzystanie (z wykluczeniem edytowanej faktury)
+      const currentUsed = await calculateDynamicProformaUsage(allocation.proformaId, excludeInvoiceId);
+      
+      // Oblicz maksymalną dostępną kwotę
+      let maxAvailableAmount;
+      if (requiredAdvancePaymentPercentage > 0) {
+        maxAvailableAmount = (proformaTotal * requiredAdvancePaymentPercentage / 100) - currentUsed;
+      } else {
+        maxAvailableAmount = proformaTotal - currentUsed;
+      }
+      maxAvailableAmount = Math.max(0, maxAvailableAmount);
+      
+      // Sprawdź czy proforma została wystarczająco opłacona
+      let requiredPaymentAmount = requiredAdvancePaymentPercentage > 0 
+        ? proformaTotal * requiredAdvancePaymentPercentage / 100 
+        : proformaTotal;
+      
+      const isReadyForSettlement = preciseCompare(proformaPaid, requiredPaymentAmount, 0.01) >= 0;
+      
+      if (!isReadyForSettlement) {
+        errors.push({
+          proformaId: allocation.proformaId,
+          proformaNumber: allocation.proformaNumber,
+          message: `Proforma ${allocation.proformaNumber} nie została wystarczająco opłacona (wymagane: ${requiredPaymentAmount.toFixed(2)}, opłacono: ${proformaPaid.toFixed(2)})`
+        });
+        continue;
+      }
+      
+      // Sprawdź czy żądana kwota nie przekracza dostępnej
+      if (preciseCompare(allocation.amount, maxAvailableAmount, 0.01) > 0) {
+        errors.push({
+          proformaId: allocation.proformaId,
+          proformaNumber: allocation.proformaNumber,
+          requestedAmount: allocation.amount,
+          availableAmount: maxAvailableAmount,
+          message: `Kwota ${allocation.amount.toFixed(2)} przekracza dostępną kwotę proformy ${allocation.proformaNumber} (dostępne: ${maxAvailableAmount.toFixed(2)}, już wykorzystano: ${currentUsed.toFixed(2)})`
+        });
+      }
+      
+      console.log(`[validateProformaAllocationsBeforeSave] Proforma ${proformaData.number}: ` +
+        `total=${proformaTotal.toFixed(2)}, currentUsed=${currentUsed.toFixed(2)}, ` +
+        `available=${maxAvailableAmount.toFixed(2)}, requested=${allocation.amount.toFixed(2)}`);
+        
+    } catch (error) {
+      errors.push({
+        proformaId: allocation.proformaId,
+        proformaNumber: allocation.proformaNumber,
+        message: `Błąd podczas walidacji proformy: ${error.message}`
+      });
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+};
+
+/**
  * Aktualizuje wykorzystanie kwoty z proformy
+ * POPRAWKA: Używa dynamicznego obliczania wykorzystania zamiast pola usedAsAdvancePayment
  */
 export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceId, userId) => {
   try {
@@ -1565,22 +1730,37 @@ export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceI
       throw new Error('Podana faktura nie jest proformą');
     }
     
-    const currentUsed = parseFloat(proformaData.usedAsAdvancePayment || 0);
-    const newUsed = currentUsed + parseFloat(usedAmount);
     const proformaTotal = parseFloat(proformaData.total || 0);
+    const requiredAdvancePaymentPercentage = parseFloat(proformaData.requiredAdvancePaymentPercentage || 0);
     
-    // DODAJ LOG
-    console.log(`[updateProformaUsage] Proforma ${proformaData.number}: currentUsed=${currentUsed.toFixed(2)}, adding=${parseFloat(usedAmount).toFixed(2)}, newUsed=${newUsed.toFixed(2)}, total=${proformaTotal.toFixed(2)}`);
+    // POPRAWKA: Oblicz dynamicznie aktualne wykorzystanie z faktur w bazie
+    // Wykluczamy targetInvoiceId, bo ta faktura może być właśnie zapisywana
+    const currentUsed = await calculateDynamicProformaUsage(proformaId, targetInvoiceId);
+    const newUsed = currentUsed + parseFloat(usedAmount);
     
-    // Sprawdź czy nie przekraczamy kwoty proformy (z tolerancją dla zaokrągleń)
-    if (preciseCompare(newUsed, proformaTotal, 0.01) > 0) {
-      const availableAmount = (proformaTotal - currentUsed).toFixed(2);
-      console.error(`[updateProformaUsage] ❌ Przekroczono limit proformy ${proformaData.number}: próba dodania ${usedAmount}, dostępne ${availableAmount}`);
+    // Oblicz maksymalny limit
+    let maxLimit;
+    if (requiredAdvancePaymentPercentage > 0) {
+      maxLimit = proformaTotal * requiredAdvancePaymentPercentage / 100;
+    } else {
+      maxLimit = proformaTotal;
+    }
+    
+    console.log(`[updateProformaUsage] Proforma ${proformaData.number}: ` +
+      `dynamicCurrentUsed=${currentUsed.toFixed(2)}, adding=${parseFloat(usedAmount).toFixed(2)}, ` +
+      `newUsed=${newUsed.toFixed(2)}, maxLimit=${maxLimit.toFixed(2)}`);
+    
+    // Sprawdź czy nie przekraczamy limitu proformy (z tolerancją dla zaokrągleń)
+    if (preciseCompare(newUsed, maxLimit, 0.01) > 0) {
+      const availableAmount = Math.max(0, maxLimit - currentUsed).toFixed(2);
+      console.error(`[updateProformaUsage] ❌ Przekroczono limit proformy ${proformaData.number}: ` +
+        `próba dodania ${usedAmount}, dostępne ${availableAmount}`);
       throw new Error(`Nie można rozliczyć ${usedAmount}. Dostępna kwota do rozliczenia: ${availableAmount}`);
     }
     
     const linkedInvoices = proformaData.linkedAdvanceInvoices || [];
     
+    // Zaktualizuj również pole usedAsAdvancePayment dla zachowania kompatybilności
     await updateDoc(proformaRef, {
       usedAsAdvancePayment: newUsed,
       linkedAdvanceInvoices: [...linkedInvoices, targetInvoiceId],
@@ -1588,9 +1768,9 @@ export const updateProformaUsage = async (proformaId, usedAmount, targetInvoiceI
       updatedBy: userId
     });
     
-    console.log(`[updateProformaUsage] ✅ Zaktualizowano proformę ${proformaData.number}, pozostało: ${(proformaTotal - newUsed).toFixed(2)}`);
+    console.log(`[updateProformaUsage] ✅ Zaktualizowano proformę ${proformaData.number}, pozostało: ${(maxLimit - newUsed).toFixed(2)}`);
     
-    return { success: true, remainingAmount: proformaTotal - newUsed };
+    return { success: true, remainingAmount: maxLimit - newUsed };
   } catch (error) {
     console.error('Błąd podczas aktualizacji wykorzystania proformy:', error);
     throw error;
@@ -1655,34 +1835,10 @@ export const getAvailableProformaAmount = async (proformaId) => {
     const total = parseFloat(proformaData.total || 0);
     const paid = parseFloat(proformaData.totalPaid || 0);
     
-    // POPRAWKA: Oblicz wykorzystaną kwotę dynamicznie na podstawie proformAllocation w fakturach
-    // zamiast polegać na zdenormalizowanym polu usedAsAdvancePayment, które może być niezsynchronizowane
+    // Użyj centralnej funkcji do dynamicznego obliczania wykorzystania
     let used = 0;
     try {
-      const invoicesQuery = query(
-        collection(db, INVOICES_COLLECTION),
-        where('isProforma', '==', false)
-      );
-      const querySnapshot = await getDocs(invoicesQuery);
-      
-      querySnapshot.forEach((docSnap) => {
-        const invoiceData = docSnap.data();
-        
-        // Sprawdź proformAllocation (nowy system)
-        if (invoiceData.proformAllocation && Array.isArray(invoiceData.proformAllocation)) {
-          const allocation = invoiceData.proformAllocation.find(
-            alloc => alloc.proformaId === proformaId
-          );
-          if (allocation && allocation.amount > 0) {
-            used += parseFloat(allocation.amount);
-          }
-        }
-        // COMPATIBILITY: Sprawdź też stary system selectedProformaId
-        else if (invoiceData.selectedProformaId === proformaId && invoiceData.settledAdvancePayments > 0) {
-          used += parseFloat(invoiceData.settledAdvancePayments);
-        }
-      });
-      
+      used = await calculateDynamicProformaUsage(proformaId, null);
       console.log(`[getAvailableProformaAmount] Proforma ${proformaData.number}: total=${total.toFixed(2)}, dynamicUsed=${used.toFixed(2)}, storedUsed=${parseFloat(proformaData.usedAsAdvancePayment || 0).toFixed(2)}`);
     } catch (queryError) {
       console.warn('[getAvailableProformaAmount] Błąd podczas dynamicznego obliczania used, fallback do usedAsAdvancePayment:', queryError);

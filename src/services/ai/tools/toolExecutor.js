@@ -54,6 +54,41 @@ export class ToolExecutor {
   }
   
   /**
+   * Helper: Rozwiązuje nazwy materiałów dla listy ID
+   * @private
+   */
+  static async resolveMaterialNames(materialIds) {
+    if (!materialIds || materialIds.length === 0) return {};
+    
+    try {
+      const uniqueIds = [...new Set(materialIds.filter(id => id))];
+      const materialNamesMap = {};
+      
+      // Pobierz materiały z kolekcji inventory
+      const inventoryRef = collection(db, COLLECTION_MAPPING.inventory);
+      const snapshot = await getDocs(inventoryRef);
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Użyj zarówno doc.id jak i data.id jako klucze (niektóre materiały mogą używać data.id)
+        if (uniqueIds.includes(doc.id)) {
+          materialNamesMap[doc.id] = data.name || data.id || doc.id;
+        }
+        if (data.id && uniqueIds.includes(data.id)) {
+          materialNamesMap[data.id] = data.name || data.id;
+        }
+      });
+      
+      console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(materialNamesMap).length}/${uniqueIds.length} materiałów`);
+      return materialNamesMap;
+    } catch (error) {
+      console.warn('[ToolExecutor] ⚠️ Nie udało się pobrać nazw materiałów:', error.message);
+      // Zwróć pustą mapę (materiały będą pokazane jako ID)
+      return {};
+    }
+  }
+  
+  /**
    * Wykonuje funkcję wywołaną przez GPT
    * @param {string} functionName - Nazwa funkcji do wykonania
    * @param {Object} parameters - Parametry funkcji
@@ -561,6 +596,49 @@ export class ToolExecutor {
       }));
       
       console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(userNamesMap).length} użytkowników`);
+    }
+    
+    // ✅ NOWE: Rozwiąż nazwy materiałów w consumedMaterials (tylko gdy includeDetails=true)
+    if (params.includeDetails === true) {
+      // Zbierz wszystkie materialId z consumedMaterials i materials
+      const materialIds = [];
+      tasks.forEach(task => {
+        if (task.consumedMaterials) {
+          task.consumedMaterials.forEach(cm => {
+            if (cm.materialId) materialIds.push(cm.materialId);
+          });
+        }
+        if (task.materials) {
+          task.materials.forEach(m => {
+            if (m.inventoryItemId) materialIds.push(m.inventoryItemId);
+            if (m.id) materialIds.push(m.id);
+          });
+        }
+      });
+      
+      if (materialIds.length > 0) {
+        const materialNamesMap = await this.resolveMaterialNames(materialIds);
+        
+        // Zaktualizuj consumedMaterials z nazwami materiałów
+        tasks = tasks.map(task => {
+          if (task.consumedMaterials) {
+            task.consumedMaterials = task.consumedMaterials.map(cm => ({
+              ...cm,
+              // Użyj istniejącej nazwy lub rozwiąż z mapy lub użyj ID jako fallback
+              materialName: cm.materialName || materialNamesMap[cm.materialId] || cm.materialId || 'Nieznany materiał'
+            }));
+          }
+          if (task.materials) {
+            task.materials = task.materials.map(m => ({
+              ...m,
+              name: m.name || materialNamesMap[m.inventoryItemId] || materialNamesMap[m.id] || m.name || 'Nieznany materiał'
+            }));
+          }
+          return task;
+        });
+        
+        console.log(`[ToolExecutor] ✅ Rozwiązano nazwy dla ${Object.keys(materialNamesMap).length} materiałów w consumedMaterials`);
+      }
     }
     
     // Ostrzeżenie o dużej liczbie wyników (optymalizacja tokenów)
@@ -2308,21 +2386,57 @@ export class ToolExecutor {
   
   /**
    * Oblicza łączną wagę składników receptury
+   * UWAGA: Obsługuje tylko jednostki wagowe (kg, g) i objętościowe (l, ml).
+   * Jednostki liczone (szt., caps) są POMIJANE w obliczeniach wagi.
    */
   static calculateTotalWeight(ingredients) {
     if (!Array.isArray(ingredients)) return 0;
     
+    // Jednostki które NIE są wagą - pomijamy je
+    const NON_WEIGHT_UNITS = ['szt.', 'szt', 'caps', 'kaps', 'tab', 'tabl'];
+    
     return ingredients.reduce((total, ingredient) => {
       const quantity = parseFloat(ingredient.quantity) || 0;
-      const unit = ingredient.unit || 'g';
+      const unit = (ingredient.unit || 'g').toLowerCase().trim();
+      
+      // Pomijaj jednostki liczone (sztuki, kapsułki, tabletki)
+      if (NON_WEIGHT_UNITS.some(u => unit.includes(u))) {
+        return total; // Nie dodawaj do wagi
+      }
       
       // Konwersja na gramy
-      let quantityInGrams = quantity;
-      if (unit === 'kg') {
-        quantityInGrams = quantity * 1000;
-      } else if (unit === 'ml') {
-        // Przyjmij gęstość ~1 dla uproszczenia
-        quantityInGrams = quantity;
+      let quantityInGrams = 0;
+      
+      switch(unit) {
+        case 'kg':
+          quantityInGrams = quantity * 1000;
+          break;
+        case 'g':
+          quantityInGrams = quantity;
+          break;
+        case 'mg':
+          quantityInGrams = quantity / 1000;
+          break;
+        case 'µg':
+        case 'ug':
+        case 'mcg':
+          quantityInGrams = quantity / 1000000;
+          break;
+        case 'l':
+        case 'litr':
+        case 'litry':
+          // Przyjmij gęstość ~1 (woda)
+          quantityInGrams = quantity * 1000;
+          break;
+        case 'ml':
+          // Przyjmij gęstość ~1 (woda)
+          quantityInGrams = quantity;
+          break;
+        default:
+          // Dla nieznanych jednostek, spróbuj domyślnie traktować jako gramy
+          // ale tylko jeśli to wygląda na jednostkę wagową
+          console.log(`[calculateTotalWeight] Nieznana jednostka: "${unit}" - pomijam`);
+          return total; // Pomijaj nieznane jednostki
       }
       
       return total + quantityInGrams;

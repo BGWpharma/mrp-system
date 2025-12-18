@@ -39,10 +39,10 @@ export const useTaskComments = (taskId) => {
       const commentData = {
         id: `comment_${Date.now()}`,
         text: newComment.trim(),
-        userId,
-        userName: userName || 'Nieznany użytkownik',
+        createdBy: userId,
+        createdByName: userName || 'Nieznany użytkownik',
         createdAt: new Date().toISOString(),
-        isRead: false
+        readBy: [userId] // Autor komentarza automatycznie ma go jako przeczytany
       };
 
       const taskRef = doc(db, 'productionTasks', taskId);
@@ -97,15 +97,21 @@ export const useTaskComments = (taskId) => {
 
     try {
       // Oznacz tylko nieprzeczytane komentarze innych użytkowników
-      const unreadComments = comments.filter(c => !c.isRead && c.userId !== userId);
+      const unreadComments = comments.filter(c => {
+        const readBy = c.readBy || [];
+        const authorId = c.createdBy || c.userId;
+        return !readBy.includes(userId) && authorId !== userId;
+      });
       
       if (unreadComments.length === 0) {
         return;
       }
 
       const updatedComments = comments.map(comment => {
-        if (!comment.isRead && comment.userId !== userId) {
-          return { ...comment, isRead: true };
+        const readBy = comment.readBy || [];
+        const authorId = comment.createdBy || comment.userId;
+        if (!readBy.includes(userId) && authorId !== userId) {
+          return { ...comment, readBy: [...readBy, userId] };
         }
         return comment;
       });
@@ -124,7 +130,11 @@ export const useTaskComments = (taskId) => {
     if (!comments || comments.length === 0) {
       return 0;
     }
-    return comments.filter(c => !c.isRead && c.userId !== userId).length;
+    return comments.filter(c => {
+      const readBy = c.readBy || [];
+      const authorId = c.createdBy || c.userId;
+      return !readBy.includes(userId) && authorId !== userId;
+    }).length;
   }, []);
 
   return {

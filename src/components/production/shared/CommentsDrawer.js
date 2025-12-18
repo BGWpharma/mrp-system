@@ -88,7 +88,7 @@ const CommentsDrawer = memo(({
                   <ListItem 
                     alignItems="flex-start"
                     sx={{
-                      bgcolor: comment.userId === currentUserId 
+                      bgcolor: (comment.createdBy || comment.userId) === currentUserId 
                         ? 'action.hover' 
                         : 'transparent',
                       '&:hover': {
@@ -100,7 +100,7 @@ const CommentsDrawer = memo(({
                       primary={
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="subtitle2" component="span">
-                            {comment.userName || 'Nieznany użytkownik'}
+                            {comment.createdByName || comment.userName || 'Nieznany użytkownik'}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
                             {comment.createdAt ? formatDateTime(comment.createdAt) : ''}
@@ -121,7 +121,7 @@ const CommentsDrawer = memo(({
                         </Typography>
                       }
                     />
-                    {comment.userId === currentUserId && (
+                    {(comment.createdBy || comment.userId) === currentUserId && (
                       <ListItemSecondaryAction>
                         <IconButton 
                           edge="end" 
