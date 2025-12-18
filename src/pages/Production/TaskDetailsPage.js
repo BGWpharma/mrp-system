@@ -2478,7 +2478,8 @@ const TaskDetailsPage = () => {
     }
 
     try {
-      await deleteTaskComment(id, commentId, currentUser.uid);
+      const isAdmin = currentUser?.role === 'administrator';
+      await deleteTaskComment(id, commentId, currentUser.uid, isAdmin);
       showSuccess(t('comments.deleteSuccess'));
     } catch (error) {
       console.error('Błąd usuwania komentarza:', error);
@@ -9490,6 +9491,7 @@ const TaskDetailsPage = () => {
             onDeleteComment={(comment) => handleDeleteComment(comment.id)}
             addingComment={addingComment}
             currentUserId={currentUser?.uid}
+            isAdmin={currentUser?.role === 'administrator'}
             t={t}
           />
         </>

@@ -36,6 +36,7 @@ const CommentsDrawer = memo(({
   onDeleteComment,
   addingComment = false,
   currentUserId,
+  isAdmin = false,  // ✅ NOWE: Czy użytkownik jest administratorem
   t = (key) => key
 }) => {
   const handleSubmit = useCallback((e) => {
@@ -121,13 +122,17 @@ const CommentsDrawer = memo(({
                         </Typography>
                       }
                     />
-                    {(comment.createdBy || comment.userId) === currentUserId && (
+                    {/* ✅ Przycisk usuwania - widoczny dla autora LUB administratora */}
+                    {((comment.createdBy || comment.userId) === currentUserId || isAdmin) && (
                       <ListItemSecondaryAction>
                         <IconButton 
                           edge="end" 
                           size="small"
                           onClick={() => onDeleteComment(comment)}
                           color="error"
+                          title={isAdmin && (comment.createdBy || comment.userId) !== currentUserId 
+                            ? 'Usuń komentarz (jako administrator)' 
+                            : 'Usuń komentarz'}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>

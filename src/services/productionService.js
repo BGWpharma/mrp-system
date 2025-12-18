@@ -6497,9 +6497,10 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
    * @param {string} taskId - ID zadania produkcyjnego
    * @param {string} commentId - ID komentarza do usunięcia
    * @param {string} userId - ID użytkownika usuwającego komentarz
+   * @param {boolean} isAdmin - Czy użytkownik jest administratorem (opcjonalne - jeśli nie podane, sprawdzi w bazie)
    * @returns {Promise<void>}
    */
-  export const deleteTaskComment = async (taskId, commentId, userId) => {
+  export const deleteTaskComment = async (taskId, commentId, userId, isAdmin = null) => {
     try {
       const taskRef = doc(db, PRODUCTION_TASKS_COLLECTION, taskId);
       const taskDoc = await getDoc(taskRef);
@@ -6511,13 +6512,23 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       const taskData = taskDoc.data();
       const comments = taskData.comments || [];
       
-      // Sprawdź czy użytkownik jest autorem komentarza
+      // Znajdź komentarz do usunięcia
       const commentToDelete = comments.find(c => c.id === commentId);
       if (!commentToDelete) {
         throw new Error('Komentarz nie istnieje');
       }
       
-      if (commentToDelete.createdBy !== userId) {
+      // Sprawdź uprawnienia - autor LUB administrator
+      const isAuthor = commentToDelete.createdBy === userId;
+      
+      // Jeśli isAdmin nie zostało przekazane, sprawdź rolę użytkownika w bazie
+      let hasAdminRights = isAdmin;
+      if (hasAdminRights === null && !isAuthor) {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        hasAdminRights = userDoc.exists() && userDoc.data()?.role === 'administrator';
+      }
+      
+      if (!isAuthor && !hasAdminRights) {
         throw new Error('Brak uprawnień do usunięcia tego komentarza');
       }
       
@@ -6529,7 +6540,8 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
         updatedBy: userId
       });
       
-      console.log(`[TASK-COMMENT] Usunięto komentarz ${commentId} z zadania ${taskId}`);
+      const deletedBy = isAuthor ? 'autora' : 'administratora';
+      console.log(`[TASK-COMMENT] Usunięto komentarz ${commentId} z zadania ${taskId} przez ${deletedBy}`);
     } catch (error) {
       console.error('Błąd podczas usuwania komentarza:', error);
       throw error;
