@@ -1449,6 +1449,7 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
   };
 
   // Funkcja obliczająca łączną kwotę opłaconą (proformy + rzeczywiste płatności z faktur, BEZ podwójnego liczenia)
+  // Pomija faktury ujemne (korekty) - to nie są płatności OD klienta, to zwroty DO klienta
   const calculateTotalPaid = () => {
     if (!invoices || invoices.length === 0) {
       return 0;
@@ -1462,7 +1463,13 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
         const proformaPaid = parseFloat(invoice.totalPaid || 0);
         totalPaid += proformaPaid;
       } else {
-        // Z faktur bierzemy TYLKO rzeczywiste płatności (bez proformAllocation, żeby nie liczyć podwójnie)
+        // Pomijamy faktury ujemne (korekty) - to nie są płatności od klienta
+        const invoiceTotal = parseFloat(invoice.total || 0);
+        if (invoiceTotal < 0) {
+          return; // Pomiń korekty w obliczeniach "Opłacone"
+        }
+        
+        // Z faktur dodatnich bierzemy rzeczywiste płatności (bez proformAllocation, żeby nie liczyć podwójnie)
         const invoiceRealPayment = parseFloat(invoice.totalPaid || 0);
         totalPaid += invoiceRealPayment;
       }
@@ -1904,10 +1911,13 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'success.contrastText', opacity: 0.85 }}>
                           {(() => {
-                            const totalValue = calculateOrderTotalValue();
+                            const invoicedAmount = calculateInvoicedAmount();
                             const totalPaid = calculateTotalPaid();
-                            const percentage = totalValue > 0 ? ((totalPaid / totalValue) * 100).toFixed(1) : 0;
-                            const remaining = totalValue - totalPaid;
+                            // Procent opłacenia względem zafakturowanej kwoty
+                            const percentage = invoicedAmount > 0 ? ((totalPaid / invoicedAmount) * 100).toFixed(1) : 0;
+                            // Do zapłaty = FK (zafakturowano) - Opłacone
+                            // Uwzględnia korekty (ujemne faktury) - jeśli wynik ujemny = nadpłata/do zwrotu
+                            const remaining = invoicedAmount - totalPaid;
                             return `${percentage}% • Do zapłaty: ${formatCurrency(remaining)}`;
                           })()}
                         </Typography>
