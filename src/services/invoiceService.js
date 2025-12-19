@@ -2197,7 +2197,12 @@ export const getInvoicedAmountsByOrderItems = async (orderId, preloadedInvoices 
             };
           }
           
-          const itemValue = parseFloat(invoiceItem.netValue || invoiceItem.totalPrice || 0);
+          // Fallback: jeśli brak netValue i totalPrice, oblicz z price * quantity
+          const itemValue = parseFloat(
+            invoiceItem.netValue || 
+            invoiceItem.totalPrice || 
+            ((parseFloat(invoiceItem.price || 0) * parseFloat(invoiceItem.quantity || 0)))
+          );
           invoicedAmounts[itemId].totalInvoiced += itemValue;
           invoicedAmounts[itemId].invoices.push({
             invoiceId: invoice.id,
@@ -2250,7 +2255,12 @@ export const getReinvoicedAmountsByPOItems = async (purchaseOrderId, preloadedIn
       if (!invoice.items || !Array.isArray(invoice.items)) return;
       
       invoice.items.forEach((invoiceItem) => {
-        const itemValue = parseFloat(invoiceItem.netValue || invoiceItem.totalPrice || 0);
+        // Fallback: jeśli brak netValue i totalPrice, oblicz z price * quantity
+        const itemValue = parseFloat(
+          invoiceItem.netValue || 
+          invoiceItem.totalPrice || 
+          ((parseFloat(invoiceItem.price || 0) * parseFloat(invoiceItem.quantity || 0)))
+        );
         const quantity = parseFloat(invoiceItem.quantity || 0);
         
         if (invoiceItem.isAdditionalCost) {
@@ -2391,7 +2401,12 @@ export const getProformaAmountsByOrderItems = async (orderId, preloadedInvoices 
             };
           }
           
-          const itemValue = parseFloat(invoiceItem.netValue || invoiceItem.totalPrice || 0);
+          // Fallback: jeśli brak netValue i totalPrice, oblicz z price * quantity
+          const itemValue = parseFloat(
+            invoiceItem.netValue || 
+            invoiceItem.totalPrice || 
+            ((parseFloat(invoiceItem.price || 0) * parseFloat(invoiceItem.quantity || 0)))
+          );
           proformaAmounts[itemId].totalProforma += itemValue;
           proformaAmounts[itemId].proformas.push({
             proformaId: invoice.id,

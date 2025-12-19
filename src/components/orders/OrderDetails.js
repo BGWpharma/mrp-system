@@ -1404,38 +1404,26 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
     return productsValue * discountMultiplier;
   };
 
-  // Funkcja obliczająca kwotę już rozliczoną na podstawie faktur
-  const calculateSettledAmount = () => {
+  // Funkcja obliczająca kwotę zafakturowaną (wartość wystawionych faktur, nie proform)
+  const calculateInvoicedAmount = () => {
     if (!invoices || invoices.length === 0) {
       return 0;
     }
 
-    let totalSettled = 0;
+    let totalInvoiced = 0;
 
     invoices.forEach(invoice => {
-      // Pomijamy proformy - nie są rzeczywistymi płatnościami
+      // Pomijamy proformy - one są liczone osobno jako zaliczki
       if (invoice.isProforma) {
         return;
       }
 
-      // Wliczamy tylko kwoty rzeczywiście zapłacone w fakturach (nie proformach)
-      const totalPaid = parseFloat(invoice.totalPaid || 0);
-      totalSettled += totalPaid;
-
-      // Przedpłaty z proform również wliczamy do kwoty rozliczonej
-      // (to są rzeczywiste płatności wykorzystane z proform)
-      if (invoice.proformAllocation && invoice.proformAllocation.length > 0) {
-        // Nowy system - suma kwot z proformAllocation
-        const advancePayments = invoice.proformAllocation.reduce((sum, allocation) => 
-          sum + (parseFloat(allocation.amount) || 0), 0);
-        totalSettled += advancePayments;
-      } else if (invoice.settledAdvancePayments) {
-        // Stary system - pole settledAdvancePayments
-        totalSettled += parseFloat(invoice.settledAdvancePayments || 0);
-      }
+      // Sumujemy wartość faktury (total), nie kwotę zapłaconą (totalPaid)
+      const invoiceTotal = parseFloat(invoice.total || 0);
+      totalInvoiced += invoiceTotal;
     });
 
-    return totalSettled;
+    return totalInvoiced;
   };
 
   // Funkcja obliczająca sumę zaliczek (proform)
@@ -1944,13 +1932,13 @@ ${report.errors.length > 0 ? `\n⚠️ Ostrzeżenia: ${report.errors.length}` : 
                         📄 FK
                       </Typography>
                       <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold', my: 0.5 }}>
-                        {formatCurrency(calculateSettledAmount())}
+                        {formatCurrency(calculateInvoicedAmount())}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {(() => {
                           const totalValue = calculateOrderTotalValue();
-                          const settledAmount = calculateSettledAmount();
-                          const percentage = totalValue > 0 ? ((settledAmount / totalValue) * 100).toFixed(1) : 0;
+                          const invoicedAmount = calculateInvoicedAmount();
+                          const percentage = totalValue > 0 ? ((invoicedAmount / totalValue) * 100).toFixed(1) : 0;
                           return `${percentage}%`;
                         })()}
                       </Typography>
