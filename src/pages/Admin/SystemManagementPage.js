@@ -25,8 +25,11 @@ import {
   Search as SearchIcon,
   LocalShipping as LocalShippingIcon,
   SmartToy as AIIcon,
-  Assessment as ReportIcon
+  Assessment as ReportIcon,
+  BugReport as BugReportIcon
 } from '@mui/icons-material';
+import * as Sentry from '@sentry/react';
+import { addBreadcrumb } from '../../utils/errorHandler';
 import {
   Dialog,
   DialogTitle,
@@ -1168,6 +1171,123 @@ const SystemManagementPage = () => {
                     </Typography>
                   </CardContent>
                 </Card>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {/* Sekcja testowania Sentry.io */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <BugReportIcon sx={{ mr: 1.5, color: 'warning.main' }} />
+              <Typography variant="h6">
+                🛡️ Test Sentry Error Tracking
+              </Typography>
+            </Box>
+            
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Narzędzia do testowania integracji z Sentry.io - systemem monitorowania błędów i wydajności aplikacji.
+            </Typography>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Test błędu JavaScript
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Rzuca błąd JavaScript który zostanie przechwycony przez ErrorBoundary i wysłany do Sentry.
+                    </Typography>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Po kliknięciu pojawi się strona błędu. Kliknij "Spróbuj ponownie" aby wrócić.
+                    </Alert>
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      startIcon={<BugReportIcon />}
+                      onClick={() => {
+                        // Dodaj breadcrumb przed testem
+                        addBreadcrumb('Admin clicked Sentry test button', 'sentry-test', 'info', {
+                          testType: 'error',
+                          location: 'SystemManagementPage',
+                          userId: currentUser?.uid
+                        });
+                        
+                        // Rzuć błąd testowy
+                        throw new Error('This is your first error!');
+                      }}
+                    >
+                      Break the world
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Test logowania wiadomości
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Wysyła testową wiadomość do Sentry bez rzucania błędu (poziom: info).
+                    </Typography>
+                    <Alert severity="success" sx={{ mb: 2 }}>
+                      Wiadomość zostanie wysłana w tle. Sprawdź konsolę i Sentry.io.
+                    </Alert>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<BugReportIcon />}
+                      onClick={() => {
+                        // Dodaj breadcrumb
+                        addBreadcrumb('Admin clicked Sentry message test', 'sentry-test', 'info', {
+                          testType: 'message',
+                          location: 'SystemManagementPage'
+                        });
+                        
+                        // Wyślij testową wiadomość
+                        Sentry.captureMessage('Test message from SystemManagementPage', {
+                          level: 'info',
+                          tags: {
+                            testType: 'manual',
+                            source: 'admin-panel'
+                          },
+                          extra: {
+                            userId: currentUser?.uid,
+                            userEmail: currentUser?.email,
+                            timestamp: new Date().toISOString()
+                          }
+                        });
+                        
+                        showSuccess('Wiadomość testowa wysłana do Sentry.io');
+                      }}
+                    >
+                      Test Message
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  <Typography variant="body2" fontWeight="bold" gutterBottom>
+                    Dokumentacja Sentry:
+                  </Typography>
+                  <Typography variant="body2" component="div">
+                    <ul style={{ margin: 0, paddingLeft: 20 }}>
+                      <li><strong>Quick Start:</strong> <code>src/utils/README_SENTRY.md</code></li>
+                      <li><strong>Pełna dokumentacja:</strong> <code>src/utils/SENTRY_ERROR_HANDLING.md</code></li>
+                      <li><strong>Przykłady użycia:</strong> <code>src/utils/sentryExamples.js</code></li>
+                    </ul>
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Wszystkie nieobsłużone błędy są automatycznie wysyłane do Sentry. 
+                    Dla błędów w try-catch użyj <code>handleError()</code> lub <code>withFirebaseErrorHandling()</code>.
+                  </Typography>
+                </Alert>
               </Grid>
             </Grid>
           </CardContent>

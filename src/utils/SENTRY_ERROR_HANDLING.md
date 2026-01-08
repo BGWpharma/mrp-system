@@ -379,9 +379,11 @@ export const useInventory = (itemId) => {
 
 ### Test lokalny:
 
-1. Użyj przycisku "Break the world" na Dashboardzie
-2. Sprawdź w konsoli przeglądarki czy błędy są logowane
-3. Sprawdź w Sentry.io czy błędy się pojawiają
+1. Przejdź do **Admin → Narzędzia systemowe**
+2. Znajdź sekcję "🛡️ Test Sentry Error Tracking"
+3. Użyj przycisku "Break the world" (testuje pełny błąd) lub "Test Message" (testuje tylko logowanie)
+4. Sprawdź w konsoli przeglądarki czy błędy są logowane
+5. Sprawdź w Sentry.io czy błędy/wiadomości się pojawiają
 
 ### Test w produkcji:
 

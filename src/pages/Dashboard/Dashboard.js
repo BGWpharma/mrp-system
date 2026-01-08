@@ -17,10 +17,8 @@ import {
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
-  Announcement as AnnouncementIcon,
-  BugReport as BugReportIcon
+  Announcement as AnnouncementIcon
 } from '@mui/icons-material';
-import * as Sentry from '@sentry/react';
 import { useAuth } from '../../hooks/useAuth';
 import { formatTimestamp } from '../../utils/dateUtils';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -400,60 +398,6 @@ const Dashboard = () => {
             )}
           </Paper>
         </Fade>
-
-        {/* Sentry Test Button - tylko w development lub dla adminów */}
-        {(process.env.NODE_ENV === 'development' || currentUser?.role === 'admin') && (
-          <Fade in timeout={1800}>
-            <Paper 
-              elevation={0}
-              sx={{ 
-                mt: 3,
-                p: 3, 
-                bgcolor: 'background.paper',
-                borderRadius: 2, 
-                border: '1px solid',
-                borderColor: 'warning.main',
-                boxShadow: '0 1px 3px rgba(237, 108, 2, 0.1)',
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 40,
-                  height: 40,
-                  borderRadius: 1.5,
-                  bgcolor: 'rgba(237, 108, 2, 0.1)',
-                }}>
-                  <BugReportIcon sx={{ color: 'warning.main', fontSize: 22 }} />
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 0.5 }}>
-                    Test Sentry Error Tracking
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                    Kliknij przycisk, aby przetestować integrację z Sentry.io
-                  </Typography>
-                </Box>
-                <Button 
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<BugReportIcon />}
-                  onClick={() => {
-                    throw new Error('This is your first error!');
-                  }}
-                  sx={{ 
-                    minWidth: 160,
-                    fontWeight: 600
-                  }}
-                >
-                  Break the world
-                </Button>
-              </Box>
-            </Paper>
-          </Fade>
-        )}
       </Container>
 
       {/* Notyfikacja */}

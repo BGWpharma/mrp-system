@@ -293,7 +293,9 @@ addBreadcrumb('User clicked submit', 'user-action', 'info');
 
 ### Testowanie
 
-W Dashboard znajdziesz przycisk testowy "Break the world" (widoczny w development lub dla adminów), który pozwala przetestować integrację z Sentry.
+W **Admin → Narzędzia systemowe** znajdziesz sekcję "Test Sentry Error Tracking" z dwoma przyciskami:
+- **"Break the world"** - testuje pełny błąd JavaScript (ErrorBoundary)
+- **"Test Message"** - testuje tylko logowanie wiadomości
 
 ### Konfiguracja
 

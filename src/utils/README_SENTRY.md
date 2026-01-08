@@ -64,7 +64,9 @@ Pełna dokumentacja: [`SENTRY_ERROR_HANDLING.md`](./SENTRY_ERROR_HANDLING.md)
 
 ## 🧪 Testowanie
 
-Użyj przycisku "Break the world" na Dashboardzie (widoczny w dev lub dla adminów).
+Przejdź do **Admin → Narzędzia systemowe** i użyj sekcji "Test Sentry Error Tracking":
+- **"Break the world"** - testuje pełny błąd (pojawi się ErrorBoundary)
+- **"Test Message"** - testuje tylko logowanie wiadomości (bez błędu)
 
 ## 📊 Co zobaczysz w Sentry?
 

@@ -78,12 +78,15 @@ Aktualizacja głównego README:
 
 ---
 
-### 4. Przycisk testowy
+### 4. Narzędzia testowe
 
-#### ✅ `src/pages/Dashboard/Dashboard.js`
-- Dodano elegancki przycisk testowy "Break the world"
-- Widoczny tylko w development lub dla adminów
-- Spójny design z resztą dashboardu
+#### ✅ `src/pages/Admin/SystemManagementPage.js`
+- Dodano sekcję "Test Sentry Error Tracking" w narzędziach systemowych
+- **Przycisk "Break the world"** - testuje pełny błąd JavaScript z ErrorBoundary
+- **Przycisk "Test Message"** - testuje logowanie wiadomości bez błędu
+- Widoczne tylko dla administratorów
+- Dokumentacja inline z instrukcjami użycia
+- Automatyczne dodawanie kontekstu i breadcrumbs przed testem
 
 #### ✅ `src/components/common/SentryErrorButton.js`
 - Reużywalny komponent przycisku testowego
@@ -159,7 +162,7 @@ addBreadcrumb('User action', 'category', 'info', { data });
 - ✅ `src/index.js` - inicjalizacja Sentry + console.error wrapper
 - ✅ `src/App.js` - ErrorBoundary
 - ✅ `src/contexts/AuthContext.js` - user context
-- ✅ `src/pages/Dashboard/Dashboard.js` - przycisk testowy
+- ✅ `src/pages/Admin/SystemManagementPage.js` - narzędzia testowe Sentry
 - ✅ `README.md` - dokumentacja
 
 ### Utworzone:
@@ -177,11 +180,12 @@ addBreadcrumb('User action', 'category', 'info', { data });
 
 ### Lokalnie (development):
 1. Uruchom aplikację: `npm start`
-2. Zaloguj się
-3. Przejdź do Dashboard
-4. Kliknij przycisk "Break the world"
-5. Sprawdź w konsoli czy błąd jest logowany
-6. Sprawdź w Sentry.io czy błąd się pojawił
+2. Zaloguj się jako administrator
+3. Przejdź do **Admin → Narzędzia systemowe**
+4. Znajdź sekcję "🛡️ Test Sentry Error Tracking"
+5. Kliknij przycisk "Break the world" (testuje błąd) lub "Test Message" (testuje wiadomość)
+6. Sprawdź w konsoli czy błąd jest logowany
+7. Sprawdź w Sentry.io czy błąd/wiadomość się pojawił
 
 ### W produkcji:
 1. Ustaw w `.env.local`:
