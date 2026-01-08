@@ -49,6 +49,7 @@ MVP systemu zawiera cztery kluczowe moduły:
 
 - **Frontend**: React, Material-UI
 - **Backend**: Firebase (Firestore, Authentication)
+- **Error Tracking**: Sentry.io (monitoring błędów i wydajności)
 - **Dodatki**: React Router, Date-fns
 
 ## Wymagania
@@ -76,14 +77,19 @@ npm install
    - Dodaj aplikację typu Web
    - Skopiuj dane konfiguracyjne
 
-4. Utwórz plik `.env.local` w głównym katalogu projektu i dodaj dane konfiguracyjne Firebase:
+4. Utwórz plik `.env.local` w głównym katalogu projektu i dodaj dane konfiguracyjne:
 ```
+# Firebase Configuration
 REACT_APP_FIREBASE_API_KEY=twoj-api-key
 REACT_APP_FIREBASE_AUTH_DOMAIN=twoj-auth-domain
 REACT_APP_FIREBASE_PROJECT_ID=twoj-project-id
 REACT_APP_FIREBASE_STORAGE_BUCKET=twoj-storage-bucket
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=twoj-messaging-sender-id
 REACT_APP_FIREBASE_APP_ID=twoj-app-id
+
+# Sentry Configuration (opcjonalne)
+REACT_APP_SENTRY_DSN=twoj-sentry-dsn
+REACT_APP_SENTRY_ENVIRONMENT=development
 ```
 
 5. Uruchom aplikację w trybie deweloperskim:
@@ -234,3 +240,83 @@ Te optymalizacje znacząco zmniejszą liczbę zapytań do bazy danych podczas ł
 - Dodano responsywność do strony zarządzania partiami - przyciski w nagłówku dostosowano do widoku mobilnego
 - Uproszczono tabelę partii w widoku mobilnym pokazując tylko najważniejsze kolumny
 - Zoptymalizowano paginację w widoku partii dla urządzeń mobilnych
+
+## 🛡️ Monitoring błędów z Sentry.io
+
+System jest zintegrowany z Sentry.io dla kompleksowego monitorowania błędów i wydajności aplikacji.
+
+### Co jest monitorowane?
+
+✅ **Automatycznie:**
+- Wszystkie nieobsłużone błędy JavaScript
+- Błędy w komponentach React (przez ErrorBoundary)
+- Wszystkie wywołania `console.error()` w produkcji
+- Błędy w asynchronicznych operacjach
+- Performance metrics (czasy ładowania, transakcje)
+- Session Replay (nagrania sesji z błędami)
+
+### Narzędzia dla developerów
+
+W katalogu `src/utils/` znajdziesz:
+- **`errorHandler.js`** - Główne funkcje obsługi błędów
+- **`firebaseErrorHandler.js`** - Wrappery dla operacji Firebase
+- **`SENTRY_ERROR_HANDLING.md`** - Pełna dokumentacja
+- **`sentryExamples.js`** - 10+ przykładów użycia
+- **`README_SENTRY.md`** - Quick start guide
+
+### Szybki start
+
+```javascript
+// 1. Podstawowa obsługa błędów
+import { handleError } from './utils/errorHandler';
+
+try {
+  await someOperation();
+} catch (error) {
+  handleError(error, 'myService.myFunction', { userId: '123' });
+}
+
+// 2. Firebase operacje
+import { withFirebaseErrorHandling } from './utils/firebaseErrorHandler';
+
+const task = await withFirebaseErrorHandling(
+  () => getDoc(doc(db, 'tasks', taskId)),
+  'taskService.getTask',
+  { taskId }
+);
+
+// 3. Breadcrumbs (śledzenie akcji użytkownika)
+import { addBreadcrumb } from './utils/errorHandler';
+
+addBreadcrumb('User clicked submit', 'user-action', 'info');
+```
+
+### Testowanie
+
+W Dashboard znajdziesz przycisk testowy "Break the world" (widoczny w development lub dla adminów), który pozwala przetestować integrację z Sentry.
+
+### Konfiguracja
+
+W pliku `.env.local` dodaj:
+```env
+REACT_APP_SENTRY_DSN=twoj-sentry-dsn
+REACT_APP_SENTRY_ENVIRONMENT=development  # lub 'production'
+```
+
+### Przyjazne komunikaty błędów
+
+System automatycznie tłumaczy kody błędów Firebase na przyjazne komunikaty po polsku:
+- `permission-denied` → "Brak uprawnień do wykonania tej operacji"
+- `not-found` → "Nie znaleziono dokumentu"
+- `auth/wrong-password` → "Nieprawidłowe hasło"
+- ...i wiele innych
+
+### Dodatkowe funkcje
+
+- **User Context**: Każdy błąd zawiera informacje o zalogowanym użytkowniku
+- **Breadcrumbs**: Automatyczne śledzenie nawigacji i akcji przed błędem
+- **Extra Data**: Możliwość dodania kontekstu do każdego błędu
+- **Filtrowanie**: Automatyczne filtrowanie błędów z rozszerzeń przeglądarki
+- **Performance**: Monitoring wydajności aplikacji (10% transakcji w produkcji)
+
+Więcej informacji: [`src/utils/SENTRY_ERROR_HANDLING.md`](src/utils/SENTRY_ERROR_HANDLING.md)

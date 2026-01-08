@@ -371,23 +371,23 @@ const InvoiceForm = ({ invoiceId }) => {
       return;
     }
     
-    console.log(`[fetchRelatedInvoices] Rozpoczynam pobieranie dla zamówienia: ${orderId}, faktura: ${invoiceId || 'nowa'}`);
+    // Rozpoczynam pobieranie dla zamówienia...
     setLoadingRelatedInvoices(true);
     try {
       const invoices = await getInvoicesByOrderId(orderId);
       // Filtruj tylko faktury inne niż obecna (jeśli edytujemy istniejącą)
       const filteredInvoices = invoices.filter(inv => inv.id !== invoiceId);
       setRelatedInvoices(filteredInvoices);
-      console.log(`[fetchRelatedInvoices] ✅ Załadowano ${filteredInvoices.length} powiązanych faktur`);
+      // Załadowano powiązane faktury
       
       // Pobierz wszystkie dostępne proformy z ich kwotami
       // Jeśli edytujemy istniejącą fakturę, uwzględnij to przy obliczaniu dostępnych kwot
-      console.log(`[fetchRelatedInvoices] Pobieranie dostępnych proform...`);
+      // Pobieranie dostępnych proform...
       const proformasWithAmounts = await getAvailableProformasForOrderWithExclusion(orderId, invoiceId);
       // Filtruj proformy inne niż obecna faktura (jeśli edytujemy proformę)
       const filteredProformas = proformasWithAmounts.filter(proforma => proforma.id !== invoiceId);
       setAvailableProformas(filteredProformas);
-      console.log(`[fetchRelatedInvoices] ✅ Załadowano ${filteredProformas.length} dostępnych proform`);
+      // Załadowano dostępne proformy
       
       // Aktualizacja availableProformaAmount dla starego systemu kompatybilności
       setInvoice(prev => {

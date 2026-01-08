@@ -29,6 +29,7 @@
     "@mui/x-date-pickers": "^6.20.2",
     "@mui/x-internals": "^7.28.0",
     "@react-pdf/renderer": "^4.3.0",
+    "@sentry/react": "^10.32.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
@@ -104,6 +105,7 @@
     ]
   },
   "devDependencies": {
+    "@sentry/cli": "^3.0.3",
     "i18next-scanner": "^4.6.0",
     "xlsx-js-style": "^1.2.0"
   }

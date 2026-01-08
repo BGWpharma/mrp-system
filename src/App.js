@@ -1,6 +1,7 @@
 // src/App.js
 import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import * as Sentry from "@sentry/react";
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { useTheme } from './contexts/ThemeContext';
@@ -15,7 +16,7 @@ import { SidebarProvider, useSidebar } from './contexts/SidebarContext';
 import Notifications from './components/common/Notifications';
 import { rtdb } from './services/firebase/config';
 import { ref, onValue } from 'firebase/database';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Box, CircularProgress, Typography, Button } from '@mui/material';
 
 // Inicjujemy przechwytywanie logów konsoli
 import './services/logsCaptureService';
@@ -240,21 +241,65 @@ initializeConnectionMonitoring();
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <NotificationProvider>
-          <LocalizationWrapper>
-            <ColumnPreferencesProvider>
-              <InventoryListStateProvider>
-                <TaskListStateProvider>
-                  <CmrListStateProvider>
-                    <RecipeListStateProvider>
-                      <InvoiceListStateProvider>
-                        <OrderListStateProvider>
-                          <SidebarProvider>
-                            <div className="app-container">
-                              <Notifications />
-                              <Routes>
+    <Sentry.ErrorBoundary 
+      fallback={({ error, componentStack, resetError }) => (
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '100vh',
+          padding: 3,
+          textAlign: 'center',
+          gap: 2
+        }}>
+          <Typography variant="h4" color="error" gutterBottom>
+            Ups! Coś poszło nie tak
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2, maxWidth: 600 }}>
+            Przepraszamy za niedogodności. Błąd został automatycznie zgłoszony do naszego zespołu.
+          </Typography>
+          {process.env.NODE_ENV === 'development' && error && (
+            <Box sx={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: 2, 
+              borderRadius: 1,
+              maxWidth: 800,
+              width: '100%',
+              textAlign: 'left',
+              overflow: 'auto'
+            }}>
+              <Typography variant="caption" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+                {error.toString()}
+              </Typography>
+            </Box>
+          )}
+          <Button 
+            variant="contained"
+            onClick={resetError}
+            sx={{ mt: 2 }}
+          >
+            Spróbuj ponownie
+          </Button>
+        </Box>
+      )}
+      showDialog
+    >
+      <Router>
+        <AuthProvider>
+          <NotificationProvider>
+            <LocalizationWrapper>
+              <ColumnPreferencesProvider>
+                <InventoryListStateProvider>
+                  <TaskListStateProvider>
+                    <CmrListStateProvider>
+                      <RecipeListStateProvider>
+                        <InvoiceListStateProvider>
+                          <OrderListStateProvider>
+                            <SidebarProvider>
+                              <div className="app-container">
+                                <Notifications />
+                                <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     
@@ -452,6 +497,7 @@ function App() {
         </NotificationProvider>
       </AuthProvider>
     </Router>
+    </Sentry.ErrorBoundary>
   );
 }
 

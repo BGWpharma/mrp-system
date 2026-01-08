@@ -17,6 +17,7 @@
  * - Stabilniejsze referencje funkcji autentykacji
  */
 import React, { createContext, useEffect, useState, useContext, useCallback, useMemo } from 'react';
+import * as Sentry from "@sentry/react";
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -90,6 +91,8 @@ export const AuthProvider = ({ children }) => {
 
   // ⚡ OPTYMALIZACJA: useCallback - stabilna referencja funkcji logout
   const logout = useCallback(() => {
+    // Wyczyść użytkownika w Sentry przy wylogowaniu
+    Sentry.setUser(null);
     return signOut(auth);
   }, []);
 
@@ -101,7 +104,16 @@ export const AuthProvider = ({ children }) => {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         
         if (userDoc.exists()) {
-          setCurrentUser({ ...user, ...userDoc.data() });
+          const userData = { ...user, ...userDoc.data() };
+          setCurrentUser(userData);
+          
+          // Ustaw użytkownika w Sentry dla lepszego trackingu błędów
+          Sentry.setUser({
+            id: user.uid,
+            email: user.email,
+            username: userDoc.data().displayName || user.displayName || user.email,
+            role: userDoc.data().role
+          });
         } else {
           // Zapisz podstawowe dane użytkownika jeśli go jeszcze nie ma w bazie
           await updateUserData(user.uid, {
@@ -113,10 +125,21 @@ export const AuthProvider = ({ children }) => {
           
           // Pobierz zaktualizowane dane
           const updatedUserDoc = await getDoc(doc(db, 'users', user.uid));
-          setCurrentUser({ ...user, ...updatedUserDoc.data() });
+          const userData = { ...user, ...updatedUserDoc.data() };
+          setCurrentUser(userData);
+          
+          // Ustaw użytkownika w Sentry
+          Sentry.setUser({
+            id: user.uid,
+            email: user.email,
+            username: updatedUserDoc.data().displayName || user.displayName || user.email,
+            role: updatedUserDoc.data().role
+          });
         }
       } else {
         setCurrentUser(null);
+        // Wyczyść użytkownika w Sentry przy wylogowaniu
+        Sentry.setUser(null);
       }
       setLoading(false);
     });

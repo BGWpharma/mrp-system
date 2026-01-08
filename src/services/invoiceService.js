@@ -273,7 +273,7 @@ export const createInvoice = async (invoiceData, userId) => {
     // POPRAWKA: Walidacja dostępności proform PRZED zapisem faktury
     // Zapobiega podwójnemu użyciu tej samej proformy przez różne faktury
     if (!invoiceData.isProforma && invoiceData.proformAllocation && invoiceData.proformAllocation.length > 0) {
-      console.log(`[createInvoice] Walidacja dostępności ${invoiceData.proformAllocation.length} proform przed zapisem...`);
+      // Walidacja dostępności proform przed zapisem...
       const validationResult = await validateProformaAllocationsBeforeSave(invoiceData.proformAllocation, null);
       
       if (!validationResult.valid) {
@@ -281,7 +281,7 @@ export const createInvoice = async (invoiceData, userId) => {
         console.error(`[createInvoice] ❌ Walidacja proform nie powiodła się:`, validationResult.errors);
         throw new Error(`Walidacja proform nie powiodła się: ${errorMessages}`);
       }
-      console.log(`[createInvoice] ✅ Walidacja proform zakończona pomyślnie`);
+      // Walidacja proform zakończona pomyślnie
     }
     
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
@@ -340,6 +340,24 @@ export const createInvoice = async (invoiceData, userId) => {
       } catch (paymentStatusError) {
         console.warn('Błąd podczas automatycznego przeliczania statusu płatności dla nowej faktury:', paymentStatusError);
         // Nie przerywamy procesu tworzenia faktury z powodu błędu statusu płatności
+      }
+    }
+    
+    // Jeśli tworzymy fakturę ze statusem 'issued' (lub wyższym), wygeneruj PDF od razu
+    if (['issued', 'paid', 'partially_paid', 'overdue'].includes(invoiceData.status)) {
+      try {
+        console.log(`[createInvoice] Generowanie PDF dla nowej faktury o statusie ${invoiceData.status}...`);
+        const pdfInfo = await generateAndSaveInvoicePdf(newInvoiceId, userId);
+        if (pdfInfo) {
+          await updateDoc(doc(db, INVOICES_COLLECTION, newInvoiceId), {
+            pdfAttachment: pdfInfo,
+            updatedAt: serverTimestamp()
+          });
+          console.log(`[createInvoice] PDF wygenerowany i przypisany do nowej faktury: ${newInvoiceId}`);
+        }
+      } catch (pdfError) {
+        console.error('[createInvoice] Błąd podczas generowania PDF dla nowej faktury:', pdfError);
+        // Nie przerywamy procesu tworzenia faktury z powodu błędu PDF
       }
     }
     
@@ -633,7 +651,7 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
     // POPRAWKA: Walidacja dostępności proform PRZED zapisem faktury
     // Przy edycji wykluczamy bieżącą fakturę z obliczeń wykorzystania
     if (!invoiceData.isProforma && invoiceData.proformAllocation && invoiceData.proformAllocation.length > 0) {
-      console.log(`[updateInvoice] Walidacja dostępności ${invoiceData.proformAllocation.length} proform przed zapisem...`);
+      // Walidacja dostępności proform przed zapisem...
       const validationResult = await validateProformaAllocationsBeforeSave(invoiceData.proformAllocation, invoiceId);
       
       if (!validationResult.valid) {
@@ -641,7 +659,7 @@ export const updateInvoice = async (invoiceId, invoiceData, userId) => {
         console.error(`[updateInvoice] ❌ Walidacja proform nie powiodła się:`, validationResult.errors);
         throw new Error(`Walidacja proform nie powiodła się: ${errorMessages}`);
       }
-      console.log(`[updateInvoice] ✅ Walidacja proform zakończona pomyślnie`);
+      // Walidacja proform zakończona pomyślnie
     }
     
     // Upewnij się, że mamy właściwe dane o zaliczkach/przedpłatach
@@ -1839,7 +1857,7 @@ export const getAvailableProformaAmount = async (proformaId) => {
     let used = 0;
     try {
       used = await calculateDynamicProformaUsage(proformaId, null);
-      console.log(`[getAvailableProformaAmount] Proforma ${proformaData.number}: total=${total.toFixed(2)}, dynamicUsed=${used.toFixed(2)}, storedUsed=${parseFloat(proformaData.usedAsAdvancePayment || 0).toFixed(2)}`);
+      // Logowanie dynamicznego użycia proformy zostało usunięte
     } catch (queryError) {
       console.warn('[getAvailableProformaAmount] Błąd podczas dynamicznego obliczania used, fallback do usedAsAdvancePayment:', queryError);
       used = parseFloat(proformaData.usedAsAdvancePayment || 0);
