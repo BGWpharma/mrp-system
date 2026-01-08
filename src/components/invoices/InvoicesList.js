@@ -58,7 +58,7 @@ import {
   calculateRequiredAdvancePayment,
   getInvoiceById
 } from '../../services/invoiceService';
-import { preciseCompare } from '../../utils/mathUtils';
+import { preciseCompare, preciseSubtract } from '../../utils/mathUtils';
 import { getAllCustomers } from '../../services/customerService';
 import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
@@ -1227,7 +1227,22 @@ const InvoicesList = () => {
                                   }
                                 }
                                 
-                                return renderPaymentStatus(calculatedStatus);
+                                const overpayment = preciseSubtract(totalSettled, invoiceTotal);
+                                
+                                return (
+                                  <>
+                                    {renderPaymentStatus(calculatedStatus)}
+                                    {preciseCompare(overpayment, 0.01) >= 0 && (
+                                      <Chip 
+                                        label={t('invoices.status.refundDue')} 
+                                        color="warning" 
+                                        size="small"
+                                        variant="outlined"
+                                        sx={{ mt: 0.5 }}
+                                      />
+                                    )}
+                                  </>
+                                );
                               })()}
                             </Box>
                           </TableCell>

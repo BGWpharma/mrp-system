@@ -39,6 +39,7 @@
     "draft": "Szkic",
     "issued": "Wystawiona",
     "paid": "Opłacona",
+    "refundDue": "Do zwrotu",
     "partiallyPaid": "Częściowo opłacona",
     "overdue": "Przeterminowana",
     "cancelled": "Anulowana",
