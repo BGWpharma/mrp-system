@@ -639,7 +639,7 @@ function performAdvancedAnalysis(data) {
     materialName: batch.materialName || batch.itemName || "Nieznany",
     materialSKU: batch.itemId || batch.sku || null,
     quantity: batch.quantity || 0,
-    unit: batch.unit || "szt",
+    unit: batch.unit ? String(batch.unit) : "szt",
     warehouseName: batch.warehouseName || null,
     expiryDate: batch.expiryDate?.toDate?.()?.toISOString() || null,
     daysUntilExpiry: batch.expiryDate?.toDate ?

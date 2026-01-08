@@ -3103,6 +3103,151 @@ export const deleteCmrInvoice = async (invoiceId, userId) => {
   }
 };
 
+/**
+ * Przesyła "inny" załącznik do CMR
+ * @param {File} file - Obiekt pliku
+ * @param {string} cmrId - ID dokumentu CMR
+ * @param {string} userId - ID użytkownika przesyłającego
+ * @returns {Promise<Object>} - Dane utworzonego załącznika
+ */
+export const uploadCmrOtherAttachment = async (file, cmrId, userId) => {
+  try {
+    if (!file) {
+      throw new Error('Nie wybrano pliku');
+    }
+
+    // Walidacja rozmiaru pliku (max 20MB)
+    const maxSize = 20 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('Rozmiar pliku przekracza 20MB');
+    }
+
+    // Dozwolone typy plików (takie same jak dla faktur + ewentualnie inne)
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/png',
+      'text/plain',
+      'application/zip',
+      'application/x-zip-compressed'
+    ];
+
+    // Sprawdzenie typu (opcjonalne, można pominąć jeśli chcemy wszystkie)
+    // if (!allowedTypes.includes(file.type)) { ... }
+
+    // Tworzymy ścieżkę do pliku w Firebase Storage - ODDZIELNA ŚCIEŻKA dla innych załączników
+    const timestamp = new Date().getTime();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `${timestamp}_${sanitizedFileName}`;
+    const storagePath = `cmr-other/${cmrId}/${fileName}`;
+
+    // Przesyłamy plik do Firebase Storage
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file);
+
+    // Pobieramy URL do pobrania pliku
+    const downloadURL = await getDownloadURL(fileRef);
+
+    // Zapisujemy informacje o załączniku w Firestore - oddzielna kolekcja
+    const attachmentData = {
+      fileName: file.name,
+      originalFileName: file.name,
+      storagePath,
+      downloadURL,
+      contentType: file.type,
+      size: file.size,
+      cmrId,
+      type: 'other',
+      uploadedBy: userId,
+      uploadedAt: serverTimestamp()
+    };
+
+    const attachmentRef = await addDoc(collection(db, 'cmrOtherAttachments'), attachmentData);
+
+    return {
+      id: attachmentRef.id,
+      ...attachmentData,
+      uploadedAt: new Date()
+    };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania innego załącznika CMR:', error);
+    throw error;
+  }
+};
+
+/**
+ * Pobiera wszystkie "inne" załączniki dla danego CMR
+ * @param {string} cmrId - ID dokumentu CMR
+ * @returns {Promise<Array>} - Lista załączników
+ */
+export const getCmrOtherAttachments = async (cmrId) => {
+  try {
+    const q = query(
+      collection(db, 'cmrOtherAttachments'),
+      where('cmrId', '==', cmrId),
+      orderBy('uploadedAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    const attachments = [];
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      attachments.push({
+        id: doc.id,
+        ...data,
+        uploadedAt: data.uploadedAt ? data.uploadedAt.toDate() : null
+      });
+    });
+
+    return attachments;
+  } catch (error) {
+    console.error('Błąd podczas pobierania innych załączników CMR:', error);
+    return [];
+  }
+};
+
+/**
+ * Usuwa "inny" załącznik CMR
+ * @param {string} attachmentId - ID załącznika w Firestore
+ * @param {string} userId - ID użytkownika usuwającego
+ * @returns {Promise<void>}
+ */
+export const deleteCmrOtherAttachment = async (attachmentId, userId) => {
+  try {
+    // Pobierz informacje o załączniku
+    const attachmentDoc = await getDoc(doc(db, 'cmrOtherAttachments', attachmentId));
+    
+    if (!attachmentDoc.exists()) {
+      throw new Error('Załącznik nie został znalezion');
+    }
+
+    const attachmentData = attachmentDoc.data();
+
+    // Usuń plik z Firebase Storage
+    if (attachmentData.storagePath) {
+      const fileRef = ref(storage, attachmentData.storagePath);
+      try {
+        await deleteObject(fileRef);
+      } catch (storageError) {
+        console.warn('Nie udało się usunąć pliku załącznika z Storage (może już nie istnieć):', storageError);
+      }
+    }
+
+    // Usuń rekord z Firestore
+    await deleteDoc(doc(db, 'cmrOtherAttachments', attachmentId));
+
+    console.log(`Załącznik ${attachmentData.fileName} został usunięty przez użytkownika ${userId}`);
+  } catch (error) {
+    console.error('Błąd podczas usuwania innego załącznika CMR:', error);
+    throw error;
+  }
+};
+
 // Cache dla zoptymalizowanej funkcji pobierania dokumentów CMR
 let cmrDocumentsCache = null;
 let cmrDocumentsCacheTimestamp = null;

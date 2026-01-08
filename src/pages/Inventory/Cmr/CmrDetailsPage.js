@@ -79,7 +79,10 @@ import {
   deleteCmrAttachment,
   uploadCmrInvoice,
   getCmrInvoices,
-  deleteCmrInvoice
+  deleteCmrInvoice,
+  uploadCmrOtherAttachment,
+  getCmrOtherAttachments,
+  deleteCmrOtherAttachment
 } from '../../../services/cmrService';
 import { getOrderById } from '../../../services/orderService';
 import { 
@@ -286,6 +289,11 @@ const CmrDetailsPage = () => {
   const [invoices, setInvoices] = useState([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
+
+  // Stany dla innych załączników
+  const [otherAttachments, setOtherAttachments] = useState([]);
+  const [otherAttachmentsLoading, setOtherAttachmentsLoading] = useState(false);
+  const [uploadingOtherAttachment, setUploadingOtherAttachment] = useState(false);
   
   const menuOpen = Boolean(anchorEl);
   
@@ -1716,6 +1724,56 @@ const CmrDetailsPage = () => {
     }
   };
 
+  // Funkcja do pobierania innych załączników
+  const fetchOtherAttachments = async () => {
+    try {
+      setOtherAttachmentsLoading(true);
+      const attachmentsList = await getCmrOtherAttachments(id);
+      setOtherAttachments(attachmentsList);
+    } catch (error) {
+      console.error('Błąd podczas pobierania innych załączników:', error);
+      showError('Nie udało się pobrać innych załączników');
+    } finally {
+      setOtherAttachmentsLoading(false);
+    }
+  };
+
+  // Funkcja do przesyłania innego załącznika
+  const handleOtherAttachmentUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+
+    try {
+      setUploadingOtherAttachment(true);
+      const newAttachment = await uploadCmrOtherAttachment(file, id, currentUser.uid);
+      setOtherAttachments(prev => [newAttachment, ...prev]);
+      showSuccess(`Załącznik "${file.name}" został przesłany pomyślnie`);
+    } catch (error) {
+      console.error('Błąd podczas przesyłania załącznika:', error);
+      showError(error.message || 'Nie udało się przesłać załącznika');
+    } finally {
+      setUploadingOtherAttachment(false);
+    }
+  };
+
+  // Funkcja do usuwania innego załącznika
+  const handleOtherAttachmentDelete = async (attachmentId, fileName) => {
+    if (!window.confirm(`Czy na pewno chcesz usunąć załącznik "${fileName}"?`)) {
+      return;
+    }
+
+    try {
+      await deleteCmrOtherAttachment(attachmentId, currentUser.uid);
+      setOtherAttachments(prev => prev.filter(att => att.id !== attachmentId));
+      showSuccess(`Załącznik "${fileName}" został usunięty`);
+    } catch (error) {
+      console.error('Błąd podczas usuwania załącznika:', error);
+      showError('Nie udało się usunąć załącznika');
+    }
+  };
+
   // Funkcja formatowania rozmiaru pliku
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
@@ -1730,6 +1788,7 @@ const CmrDetailsPage = () => {
     if (id) {
       fetchAttachments();
       fetchInvoices();
+      fetchOtherAttachments();
     }
   }, [id]);
   
@@ -3335,6 +3394,184 @@ const CmrDetailsPage = () => {
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                             Całkowity rozmiar: {formatFileSize(invoices.reduce((sum, inv) => sum + inv.size, 0))}
+                          </Typography>
+                        </Box>
+                      </TableContainer>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Inne załączniki */}
+            <Grid item xs={12}>
+              <Card>
+                <CardHeader 
+                  title={
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
+                      Inne załączniki ({otherAttachments.length})
+                    </Box>
+                  }
+                  titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
+                  sx={{ pb: 1 }}
+                />
+                <Divider />
+                <CardContent>
+                  {/* Sekcja przesyłania innych załączników */}
+                  <Box sx={{ mb: 3, p: 2, backgroundColor: 'info.50', borderRadius: 1, border: 1, borderColor: 'info.200', borderStyle: 'dashed' }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', color: 'info.dark' }}>
+                      <CloudUploadIcon sx={mr1} />
+                      Dodaj inny załącznik do CMR
+                    </Typography>
+                    
+                    <Box sx={mt2}>
+                      <input
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip,.txt"
+                        style={{ display: 'none' }}
+                        id="cmr-other-upload"
+                        type="file"
+                        onChange={handleOtherAttachmentUpload}
+                        disabled={uploadingOtherAttachment}
+                      />
+                      <label htmlFor="cmr-other-upload">
+                        <Button
+                          variant="outlined"
+                          component="span"
+                          color="info"
+                          startIcon={<AttachFileIcon />}
+                          disabled={uploadingOtherAttachment}
+                          fullWidth
+                        >
+                          Wybierz plik
+                        </Button>
+                      </label>
+                    </Box>
+                    
+                    {uploadingOtherAttachment && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                        <CircularProgress size={20} sx={mr1} color="info" />
+                        <Typography variant="caption" color="text.secondary">
+                          Przesyłanie załącznika...
+                        </Typography>
+                      </Box>
+                    )}
+                    
+                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                      Dozwolone formaty: PDF, JPG, PNG, DOC, XLS, ZIP, TXT (max 20MB)
+                    </Typography>
+                  </Box>
+
+                  {/* Lista innych załączników */}
+                  {otherAttachmentsLoading ? (
+                    <Box sx={loadingContainer}>
+                      <CircularProgress color="info" />
+                    </Box>
+                  ) : otherAttachments.length === 0 ? (
+                    <Paper sx={{ p: 2, backgroundColor: 'background.paper', border: 1, borderColor: 'divider', borderStyle: 'dashed' }}>
+                      <Typography variant="body2" color="text.secondary" align="center">
+                        Brak innych załączników dla tego CMR
+                      </Typography>
+                      <Typography variant="caption" display="block" align="center" sx={{ mt: 1, color: 'text.secondary' }}>
+                        Możesz dodać załączniki korzystając z przycisku powyżej
+                      </Typography>
+                    </Paper>
+                  ) : (
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
+                        <AttachFileIcon sx={{ mr: 1, color: 'info.main' }} />
+                        Lista załączników ({otherAttachments.length})
+                      </Typography>
+                      
+                      <TableContainer component={Paper} sx={mt2}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: 'info.50' }}>
+                              <TableCell sx={{ fontWeight: 'bold', width: 60 }}>Typ</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>Nazwa pliku</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Rozmiar</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Data dodania</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', width: 120 }} align="center">Akcje</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {otherAttachments.map((attachment) => (
+                              <TableRow key={attachment.id} hover>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Box sx={{ bgcolor: 'info.light', color: 'info.dark', px: 1, py: 0.5, borderRadius: 1, fontSize: '0.75rem', fontWeight: 'bold' }}>
+                                      INNE
+                                    </Box>
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography 
+                                    variant="body2" 
+                                    sx={{ 
+                                      fontWeight: 500,
+                                      color: 'info.main',
+                                      cursor: 'pointer',
+                                      textDecoration: 'underline',
+                                      '&:hover': {
+                                        color: 'info.dark'
+                                      }
+                                    }}
+                                    onClick={() => window.open(attachment.downloadURL, '_blank')}
+                                    title="Kliknij, aby otworzyć w nowej karcie"
+                                  >
+                                    {attachment.fileName}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatFileSize(attachment.size)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {attachment.uploadedAt ? format(attachment.uploadedAt, 'dd.MM.yyyy HH:mm', { locale: pl }) : 'Nie określono'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="center">
+                                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                    <IconButton
+                                      size="small"
+                                      color="info"
+                                      onClick={() => window.open(attachment.downloadURL, '_blank')}
+                                      title="Otwórz w nowej karcie"
+                                    >
+                                      <OpenInNewIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="secondary"
+                                      href={attachment.downloadURL}
+                                      component="a"
+                                      download={attachment.fileName}
+                                      title="Pobierz plik"
+                                    >
+                                      <DownloadIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => handleOtherAttachmentDelete(attachment.id, attachment.fileName)}
+                                      title="Usuń załącznik"
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <Box sx={{ p: 2, backgroundColor: 'info.50', borderTop: 1, borderColor: 'divider' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'info.main' }}>
+                            Łącznie załączników: {otherAttachments.length}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Całkowity rozmiar: {formatFileSize(otherAttachments.reduce((sum, att) => sum + att.size, 0))}
                           </Typography>
                         </Box>
                       </TableContainer>
