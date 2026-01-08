@@ -366,17 +366,22 @@ const processTask = async (task, { ordersCache, batchesCache, poCache, invoicesC
         }
       });
       
-      // Dodaj zarezerwowane partie (tylko jeśli nie ma skonsumowanej)
-      reservedBatches.forEach(reserved => {
-        if (!allBatches.has(reserved.batchId)) {
-          allBatches.set(reserved.batchId, {
-            batchId: reserved.batchId,
-            batchNumber: reserved.batchNumber,
-            quantity: reserved.quantity,
-            source: 'reserved'
-          });
-        }
-      });
+      // Dodaj zarezerwowane partie (tylko jeśli nie ma skonsumowanej ORAZ zadanie nie jest zakończone)
+      // Jeśli zadanie jest zakończone, interesują nas tylko faktyczne zużycia (consumed)
+      const isTaskFinished = task.status === 'Zakończone' || task.status === 'Completed';
+
+      if (!isTaskFinished) {
+        reservedBatches.forEach(reserved => {
+          if (!allBatches.has(reserved.batchId)) {
+            allBatches.set(reserved.batchId, {
+              batchId: reserved.batchId,
+              batchNumber: reserved.batchNumber,
+              quantity: reserved.quantity,
+              source: 'reserved'
+            });
+          }
+        });
+      }
       
       // Jeśli materiał nie ma żadnych partii (ani skonsumowanych, ani zarezerwowanych)
       if (allBatches.size === 0) {
@@ -489,10 +494,20 @@ const createReportRow = ({
   const coTotalSaleValue = parseFloat(coItem?.totalPrice) || (coSalePrice * coQuantity);
   
   // Oblicz marżę
-  const productionCost = parseFloat(task.fullProductionCost) || 0;
+  // FIX: Użyj poprawnego pola kosztu (totalFullProductionCost) z fallbackiem do starego (fullProductionCost)
+  const productionCost = parseFloat(task.totalFullProductionCost) || parseFloat(task.fullProductionCost) || 0;
   const margin = coTotalSaleValue - productionCost;
   const marginPercentage = coTotalSaleValue > 0 ? (margin / coTotalSaleValue) * 100 : 0;
   
+  // FIX: Oblicz właściwy koszt materiałów (bez procesowego)
+  // W productionService totalMaterialCost zawiera już processingCost, więc odejmujemy go dla celów wyświetlania 'czystego' kosztu materiałów
+  const rawTotalMaterialCost = parseFloat(task.totalMaterialCost) || parseFloat(task.materialCost) || 0;
+  const displayMaterialCost = Math.max(0, rawTotalMaterialCost - processingCost);
+
+  // FIX: Oblicz poprawny koszt jednostkowy na podstawie wyprodukowanej ilości (jeśli dostępna)
+  const actualQuantity = completedQuantity > 0 ? completedQuantity : (parseFloat(task.quantity) || 1);
+  const unitProductionCost = productionCost / actualQuantity;
+
   // Formatuj daty
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
@@ -544,10 +559,10 @@ const createReportRow = ({
     mo_product: task.productName || '',
     mo_quantity: parseFloat(task.quantity) || 0,
     mo_completed_quantity: completedQuantity,
-    mo_material_cost: parseFloat(task.materialCost) || 0,
+    mo_material_cost: displayMaterialCost,
     mo_processing_cost: processingCost,
     mo_full_production_cost: productionCost,
-    mo_unit_cost: task.quantity > 0 ? productionCost / parseFloat(task.quantity) : 0,
+    mo_unit_cost: unitProductionCost,
     mo_status: task.status || '',
     mo_scheduled_date: formatDate(task.scheduledDate),
     

@@ -2183,7 +2183,7 @@ const InvoiceForm = ({ invoiceId }) => {
               </Grid>
               <Grid item xs={6} sm={3}>
                 <Typography variant="body1" fontWeight="bold">
-                  {t('invoices.form.fields.grossValue')}: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(2)} {invoice.currency || 'EUR'}
+                  {t('invoices.form.fields.grossValue')}: {((item.netValue || (item.quantity * item.price)) * (1 + (typeof item.vat === 'number' || item.vat === 0 ? item.vat : 0) / 100)).toFixed(4)} {invoice.currency || 'EUR'}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -2312,13 +2312,16 @@ const InvoiceForm = ({ invoiceId }) => {
               {t('invoices.form.fields.totals.netTotal')} {invoice.items.reduce((sum, item) => {
                 // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
                 const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
-                return sum + netValue;
+                // Zaokrąglij do 4 miejsc (jak w PDF)
+                const roundedNetValue = Math.round(netValue * 10000) / 10000;
+                return sum + roundedNetValue;
               }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             <Typography variant="body1" fontWeight="bold">
               {t('invoices.form.fields.totals.vatTotal')} {invoice.items.reduce((sum, item) => {
                 // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
                 const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
+                const roundedNetValue = Math.round(netValue * 10000) / 10000;
                 
                 // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
                 let vatRate = 0;
@@ -2327,9 +2330,12 @@ const InvoiceForm = ({ invoiceId }) => {
                 } else if (item.vat !== "ZW" && item.vat !== "NP") {
                   vatRate = parseFloat(item.vat) || 0;
                 }
-                // Dla "ZW" i "NP" vatRate pozostaje 0
                 
-                return sum + (netValue * (vatRate / 100));
+                // Oblicz VAT z zaokrąglonej wartości netto i zaokrąglij wynik do 4 miejsc
+                const vatValue = roundedNetValue * (vatRate / 100);
+                const roundedVatValue = Math.round(vatValue * 10000) / 10000;
+                
+                return sum + roundedVatValue;
               }, 0).toFixed(2)} {invoice.currency || 'EUR'}
             </Typography>
             
@@ -2571,15 +2577,17 @@ const InvoiceForm = ({ invoiceId }) => {
             
             {/* Obliczenie wartości brutto bez przedpłat */}
             {(() => {
-              const nettoValue = parseFloat(invoice.items.reduce((sum, item) => {
-                // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
+              // Oblicz sumę netto (zaokrąglone składniki)
+              const totalNetto = invoice.items.reduce((sum, item) => {
                 const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
-                return sum + netValue;
-              }, 0));
-              
-              const vatValue = parseFloat(invoice.items.reduce((sum, item) => {
-                // Użyj netValue jeśli jest ustawione (ważne dla faktury korygującej), w przeciwnym razie oblicz
+                const roundedNetValue = Math.round(netValue * 10000) / 10000;
+                return sum + roundedNetValue;
+              }, 0);
+
+              // Oblicz sumę VAT (zaokrąglone składniki)
+              const totalVat = invoice.items.reduce((sum, item) => {
                 const netValue = Number(item.netValue) || (Number(item.quantity) || 0) * (Number(item.price) || 0);
+                const roundedNetValue = Math.round(netValue * 10000) / 10000;
                 
                 let vatRate = 0;
                 if (typeof item.vat === 'number') {
@@ -2588,10 +2596,12 @@ const InvoiceForm = ({ invoiceId }) => {
                   vatRate = parseFloat(item.vat) || 0;
                 }
                 
-                return sum + (netValue * (vatRate / 100));
-              }, 0));
+                const vatValue = roundedNetValue * (vatRate / 100);
+                const roundedVatValue = Math.round(vatValue * 10000) / 10000;
+                return sum + roundedVatValue;
+              }, 0);
               
-              const bruttoValue = nettoValue + vatValue;
+              const bruttoValue = totalNetto + totalVat;
               const totalAdvancePayments = invoice.isProforma ? 0 : getTotalAllocatedAmount();
               const finalAmount = bruttoValue - totalAdvancePayments;
               
@@ -2930,13 +2940,13 @@ const InvoiceForm = ({ invoiceId }) => {
                       onClick={() => !isDisabled && handleToggleOrderItem(index)}
                       sx={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                     >
-                      {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                      {item.netValue?.toFixed(4)} {invoice.currency || 'EUR'}
                     </TableCell>
                     
                     {/* Kolumna Koszt produkcji - tylko dla korekty */}
                     {invoice.isCorrectionInvoice && (
                       <TableCell align="right" sx={{ color: 'success.main' }}>
-                        {item.originalValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                        {item.originalValue?.toFixed(4)} {invoice.currency || 'EUR'}
                       </TableCell>
                     )}
                     
@@ -2953,14 +2963,14 @@ const InvoiceForm = ({ invoiceId }) => {
                               title={
                                 <Box>
                                   <Typography variant="caption" sx={{ display: 'block' }}>
-                                    Koszt produkcji: {productionValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                    Koszt produkcji: {productionValue.toFixed(4)} {invoice.currency || 'EUR'}
                                   </Typography>
                                   <Typography variant="caption" sx={{ display: 'block' }}>
-                                    Zafakturowano: {invoicedValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                    Zafakturowano: {invoicedValue.toFixed(4)} {invoice.currency || 'EUR'}
                                   </Typography>
                                   <Divider sx={{ my: 0.5, borderColor: 'white' }} />
                                   <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold' }}>
-                                    Correction: {correctionValue >= 0 ? '+' : ''}{correctionValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                    Correction: {correctionValue >= 0 ? '+' : ''}{correctionValue.toFixed(4)} {invoice.currency || 'EUR'}
                                   </Typography>
                                 </Box>
                               }
@@ -2974,7 +2984,7 @@ const InvoiceForm = ({ invoiceId }) => {
                                   cursor: 'help'
                                 }}
                               >
-                                {isPositive ? '+' : ''}{correctionValue.toFixed(2)} {invoice.currency || 'EUR'}
+                                {isPositive ? '+' : ''}{correctionValue.toFixed(4)} {invoice.currency || 'EUR'}
                               </Typography>
                             </Tooltip>
                           );
@@ -2990,18 +3000,18 @@ const InvoiceForm = ({ invoiceId }) => {
                             title={
                               <Box>
                                 <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-                                  Zamówienie: {item.originalQuantity} {item.unit || 'szt.'} = {item.originalValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                  Zamówienie: {item.originalQuantity} {item.unit || 'szt.'} = {item.originalValue?.toFixed(4)} {invoice.currency || 'EUR'}
                                 </Typography>
                                 <Typography variant="caption" sx={{ display: 'block' }}>
-                                  Zafakturowano: {item.invoicedInfo.totalInvoicedQuantity} {item.unit || 'szt.'} = {item.invoicedInfo.totalInvoicedValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                  Zafakturowano: {item.invoicedInfo.totalInvoicedQuantity} {item.unit || 'szt.'} = {item.invoicedInfo.totalInvoicedValue?.toFixed(4)} {invoice.currency || 'EUR'}
                                 </Typography>
                                 <Typography variant="caption" sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}>
-                                  Pozostało: {item.quantity} {item.unit || 'szt.'} = {item.netValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                  Pozostało: {item.quantity} {item.unit || 'szt.'} = {item.netValue?.toFixed(4)} {invoice.currency || 'EUR'}
                                 </Typography>
                                 <Divider sx={{ my: 1, borderColor: 'white' }} />
                                 {item.invoicedInfo.invoices.map((inv, idx) => (
                                   <Typography key={idx} variant="caption" sx={{ display: 'block' }}>
-                                    • {inv.invoiceNumber}: {inv.quantity} {item.unit || 'szt.'} = {inv.itemValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                    • {inv.invoiceNumber}: {inv.quantity} {item.unit || 'szt.'} = {inv.itemValue?.toFixed(4)} {invoice.currency || 'EUR'}
                                   </Typography>
                                 ))}
                               </Box>
@@ -3014,7 +3024,7 @@ const InvoiceForm = ({ invoiceId }) => {
                                 {item.invoicedInfo.totalInvoicedQuantity} {item.unit || 'szt.'}
                               </Typography>
                               <Typography variant="caption" sx={{ display: 'block', color: 'success.dark' }}>
-                                {item.invoicedInfo.totalInvoicedValue?.toFixed(2)} {invoice.currency || 'EUR'}
+                                {item.invoicedInfo.totalInvoicedValue?.toFixed(4)} {invoice.currency || 'EUR'}
                               </Typography>
                             </Box>
                           </Tooltip>
@@ -3043,13 +3053,13 @@ const InvoiceForm = ({ invoiceId }) => {
                     Zafakturowana wartość: {availableOrderItems
                       .filter(item => item.selected)
                       .reduce((sum, item) => sum + (item.invoicedInfo?.totalInvoicedValue || 0), 0)
-                      .toFixed(2)} {invoice.currency || 'EUR'}
+                      .toFixed(4)} {invoice.currency || 'EUR'}
                   </Typography>
                   <Typography variant="body2">
                     Koszt produkcji: {availableOrderItems
                       .filter(item => item.selected)
                       .reduce((sum, item) => sum + ((item.originalQuantity || 0) * (item.price || 0)), 0)
-                      .toFixed(2)} {invoice.currency || 'EUR'}
+                      .toFixed(4)} {invoice.currency || 'EUR'}
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'error.main', mt: 1 }}>
                     Total correction: {(() => {
@@ -3060,7 +3070,7 @@ const InvoiceForm = ({ invoiceId }) => {
                           const invoicedValue = item.invoicedInfo?.totalInvoicedValue || 0;
                           return sum + (productionValue - invoicedValue);
                         }, 0);
-                      return `${total >= 0 ? '+' : ''}${total.toFixed(2)}`;
+                      return `${total >= 0 ? '+' : ''}${total.toFixed(4)}`;
                     })()} {invoice.currency || 'EUR'}
                   </Typography>
                 </>
@@ -3069,7 +3079,7 @@ const InvoiceForm = ({ invoiceId }) => {
                   Łączna wartość: {availableOrderItems
                     .filter(item => item.selected)
                     .reduce((sum, item) => sum + (item.netValue || 0), 0)
-                    .toFixed(2)} {invoice.currency || 'EUR'}
+                    .toFixed(4)} {invoice.currency || 'EUR'}
                 </Typography>
               )}
             </Box>

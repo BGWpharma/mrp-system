@@ -353,7 +353,8 @@ const FinancialReportPage = () => {
         </CardContent>
       </Card>
       
-      {/* Statystyki */}
+      {/* Statystyki - USUNIĘTE na prośbę użytkownika */}
+      {/* 
       {statistics && (
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12} md={3}>
@@ -394,6 +395,7 @@ const FinancialReportPage = () => {
           </Grid>
         </Grid>
       )}
+      */}
       
       {/* Komunikaty */}
       {error && (
@@ -527,10 +529,12 @@ const FinancialReportPage = () => {
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      {row.material_used_quantity > 0 ? (
+                      {(row.material_used_quantity > 0 || row.material_used_quantity === 0) ? (
                         <>
                           <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            {row.material_used_quantity.toFixed(2)}
+                            {typeof row.material_used_quantity === 'number' 
+                              ? row.material_used_quantity.toFixed(2) 
+                              : parseFloat(row.material_used_quantity || 0).toFixed(2)}
                           </Typography>
                           <Typography variant="caption" color="textSecondary">
                             {row.material_unit || 'szt.'}

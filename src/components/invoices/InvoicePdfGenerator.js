@@ -21,12 +21,14 @@ class InvoicePdfGenerator {
   /**
    * Formatuje kwotę z separatorami i walutą dla PDF
    */
-  formatCurrency(amount, currency = null) {
-    if (amount === undefined || amount === null || isNaN(amount)) return '0,00';
+  formatCurrency(amount, currency = null, precision = 2) {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return precision > 0 ? `0,${'0'.repeat(precision)}` : '0';
+    }
     const usedCurrency = currency || this.invoice.currency || 'EUR';
     
     // Formatuj liczbę z separatorami tysięcy i przecinkiem dziesiętnym
-    const formattedNumber = this.formatNumberWithSeparators(amount, 2);
+    const formattedNumber = this.formatNumberWithSeparators(amount, precision);
     return `${formattedNumber} ${usedCurrency}`;
   }
 
@@ -165,8 +167,8 @@ class InvoicePdfGenerator {
       const netValue = Number(item.netValue) || 0;
       const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
       const baseValue = netValue || calculatedValue;
-      // Zaokrąglij do 2 miejsc dla spójności z formularzem
-      const roundedValue = Math.round(baseValue * 100) / 100;
+      // Zaokrąglij do 4 miejsc dla spójności z formularzem
+      const roundedValue = Math.round(baseValue * 10000) / 10000;
       return sum + roundedValue;
     }, 0);
   }
@@ -183,8 +185,8 @@ class InvoicePdfGenerator {
       const calculatedValue = Number(item.quantity) * Number(item.price) || 0;
       const baseValue = netValue || calculatedValue;
       
-      // Zaokrąglij wartość netto do 2 miejsc
-      const roundedNetValue = Math.round(baseValue * 100) / 100;
+      // Zaokrąglij wartość netto do 4 miejsc
+      const roundedNetValue = Math.round(baseValue * 10000) / 10000;
       
       let vatRate = 0;
       if (fixedVatRate !== null) {
@@ -197,9 +199,9 @@ class InvoicePdfGenerator {
         }
       }
       
-      // Oblicz VAT z zaokrąglonej wartości i zaokrąglij wynik
+      // Oblicz VAT z zaokrąglonej wartości i zaokrąglij wynik do 4 miejsc
       const vatValue = roundedNetValue * (vatRate / 100);
-      const roundedVatValue = Math.round(vatValue * 100) / 100;
+      const roundedVatValue = Math.round(vatValue * 10000) / 10000;
       
       return sum + roundedVatValue;
     }, 0);
@@ -430,8 +432,8 @@ class InvoicePdfGenerator {
       const price = Number(item.price) || 0;
       const netValue = Number(item.netValue) || (quantity * price);
       
-      // Zaokrąglij netValue do 2 miejsc dla spójności z formularzem
-      const roundedNetValue = Math.round(netValue * 100) / 100;
+      // Zaokrąglij netValue do 4 miejsc dla spójności z formularzem
+      const roundedNetValue = Math.round(netValue * 10000) / 10000;
       
       // Obsługa VAT - może być liczbą lub stringiem "ZW"/"NP"
       let vatRate = 0;
@@ -449,7 +451,7 @@ class InvoicePdfGenerator {
       
       // Oblicz VAT i brutto z zaokrąglonych wartości
       const vatValue = roundedNetValue * (vatRate / 100);
-      const roundedVatValue = Math.round(vatValue * 100) / 100;
+      const roundedVatValue = Math.round(vatValue * 10000) / 10000;
       const grossValue = roundedNetValue + roundedVatValue;
       
       totalNetto += roundedNetValue;
@@ -466,8 +468,8 @@ class InvoicePdfGenerator {
         quantity: `${this.formatNumberWithSeparators(quantity, quantity % 1 === 0 ? 0 : 2)} ${this.translateUnit(item.unit)}`,
         unitPrice: this.formatUnitPrice(price),
         vat: vatDisplay,
-        netValue: this.formatCurrency(roundedNetValue),
-        grossValue: this.formatCurrency(grossValue)
+        netValue: this.formatCurrency(roundedNetValue, null, 4),
+        grossValue: this.formatCurrency(grossValue, null, 4)
       });
     });
     

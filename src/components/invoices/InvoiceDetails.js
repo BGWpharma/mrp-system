@@ -1087,8 +1087,8 @@ const InvoiceDetails = () => {
                     <TableCell>{typeof item.unit === 'string' ? item.unit : '-'}</TableCell>
                     <TableCell align="right">{price.toFixed(4)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
                     <TableCell align="right">{vatRate}%</TableCell>
-                    <TableCell align="right">{netValue.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
-                    <TableCell align="right">{grossValue.toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
+                    <TableCell align="right">{netValue.toFixed(4)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
+                    <TableCell align="right">{grossValue.toFixed(4)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}</TableCell>
                   </TableRow>
                 );
               })}
@@ -1110,7 +1110,9 @@ const InvoiceDetails = () => {
                   const price = Number(item.price) || 0;
                   // Użyj zapisanej wartości netValue jeśli jest dostępna (spójność z formularzem i PDF)
                   const netValue = Number(item.netValue) || (quantity * price);
-                  return sum + netValue;
+                  // Zaokrąglij do 4 miejsc po przecinku (jak w PDF)
+                  const roundedNetValue = Math.round(netValue * 10000) / 10000;
+                  return sum + roundedNetValue;
                 }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
@@ -1124,8 +1126,9 @@ const InvoiceDetails = () => {
                 {invoice.items.reduce((sum, item) => {
                   const quantity = Number(item.quantity) || 0;
                   const price = Number(item.price) || 0;
-                  // Użyj zapisanej wartości netValue jeśli jest dostępna (spójność z formularzem i PDF)
+                  // Użyj zapisanej wartości netValue jeśli jest dostępna
                   const netValue = Number(item.netValue) || (quantity * price);
+                  const roundedNetValue = Math.round(netValue * 10000) / 10000;
                   
                   // Sprawdź czy stawka VAT to liczba czy string "ZW" lub "NP"
                   let vatRate = 0;
@@ -1134,9 +1137,12 @@ const InvoiceDetails = () => {
                   } else if (item.vat !== "ZW" && item.vat !== "NP") {
                     vatRate = parseFloat(item.vat) || 0;
                   }
-                  // Dla "ZW" i "NP" vatRate pozostaje 0
                   
-                  return sum + (netValue * (vatRate / 100));
+                  // Oblicz VAT z zaokrąglonej wartości netto i zaokrąglij wynik do 4 miejsc (jak w PDF)
+                  const vatValue = roundedNetValue * (vatRate / 100);
+                  const roundedVatValue = Math.round(vatValue * 10000) / 10000;
+                  
+                  return sum + roundedVatValue;
                 }, 0).toFixed(2)} {typeof invoice.currency === 'string' ? invoice.currency : 'EUR'}
               </Typography>
             </Grid>
@@ -1310,16 +1316,21 @@ const InvoiceDetails = () => {
             <Grid item xs={6}>
               <Typography variant="h6" fontWeight="bold" align="right" color="primary">
                 {(() => {
-                  // Oblicz wartość brutto faktury (netto + VAT)
-                  const nettoValue = parseFloat(invoice.items.reduce((sum, item) => {
+                  // Oblicz sumę netto (suma zaokrąglonych pozycji)
+                  const totalNetto = invoice.items.reduce((sum, item) => {
                     const quantity = Number(item.quantity) || 0;
                     const price = Number(item.price) || 0;
-                    return sum + (quantity * price);
-                  }, 0));
+                    const netValue = Number(item.netValue) || (quantity * price);
+                    const roundedNetValue = Math.round(netValue * 10000) / 10000;
+                    return sum + roundedNetValue;
+                  }, 0);
                   
-                  const vatValue = parseFloat(invoice.items.reduce((sum, item) => {
+                  // Oblicz sumę VAT (suma zaokrąglonych wartości VAT)
+                  const totalVat = invoice.items.reduce((sum, item) => {
                     const quantity = Number(item.quantity) || 0;
                     const price = Number(item.price) || 0;
+                    const netValue = Number(item.netValue) || (quantity * price);
+                    const roundedNetValue = Math.round(netValue * 10000) / 10000;
                     
                     let vatRate = 0;
                     if (typeof item.vat === 'number') {
@@ -1328,10 +1339,13 @@ const InvoiceDetails = () => {
                       vatRate = parseFloat(item.vat) || 0;
                     }
                     
-                    return sum + (quantity * price * (vatRate / 100));
-                  }, 0));
+                    const vatValue = roundedNetValue * (vatRate / 100);
+                    const roundedVatValue = Math.round(vatValue * 10000) / 10000;
+                    return sum + roundedVatValue;
+                  }, 0);
                   
-                  const total = nettoValue + vatValue;
+                  // Suma brutto to suma netto + suma VAT
+                  const total = totalNetto + totalVat;
                   
                   // Oblicz przedpłaty z proform
                   let advancePayments = 0;
