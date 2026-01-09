@@ -38,12 +38,16 @@ Główne funkcje do obsługi błędów:
 - **`addBreadcrumb()`** - Dodawanie breadcrumbs (śledzenie akcji)
 
 #### ✅ `src/utils/firebaseErrorHandler.js`
-Specjalne wrappery dla Firebase:
-- **`withFirebaseErrorHandling()`** - Wrapper dla operacji Firebase
-- **`withFirebaseBatchErrorHandling()`** - Wrapper dla batch operations
+Specjalne wrappery dla Firebase z **performance tracking**:
+- **`withFirebaseErrorHandling()`** - Wrapper dla operacji Firebase + **automatyczne śledzenie wydajności**
+- **`withFirebaseBatchErrorHandling()`** - Wrapper dla batch operations + **metryki batch**
 - **`getFirebaseErrorMessage()`** - Tłumaczenie kodów błędów na polski
 - **`logFirebaseOperation()`** - Logowanie operacji jako breadcrumb
+- **`configureFirebasePerformance()`** - 🆕 Konfiguracja performance tracking
+- **`getFirebasePerformanceConfig()`** - 🆕 Pobierz aktualną konfigurację
 - **Mapowanie 40+ kodów błędów Firebase** na przyjazne komunikaty PL
+- **🆕 Automatyczne logowanie wolnych operacji** (> 3s domyślnie)
+- **🆕 Performance metrics** w Sentry (czas trwania, status, liczba elementów)
 
 ---
 
@@ -69,6 +73,14 @@ Quick start guide:
 - Szybkie wprowadzenie
 - Najważniejsze funkcje
 - Linki do pełnej dokumentacji
+
+#### ✅ `src/utils/FIREBASE_PERFORMANCE.md` 🆕
+Kompletny przewodnik performance tracking:
+- Jak działa automatyczne śledzenie wydajności
+- Konfiguracja (threshold, sample rate)
+- Analiza w Sentry Dashboard
+- Best practices
+- Rozwiązywanie problemów z wydajnością
 
 #### ✅ `README.md` (główny)
 Aktualizacja głównego README:
@@ -105,6 +117,7 @@ Aktualizacja głównego README:
 5. **Performance** - czasy ładowania, transakcje
 6. **Session Replay** - nagrania sesji z błędami
 7. **User Context** - automatycznie przy logowaniu
+8. **🆕 Firebase Performance** - czas operacji, wolne zapytania, metryki batch
 
 ### ⚠️ Wymaga ręcznego zgłoszenia:
 1. **Błędy w try-catch** - użyj `handleError()`
@@ -120,8 +133,10 @@ Aktualizacja głównego README:
 - **1915** wywołań console.error w całej aplikacji
 - **40+** mapowań kodów błędów Firebase na polski
 - **4** nowe pliki utility
-- **3** pliki dokumentacji
+- **4** pliki dokumentacji (+ 🆕 Firebase Performance)
 - **5** zmodyfikowanych plików
+- **🆕 Automatyczne śledzenie** wydajności operacji Firebase
+- **🆕 Performance metrics** - czas trwania, wolne zapytania, batch analytics
 
 ---
 
@@ -167,9 +182,10 @@ addBreadcrumb('User action', 'category', 'info', { data });
 
 ### Utworzone:
 - ✅ `src/utils/errorHandler.js` - główne funkcje
-- ✅ `src/utils/firebaseErrorHandler.js` - Firebase wrappery
+- ✅ `src/utils/firebaseErrorHandler.js` - Firebase wrappery + **performance tracking**
 - ✅ `src/utils/SENTRY_ERROR_HANDLING.md` - pełna dokumentacja
-- ✅ `src/utils/sentryExamples.js` - przykłady
+- ✅ `src/utils/FIREBASE_PERFORMANCE.md` - 🆕 dokumentacja performance tracking
+- ✅ `src/utils/sentryExamples.js` - przykłady (+ przykłady performance)
 - ✅ `src/utils/README_SENTRY.md` - quick start
 - ✅ `src/components/common/SentryErrorButton.js` - przycisk testowy
 - ✅ `SENTRY_IMPLEMENTATION_SUMMARY.md` - to podsumowanie
@@ -285,8 +301,9 @@ try {
 
 1. **Quick Start**: `src/utils/README_SENTRY.md`
 2. **Pełna dokumentacja**: `src/utils/SENTRY_ERROR_HANDLING.md`
-3. **Przykłady**: `src/utils/sentryExamples.js`
-4. **Sentry Docs**: https://docs.sentry.io/
+3. **🆕 Performance tracking**: `src/utils/FIREBASE_PERFORMANCE.md`
+4. **Przykłady**: `src/utils/sentryExamples.js`
+5. **Sentry Docs**: https://docs.sentry.io/
 
 ---
 
@@ -305,6 +322,9 @@ try {
 - [x] Automatyczne przechwytywanie console.error
 - [x] Mapowanie błędów Firebase na polski
 - [x] Testowanie lokalne
+- [x] 🆕 Automatyczne śledzenie wydajności Firebase
+- [x] 🆕 Konfigurowalny threshold wolnych operacji
+- [x] 🆕 Performance metrics w Sentry Dashboard
 
 ---
 

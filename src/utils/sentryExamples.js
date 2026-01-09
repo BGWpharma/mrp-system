@@ -48,11 +48,26 @@ export const exampleBasicErrorHandling = async (taskId) => {
 // ============================================================================
 
 export const exampleFirebaseGet = async (taskId) => {
-  // Automatyczna obsługa błędów Firebase + przyjazne komunikaty
+  // Automatyczna obsługa błędów Firebase + przyjazne komunikaty + performance tracking
   const taskDoc = await withFirebaseErrorHandling(
     () => getDoc(doc(db, 'tasks', taskId)),
     'exampleService.getTask',
     { taskId }
+  );
+  
+  return taskDoc.data();
+};
+
+export const exampleFirebaseGetWithCustomOptions = async (taskId) => {
+  // Możesz dostosować opcje performance tracking dla pojedynczej operacji
+  const taskDoc = await withFirebaseErrorHandling(
+    () => getDoc(doc(db, 'tasks', taskId)),
+    'exampleService.getTask',
+    { taskId },
+    {
+      trackPerformance: true, // Wymuś tracking dla tej operacji
+      slowThreshold: 1000 // Uznaj za wolne jeśli > 1s
+    }
   );
   
   return taskDoc.data();

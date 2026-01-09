@@ -2,6 +2,18 @@
 import * as Sentry from '@sentry/react';
 
 /**
+ * Konfiguracja performance tracking
+ */
+const PERFORMANCE_CONFIG = {
+  // Próg czasu (ms) po którym operacja jest uznawana za wolną
+  slowOperationThreshold: 1500,
+  // Czy włączyć performance tracking (domyślnie tak w produkcji)
+  enablePerformanceTracking: process.env.NODE_ENV === 'production' || process.env.REACT_APP_SENTRY_DEBUG === 'true',
+  // Procent operacji do śledzenia (1.0 = 100%, 0.1 = 10%)
+  performanceSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0
+};
+
+/**
  * Mapowanie kodów błędów Firebase na przyjazne komunikaty po polsku
  */
 const FIREBASE_ERROR_MESSAGES = {
@@ -60,11 +72,14 @@ export const getFirebaseErrorMessage = (error) => {
 };
 
 /**
- * Wrapper dla operacji Firebase z automatyczną obsługą błędów
+ * Wrapper dla operacji Firebase z automatyczną obsługą błędów i performance tracking
  * 
  * @param {Function} operation - Funkcja asynchroniczna Firebase do wykonania
  * @param {string} context - Kontekst operacji (np. 'getTaskDetails', 'updateInventory')
  * @param {Object} extraData - Dodatkowe dane do debugowania
+ * @param {Object} options - Opcje konfiguracyjne
+ * @param {boolean} options.trackPerformance - Czy śledzić wydajność (domyślnie true w prod)
+ * @param {number} options.slowThreshold - Próg wolnej operacji w ms (domyślnie 3000)
  * @returns {Promise} - Wynik operacji lub rzuca błąd
  * 
  * @example
@@ -74,20 +89,94 @@ export const getFirebaseErrorMessage = (error) => {
  *   { taskId }
  * );
  */
-export const withFirebaseErrorHandling = async (operation, context, extraData = {}) => {
+export const withFirebaseErrorHandling = async (operation, context, extraData = {}, options = {}) => {
+  const {
+    trackPerformance = PERFORMANCE_CONFIG.enablePerformanceTracking,
+    slowThreshold = PERFORMANCE_CONFIG.slowOperationThreshold
+  } = options;
+  
+  // Decyduj czy śledzić performance na podstawie sample rate
+  const shouldTrackPerformance = trackPerformance && Math.random() < PERFORMANCE_CONFIG.performanceSampleRate;
+  
+  // Rozpocznij transaction dla performance tracking
+  let transaction = null;
+  if (shouldTrackPerformance) {
+    transaction = Sentry.startTransaction({
+      op: 'firebase.operation',
+      name: context,
+      tags: {
+        service: 'firebase',
+        operation: context
+      }
+    });
+  }
+  
+  const startTime = performance.now();
+  
   try {
-    return await operation();
+    const result = await operation();
+    const duration = performance.now() - startTime;
+    
+    // Zakończ transaction pomyślnie
+    if (transaction) {
+      transaction.setTag('status', 'success');
+      transaction.setMeasurement('duration', duration, 'millisecond');
+      transaction.setStatus('ok');
+      
+      // Dodaj informacje o wyniku jeśli dostępne
+      if (result && typeof result === 'object') {
+        if (result.exists !== undefined) {
+          transaction.setTag('exists', result.exists());
+        }
+        if (result.empty !== undefined) {
+          transaction.setTag('empty', result.empty);
+          transaction.setTag('size', result.size || 0);
+        }
+      }
+    }
+    
+    // Jeśli operacja była wolna, zaloguj ostrzeżenie
+    if (duration > slowThreshold) {
+      console.warn(`⚠️ Slow Firebase operation: ${context} took ${duration.toFixed(0)}ms`);
+      
+      Sentry.captureMessage(`Slow Firebase operation: ${context}`, {
+        level: 'warning',
+        tags: {
+          service: 'firebase',
+          operation: context,
+          performance: 'slow'
+        },
+        extra: {
+          duration,
+          threshold: slowThreshold,
+          ...extraData
+        }
+      });
+    }
+    
+    return result;
   } catch (error) {
+    const duration = performance.now() - startTime;
+    
     // Przygotuj informacje o błędzie
     const errorInfo = {
       code: error.code || 'unknown',
       message: error.message || 'Unknown error',
       friendlyMessage: getFirebaseErrorMessage(error),
+      duration,
       ...extraData
     };
     
     // Loguj do konsoli
     console.error(`Firebase error in ${context}:`, error, errorInfo);
+    
+    // Zakończ transaction z błędem
+    if (transaction) {
+      transaction.setTag('status', 'error');
+      transaction.setTag('errorCode', error.code || 'unknown');
+      transaction.setMeasurement('duration', duration, 'millisecond');
+      transaction.setStatus('error');
+    }
     
     // Wyślij do Sentry
     Sentry.captureException(error, {
@@ -104,32 +193,102 @@ export const withFirebaseErrorHandling = async (operation, context, extraData = 
     const enhancedError = new Error(errorInfo.friendlyMessage);
     enhancedError.originalError = error;
     enhancedError.code = error.code;
+    enhancedError.duration = duration;
     throw enhancedError;
+  } finally {
+    // Zawsze zakończ transaction
+    if (transaction) {
+      transaction.finish();
+    }
   }
 };
 
 /**
- * Wrapper dla batch operations Firebase
- * Automatycznie dzieli błędy na poszczególne operacje
+ * Wrapper dla batch operations Firebase z performance tracking
+ * Automatycznie dzieli błędy na poszczególne operacje i śledzi wydajność
  * 
  * @param {Function} batchOperation - Funkcja batch Firebase
  * @param {string} context - Kontekst
  * @param {Array} items - Lista elementów do batch
+ * @param {Object} options - Opcje konfiguracyjne
  * @returns {Promise}
  */
-export const withFirebaseBatchErrorHandling = async (batchOperation, context, items = []) => {
+export const withFirebaseBatchErrorHandling = async (batchOperation, context, items = [], options = {}) => {
+  const {
+    trackPerformance = PERFORMANCE_CONFIG.enablePerformanceTracking,
+    slowThreshold = PERFORMANCE_CONFIG.slowOperationThreshold
+  } = options;
+  
+  const shouldTrackPerformance = trackPerformance && Math.random() < PERFORMANCE_CONFIG.performanceSampleRate;
+  
+  let transaction = null;
+  if (shouldTrackPerformance) {
+    transaction = Sentry.startTransaction({
+      op: 'firebase.batch',
+      name: context,
+      tags: {
+        service: 'firebase',
+        operation: 'batch',
+        itemsCount: items.length
+      }
+    });
+  }
+  
+  const startTime = performance.now();
+  
   try {
-    return await batchOperation();
+    const result = await batchOperation();
+    const duration = performance.now() - startTime;
+    
+    if (transaction) {
+      transaction.setTag('status', 'success');
+      transaction.setMeasurement('duration', duration, 'millisecond');
+      transaction.setMeasurement('itemsCount', items.length, 'none');
+      transaction.setMeasurement('avgTimePerItem', duration / Math.max(items.length, 1), 'millisecond');
+      transaction.setStatus('ok');
+    }
+    
+    // Ostrzeżenie dla wolnych batch operations
+    if (duration > slowThreshold) {
+      console.warn(`⚠️ Slow Firebase batch operation: ${context} took ${duration.toFixed(0)}ms for ${items.length} items`);
+      
+      Sentry.captureMessage(`Slow Firebase batch operation: ${context}`, {
+        level: 'warning',
+        tags: {
+          service: 'firebase',
+          operation: 'batch',
+          performance: 'slow'
+        },
+        extra: {
+          duration,
+          itemsCount: items.length,
+          avgTimePerItem: duration / Math.max(items.length, 1),
+          threshold: slowThreshold
+        }
+      });
+    }
+    
+    return result;
   } catch (error) {
+    const duration = performance.now() - startTime;
+    
     const errorInfo = {
       code: error.code || 'unknown',
       message: error.message || 'Unknown error',
       friendlyMessage: getFirebaseErrorMessage(error),
+      duration,
       itemsCount: items.length,
       items: items.slice(0, 5) // Pokaż tylko pierwsze 5 elementów
     };
     
     console.error(`Firebase batch error in ${context}:`, error, errorInfo);
+    
+    if (transaction) {
+      transaction.setTag('status', 'error');
+      transaction.setTag('errorCode', error.code || 'unknown');
+      transaction.setMeasurement('duration', duration, 'millisecond');
+      transaction.setStatus('error');
+    }
     
     Sentry.captureException(error, {
       tags: {
@@ -143,6 +302,10 @@ export const withFirebaseBatchErrorHandling = async (batchOperation, context, it
     });
     
     throw error;
+  } finally {
+    if (transaction) {
+      transaction.finish();
+    }
   }
 };
 
@@ -165,6 +328,44 @@ export const logFirebaseOperation = (operation, collection, documentId = null) =
       documentId
     }
   });
+};
+
+/**
+ * Skonfiguruj ustawienia performance tracking
+ * Wywołaj na początku aplikacji aby dostosować zachowanie
+ * 
+ * @param {Object} config - Obiekt konfiguracyjny
+ * @param {number} config.slowOperationThreshold - Próg wolnej operacji w ms
+ * @param {boolean} config.enablePerformanceTracking - Czy włączyć tracking
+ * @param {number} config.performanceSampleRate - Procent operacji do śledzenia (0.0-1.0)
+ * 
+ * @example
+ * configureFirebasePerformance({
+ *   slowOperationThreshold: 2000, // 2 sekundy
+ *   enablePerformanceTracking: true,
+ *   performanceSampleRate: 0.5 // 50% operacji
+ * });
+ */
+export const configureFirebasePerformance = (config) => {
+  if (config.slowOperationThreshold !== undefined) {
+    PERFORMANCE_CONFIG.slowOperationThreshold = config.slowOperationThreshold;
+  }
+  if (config.enablePerformanceTracking !== undefined) {
+    PERFORMANCE_CONFIG.enablePerformanceTracking = config.enablePerformanceTracking;
+  }
+  if (config.performanceSampleRate !== undefined) {
+    PERFORMANCE_CONFIG.performanceSampleRate = Math.max(0, Math.min(1, config.performanceSampleRate));
+  }
+  
+  console.log('Firebase Performance Tracking configured:', PERFORMANCE_CONFIG);
+};
+
+/**
+ * Pobierz aktualną konfigurację performance tracking
+ * @returns {Object} - Aktualna konfiguracja
+ */
+export const getFirebasePerformanceConfig = () => {
+  return { ...PERFORMANCE_CONFIG };
 };
 
 export default withFirebaseErrorHandling;

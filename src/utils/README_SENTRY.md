@@ -5,9 +5,10 @@
 W katalogu `src/utils/` znajdziesz:
 
 1. **`errorHandler.js`** - Główne funkcje do obsługi błędów
-2. **`firebaseErrorHandler.js`** - Specjalne wrappery dla Firebase
+2. **`firebaseErrorHandler.js`** - Specjalne wrappery dla Firebase + **performance tracking**
 3. **`SENTRY_ERROR_HANDLING.md`** - Pełna dokumentacja
-4. **`sentryExamples.js`** - Przykłady użycia
+4. **`FIREBASE_PERFORMANCE.md`** - 🆕 Dokumentacja performance tracking
+5. **`sentryExamples.js`** - Przykłady użycia
 
 ## 🚀 Szybki start
 
@@ -57,6 +58,7 @@ Pełna dokumentacja: [`SENTRY_ERROR_HANDLING.md`](./SENTRY_ERROR_HANDLING.md)
 - Błędy w komponentach React (ErrorBoundary)
 - `console.error()` w produkcji
 - Błędy w async/await bez try-catch
+- **🆕 Performance Firebase** - czas trwania operacji, wolne zapytania
 
 ❌ **Wymaga ręcznego zgłoszenia:**
 - Błędy w try-catch (użyj `handleError()`)
@@ -76,6 +78,7 @@ Przejdź do **Admin → Narzędzia systemowe** i użyj sekcji "Test Sentry Error
 - Extra data (dane kontekstowe)
 - Environment (dev/production)
 - Device info (browser, OS)
+- **🆕 Performance metrics** (czasy operacji Firebase, wolne zapytania)
 
 ## 💡 Przykłady
 
@@ -84,8 +87,9 @@ Zobacz [`sentryExamples.js`](./sentryExamples.js) dla 10+ przykładów użycia.
 ## 🆘 Wsparcie
 
 1. Przeczytaj [`SENTRY_ERROR_HANDLING.md`](./SENTRY_ERROR_HANDLING.md)
-2. Zobacz przykłady w [`sentryExamples.js`](./sentryExamples.js)
-3. Sprawdź [dokumentację Sentry](https://docs.sentry.io/)
+2. 🆕 Performance tracking: [`FIREBASE_PERFORMANCE.md`](./FIREBASE_PERFORMANCE.md)
+3. Zobacz przykłady w [`sentryExamples.js`](./sentryExamples.js)
+4. Sprawdź [dokumentację Sentry](https://docs.sentry.io/)
 
 ---
 
