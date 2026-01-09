@@ -98,41 +98,45 @@ export const withFirebaseErrorHandling = async (operation, context, extraData = 
   // Decyduj czy śledzić performance na podstawie sample rate
   const shouldTrackPerformance = trackPerformance && Math.random() < PERFORMANCE_CONFIG.performanceSampleRate;
   
-  // Rozpocznij transaction dla performance tracking
-  let transaction = null;
-  if (shouldTrackPerformance) {
-    transaction = Sentry.startTransaction({
-      op: 'firebase.operation',
-      name: context,
-      tags: {
-        service: 'firebase',
-        operation: context
-      }
-    });
-  }
-  
   const startTime = performance.now();
+  let spanData = null;
   
   try {
     const result = await operation();
     const duration = performance.now() - startTime;
     
-    // Zakończ transaction pomyślnie
-    if (transaction) {
-      transaction.setTag('status', 'success');
-      transaction.setMeasurement('duration', duration, 'millisecond');
-      transaction.setStatus('ok');
+    // Trackuj performance jeśli włączone
+    if (shouldTrackPerformance) {
+      spanData = {
+        status: 'success',
+        duration,
+      };
       
       // Dodaj informacje o wyniku jeśli dostępne
       if (result && typeof result === 'object') {
         if (result.exists !== undefined) {
-          transaction.setTag('exists', result.exists());
+          spanData.exists = result.exists();
         }
         if (result.empty !== undefined) {
-          transaction.setTag('empty', result.empty);
-          transaction.setTag('size', result.size || 0);
+          spanData.empty = result.empty;
+          spanData.size = result.size || 0;
         }
       }
+      
+      Sentry.startSpan(
+        {
+          op: 'firebase.operation',
+          name: context,
+          attributes: {
+            service: 'firebase',
+            operation: context,
+            ...spanData
+          }
+        },
+        () => {
+          // Span jest automatycznie zakończony po wykonaniu callbacka
+        }
+      );
     }
     
     // Jeśli operacja była wolna, zaloguj ostrzeżenie
@@ -170,12 +174,24 @@ export const withFirebaseErrorHandling = async (operation, context, extraData = 
     // Loguj do konsoli
     console.error(`Firebase error in ${context}:`, error, errorInfo);
     
-    // Zakończ transaction z błędem
-    if (transaction) {
-      transaction.setTag('status', 'error');
-      transaction.setTag('errorCode', error.code || 'unknown');
-      transaction.setMeasurement('duration', duration, 'millisecond');
-      transaction.setStatus('error');
+    // Trackuj błąd w performance jeśli włączone
+    if (shouldTrackPerformance) {
+      Sentry.startSpan(
+        {
+          op: 'firebase.operation',
+          name: context,
+          attributes: {
+            service: 'firebase',
+            operation: context,
+            status: 'error',
+            errorCode: error.code || 'unknown',
+            duration
+          }
+        },
+        () => {
+          // Span jest automatycznie zakończony
+        }
+      );
     }
     
     // Wyślij do Sentry
@@ -195,11 +211,6 @@ export const withFirebaseErrorHandling = async (operation, context, extraData = 
     enhancedError.code = error.code;
     enhancedError.duration = duration;
     throw enhancedError;
-  } finally {
-    // Zawsze zakończ transaction
-    if (transaction) {
-      transaction.finish();
-    }
   }
 };
 
@@ -221,31 +232,30 @@ export const withFirebaseBatchErrorHandling = async (batchOperation, context, it
   
   const shouldTrackPerformance = trackPerformance && Math.random() < PERFORMANCE_CONFIG.performanceSampleRate;
   
-  let transaction = null;
-  if (shouldTrackPerformance) {
-    transaction = Sentry.startTransaction({
-      op: 'firebase.batch',
-      name: context,
-      tags: {
-        service: 'firebase',
-        operation: 'batch',
-        itemsCount: items.length
-      }
-    });
-  }
-  
   const startTime = performance.now();
   
   try {
     const result = await batchOperation();
     const duration = performance.now() - startTime;
     
-    if (transaction) {
-      transaction.setTag('status', 'success');
-      transaction.setMeasurement('duration', duration, 'millisecond');
-      transaction.setMeasurement('itemsCount', items.length, 'none');
-      transaction.setMeasurement('avgTimePerItem', duration / Math.max(items.length, 1), 'millisecond');
-      transaction.setStatus('ok');
+    if (shouldTrackPerformance) {
+      Sentry.startSpan(
+        {
+          op: 'firebase.batch',
+          name: context,
+          attributes: {
+            service: 'firebase',
+            operation: 'batch',
+            itemsCount: items.length,
+            status: 'success',
+            duration,
+            avgTimePerItem: duration / Math.max(items.length, 1)
+          }
+        },
+        () => {
+          // Span jest automatycznie zakończony
+        }
+      );
     }
     
     // Ostrzeżenie dla wolnych batch operations
@@ -283,11 +293,24 @@ export const withFirebaseBatchErrorHandling = async (batchOperation, context, it
     
     console.error(`Firebase batch error in ${context}:`, error, errorInfo);
     
-    if (transaction) {
-      transaction.setTag('status', 'error');
-      transaction.setTag('errorCode', error.code || 'unknown');
-      transaction.setMeasurement('duration', duration, 'millisecond');
-      transaction.setStatus('error');
+    if (shouldTrackPerformance) {
+      Sentry.startSpan(
+        {
+          op: 'firebase.batch',
+          name: context,
+          attributes: {
+            service: 'firebase',
+            operation: 'batch',
+            itemsCount: items.length,
+            status: 'error',
+            errorCode: error.code || 'unknown',
+            duration
+          }
+        },
+        () => {
+          // Span jest automatycznie zakończony
+        }
+      );
     }
     
     Sentry.captureException(error, {
@@ -302,10 +325,6 @@ export const withFirebaseBatchErrorHandling = async (batchOperation, context, it
     });
     
     throw error;
-  } finally {
-    if (transaction) {
-      transaction.finish();
-    }
   }
 };
 
@@ -369,4 +388,5 @@ export const getFirebasePerformanceConfig = () => {
 };
 
 export default withFirebaseErrorHandling;
+
 

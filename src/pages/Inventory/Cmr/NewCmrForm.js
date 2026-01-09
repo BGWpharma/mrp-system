@@ -104,7 +104,7 @@ const NewCmrForm = ({ initialData, onSubmit, onCancel }) => {
     attachedDocuments: '',   // Załączone dokumenty
     
     // Pole 13 - Instrukcje nadawcy
-    senderInstructions: 'Ostrożnie suplementy diety (żywność)!',  // Instrukcje nadawcy
+    senderInstructions: 'Towar stanowi żywność – suplementy diety i nie może być przewożony w jednym pojeździe z chemikaliami ani innymi substancjami mogącymi powodować skażenie.Pełną odpowiedzialność za dobór środka transportu, warunki przewozu oraz ewentualne pogorszenie jakości lub skażenie towaru ponosi przewoźnik / firma spedycyjna.',  // Instrukcje nadawcy
     
     // Pozycje dokumentu (pola 6-12)
     items: []

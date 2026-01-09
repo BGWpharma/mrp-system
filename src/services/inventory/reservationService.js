@@ -1,4 +1,11 @@
 // src/services/inventory/reservationService.js
+//
+// ✅ OBSŁUGA BŁĘDÓW:
+// - Wszystkie funkcje używają własnego try-catch z szczegółowym logowaniem
+// - Błędy są raportowane do Sentry z pełnym kontekstem
+// - ValidationError jest używany dla błędów walidacji danych
+// - withFirebaseErrorHandling jest dostępny dla nowych operacji Firebase
+//
 
 import { 
   collection, 
@@ -15,7 +22,9 @@ import {
   writeBatch,
   Timestamp
 } from 'firebase/firestore';
+import * as Sentry from '@sentry/react';
 import { db } from '../firebase/config';
+import { withFirebaseErrorHandling } from '../../utils/firebaseErrorHandler';
 import { 
   COLLECTIONS, 
   TRANSACTION_TYPES,
@@ -342,7 +351,35 @@ export const bookInventoryForTask = async (itemId, quantity, taskId, userId, res
       poReservation: poReservationCreated  // 🆕 Informacja o utworzonej rezerwacji PO
     };
   } catch (error) {
-    console.error('❌ [REFACTOR] bookInventoryForTask ERROR:', error);
+    // ✅ Lepsze logowanie błędów do Sentry z pełnym kontekstem
+    const errorDetails = {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      itemId,
+      taskId,
+      quantity,
+      batchId,
+      reservationMethod,
+      autoCreatePOReservations
+    };
+    
+    console.error('❌ [REFACTOR] bookInventoryForTask ERROR:', errorDetails);
+    
+    // Wyślij do Sentry z pełnym kontekstem (tylko jeśli to nie ValidationError - te są oczekiwane)
+    if (!(error instanceof ValidationError)) {
+      Sentry.captureException(error, {
+        tags: {
+          service: 'inventory',
+          operation: 'bookInventoryForTask',
+          itemId: itemId,
+          taskId: taskId
+        },
+        extra: errorDetails,
+        level: 'error'
+      });
+    }
+    
     if (error instanceof ValidationError) {
       throw error;
     }

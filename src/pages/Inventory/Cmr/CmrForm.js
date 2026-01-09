@@ -444,7 +444,7 @@ const CmrForm = ({ initialData, onSubmit, onCancel }) => {
     
     // Dane dotyczące przesyłki
     attachedDocuments: '',
-    instructionsFromSender: 'Ostrożnie suplementy diety (żywność)!',
+    instructionsFromSender: 'Towar stanowi żywność – suplementy diety i nie może być przewożony w jednym pojeździe z chemikaliami ani innymi substancjami mogącymi powodować skażenie. Pełną odpowiedzialność za dobór środka transportu, warunki przewozu oraz ewentualne pogorszenie jakości lub skażenie towaru ponosi przewoźnik / firma spedycyjna.',
     
     // Opłaty
     freight: '',

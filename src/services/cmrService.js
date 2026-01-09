@@ -19,10 +19,12 @@ import {
   getDownloadURL, 
   deleteObject 
 } from 'firebase/storage';
+import * as Sentry from '@sentry/react';
 import { format } from 'date-fns';
 import { updateOrderItemShippedQuantity, updateOrderItemShippedQuantityPrecise } from './orderService';
 import { createRealtimeStatusChangeNotification } from './notificationService';
 import { safeParseDate } from '../utils/dateUtils';
+import { withFirebaseErrorHandling } from '../utils/firebaseErrorHandler';
 
 // Kolekcje
 const CMR_COLLECTION = 'cmrDocuments';
@@ -1222,17 +1224,46 @@ export const processCmrDelivery = async (cmrId, userId) => {
       
       // Wydaj produkty z konkretnych partii
       for (const linkedBatch of item.linkedBatches) {
+        // Oblicz ilość do wydania z tej partii (proporcjonalnie)
+        // Definicja przed try block aby była dostępna w catch
+        const batchQuantity = parseFloat(linkedBatch.quantity) || 0;
+        const quantityToIssue = item.linkedBatches.length === 1 
+          ? cmrItemQuantity 
+          : (batchQuantity / totalBatchQuantity) * cmrItemQuantity;
+        
         try {
-          const batchQuantity = parseFloat(linkedBatch.quantity) || 0;
-          
-          // Oblicz ilość do wydania z tej partii (proporcjonalnie)
-          const quantityToIssue = item.linkedBatches.length === 1 
-            ? cmrItemQuantity 
-            : (batchQuantity / totalBatchQuantity) * cmrItemQuantity;
-          
           if (quantityToIssue <= 0) {
             console.log(`Pomijam partię ${linkedBatch.batchNumber} - zerowa ilość do wydania`);
             continue;
+          }
+          
+          // ✅ WALIDACJA: Sprawdź czy linkedBatch ma wszystkie wymagane pola
+          if (!linkedBatch.warehouseId) {
+            console.warn(`⚠️ Partia ${linkedBatch.batchNumber} nie ma przypisanego warehouseId`);
+            
+            // Spróbuj pobrać warehouseId z bazy danych
+            if (linkedBatch.id) {
+              try {
+                const batchRef = doc(db, 'inventoryBatches', linkedBatch.id);
+                const batchDoc = await getDoc(batchRef);
+                
+                if (batchDoc.exists()) {
+                  linkedBatch.warehouseId = batchDoc.data().warehouseId;
+                  console.log(`✅ Znaleziono warehouseId z bazy: ${linkedBatch.warehouseId}`);
+                  
+                  if (!linkedBatch.warehouseId) {
+                    throw new Error(`Partia ${linkedBatch.batchNumber} istnieje w bazie, ale nie ma przypisanego warehouseId`);
+                  }
+                } else {
+                  throw new Error(`Partia ${linkedBatch.batchNumber} (ID: ${linkedBatch.id}) nie istnieje w bazie danych`);
+                }
+              } catch (fetchError) {
+                console.error(`❌ Błąd podczas pobierania danych partii ${linkedBatch.batchNumber}:`, fetchError);
+                throw new Error(`Nie można pobrać danych partii ${linkedBatch.batchNumber}: ${fetchError.message}`);
+              }
+            } else {
+              throw new Error(`Partia ${linkedBatch.batchNumber} nie ma ID - niemożliwe pobranie warehouseId z bazy`);
+            }
           }
           
           console.log(`Wydawanie z partii ${linkedBatch.batchNumber} - ${quantityToIssue} ${linkedBatch.unit} dla CMR ${cmrData.cmrNumber}`);
@@ -1242,7 +1273,7 @@ export const processCmrDelivery = async (cmrId, userId) => {
             linkedBatch.itemId,           // ID produktu w magazynie
             quantityToIssue,             // Ilość do wydania
             {
-              warehouseId: linkedBatch.warehouseId,  // Magazyn
+              warehouseId: linkedBatch.warehouseId,  // Magazyn (zwalidowany)
               batchId: linkedBatch.id,               // Konkretna partia
               reference: `CMR ${cmrData.cmrNumber}`, // Odwołanie
               notes: `Wydanie towaru na podstawie dostarczenia CMR ${cmrData.cmrNumber}`,
@@ -1271,6 +1302,36 @@ export const processCmrDelivery = async (cmrId, userId) => {
           
         } catch (error) {
           console.error(`Błąd podczas wydawania z partii ${linkedBatch.batchNumber}:`, error);
+          
+          // ✅ Raportuj do Sentry z pełnym kontekstem
+          Sentry.captureException(error, {
+            tags: {
+              service: 'cmr',
+              operation: 'processCmrDelivery_issueInventory',
+              cmrId: cmrId,
+              cmrNumber: cmrData.cmrNumber,
+              batchNumber: linkedBatch.batchNumber
+            },
+            extra: {
+              errorMessage: error.message,
+              errorStack: error.stack,
+              linkedBatch: {
+                id: linkedBatch.id,
+                batchNumber: linkedBatch.batchNumber,
+                itemId: linkedBatch.itemId,
+                itemName: linkedBatch.itemName,
+                warehouseId: linkedBatch.warehouseId,
+                quantity: quantityToIssue
+              },
+              cmrData: {
+                cmrNumber: cmrData.cmrNumber,
+                status: cmrData.status,
+                customerId: cmrData.customerId
+              }
+            },
+            level: 'error'
+          });
+          
           errors.push({
             operation: 'issue_inventory',
             itemName: linkedBatch.itemName,
@@ -2894,10 +2955,11 @@ export const uploadCmrAttachment = async (file, cmrId, userId) => {
  */
 export const getCmrAttachments = async (cmrId) => {
   try {
+    // Usunięto orderBy aby uniknąć błędu "failed-precondition" związanego z brakiem indeksu
+    // Sortowanie odbywa się po stronie klienta
     const q = query(
       collection(db, 'cmrAttachments'),
-      where('cmrId', '==', cmrId),
-      orderBy('uploadedAt', 'desc')
+      where('cmrId', '==', cmrId)
     );
 
     const snapshot = await getDocs(q);
@@ -2912,7 +2974,12 @@ export const getCmrAttachments = async (cmrId) => {
       });
     });
 
-    return attachments;
+    // Sortowanie po stronie klienta (desc - najnowsze pierwsze)
+    return attachments.sort((a, b) => {
+      if (!a.uploadedAt) return 1;
+      if (!b.uploadedAt) return -1;
+      return b.uploadedAt - a.uploadedAt;
+    });
   } catch (error) {
     console.error('Błąd podczas pobierania załączników CMR:', error);
     return [];
@@ -3041,10 +3108,11 @@ export const uploadCmrInvoice = async (file, cmrId, userId) => {
  */
 export const getCmrInvoices = async (cmrId) => {
   try {
+    // Usunięto orderBy aby uniknąć błędu "failed-precondition" związanego z brakiem indeksu
+    // Sortowanie odbywa się po stronie klienta
     const q = query(
       collection(db, 'cmrInvoices'),
-      where('cmrId', '==', cmrId),
-      orderBy('uploadedAt', 'desc')
+      where('cmrId', '==', cmrId)
     );
 
     const snapshot = await getDocs(q);
@@ -3059,7 +3127,12 @@ export const getCmrInvoices = async (cmrId) => {
       });
     });
 
-    return invoices;
+    // Sortowanie po stronie klienta (desc - najnowsze pierwsze)
+    return invoices.sort((a, b) => {
+      if (!a.uploadedAt) return 1;
+      if (!b.uploadedAt) return -1;
+      return b.uploadedAt - a.uploadedAt;
+    });
   } catch (error) {
     console.error('Błąd podczas pobierania faktur CMR:', error);
     return [];
@@ -3186,10 +3259,11 @@ export const uploadCmrOtherAttachment = async (file, cmrId, userId) => {
  */
 export const getCmrOtherAttachments = async (cmrId) => {
   try {
+    // Usunięto orderBy aby uniknąć błędu "failed-precondition" związanego z brakiem indeksu
+    // Sortowanie odbywa się po stronie klienta
     const q = query(
       collection(db, 'cmrOtherAttachments'),
-      where('cmrId', '==', cmrId),
-      orderBy('uploadedAt', 'desc')
+      where('cmrId', '==', cmrId)
     );
 
     const snapshot = await getDocs(q);
@@ -3204,7 +3278,12 @@ export const getCmrOtherAttachments = async (cmrId) => {
       });
     });
 
-    return attachments;
+    // Sortowanie po stronie klienta (desc - najnowsze pierwsze)
+    return attachments.sort((a, b) => {
+      if (!a.uploadedAt) return 1;
+      if (!b.uploadedAt) return -1;
+      return b.uploadedAt - a.uploadedAt;
+    });
   } catch (error) {
     console.error('Błąd podczas pobierania innych załączników CMR:', error);
     return [];
