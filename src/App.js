@@ -242,7 +242,7 @@ initializeConnectionMonitoring();
 function App() {
   return (
     <Sentry.ErrorBoundary 
-      fallback={({ error, componentStack, resetError }) => (
+      fallback={({ error, componentStack, resetError, eventId }) => (
         <Box sx={{ 
           display: 'flex', 
           flexDirection: 'column',
@@ -267,23 +267,53 @@ function App() {
               maxWidth: 800,
               width: '100%',
               textAlign: 'left',
-              overflow: 'auto'
+              overflow: 'auto',
+              mb: 2
             }}>
               <Typography variant="caption" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
                 {error.toString()}
               </Typography>
             </Box>
           )}
-          <Button 
-            variant="contained"
-            onClick={resetError}
-            sx={{ mt: 2 }}
-          >
-            Spróbuj ponownie
-          </Button>
+          
+          {/* Przyciski akcji */}
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Button 
+              variant="contained"
+              onClick={resetError}
+            >
+              Spróbuj ponownie
+            </Button>
+            
+            {/* User Feedback Widget - pozwala użytkownikowi zgłosić problem */}
+            {eventId && (
+              <Button 
+                variant="outlined"
+                color="secondary"
+                onClick={() => {
+                  Sentry.showReportDialog({ 
+                    eventId,
+                    title: 'Zgłoś problem',
+                    subtitle: 'Nasz zespół został powiadomiony o tym błędzie',
+                    subtitle2: 'Jeśli chcesz pomóc, opisz co robiłeś przed wystąpieniem błędu:',
+                    labelName: 'Twoje imię',
+                    labelEmail: 'Email (opcjonalnie)',
+                    labelComments: 'Co się wydarzyło?',
+                    labelClose: 'Zamknij',
+                    labelSubmit: 'Wyślij raport',
+                    errorGeneric: 'Wystąpił błąd podczas wysyłania raportu. Spróbuj ponownie później.',
+                    errorFormEntry: 'Niektóre pola są wymagane. Proszę wypełnić je przed wysłaniem.',
+                    successMessage: 'Dziękujemy za zgłoszenie! Twój feedback pomoże nam naprawić problem.',
+                  });
+                }}
+              >
+                Zgłoś szczegóły problemu
+              </Button>
+            )}
+          </Box>
         </Box>
       )}
-      showDialog
+      showDialog={false}
     >
       <Router>
         <AuthProvider>

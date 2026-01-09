@@ -1,7 +1,7 @@
 # 🎉 Podsumowanie implementacji Sentry.io
 
-**Data:** 2026-01-08  
-**Status:** ✅ Zakończone i gotowe do użycia
+**Data:** 2026-01-09  
+**Status:** ✅ Zakończone - Zaawansowana implementacja
 
 ---
 
@@ -11,14 +11,20 @@
 
 #### ✅ `src/index.js`
 - Inicjalizacja Sentry przed renderowaniem aplikacji
+- 🆕 **Release Tracking** - automatyczne śledzenie wersji z `package.json`
+- 🆕 **Dist tracking** - identyfikacja build number
 - Konfiguracja Performance Monitoring (10% w produkcji, 100% w dev)
 - Session Replay (10% sesji, 100% sesji z błędami)
+- 🆕 **maskAllInputs: true** - maskowanie wrażliwych danych w replay
 - Filtrowanie błędów z rozszerzeń przeglądarki i ResizeObserver
+- 🆕 **beforeSend hooks** - dodawanie localStorage i viewport do kontekstu
 - **Automatyczne przechwytywanie `console.error()`** w produkcji
 
 #### ✅ `src/App.js`
 - Dodano `Sentry.ErrorBoundary` opakowujący całą aplikację
 - Polski fallback UI z możliwością resetu błędu
+- 🆕 **User Feedback Widget** - przycisk "Zgłoś szczegóły problemu"
+- 🆕 Polski formularz zgłoszeniowy dla użytkowników
 - Wyświetlanie szczegółów błędu w development mode
 
 #### ✅ `src/contexts/AuthContext.js`
@@ -43,15 +49,44 @@ Specjalne wrappery dla Firebase z **performance tracking**:
 - **`withFirebaseBatchErrorHandling()`** - Wrapper dla batch operations + **metryki batch**
 - **`getFirebaseErrorMessage()`** - Tłumaczenie kodów błędów na polski
 - **`logFirebaseOperation()`** - Logowanie operacji jako breadcrumb
-- **`configureFirebasePerformance()`** - 🆕 Konfiguracja performance tracking
-- **`getFirebasePerformanceConfig()`** - 🆕 Pobierz aktualną konfigurację
+- **`configureFirebasePerformance()`** - Konfiguracja performance tracking
+- **`getFirebasePerformanceConfig()`** - Pobierz aktualną konfigurację
 - **Mapowanie 40+ kodów błędów Firebase** na przyjazne komunikaty PL
-- **🆕 Automatyczne logowanie wolnych operacji** (> 3s domyślnie)
-- **🆕 Performance metrics** w Sentry (czas trwania, status, liczba elementów)
+- **Automatyczne logowanie wolnych operacji** (> 1.5s domyślnie, konfigurowalne)
+- **Performance metrics** w Sentry (czas trwania, status, liczba elementów)
+
+#### ✅ `src/utils/sentryContext.js` 🆕
+Helper do ustawiania kontekstu biznesowego:
+- **`setTaskContext()`** - Kontekst zadania produkcyjnego (MO, status, rezerwacje)
+- **`setOrderContext()`** - Kontekst zamówienia klienta
+- **`setInventoryContext()`** - Kontekst pozycji magazynowej
+- **`setBatchContext()`** - Kontekst partii magazynowej
+- **`setRecipeContext()`** - Kontekst receptury
+- **`setPurchaseOrderContext()`** - Kontekst zamówienia zakupu (PO)
+- **`setInvoiceContext()`** - Kontekst faktury
+- **`setPageContext()`** - Kontekst strony (lokalizacja użytkownika)
+- **`clearAllContexts()`** - Wyczyść wszystkie konteksty
+- **`usePageContext()`** - React hook do automatycznego ustawiania kontekstu strony
 
 ---
 
-### 3. Dokumentacja i przykłady
+### 3. Konfiguracja Source Maps & Release Tracking
+
+#### ✅ `.sentryclirc`
+Plik konfiguracyjny Sentry CLI:
+- Organization: `bgw-pharma`
+- Project: `mrp-system`
+- URL: `https://sentry.io/`
+
+#### ✅ `package.json`
+Dodane skrypty:
+- **`npm run build`** - Build + automatyczny upload source maps
+- **`npm run build:dev`** - Build bez source maps (dla dev)
+- **`npm run sentry:sourcemaps`** - Ręczny upload source maps
+
+---
+
+### 4. Dokumentacja i przykłady
 
 #### ✅ `src/utils/SENTRY_ERROR_HANDLING.md`
 Kompletny przewodnik zawierający:
@@ -61,6 +96,24 @@ Kompletny przewodnik zawierający:
 - 10+ przykładów użycia w różnych scenariuszach
 - Sekcja testowania
 - FAQ
+
+#### ✅ `src/utils/FIREBASE_PERFORMANCE.md`
+Kompletny przewodnik performance tracking:
+- Jak działa automatyczne śledzenie wydajności
+- Konfiguracja (threshold, sample rate)
+- Analiza w Sentry Dashboard
+- Best practices
+- Rozwiązywanie problemów z wydajnością
+
+#### ✅ `src/utils/SENTRY_ADVANCED_FEATURES.md` 🆕
+Przewodnik zaawansowanych funkcji (120+ linii):
+- **Source Maps** - konfiguracja, upload, troubleshooting
+- **Release Tracking** - śledzenie wersji, porównywanie, alerty
+- **User Feedback Widget** - formularz zgłoszeniowy
+- **Custom Context** - dane biznesowe (task, order, inventory, batch, recipe)
+- **10+ kompleksowych przykładów** użycia w praktyce
+- **Checklist implementacji** dla każdej strony
+- Best practices i anti-patterns
 
 #### ✅ `src/utils/sentryExamples.js`
 Plik z przykładami:
@@ -74,23 +127,16 @@ Quick start guide:
 - Najważniejsze funkcje
 - Linki do pełnej dokumentacji
 
-#### ✅ `src/utils/FIREBASE_PERFORMANCE.md` 🆕
-Kompletny przewodnik performance tracking:
-- Jak działa automatyczne śledzenie wydajności
-- Konfiguracja (threshold, sample rate)
-- Analiza w Sentry Dashboard
-- Best practices
-- Rozwiązywanie problemów z wydajnością
-
 #### ✅ `README.md` (główny)
 Aktualizacja głównego README:
 - Dodano Sentry.io do sekcji "Technologie"
 - Dodano zmienne środowiskowe Sentry do `.env.local`
 - Nowa sekcja "🛡️ Monitoring błędów z Sentry.io"
+- 🆕 Lista zaawansowanych funkcji (Source Maps, Release Tracking, User Feedback, Custom Context)
 
 ---
 
-### 4. Narzędzia testowe
+### 5. Narzędzia testowe
 
 #### ✅ `src/pages/Admin/SystemManagementPage.js`
 - Dodano sekcję "Test Sentry Error Tracking" w narzędziach systemowych
@@ -117,7 +163,9 @@ Aktualizacja głównego README:
 5. **Performance** - czasy ładowania, transakcje
 6. **Session Replay** - nagrania sesji z błędami
 7. **User Context** - automatycznie przy logowaniu
-8. **🆕 Firebase Performance** - czas operacji, wolne zapytania, metryki batch
+8. **Firebase Performance** - czas operacji, wolne zapytania (>1.5s), metryki batch
+9. **🆕 Release Tracking** - automatyczne z package.json
+10. **🆕 localStorage & viewport** - dodane do kontekstu każdego błędu
 
 ### ⚠️ Wymaga ręcznego zgłoszenia:
 1. **Błędy w try-catch** - użyj `handleError()`
@@ -132,8 +180,9 @@ Aktualizacja głównego README:
 - **961** bloków try-catch w services
 - **1915** wywołań console.error w całej aplikacji
 - **40+** mapowań kodów błędów Firebase na polski
-- **4** nowe pliki utility
-- **4** pliki dokumentacji (+ 🆕 Firebase Performance)
+- **5** plików utility (errorHandler, firebaseErrorHandler, 🆕 sentryContext, + przykłady)
+- **7** dokumentów markdown (w tym 🆕 SENTRY_ADVANCED_FEATURES + changelog)
+- **10** funkcji custom context (task, order, inventory, batch, recipe, PO, invoice, page, user, clear)
 - **5** zmodyfikowanych plików
 - **🆕 Automatyczne śledzenie** wydajności operacji Firebase
 - **🆕 Performance metrics** - czas trwania, wolne zapytania, batch analytics

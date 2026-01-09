@@ -259,9 +259,11 @@ System jest zintegrowany z Sentry.io dla kompleksowego monitorowania błędów i
 
 W katalogu `src/utils/` znajdziesz:
 - **`errorHandler.js`** - Główne funkcje obsługi błędów
-- **`firebaseErrorHandler.js`** - Wrappery dla operacji Firebase + **performance tracking**
+- **`firebaseErrorHandler.js`** - Wrappery dla Firebase + **performance tracking**
+- **`sentryContext.js`** - 🆕 Custom context (dane biznesowe: task, order, inventory)
 - **`SENTRY_ERROR_HANDLING.md`** - Pełna dokumentacja
-- **`FIREBASE_PERFORMANCE.md`** - 🆕 Dokumentacja performance tracking Firebase
+- **`FIREBASE_PERFORMANCE.md`** - Dokumentacja performance tracking
+- **`SENTRY_ADVANCED_FEATURES.md`** - 🆕 Source Maps, Release Tracking, User Feedback
 - **`sentryExamples.js`** - 10+ przykładów użycia
 - **`README_SENTRY.md`** - Quick start guide
 
@@ -321,6 +323,10 @@ System automatycznie tłumaczy kody błędów Firebase na przyjazne komunikaty p
 - **Extra Data**: Możliwość dodania kontekstu do każdego błędu
 - **Filtrowanie**: Automatyczne filtrowanie błędów z rozszerzeń przeglądarki
 - **Performance**: Monitoring wydajności aplikacji (10% transakcji w produkcji)
-- **🆕 Firebase Performance**: Automatyczne śledzenie czasu operacji Firebase, wolne zapytania (>3s)
+- **Firebase Performance**: Automatyczne śledzenie czasu operacji Firebase, wolne zapytania (>1.5s)
+- **🆕 Source Maps**: Czytelne stack traces w produkcji
+- **🆕 Release Tracking**: Śledzenie błędów per wersja, porównywanie stabilności
+- **🆕 User Feedback**: Użytkownicy mogą zgłaszać szczegóły problemów
+- **🆕 Custom Context**: Automatyczne dodawanie danych biznesowych (task, order, inventory)
 
 Więcej informacji: [`src/utils/SENTRY_ERROR_HANDLING.md`](src/utils/SENTRY_ERROR_HANDLING.md)

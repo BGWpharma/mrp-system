@@ -80,11 +80,13 @@
   },
   "scripts": {
     "start": "set PORT=3003 && react-scripts start",
-    "build": "react-scripts build",
+    "build": "react-scripts build && npm run sentry:sourcemaps",
+    "build:dev": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "i18n:scan": "i18next-scanner",
-    "i18n:split": "node scripts/split-translations.js"
+    "i18n:split": "node scripts/split-translations.js",
+    "sentry:sourcemaps": "sentry-cli sourcemaps upload --org bgwpharma --project bgw-mrp-system --release mrp-system@0.1.237 ./build/static/js"
   },
   "eslintConfig": {
     "extends": [

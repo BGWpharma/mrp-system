@@ -5,10 +5,12 @@
 W katalogu `src/utils/` znajdziesz:
 
 1. **`errorHandler.js`** - Główne funkcje do obsługi błędów
-2. **`firebaseErrorHandler.js`** - Specjalne wrappery dla Firebase + **performance tracking**
-3. **`SENTRY_ERROR_HANDLING.md`** - Pełna dokumentacja
-4. **`FIREBASE_PERFORMANCE.md`** - 🆕 Dokumentacja performance tracking
-5. **`sentryExamples.js`** - Przykłady użycia
+2. **`firebaseErrorHandler.js`** - Wrappery dla Firebase + **performance tracking**
+3. **`sentryContext.js`** - 🆕 Custom context (dane biznesowe)
+4. **`SENTRY_ERROR_HANDLING.md`** - Pełna dokumentacja
+5. **`FIREBASE_PERFORMANCE.md`** - Dokumentacja performance tracking
+6. **`SENTRY_ADVANCED_FEATURES.md`** - 🆕 Source Maps, Release Tracking, User Feedback
+7. **`sentryExamples.js`** - Przykłady użycia
 
 ## 🚀 Szybki start
 
@@ -86,10 +88,12 @@ Zobacz [`sentryExamples.js`](./sentryExamples.js) dla 10+ przykładów użycia.
 
 ## 🆘 Wsparcie
 
-1. Przeczytaj [`SENTRY_ERROR_HANDLING.md`](./SENTRY_ERROR_HANDLING.md)
-2. 🆕 Performance tracking: [`FIREBASE_PERFORMANCE.md`](./FIREBASE_PERFORMANCE.md)
-3. Zobacz przykłady w [`sentryExamples.js`](./sentryExamples.js)
-4. Sprawdź [dokumentację Sentry](https://docs.sentry.io/)
+1. **Quick Start**: Ten plik!
+2. **Podstawy**: [`SENTRY_ERROR_HANDLING.md`](./SENTRY_ERROR_HANDLING.md)
+3. **Performance**: [`FIREBASE_PERFORMANCE.md`](./FIREBASE_PERFORMANCE.md)
+4. **Zaawansowane**: 🆕 [`SENTRY_ADVANCED_FEATURES.md`](./SENTRY_ADVANCED_FEATURES.md)
+5. **Przykłady**: [`sentryExamples.js`](./sentryExamples.js)
+6. **Sentry Docs**: https://docs.sentry.io/
 
 ---
 
