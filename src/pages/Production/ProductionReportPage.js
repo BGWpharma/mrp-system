@@ -59,8 +59,7 @@ import {
   Schedule as ScheduleIcon,
   GetApp as ExportIcon,
   ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon,
-  SmartToy as AIIcon
+  ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
@@ -71,7 +70,6 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { PRODUCTION_TASK_STATUSES } from '../../utils/constants';
 import ProductionTimeAnalysisTab from '../../components/production/ProductionTimeAnalysisTab';
-import WeeklyConsumptionReportTab from '../../components/production/WeeklyConsumptionReportTab';
 
 const ProductionReportPage = () => {
   const { t } = useTranslation();
@@ -253,12 +251,6 @@ const ProductionReportPage = () => {
             iconPosition="start"
             sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
-          <Tab 
-            label="Raport AI"
-            icon={<AIIcon />} 
-            iconPosition="start"
-            sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
-          />
         </Tabs>
       </Box>
 
@@ -286,13 +278,6 @@ const ProductionReportPage = () => {
             setStartDate(newStartDate);
             setEndDate(newEndDate);
           }}
-        />
-      )}
-
-      {/* Zakładka Raport AI */}
-      {selectedTab === 2 && (
-        <WeeklyConsumptionReportTab 
-          isMobile={isMobile}
         />
       )}
 

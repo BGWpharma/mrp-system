@@ -20,8 +20,6 @@
  * - onProductionTaskScheduleUpdate (trigger: productionTasks)
  * - onCmrStatusUpdate         (trigger: cmrDocuments)
  * - updateExpiryStats         (scheduled: every day 01:00)
- * - generateWeeklyConsumptionReport (scheduled: every sunday 06:00)
- * - triggerWeeklyConsumptionReport (callable: manual report generation)
  */
 
 // Initialize config (must be first!)
@@ -33,7 +31,6 @@ require("./config");
 const {refreshExpiryStats} = require("./callable/expiryStats");
 const {getRandomBatch} = require("./callable/randomBatch");
 const {recalculateShippedQuantities} = require("./callable/recalculateShipped");
-const {triggerWeeklyConsumptionReport} = require("./callable/weeklyConsumptionReport");
 
 // ============================================================================
 // FIRESTORE TRIGGERS - Automatyczne aktualizacje danych
@@ -48,7 +45,6 @@ const {onCmrStatusUpdate} = require("./triggers/cmrStatus");
 // SCHEDULED FUNCTIONS - Zadania cron
 // ============================================================================
 const {updateExpiryStats} = require("./scheduled/expiryStats");
-const {generateWeeklyConsumptionReport} = require("./scheduled/weeklyConsumptionReport");
 
 // ============================================================================
 // EXPORTS - Re-export all functions
@@ -56,11 +52,9 @@ const {generateWeeklyConsumptionReport} = require("./scheduled/weeklyConsumption
 exports.refreshExpiryStats = refreshExpiryStats;
 exports.getRandomBatch = getRandomBatch;
 exports.recalculateShippedQuantities = recalculateShippedQuantities;
-exports.triggerWeeklyConsumptionReport = triggerWeeklyConsumptionReport;
 exports.onPurchaseOrderUpdate = onPurchaseOrderUpdate;
 exports.onBatchPriceUpdate = onBatchPriceUpdate;
 exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;
 exports.onProductionTaskScheduleUpdate = onProductionTaskScheduleUpdate;
 exports.onCmrStatusUpdate = onCmrStatusUpdate;
 exports.updateExpiryStats = updateExpiryStats;
-exports.generateWeeklyConsumptionReport = generateWeeklyConsumptionReport;

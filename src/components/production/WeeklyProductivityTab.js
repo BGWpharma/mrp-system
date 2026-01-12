@@ -27,7 +27,8 @@ import {
   Stack,
   Tooltip,
   TableSortLabel,
-  CircularProgress
+  CircularProgress,
+  Badge
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -42,7 +43,8 @@ import {
   AccessTime as TimeIcon,
   Inventory2 as QuantityIcon,
   AddCircleOutline as AddIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  ShowChart as ShowChartIcon
 } from '@mui/icons-material';
 import {
   BarChart,
@@ -69,6 +71,153 @@ import {
   getDailyBreakdown,
   formatWeekString
 } from '../../services/weeklyProductivityService';
+
+// Komponent mini wykresu trendu (sparkline) - prosty SVG
+const TrendSparkline = ({ weeksData, currentWeekIndex, theme }) => {
+  // Pobierz ostatnie 5 tygodni włącznie z bieżącym
+  const sparklineData = useMemo(() => {
+    const startIndex = Math.max(0, currentWeekIndex - 4);
+    const dataSlice = weeksData.slice(startIndex, currentWeekIndex + 1);
+    
+    return dataSlice.map((week) => week.productivity);
+  }, [weeksData, currentWeekIndex]);
+
+  if (sparklineData.length < 2) {
+    return null;
+  }
+
+  const width = 80;
+  const height = 30;
+  const padding = 2;
+  
+  const minValue = Math.min(...sparklineData);
+  const maxValue = Math.max(...sparklineData);
+  const range = maxValue - minValue || 1;
+  
+  // Oblicz trend (pierwsza vs ostatnia wartość)
+  const firstValue = sparklineData[0];
+  const lastValue = sparklineData[sparklineData.length - 1];
+  const trendDirection = lastValue > firstValue ? 'up' : lastValue < firstValue ? 'down' : 'flat';
+  
+  const lineColor = trendDirection === 'up' 
+    ? theme.palette.success.main 
+    : trendDirection === 'down' 
+    ? theme.palette.error.main 
+    : theme.palette.text.secondary;
+
+  // Generuj punkty dla linii SVG
+  const points = sparklineData.map((value, i) => {
+    const x = padding + (i / (sparklineData.length - 1)) * (width - 2 * padding);
+    const y = height - padding - ((value - minValue) / range) * (height - 2 * padding);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={lineColor}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+};
+
+// Komponent rozszerzonej wizualizacji trendu
+const TrendVisualization = ({ week, weekIndex, allWeeks, trends, theme }) => {
+  const { productivityChange, trend } = week;
+  
+  // Oblicz pozycję względem średniej
+  const avgProductivity = trends.avgProductivity;
+  const deviationFromAvg = ((week.productivity - avgProductivity) / avgProductivity) * 100;
+  const isAboveAverage = week.productivity > avgProductivity;
+  
+  // Określ intensywność koloru na podstawie wielkości zmiany
+  const changeIntensity = Math.min(Math.abs(productivityChange) / 20, 1); // Max przy 20%
+  
+  const getTrendBackgroundColor = () => {
+    if (trend === 'improving') {
+      return `rgba(46, 125, 50, ${0.1 + changeIntensity * 0.3})`; // success z intensywnością
+    } else if (trend === 'declining') {
+      return `rgba(211, 47, 47, ${0.1 + changeIntensity * 0.3})`; // error z intensywnością
+    }
+    return 'rgba(158, 158, 158, 0.1)'; // neutral
+  };
+
+  const getTrendIcon = () => {
+    const iconProps = {
+      sx: { 
+        fontSize: 28,
+        color: trend === 'improving' ? 'success.main' : 
+               trend === 'declining' ? 'error.main' : 
+               'text.secondary'
+      }
+    };
+    
+    if (trend === 'improving') return <TrendingUpIcon {...iconProps} />;
+    if (trend === 'declining') return <TrendingDownIcon {...iconProps} />;
+    return <TrendingFlatIcon {...iconProps} />;
+  };
+
+  return (
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center',
+        gap: 0.5,
+        p: 1,
+        borderRadius: 1,
+        backgroundColor: getTrendBackgroundColor(),
+        minWidth: 120
+      }}
+    >
+      {/* Ikona trendu i zmiana procentowa */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {getTrendIcon()}
+        <Typography 
+          variant="h6" 
+          sx={{ 
+            fontWeight: 'bold',
+            color: trend === 'improving' ? 'success.dark' : 
+                   trend === 'declining' ? 'error.dark' : 
+                   'text.primary'
+          }}
+        >
+          {productivityChange > 0 ? '+' : ''}{productivityChange.toFixed(1)}%
+        </Typography>
+      </Box>
+      
+      {/* Mini wykres sparkline */}
+      <TrendSparkline 
+        weeksData={allWeeks} 
+        currentWeekIndex={weekIndex}
+        theme={theme}
+      />
+      
+      {/* Badge ze wskaźnikiem pozycji względem średniej */}
+      <Tooltip 
+        title={`${isAboveAverage ? 'Powyżej' : 'Poniżej'} średniej o ${Math.abs(deviationFromAvg).toFixed(1)}%`}
+        arrow
+      >
+        <Chip
+          size="small"
+          label={`${isAboveAverage ? '↑' : '↓'} ${Math.abs(deviationFromAvg).toFixed(0)}%`}
+          sx={{
+            fontSize: '0.7rem',
+            height: 18,
+            backgroundColor: isAboveAverage ? 'success.light' : 'warning.light',
+            color: isAboveAverage ? 'success.dark' : 'warning.dark',
+            fontWeight: 'bold'
+          }}
+        />
+      </Tooltip>
+    </Box>
+  );
+};
 
 // Komponent karty porównania tygodnia
 const WeekComparisonCard = ({ week, label }) => {
@@ -123,11 +272,18 @@ const WeekComparisonCard = ({ week, label }) => {
               Top 3 produkty:
             </Typography>
             {week.breakdown.slice(0, 3).map((item, index) => (
-              <Box key={index} display="flex" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {item.moNumber || item.taskName}
-                </Typography>
-                <Typography variant="caption">
+              <Box key={index} display="flex" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
+                <Box sx={{ flex: 1, mr: 1 }}>
+                  {item.moNumber && (
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold', display: 'block' }}>
+                      {item.moNumber}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                    {item.taskName}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
                   {item.timePercentage}%
                 </Typography>
               </Box>
@@ -209,8 +365,13 @@ const WeekDetailsPanel = ({ week }) => {
                 {week.breakdown && week.breakdown.slice(0, 5).map((item, index) => (
                   <TableRow key={index}>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                        {item.moNumber || item.taskName}
+                      {item.moNumber && (
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          {item.moNumber}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" color="text.secondary">
+                        {item.taskName}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
@@ -379,18 +540,29 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
       ];
 
       // Dane
-      const csvData = sortedWeeksData.map(week => [
-        formatWeekString(week.week),
-        format(week.weekStart, 'dd.MM.yyyy', { locale: plLocale }),
-        format(week.weekEnd, 'dd.MM.yyyy', { locale: plLocale }),
-        week.totalTimeHours,
-        week.totalQuantity,
-        week.productivity,
-        week.productivityChange.toFixed(1),
-        week.efficiency,
-        week.sessionsCount,
-        week.topProduct ? (week.topProduct.moNumber || week.topProduct.taskName) : '-'
-      ]);
+      const csvData = sortedWeeksData.map(week => {
+        let topProductText = '-';
+        if (week.topProduct) {
+          if (week.topProduct.moNumber && week.topProduct.taskName) {
+            topProductText = `${week.topProduct.moNumber} - ${week.topProduct.taskName}`;
+          } else {
+            topProductText = week.topProduct.moNumber || week.topProduct.taskName;
+          }
+        }
+        
+        return [
+          formatWeekString(week.week),
+          format(week.weekStart, 'dd.MM.yyyy', { locale: plLocale }),
+          format(week.weekEnd, 'dd.MM.yyyy', { locale: plLocale }),
+          week.totalTimeHours,
+          week.totalQuantity,
+          week.productivity,
+          week.productivityChange.toFixed(1),
+          week.efficiency,
+          week.sessionsCount,
+          topProductText
+        ];
+      });
 
       // Połącz nagłówki z danymi
       const fullData = [headers, ...csvData];
@@ -479,7 +651,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
     return weeksData.find(w => w.week === selectedWeek2);
   }, [weeksData, selectedWeek2]);
 
-  // Ikona trendu
+  // Ikona trendu (dla kart podsumowania)
   const getTrendIcon = (trend) => {
     switch (trend) {
       case 'improving':
@@ -489,13 +661,6 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
       default:
         return <TrendingFlatIcon sx={{ color: 'text.secondary' }} />;
     }
-  };
-
-  // Kolor trendu
-  const getTrendColor = (change) => {
-    if (change > 5) return 'success.main';
-    if (change < -5) return 'error.main';
-    return 'text.secondary';
   };
 
   if (!timeAnalysis || !weeksData || weeksData.length === 0) {
@@ -548,70 +713,261 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
 
       {/* Podsumowanie ogólne */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
+        {/* Średnia wydajność */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <SpeedIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h4" color="primary">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.primary.main}05 100%)`,
+            border: `1px solid ${theme.palette.primary.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.primary.main}20`,
+                mb: 1.5
+              }}>
+                <SpeedIcon sx={{ fontSize: 32, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="h3" color="primary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {trends.avgProductivity}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Średnia wydajność (szt/h)
               </Typography>
+              <Divider sx={{ my: 1.5 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+                <Tooltip title="Rozstęp wydajności" arrow>
+                  <Typography variant="caption" color="text.secondary">
+                    {trends.minProductivity} - {trends.maxProductivity}
+                  </Typography>
+                </Tooltip>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Najlepsza wydajność */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <TrophyIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-              <Typography variant="h4" color="success.main">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.success.main}15 0%, ${theme.palette.success.main}05 100%)`,
+            border: `1px solid ${theme.palette.success.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.success.main}20`,
+                mb: 1.5
+              }}>
+                <TrophyIcon sx={{ fontSize: 32, color: 'success.main' }} />
+              </Box>
+              <Typography variant="h3" color="success.main" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {trends.maxProductivity}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Najlepsza wydajność
               </Typography>
+              <Divider sx={{ my: 1.5 }} />
               {trends.bestWeek && (
-                <Typography variant="caption" color="text.secondary">
-                  {formatWeekString(trends.bestWeek.week)}
-                </Typography>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Rekord tygodnia:
+                  </Typography>
+                  <Chip 
+                    label={formatWeekString(trends.bestWeek.week).replace('Tydz. ', 'W')}
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{ mt: 0.5, fontWeight: 'bold' }}
+                  />
+                </Box>
               )}
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Analizowanych tygodni */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <AssessmentIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
-              <Typography variant="h4" color="secondary">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.secondary.main}15 0%, ${theme.palette.secondary.main}05 100%)`,
+            border: `1px solid ${theme.palette.secondary.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.secondary.main}20`,
+                mb: 1.5
+              }}>
+                <AssessmentIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
+              </Box>
+              <Typography variant="h3" color="secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {weeksData.length}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Analizowanych tygodni
               </Typography>
+              <Divider sx={{ my: 1.5 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                <Tooltip title="Zakres dat" arrow>
+                  <Typography variant="caption" color="text.secondary">
+                    {weeksData.length > 0 && `${format(weeksData[0].weekStart, 'dd.MM', { locale: plLocale })} - ${format(weeksData[weeksData.length - 1].weekEnd, 'dd.MM.yy', { locale: plLocale })}`}
+                  </Typography>
+                </Tooltip>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
+          <Card sx={{ 
+            background: trends.trend === 'improving' 
+              ? `linear-gradient(135deg, ${theme.palette.success.light}15 0%, ${theme.palette.success.light}05 100%)`
+              : trends.trend === 'declining'
+              ? `linear-gradient(135deg, ${theme.palette.error.light}15 0%, ${theme.palette.error.light}05 100%)`
+              : 'transparent'
+          }}>
             <CardContent sx={{ textAlign: 'center' }}>
-              {getTrendIcon(trends.trend)}
-              <Typography variant="h6" sx={{ mt: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1, mb: 1 }}>
+                {getTrendIcon(trends.trend)}
+                {trends.trend === 'improving' && (
+                  <Chip 
+                    label="Wzrost" 
+                    color="success" 
+                    size="small"
+                    icon={<TrendingUpIcon />}
+                  />
+                )}
+                {trends.trend === 'declining' && (
+                  <Chip 
+                    label="Spadek" 
+                    color="error" 
+                    size="small"
+                    icon={<TrendingDownIcon />}
+                  />
+                )}
+                {trends.trend === 'stable' && (
+                  <Chip 
+                    label="Stabilnie" 
+                    color="default" 
+                    size="small"
+                    icon={<TrendingFlatIcon />}
+                  />
+                )}
+              </Box>
+              
+              <Typography variant="h6" sx={{ 
+                mt: 1,
+                fontWeight: 'bold',
+                color: trends.trend === 'improving' ? 'success.main' : 
+                       trends.trend === 'declining' ? 'error.main' : 
+                       'text.primary'
+              }}>
                 {trends.trendDescription}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 Ogólny trend
               </Typography>
+              
+              {/* Mini wizualizacja trendu dla wszystkich tygodni */}
+              {weeksData.length >= 2 && (
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                  <svg width="100" height="40" style={{ display: 'block' }}>
+                    <polyline
+                      points={weeksData.map((week, i) => {
+                        const x = 5 + (i / (weeksData.length - 1)) * 90;
+                        const minProd = Math.min(...weeksData.map(w => w.productivity));
+                        const maxProd = Math.max(...weeksData.map(w => w.productivity));
+                        const range = maxProd - minProd || 1;
+                        const y = 35 - ((week.productivity - minProd) / range) * 30;
+                        return `${x},${y}`;
+                      }).join(' ')}
+                      fill="none"
+                      stroke={trends.trend === 'improving' ? theme.palette.success.main : 
+                             trends.trend === 'declining' ? theme.palette.error.main : 
+                             theme.palette.text.secondary}
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {/* Punkty na wykresie */}
+                    {weeksData.map((week, i) => {
+                      const x = 5 + (i / (weeksData.length - 1)) * 90;
+                      const minProd = Math.min(...weeksData.map(w => w.productivity));
+                      const maxProd = Math.max(...weeksData.map(w => w.productivity));
+                      const range = maxProd - minProd || 1;
+                      const y = 35 - ((week.productivity - minProd) / range) * 30;
+                      return (
+                        <circle
+                          key={i}
+                          cx={x}
+                          cy={y}
+                          r={i === weeksData.length - 1 ? 4 : 2.5}
+                          fill={trends.trend === 'improving' ? theme.palette.success.main : 
+                               trends.trend === 'declining' ? theme.palette.error.main : 
+                               theme.palette.text.secondary}
+                        />
+                      );
+                    })}
+                  </svg>
+                </Box>
+              )}
+              
+              <Divider sx={{ my: 1 }} />
+              
+              {/* Dodatkowe statystyki */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-around', mt: 1 }}>
+                <Tooltip title="Najlepsza wydajność" arrow>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="caption" color="text.secondary">Max</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                      {trends.maxProductivity}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+                <Tooltip title="Najgorsza wydajność" arrow>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="caption" color="text.secondary">Min</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                      {trends.minProductivity}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
       {/* Filtry dat dla tygodniówek */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Filtry
-        </Typography>
+      <Paper 
+        elevation={2}
+        sx={{ 
+          p: 2.5, 
+          mb: 2,
+          background: `linear-gradient(135deg, ${theme.palette.primary.main}08 0%, ${theme.palette.secondary.main}08 100%)`,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box 
+            sx={{ 
+              display: 'inline-flex',
+              p: 1,
+              borderRadius: 1,
+              backgroundColor: `${theme.palette.primary.main}15`,
+              mr: 1.5
+            }}
+          >
+            <TimeIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            Filtry
+          </Typography>
+        </Box>
         <Grid container spacing={2} alignItems="center">
           {/* Szybkie zakresy */}
           <Grid item xs={12} sm={6} md={3}>
@@ -683,68 +1039,181 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
       </Paper>
 
       {/* Przyciski akcji */}
-      <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      <Paper 
+        elevation={1}
+        sx={{ 
+          p: 2, 
+          mb: 2,
+          display: 'flex', 
+          gap: 2, 
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          background: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
         <Button
           variant={comparisonMode ? "contained" : "outlined"}
           startIcon={<CompareIcon />}
           onClick={handleComparisonToggle}
           disabled={weeksData.length < 2}
+          size="large"
+          sx={{ 
+            fontWeight: 'bold',
+            boxShadow: comparisonMode ? 2 : 0
+          }}
         >
           Porównaj tygodnie
         </Button>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
+        <FormControl size="small" sx={{ minWidth: 220 }}>
           <InputLabel>Typ wykresu</InputLabel>
           <Select
             value={chartType}
             onChange={(e) => setChartType(e.target.value)}
             label="Typ wykresu"
+            startAdornment={<ShowChartIcon sx={{ mr: 1, color: 'primary.main' }} />}
           >
-            <MenuItem value="productivity">Wydajność</MenuItem>
-            <MenuItem value="quantity">Ilość</MenuItem>
-            <MenuItem value="time">Czas pracy</MenuItem>
-            <MenuItem value="all">Wszystkie</MenuItem>
+            <MenuItem value="productivity">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <SpeedIcon fontSize="small" color="primary" />
+                Wydajność
+              </Box>
+            </MenuItem>
+            <MenuItem value="quantity">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <QuantityIcon fontSize="small" color="secondary" />
+                Ilość
+              </Box>
+            </MenuItem>
+            <MenuItem value="time">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TimeIcon fontSize="small" color="success" />
+                Czas pracy
+              </Box>
+            </MenuItem>
+            <MenuItem value="all">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AssessmentIcon fontSize="small" color="info" />
+                Wszystkie
+              </Box>
+            </MenuItem>
           </Select>
         </FormControl>
-      </Box>
+        {comparisonMode && (
+          <Chip 
+            label="Tryb porównania aktywny" 
+            color="primary" 
+            icon={<CompareIcon />}
+            sx={{ fontWeight: 'bold' }}
+          />
+        )}
+      </Paper>
 
       {/* Tryb porównania */}
       {comparisonMode && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Porównanie dwóch tygodni
-          </Typography>
+        <Paper 
+          elevation={3}
+          sx={{ 
+            p: 3, 
+            mb: 2,
+            background: `linear-gradient(135deg, ${theme.palette.primary.main}10 0%, ${theme.palette.secondary.main}10 100%)`,
+            border: `2px solid ${theme.palette.primary.main}40`
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Box 
+              sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: 2,
+                backgroundColor: theme.palette.primary.main,
+                mr: 1.5
+              }}
+            >
+              <CompareIcon sx={{ color: 'white', fontSize: 28 }} />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+              Porównanie dwóch tygodni
+            </Typography>
+          </Box>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Tydzień 1</InputLabel>
-                <Select
-                  value={selectedWeek1 || ''}
-                  onChange={(e) => setSelectedWeek1(e.target.value)}
-                  label="Tydzień 1"
-                >
-                  {weeksData.map(week => (
-                    <MenuItem key={week.week} value={week.week}>
-                      {formatWeekString(week.week)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Paper 
+                variant="outlined" 
+                sx={{ 
+                  p: 2,
+                  backgroundColor: theme.palette.primary.main + '08',
+                  border: `2px solid ${theme.palette.primary.main}40`
+                }}
+              >
+                <Chip 
+                  label="Tydzień 1" 
+                  color="primary" 
+                  size="small" 
+                  sx={{ mb: 1.5, fontWeight: 'bold' }}
+                />
+                <FormControl fullWidth size="medium">
+                  <InputLabel>Wybierz tydzień 1</InputLabel>
+                  <Select
+                    value={selectedWeek1 || ''}
+                    onChange={(e) => setSelectedWeek1(e.target.value)}
+                    label="Wybierz tydzień 1"
+                  >
+                    {weeksData.map(week => (
+                      <MenuItem key={week.week} value={week.week}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <Typography>{formatWeekString(week.week)}</Typography>
+                          <Chip 
+                            label={`${week.productivity} szt/h`}
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                          />
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Paper>
             </Grid>
             <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Tydzień 2</InputLabel>
-                <Select
-                  value={selectedWeek2 || ''}
-                  onChange={(e) => setSelectedWeek2(e.target.value)}
-                  label="Tydzień 2"
-                >
-                  {weeksData.map(week => (
-                    <MenuItem key={week.week} value={week.week}>
-                      {formatWeekString(week.week)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Paper 
+                variant="outlined" 
+                sx={{ 
+                  p: 2,
+                  backgroundColor: theme.palette.secondary.main + '08',
+                  border: `2px solid ${theme.palette.secondary.main}40`
+                }}
+              >
+                <Chip 
+                  label="Tydzień 2" 
+                  color="secondary" 
+                  size="small" 
+                  sx={{ mb: 1.5, fontWeight: 'bold' }}
+                />
+                <FormControl fullWidth size="medium">
+                  <InputLabel>Wybierz tydzień 2</InputLabel>
+                  <Select
+                    value={selectedWeek2 || ''}
+                    onChange={(e) => setSelectedWeek2(e.target.value)}
+                    label="Wybierz tydzień 2"
+                  >
+                    {weeksData.map(week => (
+                      <MenuItem key={week.week} value={week.week}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <Typography>{formatWeekString(week.week)}</Typography>
+                          <Chip 
+                            label={`${week.productivity} szt/h`}
+                            size="small"
+                            color="secondary"
+                            variant="outlined"
+                          />
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Paper>
             </Grid>
           </Grid>
 
@@ -933,10 +1402,28 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
       )}
 
       {/* Wykres trendu */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Trend wydajności w czasie
-        </Typography>
+      <Paper 
+        elevation={2}
+        sx={{ 
+          p: 3, 
+          mb: 2,
+          background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <ShowChartIcon sx={{ mr: 1, color: 'primary.main', fontSize: 28 }} />
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            Trend wydajności w czasie
+          </Typography>
+          <Chip 
+            label={`${weeksData.length} ${weeksData.length === 1 ? 'tydzień' : weeksData.length < 5 ? 'tygodnie' : 'tygodni'}`}
+            size="small"
+            sx={{ ml: 2 }}
+            color="primary"
+            variant="outlined"
+          />
+        </Box>
         <ResponsiveContainer width="100%" height={300}>
           {chartType === 'all' ? (
             <ComposedChart data={trendChartData}>
@@ -1012,14 +1499,38 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
       </Paper>
 
       {/* Tabela tygodni */}
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Szczegółowe zestawienie tygodniowe
-        </Typography>
+      <Paper 
+        elevation={2}
+        sx={{ 
+          p: 3,
+          background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AssessmentIcon sx={{ mr: 1, color: 'secondary.main', fontSize: 28 }} />
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              Szczegółowe zestawienie tygodniowe
+            </Typography>
+          </Box>
+          <Chip 
+            label={`${sortedWeeksData.length} ${sortedWeeksData.length === 1 ? 'rekord' : sortedWeeksData.length < 5 ? 'rekordy' : 'rekordów'}`}
+            size="small"
+            color="secondary"
+            variant="outlined"
+          />
+        </Box>
         <TableContainer sx={{ maxHeight: 600 }}>
           <Table size={isMobileView ? "small" : "medium"} stickyHeader>
              <TableHead>
-               <TableRow>
+               <TableRow sx={{ 
+                 backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                 '& .MuiTableCell-root': {
+                   fontWeight: 'bold',
+                   borderBottom: `2px solid ${theme.palette.divider}`
+                 }
+               }}>
                  <TableCell>
                    <TableSortLabel
                      active={sortBy === 'week'}
@@ -1086,7 +1597,26 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                     hover
                     sx={{ 
                       '& > *': { borderBottom: expandedWeek === week.week ? 0 : undefined },
-                      backgroundColor: index === weeksData.length - 1 ? 'action.hover' : 'inherit'
+                      backgroundColor: 
+                        index === sortedWeeksData.length - 1 
+                          ? theme.palette.mode === 'dark' 
+                            ? 'rgba(144, 202, 249, 0.08)' 
+                            : 'rgba(25, 118, 210, 0.04)'
+                          : index % 2 === 0 
+                          ? 'inherit' 
+                          : theme.palette.mode === 'dark'
+                          ? 'rgba(255,255,255,0.02)'
+                          : 'rgba(0,0,0,0.01)',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        backgroundColor: theme.palette.mode === 'dark' 
+                          ? 'rgba(144, 202, 249, 0.12)' 
+                          : 'rgba(25, 118, 210, 0.08)',
+                        transform: 'scale(1.001)',
+                        boxShadow: theme.palette.mode === 'dark'
+                          ? '0 2px 8px rgba(0,0,0,0.3)'
+                          : '0 2px 8px rgba(0,0,0,0.08)'
+                      }
                     }}
                   >
                     <TableCell>
@@ -1129,18 +1659,38 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
-                      <Tooltip title={`Zmiana: ${week.productivityChange > 0 ? '+' : ''}${week.productivityChange.toFixed(1)}%`}>
-                        <Chip
-                          icon={getTrendIcon(week.trend)}
-                          label={`${week.productivityChange > 0 ? '+' : ''}${week.productivityChange.toFixed(1)}%`}
-                          size="small"
-                          sx={{ 
-                            backgroundColor: week.trend === 'improving' ? 'success.light' : 
-                                           week.trend === 'declining' ? 'error.light' : 'grey.200',
-                            color: week.trend === 'improving' ? 'success.dark' : 
-                                   week.trend === 'declining' ? 'error.dark' : 'text.secondary'
-                          }}
-                        />
+                      <Tooltip 
+                        title={
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                              Trend wydajności
+                            </Typography>
+                            <Typography variant="caption" component="div">
+                              Zmiana vs poprzedni tydzień: {week.productivityChange > 0 ? '+' : ''}{week.productivityChange.toFixed(1)}%
+                            </Typography>
+                            <Typography variant="caption" component="div">
+                              Obecna: {week.productivity} szt/h
+                            </Typography>
+                            <Typography variant="caption" component="div">
+                              Średnia: {trends.avgProductivity} szt/h
+                            </Typography>
+                            <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
+                              Mini wykres pokazuje ostatnie 5 tygodni
+                            </Typography>
+                          </Box>
+                        }
+                        arrow
+                        placement="left"
+                      >
+                        <Box>
+                          <TrendVisualization 
+                            week={week}
+                            weekIndex={index}
+                            allWeeks={sortedWeeksData}
+                            trends={trends}
+                            theme={theme}
+                          />
+                        </Box>
                       </Tooltip>
                     </TableCell>
                     <TableCell align="center">
@@ -1155,8 +1705,13 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      <TableCell>
                        {week.topProduct ? (
                          <Box>
-                           <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                             {week.topProduct.moNumber || week.topProduct.taskName}
+                           {week.topProduct.moNumber && (
+                             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                               {week.topProduct.moNumber}
+                             </Typography>
+                           )}
+                           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
+                             {week.topProduct.taskName}
                            </Typography>
                            <Typography variant="caption" color="text.secondary">
                              {week.topProduct.timePercentage}% czasu

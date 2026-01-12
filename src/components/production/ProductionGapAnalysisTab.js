@@ -59,7 +59,9 @@ import {
   Info as InfoIcon,
   Assessment as AssessmentIcon,
   Timeline as TimelineIcon,
-  TrendingUp as TrendingUpIcon
+  TrendingUp as TrendingUpIcon,
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -792,14 +794,36 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
   return (
     <Box sx={{ spacing: 2 }}>
       {/* Panel konfiguracji analizy */}
-      <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
-          <AssessmentIcon />
-          {t('productionReport.timeAnalysis.gapAnalysis.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          {t('productionReport.timeAnalysis.gapAnalysis.description')}
-        </Typography>
+      <Paper 
+        elevation={2}
+        sx={{ 
+          p: isMobileView ? 2 : 2.5, 
+          mb: 2,
+          background: `linear-gradient(135deg, ${theme.palette.primary.main}08 0%, ${theme.palette.secondary.main}08 100%)`,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box 
+            sx={{ 
+              display: 'inline-flex',
+              p: 1,
+              borderRadius: 1,
+              backgroundColor: `${theme.palette.primary.main}15`,
+              mr: 1.5
+            }}
+          >
+            <AssessmentIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              {t('productionReport.timeAnalysis.gapAnalysis.title')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('productionReport.timeAnalysis.gapAnalysis.description')}
+            </Typography>
+          </Box>
+        </Box>
 
         <Grid container spacing={2} alignItems="center" sx={{ mt: 1 }}>
           {/* Zakres dat */}
@@ -914,124 +938,237 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
       {!loading && gapAnalysis && (
         <>
           {/* Podsumowanie */}
-          <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-            <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
-              <TrendingUpIcon />
-              {t('productionReport.timeAnalysis.gapAnalysis.summary.title')}
-            </Typography>
+          <Paper 
+            elevation={2}
+            sx={{ 
+              p: isMobileView ? 2 : 3, 
+              mb: 2,
+              background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box 
+                sx={{ 
+                  display: 'inline-flex',
+                  p: 1,
+                  borderRadius: 1,
+                  backgroundColor: `${theme.palette.info.main}15`,
+                  mr: 1.5
+                }}
+              >
+                <TrendingUpIcon sx={{ color: 'info.main', fontSize: 24 }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {t('productionReport.timeAnalysis.gapAnalysis.summary.title')}
+              </Typography>
+            </Box>
 
             <Grid container spacing={2}>
               <Grid item xs={12} md={4}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
+                <Card sx={{ 
+                  background: `linear-gradient(135deg, ${theme.palette.info.main}15 0%, ${theme.palette.info.main}05 100%)`,
+                  border: `1px solid ${theme.palette.info.main}30`
+                }}>
+                  <CardContent sx={{ py: 2.5 }}>
+                    <Box sx={{ 
+                      display: 'inline-flex',
+                      p: 1,
+                      borderRadius: '50%',
+                      backgroundColor: `${theme.palette.info.main}20`,
+                      mb: 1.5
+                    }}>
+                      <ScheduleIcon sx={{ fontSize: 24, color: 'info.main' }} />
+                    </Box>
+                    <Typography color="text.secondary" gutterBottom sx={{ fontWeight: 500 }}>
                       {t('productionReport.timeAnalysis.gapAnalysis.summary.period')}
                     </Typography>
-                    <Typography variant="h6">
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                       {gapAnalysis.period.startDate} - {gapAnalysis.period.endDate}
                     </Typography>
-                    <Typography variant="body2">
-                      {gapAnalysis.period.totalDays} dni roboczych
-                    </Typography>
+                    <Chip 
+                      label={`${gapAnalysis.period.totalDays} dni roboczych`}
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      sx={{ mt: 1 }}
+                    />
                     {gapAnalysis.period.limitedToToday && (
-                      <Typography variant="caption" color="info.main" sx={{ display: 'block', mt: 0.5 }}>
-                        ⚠️ {t('productionReport.timeAnalysis.gapAnalysis.limitedToToday', { originalEndDate: gapAnalysis.period.originalEndDate })}
-                      </Typography>
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        <Typography variant="caption">
+                          {t('productionReport.timeAnalysis.gapAnalysis.limitedToToday', { originalEndDate: gapAnalysis.period.originalEndDate })}
+                        </Typography>
+                      </Alert>
                     )}
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      {t('productionReport.timeAnalysis.gapAnalysis.summary.coverage')}
-                    </Typography>
-                    <Typography variant="h4" color={gapAnalysis.summary.overallCoverage > 70 ? 'success.main' : gapAnalysis.summary.overallCoverage > 40 ? 'warning.main' : 'error.main'}>
+                <Card sx={{ 
+                  background: `linear-gradient(135deg, ${
+                    gapAnalysis.summary.overallCoverage > 70 ? theme.palette.success.main :
+                    gapAnalysis.summary.overallCoverage > 40 ? theme.palette.warning.main :
+                    theme.palette.error.main
+                  }15 0%, ${
+                    gapAnalysis.summary.overallCoverage > 70 ? theme.palette.success.main :
+                    gapAnalysis.summary.overallCoverage > 40 ? theme.palette.warning.main :
+                    theme.palette.error.main
+                  }05 100%)`,
+                  border: `1px solid ${
+                    gapAnalysis.summary.overallCoverage > 70 ? theme.palette.success.main :
+                    gapAnalysis.summary.overallCoverage > 40 ? theme.palette.warning.main :
+                    theme.palette.error.main
+                  }30`
+                }}>
+                  <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                    <Box sx={{ 
+                      display: 'inline-flex',
+                      p: 1.5,
+                      borderRadius: '50%',
+                      backgroundColor: `${
+                        gapAnalysis.summary.overallCoverage > 70 ? theme.palette.success.main :
+                        gapAnalysis.summary.overallCoverage > 40 ? theme.palette.warning.main :
+                        theme.palette.error.main
+                      }20`,
+                      mb: 1.5
+                    }}>
+                      <CheckCircleIcon sx={{ 
+                        fontSize: 32, 
+                        color: gapAnalysis.summary.overallCoverage > 70 ? 'success.main' : gapAnalysis.summary.overallCoverage > 40 ? 'warning.main' : 'error.main'
+                      }} />
+                    </Box>
+                    <Typography variant="h3" sx={{ 
+                      fontWeight: 'bold',
+                      color: gapAnalysis.summary.overallCoverage > 70 ? 'success.main' : gapAnalysis.summary.overallCoverage > 40 ? 'warning.main' : 'error.main'
+                    }}>
                       {gapAnalysis.summary.overallCoverage}%
                     </Typography>
-                    <Typography variant="body2">
-                      pokrycie czasu pracy
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.coverage')}
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      {t('productionReport.timeAnalysis.gapAnalysis.summary.gapsFound')}
-                    </Typography>
-                    <Typography variant="h4" color={gapAnalysis.summary.gapsCount > 0 ? 'warning.main' : 'success.main'}>
+                <Card sx={{ 
+                  background: `linear-gradient(135deg, ${
+                    gapAnalysis.summary.gapsCount > 0 ? theme.palette.warning.main : theme.palette.success.main
+                  }15 0%, ${
+                    gapAnalysis.summary.gapsCount > 0 ? theme.palette.warning.main : theme.palette.success.main
+                  }05 100%)`,
+                  border: `1px solid ${
+                    gapAnalysis.summary.gapsCount > 0 ? theme.palette.warning.main : theme.palette.success.main
+                  }30`
+                }}>
+                  <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                    <Box sx={{ 
+                      display: 'inline-flex',
+                      p: 1.5,
+                      borderRadius: '50%',
+                      backgroundColor: `${
+                        gapAnalysis.summary.gapsCount > 0 ? theme.palette.warning.main : theme.palette.success.main
+                      }20`,
+                      mb: 1.5
+                    }}>
+                      {gapAnalysis.summary.gapsCount > 0 ? (
+                        <WarningIcon sx={{ fontSize: 32, color: 'warning.main' }} />
+                      ) : (
+                        <CheckCircleIcon sx={{ fontSize: 32, color: 'success.main' }} />
+                      )}
+                    </Box>
+                    <Typography variant="h3" sx={{ 
+                      fontWeight: 'bold',
+                      color: gapAnalysis.summary.gapsCount > 0 ? 'warning.main' : 'success.main'
+                    }}>
                       {gapAnalysis.summary.gapsCount}
                     </Typography>
-                    <Typography variant="body2">
-                      luk w produkcji
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.gapsFound')}
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={3}>
-                <Card variant="outlined" sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      {t('productionReport.timeAnalysis.gapAnalysis.summary.totalWorkTime')}
-                    </Typography>
-                    <Typography variant="h6">
+                <Card sx={{ 
+                  height: '100%',
+                  background: `linear-gradient(135deg, ${theme.palette.info.main}10 0%, ${theme.palette.info.main}03 100%)`,
+                  border: `1px solid ${theme.palette.info.main}20`
+                }}>
+                  <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                    <ScheduleIcon sx={{ fontSize: 28, color: 'info.main', mb: 1 }} />
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'info.main' }}>
                       {gapAnalysis.summary.totalWorkHours}h
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" display="block">
                       ({gapAnalysis.summary.totalWorkMinutes} min)
                     </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mt: 0.5 }}>
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.totalWorkTime')}
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={3}>
-                <Card variant="outlined" sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      {t('productionReport.timeAnalysis.gapAnalysis.summary.totalProductionTime')}
-                    </Typography>
-                    <Typography variant="h6" color="success.main">
+                <Card sx={{ 
+                  height: '100%',
+                  background: `linear-gradient(135deg, ${theme.palette.success.main}10 0%, ${theme.palette.success.main}03 100%)`,
+                  border: `1px solid ${theme.palette.success.main}20`
+                }}>
+                  <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                    <CheckCircleIcon sx={{ fontSize: 28, color: 'success.main', mb: 1 }} />
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.main' }}>
                       {gapAnalysis.summary.totalProductionHours}h
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" display="block">
                       ({gapAnalysis.summary.totalProductionMinutes} min)
                     </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mt: 0.5 }}>
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.totalProductionTime')}
+                    </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={3}>
-                <Card variant="outlined" sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      {t('productionReport.timeAnalysis.gapAnalysis.summary.totalGapTime')}
-                    </Typography>
-                    <Typography variant="h6" color="error.main">
+                <Card sx={{ 
+                  height: '100%',
+                  background: `linear-gradient(135deg, ${theme.palette.error.main}10 0%, ${theme.palette.error.main}03 100%)`,
+                  border: `1px solid ${theme.palette.error.main}20`
+                }}>
+                  <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                    <ErrorIcon sx={{ fontSize: 28, color: 'error.main', mb: 1 }} />
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'error.main' }}>
                       {gapAnalysis.summary.totalGapHours}h
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" display="block">
                       ({gapAnalysis.summary.totalGapMinutes} min)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mt: 0.5 }}>
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.totalGapTime')}
                     </Typography>
                   </CardContent>
                 </Card>
               </Grid>
 
               <Grid item xs={12} md={3}>
-                <Card variant="outlined" sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Typography color="text.secondary" gutterBottom>
-                      Dni z problemami
-                    </Typography>
-                    <Typography variant="h6" color="warning.main">
+                <Card sx={{ 
+                  height: '100%',
+                  background: `linear-gradient(135deg, ${theme.palette.warning.main}10 0%, ${theme.palette.warning.main}03 100%)`,
+                  border: `1px solid ${theme.palette.warning.main}20`
+                }}>
+                  <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                    <WarningIcon sx={{ fontSize: 28, color: 'warning.main', mb: 1 }} />
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'warning.main' }}>
                       {gapAnalysis.summary.daysWithGaps}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mt: 0.5 }}>
+                      Dni z problemami
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
                       dni z lukami
                     </Typography>
                   </CardContent>
@@ -1041,7 +1178,31 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
           </Paper>
 
           {/* Timeline produkcji i luk */}
-          <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
+          <Paper 
+            elevation={2}
+            sx={{ 
+              p: isMobileView ? 2 : 3, 
+              mb: 2,
+              background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box 
+                sx={{ 
+                  display: 'inline-flex',
+                  p: 1,
+                  borderRadius: 1,
+                  backgroundColor: `${theme.palette.secondary.main}15`,
+                  mr: 1.5
+                }}
+              >
+                <TimelineIcon sx={{ color: 'secondary.main', fontSize: 24 }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                Timeline produkcji i luk
+              </Typography>
+            </Box>
             <ProductionTimeline 
               data={timelineData} 
               workStartHour={workStartHour} 
@@ -1052,10 +1213,31 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
 
           {/* Wykres dzienny */}
           {chartData.length > 0 && (
-            <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                {t('productionReport.timeAnalysis.gapAnalysis.dailyAnalysis.title')}
-              </Typography>
+            <Paper 
+              elevation={2}
+              sx={{ 
+                p: isMobileView ? 2 : 3, 
+                mb: 2,
+                background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+                border: `1px solid ${theme.palette.divider}`
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Box 
+                  sx={{ 
+                    display: 'inline-flex',
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: `${theme.palette.primary.main}15`,
+                    mr: 1.5
+                  }}
+                >
+                  <BarChartIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('productionReport.timeAnalysis.gapAnalysis.dailyAnalysis.title')}
+                </Typography>
+              </Box>
               <Box sx={{ width: '100%', height: 400 }}>
                 <ResponsiveContainer>
                   <BarChart data={chartData}>
@@ -1109,10 +1291,31 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
 
           {/* Typy luk */}
           {gapTypesData.length > 0 && (
-            <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Rodzaje wykrytych luk
-              </Typography>
+            <Paper 
+              elevation={2}
+              sx={{ 
+                p: isMobileView ? 2 : 3, 
+                mb: 2,
+                background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+                border: `1px solid ${theme.palette.divider}`
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Box 
+                  sx={{ 
+                    display: 'inline-flex',
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: `${theme.palette.secondary.main}15`,
+                    mr: 1.5
+                  }}
+                >
+                  <PieChartIcon sx={{ color: 'secondary.main', fontSize: 24 }} />
+                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  Rodzaje wykrytych luk
+                </Typography>
+              </Box>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <ResponsiveContainer width="100%" height={300}>
@@ -1172,16 +1375,42 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
 
           {/* Lista luk */}
           {gapAnalysis.gaps.length > 0 && (
-            <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-              <Typography variant="h6" gutterBottom sx={flexCenterGap1}>
-                <WarningIcon />
-                {t('productionReport.timeAnalysis.gapAnalysis.gaps.title')}
-              </Typography>
+            <Paper 
+              elevation={2}
+              sx={{ 
+                p: isMobileView ? 2 : 3, 
+                mb: 2,
+                background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+                border: `1px solid ${theme.palette.divider}`
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Box 
+                  sx={{ 
+                    display: 'inline-flex',
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: `${theme.palette.warning.main}15`,
+                    mr: 1.5
+                  }}
+                >
+                  <WarningIcon sx={{ color: 'warning.main', fontSize: 24 }} />
+                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  {t('productionReport.timeAnalysis.gapAnalysis.gaps.title')}
+                </Typography>
+              </Box>
 
               <TableContainer>
-                <Table>
+                <Table stickyHeader>
                   <TableHead>
-                    <TableRow>
+                    <TableRow sx={{ 
+                      backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                      '& .MuiTableCell-root': {
+                        fontWeight: 'bold',
+                        borderBottom: `2px solid ${theme.palette.divider}`
+                      }
+                    }}>
                       <TableCell>{t('productionReport.timeAnalysis.gapAnalysis.gaps.type')}</TableCell>
                       <TableCell>{t('productionReport.timeAnalysis.gapAnalysis.gaps.date')}</TableCell>
                       <TableCell>{t('productionReport.timeAnalysis.gapAnalysis.gaps.time')}</TableCell>

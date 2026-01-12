@@ -57,26 +57,5 @@ export const recalculateShippedQuantities = async (orderId) => {
   }
 };
 
-/**
- * Ręczne wywołanie generowania cotygodniowego raportu konsumpcji MO
- * Generuje raport analizy konsumpcji z wykorzystaniem AI
- * 
- * @returns {Promise<Object>} Obiekt z wynikami generowania raportu
- */
-export const triggerWeeklyConsumptionReport = async () => {
-  try {
-    const triggerReportFn = httpsCallable(functions, 'triggerWeeklyConsumptionReport');
-    const result = await triggerReportFn();
-    return result.data;
-  } catch (error) {
-    console.error('Error calling triggerWeeklyConsumptionReport:', error);
-    throw new Error(`Nie udało się wygenerować raportu: ${error.message}`);
-  }
-};
-
-
-
-
-
 
 

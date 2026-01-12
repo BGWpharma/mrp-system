@@ -53,7 +53,9 @@ import {
   TrendingUp as TrendIcon,
   Assessment as AnalysisIcon,
   Timeline as TimelineIcon,
-  CalendarToday as WeeklyIcon
+  CalendarToday as WeeklyIcon,
+  BarChart as BarChartIcon,
+  PieChart as PieChartIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
@@ -403,6 +405,8 @@ const TimeAnalysisContent = ({
   showError,
   t
 }) => {
+  const theme = useTheme();
+  
   if (!timeAnalysis || timeAnalysis.totalSessions === 0) {
     return (
       <Paper sx={{ p: 3, textAlign: 'center' }}>
@@ -412,14 +416,35 @@ const TimeAnalysisContent = ({
       </Paper>
     );
   }
-
+  
   return (
     <Box sx={{ space: 2 }}>
       {/* Filtry */}
-      <Paper sx={{ p: isMobileView ? 1.5 : 3, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('productionReport.timeAnalysis.dateRange')}
-        </Typography>
+      <Paper 
+        elevation={2}
+        sx={{ 
+          p: isMobileView ? 2 : 2.5, 
+          mb: 2,
+          background: `linear-gradient(135deg, ${theme.palette.primary.main}08 0%, ${theme.palette.secondary.main}08 100%)`,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box 
+            sx={{ 
+              display: 'inline-flex',
+              p: 1,
+              borderRadius: 1,
+              backgroundColor: `${theme.palette.primary.main}15`,
+              mr: 1.5
+            }}
+          >
+            <TimeIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            {t('productionReport.timeAnalysis.dateRange')}
+          </Typography>
+        </Box>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={2.4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
@@ -515,74 +540,141 @@ const TimeAnalysisContent = ({
 
       {/* Podsumowanie */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
+        {/* Łączny czas */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <TimeIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h4" color="primary">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.primary.main}05 100%)`,
+            border: `1px solid ${theme.palette.primary.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.primary.main}20`,
+                mb: 1.5
+              }}>
+                <TimeIcon sx={{ fontSize: 32, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="h3" color="primary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {formatMinutes(filteredAnalysis.totalTimeMinutes)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 {t('productionReport.timeAnalysis.totalTime')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('productionReport.timeAnalysis.withFilter')}
-                </Typography>
+                <Chip 
+                  label={t('productionReport.timeAnalysis.withFilter')}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ mt: 1, fontSize: '0.7rem' }}
+                />
               )}
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Liczba sesji */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <TaskIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
-              <Typography variant="h4" color="secondary">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.secondary.main}15 0%, ${theme.palette.secondary.main}05 100%)`,
+            border: `1px solid ${theme.palette.secondary.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.secondary.main}20`,
+                mb: 1.5
+              }}>
+                <TaskIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
+              </Box>
+              <Typography variant="h3" color="secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {filteredAnalysis.totalSessions}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 {t('productionReport.timeAnalysis.totalSessions')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('productionReport.timeAnalysis.withFilter')}
-                </Typography>
+                <Chip 
+                  label={t('productionReport.timeAnalysis.withFilter')}
+                  size="small"
+                  color="secondary"
+                  variant="outlined"
+                  sx={{ mt: 1, fontSize: '0.7rem' }}
+                />
               )}
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Wyprodukowana ilość */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <AnalysisIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-              <Typography variant="h4" color="success.main">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.success.main}15 0%, ${theme.palette.success.main}05 100%)`,
+            border: `1px solid ${theme.palette.success.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.success.main}20`,
+                mb: 1.5
+              }}>
+                <AnalysisIcon sx={{ fontSize: 32, color: 'success.main' }} />
+              </Box>
+              <Typography variant="h3" color="success.main" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {filteredAnalysis.totalQuantity.toLocaleString('pl-PL')}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Łączna wyprodukowana ilość
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('productionReport.timeAnalysis.withFilter')}
-                </Typography>
+                <Chip 
+                  label={t('productionReport.timeAnalysis.withFilter')}
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  sx={{ mt: 1, fontSize: '0.7rem' }}
+                />
               )}
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Średni czas na jednostkę */}
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center' }}>
-              <TrendIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
-              <Typography variant="h4" color="warning.main">
+          <Card sx={{ 
+            background: `linear-gradient(135deg, ${theme.palette.warning.main}15 0%, ${theme.palette.warning.main}05 100%)`,
+            border: `1px solid ${theme.palette.warning.main}30`
+          }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+              <Box sx={{ 
+                display: 'inline-flex',
+                p: 1.5,
+                borderRadius: '50%',
+                backgroundColor: `${theme.palette.warning.main}20`,
+                mb: 1.5
+              }}>
+                <TrendIcon sx={{ fontSize: 32, color: 'warning.main' }} />
+              </Box>
+              <Typography variant="h3" color="warning.main" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                 {formatMinutes(filteredAnalysis.averageTimePerUnit)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Łączny czas / Łączną wyprodukowaną ilość
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {t('productionReport.timeAnalysis.withFilter')}
-                </Typography>
+                <Chip 
+                  label={t('productionReport.timeAnalysis.withFilter')}
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  sx={{ mt: 1, fontSize: '0.7rem' }}
+                />
               )}
             </CardContent>
           </Card>
@@ -593,10 +685,30 @@ const TimeAnalysisContent = ({
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {/* Wykres czasowy */}
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('productionReport.timeAnalysis.charts.timeDistribution')}
-            </Typography>
+          <Paper 
+            elevation={2}
+            sx={{ 
+              p: 3,
+              background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box 
+                sx={{ 
+                  display: 'inline-flex',
+                  p: 1,
+                  borderRadius: 1,
+                  backgroundColor: `${theme.palette.primary.main}15`,
+                  mr: 1.5
+                }}
+              >
+                <BarChartIcon sx={{ color: 'primary.main', fontSize: 24 }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {t('productionReport.timeAnalysis.charts.timeDistribution')}
+              </Typography>
+            </Box>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -622,10 +734,30 @@ const TimeAnalysisContent = ({
 
         {/* Wykres kołowy zadań */}
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('productionReport.timeAnalysis.taskBreakdown')}
-            </Typography>
+          <Paper 
+            elevation={2}
+            sx={{ 
+              p: 3,
+              background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+              border: `1px solid ${theme.palette.divider}`
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Box 
+                sx={{ 
+                  display: 'inline-flex',
+                  p: 1,
+                  borderRadius: 1,
+                  backgroundColor: `${theme.palette.secondary.main}15`,
+                  mr: 1.5
+                }}
+              >
+                <PieChartIcon sx={{ color: 'secondary.main', fontSize: 24 }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {t('productionReport.timeAnalysis.taskBreakdown')}
+              </Typography>
+            </Box>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -651,22 +783,52 @@ const TimeAnalysisContent = ({
       </Grid>
 
       {/* Tabela sesji */}
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          {t('productionReport.timeAnalysis.sessionsList')}
+      <Paper 
+        elevation={2}
+        sx={{ 
+          p: 3,
+          background: `linear-gradient(to bottom, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+          border: `1px solid ${theme.palette.divider}`
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box 
+              sx={{ 
+                display: 'inline-flex',
+                p: 1,
+                borderRadius: 1,
+                backgroundColor: `${theme.palette.info.main}15`,
+                mr: 1.5
+              }}
+            >
+              <TaskIcon sx={{ color: 'info.main', fontSize: 24 }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              {t('productionReport.timeAnalysis.sessionsList')}
+            </Typography>
+          </Box>
           {selectedTask !== 'all' && (
             <Chip 
               label={tasksMap[selectedTask]?.moNumber || tasksMap[selectedTask]?.name || selectedTask} 
-              size="small" 
-              sx={{ ml: 1 }} 
+              size="small"
+              color="primary"
+              variant="outlined"
+              sx={{ fontWeight: 'bold' }}
             />
           )}
-        </Typography>
+        </Box>
         
         <TableContainer>
-          <Table size={isMobileView ? "small" : "medium"}>
+          <Table size={isMobileView ? "small" : "medium"} stickyHeader>
             <TableHead>
-              <TableRow>
+              <TableRow sx={{ 
+                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                '& .MuiTableCell-root': {
+                  fontWeight: 'bold',
+                  borderBottom: `2px solid ${theme.palette.divider}`
+                }
+              }}>
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.date')}</TableCell>
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.task')}</TableCell>
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.startTime')}</TableCell>
