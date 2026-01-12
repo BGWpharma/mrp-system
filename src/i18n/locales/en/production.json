@@ -212,6 +212,77 @@
         "productionEfficiency": "Production Efficiency"
       }
     },
+    "weeklyProductivity": {
+      "title": "Weekly Productivity Reports",
+      "description": "Analysis of production efficiency in weekly view",
+      "noData": "No weekly data to display. Change date range to see weekly analysis.",
+      "metrics": {
+        "productivity": "Productivity",
+        "avgProductivity": "Average Productivity",
+        "maxProductivity": "Best Productivity",
+        "minProductivity": "Worst Productivity",
+        "efficiency": "Efficiency",
+        "trend": "Trend",
+        "productivityUnit": "pcs/h"
+      },
+      "trends": {
+        "improving": "Productivity improving",
+        "declining": "Productivity declining",
+        "stable": "Productivity stable",
+        "generalTrend": "General trend"
+      },
+      "insights": {
+        "title": "Insights",
+        "productivityRising": "Productivity rising",
+        "productivityFalling": "Productivity falling",
+        "significantIncrease": "Significant increase",
+        "significantDecrease": "Significant decrease",
+        "newRecord": "New record!",
+        "lowEfficiency": "Low time efficiency",
+        "dominantProduct": "Dominant product"
+      },
+      "comparison": {
+        "title": "Compare two weeks",
+        "compare": "Compare weeks",
+        "week1": "Week 1",
+        "week2": "Week 2",
+        "productivity": "Productivity:",
+        "produced": "Produced:",
+        "workTime": "Work time:",
+        "sessions": "Sessions:",
+        "efficiency": "Efficiency:",
+        "topProducts": "Top 3 products:"
+      },
+      "table": {
+        "week": "Week",
+        "time": "Time (h)",
+        "quantity": "Quantity",
+        "productivity": "Productivity (pcs/h)",
+        "trend": "Trend",
+        "efficiency": "Effic.",
+        "topProduct": "Top product",
+        "details": "Details"
+      },
+      "details": {
+        "title": "Week details",
+        "dailyBreakdown": "Daily breakdown",
+        "productBreakdown": "Breakdown by products",
+        "day": "Day",
+        "product": "Product"
+      },
+      "charts": {
+        "trendTitle": "Productivity trend over time",
+        "typeProductivity": "Productivity",
+        "typeQuantity": "Quantity",
+        "typeTime": "Work time",
+        "typeAll": "All"
+      },
+      "summary": {
+        "analyzedWeeks": "Analyzed weeks",
+        "bestWeek": "Best week",
+        "worstWeek": "Worst week"
+      }
+    },
     "tableHeaders": {
       "taskName": "Task Name",
       "moNumber": "MO No.",

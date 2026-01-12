@@ -338,3 +338,4 @@ W razie pytań lub problemów:
 - Zobacz README: `SENTRY_IMPLEMENTATION_SUMMARY.md`
 - Dokumentacja: `src/utils/SENTRY_ERROR_HANDLING.md`
 
+

@@ -174,7 +174,92 @@
       "noMo": "Brak MO",
       "withFilter": "(z filtrem)",
       "taskDeletedLabel": "Zadanie usunięte",
+      "noDataForPeriod": "Brak danych do analizy dla wybranego okresu",
+      "noSessionsForCriteria": "Brak sesji spełniających wybrane kryteria",
+      "taskNotExistsError": "Zadanie nie istnieje lub zostało usunięte",
+      "charts": {
+        "timeDistribution": "Rozkład czasu"
+      },
+      "tableHeaders": {
+        "date": "Data",
+        "task": "Zadanie",
+        "startTime": "Start",
+        "endTime": "Koniec",
+        "timeSpent": "Czas trwania",
+        "quantity": "Ilość"
+      },
       "gapAnalysis": {
+      "title": "Tygodniówki wydajności",
+      "description": "Analiza wydajności produkcji w układzie tygodniowym",
+      "noData": "Brak danych tygodniowych do wyświetlenia. Zmień zakres dat aby zobaczyć analizę tygodniową.",
+      "metrics": {
+        "productivity": "Wydajność",
+        "avgProductivity": "Średnia wydajność",
+        "maxProductivity": "Najlepsza wydajność",
+        "minProductivity": "Najgorsza wydajność",
+        "efficiency": "Efektywność",
+        "trend": "Trend",
+        "productivityUnit": "szt/h"
+      },
+      "trends": {
+        "improving": "Wydajność rośnie",
+        "declining": "Wydajność spada",
+        "stable": "Wydajność stabilna",
+        "generalTrend": "Ogólny trend"
+      },
+      "insights": {
+        "title": "Spostrzeżenia",
+        "productivityRising": "Wydajność rośnie",
+        "productivityFalling": "Spadek wydajności",
+        "significantIncrease": "Znaczący wzrost",
+        "significantDecrease": "Znaczący spadek",
+        "newRecord": "Nowy rekord!",
+        "lowEfficiency": "Niska efektywność czasu",
+        "dominantProduct": "Dominujący produkt"
+      },
+      "comparison": {
+        "title": "Porównanie dwóch tygodni",
+        "compare": "Porównaj tygodnie",
+        "week1": "Tydzień 1",
+        "week2": "Tydzień 2",
+        "productivity": "Wydajność:",
+        "produced": "Wyprodukowano:",
+        "workTime": "Czas pracy:",
+        "sessions": "Sesji:",
+        "efficiency": "Efektywność:",
+        "topProducts": "Top 3 produkty:"
+      },
+      "table": {
+        "week": "Tydzień",
+        "time": "Czas (h)",
+        "quantity": "Ilość",
+        "productivity": "Wydajność (szt/h)",
+        "trend": "Trend",
+        "efficiency": "Efekt.",
+        "topProduct": "Top produkt",
+        "details": "Szczegóły"
+      },
+      "details": {
+        "title": "Szczegóły tygodnia",
+        "dailyBreakdown": "Rozkład dzienny",
+        "productBreakdown": "Breakdown według produktów",
+        "day": "Dzień",
+        "product": "Produkt"
+      },
+      "charts": {
+        "trendTitle": "Trend wydajności w czasie",
+        "typeProductivity": "Wydajność",
+        "typeQuantity": "Ilość",
+        "typeTime": "Czas pracy",
+        "typeAll": "Wszystkie"
+      },
+      "summary": {
+        "analyzedWeeks": "Analizowanych tygodni",
+        "bestWeek": "Najlepszy tydzień",
+        "worstWeek": "Najgorszy tydzień"
+      }
+    },
+    "gapAnalysis": {
         "title": "Analiza luk w produkcji",
         "description": "Sprawdzenie ciągłości czasu produkcji",
         "workingHours": "Godziny pracy zakładu",
@@ -244,43 +329,77 @@
           "quantity": "Ilość",
           "product": "Produkt"
         }
+      }
+    },
+    "weeklyProductivity": {
+      "title": "Tygodniówki wydajności",
+      "description": "Analiza wydajności produkcji w układzie tygodniowym",
+      "noData": "Brak danych tygodniowych do wyświetlenia. Zmień zakres dat aby zobaczyć analizę tygodniową.",
+      "metrics": {
+        "productivity": "Wydajność",
+        "avgProductivity": "Średnia wydajność",
+        "maxProductivity": "Najlepsza wydajność",
+        "minProductivity": "Najgorsza wydajność",
+        "efficiency": "Efektywność",
+        "trend": "Trend",
+        "productivityUnit": "szt/h"
       },
-      "noSessionsForCriteria": "Brak sesji dla wybranych kryteriów",
-      "noDataForPeriod": "Brak danych dla wybranego okresu",
-      "taskNotExistsError": "To zadanie produkcyjne już nie istnieje w systemie",
-      "tableHeaders": {
-        "date": "Data",
-        "task": "Zadanie MO",
-        "startTime": "Początek",
-        "endTime": "Koniec",
-        "timeSpent": "Czas",
+      "trends": {
+        "improving": "Wydajność rośnie",
+        "declining": "Wydajność spada",
+        "stable": "Wydajność stabilna",
+        "generalTrend": "Ogólny trend"
+      },
+      "insights": {
+        "title": "Spostrzeżenia",
+        "productivityRising": "Wydajność rośnie",
+        "productivityFalling": "Spadek wydajności",
+        "significantIncrease": "Znaczący wzrost",
+        "significantDecrease": "Znaczący spadek",
+        "newRecord": "Nowy rekord!",
+        "lowEfficiency": "Niska efektywność czasu",
+        "dominantProduct": "Dominujący produkt"
+      },
+      "comparison": {
+        "title": "Porównanie dwóch tygodni",
+        "compare": "Porównaj tygodnie",
+        "week1": "Tydzień 1",
+        "week2": "Tydzień 2",
+        "productivity": "Wydajność:",
+        "produced": "Wyprodukowano:",
+        "workTime": "Czas pracy:",
+        "sessions": "Sesji:",
+        "efficiency": "Efektywność:",
+        "topProducts": "Top 3 produkty:"
+      },
+      "table": {
+        "week": "Tydzień",
+        "time": "Czas (h)",
         "quantity": "Ilość",
-        "totalTime": "Łączny czas",
-        "sessionsCount": "Liczba sesji",
-        "averageTime": "Średni czas",
-        "period": "Okres",
-        "taskName": "Nazwa zadania",
-        "moNumber": "Nr MO"
+        "productivity": "Wydajność (szt/h)",
+        "trend": "Trend",
+        "efficiency": "Efekt.",
+        "topProduct": "Top produkt",
+        "details": "Szczegóły"
+      },
+      "details": {
+        "title": "Szczegóły tygodnia",
+        "dailyBreakdown": "Rozkład dzienny",
+        "productBreakdown": "Breakdown według produktów",
+        "day": "Dzień",
+        "product": "Produkt"
       },
       "charts": {
-        "timeDistribution": "Rozkład czasu",
-        "dailyTrend": "Trend dzienny",
-        "weeklyTrend": "Trend tygodniowy",
-        "monthlyTrend": "Trend miesięczny",
-        "timeHours": "Czas (h)",
-        "sessions": "Sesje",
-        "quantity": "Ilość"
-      },
-      "filters": {
-        "dateRange": "Zakres dat",
-        "task": "Zadanie",
-        "allTasks": "Wszystkie zadania"
+        "trendTitle": "Trend wydajności w czasie",
+        "typeProductivity": "Wydajność",
+        "typeQuantity": "Ilość",
+        "typeTime": "Czas pracy",
+        "typeAll": "Wszystkie"
       },
       "summary": {
-        "noData": "Brak danych dla wybranego okresu",
-        "dataRange": "Dane za okres od {{startDate}} do {{endDate}}",
-        "totalTimeSpent": "Łączny czas poświęcony na produkcję",
-        "productionEfficiency": "Wydajność produkcji"
+        "analyzedWeeks": "Analizowanych tygodni",
+        "bestWeek": "Najlepszy tydzień",
+        "worstWeek": "Najgorszy tydzień"
       }
     },
     "tableHeaders": {

@@ -52,7 +52,8 @@ import {
   Assignment as TaskIcon,
   TrendingUp as TrendIcon,
   Assessment as AnalysisIcon,
-  Timeline as TimelineIcon
+  Timeline as TimelineIcon,
+  CalendarToday as WeeklyIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
@@ -64,6 +65,7 @@ import {
 } from '../../services/productionTimeAnalysisService';
 import { getRecipeById } from '../../services/recipeService';
 import ProductionGapAnalysisTab from './ProductionGapAnalysisTab';
+import WeeklyProductivityTab from './WeeklyProductivityTab';
 
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
   const { t } = useTranslation('production');
@@ -157,7 +159,7 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
 
   // Załaduj dane przy montowaniu komponentu i zmianie dat
   useEffect(() => {
-    if (selectedTab === 0) { // Tylko dla zakładki analizy czasu
+    if (selectedTab === 0 || selectedTab === 1) { // Dla zakładki analizy czasu i tygodniówek
       fetchTimeAnalysisData();
     }
   }, [timeAnalysisStartDate, timeAnalysisEndDate, selectedTab]);
@@ -307,6 +309,12 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
             sx={{ minHeight: 48 }}
           />
           <Tab 
+            icon={<WeeklyIcon />} 
+            label="Tygodniówki" 
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
+          <Tab 
             icon={<TimelineIcon />} 
             label="Analiza luk" 
             iconPosition="start"
@@ -345,6 +353,20 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
       )}
 
       {selectedTab === 1 && (
+        <WeeklyProductivityTab
+          timeAnalysis={timeAnalysis}
+          tasksMap={tasksMap}
+          isMobileView={isMobileView}
+          startDate={timeAnalysisStartDate}
+          endDate={timeAnalysisEndDate}
+          onDateChange={(newStartDate, newEndDate) => {
+            setTimeAnalysisStartDate(newStartDate);
+            setTimeAnalysisEndDate(newEndDate);
+          }}
+        />
+      )}
+
+      {selectedTab === 2 && (
         <ProductionGapAnalysisTab
           startDate={startDate}
           endDate={endDate}
