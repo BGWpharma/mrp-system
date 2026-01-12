@@ -251,7 +251,8 @@ function App() {
           minHeight: '100vh',
           padding: 3,
           textAlign: 'center',
-          gap: 2
+          gap: 2,
+          backgroundColor: 'background.default'
         }}>
           <Typography variant="h4" color="error" gutterBottom>
             Ups! Coś poszło nie tak
@@ -261,16 +262,24 @@ function App() {
           </Typography>
           {process.env.NODE_ENV === 'development' && error && (
             <Box sx={{ 
-              backgroundColor: '#f5f5f5', 
+              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
               padding: 2, 
               borderRadius: 1,
               maxWidth: 800,
               width: '100%',
               textAlign: 'left',
               overflow: 'auto',
-              mb: 2
+              mb: 2,
+              border: (theme) => `1px solid ${theme.palette.divider}`
             }}>
-              <Typography variant="caption" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+              <Typography 
+                variant="caption" 
+                component="pre" 
+                sx={{ 
+                  whiteSpace: 'pre-wrap',
+                  color: 'text.primary'
+                }}
+              >
                 {error.toString()}
               </Typography>
             </Box>

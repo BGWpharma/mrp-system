@@ -156,7 +156,6 @@ import {
   Inventory2 as Materials2Icon,
   Factory as ProductionIcon,
   Assignment as FormIcon,
-  Timeline as TimelineIcon,
   Refresh as RefreshIcon,
   Calculate as CalculateIcon,
   Close as CloseIcon
@@ -251,7 +250,6 @@ const mt4 = { mt: 4 };
 
 // ✅ Lazy loading komponentów zakładek dla lepszej wydajności
 const EndProductReportTab = lazy(() => import('../../components/production/EndProductReportTab'));
-const ChangeHistoryTab = lazy(() => import('../../components/production/ChangeHistoryTab'));
 const FormsTab = lazy(() => import('../../components/production/FormsTab'));
 const ProductionPlanTab = lazy(() => import('../../components/production/ProductionPlanTab'));
 const MaterialsAndCostsTab = lazy(() => import('../../components/production/MaterialsAndCostsTab'));
@@ -617,7 +615,6 @@ const TaskDetailsPage = () => {
   const [loadedTabs, setLoadedTabs] = useState({
     productionPlan: false,     // Historia produkcji, plan mieszań
     forms: false,              // Formularze produkcyjne
-    changeHistory: false,      // Historia zmian
     endProductReport: false    // Raport gotowego produktu
   });
 
@@ -669,27 +666,6 @@ const TaskDetailsPage = () => {
       setFormResponses({ completedMO: [], productionControl: [], productionShift: [] });
     }
   }, [loadedTabs.forms, task?.moNumber]);
-
-  const loadChangeHistoryData = useCallback(async () => {
-    if (loadedTabs.changeHistory || !task?.statusHistory?.length) return;
-    
-    try {
-      // Ładowanie historii zmian
-      
-      // Pobierz nazwy użytkowników dla historii zmian (jeśli nie zostały załadowane)
-      const userIds = task.statusHistory.map(change => change.changedBy).filter(id => id);
-      const uniqueUserIds = [...new Set(userIds)];
-      
-      if (uniqueUserIds.length > 0) {
-        await fetchUserNames(uniqueUserIds);
-      }
-      
-      setLoadedTabs(prev => ({ ...prev, changeHistory: true }));
-      // Historia zmian załadowana
-    } catch (error) {
-      console.error('❌ Error loading Change History data:', error);
-    }
-  }, [loadedTabs.changeHistory, task?.statusHistory, userNames]);
 
   const loadEndProductReportData = useCallback(async () => {
     if (loadedTabs.endProductReport) return;
@@ -807,10 +783,7 @@ const TaskDetailsPage = () => {
       case 3: // Formularze
         loadFormsData();
         break;
-      case 4: // Historia zmian
-        loadChangeHistoryData();
-        break;
-      case 5: // Raport gotowego produktu
+      case 4: // Raport gotowego produktu
         loadEndProductReportData();
         break;
       default:
@@ -834,20 +807,14 @@ const TaskDetailsPage = () => {
           loadFormsData();
         }
         break;
-      case 4: // Historia zmian
-        if (!loadedTabs.changeHistory && task?.statusHistory?.length) {
-          console.log('⚡ [PREFETCH] Prefetch danych historii zmian...');
-          loadChangeHistoryData();
-        }
-        break;
-      case 5: // Raport gotowego produktu
+      case 4: // Raport gotowego produktu
         if (!loadedTabs.endProductReport && task?.id) {
           console.log('⚡ [PREFETCH] Prefetch danych raportu produktu...');
           loadEndProductReportData();
         }
         break;
     }
-  }, [loadedTabs, task?.id, task?.moNumber, task?.statusHistory, loadProductionPlanData, loadFormsData, loadChangeHistoryData, loadEndProductReportData]);
+  }, [loadedTabs, task?.id, task?.moNumber, loadProductionPlanData, loadFormsData, loadEndProductReportData]);
 
   // ⚡ OPTYMALIZACJA: useRef dla debounceTimer aby uniknąć race condition w cleanup
   const debounceTimerRef = useRef(null);
@@ -8642,16 +8609,10 @@ const TaskDetailsPage = () => {
                 onMouseEnter={() => handleTabHover(3)}
               />
               <Tab 
-                label={t('tabs.changeHistory')} 
-                icon={<TimelineIcon />} 
-                iconPosition="start"
-                onMouseEnter={() => handleTabHover(4)}
-              />
-              <Tab 
                 label={t('tabs.finishedProductReport')} 
                 icon={<AssessmentIcon />} 
                 iconPosition="start"
-                onMouseEnter={() => handleTabHover(5)}
+                onMouseEnter={() => handleTabHover(4)}
               />
             </Tabs>
           </Box>
@@ -8792,19 +8753,7 @@ const TaskDetailsPage = () => {
             </Suspense>
           )}
 
-          {mainTab === 4 && ( // Zakładka "Historia zmian"
-            <Suspense fallback={
-              <Box sx={boxP2}>
-                <Skeleton variant="rectangular" height={300} sx={skeletonStyle} />
-                <Skeleton variant="text" width="80%" height={40} />
-                <Skeleton variant="text" width="60%" height={40} />
-              </Box>
-            }>
-              <ChangeHistoryTab task={task} getUserName={getUserName} />
-            </Suspense>
-          )}
-
-          {mainTab === 5 && ( // Zakładka "Raport gotowego produktu"
+          {mainTab === 4 && ( // Zakładka "Raport gotowego produktu"
             <Suspense fallback={
               <Box sx={boxP2}>
                 <Skeleton variant="rectangular" height={500} sx={skeletonStyle} />

@@ -58,6 +58,11 @@ import {
   AccountBalance as AccountBalanceIcon,
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  ShoppingCart as ShoppingCartIcon,
+  Factory as FactoryIcon,
+  LocalShipping as LocalShippingIcon,
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -1500,7 +1505,18 @@ const COReportsPage = () => {
         </Box>
 
         {/* Filtry */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: 3, mb: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+          <Box sx={{ mb: 2, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <FilterIcon sx={{ mr: 1, color: 'primary.main' }} />
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Filtry raportu
+              </Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              Wybierz zakres dat i filtruj według klienta lub produktu
+            </Typography>
+          </Box>
           <Grid container spacing={3} alignItems="center">
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
@@ -1548,41 +1564,59 @@ const COReportsPage = () => {
             </Grid>
             
             <Grid item xs={12} md={2}>
-              <Box sx={{ display: 'flex', flexDirection: 'row' }}>
-                <Button 
-                  variant="outlined" 
-                  onClick={() => {
-                    const prevStart = new Date(startDate);
-                    const prevEnd = new Date(endDate);
-                    const diff = endDate - startDate;
-                    prevStart.setTime(prevStart.getTime() - diff);
-                    prevEnd.setTime(prevEnd.getTime() - diff);
-                    setStartDate(prevStart);
-                    setEndDate(prevEnd);
-                    setReportPeriod(TIME_PERIODS.CUSTOM);
-                  }}
-                  sx={{ mr: 1, minWidth: 0, p: 1 }}
-                  size="small"
-                >
-                  <PrevIcon fontSize="small" />
-                </Button>
-                <Button 
-                  variant="outlined" 
-                  onClick={() => {
-                    const nextStart = new Date(startDate);
-                    const nextEnd = new Date(endDate);
-                    const diff = endDate - startDate;
-                    nextStart.setTime(nextStart.getTime() + diff);
-                    nextEnd.setTime(nextEnd.getTime() + diff);
-                    setStartDate(nextStart);
-                    setEndDate(nextEnd);
-                    setReportPeriod(TIME_PERIODS.CUSTOM);
-                  }}
-                  sx={{ minWidth: 0, p: 1 }}
-                  size="small"
-                >
-                  <NextIcon fontSize="small" />
-                </Button>
+              <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
+                <Tooltip title="Poprzedni okres">
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      const prevStart = new Date(startDate);
+                      const prevEnd = new Date(endDate);
+                      const diff = endDate - startDate;
+                      prevStart.setTime(prevStart.getTime() - diff);
+                      prevEnd.setTime(prevEnd.getTime() - diff);
+                      setStartDate(prevStart);
+                      setEndDate(prevEnd);
+                      setReportPeriod(TIME_PERIODS.CUSTOM);
+                    }}
+                    sx={{ 
+                      minWidth: 0, 
+                      p: 1,
+                      '&:hover': {
+                        transform: 'translateX(-2px)',
+                        transition: 'transform 0.2s'
+                      }
+                    }}
+                    size="small"
+                  >
+                    <PrevIcon fontSize="small" />
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Następny okres">
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      const nextStart = new Date(startDate);
+                      const nextEnd = new Date(endDate);
+                      const diff = endDate - startDate;
+                      nextStart.setTime(nextStart.getTime() + diff);
+                      nextEnd.setTime(nextEnd.getTime() + diff);
+                      setStartDate(nextStart);
+                      setEndDate(nextEnd);
+                      setReportPeriod(TIME_PERIODS.CUSTOM);
+                    }}
+                    sx={{ 
+                      minWidth: 0, 
+                      p: 1,
+                      '&:hover': {
+                        transform: 'translateX(2px)',
+                        transition: 'transform 0.2s'
+                      }
+                    }}
+                    size="small"
+                  >
+                    <NextIcon fontSize="small" />
+                  </Button>
+                </Tooltip>
               </Box>
             </Grid>
           </Grid>
@@ -1676,52 +1710,108 @@ const COReportsPage = () => {
                 {productStats && (
                   <Grid container spacing={3} sx={{ mb: 3 }}>
                     <Grid item xs={12} md={3}>
-                      <Card>
-                        <CardContent>
-                          <Typography color="textSecondary" gutterBottom>
-                            {t('coReports.productionCosts.productStats.avgFullUnitCost')}
-                          </Typography>
-                          <Typography variant="h5" component="div">
-                            {formatCurrency(productStats.avgFullUnitCost)}
-                          </Typography>
-                        </CardContent>
-                      </Card>
+                      <Tooltip title="Średni koszt bazowy materiałów na jednostkę produktu" placement="top" arrow>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          color: 'white',
+                          transition: 'transform 0.2s, box-shadow 0.2s',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                          }
+                        }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <TrendingUpIcon sx={{ mr: 1, opacity: 0.8 }} />
+                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                {t('coReports.productionCosts.productStats.avgFullUnitCost')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+                              {formatCurrency(productStats.avgFullUnitCost)}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Tooltip>
                     </Grid>
                     <Grid item xs={12} md={3}>
-                      <Card>
-                        <CardContent>
-                          <Typography color="textSecondary" gutterBottom>
-                            {t('coReports.productionCosts.productStats.minFullUnitCost')}
-                          </Typography>
-                          <Typography variant="h5" component="div">
-                            {formatCurrency(productStats.minFullUnitCost)}
-                          </Typography>
-                        </CardContent>
-                      </Card>
+                      <Tooltip title="Minimalny koszt jednostkowy - najniższy koszt produkcji" placement="top" arrow>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                          color: 'white',
+                          transition: 'transform 0.2s, box-shadow 0.2s',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                          }
+                        }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <TrendingDownIcon sx={{ mr: 1, opacity: 0.8 }} />
+                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                {t('coReports.productionCosts.productStats.minFullUnitCost')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+                              {formatCurrency(productStats.minFullUnitCost)}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Tooltip>
                     </Grid>
                     <Grid item xs={12} md={3}>
-                      <Card>
-                        <CardContent>
-                          <Typography color="textSecondary" gutterBottom>
-                            {t('coReports.productionCosts.productStats.maxFullUnitCost')}
-                          </Typography>
-                          <Typography variant="h5" component="div">
-                            {formatCurrency(productStats.maxFullUnitCost)}
-                          </Typography>
-                        </CardContent>
-                      </Card>
+                      <Tooltip title="Maksymalny koszt jednostkowy - najwyższy koszt produkcji" placement="top" arrow>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                          color: 'white',
+                          transition: 'transform 0.2s, box-shadow 0.2s',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                          }
+                        }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <TrendingUpIcon sx={{ mr: 1, opacity: 0.8 }} />
+                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                {t('coReports.productionCosts.productStats.maxFullUnitCost')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+                              {formatCurrency(productStats.maxFullUnitCost)}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Tooltip>
                     </Grid>
                     <Grid item xs={12} md={3}>
-                      <Card>
-                        <CardContent>
-                          <Typography color="textSecondary" gutterBottom>
-                            {t('coReports.cards.totalOrders')}
-                          </Typography>
-                          <Typography variant="h5" component="div">
-                            {productStats.orderCount}
-                          </Typography>
-                        </CardContent>
-                      </Card>
+                      <Tooltip title="Liczba zamówień (MO) dla tego produktu" placement="top" arrow>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                          color: 'white',
+                          transition: 'transform 0.2s, box-shadow 0.2s',
+                          cursor: 'pointer',
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                          }
+                        }}>
+                          <CardContent>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                              <ShoppingCartIcon sx={{ mr: 1, opacity: 0.8 }} />
+                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                {t('coReports.cards.totalOrders')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+                              {productStats.orderCount}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Tooltip>
                     </Grid>
                   </Grid>
                 )}
@@ -2038,40 +2128,91 @@ const COReportsPage = () => {
             
             {!selectedProduct && (
               <>
-                {/* Karty ze statystykami kosztów - widok oryginalny dla wszystkich produktów */}
+                {/* Karty ze statystykami kosztów - widok dla wszystkich produktów */}
                 <Grid container spacing={3} sx={{ mb: 3 }}>
                   <Grid item xs={12} md={4}>
-                    <Card>
+                    <Card sx={{ 
+                      height: '100%',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                      }
+                    }}>
                       <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          {t('coReports.productionCosts.cards.itemsWithCosts')}
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {costStats.totalItems}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                          <FactoryIcon sx={{ fontSize: 40, opacity: 0.9, mr: 2 }} />
+                          <Box>
+                            <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
+                              {t('coReports.productionCosts.cards.itemsWithCosts')}
+                            </Typography>
+                            <Typography variant="h3" component="div" sx={{ fontWeight: 'bold' }}>
+                              {costStats.totalItems}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                          Zadań produkcyjnych z kosztami
                         </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid item xs={12} md={4}>
-                    <Card>
+                    <Card sx={{ 
+                      height: '100%',
+                      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                      color: 'white',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                      }
+                    }}>
                       <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          {t('coReports.productionCosts.cards.totalProductionCost')}
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {formatCurrency(costStats.totalProductionCost)}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                          <MoneyIcon sx={{ fontSize: 40, opacity: 0.9, mr: 2 }} />
+                          <Box>
+                            <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
+                              {t('coReports.productionCosts.cards.totalProductionCost')}
+                            </Typography>
+                            <Typography variant="h3" component="div" sx={{ fontWeight: 'bold' }}>
+                              {formatCurrency(costStats.totalProductionCost)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                          Łączny koszt materiałów
                         </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                   <Grid item xs={12} md={4}>
-                    <Card>
+                    <Card sx={{ 
+                      height: '100%',
+                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                      color: 'white',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+                      }
+                    }}>
                       <CardContent>
-                        <Typography color="textSecondary" gutterBottom>
-                          {t('coReports.productionCosts.cards.totalFullProductionCost')}
-                        </Typography>
-                        <Typography variant="h4" component="div">
-                          {formatCurrency(costStats.totalFullProductionCost)}
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                          <AccountBalanceIcon sx={{ fontSize: 40, opacity: 0.9, mr: 2 }} />
+                          <Box>
+                            <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
+                              {t('coReports.productionCosts.cards.totalFullProductionCost')}
+                            </Typography>
+                            <Typography variant="h3" component="div" sx={{ fontWeight: 'bold' }}>
+                              {formatCurrency(costStats.totalFullProductionCost)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                          Pełny koszt bazowy produkcji
                         </Typography>
                       </CardContent>
                     </Card>
@@ -2079,41 +2220,145 @@ const COReportsPage = () => {
                 </Grid>
                 
                 {/* Tabela kosztów według produktów */}
-                <Paper sx={{ mb: 3 }}>
-                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="h6" component="h3">
-                      {t('coReports.productionCosts.byProduct.title')}
+                <Paper sx={{ mb: 3, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                  <Box sx={{ 
+                    p: 3, 
+                    background: 'linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%)',
+                    borderBottom: '2px solid',
+                    borderColor: 'primary.main'
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <AssessmentIcon sx={{ mr: 1.5, color: 'primary.main', fontSize: 28 }} />
+                      <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                        {t('coReports.productionCosts.byProduct.title')}
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Szczegółowa analiza kosztów według produktów
                     </Typography>
                   </Box>
-                  <TableContainer>
-                    <Table size="small">
+                  <TableContainer sx={{ maxHeight: 600 }}>
+                    <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell>{t('coReports.table.product')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.totalQuantity')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.productionCost')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.fullCost')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.fullCostPerUnit')}</TableCell>
-                          <TableCell align="center">{t('coReports.table.actions')}</TableCell>
+                          <TableCell sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.product')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.totalQuantity')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.productionCost')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.fullCost')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.ordersCount')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.fullCostPerUnit')}
+                          </TableCell>
+                          <TableCell align="center" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.actions')}
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {costStats.costsByProduct.map((product, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{product.name}</TableCell>
-                            <TableCell align="right">{product.totalQuantity}</TableCell>
-                            <TableCell align="right">{formatCurrency(product.totalCost)}</TableCell>
-                            <TableCell align="right">{formatCurrency(product.totalFullCost)}</TableCell>
-                            <TableCell align="right">{product.taskCount || product.orderCount}</TableCell>
+                          <TableRow 
+                            key={index}
+                            hover
+                            sx={{ 
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: 'action.hover',
+                                '& .MuiTableCell-root': {
+                                  color: 'primary.main'
+                                }
+                              },
+                              transition: 'all 0.2s'
+                            }}
+                            onClick={() => setSelectedProduct(product.name)}
+                          >
+                            <TableCell sx={{ fontWeight: 500 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ 
+                                  width: 4, 
+                                  height: 24, 
+                                  backgroundColor: 'primary.main', 
+                                  mr: 1.5,
+                                  borderRadius: 1
+                                }} />
+                                {product.name}
+                              </Box>
+                            </TableCell>
                             <TableCell align="right">
+                              <Chip 
+                                label={product.totalQuantity} 
+                                size="small" 
+                                variant="outlined"
+                                color="primary"
+                              />
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                              {formatCurrency(product.totalCost)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.9rem', fontWeight: 600 }}>
+                              {formatCurrency(product.totalFullCost)}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Chip 
+                                label={product.taskCount || product.orderCount} 
+                                size="small" 
+                                color="secondary"
+                              />
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
                               {formatCurrency(product.totalQuantity > 0 ? product.totalFullCost / product.totalQuantity : 0)}
                             </TableCell>
                             <TableCell align="center">
                               <Tooltip title={t('coReports.productionCosts.byProduct.showProductDetails')}>
                                 <IconButton 
                                   size="small"
-                                  onClick={() => {
+                                  color="primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setSelectedProduct(product.name);
                                   }}
                                 >
@@ -2129,31 +2374,114 @@ const COReportsPage = () => {
                 </Paper>
                 
                 {/* Tabela kosztów według klientów */}
-                <Paper sx={{ mb: 3 }}>
-                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="h6" component="h3">
-                      {t('coReports.productionCosts.byCustomer.title')}
+                <Paper sx={{ mb: 3, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                  <Box sx={{ 
+                    p: 3, 
+                    background: 'linear-gradient(135deg, rgba(79,172,254,0.08) 0%, rgba(0,242,254,0.08) 100%)',
+                    borderBottom: '2px solid',
+                    borderColor: 'info.main'
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <LocalShippingIcon sx={{ mr: 1.5, color: 'info.main', fontSize: 28 }} />
+                      <Typography variant="h6" component="h3" sx={{ fontWeight: 600 }}>
+                        {t('coReports.productionCosts.byCustomer.title')}
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Koszty produkcji według klientów
                     </Typography>
                   </Box>
-                  <TableContainer>
-                    <Table size="small">
+                  <TableContainer sx={{ maxHeight: 500 }}>
+                    <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell>{t('coReports.table.customer')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.productionCost')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.fullCost')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.ordersCount')}</TableCell>
-                          <TableCell align="right">{t('coReports.table.itemsCount')}</TableCell>
+                          <TableCell sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.customer')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.productionCost')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.fullCost')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.ordersCount')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ 
+                            fontWeight: 600, 
+                            backgroundColor: 'background.paper',
+                            borderBottom: '2px solid',
+                            borderColor: 'divider'
+                          }}>
+                            {t('coReports.table.itemsCount')}
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {costStats.costsByCustomer.map((customer, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{customer.name}</TableCell>
-                            <TableCell align="right">{formatCurrency(customer.totalCost)}</TableCell>
-                            <TableCell align="right">{formatCurrency(customer.totalFullCost)}</TableCell>
-                            <TableCell align="right">{customer.orderCount}</TableCell>
-                            <TableCell align="right">{customer.taskCount || customer.itemCount}</TableCell>
+                          <TableRow 
+                            key={index}
+                            hover
+                            sx={{ 
+                              '&:hover': {
+                                backgroundColor: 'action.hover',
+                              },
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <TableCell sx={{ fontWeight: 500 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ 
+                                  width: 4, 
+                                  height: 24, 
+                                  backgroundColor: 'info.main', 
+                                  mr: 1.5,
+                                  borderRadius: 1
+                                }} />
+                                {customer.name}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                              {formatCurrency(customer.totalCost)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.9rem', fontWeight: 600 }}>
+                              {formatCurrency(customer.totalFullCost)}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Chip 
+                                label={customer.orderCount} 
+                                size="small" 
+                                color="success"
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Chip 
+                                label={customer.taskCount || customer.itemCount} 
+                                size="small" 
+                                variant="outlined"
+                                color="info"
+                              />
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2170,30 +2498,58 @@ const COReportsPage = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4" component="h1">
-          {t('coReports.title')}
-        </Typography>
-      </Box>
+      <Paper 
+        elevation={0}
+        sx={{ 
+          p: 4, 
+          mb: 4, 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          borderRadius: 2,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
+              📊 {t('coReports.title')}
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.9 }}>
+              Kompleksowa analiza kosztów produkcji, raportów finansowych i przepływów pieniężnych
+            </Typography>
+          </Box>
+        </Box>
+      </Paper>
       
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+      <Paper elevation={0} sx={{ mb: 3, borderRadius: 2, overflow: 'hidden' }}>
         <Tabs 
           value={selectedTab} 
           onChange={handleTabChange} 
           aria-label={t('coReports.aria.tabs')}
           sx={{
+            backgroundColor: 'background.paper',
             '& .MuiTab-root': {
-              fontWeight: 'bold',
-              py: 2
+              fontWeight: 600,
+              py: 2.5,
+              px: 4,
+              minHeight: 64,
+              fontSize: '1rem',
+              transition: 'all 0.3s',
+              '&:hover': {
+                backgroundColor: 'action.hover',
+                transform: 'translateY(-2px)'
+              }
             },
             '& .Mui-selected': {
               color: 'primary.main',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              backgroundColor: 'action.selected'
             },
             '& .MuiTabs-indicator': {
-              height: 3,
-              borderTopLeftRadius: 3,
-              borderTopRightRadius: 3
+              height: 4,
+              borderTopLeftRadius: 4,
+              borderTopRightRadius: 4,
+              backgroundColor: 'primary.main'
             }
           }}
         >
@@ -2201,22 +2557,19 @@ const COReportsPage = () => {
             label={t('coReports.tabs.productionCosts')}
             icon={<MoneyIcon />} 
             iconPosition="start"
-            sx={{ fontSize: '1rem' }}
           />
           <Tab 
             label={t('coReports.tabs.financialReport')}
             icon={<AssessmentIcon />} 
             iconPosition="start"
-            sx={{ fontSize: '1rem' }}
           />
           <Tab 
             label={t('coReports.tabs.cashflow')}
             icon={<AccountBalanceIcon />} 
             iconPosition="start"
-            sx={{ fontSize: '1rem' }}
           />
         </Tabs>
-      </Box>
+      </Paper>
       
       <Box sx={{ py: 3 }}>
         {selectedTab === 0 && <ProductionCostsTab />}

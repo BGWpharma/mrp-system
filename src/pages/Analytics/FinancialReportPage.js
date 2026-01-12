@@ -40,7 +40,8 @@ import {
   Factory as FactoryIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
-  OpenInNew as OpenInNewIcon
+  OpenInNew as OpenInNewIcon,
+  FilterList as FilterListIcon
 } from '@mui/icons-material';
 
 import {
@@ -218,20 +219,37 @@ const FinancialReportPage = () => {
     page * rowsPerPage + rowsPerPage
   );
   
+  const gradients = {
+    primary: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    success: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
+    error: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    warning: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    info: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+  };
+
   const StatCard = ({ title, value, icon: Icon, color = 'primary', subtitle }) => (
-    <Card sx={{ height: '100%' }}>
+    <Card sx={{ 
+      height: '100%',
+      background: gradients[color] || gradients.primary,
+      color: 'white',
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      '&:hover': {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 24px rgba(0,0,0,0.15)'
+      }
+    }}>
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Icon sx={{ fontSize: 40, color: `${color}.main`, mr: 2 }} />
+          <Icon sx={{ fontSize: 40, opacity: 0.9, mr: 2 }} />
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" color="textSecondary" gutterBottom>
+            <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
               {title}
             </Typography>
-            <Typography variant="h4" component="div">
+            <Typography variant="h3" component="div" sx={{ fontWeight: 'bold' }}>
               {value}
             </Typography>
             {subtitle && (
-              <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
+              <Typography variant="caption" sx={{ mt: 0.5, opacity: 0.8, display: 'block' }}>
                 {subtitle}
               </Typography>
             )}
@@ -244,38 +262,76 @@ const FinancialReportPage = () => {
   return (
     <Box>
       {/* Nagłówek */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" gutterBottom>
-            📊 {t('title')}
-          </Typography>
-          <Typography variant="subtitle1" color="textSecondary">
-            {t('subtitle')}
-          </Typography>
+      <Paper 
+        elevation={0}
+        sx={{ 
+          p: 3, 
+          mb: 3,
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          borderRadius: 2,
+          boxShadow: '0 4px 12px rgba(102,126,234,0.3)'
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+              📊 {t('title')}
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.95 }}>
+              {t('subtitle')}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleGenerateReport}
+              disabled={loading}
+              sx={{ 
+                color: 'white',
+                borderColor: 'white',
+                '&:hover': {
+                  borderColor: 'white',
+                  backgroundColor: 'rgba(255,255,255,0.1)'
+                }
+              }}
+            >
+              {t('buttons.generateReport')}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportCSV}
+              disabled={!filteredData.length || loading}
+              sx={{ 
+                backgroundColor: 'white',
+                color: 'primary.main',
+                fontWeight: 600,
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.9)'
+                }
+              }}
+            >
+              {t('buttons.exportCsv')}
+            </Button>
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={handleGenerateReport}
-            disabled={loading}
-          >
-            {t('buttons.generateReport')}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            onClick={handleExportCSV}
-            disabled={!filteredData.length || loading}
-          >
-            {t('buttons.exportCsv')}
-          </Button>
-        </Box>
-      </Box>
+      </Paper>
       
       {/* Filtry */}
-      <Card sx={{ mb: 3 }}>
-        <CardHeader title={t('filters.title')} />
+      <Card sx={{ mb: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <CardHeader 
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <FilterListIcon sx={{ mr: 1, color: 'primary.main' }} />
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {t('filters.title')}
+              </Typography>
+            </Box>
+          }
+          subheader="Analiza łańcucha: PO → Partia → MO → CO → Faktura"
+        />
         <Divider />
         <CardContent>
           <Grid container spacing={2}>
