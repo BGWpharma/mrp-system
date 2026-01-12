@@ -79,7 +79,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useNotification } from '../../../hooks/useNotification';
 import { getAllOrders, updateOrder, getOrdersByDateRange } from '../../../services/orderService';
 import { getAllCustomers } from '../../../services/customerService';
-import { getTaskById, getMultipleTasksById } from '../../../services/productionService';
+import { getTaskById, getMultipleTasksById, getTasksWithCosts } from '../../../services/productionService';
 import { getAllInventoryItems } from '../../../services/inventory/inventoryItemsService';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { exportToCSV, exportToPDF, exportToExcel, formatDateForExport, formatCurrencyForExport } from '../../../utils/exportUtils';
@@ -143,6 +143,7 @@ const COReportsPage = () => {
   // Stan komponentu
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
+  const [allOrdersForLinking, setAllOrdersForLinking] = useState([]); // NOWE: wszystkie zamówienia dla linkowania z MO
   const [customers, setCustomers] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedTab, setSelectedTab] = useState(0);
@@ -168,6 +169,10 @@ const COReportsPage = () => {
   
   // Stan dla wybranego produktu
   const [selectedProduct, setSelectedProduct] = useState('');
+  
+  // NOWE: Stan dla zadań produkcyjnych (dla raportu kosztów)
+  const [productionTasks, setProductionTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
   
   // Pobieranie danych - zoptymalizowane dla zakresu dat
   useEffect(() => {
@@ -220,6 +225,18 @@ const COReportsPage = () => {
     
     return () => clearTimeout(timeoutId);
   }, [startDate, endDate, selectedCustomer]);
+  
+  // NOWE: Odświeżaj zadania produkcyjne gdy zmienią się filtry (tylko dla zakładki Koszty produkcji)
+  useEffect(() => {
+    if (selectedTab === 0 && !loading) { // Tylko dla zakładki Koszty produkcji i po załadowaniu
+      const timeoutId = setTimeout(() => {
+        console.log('🔄 Odświeżanie zadań produkcyjnych po zmianie filtrów...');
+        fetchProductionTasks();
+      }, 500); // Debounce 500ms
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [startDate, endDate, selectedTab]);
   
   // Funkcja pomocnicza do sprawdzania cache
   const getCachedOrders = async (startDate, endDate, customerId) => {
@@ -275,6 +292,38 @@ const COReportsPage = () => {
     ordersCache.customerId = customerId;
 
     return orders;
+  };
+
+  // NOWA: Funkcja do pobierania zadań produkcyjnych dla raportu kosztów
+  const fetchProductionTasks = async () => {
+    try {
+      setTasksLoading(true);
+      console.log('🔄 [NOWE PODEJŚCIE] Pobieranie zadań produkcyjnych z kosztami...');
+      console.log('📅 Zakres dat:', {
+        startDate: startDate?.toISOString?.(),
+        endDate: endDate?.toISOString?.()
+      });
+      
+      // Użyj gotowej funkcji getTasksWithCosts
+      const tasks = await getTasksWithCosts(
+        startDate,
+        endDate,
+        'completed', // Tylko zakończone zadania
+        'all' // Wszystkie produkty (filtrowanie po stronie klienta)
+      );
+      
+      console.log(`✅ Pobrano ${tasks.length} zadań produkcyjnych z kosztami`);
+      setProductionTasks(tasks);
+      
+      return tasks;
+    } catch (error) {
+      console.error('❌ Błąd podczas pobierania zadań produkcyjnych:', error);
+      showError('Nie udało się pobrać zadań produkcyjnych');
+      setProductionTasks([]);
+      return [];
+    } finally {
+      setTasksLoading(false);
+    }
   };
 
   // Zoptymalizowana funkcja batch sprawdzania zadań produkcyjnych
@@ -392,9 +441,18 @@ const COReportsPage = () => {
       
       setOrders(cleanedOrders);
       
+      // NOWE: Pobierz WSZYSTKIE zamówienia (bez filtrowania po datach) do linkowania z MO
+      console.log('📥 Pobieranie wszystkich zamówień dla linkowania z MO...');
+      const allOrders = await getAllOrders(selectedCustomer !== 'all' ? { customerId: selectedCustomer } : {});
+      setAllOrdersForLinking(allOrders || []);
+      console.log(`✅ Pobrano ${allOrders?.length || 0} zamówień dla linkowania`);
+      
       // Pobierz wszystkich klientów
       const allCustomers = await getAllCustomers();
       setCustomers(allCustomers || []);
+      
+      // NOWE: Pobierz zadania produkcyjne dla raportu kosztów
+      await fetchProductionTasks();
       
       const endTime = performance.now();
       console.log(`⚡ fetchData zakończone w ${Math.round(endTime - startTime)}ms`);
@@ -591,6 +649,12 @@ const COReportsPage = () => {
       
       setOrders(syncedOrders);
       
+      // NOWE: Odśwież również wszystkie zamówienia dla linkowania
+      console.log('📥 Odświeżanie wszystkich zamówień dla linkowania...');
+      const allOrders = await getAllOrders(selectedCustomer !== 'all' ? { customerId: selectedCustomer } : {});
+      setAllOrdersForLinking(allOrders || []);
+      console.log(`✅ Odświeżono ${allOrders?.length || 0} zamówień dla linkowania`);
+      
       // Pobierz klientów
       const allCustomers = await getAllCustomers();
       setCustomers(allCustomers || []);
@@ -733,133 +797,233 @@ const COReportsPage = () => {
     setSelectedTab(newValue);
   };
 
-  // Funkcja do obliczania kosztów produkcji - ZOPTYMALIZOWANA z memoizacją
+  // NOWA FUNKCJA: Obliczanie kosztów produkcji na podstawie zadań produkcyjnych
   const calculateProductionCosts = React.useCallback(() => {
     const productionCosts = [];
     
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('🔍 [KOSZT PRODUKCJI - NOWE PODEJŚCIE] Obliczanie na podstawie zadań produkcyjnych');
+    console.log('📅 Zakres dat:', {
+      startDate: startDate?.toISOString?.() || startDate,
+      endDate: endDate?.toISOString?.() || endDate
+    });
+    console.log('📦 Liczba zadań produkcyjnych:', productionTasks.length);
+    console.log('📦 Liczba zamówień (dla linkowania):', allOrdersForLinking.length);
+    console.log('📦 Liczba zamówień (filtrowane w zakresie dat):', orders.length);
+    console.log('🎯 Filtr produktu:', selectedProduct || 'Wszystkie');
+    
+    let acceptedCount = 0;
+    let rejectedByProduct = 0;
+    let rejectedByCost = 0;
+    
     try {
-      filteredOrders.forEach(order => {
-        if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-          order.items.forEach(item => {
-            // Sprawdź, czy pozycja ma koszt produkcji I przypisane zadanie produkcyjne
-            if ((item.productionCost && parseFloat(item.productionCost) > 0) || 
-                (item.productionTaskId && item.productionTaskNumber)) {
-              try {
-                // Tylko dodaj pozycję jeśli ma rzeczywiste dane zadania produkcyjnego
-                if (item.productionTaskId && item.productionTaskNumber && item.productionTaskNumber !== 'N/A') {
-                  // Sprawdź status zadania produkcyjnego - uwzględniaj tylko zadania "Zakończone"
-                  const taskData = tasksCache.data.get(item.productionTaskId);
-                  const taskStatus = taskData?.status || item.productionStatus;
-                  
-                  // Pomiń zadania, które nie mają statusu "Zakończone"
-                  if (taskStatus !== 'Zakończone') {
-                    return; // Pomiń tę pozycję
-                  }
-                  
-                  const quantity = parseFloat(item.quantity) || 0;
-                  const fullProductionUnitCost = parseFloat(item.fullProductionUnitCost || 0);
-                  const totalFullProductionCost = quantity * parseFloat(item.fullProductionUnitCost || item.fullProductionCost || 0);
-                  
-                  // Oblicz rzeczywisty czas produkcji z sesji produkcyjnych
-                  let actualProductionTime = 0;
-                  if (taskData && taskData.productionSessions && Array.isArray(taskData.productionSessions)) {
-                    actualProductionTime = taskData.productionSessions.reduce((total, session) => {
-                      return total + (parseFloat(session.timeSpent) || 0);
-                    }, 0);
-                  }
-                  
-                  // Filtruj pozycje z zerowymi kosztami - pomiń jeśli pełny koszt jednostkowy i łączny pełny koszt to 0
-                  if (fullProductionUnitCost > 0 || totalFullProductionCost > 0) {
-                    productionCosts.push({
-                      orderId: order.id,
-                      orderNumber: order.orderNumber || order.id,
-                      orderDate: order.orderDate,
-                      customerName: order.customer?.name || 'Nieznany klient',
-                      itemName: item.name || 'Produkt bez nazwy',
-                      quantity: quantity,
-                      unit: item.unit || 'szt.',
-                      productionTaskId: item.productionTaskId,
-                      productionTaskNumber: item.productionTaskNumber,
-                      productionCost: parseFloat(item.productionCost || 0),
-                      fullProductionCost: parseFloat(item.fullProductionCost || 0),
-                      unitProductionCost: parseFloat(item.productionUnitCost || 0),
-                      fullProductionUnitCost: fullProductionUnitCost,
-                      totalItemValue: quantity * (parseFloat(item.price) || 0),
-                      totalProductionCost: quantity * parseFloat(item.productionUnitCost || item.productionCost || 0),
-                      totalFullProductionCost: totalFullProductionCost,
-                      actualProductionTimeMinutes: actualProductionTime,
-                      actualProductionTimeHours: actualProductionTime > 0 ? (actualProductionTime / 60).toFixed(2) : 0
-                    });
-                  }
-                }
-              } catch (itemError) {
-                console.error('Błąd podczas przetwarzania pozycji zamówienia:', itemError, item);
+      // Iteruj przez zadania produkcyjne zamiast przez zamówienia
+      if (!productionTasks || productionTasks.length === 0) {
+        console.log('⚠️ Brak zadań produkcyjnych do przetworzenia');
+        return productionCosts;
+      }
+      
+      productionTasks.forEach(task => {
+        try {
+          // Filtruj według produktu (jeśli wybrany)
+          if (selectedProduct && task.productName !== selectedProduct) {
+            rejectedByProduct++;
+            return;
+          }
+          
+          // Sprawdź czy zadanie ma koszty
+          const totalMaterialCost = parseFloat(task.totalMaterialCost) || 0;
+          const totalFullProductionCost = parseFloat(task.totalFullProductionCost) || 0;
+          
+          if (totalFullProductionCost <= 0) {
+            rejectedByCost++;
+            return;
+          }
+          
+          // Oblicz dodatkowe dane
+          const completedQuantity = parseFloat(task.completedQuantity) || parseFloat(task.totalCompletedQuantity) || 0;
+          const unitMaterialCost = task.unitMaterialCost || (completedQuantity > 0 ? totalMaterialCost / completedQuantity : 0);
+          const unitFullCost = task.unitFullCost || (completedQuantity > 0 ? totalFullProductionCost / completedQuantity : 0);
+          
+          // Czas produkcji jest już obliczony przez getTasksWithCosts
+          const totalProductionTime = parseFloat(task.totalProductionTime) || 0;
+          const totalProductionTimeHours = task.totalProductionTimeHours || (totalProductionTime > 0 ? (totalProductionTime / 60).toFixed(2) : 0);
+          
+          // Znajdź powiązane zamówienie klienta (jeśli istnieje)
+          let linkedOrder = null;
+          let customerName = 'Brak przypisania';
+          let orderNumber = '-';
+          
+          // Szukaj w WSZYSTKICH zamówieniach (nie tylko z zakresu dat) czy jakiekolwiek item ma productionTaskId === task.id
+          for (const order of allOrdersForLinking) {
+            if (order.items && Array.isArray(order.items)) {
+              const linkedItem = order.items.find(item => item.productionTaskId === task.id);
+              if (linkedItem) {
+                linkedOrder = order;
+                customerName = order.customer?.name || 'Nieznany klient';
+                orderNumber = order.orderNumber || '-';
+                break;
               }
             }
+          }
+          
+          // Filtr klienta - pomiń zadania które nie są powiązane z wybranym klientem
+          if (selectedCustomer !== 'all') {
+            if (!linkedOrder || linkedOrder.customer?.id !== selectedCustomer) {
+              return; // Pomiń - nie jest powiązane z wybranym klientem
+            }
+          }
+          
+          // Dodaj do wyników
+          acceptedCount++;
+          productionCosts.push({
+            // Dane zadania
+            taskId: task.id,
+            moNumber: task.moNumber || 'N/A',
+            productName: task.productName || 'Brak nazwy',
+            quantity: completedQuantity,
+            unit: 'szt.',
+            status: task.status,
+            
+            // Daty
+            completionDate: task.completionDate,
+            taskCompletionDate: task.completionDate, // Alias dla kompatybilności
+            scheduledDate: task.scheduledDate,
+            
+            // Koszty
+            totalMaterialCost: totalMaterialCost,
+            totalFullProductionCost: totalFullProductionCost,
+            unitMaterialCost: unitMaterialCost,
+            unitFullCost: unitFullCost,
+            fullProductionUnitCost: unitFullCost, // Alias dla kompatybilności
+            processingCostPerUnit: parseFloat(task.processingCostPerUnit) || 0,
+            totalProcessingCost: task.totalProcessingCost || 0,
+            
+            // Czas produkcji
+            totalProductionTimeMinutes: totalProductionTime,
+            totalProductionTimeHours: totalProductionTimeHours,
+            actualProductionTimeMinutes: totalProductionTime, // Alias
+            actualProductionTimeHours: totalProductionTimeHours, // Alias
+            
+            // Powiązane zamówienie (opcjonalnie)
+            linkedOrderNumber: orderNumber,
+            orderNumber: orderNumber, // Alias
+            customerName: customerName,
+            hasLinkedOrder: !!linkedOrder,
+            orderId: linkedOrder?.id || null,
+            orderDate: linkedOrder?.orderDate || null,
+            
+            // Dodatkowe dane
+            productId: task.productId,
+            recipeId: task.recipeId,
+            recipeName: task.recipeName,
+            productionTaskId: task.id, // Alias dla kompatybilności
+            productionTaskNumber: task.moNumber, // Alias
+            itemName: task.productName, // Alias dla kompatybilności
+            
+            // Dla kompatybilności z eksportem
+            totalItemValue: 0, // Nie mamy ceny sprzedaży w zadaniu
+            totalProductionCost: totalMaterialCost, // Używamy kosztu materiałów
+            productionCost: unitMaterialCost,
+            fullProductionCost: totalFullProductionCost,
+            unitProductionCost: unitMaterialCost
           });
+          
+        } catch (taskError) {
+          console.error('❌ Błąd podczas przetwarzania zadania:', taskError, task);
         }
       });
     } catch (error) {
-      console.error('Błąd podczas obliczania kosztów produkcji:', error);
+      console.error('❌ Błąd podczas obliczania kosztów produkcji:', error);
     }
     
+    // Sortuj według daty zakończenia (najnowsze najpierw)
+    productionCosts.sort((a, b) => {
+      const dateA = a.completionDate || new Date(0);
+      const dateB = b.completionDate || new Date(0);
+      return dateB - dateA;
+    });
+    
+    console.log('\n📊 [PODSUMOWANIE] Wyniki przetwarzania:');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📦 Zadań produkcyjnych przetworzonych: ${productionTasks.length}`);
+    console.log(`✅ Zaakceptowanych: ${acceptedCount}`);
+    console.log(`❌ Odrzuconych razem: ${rejectedByProduct + rejectedByCost}`);
+    console.log('   Powody odrzucenia:');
+    console.log(`   • Filtr produktu: ${rejectedByProduct}`);
+    console.log(`   • Zerowe koszty: ${rejectedByCost}`);
+    console.log(`🎯 Zwracam ${productionCosts.length} zadań do raportu`);
+    console.log('═══════════════════════════════════════════════════════════════\n');
+    
     return productionCosts;
-  }, [filteredOrders, selectedProduct, tasksCache]); // Zoptymalizowane dependencies + tasksCache dla czasu produkcji
+  }, [productionTasks, allOrdersForLinking, startDate, endDate, selectedCustomer, selectedProduct]); // ZAKTUALIZOWANE: używamy allOrdersForLinking zamiast orders
 
-  // Funkcja do obliczania statystyk kosztów produkcji - ZOPTYMALIZOWANA z memoizacją
+  // NOWA FUNKCJA: Obliczanie statystyk kosztów produkcji - dostosowana do zadań
   const calculateProductionCostStats = React.useCallback((productionCosts) => {
     const totalItems = productionCosts.length;
-    const totalProductionCost = productionCosts.reduce((sum, item) => sum + item.totalProductionCost, 0);
-    const totalFullProductionCost = productionCosts.reduce((sum, item) => sum + item.totalFullProductionCost, 0);
-    const totalItemValue = productionCosts.reduce((sum, item) => sum + item.totalItemValue, 0);
+    const totalQuantity = productionCosts.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const totalMaterialCost = productionCosts.reduce((sum, item) => sum + (item.totalMaterialCost || 0), 0);
+    const totalFullProductionCost = productionCosts.reduce((sum, item) => sum + (item.totalFullProductionCost || 0), 0);
     
     // Grupowanie po produktach
     const costsByProduct = {};
     productionCosts.forEach(item => {
-      if (!costsByProduct[item.itemName]) {
-        costsByProduct[item.itemName] = {
-          name: item.itemName,
+      const productName = item.productName || item.itemName || 'Nieznany produkt';
+      
+      if (!costsByProduct[productName]) {
+        costsByProduct[productName] = {
+          name: productName,
           totalQuantity: 0,
           totalCost: 0,
           totalFullCost: 0,
+          taskCount: 0
+        };
+      }
+      
+      costsByProduct[productName].totalQuantity += item.quantity || 0;
+      costsByProduct[productName].totalCost += item.totalMaterialCost || 0;
+      costsByProduct[productName].totalFullCost += item.totalFullProductionCost || 0;
+      costsByProduct[productName].taskCount += 1;
+    });
+    
+    // Grupowanie po klientach (tylko dla zadań z powiązanym CO)
+    const costsByCustomer = {};
+    productionCosts.forEach(item => {
+      if (!item.hasLinkedOrder) return; // Pomiń zadania bez powiązania z CO
+      
+      const customerName = item.customerName || 'Nieznany klient';
+      
+      if (!costsByCustomer[customerName]) {
+        costsByCustomer[customerName] = {
+          name: customerName,
+          totalCost: 0,
+          totalFullCost: 0,
+          taskCount: 0,
           orderCount: 0
         };
       }
       
-      costsByProduct[item.itemName].totalQuantity += item.quantity;
-      costsByProduct[item.itemName].totalCost += item.totalProductionCost;
-      costsByProduct[item.itemName].totalFullCost += item.totalFullProductionCost;
-      costsByProduct[item.itemName].orderCount += 1;
-    });
-    
-    // Grupowanie po klientach
-    const costsByCustomer = {};
-    productionCosts.forEach(item => {
-      if (!costsByCustomer[item.customerName]) {
-        costsByCustomer[item.customerName] = {
-          name: item.customerName,
-          totalCost: 0,
-          totalFullCost: 0,
-          orderCount: 0,
-          itemCount: 0
-        };
+      costsByCustomer[customerName].totalCost += item.totalMaterialCost || 0;
+      costsByCustomer[customerName].totalFullCost += item.totalFullProductionCost || 0;
+      costsByCustomer[customerName].taskCount += 1;
+      // Zliczamy unikalne zamówienia
+      if (item.orderId) {
+        costsByCustomer[customerName].orderCount += 1;
       }
-      
-      costsByCustomer[item.customerName].totalCost += item.totalProductionCost;
-      costsByCustomer[item.customerName].totalFullCost += item.totalFullProductionCost;
-      costsByCustomer[item.customerName].orderCount += 1;
-      costsByCustomer[item.customerName].itemCount += 1;
     });
     
     return {
       totalItems,
-      totalProductionCost,
+      totalQuantity,
+      totalProductionCost: totalMaterialCost, // Alias dla kompatybilności
+      totalMaterialCost,
       totalFullProductionCost,
-      totalItemValue,
-      avgProductionCost: totalItems > 0 ? totalProductionCost / totalItems : 0,
+      totalItemValue: 0, // Nie mamy wartości sprzedaży w zadaniach
+      avgProductionCost: totalItems > 0 ? totalMaterialCost / totalItems : 0,
       avgFullProductionCost: totalItems > 0 ? totalFullProductionCost / totalItems : 0,
-      productionCostRatio: totalItemValue > 0 ? (totalProductionCost / totalItemValue) * 100 : 0,
-      fullProductionCostRatio: totalItemValue > 0 ? (totalFullProductionCost / totalItemValue) * 100 : 0,
+      avgUnitCost: totalQuantity > 0 ? totalFullProductionCost / totalQuantity : 0,
+      productionCostRatio: 0, // Nie obliczamy bez wartości sprzedaży
+      fullProductionCostRatio: 0, // Nie obliczamy bez wartości sprzedaży
       costsByProduct: Object.values(costsByProduct),
       costsByCustomer: Object.values(costsByCustomer)
     };
@@ -905,16 +1069,10 @@ const COReportsPage = () => {
             orderDate = new Date(); // Domyślna data
           }
           
-          // Pobierz dane zadania z cache, aby uzyskać rzeczywisty czas produkcji
-          const taskData = tasksCache.data.get(item.productionTaskId);
-          let actualProductionTime = 0;
-          
-          if (taskData && taskData.productionSessions && Array.isArray(taskData.productionSessions)) {
-            // Oblicz całkowity czas produkcji z wszystkich sesji (timeSpent jest w minutach)
-            actualProductionTime = taskData.productionSessions.reduce((total, session) => {
-              return total + (parseFloat(session.timeSpent) || 0);
-            }, 0);
-          }
+          // Użyj danych czasu produkcji które już są w item (przychodzą z productionCosts)
+          const actualProductionTimeMinutes = item.totalProductionTimeMinutes || item.actualProductionTimeMinutes || 0;
+          const actualProductionTimeHours = item.totalProductionTimeHours || item.actualProductionTimeHours || 
+            (actualProductionTimeMinutes > 0 ? (actualProductionTimeMinutes / 60).toFixed(2) : 0);
           
           return {
             date: orderDate,
@@ -925,8 +1083,8 @@ const COReportsPage = () => {
             totalFullCost: item.totalFullProductionCost,
             productionTaskId: item.productionTaskId,
             productionTaskNumber: item.productionTaskNumber,
-            actualProductionTimeMinutes: actualProductionTime,
-            actualProductionTimeHours: actualProductionTime > 0 ? (actualProductionTime / 60).toFixed(2) : 0
+            actualProductionTimeMinutes: actualProductionTimeMinutes,
+            actualProductionTimeHours: actualProductionTimeHours
           };
         }).sort((a, b) => a.date - b.date);
         
@@ -1072,7 +1230,9 @@ const COReportsPage = () => {
       
       // Jeśli wybrano konkretny produkt, filtruj dane
       if (selectedProduct) {
-        dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+        dataToExport = productionCosts.filter(item => 
+          (item.itemName === selectedProduct) || (item.productName === selectedProduct)
+        );
         console.log('🔍 Export CSV - filtering for product:', selectedProduct, 'found items:', dataToExport.length);
       } else {
         console.log('🔍 Export CSV - no product selected, exporting all data');
@@ -1133,7 +1293,9 @@ const COReportsPage = () => {
       
       // Jeśli wybrano konkretny produkt, filtruj dane
       if (selectedProduct) {
-        dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+        dataToExport = productionCosts.filter(item => 
+          (item.itemName === selectedProduct) || (item.productName === selectedProduct)
+        );
       }
       
       if (dataToExport.length === 0) {
@@ -1203,7 +1365,9 @@ const COReportsPage = () => {
       
       // Jeśli wybrano konkretny produkt, filtruj dane
       if (selectedProduct) {
-        dataToExport = productionCosts.filter(item => item.itemName === selectedProduct);
+        dataToExport = productionCosts.filter(item => 
+          (item.itemName === selectedProduct) || (item.productName === selectedProduct)
+        );
       }
       
       if (dataToExport.length === 0) {
@@ -1941,7 +2105,7 @@ const COReportsPage = () => {
                             <TableCell align="right">{product.totalQuantity}</TableCell>
                             <TableCell align="right">{formatCurrency(product.totalCost)}</TableCell>
                             <TableCell align="right">{formatCurrency(product.totalFullCost)}</TableCell>
-                            <TableCell align="right">{product.orderCount}</TableCell>
+                            <TableCell align="right">{product.taskCount || product.orderCount}</TableCell>
                             <TableCell align="right">
                               {formatCurrency(product.totalQuantity > 0 ? product.totalFullCost / product.totalQuantity : 0)}
                             </TableCell>
@@ -1989,7 +2153,7 @@ const COReportsPage = () => {
                             <TableCell align="right">{formatCurrency(customer.totalCost)}</TableCell>
                             <TableCell align="right">{formatCurrency(customer.totalFullCost)}</TableCell>
                             <TableCell align="right">{customer.orderCount}</TableCell>
-                            <TableCell align="right">{customer.itemCount}</TableCell>
+                            <TableCell align="right">{customer.taskCount || customer.itemCount}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -2055,15 +2219,9 @@ const COReportsPage = () => {
       </Box>
       
       <Box sx={{ py: 3 }}>
-        <Box sx={{ display: selectedTab === 0 ? 'block' : 'none' }}>
-          <ProductionCostsTab />
-        </Box>
-        <Box sx={{ display: selectedTab === 1 ? 'block' : 'none' }}>
-          <FinancialReportTab />
-        </Box>
-        <Box sx={{ display: selectedTab === 2 ? 'block' : 'none' }}>
-          <CashflowTab />
-        </Box>
+        {selectedTab === 0 && <ProductionCostsTab />}
+        {selectedTab === 1 && <FinancialReportTab />}
+        {selectedTab === 2 && <CashflowTab />}
       </Box>
     </Container>
   );

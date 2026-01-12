@@ -6594,3 +6594,251 @@ export const updateTaskCostsForUpdatedBatches = async (batchIds, userId = 'syste
       throw error;
     }
   };
+
+/**
+ * Pobiera zadania produkcyjne z kosztami dla raportu kosztów produkcji
+ * @param {Date} startDate - Data początkowa
+ * @param {Date} endDate - Data końcowa
+ * @param {string} statusFilter - Filtr statusu ('all', 'completed', lub konkretny status)
+ * @param {string} productFilter - Filtr produktu (ID produktu lub 'all')
+ * @returns {Promise<Array>} - Lista zadań z danymi kosztów
+ */
+export const getTasksWithCosts = async (startDate, endDate, statusFilter = 'completed', productFilter = 'all') => {
+  try {
+    console.log('[COST REPORT] Pobieranie zadań z kosztami:', { 
+      startDate: startDate?.toISOString?.(), 
+      endDate: endDate?.toISOString?.(), 
+      statusFilter, 
+      productFilter 
+    });
+    
+    const tasksRef = collection(db, PRODUCTION_TASKS_COLLECTION);
+    let q = tasksRef;
+    
+    // Filtruj według statusu
+    if (statusFilter === 'completed') {
+      // Pobierz tylko zakończone zadania
+      q = query(q, where('status', 'in', ['Zakończone', 'Potwierdzenie zużycia']));
+    } else if (statusFilter !== 'all') {
+      q = query(q, where('status', '==', statusFilter));
+    }
+    
+    const snapshot = await getDocs(q);
+    const tasks = [];
+    
+    snapshot.forEach(doc => {
+      const task = { id: doc.id, ...doc.data() };
+      
+      // Filtruj według produktu
+      if (productFilter !== 'all' && task.productId !== productFilter) {
+        return;
+      }
+      
+      // Określ datę zakończenia zadania
+      let completionDate = null;
+      
+      // Priorytet 1: completionDate (rzeczywista data zakończenia)
+      if (task.completionDate) {
+        completionDate = task.completionDate.toDate ? task.completionDate.toDate() : new Date(task.completionDate);
+      } 
+      // Priorytet 2: Ostatnia sesja produkcyjna
+      else if (task.productionSessions && Array.isArray(task.productionSessions) && task.productionSessions.length > 0) {
+        const lastSession = task.productionSessions[task.productionSessions.length - 1];
+        if (lastSession.endDate) {
+          completionDate = lastSession.endDate.toDate ? lastSession.endDate.toDate() : new Date(lastSession.endDate);
+        }
+      }
+      // Priorytet 3: endDate (planowana data zakończenia)
+      else if (task.endDate) {
+        completionDate = task.endDate.toDate ? task.endDate.toDate() : new Date(task.endDate);
+      }
+      // Priorytet 4: scheduledDate (planowana data rozpoczęcia)
+      else if (task.scheduledDate) {
+        completionDate = task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate);
+      }
+      
+      // Sprawdź czy data jest prawidłowa
+      if (!completionDate || isNaN(completionDate.getTime())) {
+        console.log(`[COST REPORT] Pominięto zadanie ${task.moNumber || task.id} - brak prawidłowej daty`);
+        return;
+      }
+      
+      // Filtruj według zakresu dat
+      if (completionDate >= startDate && completionDate <= endDate) {
+        // Oblicz koszty z precyzją
+        const totalMaterialCost = parseFloat(task.totalMaterialCost) || 0;
+        const totalFullProductionCost = parseFloat(task.totalFullProductionCost) || 0;
+        const processingCostPerUnit = parseFloat(task.processingCostPerUnit) || 0;
+        const completedQuantity = parseFloat(task.totalCompletedQuantity) || 0;
+        const plannedQuantity = parseFloat(task.quantity) || 0;
+        
+        // Oblicz całkowity koszt procesowy
+        const totalProcessingCost = processingCostPerUnit * completedQuantity;
+        
+        // Oblicz koszty jednostkowe
+        const unitMaterialCost = completedQuantity > 0 ? totalMaterialCost / completedQuantity : 0;
+        const unitFullCost = completedQuantity > 0 ? totalFullProductionCost / completedQuantity : 0;
+        
+        // Oblicz całkowity czas produkcji z sesji
+        let totalProductionTime = 0;
+        if (task.productionSessions && Array.isArray(task.productionSessions)) {
+          totalProductionTime = task.productionSessions.reduce((sum, session) => 
+            sum + (parseFloat(session.timeSpent) || 0), 0
+          );
+        }
+        
+        // Oblicz efektywność produkcji
+        const efficiency = plannedQuantity > 0 ? (completedQuantity / plannedQuantity) * 100 : 0;
+        
+        tasks.push({
+          ...task,
+          completionDate,
+          totalMaterialCost,
+          totalFullProductionCost,
+          totalProcessingCost,
+          unitMaterialCost,
+          unitFullCost,
+          completedQuantity,
+          plannedQuantity,
+          totalProductionTime,
+          totalProductionTimeHours: totalProductionTime > 0 ? (totalProductionTime / 60).toFixed(2) : 0,
+          efficiency
+        });
+      }
+    });
+    
+    // Sortuj według daty zakończenia (najnowsze najpierw)
+    tasks.sort((a, b) => b.completionDate - a.completionDate);
+    
+    console.log(`[COST REPORT] Znaleziono ${tasks.length} zadań z kosztami w podanym zakresie`);
+    return tasks;
+  } catch (error) {
+    console.error('[COST REPORT] Błąd podczas pobierania zadań z kosztami:', error);
+    throw error;
+  }
+};
+
+/**
+ * Oblicza statystyki kosztów produkcji na podstawie listy zadań
+ * @param {Array} tasks - Lista zadań z kosztami
+ * @returns {Object} - Obiekt ze statystykami kosztów
+ */
+export const calculateCostStatistics = (tasks) => {
+  if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+    return {
+      totalTasks: 0,
+      totalMaterialCost: 0,
+      totalFullProductionCost: 0,
+      totalProcessingCost: 0,
+      totalCompletedQuantity: 0,
+      totalPlannedQuantity: 0,
+      avgUnitMaterialCost: 0,
+      avgUnitFullCost: 0,
+      avgEfficiency: 0,
+      costByProduct: {},
+      costByMonth: {},
+      totalProductionTime: 0
+    };
+  }
+  
+  const stats = {
+    totalTasks: tasks.length,
+    totalMaterialCost: 0,
+    totalFullProductionCost: 0,
+    totalProcessingCost: 0,
+    totalCompletedQuantity: 0,
+    totalPlannedQuantity: 0,
+    totalProductionTime: 0,
+    costByProduct: {},
+    costByMonth: {}
+  };
+  
+  tasks.forEach(task => {
+    // Sumuj koszty
+    stats.totalMaterialCost += task.totalMaterialCost || 0;
+    stats.totalFullProductionCost += task.totalFullProductionCost || 0;
+    stats.totalProcessingCost += task.totalProcessingCost || 0;
+    stats.totalCompletedQuantity += task.completedQuantity || 0;
+    stats.totalPlannedQuantity += task.plannedQuantity || 0;
+    stats.totalProductionTime += task.totalProductionTime || 0;
+    
+    // Grupuj według produktu
+    const productName = task.productName || 'Nieznany produkt';
+    if (!stats.costByProduct[productName]) {
+      stats.costByProduct[productName] = {
+        name: productName,
+        productId: task.productId || null,
+        totalTasks: 0,
+        totalQuantity: 0,
+        totalPlannedQuantity: 0,
+        totalMaterialCost: 0,
+        totalFullCost: 0,
+        totalProcessingCost: 0,
+        avgUnitCost: 0,
+        avgEfficiency: 0,
+        totalProductionTime: 0
+      };
+    }
+    
+    const productStats = stats.costByProduct[productName];
+    productStats.totalTasks++;
+    productStats.totalQuantity += task.completedQuantity || 0;
+    productStats.totalPlannedQuantity += task.plannedQuantity || 0;
+    productStats.totalMaterialCost += task.totalMaterialCost || 0;
+    productStats.totalFullCost += task.totalFullProductionCost || 0;
+    productStats.totalProcessingCost += task.totalProcessingCost || 0;
+    productStats.totalProductionTime += task.totalProductionTime || 0;
+    
+    // Grupuj według miesiąca
+    const monthKey = task.completionDate.toISOString().substring(0, 7); // Format: YYYY-MM
+    if (!stats.costByMonth[monthKey]) {
+      stats.costByMonth[monthKey] = {
+        month: monthKey,
+        totalTasks: 0,
+        totalMaterialCost: 0,
+        totalFullCost: 0,
+        totalQuantity: 0,
+        totalProductionTime: 0
+      };
+    }
+    
+    const monthStats = stats.costByMonth[monthKey];
+    monthStats.totalTasks++;
+    monthStats.totalMaterialCost += task.totalMaterialCost || 0;
+    monthStats.totalFullCost += task.totalFullProductionCost || 0;
+    monthStats.totalQuantity += task.completedQuantity || 0;
+    monthStats.totalProductionTime += task.totalProductionTime || 0;
+  });
+  
+  // Oblicz średnie dla produktów
+  Object.values(stats.costByProduct).forEach(product => {
+    if (product.totalQuantity > 0) {
+      product.avgUnitCost = product.totalFullCost / product.totalQuantity;
+    }
+    if (product.totalPlannedQuantity > 0) {
+      product.avgEfficiency = (product.totalQuantity / product.totalPlannedQuantity) * 100;
+    }
+  });
+  
+  // Oblicz średnie koszty jednostkowe
+  stats.avgUnitMaterialCost = stats.totalCompletedQuantity > 0 
+    ? stats.totalMaterialCost / stats.totalCompletedQuantity 
+    : 0;
+  stats.avgUnitFullCost = stats.totalCompletedQuantity > 0 
+    ? stats.totalFullProductionCost / stats.totalCompletedQuantity 
+    : 0;
+  
+  // Oblicz średnią efektywność
+  stats.avgEfficiency = stats.totalPlannedQuantity > 0
+    ? (stats.totalCompletedQuantity / stats.totalPlannedQuantity) * 100
+    : 0;
+  
+  console.log('[COST REPORT] Statystyki obliczone:', {
+    totalTasks: stats.totalTasks,
+    totalFullCost: stats.totalFullProductionCost.toFixed(2),
+    avgUnitCost: stats.avgUnitFullCost.toFixed(2),
+    productsCount: Object.keys(stats.costByProduct).length
+  });
+  
+  return stats;
+};

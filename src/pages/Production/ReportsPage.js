@@ -34,12 +34,15 @@ import {
   Refresh as RefreshIcon,
   DateRange as DateRangeIcon,
   NavigateBefore as PrevIcon,
-  NavigateNext as NextIcon
+  NavigateNext as NextIcon,
+  Euro as EuroIcon
 } from '@mui/icons-material';
 import {
   getProductionReports,
   generateProductionReport,
-  getCompletedTasksStats
+  getCompletedTasksStats,
+  getTasksWithCosts,
+  calculateCostStatistics
 } from '../../services/productionService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
@@ -144,6 +147,12 @@ const ReportsPage = () => {
   const [endDate, setEndDate] = useState(new Date());
   const [reportPeriod, setReportPeriod] = useState('lastMonth');
   
+  // Nowe stany dla raportu kosztów produkcji
+  const [costReportData, setCostReportData] = useState([]);
+  const [costStats, setCostStats] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState('all');
+  const [productsList, setProductsList] = useState([]);
+  
   // Pobieranie danych
   useEffect(() => {
     fetchReportsData();
@@ -172,6 +181,18 @@ const ReportsPage = () => {
       
       setStatsData(stats || defaultStats);
       
+      // Pobierz dane kosztów produkcji
+      const costsData = await getTasksWithCosts(startDate, endDate, 'completed', selectedProduct);
+      setCostReportData(costsData);
+      
+      // Oblicz statystyki kosztów
+      const costStatistics = calculateCostStatistics(costsData);
+      setCostStats(costStatistics);
+      
+      // Wyciągnij listę unikalnych produktów
+      const uniqueProducts = [...new Set(costsData.map(t => t.productName).filter(Boolean))];
+      setProductsList(uniqueProducts.sort());
+      
       setLoading(false);
     } catch (error) {
       console.error('Błąd podczas pobierania danych raportów:', error);
@@ -186,6 +207,8 @@ const ReportsPage = () => {
         dailyOutput: {},
         materialsUsage: []
       });
+      setCostReportData([]);
+      setCostStats(null);
       setLoading(false);
     }
   };
@@ -470,6 +493,310 @@ const ReportsPage = () => {
     );
   };
   
+  // Komponent raportu kosztów produkcji
+  const ProductionCostsTab = () => {
+    if (!costStats || costReportData.length === 0) {
+      return (
+        <Alert severity="info">
+          Brak danych o kosztach produkcji w wybranym okresie. 
+          Koszty są dostępne tylko dla zadań ze statusem "Zakończone" lub "Potwierdzenie zużycia".
+        </Alert>
+      );
+    }
+    
+    // Funkcja eksportu do CSV
+    const exportCostsToCsv = () => {
+      if (!costReportData || costReportData.length === 0) {
+        showError('Brak danych do eksportu');
+        return;
+      }
+      
+      // Nagłówki CSV
+      const headers = [
+        'Numer MO',
+        'Produkt',
+        'Status',
+        'Data zakończenia',
+        'Ilość planowana',
+        'Ilość wyprodukowana',
+        'Efektywność %',
+        'Koszt materiałów €',
+        'Koszt procesowy €',
+        'Pełny koszt produkcji €',
+        'Koszt jednostkowy €',
+        'Czas produkcji (min)'
+      ];
+      
+      // Dane
+      const rows = costReportData
+        .filter(task => selectedProduct === 'all' || task.productName === selectedProduct)
+        .map(task => [
+          task.moNumber || task.id,
+          task.productName || 'Nieznany',
+          task.status,
+          task.completionDate ? format(task.completionDate, 'yyyy-MM-dd') : '',
+          task.plannedQuantity.toFixed(2),
+          task.completedQuantity.toFixed(2),
+          task.efficiency.toFixed(2),
+          task.totalMaterialCost.toFixed(2),
+          task.totalProcessingCost.toFixed(2),
+          task.totalFullProductionCost.toFixed(2),
+          task.unitFullCost.toFixed(2),
+          task.totalProductionTime.toFixed(0)
+        ]);
+      
+      // Utwórz CSV
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+      ].join('\n');
+      
+      // Pobierz plik
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const fileName = `koszty_produkcji_${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}.csv`;
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showSuccess('Raport został wyeksportowany do CSV');
+    };
+    
+    return (
+      <Box>
+        {/* Karty z podsumowaniem */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={3}>
+            <Card sx={{ boxShadow: 3, transition: 'transform 0.3s', '&:hover': { transform: 'translateY(-5px)' } }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="textSecondary" gutterBottom variant="subtitle2" fontWeight="bold">
+                  Zadania z kosztami
+                </Typography>
+                <Typography variant="h4" component="div" color="primary.main" fontWeight="bold">
+                  {costStats.totalTasks}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={3}>
+            <Card sx={{ boxShadow: 3, transition: 'transform 0.3s', '&:hover': { transform: 'translateY(-5px)' } }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="textSecondary" gutterBottom variant="subtitle2" fontWeight="bold">
+                  Łączny koszt materiałów
+                </Typography>
+                <Typography variant="h4" component="div" color="secondary.main" fontWeight="bold">
+                  {costStats.totalMaterialCost.toFixed(2)} €
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={3}>
+            <Card sx={{ boxShadow: 3, transition: 'transform 0.3s', '&:hover': { transform: 'translateY(-5px)' } }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="textSecondary" gutterBottom variant="subtitle2" fontWeight="bold">
+                  Pełny koszt produkcji
+                </Typography>
+                <Typography variant="h4" component="div" color="success.main" fontWeight="bold">
+                  {costStats.totalFullProductionCost.toFixed(2)} €
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={3}>
+            <Card sx={{ boxShadow: 3, transition: 'transform 0.3s', '&:hover': { transform: 'translateY(-5px)' } }}>
+              <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                <Typography color="textSecondary" gutterBottom variant="subtitle2" fontWeight="bold">
+                  Śr. koszt jedn. (pełny)
+                </Typography>
+                <Typography variant="h4" component="div" color="warning.main" fontWeight="bold">
+                  {costStats.avgUnitFullCost.toFixed(2)} €
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+        
+        {/* Przycisk eksportu i filtr produktów */}
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={8}>
+              <FormControl fullWidth>
+                <InputLabel>Filtruj według produktu</InputLabel>
+                <Select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  label="Filtruj według produktu"
+                >
+                  <MenuItem value="all">Wszystkie produkty</MenuItem>
+                  {productsList.map(product => (
+                    <MenuItem key={product} value={product}>{product}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<DownloadIcon />}
+                onClick={exportCostsToCsv}
+                fullWidth
+                size="large"
+              >
+                Eksportuj do CSV
+              </Button>
+            </Grid>
+          </Grid>
+        </Paper>
+        
+        {/* Tabela kosztów według produktów */}
+        <Paper sx={{ mb: 3 }}>
+          <Box sx={{ p: 2, bgcolor: 'primary.main' }}>
+            <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
+              📊 Koszty według produktów
+            </Typography>
+          </Box>
+          <TableContainer>
+            <Table size="small">
+              <TableHead sx={{ bgcolor: 'grey.100' }}>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Produkt</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Zadania</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ilość</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Koszt materiałów</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Pełny koszt</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Śr. koszt/szt</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>Efektywność</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {Object.values(costStats.costByProduct)
+                  .sort((a, b) => b.totalFullCost - a.totalFullCost)
+                  .map((product, index) => (
+                  <TableRow 
+                    key={index}
+                    sx={{ 
+                      '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
+                      '&:hover': { bgcolor: 'action.selected' }
+                    }}
+                  >
+                    <TableCell sx={{ fontWeight: 'medium' }}>{product.name}</TableCell>
+                    <TableCell align="right">{product.totalTasks}</TableCell>
+                    <TableCell align="right">{product.totalQuantity.toFixed(2)}</TableCell>
+                    <TableCell align="right">{product.totalMaterialCost.toFixed(2)} €</TableCell>
+                    <TableCell align="right"><strong>{product.totalFullCost.toFixed(2)} €</strong></TableCell>
+                    <TableCell align="right">
+                      <Chip 
+                        label={`${product.avgUnitCost.toFixed(2)} €`} 
+                        color="primary" 
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Chip 
+                        label={`${product.avgEfficiency.toFixed(0)}%`}
+                        color={product.avgEfficiency >= 95 ? 'success' : product.avgEfficiency >= 85 ? 'warning' : 'error'}
+                        size="small"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+        
+        {/* Szczegółowa tabela zadań */}
+        <Paper>
+          <Box sx={{ p: 2, bgcolor: 'secondary.main' }}>
+            <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
+              📋 Szczegółowe dane zadań
+            </Typography>
+          </Box>
+          <TableContainer sx={{ maxHeight: 600 }}>
+            <Table stickyHeader size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>MO</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Produkt</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Ilość</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Data</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Koszt mat.</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Koszt proc.</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Pełny koszt</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Koszt/szt</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Czas</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', bgcolor: 'grey.100' }}>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {costReportData
+                  .filter(task => selectedProduct === 'all' || task.productName === selectedProduct)
+                  .map((task, index) => (
+                  <TableRow 
+                    key={task.id}
+                    sx={{ 
+                      '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
+                      '&:hover': { bgcolor: 'action.selected', cursor: 'pointer' }
+                    }}
+                  >
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="medium">
+                        {task.moNumber || task.id.substring(0, 8)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{task.productName || 'Nieznany'}</TableCell>
+                    <TableCell align="right">
+                      {task.completedQuantity.toFixed(2)} / {task.plannedQuantity.toFixed(2)}
+                      {task.efficiency !== 100 && (
+                        <Typography variant="caption" display="block" color="textSecondary">
+                          ({task.efficiency.toFixed(0)}%)
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {task.completionDate ? format(task.completionDate, 'dd.MM.yyyy', { locale: pl }) : '-'}
+                    </TableCell>
+                    <TableCell align="right">{task.totalMaterialCost.toFixed(2)} €</TableCell>
+                    <TableCell align="right">{task.totalProcessingCost.toFixed(2)} €</TableCell>
+                    <TableCell align="right">
+                      <strong>{task.totalFullProductionCost.toFixed(2)} €</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Chip 
+                        label={`${task.unitFullCost.toFixed(2)} €`}
+                        color="secondary"
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      {task.totalProductionTimeHours > 0 ? `${task.totalProductionTimeHours}h` : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={task.status} 
+                        color={task.status === 'Zakończone' ? 'success' : 'info'}
+                        size="small"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      </Box>
+    );
+  };
+  
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -602,6 +929,8 @@ const ReportsPage = () => {
               value={selectedTab} 
               onChange={handleTabChange} 
               aria-label="raporty produkcyjne"
+              variant="scrollable"
+              scrollButtons="auto"
               sx={{
                 '& .MuiTab-root': {
                   fontWeight: 'bold',
@@ -625,6 +954,12 @@ const ReportsPage = () => {
                 sx={{ fontSize: '1rem' }}
               />
               <Tab 
+                label="Koszty produkcji"
+                icon={<EuroIcon />}
+                iconPosition="start"
+                sx={{ fontSize: '1rem' }}
+              />
+              <Tab 
                 label="Ukończone zadania"
                 sx={{ fontSize: '1rem' }}
               />
@@ -637,8 +972,9 @@ const ReportsPage = () => {
           
           <Box sx={{ py: 3 }}>
             {selectedTab === 0 && <StatisticsTab />}
-            {selectedTab === 1 && <CompletedTasksTab />}
-            {selectedTab === 2 && <MaterialsUsageTab />}
+            {selectedTab === 1 && <ProductionCostsTab />}
+            {selectedTab === 2 && <CompletedTasksTab />}
+            {selectedTab === 3 && <MaterialsUsageTab />}
           </Box>
         </>
       )}
