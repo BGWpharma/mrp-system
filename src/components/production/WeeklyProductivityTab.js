@@ -1,5 +1,5 @@
 // src/components/production/WeeklyProductivityTab.js
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -28,7 +28,10 @@ import {
   Tooltip,
   TableSortLabel,
   CircularProgress,
-  Badge
+  Badge,
+  TextField,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
@@ -44,7 +47,8 @@ import {
   Inventory2 as QuantityIcon,
   AddCircleOutline as AddIcon,
   Download as DownloadIcon,
-  ShowChart as ShowChartIcon
+  ShowChart as ShowChartIcon,
+  FitnessCenter as WeightIcon
 } from '@mui/icons-material';
 import {
   BarChart,
@@ -71,6 +75,78 @@ import {
   getDailyBreakdown,
   formatWeekString
 } from '../../services/weeklyProductivityService';
+import { analyzeProductionTime } from '../../services/productionTimeAnalysisService';
+
+// Funkcja obliczająca regresję liniową dla krzywej trendu
+const calculateLinearRegression = (data, dataKey) => {
+  if (!data || data.length < 2) {
+    return data;
+  }
+  
+  const n = data.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  
+  data.forEach((point, index) => {
+    const x = index;
+    const y = point[dataKey] || 0;
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumX2 += x * x;
+  });
+  
+  const denominator = (n * sumX2 - sumX * sumX);
+  if (denominator === 0) {
+    return data;
+  }
+  
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+  
+  return data.map((point, index) => ({
+    ...point,
+    trendLine: Number((slope * index + intercept).toFixed(2))
+  }));
+};
+
+// Custom Tooltip dla wykresu trendu
+const CustomChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  return (
+    <Paper 
+      sx={{ 
+        p: 1.5, 
+        minWidth: 180,
+        boxShadow: 3,
+        border: '1px solid',
+        borderColor: 'divider'
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+        Tydzień {label}
+      </Typography>
+      {payload.map((entry, index) => (
+        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+          <Box 
+            sx={{ 
+              width: 12, 
+              height: 12, 
+              backgroundColor: entry.color,
+              borderRadius: entry.name === 'Trend' || entry.name === 'Trend wydajności' ? 0 : '50%',
+              border: entry.name === 'Trend' || entry.name === 'Trend wydajności' ? `2px dashed ${entry.color}` : 'none'
+            }} 
+          />
+          <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+            {entry.name}: <strong>{typeof entry.value === 'number' ? entry.value.toLocaleString('pl-PL') : entry.value}</strong>
+          </Typography>
+        </Box>
+      ))}
+    </Paper>
+  );
+};
 
 // Komponent mini wykresu trendu (sparkline) - prosty SVG
 const TrendSparkline = ({ weeksData, currentWeekIndex, theme }) => {
@@ -413,11 +489,157 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortBy, setSortBy] = useState('week');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [weightFilter, setWeightFilter] = useState({ min: '', max: '', enabled: false });
+  const [inputWeightFilter, setInputWeightFilter] = useState({ min: '', max: '', enabled: false }); // Stan UI - bez debounce
+  const [filterStats, setFilterStats] = useState({ original: 0, filtered: 0, rejected: 0 });
+  const [isFilterPending, setIsFilterPending] = useState(false); // Wskaźnik oczekiwania na debounce
+
+  // Debounce dla filtra wagi - 300ms opóźnienia (tylko dla pól tekstowych min/max)
+  useEffect(() => {
+    // Sprawdź czy są zmiany w wartościach min/max (nie enabled - to jest natychmiastowe)
+    const hasChanges = inputWeightFilter.min !== weightFilter.min || 
+                       inputWeightFilter.max !== weightFilter.max;
+    
+    if (hasChanges && weightFilter.enabled) {
+      setIsFilterPending(true);
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (hasChanges) {
+        setWeightFilter(prev => ({ ...prev, min: inputWeightFilter.min, max: inputWeightFilter.max }));
+        setIsFilterPending(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [inputWeightFilter.min, inputWeightFilter.max]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filtrowanie sesji według wagi produktu końcowego
+  const filteredTimeAnalysis = useMemo(() => {
+    if (!timeAnalysis || !weightFilter.enabled) {
+      // Reset statystyk gdy filtr wyłączony
+      if (timeAnalysis?.sessions) {
+        setFilterStats({ original: timeAnalysis.sessions.length, filtered: timeAnalysis.sessions.length, rejected: 0 });
+      }
+      return timeAnalysis;
+    }
+    
+    const minWeight = weightFilter.min !== '' ? parseFloat(weightFilter.min) : null;
+    const maxWeight = weightFilter.max !== '' ? parseFloat(weightFilter.max) : null;
+    
+    console.log('[TYGODNIÓWKI] Filtr wagi włączony:', { minWeight, maxWeight, enabled: weightFilter.enabled });
+    
+    // Jeśli żaden filtr nie jest ustawiony, zwróć oryginalne dane
+    if (minWeight === null && maxWeight === null) {
+      console.log('[TYGODNIÓWKI] Brak wartości min/max - pomijam filtrowanie');
+      if (timeAnalysis?.sessions) {
+        setFilterStats({ original: timeAnalysis.sessions.length, filtered: timeAnalysis.sessions.length, rejected: 0 });
+      }
+      return timeAnalysis;
+    }
+    
+    // Debug: Sprawdź wagi w taskach
+    const tasksWithWeights = Object.values(tasksMap).filter(t => t.productWeight > 0);
+    console.log('[TYGODNIÓWKI] Zadania z wagami:', tasksWithWeights.length, '/', Object.keys(tasksMap).length);
+    if (tasksWithWeights.length > 0) {
+      console.log('[TYGODNIÓWKI] Przykładowe wagi:', tasksWithWeights.slice(0, 3).map(t => ({ 
+        moNumber: t.moNumber, 
+        productName: t.productName, 
+        weight: t.productWeight 
+      })));
+    }
+    
+    // Filtruj sesje według wagi produktu końcowego
+    const originalSessionsCount = timeAnalysis.sessions.length;
+    let acceptedCount = 0;
+    let rejectedCount = 0;
+    const rejectionReasons = [];
+    
+    const filteredSessions = timeAnalysis.sessions.filter((session, index) => {
+      const task = tasksMap[session.taskId];
+      if (!task) {
+        console.log(`[TYGODNIÓWKI] Sesja ${index}: Brak zadania dla taskId=${session.taskId} - AKCEPTUJĘ`);
+        acceptedCount++;
+        return true;
+      }
+      
+      const productWeight = task.productWeight || 0;
+      
+      // Debug dla każdej sesji
+      const debugInfo = {
+        sessionIndex: index,
+        taskId: session.taskId,
+        moNumber: task.moNumber,
+        productName: task.productName,
+        productWeight: productWeight,
+        minWeight: minWeight,
+        maxWeight: maxWeight
+      };
+      
+      if (minWeight !== null && productWeight < minWeight) {
+        debugInfo.rejected = true;
+        debugInfo.reason = `Waga ${productWeight} kg < min ${minWeight} kg`;
+        rejectionReasons.push(debugInfo);
+        rejectedCount++;
+        console.log(`[TYGODNIÓWKI] Sesja ${index}: ${task.moNumber} (${productWeight} kg) ODRZUCONA - poniżej min`);
+        return false;
+      }
+      
+      if (maxWeight !== null && productWeight > maxWeight) {
+        debugInfo.rejected = true;
+        debugInfo.reason = `Waga ${productWeight} kg > max ${maxWeight} kg`;
+        rejectionReasons.push(debugInfo);
+        rejectedCount++;
+        console.log(`[TYGODNIÓWKI] Sesja ${index}: ${task.moNumber} (${productWeight} kg) ODRZUCONA - powyżej max`);
+        return false;
+      }
+      
+      acceptedCount++;
+      console.log(`[TYGODNIÓWKI] Sesja ${index}: ${task.moNumber} (${productWeight} kg) ZAAKCEPTOWANA`);
+      return true;
+    });
+    
+    console.log(`[TYGODNIÓWKI] Przefiltrowano sesje: ${originalSessionsCount} → ${filteredSessions.length} (zaakceptowane: ${acceptedCount}, odrzucone: ${rejectedCount})`);
+    if (rejectionReasons.length > 0) {
+      console.log('[TYGODNIÓWKI] Powody odrzucenia:', rejectionReasons);
+    }
+    
+    // Zapisz statystyki filtrowania
+    setFilterStats({ 
+      original: originalSessionsCount, 
+      filtered: filteredSessions.length, 
+      rejected: rejectedCount 
+    });
+    
+    // KLUCZOWE: Przelicz timeByWeek na podstawie przefiltrowanych sesji
+    // Konwertuj przefiltrowane sesje z powrotem do formatu productionHistory
+    const filteredProductionHistory = filteredSessions.map(session => ({
+      ...session,
+      // Upewnij się, że mamy wszystkie wymagane pola
+      startTime: session.startTime,
+      endTime: session.endTime,
+      timeSpent: session.timeSpent || 0,
+      quantity: session.quantity || 0,
+      taskId: session.taskId
+    }));
+    
+    // Wywołaj analyzeProductionTime na przefiltrowanych danych
+    console.log('[TYGODNIÓWKI] Przeliczam timeByWeek dla przefiltrowanych sesji...');
+    const reanalyzedTimeData = analyzeProductionTime(filteredProductionHistory);
+    
+    console.log('[TYGODNIÓWKI] Przeliczono dane tygodniowe:', {
+      totalSessions: reanalyzedTimeData.totalSessions,
+      totalTimeHours: reanalyzedTimeData.totalTimeHours,
+      weeksCount: Object.keys(reanalyzedTimeData.timeByWeek || {}).length
+    });
+    
+    return reanalyzedTimeData;
+  }, [timeAnalysis, tasksMap, weightFilter]);
 
   // Przygotuj dane tygodniowe
   const weeksData = useMemo(() => {
-    return prepareWeeklyData(timeAnalysis, tasksMap);
-  }, [timeAnalysis, tasksMap]);
+    return prepareWeeklyData(filteredTimeAnalysis, tasksMap);
+  }, [filteredTimeAnalysis, tasksMap]);
 
   // Analiza trendów
   const trends = useMemo(() => {
@@ -426,7 +648,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
 
   // Dane do wykresu trendu
   const trendChartData = useMemo(() => {
-    return weeksData.map(week => ({
+    const baseData = weeksData.map(week => ({
       week: formatWeekString(week.week),
       weekShort: week.week.split('-W')[1],
       productivity: week.productivity,
@@ -434,6 +656,9 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
       timeHours: week.totalTimeHours,
       sessions: week.sessionsCount
     }));
+    
+    // Dodaj krzywą trendu dla wydajności
+    return calculateLinearRegression(baseData, 'productivity');
   }, [weeksData]);
 
   // Handler rozwijania szczegółów tygodnia
@@ -701,8 +926,84 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             </LocalizationProvider>
           </Grid>
         </Grid>
+        
+        {/* Filtr wagi produktu końcowego - MUSI być dostępny nawet gdy brak danych! */}
+        <Divider sx={{ my: 2 }} />
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={weightFilter.enabled}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setWeightFilter(prev => ({ ...prev, enabled }));
+                  setInputWeightFilter(prev => ({ ...prev, enabled }));
+                }}
+                size="small"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <WeightIcon sx={{ fontSize: 20, color: weightFilter.enabled ? 'primary.main' : 'text.secondary' }} />
+                <Typography variant="body2" sx={{ fontWeight: weightFilter.enabled ? 600 : 400 }}>
+                  Filtruj według wagi produktu końcowego
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
+        {weightFilter.enabled && (
+          <Grid container spacing={2} sx={{ mt: 0 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Waga minimalna (kg)"
+                type="number"
+                value={inputWeightFilter.min}
+                onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, min: e.target.value })}
+                inputProps={{ 
+                  min: 0, 
+                  step: 0.001 
+                }}
+                InputProps={{
+                  endAdornment: <Typography variant="caption" sx={{ color: 'text.secondary' }}>kg</Typography>
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Waga maksymalna (kg)"
+                type="number"
+                value={inputWeightFilter.max}
+                onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, max: e.target.value })}
+                inputProps={{ 
+                  min: 0, 
+                  step: 0.001 
+                }}
+                InputProps={{
+                  endAdornment: <Typography variant="caption" sx={{ color: 'text.secondary' }}>kg</Typography>
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={12} md={6}>
+              <Alert severity="info" sx={{ py: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {isFilterPending && <CircularProgress size={16} />}
+                Filtr obejmuje tylko produkcje, których waga produktu końcowego mieści się w podanym zakresie
+                {isFilterPending && ' - przetwarzanie...'}
+              </Alert>
+            </Grid>
+          </Grid>
+        )}
+        
+        <Divider sx={{ my: 2 }} />
         <Alert severity="info">
-          Brak danych tygodniowych do wyświetlenia. Zmień zakres dat aby zobaczyć analizę tygodniową.
+          {weightFilter.enabled && (weightFilter.min !== '' || weightFilter.max !== '') 
+            ? `Brak danych tygodniowych spełniających kryteria filtra. Odfiltrowano ${filterStats.rejected} z ${filterStats.original} sesji. Zmień zakres dat lub filtr wagi.`
+            : 'Brak danych tygodniowych do wyświetlenia. Zmień zakres dat aby zobaczyć analizę tygodniową.'
+          }
         </Alert>
       </Paper>
     );
@@ -1023,19 +1324,94 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               </Grid>
             </>
           )}
-          
-          {/* Akcje */}
-          <Grid item xs={12} sm={6} md={quickRange === 'custom' ? 3 : 9}>
-            <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
-              {isRefreshing && <CircularProgress size={24} />}
-              <Tooltip title="Eksportuj do CSV">
-                <IconButton onClick={handleExportCSV} size="small" color="primary">
-                  <DownloadIcon />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          </Grid>
         </Grid>
+        
+        {/* Filtr wagi produktu końcowego */}
+        <Divider sx={{ my: 2 }} />
+        <Box sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={weightFilter.enabled}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setWeightFilter(prev => ({ ...prev, enabled }));
+                  setInputWeightFilter(prev => ({ ...prev, enabled }));
+                }}
+                size="small"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <WeightIcon sx={{ fontSize: 20, color: weightFilter.enabled ? 'primary.main' : 'text.secondary' }} />
+                <Typography variant="body2" sx={{ fontWeight: weightFilter.enabled ? 600 : 400 }}>
+                  Filtruj według wagi produktu końcowego
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
+        {weightFilter.enabled && (
+          <Grid container spacing={2} sx={{ mt: 0 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Waga minimalna (kg)"
+                type="number"
+                value={inputWeightFilter.min}
+                onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, min: e.target.value })}
+                inputProps={{ 
+                  min: 0, 
+                  step: 0.001 
+                }}
+                InputProps={{
+                  endAdornment: <Typography variant="caption" sx={{ color: 'text.secondary' }}>kg</Typography>
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Waga maksymalna (kg)"
+                type="number"
+                value={inputWeightFilter.max}
+                onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, max: e.target.value })}
+                inputProps={{ 
+                  min: 0, 
+                  step: 0.001 
+                }}
+                InputProps={{
+                  endAdornment: <Typography variant="caption" sx={{ color: 'text.secondary' }}>kg</Typography>
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={12} md={6}>
+              <Alert severity="info" sx={{ py: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+                {isFilterPending && <CircularProgress size={16} />}
+                Filtr obejmuje tylko produkcje, których waga produktu końcowego mieści się w podanym zakresie
+                {isFilterPending && ' - przetwarzanie...'}
+              </Alert>
+            </Grid>
+          </Grid>
+        )}
+        
+        {/* Statystyki filtrowania */}
+        {weightFilter.enabled && (weightFilter.min !== '' || weightFilter.max !== '') && filterStats.original > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Alert 
+              severity={filterStats.rejected === filterStats.original ? "warning" : "success"}
+              icon={<WeightIcon />}
+              sx={{ py: 0.5 }}
+            >
+              <Typography variant="body2">
+                <strong>Filtr wagi aktywny:</strong> {filterStats.filtered} z {filterStats.original} sesji spełnia kryteria 
+                {filterStats.rejected > 0 && ` (odfiltrowano: ${filterStats.rejected})`}
+              </Typography>
+            </Alert>
+          </Box>
+        )}
       </Paper>
 
       {/* Przyciski akcji */}
@@ -1424,45 +1800,100 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             variant="outlined"
           />
         </Box>
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={400}>
           {chartType === 'all' ? (
             <ComposedChart data={trendChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="weekShort" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <RechartTooltip />
-              <Legend />
+              <XAxis 
+                dataKey="weekShort" 
+                label={{ value: 'Tydzień', position: 'insideBottom', offset: -5 }}
+              />
+              <YAxis 
+                yAxisId="left"
+                label={{ value: 'Wydajność (szt/h) / Czas (h)', angle: -90, position: 'insideLeft' }}
+              />
+              <YAxis 
+                yAxisId="right" 
+                orientation="right"
+                label={{ value: 'Ilość (szt)', angle: 90, position: 'insideRight' }}
+              />
+              <RechartTooltip content={<CustomChartTooltip />} />
+              <Legend 
+                verticalAlign="top" 
+                height={36}
+                wrapperStyle={{ paddingBottom: '10px' }}
+              />
               <Area 
                 yAxisId="left"
                 type="monotone" 
                 dataKey="productivity" 
-                fill={theme.palette.primary.light}
+                fill={`url(#colorProductivity)`}
                 stroke={theme.palette.primary.main}
+                strokeWidth={2}
                 name="Wydajność (szt/h)"
               />
+              <defs>
+                <linearGradient id="colorProductivity" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0.05}/>
+                </linearGradient>
+              </defs>
+              {trendChartData.length > 0 && trendChartData[0].trendLine !== undefined && (
+                <Line 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="trendLine" 
+                  stroke={theme.palette.warning.dark}
+                  strokeWidth={2.5}
+                  strokeDasharray="8 4"
+                  name="Trend wydajności"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              )}
               <Line 
                 yAxisId="right"
                 type="monotone" 
                 dataKey="quantity" 
                 stroke={theme.palette.secondary.main}
+                strokeWidth={2}
                 name="Ilość"
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
               />
               <Line 
                 yAxisId="left"
                 type="monotone" 
                 dataKey="timeHours" 
                 stroke={theme.palette.success.main}
+                strokeWidth={2}
                 name="Czas (h)"
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
               />
             </ComposedChart>
           ) : (
             <LineChart data={trendChartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="weekShort" />
-              <YAxis />
-              <RechartTooltip />
-              <Legend />
+              <XAxis 
+                dataKey="weekShort"
+                label={{ value: 'Tydzień', position: 'insideBottom', offset: -5 }}
+              />
+              <YAxis 
+                label={{ 
+                  value: chartType === 'productivity' ? 'Wydajność (szt/h)' : 
+                         chartType === 'quantity' ? 'Ilość (szt)' : 
+                         'Czas pracy (h)', 
+                  angle: -90, 
+                  position: 'insideLeft' 
+                }}
+              />
+              <RechartTooltip content={<CustomChartTooltip />} />
+              <Legend 
+                verticalAlign="top" 
+                height={36}
+                wrapperStyle={{ paddingBottom: '10px' }}
+              />
               {chartType === 'productivity' && (
                 <Line 
                   type="monotone" 
@@ -1470,7 +1901,20 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   stroke={theme.palette.primary.main}
                   strokeWidth={3}
                   name="Wydajność (szt/h)"
-                  dot={{ r: 5 }}
+                  dot={{ r: 5, fill: theme.palette.primary.main, strokeWidth: 2, stroke: theme.palette.background.paper }}
+                  activeDot={{ r: 7, strokeWidth: 2 }}
+                />
+              )}
+              {chartType === 'productivity' && trendChartData.length > 0 && trendChartData[0].trendLine !== undefined && (
+                <Line 
+                  type="monotone" 
+                  dataKey="trendLine" 
+                  stroke={theme.palette.warning.dark}
+                  strokeWidth={2.5}
+                  strokeDasharray="8 4"
+                  name="Trend"
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
               )}
               {chartType === 'quantity' && (
@@ -1480,7 +1924,8 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   stroke={theme.palette.secondary.main}
                   strokeWidth={3}
                   name="Ilość"
-                  dot={{ r: 5 }}
+                  dot={{ r: 5, fill: theme.palette.secondary.main, strokeWidth: 2, stroke: theme.palette.background.paper }}
+                  activeDot={{ r: 7, strokeWidth: 2 }}
                 />
               )}
               {chartType === 'time' && (
@@ -1490,7 +1935,8 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   stroke={theme.palette.success.main}
                   strokeWidth={3}
                   name="Czas pracy (h)"
-                  dot={{ r: 5 }}
+                  dot={{ r: 5, fill: theme.palette.success.main, strokeWidth: 2, stroke: theme.palette.background.paper }}
+                  activeDot={{ r: 7, strokeWidth: 2 }}
                 />
               )}
             </LineChart>

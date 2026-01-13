@@ -2,6 +2,7 @@
 import { 
   collection, 
   doc, 
+  getDoc,
   getDocs, 
   query, 
   where,
@@ -260,6 +261,95 @@ export const getTasksForTimeAnalysis = async (taskIds) => {
   } catch (error) {
     console.error('Błąd podczas pobierania zadań:', error);
     return {};
+  }
+};
+
+/**
+ * Wzbogaca zadania produkcyjne o informacje o wadze produktów końcowych
+ * @param {Object} tasksMap - Mapa zadań produkcyjnych
+ * @returns {Promise<Object>} - Wzbogacona mapa zadań z wagami produktów
+ */
+export const enrichTasksWithProductWeights = async (tasksMap) => {
+  try {
+    if (!tasksMap || Object.keys(tasksMap).length === 0) {
+      return {};
+    }
+
+    console.log(`[ANALIZA CZASU] Wzbogacanie ${Object.keys(tasksMap).length} zadań o wagi produktów`);
+    
+    const enrichedTasks = { ...tasksMap };
+    const inventoryProductIds = new Set();
+    
+    // Zbierz unikalne ID produktów
+    Object.values(enrichedTasks).forEach(task => {
+      if (task.inventoryProductId) {
+        inventoryProductIds.add(task.inventoryProductId);
+      }
+    });
+    
+    // Jeśli nie ma żadnych produktów do pobrania, zwróć oryginalne dane
+    if (inventoryProductIds.size === 0) {
+      console.log('[ANALIZA CZASU] Brak zadań z inventoryProductId');
+      return tasksMap;
+    }
+    
+    console.log(`[ANALIZA CZASU] Pobieranie wag dla ${inventoryProductIds.size} produktów`);
+    
+    // Pobierz produkty z inventory
+    const inventoryRef = collection(db, 'inventory');
+    const productWeights = {};
+    
+    // Pobierz produkty batch'ami (Firestore ma limit 10 elementów dla where...in)
+    const batchSize = 10;
+    const uniqueProductIds = [...inventoryProductIds];
+    
+    for (let i = 0; i < uniqueProductIds.length; i += batchSize) {
+      const batch = uniqueProductIds.slice(i, i + batchSize);
+      const q = query(inventoryRef, where('__name__', 'in', batch));
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.weight !== undefined && data.weight !== null) {
+          productWeights[doc.id] = parseFloat(data.weight) || 0;
+        }
+      });
+    }
+
+    console.log(`[ANALIZA CZASU] Pobrano wagi dla ${Object.keys(productWeights).length} produktów`);
+    
+    // Debug: Wyświetl przykładowe wagi
+    const sampleWeights = Object.entries(productWeights).slice(0, 3);
+    if (sampleWeights.length > 0) {
+      console.log('[ANALIZA CZASU] Przykładowe wagi produktów:', sampleWeights);
+    }
+
+    // Wzbogać tasksMap o wagi produktów
+    let tasksWithWeight = 0;
+    let tasksWithoutWeight = 0;
+    
+    for (const [taskId, task] of Object.entries(tasksMap)) {
+      const productWeight = task.inventoryProductId ? 
+        (productWeights[task.inventoryProductId] || 0) : 0;
+      
+      enrichedTasks[taskId] = {
+        ...task,
+        productWeight: productWeight
+      };
+      
+      if (productWeight > 0) {
+        tasksWithWeight++;
+      } else {
+        tasksWithoutWeight++;
+      }
+    }
+
+    console.log(`[ANALIZA CZASU] Wzbogacono ${Object.keys(enrichedTasks).length} zadań o wagi produktów (z wagą: ${tasksWithWeight}, bez wagi: ${tasksWithoutWeight})`);
+    return enrichedTasks;
+  } catch (error) {
+    console.error('Błąd podczas wzbogacania zadań o wagi produktów:', error);
+    // W przypadku błędu zwróć oryginalne tasksMap bez wag
+    return tasksMap;
   }
 };
 

@@ -63,6 +63,7 @@ import {
   getProductionHistoryByDateRange,
   analyzeProductionTime,
   getTasksForTimeAnalysis,
+  enrichTasksWithProductWeights,
   formatMinutes
 } from '../../services/productionTimeAnalysisService';
 import { getRecipeById } from '../../services/recipeService';
@@ -117,6 +118,10 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
       let tasks = {};
       if (taskIds.length > 0) {
         tasks = await getTasksForTimeAnalysis(taskIds);
+        
+        // Wzbogać zadania o wagi produktów końcowych
+        tasks = await enrichTasksWithProductWeights(tasks);
+        
         setTasksMap(tasks);
         
         // Pobierz receptury dla zadań, które mają recipeId
