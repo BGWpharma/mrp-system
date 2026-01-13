@@ -59,7 +59,8 @@ import {
   Schedule as ScheduleIcon,
   GetApp as ExportIcon,
   ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
+  ArrowDownward as ArrowDownwardIcon,
+  ShowChart as ShowChartIcon
 } from '@mui/icons-material';
 import { getAllTasks } from '../../services/productionService';
 import { getAllOrders } from '../../services/orderService';
@@ -70,6 +71,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { PRODUCTION_TASK_STATUSES } from '../../utils/constants';
 import ProductionTimeAnalysisTab from '../../components/production/ProductionTimeAnalysisTab';
+import ProgressReportTab from '../../components/production/ProgressReportTab';
 
 const ProductionReportPage = () => {
   const { t } = useTranslation();
@@ -251,6 +253,12 @@ const ProductionReportPage = () => {
             iconPosition="start"
             sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
           />
+          <Tab 
+            label="Postęp Produkcji"
+            icon={<ShowChartIcon />} 
+            iconPosition="start"
+            sx={{ fontSize: isMobile ? '0.85rem' : '1rem' }}
+          />
         </Tabs>
       </Box>
 
@@ -278,6 +286,15 @@ const ProductionReportPage = () => {
             setStartDate(newStartDate);
             setEndDate(newEndDate);
           }}
+        />
+      )}
+
+      {/* Zakładka Postęp Produkcji */}
+      {selectedTab === 2 && (
+        <ProgressReportTab 
+          tasks={tasks}
+          loading={loading}
+          isMobile={isMobile}
         />
       )}
 
