@@ -222,7 +222,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
         completedTasks: 0,
         inProgressTasks: 0,
         averageProgress: 0,
-        totalPlannedTime: 0,
+        expectedTimeForCompleted: 0,
         totalActualTime: 0,
         averageTimeEfficiency: 0
       };
@@ -234,17 +234,25 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
     const totalProgress = processedTasks.reduce((sum, task) => sum + task.percentComplete, 0);
     const averageProgress = totalProgress / totalTasks;
     
-    // Statystyki czasowe
-    const totalPlannedTime = processedTasks.reduce((sum, t) => sum + t.plannedTotalTime, 0);
+    // Statystyki czasowe - POPRAWIONE
+    // Liczymy oczekiwany czas dla WYPRODUKOWANEJ ilości, nie planowanej
+    // expectedTimeForCompleted = ile czasu powinno zająć wyprodukowanie tego co już zrobiono
+    const expectedTimeForCompleted = processedTasks.reduce((sum, t) => {
+      // completedQty * timePerUnit = czas jaki powinno zająć wyprodukowanie wykonanej ilości
+      return sum + (t.completedQty * t.timePerUnit);
+    }, 0);
     const totalActualTime = processedTasks.reduce((sum, t) => sum + t.actualTotalTime, 0);
-    const averageTimeEfficiency = totalActualTime > 0 ? (totalPlannedTime / totalActualTime) * 100 : 0;
+    
+    // Efektywność: jeśli expectedTime > actualTime → >100% (szybciej niż plan)
+    // jeśli expectedTime < actualTime → <100% (wolniej niż plan)
+    const averageTimeEfficiency = totalActualTime > 0 ? (expectedTimeForCompleted / totalActualTime) * 100 : 0;
 
     return {
       totalTasks,
       completedTasks,
       inProgressTasks,
       averageProgress,
-      totalPlannedTime,
+      expectedTimeForCompleted,
       totalActualTime,
       averageTimeEfficiency
     };
@@ -731,8 +739,8 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
         </Grid>
       </Grid>
 
-      {/* Karta efektywności czasowej */}
-      {statistics.totalPlannedTime > 0 && (
+      {/* Karta efektywności czasowej - pokazuj tylko gdy są dane rzeczywiste */}
+      {statistics.totalActualTime > 0 && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={4}>
             <Card>
@@ -749,7 +757,12 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       {statistics.averageTimeEfficiency.toFixed(1)}%
                     </Typography>
                     <Typography variant="caption" color="textSecondary">
-                      Plan: {(statistics.totalPlannedTime / 60).toFixed(1)}h / Rzecz: {(statistics.totalActualTime / 60).toFixed(1)}h
+                      Oczek: {(statistics.expectedTimeForCompleted / 60).toFixed(1)}h / Rzecz: {(statistics.totalActualTime / 60).toFixed(1)}h
+                    </Typography>
+                    <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5 }}>
+                      {statistics.averageTimeEfficiency >= 100 
+                        ? '✓ Produkcja szybsza niż plan' 
+                        : '⚠ Produkcja wolniejsza niż plan'}
                     </Typography>
                   </Box>
                   <TimerIcon color="primary" sx={{ fontSize: 40 }} />
