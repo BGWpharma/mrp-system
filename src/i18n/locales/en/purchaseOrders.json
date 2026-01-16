@@ -55,6 +55,28 @@
       "newPaymentStatus": "New payment status"
     }
   },
+  "orderReminder": {
+    "title": "Unordered materials for production",
+    "refresh": "Refresh",
+    "noAlerts": "All materials reserved from PO have been ordered. No warnings to display.",
+    "critical": "Critical",
+    "urgent": "Urgent",
+    "notice": "Notice",
+    "draftPOs": "Draft POs",
+    "draft": "DRAFT",
+    "items": "items",
+    "supplier": "Supplier",
+    "openPO": "Open PO",
+    "openTask": "Open task",
+    "task": "Task",
+    "production": "Production",
+    "overdue": "OVERDUE by {{days}} days!",
+    "inDays": "in {{days}} days",
+    "close": "Close",
+    "unordered": "Unordered",
+    "unorderedMaterials": "unordered materials",
+    "checkUnordered": "Check unordered materials"
+  },
   "statuses": {
     "new": "New",
     "pending": "Pending",

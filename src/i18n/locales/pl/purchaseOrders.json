@@ -345,6 +345,28 @@
       "unmatchedItems": "Następujące pozycje nie zostały dopasowane:"
     }
   },
+  "orderReminder": {
+    "title": "Niezamówione materiały dla produkcji",
+    "refresh": "Odśwież",
+    "noAlerts": "Wszystkie materiały zarezerwowane z PO zostały już zamówione. Brak ostrzeżeń do wyświetlenia.",
+    "critical": "Krytyczne",
+    "urgent": "Pilne",
+    "notice": "Uwaga",
+    "draftPOs": "PO w projekcie",
+    "draft": "PROJEKT",
+    "items": "pozycji",
+    "supplier": "Dostawca",
+    "openPO": "Otwórz PO",
+    "openTask": "Otwórz zadanie",
+    "task": "Zadanie",
+    "production": "Produkcja",
+    "overdue": "SPÓŹNIONE o {{days}} dni!",
+    "inDays": "za {{days}} dni",
+    "close": "Zamknij",
+    "unordered": "Niezamówione",
+    "unorderedMaterials": "niezamówionych materiałów",
+    "checkUnordered": "Sprawdź niezamówione materiały"
+  },
   "invoiceOcr": {
     "title": "Skanowanie faktury",
     "scanButton": "Skanuj fakturę",

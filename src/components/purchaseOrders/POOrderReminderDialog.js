@@ -34,16 +34,21 @@ import {
   ShoppingCart as ShoppingCartIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
-import { pl } from 'date-fns/locale';
+import { pl, enUS } from 'date-fns/locale';
+import { useTranslation } from '../../hooks/useTranslation';
 import { getUnorderedMaterialAlerts } from '../../services/poOrderReminderService';
 
 const POOrderReminderDialog = ({ open, onClose }) => {
+  const { t, currentLanguage } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState(null);
   const [expandedPOs, setExpandedPOs] = useState({});
   const [error, setError] = useState(null);
+
+  // Wybór locale dla date-fns
+  const dateLocale = currentLanguage === 'pl' ? pl : enUS;
 
   const fetchAlerts = async () => {
     setLoading(true);
@@ -89,6 +94,15 @@ const POOrderReminderDialog = ({ open, onClose }) => {
   const handleGoToTask = (taskId) => {
     onClose();
     navigate(`/production/tasks/${taskId}`);
+  };
+
+  // Tłumaczenie poziomów ostrzeżeń
+  const getTranslatedLabel = (level) => {
+    switch (level) {
+      case 'critical': return t('purchaseOrders.orderReminder.critical');
+      case 'urgent': return t('purchaseOrders.orderReminder.urgent');
+      default: return t('purchaseOrders.orderReminder.notice');
+    }
   };
 
   // Grupuj alerty po PO
@@ -137,10 +151,10 @@ const POOrderReminderDialog = ({ open, onClose }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ShoppingCartIcon color="warning" />
             <Typography variant="h6">
-              Niezamówione materiały dla produkcji
+              {t('purchaseOrders.orderReminder.title')}
             </Typography>
           </Box>
-          <Tooltip title="Odśwież">
+          <Tooltip title={t('purchaseOrders.orderReminder.refresh')}>
             <IconButton onClick={fetchAlerts} disabled={loading} size="small">
               <RefreshIcon />
             </IconButton>
@@ -157,8 +171,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
           <Alert severity="error">{error}</Alert>
         ) : alerts.length === 0 ? (
           <Alert severity="success" icon={<InfoIcon />}>
-            Wszystkie materiały zarezerwowane z PO zostały już zamówione. 
-            Brak ostrzeżeń do wyświetlenia.
+            {t('purchaseOrders.orderReminder.noAlerts')}
           </Alert>
         ) : (
           <>
@@ -167,7 +180,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
               {stats?.criticalCount > 0 && (
                 <Chip 
                   icon={<ErrorIcon />} 
-                  label={`🔴 Krytyczne: ${stats.criticalCount}`} 
+                  label={`🔴 ${t('purchaseOrders.orderReminder.critical')}: ${stats.criticalCount}`} 
                   color="error" 
                   variant="filled"
                 />
@@ -175,7 +188,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
               {stats?.urgentCount > 0 && (
                 <Chip 
                   icon={<WarningIcon />} 
-                  label={`🟠 Pilne: ${stats.urgentCount}`} 
+                  label={`🟠 ${t('purchaseOrders.orderReminder.urgent')}: ${stats.urgentCount}`} 
                   color="warning" 
                   variant="filled"
                 />
@@ -183,13 +196,13 @@ const POOrderReminderDialog = ({ open, onClose }) => {
               {stats?.normalCount > 0 && (
                 <Chip 
                   icon={<InfoIcon />} 
-                  label={`🟡 Uwaga: ${stats.normalCount}`} 
+                  label={`🟡 ${t('purchaseOrders.orderReminder.notice')}: ${stats.normalCount}`} 
                   color="info" 
                   variant="filled"
                 />
               )}
               <Chip 
-                label={`PO w projekcie: ${stats?.draftPOs || 0}`} 
+                label={`${t('purchaseOrders.orderReminder.draftPOs')}: ${stats?.draftPOs || 0}`} 
                 variant="outlined"
               />
             </Box>
@@ -229,7 +242,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
                             {poGroup.poNumber}
                           </Typography>
                           <Chip 
-                            label="PROJEKT" 
+                            label={t('purchaseOrders.orderReminder.draft')} 
                             size="small" 
                             color="default"
                             variant="outlined"
@@ -239,14 +252,14 @@ const POOrderReminderDialog = ({ open, onClose }) => {
                             color={poGroup.worstLevel?.color || 'default'}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              pozycji
+                              {t('purchaseOrders.orderReminder.items')}
                             </Typography>
                           </Badge>
                         </Box>
                       }
-                      secondary={`Dostawca: ${poGroup.supplierName}`}
+                      secondary={`${t('purchaseOrders.orderReminder.supplier')}: ${poGroup.supplierName}`}
                     />
-                    <Tooltip title="Otwórz PO">
+                    <Tooltip title={t('purchaseOrders.orderReminder.openPO')}>
                       <IconButton 
                         size="small" 
                         onClick={(e) => { e.stopPropagation(); handleGoToPO(poGroup.poId); }}
@@ -282,7 +295,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
                                   variant="outlined"
                                 />
                                 <Chip 
-                                  label={alert.warningLevel.label}
+                                  label={getTranslatedLabel(alert.warningLevel.level)}
                                   size="small"
                                   color={alert.warningLevel.color}
                                 />
@@ -291,7 +304,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
                             secondary={
                               <Box sx={{ mt: 0.5 }}>
                                 <Typography variant="caption" display="block">
-                                  <strong>Zadanie:</strong> {alert.taskNumber} - {alert.taskName}
+                                  <strong>{t('purchaseOrders.orderReminder.task')}:</strong> {alert.taskNumber} - {alert.taskName}
                                 </Typography>
                                 <Typography 
                                   variant="caption" 
@@ -299,17 +312,17 @@ const POOrderReminderDialog = ({ open, onClose }) => {
                                   color={alert.isOverdue ? 'error.main' : 'text.secondary'}
                                   fontWeight={alert.isOverdue ? 'bold' : 'normal'}
                                 >
-                                  <strong>Produkcja:</strong> {format(alert.scheduledDate, 'dd.MM.yyyy', { locale: pl })}
+                                  <strong>{t('purchaseOrders.orderReminder.production')}:</strong> {format(alert.scheduledDate, 'dd.MM.yyyy', { locale: dateLocale })}
                                   {alert.isOverdue ? (
-                                    ` (SPÓŹNIONE o ${Math.abs(alert.daysToProduction)} dni!)`
+                                    ` (${t('purchaseOrders.orderReminder.overdue', { days: Math.abs(alert.daysToProduction) })})`
                                   ) : (
-                                    ` (za ${alert.daysToProduction} dni)`
+                                    ` (${t('purchaseOrders.orderReminder.inDays', { days: alert.daysToProduction })})`
                                   )}
                                 </Typography>
                               </Box>
                             }
                           />
-                          <Tooltip title="Otwórz zadanie">
+                          <Tooltip title={t('purchaseOrders.orderReminder.openTask')}>
                             <IconButton 
                               size="small"
                               onClick={() => handleGoToTask(alert.taskId)}
@@ -330,7 +343,7 @@ const POOrderReminderDialog = ({ open, onClose }) => {
       
       <DialogActions>
         <Button onClick={onClose} variant="contained">
-          Zamknij
+          {t('purchaseOrders.orderReminder.close')}
         </Button>
       </DialogActions>
     </Dialog>

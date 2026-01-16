@@ -804,7 +804,7 @@ const PurchaseOrderList = () => {
             </IconButton>
           </Tooltip>
           
-          <Tooltip title={alertsCount > 0 ? `${alertsCount} niezamówionych materiałów` : 'Sprawdź niezamówione materiały'}>
+          <Tooltip title={alertsCount > 0 ? `${alertsCount} ${t('purchaseOrders.orderReminder.unorderedMaterials')}` : t('purchaseOrders.orderReminder.checkUnordered')}>
             <Badge badgeContent={alertsCount} color="error" max={99}>
               <Button
                 variant={alertsCount > 0 ? "contained" : "outlined"}
@@ -813,7 +813,7 @@ const PurchaseOrderList = () => {
                 onClick={() => setOrderReminderDialogOpen(true)}
                 size="small"
               >
-                Niezamówione
+                {t('purchaseOrders.orderReminder.unordered')}
               </Button>
             </Badge>
           </Tooltip>
