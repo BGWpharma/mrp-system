@@ -36,6 +36,7 @@ import { pl } from 'date-fns/locale';
 import { Save as SaveIcon, ArrowBack as ArrowBackIcon, CloudUpload as CloudUploadIcon, Search as SearchIcon, AttachFile as AttachFileIcon, Delete as DeleteIcon, Visibility as VisibilityIcon, CheckBox, CheckBoxOutlineBlank, Refresh as RefreshIcon, LocalShipping as LocalShippingIcon, Person as PersonIcon, Inventory as InventoryIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
 import { getAllPurchaseOrders, getPurchaseOrderById, searchPurchaseOrdersQuick, getRecentPurchaseOrders } from '../../services/purchaseOrderService';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -57,6 +58,7 @@ const UnloadingReportFormPage = () => {
   const location = useLocation();
   const { currentUser } = useAuth();
   const theme = useTheme();
+  const { t } = useTranslation('forms');
   
   // Sprawdź czy jesteśmy w trybie edycji
   const isEditMode = new URLSearchParams(location.search).get('edit') === 'true';
@@ -860,19 +862,19 @@ const UnloadingReportFormPage = () => {
               gap: 1
             }}>
               <LocalShippingIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
-              {isEditMode ? 'EDYCJA RAPORTU - ROZŁADUNEK TOWARU' : 'RAPORT - ROZŁADUNEK TOWARU'}
+              {isEditMode ? t('inventoryForms.unloadingReport.editTitle') : t('inventoryForms.unloadingReport.formTitle')}
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary" sx={{
               fontSize: { xs: '0.75rem', sm: '0.875rem' },
               mb: 2
             }}>
-              {isEditMode ? 'Edytuj wypełniony formularz rozładunku towaru' : 'Formularz dokumentujący proces rozładunku towaru'}
+              {t('inventoryForms.unloadingReport.description')}
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary" sx={{
               fontSize: { xs: '0.75rem', sm: '0.875rem' },
               mb: 0
             }}>
-              W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+              {t('common.emergencyContact')} mateusz@bgwpharma.com
             </Typography>
           </Box>
 
@@ -884,7 +886,7 @@ const UnloadingReportFormPage = () => {
               variant="outlined"
               sx={getFormButtonStyles('outlined')}
             >
-              Powrót
+              {t('common.back')}
             </Button>
           </Box>
 
@@ -893,7 +895,7 @@ const UnloadingReportFormPage = () => {
             <TextField
               required
               fullWidth
-              label="Adres e-mail"
+              label={t('common.email')}
               name="email"
               value={formData.email}
               onChange={handleInputChange('email')}
@@ -908,24 +910,24 @@ const UnloadingReportFormPage = () => {
             {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
             <Box sx={getFormSectionStyles(theme, 'primary')}>
               <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-                Sekcja 1 z 3
+                {t('common.section', { current: 1, total: 3 })}
               </Typography>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <PersonIcon className="section-icon" />
-                Identyfikacja
+                {t('sections.identification')}
               </Typography>
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid item xs={12}>
                   <FormControl component="fieldset" required error={!!errors.employeeName}>
-                    <FormLabel component="legend">Imię i nazwisko: </FormLabel>
+                    <FormLabel component="legend">{t('inventoryForms.unloadingReport.employeeNameLabel')}</FormLabel>
                     <RadioGroup
                       value={formData.employeeName}
                       onChange={handleInputChange('employeeName')}
                     >
                       {employeeLoading ? (
-                        <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('common.loadingOptions')}</Typography>
                       ) : (
                         employeeOptions.map((employee) => (
                           <FormControlLabel 
@@ -942,13 +944,13 @@ const UnloadingReportFormPage = () => {
                 
                 <Grid item xs={12}>
                   <FormControl component="fieldset" required error={!!errors.position}>
-                    <FormLabel component="legend">Stanowisko: </FormLabel>
+                    <FormLabel component="legend">{t('inventoryForms.unloadingReport.positionLabel')}</FormLabel>
                     <RadioGroup
                       value={formData.position}
                       onChange={handleInputChange('position')}
                     >
                       {positionLoading ? (
-                        <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('common.loadingOptions')}</Typography>
                       ) : (
                         positionOptions.map((position) => (
                           <FormControlLabel 
@@ -965,7 +967,7 @@ const UnloadingReportFormPage = () => {
                 
                 <Grid item xs={12} sm={6}>
                   <DatePicker
-                    label="Data wypełnienia "
+                    label={t('inventoryForms.unloadingReport.fillDateLabel')}
                     value={formData.fillDate}
                     onChange={handleDateChange('fillDate')}
                     renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -976,7 +978,7 @@ const UnloadingReportFormPage = () => {
                   <TextField
                     required
                     fullWidth
-                    label="Godzina wypełnienia"
+                    label={t('inventoryForms.unloadingReport.fillTimeLabel')}
                     name="fillTime"
                     type="time"
                     value={formData.fillTime}
@@ -995,12 +997,12 @@ const UnloadingReportFormPage = () => {
                  options={searchResults}
                  getOptionLabel={(option) => {
                    if (typeof option === 'string') return option;
-                   return `${option.number || ''} - ${option.supplier?.name || 'Brak dostawcy'}`;
+                   return `${option.number || ''} - ${option.supplier?.name || t('common.noSupplier')}`;
                  }}
                  groupBy={(option) => {
-                   if (typeof option === 'string') return 'Historia wyszukiwania';
-                   if (option.searchScore && option.searchScore >= 50) return 'Dokładne dopasowania';
-                   return 'Inne wyniki';
+                   if (typeof option === 'string') return t('inventoryForms.unloadingReport.searchHistory');
+                   if (option.searchScore && option.searchScore >= 50) return t('inventoryForms.unloadingReport.exactMatches');
+                   return t('inventoryForms.unloadingReport.otherResults');
                  }}
                  inputValue={poSearchQuery}
                  onInputChange={(event, newInputValue) => {
@@ -1033,10 +1035,10 @@ const UnloadingReportFormPage = () => {
                  renderInput={(params) => (
                    <TextField
                      {...params}
-                     label="Numer zamówienia (PO) "
+                     label={t('inventoryForms.unloadingReport.poNumberLabel')}
                      required
                      error={!!errors.poNumber}
-                     helperText={errors.poNumber || "Wpisz min. 2 znaki aby wyszukać PO (numer lub dostawca)"}
+                     helperText={errors.poNumber || t('inventoryForms.unloadingReport.poSearchHelperText')}
                      InputProps={{
                        ...params.InputProps,
                        startAdornment: (
@@ -1060,27 +1062,27 @@ const UnloadingReportFormPage = () => {
                          {option.number}
                        </Typography>
                        <Typography variant="caption" color="text.secondary">
-                         {option.supplier?.name || 'Brak dostawcy'} • {option.status || 'Brak statusu'}
+                         {option.supplier?.name || t('common.noSupplier')} • {option.status || t('common.noStatus')}
                        </Typography>
                      </Box>
                    </Box>
                  )}
                  noOptionsText={
                    poSearchQuery && poSearchQuery.length >= 2 
-                     ? `Nie znaleziono PO dla "${poSearchQuery}"` 
-                     : "Wpisz min. 2 znaki aby wyszukać"
+                     ? t('inventoryForms.unloadingReport.noPoFoundFor', { query: poSearchQuery })
+                     : t('inventoryForms.unloadingReport.typeMinChars')
                  }
-                 loadingText="Wyszukiwanie PO..."
+                 loadingText={t('inventoryForms.unloadingReport.searchingPo')}
                />
             </Grid>
 
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Numer faktury"
+                    label={t('inventoryForms.unloadingReport.invoiceNumberLabel')}
                     value={formData.invoiceNumber}
                     onChange={handleInputChange('invoiceNumber')}
                     fullWidth
-                    helperText="Numer faktury dostawy (opcjonalnie)"
+                    helperText={t('inventoryForms.unloadingReport.invoiceNumberHelperText')}
                   />
                 </Grid>
               </Grid>
@@ -1089,18 +1091,18 @@ const UnloadingReportFormPage = () => {
             {/* SEKCJA 2 z 3 - INFORMACJE O ROZŁADUNKU */}
             <Box sx={getFormSectionStyles(theme, 'warning')}>
               <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
-                Sekcja 2 z 3
+                {t('common.section', { current: 2, total: 3 })}
               </Typography>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <LocalShippingIcon className="section-icon" />
-                Informacje o rozładunku
+                {t('inventoryForms.unloadingReport.section2Title')}
               </Typography>
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data rozładunku "
+                label={t('inventoryForms.unloadingReport.unloadingDateLabel')}
                 value={formData.unloadingDate}
                 onChange={handleDateChange('unloadingDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -1110,7 +1112,7 @@ const UnloadingReportFormPage = () => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Godzina rozładunku"
+                label={t('inventoryForms.unloadingReport.unloadingTimeLabel')}
                 name="unloadingTime"
                 type="time"
                 value={formData.unloadingTime}
@@ -1123,31 +1125,31 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa przewoźnika "
+                label={t('inventoryForms.unloadingReport.carrierNameLabel')}
                 value={formData.carrierName}
                 onChange={handleInputChange('carrierName')}
                 fullWidth
                 required
                 error={!!errors.carrierName}
-                helperText={errors.carrierName || "Tekst krótkiej odpowiedzi"}
+                helperText={errors.carrierName || t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nr rejestracyjny samochodu "
+                label={t('inventoryForms.unloadingReport.vehicleRegistrationLabel')}
                 value={formData.vehicleRegistration}
                 onChange={handleInputChange('vehicleRegistration')}
                 fullWidth
                 required
                 error={!!errors.vehicleRegistration}
-                helperText={errors.vehicleRegistration || "Tekst krótkiej odpowiedzi"}
+                helperText={errors.vehicleRegistration || t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.vehicleTechnicalCondition}>
-                <FormLabel component="legend">Stan techniczny samochodu:</FormLabel>
+                <FormLabel component="legend">{t('inventoryForms.unloadingReport.vehicleTechnicalConditionLabel')}</FormLabel>
                 <RadioGroup
                   value={formData.vehicleTechnicalCondition}
                   onChange={handleInputChange('vehicleTechnicalCondition')}
@@ -1156,17 +1158,17 @@ const UnloadingReportFormPage = () => {
                   <FormControlLabel 
                     value="Bez uszkodzeń" 
                     control={<Radio />} 
-                    label="Bez uszkodzeń" 
+                    label={t('inventoryForms.unloadingReport.conditionNoDamage')} 
                   />
                   <FormControlLabel 
                     value="Uszkodzony" 
                     control={<Radio />} 
-                    label="Uszkodzony" 
+                    label={t('inventoryForms.unloadingReport.conditionDamaged')} 
                   />
                   <FormControlLabel 
                     value="Inna odpowiedź" 
                     control={<Radio />} 
-                    label="Inna odpowiedź" 
+                    label={t('common.otherAnswer')} 
                   />
                 </RadioGroup>
               </FormControl>
@@ -1174,7 +1176,7 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.transportHygiene}>
-                <FormLabel component="legend">Higiena środka transportu i kierowcy: </FormLabel>
+                <FormLabel component="legend">{t('inventoryForms.unloadingReport.transportHygieneLabel')}</FormLabel>
                 <RadioGroup
                   value={formData.transportHygiene}
                   onChange={handleInputChange('transportHygiene')}
@@ -1183,17 +1185,17 @@ const UnloadingReportFormPage = () => {
                   <FormControlLabel 
                     value="Prawidłowa" 
                     control={<Radio />} 
-                    label="Prawidłowa" 
+                    label={t('common.correct')} 
                   />
                   <FormControlLabel 
                     value="Nieprawidłowa" 
                     control={<Radio />} 
-                    label="Nieprawidłowa" 
+                    label={t('common.incorrect')} 
                   />
                   <FormControlLabel 
                     value="Inna odpowiedź" 
                     control={<Radio />} 
-                    label="Inna odpowiedź" 
+                    label={t('common.otherAnswer')} 
                   />
                 </RadioGroup>
               </FormControl>
@@ -1201,14 +1203,14 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <TextField
-                label="Uwagi"
+                label={t('common.notes')}
                 value={formData.notes}
                 onChange={handleInputChange('notes')}
                 fullWidth
                 multiline
                 rows={4}
-                placeholder="Ewentualne uwagi do stanu technicznego samochodu lub higieny"
-                helperText="Tekst długiej odpowiedzi"
+                placeholder={t('inventoryForms.unloadingReport.notesPlaceholder')}
+                helperText={t('common.longAnswerText')}
               />
                 </Grid>
               </Grid>
@@ -1217,31 +1219,31 @@ const UnloadingReportFormPage = () => {
             {/* SEKCJA 3 z 3 - INFORMACJE O TOWARZE */}
             <Box sx={getFormSectionStyles(theme, 'success')}>
               <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
-                Sekcja 3 z 3
+                {t('common.section', { current: 3, total: 3 })}
               </Typography>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <InventoryIcon className="section-icon" />
-                Informacje o towarze
+                {t('inventoryForms.unloadingReport.section3Title')}
               </Typography>
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid item xs={12} sm={6}>
                   <TextField
-                    label="Nazwa dostawcy "
+                    label={t('inventoryForms.unloadingReport.supplierNameLabel')}
                     value={formData.supplierName}
                     onChange={handleInputChange('supplierName')}
                     fullWidth
                     required
                     error={!!errors.supplierName}
-                    helperText={errors.supplierName || "Tekst krótkiej odpowiedzi"}
+                    helperText={errors.supplierName || t('common.shortAnswerText')}
                   />
                 </Grid>
                 
                 <Grid item xs={12}>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                  Pozycje dostarczonego towaru 
+                  {t('inventoryForms.unloadingReport.deliveredItemsTitle')}
                 </Typography>
                 {formData.poNumber && (
                   <Button
@@ -1251,9 +1253,9 @@ const UnloadingReportFormPage = () => {
                     onClick={handleRefreshPoItems}
                     disabled={poLoading}
                     sx={{ minWidth: 'auto', flexShrink: 0 }}
-                    title="Odśwież pozycje z PO"
+                    title={t('common.refresh')}
                   >
-                    Odśwież
+                    {t('common.refresh')}
                   </Button>
                 )}
               </Box>
@@ -1266,21 +1268,21 @@ const UnloadingReportFormPage = () => {
               
               {poItems.length === 0 ? (
                 <Alert severity="info">
-                  {formData.poNumber ? 'Ładowanie pozycji z PO...' : 'Najpierw wybierz numer PO'}
+                  {formData.poNumber ? t('inventoryForms.unloadingReport.loadingPoItems') : t('inventoryForms.unloadingReport.selectPoFirst')}
                 </Alert>
               ) : (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell padding="checkbox">Dostarczone</TableCell>
-                        <TableCell>Nazwa produktu</TableCell>
-                        <TableCell>Ilość w PO</TableCell>
-                        <TableCell>Waga</TableCell>
-                        <TableCell>Numer partii</TableCell>
-                        <TableCell>Ilość rozładowana </TableCell>
-                        <TableCell>Data ważności</TableCell>
-                        <TableCell align="center">Akcje</TableCell>
+                        <TableCell padding="checkbox">{t('inventoryForms.unloadingReport.tableDelivered')}</TableCell>
+                        <TableCell>{t('inventoryForms.unloadingReport.tableProductName')}</TableCell>
+                        <TableCell>{t('inventoryForms.unloadingReport.tableQuantityInPo')}</TableCell>
+                        <TableCell>{t('inventoryForms.unloadingReport.tableWeight')}</TableCell>
+                        <TableCell>{t('inventoryForms.unloadingReport.tableBatchNumber')}</TableCell>
+                        <TableCell>{t('inventoryForms.unloadingReport.tableUnloadedQuantity')}</TableCell>
+                        <TableCell>{t('inventoryForms.unloadingReport.tableExpiryDate')}</TableCell>
+                        <TableCell align="center">{t('common.actions')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1301,7 +1303,7 @@ const UnloadingReportFormPage = () => {
                               </TableCell>
                               <TableCell rowSpan={isSelected ? batches.length : 1}>
                                 <Typography variant="body2" fontWeight="bold">
-                                  {item.productName || 'Brak nazwy'}
+                                  {item.productName || t('common.noName')}
                                 </Typography>
                                 {item.description && (
                                   <Typography variant="caption" color="text.secondary">
@@ -1310,7 +1312,7 @@ const UnloadingReportFormPage = () => {
                                 )}
                               </TableCell>
                               <TableCell rowSpan={isSelected ? batches.length : 1}>
-                                {item.quantity ? `${item.quantity} ${item.unit}` : 'Brak danych'}
+                                {item.quantity ? `${item.quantity} ${item.unit}` : t('common.noData')}
                               </TableCell>
                               <TableCell rowSpan={isSelected ? batches.length : 1}>
                                 {item.weight > 0 ? `${item.weight} kg` : '-'}
@@ -1322,7 +1324,7 @@ const UnloadingReportFormPage = () => {
                                   <TableCell>
                                     <TextField
                                       size="small"
-                                      placeholder="Nr partii"
+                                      placeholder={t('inventoryForms.unloadingReport.batchNumberPlaceholder')}
                                       value={batches[0]?.batchNumber || ''}
                                       onChange={(e) => handleBatchFieldChange(item.id, batches[0].id, 'batchNumber', e.target.value)}
                                       sx={{ minWidth: 100 }}
@@ -1331,7 +1333,7 @@ const UnloadingReportFormPage = () => {
                                   <TableCell>
                                     <TextField
                                       size="small"
-                                      placeholder="Ilość"
+                                      placeholder={t('common.quantity')}
                                       value={batches[0]?.unloadedQuantity || ''}
                                       onChange={(e) => handleBatchFieldChange(item.id, batches[0].id, 'unloadedQuantity', e.target.value)}
                                       sx={{ minWidth: 100 }}
@@ -1348,7 +1350,7 @@ const UnloadingReportFormPage = () => {
                                           <TextField
                                             {...params}
                                             size="small"
-                                            placeholder="Data ważności"
+                                            placeholder={t('inventoryForms.unloadingReport.expiryDatePlaceholder')}
                                             sx={{ minWidth: 140 }}
                                           />
                                         )}
@@ -1361,7 +1363,7 @@ const UnloadingReportFormPage = () => {
                                             onChange={(e) => handleBatchFieldChange(item.id, batches[0].id, 'noExpiryDate', e.target.checked)}
                                           />
                                         }
-                                        label="Nie dotyczy"
+                                        label={t('common.notApplicable')}
                                         sx={{ 
                                           margin: 0,
                                           '& .MuiFormControlLabel-label': {
@@ -1380,7 +1382,7 @@ const UnloadingReportFormPage = () => {
                                       onClick={() => handleAddBatch(item.id)}
                                       sx={{ minWidth: 'auto', px: 1 }}
                                     >
-                                      + Partia
+                                      + {t('inventoryForms.unloadingReport.batch')}
                                     </Button>
                                   </TableCell>
                                 </>
@@ -1400,7 +1402,7 @@ const UnloadingReportFormPage = () => {
                                 <TableCell>
                                   <TextField
                                     size="small"
-                                    placeholder="Nr partii"
+                                    placeholder={t('inventoryForms.unloadingReport.batchNumberPlaceholder')}
                                     value={batch.batchNumber || ''}
                                     onChange={(e) => handleBatchFieldChange(item.id, batch.id, 'batchNumber', e.target.value)}
                                     sx={{ minWidth: 100 }}
@@ -1409,7 +1411,7 @@ const UnloadingReportFormPage = () => {
                                 <TableCell>
                                   <TextField
                                     size="small"
-                                    placeholder="Ilość"
+                                    placeholder={t('common.quantity')}
                                     value={batch.unloadedQuantity || ''}
                                     onChange={(e) => handleBatchFieldChange(item.id, batch.id, 'unloadedQuantity', e.target.value)}
                                     sx={{ minWidth: 100 }}
@@ -1426,7 +1428,7 @@ const UnloadingReportFormPage = () => {
                                         <TextField
                                           {...params}
                                           size="small"
-                                          placeholder="Data ważności"
+                                          placeholder={t('inventoryForms.unloadingReport.expiryDatePlaceholder')}
                                           sx={{ minWidth: 140 }}
                                         />
                                       )}
@@ -1439,7 +1441,7 @@ const UnloadingReportFormPage = () => {
                                           onChange={(e) => handleBatchFieldChange(item.id, batch.id, 'noExpiryDate', e.target.checked)}
                                         />
                                       }
-                                      label="Nie dotyczy"
+                                      label={t('common.notApplicable')}
                                       sx={{ 
                                         margin: 0,
                                         '& .MuiFormControlLabel-label': {
@@ -1458,7 +1460,7 @@ const UnloadingReportFormPage = () => {
                                     onClick={() => handleRemoveBatch(item.id, batch.id)}
                                     sx={{ minWidth: 'auto', px: 1 }}
                                   >
-                                    Usuń
+                                    {t('common.delete')}
                                   </Button>
                                 </TableCell>
                               </TableRow>
@@ -1474,40 +1476,40 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Ilość palet "
+                label={t('inventoryForms.unloadingReport.palletQuantityLabel')}
                 value={formData.palletQuantity}
                 onChange={handleInputChange('palletQuantity')}
                 fullWidth
                 error={!!errors.palletQuantity}
-                helperText={errors.palletQuantity || "Tekst krótkiej odpowiedzi"}
+                helperText={errors.palletQuantity || t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Ilość kartonów/tub "
+                label={t('inventoryForms.unloadingReport.cartonsTubsQuantityLabel')}
                 value={formData.cartonsTubsQuantity}
                 onChange={handleInputChange('cartonsTubsQuantity')}
                 fullWidth
                 error={!!errors.cartonsTubsQuantity}
-                helperText={errors.cartonsTubsQuantity || "Tekst krótkiej odpowiedzi"}
+                helperText={errors.cartonsTubsQuantity || t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Waga "
+                label={t('inventoryForms.unloadingReport.weightLabel')}
                 value={formData.weight}
                 onChange={handleInputChange('weight')}
                 fullWidth
                 error={!!errors.weight}
-                helperText={errors.weight || "Tekst krótkiej odpowiedzi"}
+                helperText={errors.weight || t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.visualInspectionResult}>
-                <FormLabel component="legend">Wynik oceny wizualnej (wygląd, zapach, opakowanie): </FormLabel>
+                <FormLabel component="legend">{t('inventoryForms.unloadingReport.visualInspectionLabel')}</FormLabel>
                 <RadioGroup
                   value={formData.visualInspectionResult}
                   onChange={handleInputChange('visualInspectionResult')}
@@ -1516,17 +1518,17 @@ const UnloadingReportFormPage = () => {
                   <FormControlLabel 
                     value="Prawidłowy" 
                     control={<Radio />} 
-                    label="Prawidłowy" 
+                    label={t('common.correct')} 
                   />
                   <FormControlLabel 
                     value="Nieprawidłowy" 
                     control={<Radio />} 
-                    label="Nieprawidłowy" 
+                    label={t('common.incorrect')} 
                   />
                   <FormControlLabel 
                     value="Inna odpowiedź" 
                     control={<Radio />} 
-                    label="Inna odpowiedź" 
+                    label={t('common.otherAnswer')} 
                   />
                 </RadioGroup>
               </FormControl>
@@ -1534,27 +1536,27 @@ const UnloadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nr certyfikatu ekologicznego oraz jego data ważności"
+                label={t('inventoryForms.unloadingReport.ecoCertificateLabel')}
                 value={formData.ecoCertificateNumber}
                 onChange={handleInputChange('ecoCertificateNumber')}
                 fullWidth
-                helperText="Tekst krótkiej odpowiedzi"
+                helperText={t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Uwagi"
+                label={t('common.notes')}
                 value={formData.goodsNotes}
                 onChange={handleInputChange('goodsNotes')}
                 fullWidth
-                helperText="Tekst krótkiej odpowiedzi"
+                helperText={t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <Typography variant="body1" gutterBottom>
-                Skan dokumentów dostawy:
+                {t('inventoryForms.unloadingReport.documentScanLabel')}
               </Typography>
               <Button
                 variant="outlined"
@@ -1563,7 +1565,7 @@ const UnloadingReportFormPage = () => {
                 sx={{ mb: 1 }}
                 fullWidth
               >
-                {formData.documentsFile ? 'Zmień załącznik' : 'Dodaj plik'}
+                {formData.documentsFile ? t('common.changeAttachment') : t('common.addFile')}
                 <input
                   type="file"
                   hidden
@@ -1598,7 +1600,7 @@ const UnloadingReportFormPage = () => {
                     startIcon={<DeleteIcon />}
                     onClick={() => setFormData(prev => ({ ...prev, documentsFile: null }))}
                   >
-                    Usuń
+                    {t('common.delete')}
                   </Button>
                 </Box>
               )}
@@ -1618,10 +1620,10 @@ const UnloadingReportFormPage = () => {
                   <AttachFileIcon color="action" />
                   <Box sx={{ flexGrow: 1 }}>
                     <Typography variant="body2" color="text.primary">
-                      {formData.documentsName || 'Załącznik'}
+                      {formData.documentsName || t('common.attachment')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Istniejący plik
+                      {t('common.existingFile')}
                     </Typography>
                   </Box>
                   <Button
@@ -1630,7 +1632,7 @@ const UnloadingReportFormPage = () => {
                     startIcon={<VisibilityIcon />}
                     onClick={() => window.open(formData.documentsUrl, '_blank')}
                   >
-                    Zobacz
+                    {t('common.view')}
                   </Button>
                   <Button
                     size="small"
@@ -1639,12 +1641,12 @@ const UnloadingReportFormPage = () => {
                     startIcon={<DeleteIcon />}
                     onClick={() => setFormData(prev => ({ ...prev, documentsUrl: '', documentsName: '' }))}
                   >
-                    Usuń
+                    {t('common.delete')}
                   </Button>
                 </Box>
               )}
               <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
-                Dodaj plik PDF, JPG lub PNG zawierający skan dokumentów dostawy
+                {t('inventoryForms.unloadingReport.documentScanHelperText')}
               </Typography>
                 </Grid>
               </Grid>
@@ -1657,7 +1659,7 @@ const UnloadingReportFormPage = () => {
                 onClick={handleBack}
                 sx={getFormButtonStyles('outlined')}
               >
-                Anuluj
+                {t('common.cancel')}
               </Button>
               <Button
                 type="submit"
@@ -1669,7 +1671,7 @@ const UnloadingReportFormPage = () => {
                   flexGrow: 1
                 }}
               >
-                {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
+                {saving ? t('common.saving') : (isEditMode ? t('common.saveChanges') : t('common.submitReport'))}
               </Button>
             </Box>
           </Box>
@@ -1680,7 +1682,7 @@ const UnloadingReportFormPage = () => {
           onClose={() => setShowSuccess(false)}
         >
           <Alert onClose={() => setShowSuccess(false)} severity="success" sx={{ width: '100%' }}>
-            {isEditMode ? 'Raport rozładunku towaru został zaktualizowany pomyślnie!' : 'Raport rozładunku towaru został przesłany pomyślnie!'}
+            {isEditMode ? t('inventoryForms.unloadingReport.successMessageEdit') : t('inventoryForms.unloadingReport.successMessage')}
           </Alert>
         </Snackbar>
 
@@ -1696,7 +1698,7 @@ const UnloadingReportFormPage = () => {
             severity="info" 
             sx={{ width: '100%' }}
           >
-            Automatycznie uzupełniono dane na podstawie wybranego PO
+            {t('inventoryForms.unloadingReport.autoFillNotification')}
           </Alert>
         </Snackbar>
         </Paper>

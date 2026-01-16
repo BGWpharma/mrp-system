@@ -74,6 +74,70 @@ import {
       ...doc.data()
     }));
   };
+
+  /**
+   * ⚡ OPTYMALIZACJA WYDAJNOŚCI: Pobiera aktywne receptury z podstawowymi polami
+   * Używane w formularzach gdzie potrzebne są tylko podstawowe dane do wyboru receptury
+   * @param {number} maxResults - Maksymalna liczba receptur do pobrania (domyślnie 150)
+   * @returns {Promise<Array>} - Tablica receptur z podstawowymi polami
+   */
+  export const getActiveRecipesMinimal = async (maxResults = 150) => {
+    try {
+      const recipesRef = collection(db, RECIPES_COLLECTION);
+      
+      // Pobierz tylko aktywne receptury, posortowane po nazwie
+      // Używamy query z limitem dla lepszej wydajności
+      const q = query(
+        recipesRef,
+        where('status', '==', 'active'),
+        orderBy('name', 'asc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      // Mapuj tylko potrzebne pola dla wydajności
+      const recipes = querySnapshot.docs.slice(0, maxResults).map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          productName: data.productName || data.name || '',
+          category: data.category || '',
+          unit: data.unit || 'szt.',
+          expectedYield: data.expectedYield || null,
+          // Pola potrzebne do TaskForm
+          productMaterialId: data.productMaterialId || null,
+          lotNumber: data.lotNumber || null,
+          processingCostPerUnit: data.processingCostPerUnit || 0,
+          productionTimePerUnit: data.productionTimePerUnit || null
+        };
+      });
+      
+      console.log(`⚡ getActiveRecipesMinimal: Pobrano ${recipes.length} aktywnych receptur (limit: ${maxResults})`);
+      
+      return recipes;
+    } catch (error) {
+      console.error('Błąd w getActiveRecipesMinimal:', error);
+      // Fallback do getAllRecipes w przypadku błędu (np. brak indeksu)
+      console.warn('Fallback: Używam getAllRecipes');
+      const allRecipes = await getAllRecipes();
+      return allRecipes
+        .filter(r => r.status === 'active')
+        .slice(0, maxResults)
+        .map(r => ({
+          id: r.id,
+          name: r.name || '',
+          productName: r.productName || r.name || '',
+          category: r.category || '',
+          unit: r.unit || 'szt.',
+          expectedYield: r.expectedYield || null,
+          productMaterialId: r.productMaterialId || null,
+          lotNumber: r.lotNumber || null,
+          processingCostPerUnit: r.processingCostPerUnit || 0,
+          productionTimePerUnit: r.productionTimePerUnit || null
+        }));
+    }
+  };
   
   /**
    * Pobiera receptury z paginacją

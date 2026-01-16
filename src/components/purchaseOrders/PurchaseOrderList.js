@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import { format, isValid } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon, Assessment as ReportIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Visibility as ViewIcon, ViewColumn as ViewColumnIcon, Clear as ClearIcon, Refresh as RefreshIcon, Sync as SyncIcon, Assessment as ReportIcon, Warning as WarningIcon } from '@mui/icons-material';
+import Badge from '@mui/material/Badge';
 import { 
   getAllPurchaseOrders, 
   deletePurchaseOrder, 
@@ -38,7 +39,9 @@ import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { usePurchaseOrderListState } from '../../contexts/PurchaseOrderListStateContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import PurchaseOrderReportDialog from './PurchaseOrderReportDialog';
+import POOrderReminderDialog from './POOrderReminderDialog';
 import { generatePurchaseOrderReport } from '../../services/purchaseOrderReportService';
+import { getUnorderedMaterialAlertsCount } from '../../services/poOrderReminderService';
 
 const PurchaseOrderList = () => {
   const { t } = useTranslation();
@@ -72,6 +75,10 @@ const PurchaseOrderList = () => {
   
   // Stan dla dialogu raportu CSV
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  
+  // Stan dla dialogu niezamówionych materiałów
+  const [orderReminderDialogOpen, setOrderReminderDialogOpen] = useState(false);
+  const [alertsCount, setAlertsCount] = useState(0);
   
   // Dodajemy stan dla opóźnionego wyszukiwania
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -173,6 +180,20 @@ const PurchaseOrderList = () => {
       }
     };
   }, [searchTerm]);
+  
+  // Pobieranie liczby alertów o niezamówionych materiałach
+  useEffect(() => {
+    const fetchAlertsCount = async () => {
+      try {
+        const count = await getUnorderedMaterialAlertsCount();
+        setAlertsCount(count);
+      } catch (error) {
+        console.error('Błąd pobierania liczby alertów:', error);
+      }
+    };
+    
+    fetchAlertsCount();
+  }, []);
   
   // Funkcja obsługująca kliknięcie w nagłówek kolumny
   const handleRequestSort = (property) => {
@@ -781,6 +802,20 @@ const PurchaseOrderList = () => {
             >
               <ViewColumnIcon />
             </IconButton>
+          </Tooltip>
+          
+          <Tooltip title={alertsCount > 0 ? `${alertsCount} niezamówionych materiałów` : 'Sprawdź niezamówione materiały'}>
+            <Badge badgeContent={alertsCount} color="error" max={99}>
+              <Button
+                variant={alertsCount > 0 ? "contained" : "outlined"}
+                color={alertsCount > 0 ? "warning" : "primary"}
+                startIcon={<WarningIcon />}
+                onClick={() => setOrderReminderDialogOpen(true)}
+                size="small"
+              >
+                Niezamówione
+              </Button>
+            </Badge>
           </Tooltip>
           
           <Button
@@ -1489,6 +1524,12 @@ const PurchaseOrderList = () => {
         open={reportDialogOpen}
         onClose={() => setReportDialogOpen(false)}
         onGenerate={handleGenerateReport}
+      />
+      
+      {/* Dialog niezamówionych materiałów */}
+      <POOrderReminderDialog
+        open={orderReminderDialogOpen}
+        onClose={() => setOrderReminderDialogOpen(false)}
       />
     </Container>
   );

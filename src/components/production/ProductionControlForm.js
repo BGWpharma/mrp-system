@@ -43,6 +43,7 @@ import { format } from 'date-fns';
 import { query, where } from 'firebase/firestore';
 import { getAllOrders } from '../../services/orderService';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useStaffOptions, usePositionOptions } from '../../hooks/useFormOptions';
 import FileOrCameraInput from '../common/FileOrCameraInput';
 import { 
@@ -332,6 +333,7 @@ const ProductionControlForm = ({
   const searchParams = new URLSearchParams(location.search);
   const isEditMode = searchParams.get('edit') === 'true';
   const { currentUser } = useAuth();
+  const { t } = useTranslation('forms');
 
   // Używamy hooków do pobierania opcji z bazy danych
   const { options: staffOptions, loading: staffLoading } = useStaffOptions();
@@ -795,24 +797,28 @@ const ProductionControlForm = ({
 
       // Pokaż komunikat o pomyślnym pobraniu danych
       const norms = checkEnvironmentalNorms(data.temperature, data.humidity);
-      const temperatureStatus = norms.temperature.isInRange ? 'w normie' : norms.temperature.message.toLowerCase();
-      const humidityStatus = norms.humidity.isInRange ? 'w normie' : norms.humidity.message.toLowerCase();
+      const temperatureStatus = norms.temperature.isInRange 
+        ? t('productionForms.productionControl.sensorDialog.inNorm') 
+        : norms.temperature.message.toLowerCase();
+      const humidityStatus = norms.humidity.isInRange 
+        ? t('productionForms.productionControl.sensorDialog.inNorm') 
+        : norms.humidity.message.toLowerCase();
       const actualTimestamp = formatSensorTimestamp(data.timestamp);
       
-      let message = `Dane pobrane pomyślnie z czujnika "${selectedSensor}":\n\n` +
-                   `🌡️ Temperatura: ${data.temperature.toFixed(1)}°C (${temperatureStatus})\n` +
-                   `💧 Wilgotność: ${data.humidity.toFixed(1)}% (${humidityStatus})\n` +
-                   `⏰ Rzeczywisty czas odczytu: ${actualTimestamp.full}`;
+      let message = t('productionForms.productionControl.sensorDialog.dataFetchedFrom', { sensorName: selectedSensor }) + '\n\n' +
+                   `🌡️ ${t('productionForms.productionControl.sensorDialog.temperature')}: ${data.temperature.toFixed(1)}°C (${temperatureStatus})\n` +
+                   `💧 ${t('productionForms.productionControl.sensorDialog.humidity')}: ${data.humidity.toFixed(1)}% (${humidityStatus})\n` +
+                   `⏰ ${t('productionForms.productionControl.sensorDialog.actualReadTime')}: ${actualTimestamp.full}`;
       
       if (data.timeDifference > 0) {
-        message += `\n\n⚠️ Różnica czasowa: ${data.timeDifference} minut od żądanego czasu`;
+        message += '\n\n⚠️ ' + t('productionForms.productionControl.sensorDialog.timeDifferenceMessage', { minutes: data.timeDifference });
       }
       
-      showSensorInfoDialog('Dane z czujnika pobrane pomyślnie', message);
+      showSensorInfoDialog(t('productionForms.productionControl.sensorDialog.successTitle'), message);
             
     } catch (error) {
       console.error('Błąd podczas pobierania danych z czujnika:', error);
-      showSensorInfoDialog('Błąd pobierania danych', error.message, true);
+      showSensorInfoDialog(t('productionForms.productionControl.sensorDialog.errorTitle'), error.message, true);
     }
   };
 
@@ -1072,19 +1078,19 @@ const ProductionControlForm = ({
           fontSize: { xs: '1.25rem', sm: '1.5rem' },
           color: isEditMode ? 'warning.main' : 'primary.main'
         }}>
-          {isEditMode ? 'EDYCJA - RAPORT KONTROLA PRODUKCJI' : 'RAPORT - KONTROLA PRODUKCJI'}
+          {isEditMode ? t('productionForms.productionControl.editTitle') : t('productionForms.productionControl.formTitle')}
         </Typography>
         <Typography variant="body2" align="center" color="text.secondary" paragraph sx={{
           fontSize: { xs: '0.75rem', sm: '0.875rem' },
           mb: 0
         }}>
-          W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+          {t('common.emergencyContact')} mateusz@bgwpharma.com
         </Typography>
       </Box>
 
         {submitted && (
           <Alert severity="success" sx={{ mb: 3 }}>
-            {isEditMode ? 'Raport kontroli produkcji został zaktualizowany pomyślnie!' : 'Raport kontroli produkcji został wysłany pomyślnie!'}
+            {isEditMode ? t('common.successUpdate') : t('common.successCreate')}
           </Alert>
         )}
         
@@ -1092,10 +1098,10 @@ const ProductionControlForm = ({
           {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
           <Box sx={getFormSectionStyles(theme, 'primary')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-              Sekcja 1 z 3
+              {t('common.section', { current: 1, total: 3 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              Identyfikacja
+              {t('sections.identification')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -1104,7 +1110,7 @@ const ProductionControlForm = ({
                 <TextField
                   required
                   fullWidth
-                  label="Adres e-mail"
+                  label={t('common.email')}
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
@@ -1118,12 +1124,12 @@ const ProductionControlForm = ({
               
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required error={!!validationErrors.name}>
-                  <InputLabel>Imię i nazwisko</InputLabel>
+                  <InputLabel>{t('fields.employeeName')}</InputLabel>
                   <Select
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    label="Imię i nazwisko"
+                    label={t('fields.employeeName')}
                   >
                     {staffOptions.map(option => (
                       <MenuItem key={option} value={option}>{option}</MenuItem>
@@ -1134,12 +1140,12 @@ const ProductionControlForm = ({
               
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required error={!!validationErrors.position}>
-                  <InputLabel>Stanowisko</InputLabel>
+                  <InputLabel>{t('fields.position')}</InputLabel>
                   <Select
                     name="position"
                     value={formData.position}
                     onChange={handleChange}
-                    label="Stanowisko"
+                    label={t('fields.position')}
                   >
                     {positionOptions.map(option => (
                       <MenuItem key={option} value={option}>{option}</MenuItem>
@@ -1151,7 +1157,7 @@ const ProductionControlForm = ({
               <Grid item xs={12}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DateTimePicker
-                    label="Data wypełnienia"
+                    label={t('fields.fillDate')}
                     value={formData.fillDate}
                     onChange={(date) => handleDateChange(date, 'fillDate')}
                     renderInput={(params) => 
@@ -1167,10 +1173,10 @@ const ProductionControlForm = ({
           {/* SEKCJA 2 z 3 - PROTOKÓŁ KONTROLI PRODUKCJI */}
           <Box sx={getFormSectionStyles(theme, 'warning')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
-              Sekcja 2 z 3
+              {t('common.section', { current: 2, total: 3 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-              Protokół Kontroli Produkcji
+              {t('productionForms.productionControl.section2Title')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -1182,12 +1188,12 @@ const ProductionControlForm = ({
                 required 
                 error={!!validationErrors.manufacturingOrder}
               >
-                <InputLabel>Manufacturing Order</InputLabel>
+                <InputLabel>{t('productionForms.productionControl.manufacturingOrderLabel')}</InputLabel>
                 <Select
                   name="manufacturingOrder"
                   value={formData.manufacturingOrder}
                   onChange={handleMOChange}
-                  label="Manufacturing Order"
+                  label={t('productionForms.productionControl.manufacturingOrderLabel')}
                   disabled={loadingMO}
                   startAdornment={
                     loadingMO ? 
@@ -1214,12 +1220,12 @@ const ProductionControlForm = ({
                 fullWidth
                 error={!!validationErrors.customerOrder}
               >
-                <InputLabel>Customer Order</InputLabel>
+                <InputLabel>{t('productionForms.productionControl.customerOrderLabel')}</InputLabel>
                 <Select
                 name="customerOrder"
                 value={formData.customerOrder}
                 onChange={handleChange}
-                  label="Customer Order"
+                  label={t('productionForms.productionControl.customerOrderLabel')}
                   disabled={loadingCustomerOrders}
                   startAdornment={
                     loadingCustomerOrders ? 
@@ -1228,7 +1234,7 @@ const ProductionControlForm = ({
                   }
                 >
                   <MenuItem value="">
-                    <em>Wybierz zamówienie klienta</em>
+                    <em>{t('productionForms.productionControl.selectCustomerOrder')}</em>
                   </MenuItem>
                   {customerOrders.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
@@ -1247,7 +1253,7 @@ const ProductionControlForm = ({
             <Grid item xs={12} sm={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DateTimePicker
-                  label="Data rozpoczęcia produkcji"
+                  label={t('productionForms.productionControl.productionStartDateLabel')}
                   value={formData.productionStartDate}
                   onChange={(date) => handleDateChange(date, 'productionStartDate')}
                   renderInput={(params) => 
@@ -1262,11 +1268,11 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="Godzina rozpoczęcia produkcji"
+                label={t('productionForms.productionControl.productionStartTimeLabel')}
                 name="productionStartTime"
                 value={formData.productionStartTime}
                 onChange={handleChange}
-                placeholder="np. 8:30"
+                placeholder={t('productionForms.productionControl.timePlaceholder')}
                 error={!!validationErrors.productionStartTime}
                 helperText={validationErrors.productionStartTime}
               />
@@ -1275,7 +1281,7 @@ const ProductionControlForm = ({
             <Grid item xs={12} sm={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DateTimePicker
-                  label="Data zakończenia produkcji"
+                  label={t('productionForms.productionControl.productionEndDateLabel')}
                   value={formData.productionEndDate}
                   onChange={(date) => handleDateChange(date, 'productionEndDate')}
                   renderInput={(params) => 
@@ -1289,18 +1295,18 @@ const ProductionControlForm = ({
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Godzina zakończenia produkcji"
+                label={t('productionForms.productionControl.productionEndTimeLabel')}
                 name="productionEndTime"
                 value={formData.productionEndTime}
                 onChange={handleChange}
-                placeholder="np. 8:30"
+                placeholder={t('productionForms.productionControl.timePlaceholder')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                 <DateTimePicker
-                  label="Data odczytu (Warunków Atmosferycznych)"
+                  label={t('productionForms.productionControl.readingDateLabel')}
                   value={formData.readingDate}
                   onChange={(date) => handleDateChange(date, 'readingDate')}
                   renderInput={(params) => 
@@ -1315,11 +1321,11 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="Godzina odczytu (Warunków Atmosferycznych)"
+                label={t('productionForms.productionControl.readingTimeLabel')}
                 name="readingTime"
                 value={formData.readingTime}
                 onChange={handleChange}
-                placeholder="np. 8:30"
+                placeholder={t('productionForms.productionControl.timePlaceholder')}
                 error={!!validationErrors.readingTime}
                 helperText={validationErrors.readingTime}
               />
@@ -1329,12 +1335,12 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="Nazwa produktu"
+                label={t('productionForms.productionControl.productNameLabel')}
                 name="productName"
                 value={formData.productName}
                 onChange={handleChange}
                 error={!!validationErrors.productName}
-                helperText={validationErrors.productName || "Nazwa produktu jest automatycznie wypełniana na podstawie wybranego MO"}
+                helperText={validationErrors.productName || t('helpers.productAutoFill')}
                 InputProps={{
                   readOnly: true,
                 }}
@@ -1345,7 +1351,7 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="LOT"
+                label={t('productionForms.productionControl.lotLabel')}
                 name="lotNumber"
                 value={formData.lotNumber}
                 onChange={handleChange}
@@ -1358,7 +1364,7 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="EXP"
+                label={t('productionForms.productionControl.expLabel')}
                 name="expiryDate"
                 value={formData.expiryDate}
                 onChange={handleChange}
@@ -1373,13 +1379,13 @@ const ProductionControlForm = ({
           {/* SEKCJA 3 z 3 - WARUNKI ŚRODOWISKOWE */}
           <Box sx={getFormSectionStyles(theme, 'success')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
-              Sekcja 3 z 3
+              {t('common.section', { current: 3, total: 3 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SensorsIcon /> Warunki środowiskowe
+              <SensorsIcon /> {t('productionForms.productionControl.section3Title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Wybierz czujnik i pobierz dane dla określonej daty i godziny odczytu
+              {t('productionForms.productionControl.section3Description')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -1387,11 +1393,11 @@ const ProductionControlForm = ({
             
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Wybierz czujnik</InputLabel>
+                <InputLabel>{t('productionForms.productionControl.selectSensorLabel')}</InputLabel>
                 <Select
                   value={selectedSensor}
                   onChange={handleSensorChange}
-                  label="Wybierz czujnik"
+                  label={t('productionForms.productionControl.selectSensorLabel')}
                   disabled={loadingSensors}
                   sx={{ 
                     '& .MuiOutlinedInput-root': {
@@ -1409,14 +1415,14 @@ const ProductionControlForm = ({
                   <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
                     <CircularProgress size={16} />
                     <Typography variant="caption" color="text.secondary">
-                      Ładowanie czujników...
+                      {t('productionForms.productionControl.loadingSensors')}
                     </Typography>
                   </Box>
                 )}
                 {sensors.length === 0 && !loadingSensors && (
                   <Alert severity="warning" sx={{ mt: 1 }}>
                     <Typography variant="caption">
-                      Brak dostępnych czujników
+                      {t('productionForms.productionControl.noSensorsAvailable')}
                     </Typography>
                   </Alert>
                 )}
@@ -1443,13 +1449,13 @@ const ProductionControlForm = ({
                     lineHeight: 1.2,
                     display: { xs: 'block', sm: 'none' }
                   }}>
-                    Pobierz dane
+                    {t('productionForms.productionControl.fetchDataShort')}
                   </Typography>
                   <Typography sx={{ 
                     fontSize: { xs: '0.75rem', sm: '1rem' },
                     display: { xs: 'none', sm: 'block' }
                   }}>
-                    Pobierz dane dla określonej daty/godziny
+                    {t('productionForms.productionControl.fetchDataLong')}
                   </Typography>
                 </Box>
               </Button>
@@ -1457,11 +1463,11 @@ const ProductionControlForm = ({
               {sensorData && (
                 <Alert severity="success" sx={{ mt: 1, py: 0.5 }}>
                   <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
-                    <strong>Ostatnio pobrano:</strong><br />
+                    <strong>{t('productionForms.productionControl.lastFetched')}</strong><br />
                     {formatSensorTimestamp(sensorData.timestamp).full}
                     {sensorData.timeDifference > 0 && (
                       <span style={{ color: '#ff9800', fontWeight: 'bold' }}>
-                        <br />⚠️ Różnica: {sensorData.timeDifference} min
+                        <br />⚠️ {t('productionForms.productionControl.timeDifference', { minutes: sensorData.timeDifference })}
                       </span>
                     )}
                   </Typography>
@@ -1471,7 +1477,7 @@ const ProductionControlForm = ({
               {(!formData.readingDate || !formData.readingTime) && (
                 <Alert severity="info" sx={{ mt: 1, py: 0.5 }}>
                   <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
-                    Najpierw ustaw datę i godzinę odczytu powyżej
+                    {t('productionForms.productionControl.setDateTimeFirst')}
                   </Typography>
                 </Alert>
               )}
@@ -1494,7 +1500,7 @@ const ProductionControlForm = ({
                     color: 'primary.main',
                     mb: 2
                   }}>
-                    💧 Zmierzona wilgotność powietrza w pomieszczeniu
+                    💧 {t('productionForms.productionControl.humidityLabel')}
                   </FormLabel>
                   
                   <Box sx={{ mt: 2 }}>
@@ -1509,7 +1515,7 @@ const ProductionControlForm = ({
                         fontWeight: 'bold',
                         minWidth: { sm: '120px' }
                       }}>
-                        PONIŻEJ NORMY!
+                        {t('productionForms.productionControl.belowNorm')}
                       </Typography>
                       
                       <Box sx={{ flex: 1, width: '100%', px: { xs: 0, sm: 2 } }}>
@@ -1572,7 +1578,7 @@ const ProductionControlForm = ({
                         minWidth: { sm: '120px' },
                         textAlign: { sm: 'right' }
                       }}>
-                        POWYŻEJ NORMY!
+                        {t('productionForms.productionControl.aboveNorm')}
                       </Typography>
                     </Stack>
                     
@@ -1587,7 +1593,7 @@ const ProductionControlForm = ({
                       <Typography variant="caption" color="text.secondary" sx={{ 
                         fontSize: { xs: '0.7rem', sm: '0.75rem' }
                       }}>
-                        Prawidłowy zakres: 40-60%
+                        {t('productionForms.productionControl.humidityRange')}
                       </Typography>
                       <Typography variant="caption" fontWeight="bold" sx={{ 
                         fontSize: { xs: '0.7rem', sm: '0.75rem' },
@@ -1595,7 +1601,7 @@ const ProductionControlForm = ({
                           ? 'success.main' 
                           : 'error.main'
                       }}>
-                        Wybrana wartość: {typeof formData.humidity === 'number' ? `${formData.humidity}%` : 'Nie wybrano'}
+                        {t('productionForms.productionControl.selectedValue')}: {typeof formData.humidity === 'number' ? `${formData.humidity}%` : t('productionForms.productionControl.notSelected')}
                       </Typography>
                     </Box>
                   </Box>
@@ -1620,7 +1626,7 @@ const ProductionControlForm = ({
                     color: 'primary.main',
                     mb: 2
                   }}>
-                    🌡️ Zmierzona temperatura powietrza w pomieszczeniu
+                    🌡️ {t('productionForms.productionControl.temperatureLabel')}
                   </FormLabel>
                   
                   <Box sx={{ mt: 2 }}>
@@ -1635,7 +1641,7 @@ const ProductionControlForm = ({
                         fontWeight: 'bold',
                         minWidth: { sm: '120px' }
                       }}>
-                        PONIŻEJ NORMY!
+                        {t('productionForms.productionControl.belowNorm')}
                       </Typography>
                       
                       <Box sx={{ flex: 1, width: '100%', px: { xs: 0, sm: 2 } }}>
@@ -1700,7 +1706,7 @@ const ProductionControlForm = ({
                         minWidth: { sm: '120px' },
                         textAlign: { sm: 'right' }
                       }}>
-                        POWYŻEJ NORMY!
+                        {t('productionForms.productionControl.aboveNorm')}
                       </Typography>
                     </Stack>
                     
@@ -1715,7 +1721,7 @@ const ProductionControlForm = ({
                       <Typography variant="caption" color="text.secondary" sx={{ 
                         fontSize: { xs: '0.7rem', sm: '0.75rem' }
                       }}>
-                        Prawidłowy zakres: 10-25°C
+                        {t('productionForms.productionControl.temperatureRange')}
                       </Typography>
                       <Typography variant="caption" fontWeight="bold" sx={{ 
                         fontSize: { xs: '0.7rem', sm: '0.75rem' },
@@ -1723,7 +1729,7 @@ const ProductionControlForm = ({
                           ? 'success.main' 
                           : 'error.main'
                       }}>
-                        Wybrana wartość: {typeof formData.temperature === 'number' ? `${formData.temperature}°C` : 'Nie wybrano'}
+                        {t('productionForms.productionControl.selectedValue')}: {typeof formData.temperature === 'number' ? `${formData.temperature}°C` : t('productionForms.productionControl.notSelected')}
                       </Typography>
                     </Box>
                   </Box>
@@ -1735,7 +1741,7 @@ const ProductionControlForm = ({
               <TextField
                 required
                 fullWidth
-                label="Wyprodukowana ilość (szt.)"
+                label={t('productionForms.productionControl.producedQuantityLabel')}
                 name="quantity"
                 value={formData.quantity}
                 onChange={handleChange}
@@ -1746,7 +1752,7 @@ const ProductionControlForm = ({
             
             <Grid item xs={12}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Numer zmiany produkcji</FormLabel>
+                <FormLabel component="legend">{t('productionForms.productionControl.shiftNumberLabel')}</FormLabel>
                 <FormGroup>
                   <FormControlLabel
                     control={
@@ -1756,7 +1762,7 @@ const ProductionControlForm = ({
                         checked={formData.shiftNumber.includes("Zmiana 1")}
                       />
                     }
-                    label="Zmiana 1"
+                    label={t('productionForms.productionControl.shift1')}
                   />
                   <FormControlLabel
                     control={
@@ -1766,7 +1772,7 @@ const ProductionControlForm = ({
                         checked={formData.shiftNumber.includes("Zmiana 2")}
                       />
                     }
-                    label="Zmiana 2"
+                    label={t('productionForms.productionControl.shift2')}
                   />
                 </FormGroup>
               </FormControl>
@@ -1774,66 +1780,66 @@ const ProductionControlForm = ({
             
             <Grid item xs={12}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Czystość surowca</FormLabel>
+                <FormLabel component="legend">{t('productionForms.productionControl.rawMaterialPurityLabel')}</FormLabel>
                 <RadioGroup
                   name="rawMaterialPurity"
                   value={formData.rawMaterialPurity}
                   onChange={handleRadioChange}
                 >
-                  <FormControlLabel value="Prawidłowa" control={<Radio />} label="Prawidłowa" />
-                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label="Nieprawidłowa" />
+                  <FormControlLabel value="Prawidłowa" control={<Radio />} label={t('common.correct')} />
+                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label={t('common.incorrect')} />
                 </RadioGroup>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Czystość opakowania (doypack/tuba)</FormLabel>
+                <FormLabel component="legend">{t('productionForms.productionControl.packagingPurityLabel')}</FormLabel>
                 <RadioGroup
                   name="packagingPurity"
                   value={formData.packagingPurity}
                   onChange={handleRadioChange}
                 >
-                  <FormControlLabel value="Prawidłowa" control={<Radio />} label="Prawidłowa" />
-                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label="Nieprawidłowa" />
+                  <FormControlLabel value="Prawidłowa" control={<Radio />} label={t('common.correct')} />
+                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label={t('common.incorrect')} />
                 </RadioGroup>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Zamknięcie opakowania (doypack/tuba)</FormLabel>
+                <FormLabel component="legend">{t('productionForms.productionControl.packagingClosureLabel')}</FormLabel>
                 <RadioGroup
                   name="packagingClosure"
                   value={formData.packagingClosure}
                   onChange={handleRadioChange}
                 >
-                  <FormControlLabel value="Prawidłowa" control={<Radio />} label="Prawidłowa" />
-                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label="Nieprawidłowa" />
+                  <FormControlLabel value="Prawidłowa" control={<Radio />} label={t('common.correct')} />
+                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label={t('common.incorrect')} />
                 </RadioGroup>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset">
-                <FormLabel component="legend">Ilość doypacków/tub na jednej palecie</FormLabel>
+                <FormLabel component="legend">{t('productionForms.productionControl.packagingQuantityLabel')}</FormLabel>
                 <RadioGroup
                   name="packagingQuantity"
                   value={formData.packagingQuantity}
                   onChange={handleRadioChange}
                 >
-                  <FormControlLabel value="Prawidłowa" control={<Radio />} label="Prawidłowa" />
-                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label="Nieprawidłowa" />
+                  <FormControlLabel value="Prawidłowa" control={<Radio />} label={t('common.correct')} />
+                  <FormControlLabel value="Nieprawidłowa" control={<Radio />} label={t('common.incorrect')} />
                 </RadioGroup>
               </FormControl>
             </Grid>
             
             <Grid item xs={12}>
               <Typography variant="subtitle2" gutterBottom>
-                Skany Dokumentów
+                {t('productionForms.productionControl.documentScansLabel')}
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Np. Plan mieszań
+                {t('productionForms.productionControl.documentScansHelper')}
               </Typography>
               
               {/* Pokaż istniejący plik (z URL) */}
@@ -1861,10 +1867,10 @@ const ProductionControlForm = ({
             
             <Grid item xs={12}>
               <Typography variant="subtitle2" gutterBottom>
-                Zdjęcie produktu - 1
+                {t('productionForms.productionControl.productPhoto1Label')}
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Zdjęcie produktu od frontu
+                {t('productionForms.productionControl.productPhoto1Helper')}
               </Typography>
               
               {/* Pokaż istniejący plik (z URL) */}
@@ -1892,10 +1898,10 @@ const ProductionControlForm = ({
             
             <Grid item xs={12}>
               <Typography variant="subtitle2" gutterBottom>
-                Zdjęcie produktu - 2
+                {t('productionForms.productionControl.productPhoto2Label')}
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Zdjęcie produktu z widocznym nr. LOT - EXP
+                {t('productionForms.productionControl.productPhoto2Helper')}
               </Typography>
               
               {/* Pokaż istniejący plik (z URL) */}
@@ -1923,10 +1929,10 @@ const ProductionControlForm = ({
             
             <Grid item xs={12}>
               <Typography variant="subtitle2" gutterBottom>
-                Zdjęcie produktu - 3
+                {t('productionForms.productionControl.productPhoto3Label')}
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Zdjęcie zapakowanego produktu w karton z widoczną etykietą
+                {t('productionForms.productionControl.productPhoto3Helper')}
               </Typography>
               
               {/* Pokaż istniejący plik (z URL) */}
@@ -1964,7 +1970,7 @@ const ProductionControlForm = ({
               onClick={handleBack}
               sx={getFormButtonStyles('outlined')}
             >
-              Powrót
+              {t('common.back')}
             </Button>
             <Button
               type="submit"
@@ -1977,7 +1983,7 @@ const ProductionControlForm = ({
                 flexGrow: 1
               }}
             >
-              {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
+              {saving ? t('common.saving') : (isEditMode ? t('common.update') : t('common.submit'))}
             </Button>
           </Box>
         </Box>

@@ -34,6 +34,7 @@ import { db } from '../../services/firebase/config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useStaffOptions, useShiftWorkerOptions, useProductOptionsForPrinting, useFilteredProductOptions } from '../../hooks/useFormOptions';
 import { 
   getFormHeaderStyles, 
@@ -78,6 +79,7 @@ const ProductionShiftForm = () => {
   const isEditMode = searchParams.get('edit') === 'true';
   const { currentUser } = useAuth();
   const theme = useTheme();
+  const { t } = useTranslation('forms');
 
   // Używamy hooków do pobierania opcji z bazy danych
   const { options: staffOptions, loading: staffLoading } = useStaffOptions();
@@ -287,64 +289,64 @@ const ProductionShiftForm = () => {
     const errors = {};
     
     if (!formData.email) {
-      errors.email = 'Adres e-mail jest wymagany';
+      errors.email = t('validation.emailRequired');
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Podaj prawidłowy adres e-mail';
+      errors.email = t('validation.emailInvalid');
     }
     
     if (!formData.responsiblePerson) {
-      errors.responsiblePerson = 'Osoba odpowiedzialna za zmianę jest wymagana';
+      errors.responsiblePerson = t('validation.responsiblePersonRequired');
     }
     
     if (!formData.fillTime) {
-      errors.fillTime = 'Godzina wypełnienia jest wymagana';
+      errors.fillTime = t('validation.fillTimeRequired');
     }
     
     if (formData.shiftWorkers.length === 0) {
-      errors.shiftWorkers = 'Wybierz co najmniej jednego pracownika zmiany';
+      errors.shiftWorkers = t('validation.shiftWorkersRequired');
     }
     
     if (!formData.shiftStartTime) {
-      errors.shiftStartTime = 'Godzina rozpoczęcia zmiany jest wymagana';
+      errors.shiftStartTime = t('validation.shiftStartTimeRequired');
     }
     
     if (!formData.shiftEndTime) {
-      errors.shiftEndTime = 'Godzina zakończenia zmiany jest wymagana';
+      errors.shiftEndTime = t('validation.shiftEndTimeRequired');
     }
     
     if (!formData.product) {
-      errors.product = 'Produkt jest wymagany';
+      errors.product = t('validation.productRequired');
     }
     
     if (!formData.moNumber) {
-      errors.moNumber = 'Numer MO jest wymagany';
+      errors.moNumber = t('validation.moNumberRequired');
     }
     
     if (!formData.productionQuantity) {
-      errors.productionQuantity = 'Ilość zrobionego produktu jest wymagana';
+      errors.productionQuantity = t('validation.productionQuantityRequired');
     } else if (isNaN(formData.productionQuantity)) {
-      errors.productionQuantity = 'Podaj wartość liczbową';
+      errors.productionQuantity = t('validation.numericRequired');
     }
     
     if (!formData.warehouseId) {
-      errors.warehouseId = 'Wybierz magazyn docelowy';
+      errors.warehouseId = t('validation.warehouseRequired');
     }
     
     if (formData.firstProduct !== 'BRAK' && !formData.firstProductQuantity) {
-      errors.firstProductQuantity = 'Podaj ilość dla pierwszego produktu';
+      errors.firstProductQuantity = t('validation.quantityRequired');
     }
     
     if (formData.secondProduct !== 'BRAK' && !formData.secondProductQuantity) {
-      errors.secondProductQuantity = 'Podaj ilość dla drugiego produktu';
+      errors.secondProductQuantity = t('validation.quantityRequired');
     }
     
     if (formData.thirdProduct !== 'BRAK' && !formData.thirdProductQuantity) {
-      errors.thirdProductQuantity = 'Podaj ilość dla trzeciego produktu';
+      errors.thirdProductQuantity = t('validation.quantityRequired');
     }
     
     // Walidacja pola strat produktu gotowego
     if (formData.finishedProductLoss && isNaN(formData.finishedProductLoss)) {
-      errors.finishedProductLoss = 'Podaj wartość liczbową';
+      errors.finishedProductLoss = t('validation.numericRequired');
     }
     
     setValidationErrors(errors);
@@ -573,19 +575,19 @@ const ProductionShiftForm = () => {
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
             color: isEditMode ? 'warning.main' : 'primary.main'
           }}>
-            {isEditMode ? 'EDYCJA - RAPORT ZMIANA PRODUKCJI' : 'RAPORT - ZMIANA PRODUKCJI'}
+            {isEditMode ? t('productionForms.productionShift.editTitle') : t('productionForms.productionShift.formTitle')}
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" paragraph sx={{
             fontSize: { xs: '0.75rem', sm: '0.875rem' },
             mb: 0
           }}>
-            W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+            {t('common.emergencyContact')} mateusz@bgwpharma.com
           </Typography>
         </Box>
 
         {submitted && (
           <Alert severity="success" sx={{ mb: 3 }}>
-            {isEditMode ? 'Raport zmiany produkcyjnej został zaktualizowany pomyślnie!' : 'Raport zmiany produkcyjnej został wysłany pomyślnie!'}
+            {isEditMode ? t('common.successUpdate') : t('common.successCreate')}
           </Alert>
         )}
         
@@ -593,10 +595,10 @@ const ProductionShiftForm = () => {
           {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
           <Box sx={getFormSectionStyles(theme, 'primary')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-              Sekcja 1 z 3
+              {t('common.section', { current: 1, total: 3 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              👤 Identyfikacja
+              👤 {t('sections.identification')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -605,7 +607,7 @@ const ProductionShiftForm = () => {
                 <TextField
                   required
                   fullWidth
-                  label="Adres e-mail"
+                  label={t('fields.email')}
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
@@ -619,12 +621,12 @@ const ProductionShiftForm = () => {
               
               <Grid item xs={12}>
                 <FormControl fullWidth required error={!!validationErrors.responsiblePerson}>
-                  <InputLabel>Osoba odpowiedzialna za zmianę</InputLabel>
+                  <InputLabel>{t('fields.responsiblePerson')}</InputLabel>
                   <Select
                     name="responsiblePerson"
                     value={formData.responsiblePerson}
                     onChange={handleChange}
-                    label="Osoba odpowiedzialna za zmianę"
+                    label={t('fields.responsiblePerson')}
                   >
                     {staffOptions.map(option => (
                       <MenuItem key={option} value={option}>{option}</MenuItem>
@@ -641,7 +643,7 @@ const ProductionShiftForm = () => {
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DateTimePicker
-                    label="Data wypełnienia"
+                    label={t('fields.fillDate')}
                     value={formData.fillDate}
                     onChange={handleDateChange}
                     renderInput={(params) => 
@@ -656,7 +658,7 @@ const ProductionShiftForm = () => {
                 <TextField
                   required
                   fullWidth
-                  label="Godzina wypełnienia"
+                  label={t('fields.fillTime')}
                   name="fillTime"
                   value={formData.fillTime}
                   onChange={handleChange}
@@ -671,17 +673,17 @@ const ProductionShiftForm = () => {
           {/* SEKCJA 2 z 3 - PRACOWNICY PRODUKCJI/RODZAJ ZMIANY */}
           <Box sx={getFormSectionStyles(theme, 'warning')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
-              Sekcja 2 z 3
+              {t('common.section', { current: 2, total: 3 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-              👥 Pracownicy Produkcji/Rodzaj Zmiany
+              👥 {t('sections.shiftWorkers')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
             <Grid container spacing={{ xs: 2, sm: 3 }}>
               <Grid item xs={12}>
                 <FormControl component="fieldset" error={!!validationErrors.shiftWorkers} required>
-                  <FormLabel component="legend">Pracownicy zmiany</FormLabel>
+                  <FormLabel component="legend">{t('fields.shiftWorkers')}</FormLabel>
                   <FormGroup>
                     {shiftWorkerOptions.map(worker => (
                       <FormControlLabel
@@ -710,7 +712,7 @@ const ProductionShiftForm = () => {
                   required
                   fullWidth
                   type="time"
-                  label="Godzina rozpoczęcia zmiany"
+                  label={t('fields.shiftStartTime')}
                   name="shiftStartTime"
                   value={formData.shiftStartTime}
                   onChange={handleChange}
@@ -727,7 +729,7 @@ const ProductionShiftForm = () => {
                   required
                   fullWidth
                   type="time"
-                  label="Godzina zakończenia zmiany"
+                  label={t('fields.shiftEndTime')}
                   name="shiftEndTime"
                   value={formData.shiftEndTime}
                   onChange={handleChange}
@@ -744,13 +746,13 @@ const ProductionShiftForm = () => {
           {/* SEKCJA 3 z 3 - RAPORT WYKONANYCH CZYNNOŚCI NA ZMIANIE */}
           <Box sx={getFormSectionStyles(theme, 'success')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
-              Sekcja 3 z 3
+              {t('common.section', { current: 3, total: 3 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main' }}>
-              📊 Raport Wykonanych Czynności Na Zmianie
+              📊 {t('sections.shiftReport')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Raport zmiany wykonujemy per jeden produkt gotowy!
+              {t('helpers.oneProductPerReport')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -762,12 +764,12 @@ const ProductionShiftForm = () => {
                 required 
                 error={!!validationErrors.moNumber}
               >
-                <InputLabel>Numer MO</InputLabel>
+                <InputLabel>{t('fields.moNumber')}</InputLabel>
                 <Select
                   name="moNumber"
                   value={formData.moNumber}
                   onChange={handleChange}
-                  label="Numer MO"
+                  label={t('fields.moNumber')}
                   disabled={loadingMO}
                   startAdornment={
                     loadingMO ? 
@@ -793,12 +795,12 @@ const ProductionShiftForm = () => {
               <TextField
                 required
                 fullWidth
-                label="Produkt"
+                label={t('fields.product')}
                 name="product"
                 value={formData.product}
                 onChange={handleChange}
                 error={!!validationErrors.product}
-                helperText={validationErrors.product || "Nazwa produktu jest automatycznie wypełniana na podstawie wybranego MO"}
+                helperText={validationErrors.product || t('helpers.productAutoFill')}
                 InputProps={{
                   readOnly: true,
                 }}
@@ -809,11 +811,11 @@ const ProductionShiftForm = () => {
               <TextField
                 required
                 fullWidth
-                label="Ilość zrobionego produktu"
+                label={t('fields.productionQuantity')}
                 name="productionQuantity"
                 value={formData.productionQuantity}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową!"
+                placeholder={t('helpers.numericOnly')}
                 error={!!validationErrors.productionQuantity}
                 helperText={validationErrors.productionQuantity}
               />
@@ -826,12 +828,12 @@ const ProductionShiftForm = () => {
                 error={!!validationErrors.warehouseId}
                 disabled={warehousesLoading}
               >
-                <InputLabel>Magazyn docelowy</InputLabel>
+                <InputLabel>{t('fields.warehouse')}</InputLabel>
                 <Select
                   name="warehouseId"
                   value={formData.warehouseId}
                   onChange={handleChange}
-                  label="Magazyn docelowy"
+                  label={t('fields.warehouse')}
                 >
                   {warehouses.map(warehouse => (
                     <MenuItem key={warehouse.id} value={warehouse.id}>
@@ -851,7 +853,7 @@ const ProductionShiftForm = () => {
               <Autocomplete
                 fullWidth
                 freeSolo
-                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredFirstProducts]}
+                options={[{ id: 'brak', name: t('common.none'), searchText: 'brak' }, ...filteredFirstProducts]}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                 value={null} // Zawsze null aby umożliwić swobodne wpisywanie
                 onChange={(event, newValue) => {
@@ -867,9 +869,9 @@ const ProductionShiftForm = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Rodzaj nadrukowanych doypack/tub - 1"
-                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
-                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                    label={t('fields.printedProduct1')}
+                    placeholder={t('helpers.productPlaceholder')}
+                    helperText={t('helpers.searchOrType')}
                   />
                 )}
                 renderOption={(props, option) => (
@@ -892,11 +894,11 @@ const ProductionShiftForm = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Ilość nadrukowanych doypack/tub - 1"
+                  label={t('fields.printedQuantity1')}
                   name="firstProductQuantity"
                   value={formData.firstProductQuantity}
                   onChange={handleChange}
-                  placeholder="Proszę podać tylko wartość liczbową dla pierwszego zadrukowanego produktu z poprzedniej listy!"
+                  placeholder={t('helpers.numericOnly')}
                   error={!!validationErrors.firstProductQuantity}
                   helperText={validationErrors.firstProductQuantity}
                 />
@@ -907,7 +909,7 @@ const ProductionShiftForm = () => {
               <Autocomplete
                 fullWidth
                 freeSolo
-                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredSecondProducts]}
+                options={[{ id: 'brak', name: t('common.none'), searchText: 'brak' }, ...filteredSecondProducts]}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                 value={null} // Zawsze null aby umożliwić swobodne wpisywanie
                 onChange={(event, newValue) => {
@@ -923,9 +925,9 @@ const ProductionShiftForm = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Rodzaj nadrukowanych doypack/tub - 2"
-                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
-                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                    label={t('fields.printedProduct2')}
+                    placeholder={t('helpers.productPlaceholder')}
+                    helperText={t('helpers.searchOrType')}
                   />
                 )}
                 renderOption={(props, option) => (
@@ -948,11 +950,11 @@ const ProductionShiftForm = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Ilość nadrukowanych doypack/tub - 2"
+                  label={t('fields.printedQuantity2')}
                   name="secondProductQuantity"
                   value={formData.secondProductQuantity}
                   onChange={handleChange}
-                  placeholder="Proszę podać tylko wartość liczbową dla drugiego zadrukowanego produktu z poprzedniej listy!"
+                  placeholder={t('helpers.numericOnly')}
                   error={!!validationErrors.secondProductQuantity}
                   helperText={validationErrors.secondProductQuantity}
                 />
@@ -963,7 +965,7 @@ const ProductionShiftForm = () => {
               <Autocomplete
                 fullWidth
                 freeSolo
-                options={[{ id: 'brak', name: 'BRAK', searchText: 'brak' }, ...filteredThirdProducts]}
+                options={[{ id: 'brak', name: t('common.none'), searchText: 'brak' }, ...filteredThirdProducts]}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
                 value={null} // Zawsze null aby umożliwić swobodne wpisywanie
                 onChange={(event, newValue) => {
@@ -979,9 +981,9 @@ const ProductionShiftForm = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Rodzaj nadrukowanych doypack/tub - 3"
-                    placeholder="Wpisz nazwę produktu lub fragment, np. 'mango', lub 'BRAK'"
-                    helperText="Wyszukaj gotowy produkt z magazynu lub wpisz dowolny tekst"
+                    label={t('fields.printedProduct3')}
+                    placeholder={t('helpers.productPlaceholder')}
+                    helperText={t('helpers.searchOrType')}
                   />
                 )}
                 renderOption={(props, option) => (
@@ -1004,11 +1006,11 @@ const ProductionShiftForm = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Ilość nadrukowanych doypack/tub - 3"
+                  label={t('fields.printedQuantity3')}
                   name="thirdProductQuantity"
                   value={formData.thirdProductQuantity}
                   onChange={handleChange}
-                  placeholder="Proszę podać tylko wartość liczbową dla trzeciego zadrukowanego produktu z poprzedniej listy!"
+                  placeholder={t('helpers.numericOnly')}
                   error={!!validationErrors.thirdProductQuantity}
                   helperText={validationErrors.thirdProductQuantity}
                 />
@@ -1018,33 +1020,33 @@ const ProductionShiftForm = () => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Ilość strat doypack/tub - 1"
+                label={t('fields.lossQuantity1')}
                 name="firstProductLoss"
                 value={formData.firstProductLoss}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową dla pierwszego zadrukowanego produktu z poprzedniej listy!"
+                placeholder={t('helpers.numericOnly')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Ilość strat doypack/tub - 2"
+                label={t('fields.lossQuantity2')}
                 name="secondProductLoss"
                 value={formData.secondProductLoss}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową dla drugiego zadrukowanego produktu z poprzedniej listy!"
+                placeholder={t('helpers.numericOnly')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Ilość strat doypack/tub - 3"
+                label={t('fields.lossQuantity3')}
                 name="thirdProductLoss"
                 value={formData.thirdProductLoss}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową dla trzeciego zadrukowanego produktu z poprzedniej listy!"
+                placeholder={t('helpers.numericOnly')}
               />
             </Grid>
             
@@ -1053,25 +1055,25 @@ const ProductionShiftForm = () => {
                 fullWidth
                 multiline
                 rows={3}
-                label="Straty surowca"
+                label={t('fields.rawMaterialLoss')}
                 name="rawMaterialLoss"
                 value={formData.rawMaterialLoss}
                 onChange={handleChange}
-                placeholder="Opisz straty surowca jeśli wystąpiły (opcjonalne)"
-                helperText="Pole opcjonalne - opisz rodzaj i ilość strat surowca"
+                placeholder={t('helpers.lossDescription')}
+                helperText={t('helpers.rawMaterialLossHelper')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Straty - produkt gotowy (kg)"
+                label={t('fields.finishedProductLoss')}
                 name="finishedProductLoss"
                 type="number"
                 value={formData.finishedProductLoss}
                 onChange={handleChange}
-                placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
-                helperText="Pole opcjonalne - ilość strat produktu gotowego"
+                placeholder={t('helpers.finishedProductLossHelper')}
+                helperText={t('helpers.optionalField')}
                 inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
@@ -1079,13 +1081,13 @@ const ProductionShiftForm = () => {
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Strata wieczek"
+                label={t('fields.lidLoss')}
                 name="lidLoss"
                 type="number"
                 value={formData.lidLoss}
                 onChange={handleChange}
-                placeholder="Proszę podać tylko wartość liczbową!"
-                helperText="Pole opcjonalne - ilość straconych wieczek"
+                placeholder={t('helpers.numericOnly')}
+                helperText={t('helpers.lidLossHelper')}
                 inputProps={{ min: 0, step: 'any' }}
               />
             </Grid>
@@ -1095,13 +1097,13 @@ const ProductionShiftForm = () => {
                 fullWidth
                 multiline
                 rows={5}
-                label="Pozostałe czynności produkcyjne"
+                label={t('fields.otherActivities')}
                 name="otherActivities"
                 value={formData.otherActivities}
                 onChange={handleChange}
-                placeholder="Wpisujemy np. czyszczenie maszyny, sprzątanie produkcji, sprzątanie generalne zakładu produkcyjnego itp."
+                placeholder={t('helpers.otherActivitiesDesc')}
                 error={!!validationErrors.otherActivities}
-                helperText={validationErrors.otherActivities || "Pole opcjonalne - wypełnij w razie potrzeby"}
+                helperText={validationErrors.otherActivities || t('helpers.optionalField')}
               />
             </Grid>
             
@@ -1110,13 +1112,13 @@ const ProductionShiftForm = () => {
                 fullWidth
                 multiline
                 rows={5}
-                label="Awarie maszyn"
+                label={t('fields.machineIssues')}
                 name="machineIssues"
                 value={formData.machineIssues}
                 onChange={handleChange}
-                placeholder="Wpisujemy w przypadku awarii cały opis co się wydarzyło. Jeśli brak awarii - pole można pozostawić puste."
+                placeholder={t('helpers.machineIssuesDesc')}
                 error={!!validationErrors.machineIssues}
-                helperText={validationErrors.machineIssues || "Pole opcjonalne - wypełnij tylko w przypadku awarii"}
+                helperText={validationErrors.machineIssues || t('helpers.optionalField')}
               />
             </Grid>
             
@@ -1132,7 +1134,7 @@ const ProductionShiftForm = () => {
               onClick={handleBack}
               sx={getFormButtonStyles('outlined')}
             >
-              Powrót
+              {t('common.back')}
             </Button>
             <Button
               type="submit"
@@ -1145,7 +1147,7 @@ const ProductionShiftForm = () => {
                 flexGrow: 1
               }}
             >
-              {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
+              {saving ? t('common.saving') : (isEditMode ? t('common.update') : t('common.submit'))}
             </Button>
           </Box>
         </Box>

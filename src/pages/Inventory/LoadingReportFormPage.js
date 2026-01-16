@@ -29,6 +29,7 @@ import { pl } from 'date-fns/locale';
 import { Save as SaveIcon, ArrowBack as ArrowBackIcon, Search as SearchIcon, LocalShipping as LocalShippingIcon, Person as PersonIcon, Inventory as InventoryIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from '../../hooks/useTranslation';
 import { useInventoryEmployeeOptions, useInventoryPositionOptions } from '../../hooks/useFormOptions';
 import { getAllCmrDocuments, getCmrDocumentById } from '../../services/cmrService';
 import { db } from '../../services/firebase/config';
@@ -48,6 +49,7 @@ const LoadingReportFormPage = () => {
   const location = useLocation();
   const { currentUser } = useAuth();
   const theme = useTheme();
+  const { t } = useTranslation('forms');
   
   // Sprawdź czy jesteśmy w trybie edycji
   const isEditMode = new URLSearchParams(location.search).get('edit') === 'true';
@@ -520,19 +522,19 @@ const LoadingReportFormPage = () => {
               gap: 1
             }}>
               <LocalShippingIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
-              {isEditMode ? 'EDYCJA RAPORTU - ZAŁADUNEK TOWARU' : 'RAPORT - ZAŁADUNEK TOWARU'}
+              {isEditMode ? t('inventoryForms.loadingReport.editTitle') : t('inventoryForms.loadingReport.formTitle')}
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary" sx={{
               fontSize: { xs: '0.75rem', sm: '0.875rem' },
               mb: 2
             }}>
-              {isEditMode ? 'Edytuj wypełniony formularz załadunku towaru' : 'Formularz dokumentujący proces załadunku towaru'}
+              {t('inventoryForms.loadingReport.description')}
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary" sx={{
               fontSize: { xs: '0.75rem', sm: '0.875rem' },
               mb: 0
             }}>
-              W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+              {t('common.emergencyContact')} mateusz@bgwpharma.com
             </Typography>
           </Box>
 
@@ -544,7 +546,7 @@ const LoadingReportFormPage = () => {
               variant="outlined"
               sx={getFormButtonStyles('outlined')}
             >
-              Powrót
+              {t('common.back')}
             </Button>
           </Box>
 
@@ -553,7 +555,7 @@ const LoadingReportFormPage = () => {
             <TextField
               required
               fullWidth
-              label="Adres e-mail"
+              label={t('common.email')}
               name="email"
               value={formData.email}
               onChange={handleInputChange('email')}
@@ -568,11 +570,11 @@ const LoadingReportFormPage = () => {
             {/* SEKCJA 1 z 3 - IDENTYFIKACJA */}
             <Box sx={getFormSectionStyles(theme, 'primary')}>
               <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-                Sekcja 1 z 3
+                {t('common.section', { current: 1, total: 3 })}
               </Typography>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <PersonIcon className="section-icon" />
-                Identyfikacja
+                {t('sections.identification')}
               </Typography>
               <Divider sx={{ mb: 3 }} />
               
@@ -612,12 +614,12 @@ const LoadingReportFormPage = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label="Nr CMR"
+                    label={t('inventoryForms.loadingReport.cmrNumberLabel')}
                     variant="outlined"
-                    placeholder="Wpisz numer CMR, nazwę klienta..."
+                    placeholder={t('inventoryForms.loadingReport.cmrNumberPlaceholder')}
                     required
                     error={!!errors.cmrNumber}
-                    helperText={errors.cmrNumber || "Wpisz numer CMR lub wybierz z listy istniejących dokumentów"}
+                    helperText={errors.cmrNumber || t('inventoryForms.loadingReport.cmrNumberHelperText')}
                     InputProps={{
                       ...params.InputProps,
                       startAdornment: (
@@ -650,21 +652,21 @@ const LoadingReportFormPage = () => {
                 clearOnBlur={false}
                 selectOnFocus={true}
                 handleHomeEndKeys={true}
-                noOptionsText="Brak dokumentów CMR spełniających kryteria wyszukiwania"
-                loadingText="Ładowanie dokumentów CMR..."
+                noOptionsText={t('inventoryForms.loadingReport.cmrNoOptionsText')}
+                loadingText={t('inventoryForms.loadingReport.cmrLoadingText')}
                 loading={cmrLoading}
               />
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.employeeName}>
-                <FormLabel component="legend">Imię i nazwisko: </FormLabel>
+                <FormLabel component="legend">{t('inventoryForms.loadingReport.employeeNameLabel')}</FormLabel>
                 <RadioGroup
                   value={formData.employeeName}
                   onChange={handleInputChange('employeeName')}
                 >
                   {employeeLoading ? (
-                    <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('common.loadingOptions')}</Typography>
                   ) : (
                     employeeOptions.map((employee) => (
                       <FormControlLabel 
@@ -681,13 +683,13 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.position}>
-                <FormLabel component="legend">Stanowisko: </FormLabel>
+                <FormLabel component="legend">{t('inventoryForms.loadingReport.positionLabel')}</FormLabel>
                 <RadioGroup
                   value={formData.position}
                   onChange={handleInputChange('position')}
                 >
                   {positionLoading ? (
-                    <Typography variant="body2" color="text.secondary">Ładowanie opcji...</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('common.loadingOptions')}</Typography>
                   ) : (
                     positionOptions.map((position) => (
                       <FormControlLabel 
@@ -704,7 +706,7 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data wypełnienia"
+                label={t('fields.fillDate')}
                 value={formData.fillDate}
                 onChange={handleDateChange('fillDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -715,7 +717,7 @@ const LoadingReportFormPage = () => {
               <TextField
                 required
                 fullWidth
-                label="Godzina wypełnienia"
+                label={t('fields.fillTime')}
                 name="fillTime"
                 type="time"
                 value={formData.fillTime}
@@ -733,18 +735,18 @@ const LoadingReportFormPage = () => {
             {/* SEKCJA 2 z 3 - INFORMACJE O ZAŁADUNKU */}
             <Box sx={getFormSectionStyles(theme, 'warning')}>
               <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
-                Sekcja 2 z 3
+                {t('common.section', { current: 2, total: 3 })}
               </Typography>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <LocalShippingIcon className="section-icon" />
-                Informacje o załadunku
+                {t('sections.loadingInfo')}
               </Typography>
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid item xs={12} sm={6}>
               <DatePicker
-                label="Data załadunku"
+                label={t('fields.loadingDate')}
                 value={formData.loadingDate}
                 onChange={handleDateChange('loadingDate')}
                 renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -754,7 +756,7 @@ const LoadingReportFormPage = () => {
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Godzina załadunku"
+                label={t('fields.loadingTime')}
                 name="loadingTime"
                 type="time"
                 value={formData.loadingTime}
@@ -767,33 +769,33 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa przewoźnika"
+                label={t('fields.carrierName')}
                 value={formData.carrierName}
                 onChange={handleInputChange('carrierName')}
                 fullWidth
                 required
                 error={!!errors.carrierName}
-                helperText={errors.carrierName || "Wybierz CMR powyżej, aby automatycznie uzupełnić to pole"}
-                placeholder="Automatycznie uzupełniane z CMR"
+                helperText={errors.carrierName || t('inventoryForms.loadingReport.carrierAutoFillHelper')}
+                placeholder={t('inventoryForms.loadingReport.autoFilledFromCmr')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Nr rejestracyjny samochodu"
+                label={t('fields.vehicleRegistration')}
                 value={formData.vehicleRegistration}
                 onChange={handleInputChange('vehicleRegistration')}
                 fullWidth
                 required
                 error={!!errors.vehicleRegistration}
-                helperText={errors.vehicleRegistration || "Wybierz CMR powyżej, aby automatycznie uzupełnić to pole"}
-                placeholder="Automatycznie uzupełniane z CMR"
+                helperText={errors.vehicleRegistration || t('inventoryForms.loadingReport.vehicleAutoFillHelper')}
+                placeholder={t('inventoryForms.loadingReport.autoFilledFromCmr')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <FormControl component="fieldset" required error={!!errors.vehicleTechnicalCondition}>
-                <FormLabel component="legend">Stan techniczny samochodu:</FormLabel>
+                <FormLabel component="legend">{t('inventoryForms.loadingReport.vehicleTechnicalConditionLabel')}</FormLabel>
                 <RadioGroup
                   value={formData.vehicleTechnicalCondition}
                   onChange={handleInputChange('vehicleTechnicalCondition')}
@@ -802,12 +804,12 @@ const LoadingReportFormPage = () => {
                   <FormControlLabel 
                     value="Prawidłowy" 
                     control={<Radio />} 
-                    label="Prawidłowy" 
+                    label={t('common.correct')} 
                   />
                   <FormControlLabel 
                     value="Uszkodzony" 
                     control={<Radio />} 
-                    label="Uszkodzony" 
+                    label={t('inventoryForms.loadingReport.damaged')} 
                   />
                 </RadioGroup>
               </FormControl>
@@ -815,14 +817,14 @@ const LoadingReportFormPage = () => {
             
             <Grid item xs={12}>
               <TextField
-                label="Uwagi"
+                label={t('common.notes')}
                 value={formData.notes}
                 onChange={handleInputChange('notes')}
                 fullWidth
                 multiline
                 rows={4}
-                placeholder="Ewentualne uwagi do stanu technicznego samochodu - jeśli był 'uszkodzony' w poprzednim pytaniu"
-                helperText="Tekst długiej odpowiedzi"
+                placeholder={t('inventoryForms.loadingReport.notesPlaceholder')}
+                helperText={t('common.longAnswerText')}
               />
                 </Grid>
               </Grid>
@@ -831,39 +833,39 @@ const LoadingReportFormPage = () => {
             {/* SEKCJA 3 z 3 - INFORMACJE O TOWARZE */}
             <Box sx={getFormSectionStyles(theme, 'success')}>
               <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
-                Sekcja 3 z 3
+                {t('common.section', { current: 3, total: 3 })}
               </Typography>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main', display: 'flex', alignItems: 'center', gap: 1 }}>
                 <InventoryIcon className="section-icon" />
-                Informacje o towarze
+                {t('sections.goodsInfo')}
               </Typography>
               <Divider sx={{ mb: 3 }} />
               
               <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid item xs={12} sm={6}>
               <TextField
-                label="Nazwa klienta"
+                label={t('fields.clientName')}
                 value={formData.clientName}
                 onChange={handleInputChange('clientName')}
                 fullWidth
                 required
                 error={!!errors.clientName}
-                helperText={errors.clientName || "Automatycznie uzupełniane z odbiorcy CMR"}
-                placeholder="Automatycznie z CMR - odbiorca"
+                helperText={errors.clientName || t('inventoryForms.loadingReport.clientAutoFillHelper')}
+                placeholder={t('inventoryForms.loadingReport.clientAutoFillPlaceholder')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               {formData.availableOrderNumbers && formData.availableOrderNumbers.length > 1 ? (
                 <FormControl fullWidth required error={!!errors.orderNumber}>
-                  <InputLabel>Numer zamówienia</InputLabel>
+                  <InputLabel>{t('fields.orderNumber')}</InputLabel>
                   <Select
                     value={formData.orderNumber}
                     onChange={handleInputChange('orderNumber')}
-                    label="Numer zamówienia"
+                    label={t('fields.orderNumber')}
                   >
                     <MenuItem value="">
-                      <em>Wybierz numer zamówienia</em>
+                      <em>{t('inventoryForms.loadingReport.selectOrderNumber')}</em>
                     </MenuItem>
                     {formData.availableOrderNumbers.map((orderNum, index) => (
                       <MenuItem key={index} value={orderNum}>
@@ -871,7 +873,7 @@ const LoadingReportFormPage = () => {
                       </MenuItem>
                     ))}
                     <MenuItem value={formData.availableOrderNumbers.join(', ')}>
-                      <em>Wszystkie zamówienia: {formData.availableOrderNumbers.join(', ')}</em>
+                      <em>{t('inventoryForms.loadingReport.allOrders')}: {formData.availableOrderNumbers.join(', ')}</em>
                     </MenuItem>
                   </Select>
                   {errors.orderNumber && (
@@ -880,12 +882,12 @@ const LoadingReportFormPage = () => {
                     </Typography>
                   )}
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
-                    CMR ma {formData.availableOrderNumbers.length} powiązanych zamówień - wybierz jedno lub wszystkie
+                    {t('inventoryForms.loadingReport.multipleOrdersHelper', { count: formData.availableOrderNumbers.length })}
                   </Typography>
                 </FormControl>
               ) : (
                 <TextField
-                  label="Numer zamówienia"
+                  label={t('fields.orderNumber')}
                   value={formData.orderNumber}
                   onChange={handleInputChange('orderNumber')}
                   fullWidth
@@ -894,60 +896,60 @@ const LoadingReportFormPage = () => {
                   helperText={
                     errors.orderNumber || 
                     (formData.availableOrderNumbers && formData.availableOrderNumbers.length === 1 
-                      ? "Automatycznie uzupełnione z powiązanego CO w CMR"
-                      : "Automatycznie uzupełniane z powiązanych CO w CMR")
+                      ? t('inventoryForms.loadingReport.orderAutoFillSingle')
+                      : t('inventoryForms.loadingReport.orderAutoFillMultiple'))
                   }
-                  placeholder="Automatycznie z CMR - powiązane CO"
+                  placeholder={t('inventoryForms.loadingReport.orderAutoFillPlaceholder')}
                 />
               )}
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Paleta/nazwa produktu"
+                label={t('inventoryForms.loadingReport.palletProductNameLabel')}
                 value={formData.palletProductName}
                 onChange={handleInputChange('palletProductName')}
                 fullWidth
                 required
                 error={!!errors.palletProductName}
-                helperText={errors.palletProductName || "Automatycznie uzupełniane z pozycji CMR"}
-                placeholder="Automatycznie z CMR - pozycje + ilości"
+                helperText={errors.palletProductName || t('inventoryForms.loadingReport.palletAutoFillHelper')}
+                placeholder={t('inventoryForms.loadingReport.palletAutoFillPlaceholder')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Ilość palet"
+                label={t('fields.palletQuantity')}
                 value={formData.palletQuantity}
                 onChange={handleInputChange('palletQuantity')}
                 fullWidth
                 required
                 type="number"
                 error={!!errors.palletQuantity}
-                helperText={errors.palletQuantity || "Tekst krótkiej odpowiedzi"}
+                helperText={errors.palletQuantity || t('common.shortAnswerText')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Waga"
+                label={t('fields.weight')}
                 value={formData.weight}
                 onChange={handleInputChange('weight')}
                 fullWidth
                 required
                 error={!!errors.weight}
-                helperText={errors.weight || "Automatycznie uzupełniane - suma wag z CMR"}
-                placeholder="Automatycznie z CMR - suma wag pozycji"
+                helperText={errors.weight || t('inventoryForms.loadingReport.weightAutoFillHelper')}
+                placeholder={t('inventoryForms.loadingReport.weightAutoFillPlaceholder')}
               />
             </Grid>
             
             <Grid item xs={12} sm={6}>
               <TextField
-                label="Uwagi"
+                label={t('fields.goodsNotes')}
                 value={formData.goodsNotes}
                 onChange={handleInputChange('goodsNotes')}
                 fullWidth
-                helperText="Tekst krótkiej odpowiedzi"
+                helperText={t('common.shortAnswerText')}
               />
                 </Grid>
               </Grid>
@@ -960,7 +962,7 @@ const LoadingReportFormPage = () => {
                 onClick={handleBack}
                 sx={getFormButtonStyles('outlined')}
               >
-                Anuluj
+                {t('common.back')}
               </Button>
               <Button
                 type="submit"
@@ -972,7 +974,7 @@ const LoadingReportFormPage = () => {
                   flexGrow: 1
                 }}
               >
-                {saving ? 'Zapisywanie...' : (isEditMode ? 'Zapisz zmiany' : 'Prześlij raport')}
+                {saving ? t('common.saving') : (isEditMode ? t('common.update') : t('common.submit'))}
               </Button>
             </Box>
           </Box>
@@ -983,7 +985,7 @@ const LoadingReportFormPage = () => {
           onClose={() => setShowSuccess(false)}
         >
           <Alert onClose={() => setShowSuccess(false)} severity="success" sx={{ width: '100%' }}>
-            {isEditMode ? 'Raport załadunku towaru został zaktualizowany pomyślnie!' : 'Raport załadunku towaru został przesłany pomyślnie!'}
+            {isEditMode ? t('common.successUpdate') : t('common.successCreate')}
           </Alert>
         </Snackbar>
 
@@ -994,7 +996,7 @@ const LoadingReportFormPage = () => {
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         >
           <Alert onClose={() => setAutoFillNotification(false)} severity="info" sx={{ width: '100%' }}>
-            ✅ Automatycznie uzupełniono dane z dokumentu CMR (przewoźnik, pojazd, klient, zamówienie, produkty, waga)
+            {t('inventoryForms.loadingReport.autoFillNotification')}
           </Alert>
         </Snackbar>
         </Paper>

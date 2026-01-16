@@ -658,26 +658,38 @@ const ProductionTimeline = React.memo(({
     }
   };
 
+  // ⚡ OPTYMALIZACJA WYDAJNOŚCI: Dynamiczny limit na podstawie widocznego zakresu
   const fetchTasks = useCallback(async () => {
     try {
       setLoading(true);
       const startDate = new Date(canvasTimeStart);
       const endDate = new Date(canvasTimeEnd);
       
+      // ⚡ OPTYMALIZACJA: Oblicz dynamiczny limit na podstawie zakresu dat
+      const visibleDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+      // Zakładamy max ~30 zadań na dzień, z buforem 2x
+      // Maksymalnie 500 zadań dla wydajności (zamiast 5000)
+      const dynamicLimit = Math.min(Math.max(visibleDays * 30, 100), 500);
+      
+      console.log(`⚡ ProductionTimeline: Pobieranie zadań dla ${visibleDays} dni (limit: ${dynamicLimit})`);
+      
       let data;
       try {
-        // Spróbuj najpierw pobrać dane z nową funkcją
+        // Spróbuj najpierw pobrać dane z nową funkcją z dynamicznym limitem
         data = await getTasksByDateRangeOptimizedNew(
           startDate.toISOString(),
           endDate.toISOString(),
-          5000
+          dynamicLimit // ⚡ ZMIANA: Dynamiczny limit zamiast stałego 5000
         );
+        
+        console.log(`⚡ ProductionTimeline: Pobrano ${data.length} zadań`);
       } catch (error) {
-        // Fallback - pobierz wszystkie zadania
-        data = await getAllTasks();
+        console.warn('Fallback do getAllTasks:', error.message);
+        // Fallback - pobierz wszystkie zadania z limitem
+        const allData = await getAllTasks();
         
         // Filtruj zadania według zakresu dat po stronie klienta
-        data = data.filter(task => {
+        data = allData.filter(task => {
           const taskDate = task.scheduledDate;
           if (!taskDate) return true;
           
@@ -686,7 +698,7 @@ const ProductionTimeline = React.memo(({
                           new Date(taskDate).getTime();
           
           return taskTime >= canvasTimeStart && taskTime <= canvasTimeEnd;
-        });
+        }).slice(0, dynamicLimit); // ⚡ OPTYMALIZACJA: Ogranicz po stronie klienta
       }
       
       setTasks(data);
@@ -694,6 +706,18 @@ const ProductionTimeline = React.memo(({
       // Zresetuj stan wzbogacenia przy nowym ładowaniu zadań
       // (nowe zadania mogą być inne lub z innego zakresu dat)
       setTasksEnrichedWithPO(false);
+      
+      // ⚡ OPTYMALIZACJA: Wzbogacanie PO tylko dla małych zbiorów (< 100 zadań)
+      // Dla większych zbiorów wzbogacaj on-demand przy hover
+      if (data.length > 0 && data.length <= 100) {
+        console.log('⚡ ProductionTimeline: Wzbogacanie PO dla małego zbioru...');
+        // Opóźnione wzbogacanie żeby nie blokować pierwszego renderowania
+        setTimeout(() => {
+          enrichTasksInBackground(data);
+        }, 500);
+      } else if (data.length > 100) {
+        console.log(`⚡ ProductionTimeline: Pominięto wzbogacanie PO dla ${data.length} zadań (on-demand)`);
+      }
     } catch (error) {
       console.error('Błąd podczas pobierania zadań:', error);
       showError(t('production.timeline.messages.loadingError') + ': ' + error.message);
@@ -701,6 +725,20 @@ const ProductionTimeline = React.memo(({
       setLoading(false);
     }
   }, [canvasTimeStart, canvasTimeEnd, showError]);
+  
+  // ⚡ OPTYMALIZACJA: Wzbogacanie zadań o numery PO w tle
+  const enrichTasksInBackground = useCallback(async (tasksToEnrich) => {
+    if (tasksEnrichedWithPO || !tasksToEnrich || tasksToEnrich.length === 0) return;
+    
+    try {
+      const enrichedTasks = await enrichTasksWithAllPONumbers(tasksToEnrich, false);
+      setTasks(enrichedTasks);
+      setTasksEnrichedWithPO(true);
+      console.log('⚡ ProductionTimeline: Wzbogacono zadania o numery PO');
+    } catch (error) {
+      console.warn('Nie udało się wzbogacić zadań o numery PO:', error.message);
+    }
+  }, [tasksEnrichedWithPO]);
 
   // Funkcja do pobierania historii produkcji dla zadań zakończonych
   const fetchProductionHistoryForCompletedTasks = useCallback(async () => {

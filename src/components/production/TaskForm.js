@@ -82,7 +82,7 @@ import {
   getTaskById,
   clearProductionTasksCache
 } from '../../services/productionService';
-import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion } from '../../services/recipeService';
+import { getAllRecipes, getRecipeById, getRecipeVersions, getRecipeVersion, getActiveRecipesMinimal } from '../../services/recipeService';
 import {
   getAllInventoryItems,
   getInventoryItemById
@@ -325,21 +325,39 @@ const TaskForm = ({ taskId }) => {
     }
   }, [dataLoaded]);
 
-  const fetchRecipes = async () => {
+  // ⚡ OPTYMALIZACJA WYDAJNOŚCI: Pobieranie receptur z limitem (tylko aktywne, podstawowe pola)
+  const fetchRecipes = async (minimal = true) => {
     if (dataLoaded.recipes) return;
     
     try {
       // Sprawdź cache
-      const cachedRecipes = getCachedData('recipes');
+      const cacheKey = minimal ? 'recipes_minimal' : 'recipes';
+      const cachedRecipes = getCachedData(cacheKey);
       if (cachedRecipes) {
         setRecipes(cachedRecipes);
         setDataLoaded(prev => ({ ...prev, recipes: true }));
         return;
       }
 
-      const recipesData = await getAllRecipes();
+      let recipesData;
+      
+      if (minimal) {
+        // ⚡ OPTYMALIZACJA: Pobierz tylko aktywne receptury z podstawowymi polami
+        // Limit 150 receptur dla szybszego ładowania
+        try {
+          recipesData = await getActiveRecipesMinimal(150);
+          console.log(`⚡ TaskForm: Pobrano ${recipesData.length} receptur (tryb minimal)`);
+        } catch (minimalError) {
+          // Fallback do pełnego pobierania jeśli minimal nie istnieje
+          console.warn('getActiveRecipesMinimal niedostępne, używam getAllRecipes');
+          recipesData = await getAllRecipes();
+        }
+      } else {
+        recipesData = await getAllRecipes();
+      }
+      
       setRecipes(recipesData);
-      setCachedData('recipes', recipesData);
+      setCachedData(cacheKey, recipesData);
       setDataLoaded(prev => ({ ...prev, recipes: true }));
     } catch (error) {
       showError('Błąd podczas pobierania receptur: ' + error.message);

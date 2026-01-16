@@ -18,8 +18,9 @@ const formatDate = (date) => {
 
 /**
  * Parsuj adres - rozszerzona wersja
+ * Obsługuje zarówno string (rozdzielony przecinkami) jak i obiekt adresowy
  */
-const parseAddress = (addressString) => {
+const parseAddress = (addressInput) => {
   const defaultAddr = {
     street: '',
     city: '',
@@ -27,15 +28,31 @@ const parseAddress = (addressString) => {
     country: 'Polska'
   };
   
-  if (!addressString) return defaultAddr;
+  if (!addressInput) return defaultAddr;
   
-  const lines = addressString.split(',').map(s => s.trim());
-  return {
-    street: lines[0] || '',
-    city: lines[1] || '',
-    postalCode: lines[2] || '',
-    country: lines[3] || 'Polska'
-  };
+  // Jeśli adres jest obiektem, użyj bezpośrednio jego pól
+  if (typeof addressInput === 'object' && addressInput !== null) {
+    return {
+      street: addressInput.street || addressInput.address || '',
+      city: addressInput.city || '',
+      postalCode: addressInput.postalCode || addressInput.zipCode || '',
+      country: addressInput.country || 'Polska'
+    };
+  }
+  
+  // Jeśli adres jest stringiem, parsuj go
+  if (typeof addressInput === 'string') {
+    const lines = addressInput.split(',').map(s => s.trim());
+    return {
+      street: lines[0] || '',
+      city: lines[1] || '',
+      postalCode: lines[2] || '',
+      country: lines[3] || 'Polska'
+    };
+  }
+  
+  // Dla innych typów zwróć domyślny adres
+  return defaultAddr;
 };
 
 /**
@@ -57,7 +74,11 @@ const escapeXML = (str) => {
 const parseNIP = (nip) => {
   if (!nip) return { country: 'PL', number: '' };
   
-  const cleaned = nip.replace(/\s/g, '');
+  // Upewnij się, że nip jest stringiem
+  const nipString = typeof nip === 'string' ? nip : String(nip || '');
+  if (!nipString) return { country: 'PL', number: '' };
+  
+  const cleaned = nipString.replace(/\s/g, '');
   
   // Jeśli ma prefix kraju (np. FR, DE, UK)
   if (/^[A-Z]{2}/.test(cleaned)) {

@@ -28,6 +28,7 @@ import { collection, addDoc, serverTimestamp, doc, updateDoc, query, where, getD
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { 
@@ -64,7 +65,7 @@ const getMODetailsById = async (moNumber) => {
 };
 
 // Komponent do wyświetlania istniejącego załącznika
-const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
+const ExistingAttachment = ({ fileUrl, fileName, onRemove, t }) => {
   if (!fileUrl) return null;
 
   const isImage = fileName && /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
@@ -83,7 +84,7 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
       {isImage ? (
         <img 
           src={fileUrl} 
-          alt={fileName || 'Załącznik'}
+          alt={fileName || t('common.attachedFile')}
           style={{ 
             maxWidth: '60px', 
             maxHeight: '60px', 
@@ -98,10 +99,10 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
       
       <Box sx={{ flexGrow: 1 }}>
         <Typography variant="body2" color="text.primary">
-          {fileName || 'Załączony plik'}
+          {fileName || t('common.attachedFile')}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          Aktualnie załączony plik
+          {t('common.currentAttachment')}
         </Typography>
       </Box>
       
@@ -112,7 +113,7 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
           startIcon={<VisibilityIcon />}
           onClick={() => window.open(fileUrl, '_blank')}
         >
-          Pokaż
+          {t('common.show')}
         </Button>
         <Button
           size="small"
@@ -121,7 +122,7 @@ const ExistingAttachment = ({ fileUrl, fileName, onRemove }) => {
           startIcon={<DeleteIcon />}
           onClick={onRemove}
         >
-          Usuń
+          {t('common.remove')}
         </Button>
       </Box>
     </Box>
@@ -135,6 +136,7 @@ const CompletedMOForm = () => {
   const isEditMode = searchParams.get('edit') === 'true';
   const { currentUser } = useAuth();
   const theme = useTheme();
+  const { t } = useTranslation('forms');
 
   const [formData, setFormData] = useState({
     email: '',
@@ -289,36 +291,36 @@ const CompletedMOForm = () => {
     const errors = {};
     
     if (!formData.email) {
-      errors.email = 'Adres e-mail jest wymagany';
+      errors.email = t('validation.emailRequired');
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Podaj prawidłowy adres e-mail';
+      errors.email = t('validation.emailInvalid');
     }
     
     if (!formData.time) {
-      errors.time = 'Godzina wypełnienia jest wymagana';
+      errors.time = t('validation.timeRequired');
     }
     
     if (!formData.moNumber) {
-      errors.moNumber = 'Numer MO jest wymagany';
+      errors.moNumber = t('validation.moNumberRequired');
     }
     
     if (!formData.productQuantity) {
-      errors.productQuantity = 'Ilość produktu końcowego jest wymagana';
+      errors.productQuantity = t('validation.productionQuantityRequired');
     } else if (isNaN(formData.productQuantity)) {
-      errors.productQuantity = 'Podaj wartość liczbową';
+      errors.productQuantity = t('validation.numericRequired');
     }
     
     if (formData.packagingLoss && isNaN(formData.packagingLoss)) {
-      errors.packagingLoss = 'Podaj wartość liczbową';
+      errors.packagingLoss = t('validation.numericRequired');
     }
     
     if (formData.rawMaterialLoss && isNaN(formData.rawMaterialLoss)) {
-      errors.rawMaterialLoss = 'Podaj wartość liczbową';
+      errors.rawMaterialLoss = t('validation.numericRequired');
     }
     
     
     if (formData.netCapsuleWeight && isNaN(formData.netCapsuleWeight)) {
-      errors.netCapsuleWeight = 'Podaj wartość liczbową';
+      errors.netCapsuleWeight = t('validation.numericRequired');
     }
     
     setValidationErrors(errors);
@@ -828,19 +830,19 @@ const CompletedMOForm = () => {
             gap: 1
           }}>
             <AssignmentIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
-            {isEditMode ? 'EDYCJA - RAPORT SKOŃCZONE MO' : 'RAPORT - SKOŃCZONE MO'}
+            {isEditMode ? t('productionForms.completedMO.editTitle') : t('productionForms.completedMO.formTitle')}
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" paragraph sx={{
             fontSize: { xs: '0.75rem', sm: '0.875rem' },
             mb: 0
           }}>
-            W razie awarii i pilnych zgłoszeń prosimy o kontakt: mateusz@bgwpharma.com
+            {t('common.emergencyContact')} mateusz@bgwpharma.com
           </Typography>
         </Box>
 
         {submitted && (
           <Alert severity="success" sx={{ mb: 3 }}>
-            {isEditMode ? 'Raport został zaktualizowany pomyślnie!' : 'Raport został wysłany pomyślnie!'}
+            {isEditMode ? t('common.successUpdate') : t('common.successCreate')}
           </Alert>
         )}
         
@@ -848,10 +850,10 @@ const CompletedMOForm = () => {
           {/* SEKCJA 1 z 4 - IDENTYFIKACJA */}
           <Box sx={getFormSectionStyles(theme, 'primary')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'primary.main', fontWeight: 'bold' }}>
-              Sekcja 1 z 4
+              {t('common.section', { current: 1, total: 4 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              Identyfikacja
+              👤 {t('sections.identification')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -860,7 +862,7 @@ const CompletedMOForm = () => {
                 <TextField
                   required
                   fullWidth
-                  label="Adres e-mail"
+                  label={t('fields.email')}
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
@@ -875,7 +877,7 @@ const CompletedMOForm = () => {
               <Grid item xs={12} sm={6}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
                   <DateTimePicker
-                    label="Data wypełnienia"
+                    label={t('fields.fillDate')}
                     value={formData.date}
                     onChange={handleDateChange}
                     renderInput={(params) => <TextField {...params} fullWidth required />}
@@ -888,7 +890,7 @@ const CompletedMOForm = () => {
                 <TextField
                   required
                   fullWidth
-                  label="Godzina wypełnienia"
+                  label={t('fields.fillTime')}
                   name="time"
                   value={formData.time}
                   onChange={handleChange}
@@ -903,10 +905,10 @@ const CompletedMOForm = () => {
           {/* SEKCJA 2 z 4 - INFORMACJE O MO */}
           <Box sx={getFormSectionStyles(theme, 'warning')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'warning.main', fontWeight: 'bold' }}>
-              Sekcja 2 z 4
+              {t('common.section', { current: 2, total: 4 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-              Informacje o Zleceniu Produkcyjnym
+              📋 {t('sections.moReport')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -917,12 +919,12 @@ const CompletedMOForm = () => {
                   required 
                   error={!!validationErrors.moNumber}
                 >
-                  <InputLabel>Numer MO</InputLabel>
+                  <InputLabel>{t('fields.moNumber')}</InputLabel>
                   <Select
                     name="moNumber"
                     value={formData.moNumber}
                     onChange={handleChange}
-                    label="Numer MO"
+                    label={t('fields.moNumber')}
                     disabled={loadingMO}
                     startAdornment={
                       loadingMO ? 
@@ -949,10 +951,10 @@ const CompletedMOForm = () => {
           {/* SEKCJA 3 z 4 - DANE PRODUKCYJNE I STRATY */}
           <Box sx={getFormSectionStyles(theme, 'success')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'success.main', fontWeight: 'bold' }}>
-              Sekcja 3 z 4
+              {t('common.section', { current: 3, total: 4 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'success.main' }}>
-              Dane Produkcyjne i Straty
+              📊 {t('sections.lossReport')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
@@ -961,11 +963,11 @@ const CompletedMOForm = () => {
                 <TextField
                   required
                   fullWidth
-                  label="Ilość produktu końcowego"
+                  label={t('fields.productionQuantity')}
                   name="productQuantity"
                   value={formData.productQuantity}
                   onChange={handleChange}
-                  placeholder="Proszę podać tylko wartość liczbową!"
+                  placeholder={t('helpers.numericOnly')}
                   error={!!validationErrors.productQuantity}
                   helperText={validationErrors.productQuantity}
                 />
@@ -974,11 +976,11 @@ const CompletedMOForm = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Strata - Opakowanie"
+                  label={t('fields.packagingLoss')}
                   name="packagingLoss"
                   value={formData.packagingLoss}
                   onChange={handleChange}
-                  placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                  placeholder={t('helpers.finishedProductLossHelper')}
                   error={!!validationErrors.packagingLoss}
                   helperText={validationErrors.packagingLoss}
                 />
@@ -987,24 +989,24 @@ const CompletedMOForm = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Strata - Wieczka"
+                  label={t('fields.bulkLoss')}
                   name="bulkLoss"
                   value={formData.bulkLoss}
                   onChange={handleChange}
-                  placeholder="W ramach robionego MO. Proszę podać tylko wartość liczbową!"
+                  placeholder={t('helpers.finishedProductLossHelper')}
                 />
               </Grid>
               
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Strata - Surowiec"
+                  label={t('fields.rawMaterialLoss')}
                   name="rawMaterialLoss"
                   value={formData.rawMaterialLoss}
                   onChange={handleChange}
-                  placeholder="W ramach robionego MO. Np. rozsypane kakao, rozsypany produkt końcowy itp. Jeśli nie było straty - proszę wpisać 'brak'."
+                  placeholder={t('helpers.lossDescription')}
                   error={!!validationErrors.rawMaterialLoss}
-                  helperText={validationErrors.rawMaterialLoss}
+                  helperText={validationErrors.rawMaterialLoss || t('helpers.rawMaterialLossHelper')}
                   multiline
                   rows={5}
                 />
@@ -1013,15 +1015,15 @@ const CompletedMOForm = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Waga netto kapsułek (opcjonalne)"
+                  label={t('fields.netCapsuleWeight')}
                   name="netCapsuleWeight"
                   value={formData.netCapsuleWeight}
                   onChange={handleChange}
-                  placeholder="Podaj wagę netto kapsułek w gramach lub kilogramach"
+                  placeholder={t('helpers.netCapsuleWeightHelper')}
                   type="number"
                   inputProps={{ step: "0.01", min: "0" }}
                   error={!!validationErrors.netCapsuleWeight}
-                  helperText={validationErrors.netCapsuleWeight}
+                  helperText={validationErrors.netCapsuleWeight || t('helpers.optionalField')}
                 />
               </Grid>
             </Grid>
@@ -1030,17 +1032,17 @@ const CompletedMOForm = () => {
           {/* SEKCJA 4 z 4 - ZAŁĄCZNIKI */}
           <Box sx={getFormSectionStyles(theme, 'info')}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'info.main', fontWeight: 'bold' }}>
-              Sekcja 4 z 4
+              {t('common.section', { current: 4, total: 4 })}
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', color: 'info.main' }}>
-              Załączniki
+              📎 {t('sections.attachments')}
             </Typography>
             <Divider sx={{ mb: 3 }} />
             
             <Grid container spacing={{ xs: 2, sm: 3 }}>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom>
-                  Raport z planu mieszań:
+                  {t('fields.mixingPlanReport')}:
                 </Typography>
                 
                 {/* Wyświetlaj istniejący załącznik z URL */}
@@ -1048,6 +1050,7 @@ const CompletedMOForm = () => {
                   fileUrl={formData.mixingPlanReportUrl}
                   fileName={formData.mixingPlanReportName}
                   onRemove={handleRemoveAttachment}
+                  t={t}
                 />
                 
                 {/* Wyświetlaj lokalny plik (wygenerowany PDF) */}
@@ -1101,7 +1104,7 @@ const CompletedMOForm = () => {
               onClick={handleBack}
               sx={getFormButtonStyles('outlined')}
             >
-              Powrót
+              {t('common.back')}
             </Button>
             {currentTaskData && (
               <Button
@@ -1112,7 +1115,7 @@ const CompletedMOForm = () => {
                 disabled={generatingPDF}
                 sx={getFormButtonStyles('outlined')}
               >
-                {generatingPDF ? 'Generowanie...' : 'Załącz szczegóły MO'}
+                {generatingPDF ? t('common.generatingPdf') : t('common.generatePdf')}
               </Button>
             )}
             <Button
@@ -1126,7 +1129,7 @@ const CompletedMOForm = () => {
                 flexGrow: 1
               }}
             >
-              {saving ? 'Zapisywanie...' : (isEditMode ? 'Aktualizuj raport' : 'Wyślij raport')}
+              {saving ? t('common.saving') : (isEditMode ? t('common.update') : t('common.submit'))}
             </Button>
           </Box>
         </Box>

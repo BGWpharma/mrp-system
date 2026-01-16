@@ -20,6 +20,7 @@
  * - onProductionTaskScheduleUpdate (trigger: productionTasks)
  * - onCmrStatusUpdate         (trigger: cmrDocuments)
  * - updateExpiryStats         (scheduled: every day 01:00)
+ * - checkUnorderedPOReservations (scheduled: every day 08:00)
  */
 
 // Initialize config (must be first!)
@@ -45,6 +46,7 @@ const {onCmrStatusUpdate} = require("./triggers/cmrStatus");
 // SCHEDULED FUNCTIONS - Zadania cron
 // ============================================================================
 const {updateExpiryStats} = require("./scheduled/expiryStats");
+const {checkUnorderedPOReservations} = require("./scheduled/poOrderReminder");
 
 // ============================================================================
 // EXPORTS - Re-export all functions
@@ -58,3 +60,4 @@ exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;
 exports.onProductionTaskScheduleUpdate = onProductionTaskScheduleUpdate;
 exports.onCmrStatusUpdate = onCmrStatusUpdate;
 exports.updateExpiryStats = updateExpiryStats;
+exports.checkUnorderedPOReservations = checkUnorderedPOReservations;

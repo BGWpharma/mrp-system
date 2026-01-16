@@ -52,12 +52,31 @@ const Dashboard = () => {
     severity: 'success'
   });
 
-  // Pobieranie ogłoszenia
+  // ⚡ OPTYMALIZACJA WYDAJNOŚCI: Pobieranie ogłoszenia z timeout 5s
   const fetchAnnouncement = useCallback(async () => {
+    // Stwórz AbortController do anulowania zapytania przy timeout
+    const controller = new AbortController();
+    const TIMEOUT_MS = 5000; // 5 sekund timeout
+    
+    // Timeout - anuluj zapytanie jeśli trwa za długo
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.warn('⚠️ fetchAnnouncement: Przekroczono timeout 5s');
+    }, TIMEOUT_MS);
+    
     try {
       setTimeout(() => setAnnouncementLoading(true), 100);
       
-      const announcementDoc = await getDoc(doc(db, 'settings', 'dashboard'));
+      // Firestore getDoc nie wspiera AbortSignal bezpośrednio,
+      // ale używamy Promise.race dla implementacji timeout
+      const fetchPromise = getDoc(doc(db, 'settings', 'dashboard'));
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), TIMEOUT_MS);
+      });
+      
+      const announcementDoc = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      clearTimeout(timeoutId);
       
       if (announcementDoc.exists()) {
         const data = announcementDoc.data();
@@ -72,12 +91,17 @@ const Dashboard = () => {
           setAnnouncementLoading(false);
           setAnnouncementInitialized(true);
         } else {
-          await setDoc(doc(db, 'settings', 'dashboard'), {
-            announcement: '',
-            updatedBy: currentUser.uid,
-            updatedByName: currentUser.displayName || currentUser.email,
-            updatedAt: serverTimestamp()
-          });
+          // Utwórz dokument tylko jeśli nie ma timeout
+          try {
+            await setDoc(doc(db, 'settings', 'dashboard'), {
+              announcement: '',
+              updatedBy: currentUser.uid,
+              updatedByName: currentUser.displayName || currentUser.email,
+              updatedAt: serverTimestamp()
+            });
+          } catch (setError) {
+            console.warn('Nie udało się utworzyć dokumentu ogłoszenia:', setError);
+          }
           setAnnouncement('');
           setAnnouncementMeta({
             updatedBy: currentUser.uid,
@@ -87,9 +111,23 @@ const Dashboard = () => {
           setAnnouncementLoading(false);
           setAnnouncementInitialized(true);
         }
+      } else {
+        // Dokument nie istnieje - ustaw domyślne wartości
+        setAnnouncement('');
+        setAnnouncementLoading(false);
+        setAnnouncementInitialized(true);
       }
     } catch (error) {
-      console.error('Błąd podczas pobierania ogłoszenia:', error);
+      clearTimeout(timeoutId);
+      
+      // Obsłuż timeout gracefully
+      if (error.message === 'TIMEOUT' || error.name === 'AbortError') {
+        console.warn('⚡ Dashboard: Timeout pobierania ogłoszenia - używam cache');
+      } else {
+        console.error('Błąd podczas pobierania ogłoszenia:', error);
+      }
+      
+      // Fallback do localStorage
       const savedAnnouncement = localStorage.getItem('dashboardAnnouncement') || '';
       setAnnouncement(savedAnnouncement);
       setAnnouncementLoading(false);
