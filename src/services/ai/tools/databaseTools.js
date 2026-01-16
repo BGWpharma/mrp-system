@@ -288,7 +288,19 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "aggregate_data",
-      description: "Wykonuje operacje agregujące na danych (suma, średnia, liczba, grupowanie). Użyj do analiz statystycznych i podsumowań.",
+      description: `Wykonuje operacje agregujące na danych (suma, średnia, liczba, grupowanie). Użyj do analiz statystycznych i podsumowań.
+
+WAŻNE dla FAKTUR (invoices):
+- customerId: ID klienta (automatycznie mapowane na customer.id)
+- issueDate: Data wystawienia (format: "YYYY-MM-DD", np. "2025-01-01")
+- dueDate: Termin płatności
+- total: Całkowita wartość faktury (GŁÓWNE POLE DO SUMOWANIA!)
+- status: Status faktury (issued, paid, partially_paid, overdue, cancelled)
+- type: Typ faktury (invoice, proforma)
+- isProforma: true/false - czy faktura proforma
+
+UWAGA: Używaj pola "total" do sumowania wartości faktur (nie totalNet/totalGross).
+Daty można podawać jako string "YYYY-MM-DD" - automatyczna konwersja na Timestamp.`,
       parameters: {
         type: "object",
         properties: {
@@ -318,7 +330,7 @@ export const DATABASE_TOOLS = [
           },
           field: {
             type: "string",
-            description: "Pole na którym wykonać operację (wymagane dla sum, average, min, max)"
+            description: "Pole na którym wykonać operację (wymagane dla sum, average, min, max). Dla faktur używaj: total"
           },
           groupBy: {
             type: "string",
@@ -326,13 +338,13 @@ export const DATABASE_TOOLS = [
           },
           filters: {
             type: "array",
-            description: "Opcjonalne filtry przed agregacją",
+            description: "Filtry przed agregacją. Dla dat użyj formatu 'YYYY-MM-DD'. Dla faktur: customerId (ID klienta), issueDate (data wystawienia)",
             items: {
               type: "object",
               properties: {
-                field: { type: "string" },
-                operator: { type: "string" },
-                value: {}
+                field: { type: "string", description: "Nazwa pola (np. customerId, issueDate, status)" },
+                operator: { type: "string", description: "Operator: ==, !=, <, <=, >, >=, in, array-contains" },
+                value: { description: "Wartość do porównania. Dla dat: 'YYYY-MM-DD'" }
               }
             }
           }
@@ -437,30 +449,38 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_invoices",
-      description: "Pobiera faktury z opcjonalnymi filtrami. Użyj gdy użytkownik pyta o faktury, rozliczenia, płatności.",
+      description: `Pobiera faktury z opcjonalnymi filtrami. Użyj gdy użytkownik pyta o faktury, rozliczenia, płatności.
+
+WYNIK zawiera:
+- invoices: lista faktur z polami (number, total, status, paymentStatus, customer, issueDate, dueDate)
+- totalSum: SUMA wartości wszystkich znalezionych faktur (obliczona automatycznie!)
+- count: liczba znalezionych faktur
+
+UŻYJ TEGO ZAMIAST aggregate_data dla zapytań o sumę faktur - totalSum jest już obliczone!`,
       parameters: {
         type: "object",
         properties: {
           status: {
             type: "array",
             items: { type: "string" },
-            description: "Statusy faktur (np. opłacona, nieopłacona, częściowo)"
+            description: "Statusy płatności faktur: opłacona, nieopłacona, częściowo opłacona, przeterminowana"
           },
           customerId: {
             type: "string",
-            description: "ID klienta"
+            description: "ID klienta (automatycznie mapowane na customer.id)"
           },
           dateFrom: {
             type: "string",
-            description: "Data początkowa (ISO format)"
+            description: "Data początkowa wystawienia (YYYY-MM-DD)"
           },
           dateTo: {
             type: "string",
-            description: "Data końcowa (ISO format)"
+            description: "Data końcowa wystawienia (YYYY-MM-DD)"
           },
           limit: {
             type: "number",
-            default: 100
+            default: 100,
+            description: "Maksymalna liczba faktur do pobrania"
           }
         }
       }

@@ -870,11 +870,53 @@ export class ToolExecutor {
     
     let q = collection(db, collectionName);
     
-    // Zastosuj filtry
+    // Pola, które wymagają konwersji dat na Firestore Timestamp
+    const dateFields = [
+      'issueDate', 'dueDate', 'paymentDate', 'createdAt', 'updatedAt',
+      'expirationDate', 'orderDate', 'expectedDelivery', 'deliveryDate',
+      'startDate', 'endDate', 'completedAt', 'scheduledDate'
+    ];
+    
+    // Mapowanie pól dla różnych kolekcji (zagnieżdżone pola, aliasy)
+    const fieldMapping = {
+      invoices: {
+        'customerId': 'customer.id',
+        'customerName': 'customer.name',
+        'sellerId': 'seller.id',
+        'sellerName': 'seller.name'
+      },
+      customer_orders: {
+        'customerId': 'customerId',
+        'customerName': 'customerName'
+      }
+    };
+    
+    // Zastosuj filtry z konwersją dat i mapowaniem pól
     if (params.filters && params.filters.length > 0) {
-      const constraints = params.filters.map(f => 
-        where(f.field, f.operator, f.value)
-      );
+      const constraints = params.filters.map(f => {
+        let fieldName = f.field;
+        let value = f.value;
+        
+        // Mapowanie pól dla danej kolekcji
+        const collectionFieldMap = fieldMapping[params.collection];
+        if (collectionFieldMap && collectionFieldMap[fieldName]) {
+          const mappedField = collectionFieldMap[fieldName];
+          console.log(`[ToolExecutor] 🔄 Mapowanie pola: ${fieldName} → ${mappedField}`);
+          fieldName = mappedField;
+        }
+        
+        // Konwersja dat string na Firestore Timestamp
+        if (dateFields.includes(f.field) && typeof value === 'string') {
+          try {
+            value = Timestamp.fromDate(new Date(value));
+            console.log(`[ToolExecutor] 📅 Konwersja daty: ${f.field} = "${f.value}" → Timestamp`);
+          } catch (e) {
+            console.warn(`[ToolExecutor] ⚠️ Nie udało się skonwertować daty: ${f.value}`);
+          }
+        }
+        
+        return where(fieldName, f.operator, value);
+      });
       q = query(q, ...constraints);
     }
     
@@ -1128,17 +1170,23 @@ export class ToolExecutor {
     }
     
     if (params.customerId) {
-      constraints.push(where('customerId', '==', params.customerId));
+      // UWAGA: Faktury mają zagnieżdżone pole customer.id, nie customerId
+      constraints.push(where('customer.id', '==', params.customerId));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie faktur po customer.id: ${params.customerId}`);
     }
     
     if (params.dateFrom) {
+      // Filtruj po issueDate (data wystawienia), nie createdAt
       const fromDate = Timestamp.fromDate(new Date(params.dateFrom));
-      constraints.push(where('createdAt', '>=', fromDate));
+      constraints.push(where('issueDate', '>=', fromDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie faktur od: ${params.dateFrom}`);
     }
     
     if (params.dateTo) {
+      // Filtruj po issueDate (data wystawienia), nie createdAt
       const toDate = Timestamp.fromDate(new Date(params.dateTo));
-      constraints.push(where('createdAt', '<=', toDate));
+      constraints.push(where('issueDate', '<=', toDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie faktur do: ${params.dateTo}`);
     }
     
     const limitValue = params.limit || 100;
@@ -1153,17 +1201,37 @@ export class ToolExecutor {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
+        number: data.number,
+        status: data.status,
+        paymentStatus: data.paymentStatus,
+        total: data.total || 0,
+        totalPaid: data.totalPaid || 0,
+        currency: data.currency || 'EUR',
+        customer: data.customer,
+        isProforma: data.isProforma || data.type === 'proforma',
+        issueDate: data.issueDate?.toDate?.()?.toISOString?.() || data.issueDate,
+        dueDate: data.dueDate?.toDate?.()?.toISOString?.() || data.dueDate,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
-        dueDate: data.dueDate?.toDate?.()?.toISOString?.() || data.dueDate
+        orderId: data.orderId,
+        items: data.items?.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          netValue: item.netValue,
+          vat: item.vat
+        }))
       };
     });
+    
+    // Oblicz sumę wartości dla szybkiego podglądu
+    const totalSum = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
     
     return {
       invoices,
       isEmpty: invoices.length === 0,
       warning: invoices.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych faktur spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
       count: invoices.length,
+      totalSum: parseFloat(totalSum.toFixed(2)),
       limitApplied: limitValue
     };
   }

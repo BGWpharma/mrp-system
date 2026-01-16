@@ -104,15 +104,7 @@ import {
 
 // Importuj komponenty
 import { useTranslation } from '../../../hooks/useTranslation';
-import FinancialReportPage from '../../Analytics/FinancialReportPage';
 import CashflowTab from './CashflowTab';
-
-// Komponent zakładki "Raport finansowy" - POZA głównym komponentem, żeby uniknąć unmount/remount
-const FinancialReportTab = () => (
-  <Box sx={{ mt: -4 }}>
-    <FinancialReportPage />
-  </Box>
-);
 
 // Definicja okresów czasowych dla filtrowania
 const TIME_PERIODS = {
@@ -2559,11 +2551,6 @@ const COReportsPage = () => {
             iconPosition="start"
           />
           <Tab 
-            label={t('coReports.tabs.financialReport')}
-            icon={<AssessmentIcon />} 
-            iconPosition="start"
-          />
-          <Tab 
             label={t('coReports.tabs.cashflow')}
             icon={<AccountBalanceIcon />} 
             iconPosition="start"
@@ -2573,8 +2560,7 @@ const COReportsPage = () => {
       
       <Box sx={{ py: 3 }}>
         {selectedTab === 0 && <ProductionCostsTab />}
-        {selectedTab === 1 && <FinancialReportTab />}
-        {selectedTab === 2 && <CashflowTab />}
+        {selectedTab === 1 && <CashflowTab />}
       </Box>
     </Container>
   );
