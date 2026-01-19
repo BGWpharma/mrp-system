@@ -48,6 +48,15 @@ import './assets/styles/global.css';
 // Dashboard - ładowany lazy bo może być duży
 const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'));
 
+// Analytics
+const AnalyticsDashboardPage = lazy(() => import('./pages/Analytics/AnalyticsDashboardPage'));
+const FinancialReportPage = lazy(() => import('./pages/Analytics/FinancialReportPage'));
+const ProductionTimePage = lazy(() => import('./pages/Analytics/ProductionTimePage'));
+const MOConsumptionPage = lazy(() => import('./pages/Analytics/MOConsumptionPage'));
+const ProductionProgressPage = lazy(() => import('./pages/Analytics/ProductionProgressPage'));
+const ProductionCostsPage = lazy(() => import('./pages/Analytics/ProductionCostsPage'));
+const CashflowPage = lazy(() => import('./pages/Analytics/CashflowPage'));
+
 // Recipes
 const RecipesPage = lazy(() => import('./pages/Recipes/RecipesPage'));
 const RecipeDetailsPage = lazy(() => import('./pages/Recipes/RecipeDetailsPage'));
@@ -156,8 +165,6 @@ const PriceListsPage = lazy(() => import('./pages/Sales/PriceLists/PriceListsPag
 const PriceListFormPage = lazy(() => import('./pages/Sales/PriceLists/PriceListFormPage'));
 const PriceListDetailsPage = lazy(() => import('./pages/Sales/PriceLists/PriceListDetailsPage'));
 
-// CO Reports - nowy moduł raportów CO
-const COReportsPage = lazy(() => import('./pages/Sales/COReports/COReportsPage'));
 
 // Admin Pages
 const UsersManagementPage = lazy(() => import('./pages/Admin/UsersManagementPage'));
@@ -344,6 +351,15 @@ function App() {
                     
                     <Route path="/" element={<PrivateLayout><Dashboard /></PrivateLayout>} />
                     
+                    {/* Analytics Routes */}
+                    <Route path="/analytics" element={<PrivateLayout><AnalyticsDashboardPage /></PrivateLayout>} />
+                    <Route path="/analytics/financial-report" element={<PrivateLayout><FinancialReportPage /></PrivateLayout>} />
+                    <Route path="/analytics/production-time" element={<PrivateLayout><ProductionTimePage /></PrivateLayout>} />
+                    <Route path="/analytics/mo-consumption" element={<PrivateLayout><MOConsumptionPage /></PrivateLayout>} />
+                    <Route path="/analytics/production-progress" element={<PrivateLayout><ProductionProgressPage /></PrivateLayout>} />
+                    <Route path="/analytics/production-costs" element={<PrivateLayout><ProductionCostsPage /></PrivateLayout>} />
+                    <Route path="/analytics/cashflow" element={<PrivateLayout><CashflowPage /></PrivateLayout>} />
+                    
                     {/* Admin Routes - dostępne tylko dla administratorów */}
                     <Route path="/admin/users" element={
                       <AdminRoute>
@@ -446,8 +462,6 @@ function App() {
                     <Route path="/sales/price-lists/:id" element={<PrivateLayout><PriceListDetailsPage /></PrivateLayout>} />
                     <Route path="/sales/price-lists/:id/edit" element={<PrivateLayout><PriceListFormPage /></PrivateLayout>} />
                     
-                    {/* CO Reports Routes - nowy moduł raportów CO */}
-                    <Route path="/sales/co-reports" element={<PrivateLayout><COReportsPage /></PrivateLayout>} />
                     
                     {/* Sales Routes - nowa struktura z zakładkami */}
                     <Route path="/sales" element={<PrivateLayout><SalesPage /></PrivateLayout>} />

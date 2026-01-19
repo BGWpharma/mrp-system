@@ -12,13 +12,16 @@ import {
   ShoppingCart as ShoppingCartIcon,
   Description as DescriptionIcon,
   Receipt as ReceiptIcon,
+  Receipt,
   AccountBalance as AccountBalanceIcon,
   Schedule as ScheduleIcon,
   TrendingUp as TrendingUpIcon,
   Assessment as AssessmentIcon,
   Timer as TimerIcon,
   ShoppingBasket as ShoppingBasketIcon,
-  AttachMoney as AttachMoneyIcon
+  AttachMoney as AttachMoneyIcon,
+  Settings as SettingsIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 import { formatCurrency } from '../../../utils/formatUtils';
 import { useTranslation } from '../../../hooks/useTranslation';
@@ -63,9 +66,9 @@ const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) 
       color: 'warning',
       format: 'currency'
     },
-    // GLOBALNE WYDATKI
+    // GLOBALNE WYDATKI Z PO
     {
-      title: 'Wydatki (PO w okresie)',
+      title: 'Wydatki (PO)',
       value: statistics.totalExpenses || 0,
       icon: <ShoppingBasketIcon />,
       color: 'error',
@@ -80,24 +83,51 @@ const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) 
       format: 'currency',
       tooltip: 'Zapłacone faktury za zamówienia zakupu'
     },
+    // KOSZTY OPERACYJNE
     {
-      title: 'Cashflow netto (okres)',
+      title: 'Koszty operacyjne',
+      value: statistics.totalOperationalCosts || 0,
+      icon: <BusinessIcon />,
+      color: 'warning',
+      format: 'currency',
+      tooltip: 'Miesięczne koszty operacyjne (czynsz, media, wynagrodzenia itp.)'
+    },
+    {
+      title: 'Koszty op. zapłacone',
+      value: statistics.totalOperationalCostsPaid || 0,
+      icon: <SettingsIcon />,
+      color: 'warning',
+      format: 'currency',
+      tooltip: 'Zapłacone koszty operacyjne'
+    },
+    // ŁĄCZNE WYDATKI
+    {
+      title: 'Łączne wydatki',
+      value: statistics.totalAllExpenses || 0,
+      icon: <Receipt />,
+      color: 'error',
+      format: 'currency',
+      tooltip: 'Suma: wydatki PO + koszty operacyjne'
+    },
+    // BILANS
+    {
+      title: 'Cashflow netto',
       value: statistics.netCashflow || 0,
       icon: <AccountBalanceIcon />,
       color: (statistics.netCashflow || 0) >= 0 ? 'success' : 'error',
       format: 'currency',
-      tooltip: 'Rzeczywisty przepływ gotówki: wpłacono za CO - zapłacono za PO'
+      tooltip: 'Rzeczywisty przepływ gotówki: wpłacono - zapłacono (PO + koszty op.)'
     },
     {
-      title: 'Zysk netto (okres)',
+      title: 'Zysk netto',
       value: statistics.netProfit || 0,
       icon: <TrendingUpIcon />,
       color: (statistics.netProfit || 0) >= 0 ? 'success' : 'error',
       format: 'currency',
-      tooltip: 'Wartość zamówień CO - wartość PO w okresie'
+      tooltip: 'Wartość zamówień CO - wszystkie wydatki (PO + koszty op.)'
     },
     {
-      title: 'Liczba PO w okresie',
+      title: 'Liczba PO',
       value: statistics.totalPOCount || 0,
       icon: <ShoppingBasketIcon />,
       color: 'secondary',

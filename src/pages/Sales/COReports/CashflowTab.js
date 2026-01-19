@@ -20,7 +20,8 @@ import {
 import {
   Refresh as RefreshIcon,
   Download as DownloadIcon,
-  FilterList as FilterListIcon
+  FilterList as FilterListIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -40,6 +41,7 @@ import CashflowSummaryCards from '../../../components/sales/co-reports/CashflowS
 import CashflowChart from '../../../components/sales/co-reports/CashflowChart';
 import CashflowTable from '../../../components/sales/co-reports/CashflowTable';
 import ExpenseTimeline from '../../../components/sales/co-reports/ExpenseTimeline';
+import OperationalCostsDialog from '../../../components/sales/co-reports/OperationalCostsDialog';
 
 /**
  * Główny komponent zakładki Cashflow w raporcie CO
@@ -66,6 +68,7 @@ const CashflowTab = () => {
   });
 
   const [showFilters, setShowFilters] = useState(true);
+  const [operationalCostsDialogOpen, setOperationalCostsDialogOpen] = useState(false);
 
   // Pobierz listę klientów przy montowaniu
   useEffect(() => {
@@ -211,6 +214,21 @@ const CashflowTab = () => {
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<SettingsIcon />}
+              onClick={() => setOperationalCostsDialogOpen(true)}
+              sx={{ 
+                backgroundColor: 'rgba(255,255,255,0.9)',
+                color: 'primary.main',
+                fontWeight: 600,
+                '&:hover': {
+                  backgroundColor: 'white'
+                }
+              }}
+            >
+              Koszty operacyjne
+            </Button>
             <Button
               variant="contained"
               startIcon={<DownloadIcon />}
@@ -391,6 +409,16 @@ const CashflowTab = () => {
           )}
         </>
       )}
+
+      {/* Dialog kosztów operacyjnych */}
+      <OperationalCostsDialog
+        open={operationalCostsDialogOpen}
+        onClose={() => setOperationalCostsDialogOpen(false)}
+        dateFrom={filters.dateFrom}
+        dateTo={filters.dateTo}
+        onSave={handleRefresh}
+        currency="EUR"
+      />
     </Box>
   );
 };

@@ -176,6 +176,7 @@ const Sidebar = ({ onToggle }) => {
     const pathToIdMap = {
       // Dashboard
       '/': 'dashboard-main',
+      '/analytics': 'dashboard-analytics',
       
       // Hall Data
       '/hall-data/conditions': 'hall-data-conditions',
@@ -191,7 +192,6 @@ const Sidebar = ({ onToggle }) => {
       '/customers': 'sales-customer-orders',
       '/sales/price-lists': 'sales-customer-orders',
       '/production/create-from-order': 'sales-production-task',
-      '/sales/co-reports': 'sales-co-reports',
       
       // Production
       '/production/forms': 'production-forms',
@@ -266,7 +266,7 @@ const Sidebar = ({ onToggle }) => {
       setOpenSubmenu(t('sales'));
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders') || location.pathname.startsWith('/suppliers')) {
       setOpenSubmenu(t('inventory'));
-    } else if (location.pathname === '/') {
+    } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
       setOpenSubmenu(t('dashboard'));
     } else if (location.pathname.startsWith('/hall-data')) {
       setOpenSubmenu(t('hallData'));
@@ -340,7 +340,7 @@ const Sidebar = ({ onToggle }) => {
   const isMenuActive = (menuPath) => {
     // Specjalne przypadki dla głównych sekcji
     if (menuPath === '/') {
-      return location.pathname === '/';
+      return location.pathname === '/' || location.pathname.startsWith('/analytics');
     } else if (menuPath === '/sales') {
       // Sales obejmuje wszystkie ścieżki związane ze sprzedażą
       return location.pathname.startsWith('/customers') || 
@@ -397,6 +397,7 @@ const Sidebar = ({ onToggle }) => {
       hasSubmenu: true,
       children: [
         { text: t('submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
+        { text: t('submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
@@ -421,7 +422,6 @@ const Sidebar = ({ onToggle }) => {
         { text: t('submenu.sales.invoices'), icon: <InvoicesIcon />, path: '/sales' },
         { text: t('submenu.sales.materialAdvances'), icon: <InvoicesIcon />, path: '/sales/material-advances' },
         { text: t('submenu.sales.customerOrders'), icon: <OrdersIcon />, path: '/orders' },
-        { text: t('submenu.sales.coReports'), icon: <ReportsIcon />, path: '/sales/co-reports' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 

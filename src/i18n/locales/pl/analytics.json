@@ -1,4 +1,50 @@
 {
+    "analyticsDashboard": {
+        "title": "Centrum Analityki",
+        "subtitle": "Przeglądaj raporty i analizuj dane firmy",
+        "tiles": {
+            "financialReport": {
+                "title": "Raport Finansowy",
+                "description": "Szczegółowa analiza łańcucha: PO → Partia → MO → CO → Faktura. Śledź przepływ kosztów i marże."
+            },
+            "productionCosts": {
+                "title": "Koszty Produkcji",
+                "description": "Analiza kosztów wytworzenia produktów. Śledź koszty materiałów i pełne koszty produkcji."
+            },
+            "cashflow": {
+                "title": "Cashflow",
+                "description": "Analiza przepływów pieniężnych. Monitoruj przychody, wydatki operacyjne i bilans finansowy."
+            },
+            "productionTime": {
+                "title": "Czas Produkcji",
+                "description": "Analiza czasu produkcji z wykresami rozłożenia dziennego, tygodniowego i miesięcznego. Monitoruj wydajność."
+            },
+            "moConsumption": {
+                "title": "Konsumpcja MO",
+                "description": "Raport zużycia materiałów w zadaniach produkcyjnych. Śledź koszty i partie materiałów."
+            },
+            "productionProgress": {
+                "title": "Postęp Produkcji",
+                "description": "Monitoring postępu realizacji zadań produkcyjnych. Analizuj trendy i opóźnienia."
+            },
+            "inventoryExpiry": {
+                "title": "Terminy Ważności",
+                "description": "Przegląd partii z krótkim terminem ważności. Zapobiegaj stratom i planuj wykorzystanie."
+            },
+            "productionTimeline": {
+                "title": "Harmonogram Produkcji",
+                "description": "Wizualizacja timeline zadań produkcyjnych. Planuj i optymalizuj obciążenie zasobów."
+            },
+            "forecast": {
+                "title": "Prognoza Zapotrzebowania",
+                "description": "Prognozowanie zapotrzebowania na materiały. Planuj zakupy i unikaj braków."
+            }
+        },
+        "quickAccess": {
+            "title": "Szybki dostęp do raportów",
+            "description": "Wybierz raport z powyższych kafelków, aby przejść do szczegółowej analizy danych. Każdy raport oferuje interaktywne filtry i możliwość eksportu danych."
+        }
+    },
     "charts": {
         "title": "Wykresy",
         "loading": "Ładowanie danych wykresów...",

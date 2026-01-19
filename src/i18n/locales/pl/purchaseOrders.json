@@ -348,6 +348,8 @@
   "orderReminder": {
     "title": "Niezamówione materiały dla produkcji",
     "refresh": "Odśwież",
+    "refreshLive": "Odśwież na żywo (aktualne dane)",
+    "lastUpdate": "Ostatnia aktualizacja",
     "noAlerts": "Wszystkie materiały zarezerwowane z PO zostały już zamówione. Brak ostrzeżeń do wyświetlenia.",
     "critical": "Krytyczne",
     "urgent": "Pilne",

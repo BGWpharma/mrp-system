@@ -1,0 +1,83 @@
+{
+  "operationalCosts": {
+    "title": "Operational Costs",
+    "subtitle": "Manage monthly operational costs",
+    "description": "Rent, utilities, salaries and other fixed costs",
+    
+    "dialog": {
+      "title": "Operational Costs",
+      "period": "Period",
+      "totalCosts": "Total Costs",
+      "totalPaid": "Paid",
+      "close": "Close"
+    },
+    
+    "month": {
+      "noCosts": "No costs",
+      "costsCount": "{{count}} cost",
+      "costsCount_plural": "{{count}} costs"
+    },
+    
+    "form": {
+      "addNew": "New operational cost",
+      "edit": "Edit cost",
+      "name": "Cost name",
+      "namePlaceholder": "e.g. Office rent",
+      "amount": "Amount (EUR)",
+      "amountPlaceholder": "0.00",
+      "category": "Category",
+      "description": "Description (optional)",
+      "descriptionPlaceholder": "Additional information...",
+      "isPaid": "Paid",
+      "paidDate": "Payment date",
+      "save": "Save",
+      "add": "Add",
+      "cancel": "Cancel",
+      "addButton": "Add operational cost"
+    },
+    
+    "categories": {
+      "rent": "Rent / Lease",
+      "utilities": "Utilities (electricity, water, gas)",
+      "salaries": "Salaries",
+      "marketing": "Marketing / Advertising",
+      "subscriptions": "Subscriptions / Licenses",
+      "insurance": "Insurance",
+      "maintenance": "Maintenance / Repairs",
+      "transport": "Transport / Fuel",
+      "office": "Office supplies",
+      "other": "Other"
+    },
+    
+    "status": {
+      "paid": "Paid",
+      "unpaid": "Unpaid"
+    },
+    
+    "validation": {
+      "nameRequired": "Name is required",
+      "amountRequired": "Amount is required",
+      "nameAndAmountRequired": "Name and amount are required"
+    },
+    
+    "notifications": {
+      "added": "Operational cost added",
+      "updated": "Operational cost updated",
+      "deleted": "Operational cost deleted",
+      "saveError": "Failed to save cost",
+      "deleteError": "Failed to delete cost",
+      "loadError": "Failed to load operational costs"
+    },
+    
+    "confirm": {
+      "delete": "Are you sure you want to delete \"{{name}}\"?"
+    },
+    
+    "summary": {
+      "operationalCosts": "Operational Costs",
+      "operationalCostsPaid": "Op. Costs Paid",
+      "totalExpenses": "Total Expenses",
+      "tooltip": "Monthly operational costs (rent, utilities, salaries, etc.)"
+    }
+  }
+}

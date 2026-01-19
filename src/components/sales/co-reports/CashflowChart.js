@@ -47,15 +47,19 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
     // Przychody
     revenuePaid: item.cumulativeRevenuePaid || 0,
     revenueTotal: item.cumulativeRevenueTotal || 0,
-    // Wydatki
+    // Wydatki (PO + operacyjne łącznie)
     expensePaid: item.cumulativeExpensePaid || 0,
     expenseTotal: item.cumulativeExpenseTotal || 0,
+    // Koszty operacyjne (osobna linia)
+    operationalPaid: item.cumulativeOperationalPaid || 0,
+    operationalTotal: item.cumulativeOperationalTotal || 0,
     // Netto
     netPaid: item.netPaid || 0,
     netTotal: item.netTotal || 0,
     // Dzienne
     dailyRevenue: item.dailyRevenue || 0,
-    dailyExpense: item.dailyExpense || 0
+    dailyExpense: item.dailyExpense || 0,
+    dailyOperational: item.dailyOperational || 0
   }));
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -89,9 +93,24 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
           ))}
           
           <Typography variant="caption" display="block" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
-            Wydatki:
+            Wydatki (łącznie):
           </Typography>
-          {payload.filter(p => p.dataKey.includes('expense')).map((entry, index) => (
+          {payload.filter(p => p.dataKey.includes('expense') && !p.dataKey.includes('operational')).map((entry, index) => (
+            <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: entry.color }} />
+              <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+                {entry.name}:
+              </Typography>
+              <Typography variant="body2" fontWeight="bold" fontSize="0.75rem">
+                {formatCurrency(entry.value, currency)}
+              </Typography>
+            </Box>
+          ))}
+          
+          <Typography variant="caption" display="block" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
+            Koszty operacyjne:
+          </Typography>
+          {payload.filter(p => p.dataKey.includes('operational')).map((entry, index) => (
             <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: entry.color }} />
               <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
@@ -192,6 +211,27 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
               dot={false}
             />
             
+            {/* Koszty operacyjne - zapłacone */}
+            <Line
+              type="monotone"
+              dataKey="operationalPaid"
+              stroke={theme.palette.warning.main}
+              strokeWidth={2}
+              name="Koszty op. (zapłacone)"
+              dot={false}
+            />
+            
+            {/* Koszty operacyjne - z oczekiwanymi */}
+            <Line
+              type="monotone"
+              dataKey="operationalTotal"
+              stroke={theme.palette.warning.light}
+              strokeWidth={1}
+              strokeDasharray="5 5"
+              name="Koszty op. (z oczekiwanymi)"
+              dot={false}
+            />
+            
             {/* Cashflow netto - zapłacone */}
             <Line
               type="monotone"
@@ -224,7 +264,11 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 20, height: 3, bgcolor: 'error.main' }} />
-          <Typography variant="caption" color="text.secondary">Wydatki zapłacone</Typography>
+          <Typography variant="caption" color="text.secondary">Wydatki (PO + op.)</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 20, height: 3, bgcolor: 'warning.main' }} />
+          <Typography variant="caption" color="text.secondary">Koszty operacyjne</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 20, height: 3, bgcolor: 'primary.main' }} />

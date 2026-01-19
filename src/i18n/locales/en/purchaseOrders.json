@@ -58,6 +58,8 @@
   "orderReminder": {
     "title": "Unordered materials for production",
     "refresh": "Refresh",
+    "refreshLive": "Refresh live (current data)",
+    "lastUpdate": "Last update",
     "noAlerts": "All materials reserved from PO have been ordered. No warnings to display.",
     "critical": "Critical",
     "urgent": "Urgent",

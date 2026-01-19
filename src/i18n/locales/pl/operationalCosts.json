@@ -1,0 +1,83 @@
+{
+  "operationalCosts": {
+    "title": "Koszty operacyjne",
+    "subtitle": "Zarządzaj miesięcznymi kosztami operacyjnymi",
+    "description": "Czynsz, media, wynagrodzenia i inne stałe koszty",
+    
+    "dialog": {
+      "title": "Koszty operacyjne",
+      "period": "Okres",
+      "totalCosts": "Łączne koszty",
+      "totalPaid": "Zapłacone",
+      "close": "Zamknij"
+    },
+    
+    "month": {
+      "noCosts": "Brak kosztów",
+      "costsCount": "{{count}} koszt",
+      "costsCount_plural": "{{count}} kosztów"
+    },
+    
+    "form": {
+      "addNew": "Nowy koszt operacyjny",
+      "edit": "Edycja kosztu",
+      "name": "Nazwa kosztu",
+      "namePlaceholder": "np. Czynsz biura",
+      "amount": "Kwota (EUR)",
+      "amountPlaceholder": "0.00",
+      "category": "Kategoria",
+      "description": "Opis (opcjonalnie)",
+      "descriptionPlaceholder": "Dodatkowe informacje...",
+      "isPaid": "Zapłacone",
+      "paidDate": "Data zapłaty",
+      "save": "Zapisz",
+      "add": "Dodaj",
+      "cancel": "Anuluj",
+      "addButton": "Dodaj koszt operacyjny"
+    },
+    
+    "categories": {
+      "rent": "Czynsz / Najem",
+      "utilities": "Media (prąd, woda, gaz)",
+      "salaries": "Wynagrodzenia",
+      "marketing": "Marketing / Reklama",
+      "subscriptions": "Subskrypcje / Licencje",
+      "insurance": "Ubezpieczenia",
+      "maintenance": "Konserwacja / Naprawy",
+      "transport": "Transport / Paliwo",
+      "office": "Materiały biurowe",
+      "other": "Inne"
+    },
+    
+    "status": {
+      "paid": "Zapłacone",
+      "unpaid": "Do zapłaty"
+    },
+    
+    "validation": {
+      "nameRequired": "Nazwa jest wymagana",
+      "amountRequired": "Kwota jest wymagana",
+      "nameAndAmountRequired": "Nazwa i kwota są wymagane"
+    },
+    
+    "notifications": {
+      "added": "Dodano koszt operacyjny",
+      "updated": "Zaktualizowano koszt operacyjny",
+      "deleted": "Usunięto koszt operacyjny",
+      "saveError": "Nie udało się zapisać kosztu",
+      "deleteError": "Nie udało się usunąć kosztu",
+      "loadError": "Nie udało się pobrać kosztów operacyjnych"
+    },
+    
+    "confirm": {
+      "delete": "Czy na pewno chcesz usunąć koszt \"{{name}}\"?"
+    },
+    
+    "summary": {
+      "operationalCosts": "Koszty operacyjne",
+      "operationalCostsPaid": "Koszty op. zapłacone",
+      "totalExpenses": "Łączne wydatki",
+      "tooltip": "Miesięczne koszty operacyjne (czynsz, media, wynagrodzenia itp.)"
+    }
+  }
+}

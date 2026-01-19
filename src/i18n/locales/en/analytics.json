@@ -1,4 +1,50 @@
 {
+    "analyticsDashboard": {
+        "title": "Analytics Center",
+        "subtitle": "Browse reports and analyze company data",
+        "tiles": {
+            "financialReport": {
+                "title": "Financial Report",
+                "description": "Detailed chain analysis: PO → Batch → MO → CO → Invoice. Track cost flow and margins."
+            },
+            "productionCosts": {
+                "title": "Production Costs",
+                "description": "Product manufacturing cost analysis. Track material costs and full production costs."
+            },
+            "cashflow": {
+                "title": "Cashflow",
+                "description": "Cash flow analysis. Monitor revenues, operational expenses and financial balance."
+            },
+            "productionTime": {
+                "title": "Production Time",
+                "description": "Production time analysis with daily, weekly and monthly distribution charts. Monitor efficiency."
+            },
+            "moConsumption": {
+                "title": "MO Consumption",
+                "description": "Material consumption report in production tasks. Track costs and material batches."
+            },
+            "productionProgress": {
+                "title": "Production Progress",
+                "description": "Production task progress monitoring. Analyze trends and delays."
+            },
+            "inventoryExpiry": {
+                "title": "Expiry Dates",
+                "description": "Overview of batches with short expiry dates. Prevent losses and plan utilization."
+            },
+            "productionTimeline": {
+                "title": "Production Timeline",
+                "description": "Visualization of production task timeline. Plan and optimize resource load."
+            },
+            "forecast": {
+                "title": "Demand Forecast",
+                "description": "Material demand forecasting. Plan purchases and avoid shortages."
+            }
+        },
+        "quickAccess": {
+            "title": "Quick access to reports",
+            "description": "Select a report from the tiles above to access detailed data analysis. Each report offers interactive filters and data export capabilities."
+        }
+    },
     "charts": {
         "title": "Charts",
         "loading": "Loading chart data...",

@@ -4,7 +4,6 @@ import { Container, Typography, Box, Tabs, Tab, Button, Dialog, DialogTitle, Dia
 import {
   FormatListBulleted as ListIcon,
   Timeline as TimelineIcon,
-  Assessment as ReportIcon,
   ViewModule as GridIcon,
   ViewList as ViewListIcon,
   Description as FormsIcon,
@@ -14,7 +13,6 @@ import {
 } from '@mui/icons-material';
 import TaskList from '../../components/production/TaskList';
 import ProductionTimeline from '../../components/production/ProductionTimeline';
-import ProductionReportPage from './ProductionReportPage';
 import FormsPage from './FormsPage';
 import WorkstationsPage from './WorkstationsPage';
 import { initializeMissingCostFields } from '../../services/productionService';
@@ -79,11 +77,10 @@ const ProductionPage = () => {
   const isAdmin = currentUser && (currentUser.role === 'admin' || currentUser.isAdmin);
   
   const tabData = [
-          { icon: <ListIcon />, label: t('production.taskList.tabs.taskList'), value: 0 },
+    { icon: <ListIcon />, label: t('production.taskList.tabs.taskList'), value: 0 },
     { icon: <TimelineIcon />, label: t('production.taskList.tabs.timeline'), value: 1 },
-    { icon: <ReportIcon />, label: t('production.taskList.tabs.moReport'), value: 2 },
-    { icon: <FormsIcon />, label: t('production.taskList.tabs.forms'), value: 3 },
-    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 4 }
+    { icon: <FormsIcon />, label: t('production.taskList.tabs.forms'), value: 2 },
+    { icon: <BusinessIcon />, label: t('production.taskList.tabs.workstations'), value: 3 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki
@@ -91,9 +88,8 @@ const ProductionPage = () => {
     switch (activeTab) {
       case 0: return <TaskList />;
       case 1: return <ProductionTimeline />;
-      case 2: return <ProductionReportPage />;
-      case 3: return <FormsPage />;
-      case 4: return <WorkstationsPage />;
+      case 2: return <FormsPage />;
+      case 3: return <WorkstationsPage />;
       default: return <TaskList />;
     }
   };

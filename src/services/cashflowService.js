@@ -9,6 +9,7 @@ import {
 import { db } from '../firebase';
 import { getInvoicesByOrderId } from './invoiceService';
 import { safeParseDate } from '../utils/dateUtils';
+import { generateOperationalCostsTimeline } from './operationalCostService';
 
 /**
  * Generuje raport cashflow dla zamówień klientów (CO)
@@ -1055,11 +1056,18 @@ export const generateCashflowReportWithExpenses = async (filters = {}) => {
       filters.dateTo
     );
 
-    console.log(`✅ Wygenerowano raport cashflow: ${cashflowData.length} zamówień, ${globalExpenses.totalPOCount} PO z wydatkami`);
+    // Pobierz koszty operacyjne w zakresie dat
+    const operationalCosts = await generateOperationalCostsTimeline(
+      filters.dateFrom,
+      filters.dateTo
+    );
+
+    console.log(`✅ Wygenerowano raport cashflow: ${cashflowData.length} zamówień, ${globalExpenses.totalPOCount} PO z wydatkami, ${operationalCosts.monthsCount} miesięcy kosztów operacyjnych`);
     
     return {
       orders: cashflowData,
-      globalExpenses
+      globalExpenses,
+      operationalCosts
     };
   } catch (error) {
     console.error('❌ Błąd podczas generowania raportu cashflow z wydatkami:', error);
@@ -1077,7 +1085,7 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
     return [];
   }
   
-  const { orders, globalExpenses } = cashflowDataWithExpenses;
+  const { orders, globalExpenses, operationalCosts } = cashflowDataWithExpenses;
   
   // Zbierz wszystkie płatności (przychody) i wydatki
   const allTransactions = [];
@@ -1097,7 +1105,7 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
     });
   });
   
-  // Wydatki z globalnego timeline
+  // Wydatki z globalnego timeline (PO)
   if (globalExpenses && globalExpenses.expenseTimeline) {
     globalExpenses.expenseTimeline.forEach(expense => {
       const expenseDate = new Date(expense.date);
@@ -1105,9 +1113,26 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
       allTransactions.push({
         date: expenseDate,
         type: 'expense',
+        subType: 'po',
         amount: expense.amount,
         status: expense.isPaid ? 'confirmed' : 'expected',
         poNumber: expense.poNumber
+      });
+    });
+  }
+  
+  // Koszty operacyjne
+  if (operationalCosts && operationalCosts.timeline) {
+    operationalCosts.timeline.forEach(cost => {
+      const costDate = new Date(cost.date);
+      
+      allTransactions.push({
+        date: costDate,
+        type: 'expense',
+        subType: 'operational',
+        amount: cost.amount,
+        status: cost.isPaid ? 'confirmed' : 'expected',
+        name: cost.name
       });
     });
   }
@@ -1120,6 +1145,8 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
   let cumulativeRevenueExpected = 0;
   let cumulativeExpensePaid = 0;
   let cumulativeExpenseExpected = 0;
+  let cumulativeOperationalPaid = 0;
+  let cumulativeOperationalExpected = 0;
   
   const dateMap = new Map();
   
@@ -1133,12 +1160,26 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
         cumulativeRevenueExpected += transaction.amount;
       }
     } else if (transaction.type === 'expense') {
-      if (transaction.status === 'confirmed') {
-        cumulativeExpensePaid += transaction.amount;
+      if (transaction.subType === 'operational') {
+        // Koszty operacyjne
+        if (transaction.status === 'confirmed') {
+          cumulativeOperationalPaid += transaction.amount;
+        } else {
+          cumulativeOperationalExpected += transaction.amount;
+        }
       } else {
-        cumulativeExpenseExpected += transaction.amount;
+        // Wydatki PO
+        if (transaction.status === 'confirmed') {
+          cumulativeExpensePaid += transaction.amount;
+        } else {
+          cumulativeExpenseExpected += transaction.amount;
+        }
       }
     }
+    
+    // Łączne wydatki = PO + operacyjne
+    const totalExpensePaid = cumulativeExpensePaid + cumulativeOperationalPaid;
+    const totalExpenseExpected = cumulativeExpenseExpected + cumulativeOperationalExpected;
     
     // Utwórz lub zaktualizuj wpis dla daty
     if (!dateMap.has(dateKey)) {
@@ -1146,28 +1187,37 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
         date: dateKey,
         cumulativeRevenuePaid,
         cumulativeRevenueTotal: cumulativeRevenuePaid + cumulativeRevenueExpected,
-        cumulativeExpensePaid,
-        cumulativeExpenseTotal: cumulativeExpensePaid + cumulativeExpenseExpected,
-        netPaid: cumulativeRevenuePaid - cumulativeExpensePaid,
-        netTotal: (cumulativeRevenuePaid + cumulativeRevenueExpected) - (cumulativeExpensePaid + cumulativeExpenseExpected),
+        cumulativeExpensePaid: totalExpensePaid,
+        cumulativeExpenseTotal: totalExpensePaid + totalExpenseExpected,
+        cumulativeOperationalPaid,
+        cumulativeOperationalTotal: cumulativeOperationalPaid + cumulativeOperationalExpected,
+        netPaid: cumulativeRevenuePaid - totalExpensePaid,
+        netTotal: (cumulativeRevenuePaid + cumulativeRevenueExpected) - (totalExpensePaid + totalExpenseExpected),
         dailyRevenue: 0,
-        dailyExpense: 0
+        dailyExpense: 0,
+        dailyOperational: 0
       });
     }
     
     const dayData = dateMap.get(dateKey);
     dayData.cumulativeRevenuePaid = cumulativeRevenuePaid;
     dayData.cumulativeRevenueTotal = cumulativeRevenuePaid + cumulativeRevenueExpected;
-    dayData.cumulativeExpensePaid = cumulativeExpensePaid;
-    dayData.cumulativeExpenseTotal = cumulativeExpensePaid + cumulativeExpenseExpected;
-    dayData.netPaid = cumulativeRevenuePaid - cumulativeExpensePaid;
-    dayData.netTotal = (cumulativeRevenuePaid + cumulativeRevenueExpected) - (cumulativeExpensePaid + cumulativeExpenseExpected);
+    dayData.cumulativeExpensePaid = totalExpensePaid;
+    dayData.cumulativeExpenseTotal = totalExpensePaid + totalExpenseExpected;
+    dayData.cumulativeOperationalPaid = cumulativeOperationalPaid;
+    dayData.cumulativeOperationalTotal = cumulativeOperationalPaid + cumulativeOperationalExpected;
+    dayData.netPaid = cumulativeRevenuePaid - totalExpensePaid;
+    dayData.netTotal = (cumulativeRevenuePaid + cumulativeRevenueExpected) - (totalExpensePaid + totalExpenseExpected);
     
     // Zlicz dzienny przychód/wydatek
     if (transaction.type === 'revenue' && transaction.status === 'confirmed') {
       dayData.dailyRevenue += transaction.amount;
-    } else if (transaction.type === 'expense' && transaction.status === 'confirmed') {
-      dayData.dailyExpense += transaction.amount;
+    } else if (transaction.type === 'expense') {
+      if (transaction.subType === 'operational' && transaction.status === 'confirmed') {
+        dayData.dailyOperational += transaction.amount;
+      } else if (transaction.status === 'confirmed') {
+        dayData.dailyExpense += transaction.amount;
+      }
     }
   });
   
@@ -1190,6 +1240,11 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
       totalExpenses: 0,
       totalExpensesPaid: 0,
       totalExpensesRemaining: 0,
+      totalOperationalCosts: 0,
+      totalOperationalCostsPaid: 0,
+      totalOperationalCostsRemaining: 0,
+      totalAllExpenses: 0,
+      totalAllExpensesPaid: 0,
       netProfit: 0,
       netCashflow: 0,
       totalPOCount: 0,
@@ -1197,22 +1252,41 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
     };
   }
   
-  const { orders, globalExpenses } = cashflowDataWithExpenses;
+  const { orders, globalExpenses, operationalCosts } = cashflowDataWithExpenses;
   const baseStats = calculateCashflowStatistics(orders);
   
+  // Wydatki z PO
   const totalExpenses = globalExpenses?.totalExpenseValue || 0;
   const totalExpensesPaid = globalExpenses?.totalExpensePaid || 0;
   const totalExpensesRemaining = globalExpenses?.totalExpenseRemaining || 0;
   
-  // Zysk netto okresu = suma przychodów - suma wydatków
-  const netProfit = baseStats.totalOrderValue - totalExpenses;
-  const netCashflow = baseStats.totalPaid - totalExpensesPaid;
+  // Koszty operacyjne
+  const totalOperationalCosts = operationalCosts?.totalValue || 0;
+  const totalOperationalCostsPaid = operationalCosts?.totalPaid || 0;
+  const totalOperationalCostsRemaining = operationalCosts?.totalRemaining || 0;
+  
+  // Łączne wszystkie wydatki (PO + operacyjne)
+  const totalAllExpenses = totalExpenses + totalOperationalCosts;
+  const totalAllExpensesPaid = totalExpensesPaid + totalOperationalCostsPaid;
+  
+  // Zysk netto okresu = suma przychodów - suma wszystkich wydatków
+  const netProfit = baseStats.totalOrderValue - totalAllExpenses;
+  const netCashflow = baseStats.totalPaid - totalAllExpensesPaid;
   
   return {
     ...baseStats,
+    // Wydatki PO
     totalExpenses,
     totalExpensesPaid,
     totalExpensesRemaining,
+    // Koszty operacyjne
+    totalOperationalCosts,
+    totalOperationalCostsPaid,
+    totalOperationalCostsRemaining,
+    // Łączne wydatki
+    totalAllExpenses,
+    totalAllExpensesPaid,
+    // Bilans
     netProfit,
     netCashflow,
     totalPOCount: globalExpenses?.totalPOCount || 0,

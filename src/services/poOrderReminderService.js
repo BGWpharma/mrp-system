@@ -184,15 +184,72 @@ export const getUnorderedMaterialAlerts = async () => {
 };
 
 /**
+ * Pobiera ostrzeżenia o niezamówionych materiałach z cache (aggregates/poOrderReminders)
+ * Cache jest aktualizowany przez Cloud Function codziennie o 8:00
+ * @returns {Promise<Object>} Obiekt z alertami, statystykami i datą ostatniej aktualizacji
+ */
+export const getUnorderedMaterialAlertsFromCache = async () => {
+  try {
+    const docRef = doc(db, 'aggregates', 'poOrderReminders');
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      console.log('Cache poOrderReminders nie istnieje - zwracam puste dane');
+      return { 
+        alerts: [], 
+        stats: { 
+          totalReservations: 0,
+          draftPOs: 0,
+          criticalCount: 0, 
+          urgentCount: 0, 
+          normalCount: 0 
+        },
+        lastRun: null
+      };
+    }
+    
+    const data = docSnap.data();
+    
+    // Konwertuj daty z ISO string na Date i dodaj kolor do warningLevel
+    const alerts = (data.alerts || []).map(alert => ({
+      ...alert,
+      scheduledDate: new Date(alert.scheduledDate),
+      warningLevel: {
+        ...alert.warningLevel,
+        color: alert.warningLevel.level === 'critical' ? 'error' : 
+               alert.warningLevel.level === 'urgent' ? 'warning' : 'info'
+      }
+    }));
+    
+    return { 
+      alerts, 
+      stats: data.stats || {
+        totalReservations: 0,
+        draftPOs: 0,
+        criticalCount: 0,
+        urgentCount: 0,
+        normalCount: 0
+      },
+      lastRun: data.lastRun?.toDate() || null
+    };
+  } catch (error) {
+    console.error('Błąd podczas pobierania alertów z cache:', error);
+    throw error;
+  }
+};
+
+/**
  * Pobiera liczbę aktywnych alertów (do wyświetlenia w badge)
+ * Używa cache dla lepszej wydajności
  * @returns {Promise<number>} Liczba alertów
  */
 export const getUnorderedMaterialAlertsCount = async () => {
   try {
-    const { stats } = await getUnorderedMaterialAlerts();
+    // Najpierw spróbuj z cache (szybsze)
+    const { stats } = await getUnorderedMaterialAlertsFromCache();
     return stats.criticalCount + stats.urgentCount + stats.normalCount;
   } catch (error) {
-    console.error('Błąd podczas pobierania liczby alertów:', error);
+    console.error('Błąd podczas pobierania liczby alertów z cache:', error);
     return 0;
   }
 };

@@ -273,13 +273,53 @@ const checkUnorderedPOReservations = onSchedule(
           }
         }
 
-        // 6. Zapisz statystyki do agregatów
+        // 6. Zapisz statystyki i pełne dane alertów do agregatów (dla cache frontendu)
+        const criticalCount = alerts.filter(
+            (a) => a.warningLevel.level === "critical",
+        ).length;
+        const urgentCount = alerts.filter(
+            (a) => a.warningLevel.level === "urgent",
+        ).length;
+        const normalCount = alerts.filter(
+            (a) => a.warningLevel.level === "normal",
+        ).length;
+
+        // Sortuj alerty po priorytecie (najważniejsze najpierw)
+        alerts.sort((a, b) => a.daysToProduction - b.daysToProduction);
+
         await db.doc("aggregates/poOrderReminders").set({
           lastRun: admin.firestore.FieldValue.serverTimestamp(),
           reservationsChecked: reservationsSnapshot.size,
           draftPOsFound: processedPOs.size,
           alertsGenerated: alerts.length,
           notificationsSent,
+          // Pełne dane alertów do wyświetlenia w UI
+          alerts: alerts.map((alert) => ({
+            id: `${alert.poId}_${alert.taskId}_${alert.materialName}`,
+            poId: alert.poId,
+            poNumber: alert.poNumber,
+            taskId: alert.taskId,
+            taskNumber: alert.taskNumber,
+            taskName: alert.taskName,
+            materialId: alert.materialId || null,
+            materialName: alert.materialName,
+            reservedQuantity: alert.reservedQuantity,
+            unit: alert.unit,
+            reservedBy: alert.reservedBy,
+            scheduledDate: alert.scheduledDate.toISOString(),
+            daysToProduction: alert.daysToProduction,
+            warningLevel: alert.warningLevel,
+            supplierName: alert.supplierName,
+            isOverdue: alert.daysToProduction < 0,
+          })),
+          // Statystyki
+          stats: {
+            totalReservations: reservationsSnapshot.size,
+            draftPOs: processedPOs.size,
+            criticalCount,
+            urgentCount,
+            normalCount,
+          },
         });
 
         logger.info("checkUnorderedPOReservations - zakończono", {

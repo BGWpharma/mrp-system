@@ -36,27 +36,54 @@ import {
 import { format } from 'date-fns';
 import { pl, enUS } from 'date-fns/locale';
 import { useTranslation } from '../../hooks/useTranslation';
-import { getUnorderedMaterialAlerts } from '../../services/poOrderReminderService';
+import { 
+  getUnorderedMaterialAlerts, 
+  getUnorderedMaterialAlertsFromCache 
+} from '../../services/poOrderReminderService';
 
 const POOrderReminderDialog = ({ open, onClose }) => {
   const { t, currentLanguage } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState(null);
+  const [lastRun, setLastRun] = useState(null);
   const [expandedPOs, setExpandedPOs] = useState({});
   const [error, setError] = useState(null);
 
   // Wybór locale dla date-fns
   const dateLocale = currentLanguage === 'pl' ? pl : enUS;
 
-  const fetchAlerts = async () => {
-    setLoading(true);
+  /**
+   * Pobiera alerty z cache (szybkie) lub na żywo (wolniejsze ale aktualne)
+   * @param {boolean} forceRefresh - Jeśli true, pobiera dane na żywo zamiast z cache
+   */
+  const fetchAlerts = async (forceRefresh = false) => {
+    if (forceRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
+    
     try {
-      const result = await getUnorderedMaterialAlerts();
+      let result;
+      
+      if (forceRefresh) {
+        // Pobierz dane na żywo (wolniejsze, ale aktualne)
+        console.log('🔄 Pobieranie alertów na żywo...');
+        result = await getUnorderedMaterialAlerts();
+        result.lastRun = new Date(); // Dane są świeże
+      } else {
+        // Pobierz z cache (szybkie)
+        console.log('💾 Pobieranie alertów z cache...');
+        result = await getUnorderedMaterialAlertsFromCache();
+      }
+      
       setAlerts(result.alerts);
       setStats(result.stats);
+      setLastRun(result.lastRun);
       
       // Domyślnie rozwiń wszystkie PO z alertami krytycznymi
       const expanded = {};
@@ -67,15 +94,17 @@ const POOrderReminderDialog = ({ open, onClose }) => {
       });
       setExpandedPOs(expanded);
     } catch (err) {
+      console.error('Błąd pobierania alertów:', err);
       setError(err.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     if (open) {
-      fetchAlerts();
+      fetchAlerts(false); // Domyślnie z cache
     }
   }, [open]);
 
@@ -154,12 +183,25 @@ const POOrderReminderDialog = ({ open, onClose }) => {
               {t('purchaseOrders.orderReminder.title')}
             </Typography>
           </Box>
-          <Tooltip title={t('purchaseOrders.orderReminder.refresh')}>
-            <IconButton onClick={fetchAlerts} disabled={loading} size="small">
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Tooltip title={t('purchaseOrders.orderReminder.refreshLive', 'Odśwież na żywo (aktualne dane)')}>
+              <IconButton 
+                onClick={() => fetchAlerts(true)} 
+                disabled={loading || refreshing} 
+                size="small"
+                color="primary"
+              >
+                {refreshing ? <CircularProgress size={20} /> : <RefreshIcon />}
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
+        {/* Informacja o ostatniej aktualizacji cache */}
+        {lastRun && !loading && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {t('purchaseOrders.orderReminder.lastUpdate', 'Ostatnia aktualizacja')}: {format(lastRun, 'dd.MM.yyyy HH:mm', { locale: dateLocale })}
+          </Typography>
+        )}
       </DialogTitle>
       
       <DialogContent dividers>
