@@ -23,6 +23,9 @@
     "backToLists": "Back to price lists",
     "edit": "Edit",
     "delete": "Delete",
+    "exportCSV": "Export CSV",
+    "exporting": "Exporting...",
+    "importCSV": "Import CSV",
     "customer": "Customer",
     "status": "Status",
     "currency": "Currency",
@@ -110,13 +113,43 @@
       "loadDataFailed": "Error occurred while loading data",
       "deleteFailed": "Error deleting price list",
       "deleteItemFailed": "Error deleting price list item",
-      "saveFailed": "Error saving price list"
+      "saveFailed": "Error saving price list",
+      "exportFailed": "Error exporting price list",
+      "importFailed": "Error importing price list"
     },
     "success": {
       "deleted": "Price list has been deleted",
       "itemDeleted": "Item has been removed from price list",
       "created": "Price list has been created",
-      "updated": "Price list has been updated"
+      "updated": "Price list has been updated",
+      "exported": "Price list has been successfully exported to CSV",
+      "imported": "Import completed successfully"
+    }
+  },
+  "import": {
+    "title": "Import price list from CSV",
+    "description": "Select a CSV file with items to import. Required columns: SKU, PRICE, CURRENCY, UNIT, MOQ, COMMENTS. NOTE: Use dot for decimals (5.99 not 5,99)!",
+    "selectFile": "Select CSV file",
+    "selectedFile": "Selected file",
+    "downloadTemplate": "Download template",
+    "options": {
+      "title": "Import options",
+      "updateExisting": "Update existing items",
+      "skipNotFound": "Skip products not found"
+    },
+    "preview": {
+      "title": "Preview changes",
+      "toCreate": "To add",
+      "toUpdate": "To update",
+      "notFound": "Not found",
+      "errors": "Errors",
+      "warnings": "Warnings"
+    },
+    "results": {
+      "title": "Import completed successfully!",
+      "created": "Created",
+      "updated": "Updated",
+      "skipped": "Skipped"
     }
   }
 }

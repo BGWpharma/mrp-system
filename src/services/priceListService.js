@@ -485,4 +485,63 @@ export const getPriceListsContainingRecipe = async (recipeId) => {
     console.error('Błąd podczas pobierania list cenowych zawierających recepturę:', error);
     return [];
   }
+};
+
+/**
+ * Eksportuje listę cenową do formatu CSV
+ * Format: SKU, PRICE, CURRENCY, UNIT, MOQ, COMMENTS
+ * @param {string} priceListId - ID listy cenowej
+ * @returns {Promise<boolean>} - Status powodzenia eksportu
+ */
+export const exportPriceListToCSV = async (priceListId) => {
+  try {
+    // Pobierz listę cenową i jej pozycje
+    const priceList = await getPriceListById(priceListId);
+    const items = await getPriceListItems(priceListId);
+    
+    if (!items || items.length === 0) {
+      throw new Error('Lista cenowa nie zawiera żadnych pozycji do eksportu');
+    }
+    
+    // Import funkcji eksportu - dynamiczny import, aby uniknąć problemów z cyklicznymi zależnościami
+    const { exportToCSV } = await import('../utils/exportUtils');
+    
+    // Nagłówki CSV zgodnie z wymaganiami
+    const headers = [
+      { label: 'SKU', key: 'productName' },
+      { label: 'PRICE', key: 'price' },
+      { label: 'CURRENCY', key: 'currency' },
+      { label: 'UNIT', key: 'unit' },
+      { label: 'MOQ', key: 'minQuantity' },
+      { label: 'COMMENTS', key: 'notes' }
+    ];
+    
+    // Przygotuj dane do eksportu - dodaj walutę z głównej listy cenowej do każdej pozycji
+    // Formatuj cenę z dwoma miejscami dziesiętnymi (zawsze z kropką, niezależnie od locale)
+    const dataForExport = items.map(item => ({
+      ...item,
+      // Wymuszamy format z kropką dziesiętną (5.00 zamiast 5,00) dla kompatybilności CSV
+      price: typeof item.price === 'number' ? Number(item.price).toFixed(2) : String(item.price).replace(',', '.'),
+      currency: item.currency || priceList.currency || 'EUR',
+      minQuantity: item.minQuantity || 1,
+      notes: item.notes || ''
+    }));
+    
+    // Nazwa pliku: nazwa listy cenowej + data
+    const sanitizedName = priceList.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `price_list_${sanitizedName}_${dateStr}`;
+    
+    // Eksportuj do CSV
+    const success = exportToCSV(dataForExport, headers, filename);
+    
+    if (!success) {
+      throw new Error('Eksport do CSV nie powiódł się');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas eksportowania listy cenowej do CSV:', error);
+    throw error;
+  }
 }; 

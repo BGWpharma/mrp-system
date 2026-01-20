@@ -23,6 +23,9 @@
     "backToLists": "Powrót do list cenowych",
     "edit": "Edytuj",
     "delete": "Usuń",
+    "exportCSV": "Eksportuj CSV",
+    "exporting": "Eksportowanie...",
+    "importCSV": "Importuj CSV",
     "customer": "Klient",
     "status": "Status",
     "currency": "Waluta",
@@ -110,13 +113,43 @@
       "loadDataFailed": "Wystąpił błąd podczas ładowania danych",
       "deleteFailed": "Błąd podczas usuwania listy cenowej",
       "deleteItemFailed": "Błąd podczas usuwania elementu listy cenowej",
-      "saveFailed": "Błąd podczas zapisywania listy cenowej"
+      "saveFailed": "Błąd podczas zapisywania listy cenowej",
+      "exportFailed": "Błąd podczas eksportowania listy cenowej",
+      "importFailed": "Błąd podczas importowania listy cenowej"
     },
     "success": {
       "deleted": "Lista cenowa została usunięta",
       "itemDeleted": "Element został usunięty z listy cenowej",
       "created": "Lista cenowa została utworzona",
-      "updated": "Lista cenowa została zaktualizowana"
+      "updated": "Lista cenowa została zaktualizowana",
+      "exported": "Lista cenowa została pomyślnie wyeksportowana do CSV",
+      "imported": "Import zakończony pomyślnie"
+    }
+  },
+  "import": {
+    "title": "Import listy cenowej z CSV",
+    "description": "Wybierz plik CSV z pozycjami do importu. Wymagane kolumny: SKU, PRICE, CURRENCY, UNIT, MOQ, COMMENTS. UWAGA: Ceny z kropką (5.99 nie 5,99)!",
+    "selectFile": "Wybierz plik CSV",
+    "selectedFile": "Wybrany plik",
+    "downloadTemplate": "Pobierz szablon",
+    "options": {
+      "title": "Opcje importu",
+      "updateExisting": "Aktualizuj istniejące pozycje",
+      "skipNotFound": "Pomiń nieznalezione produkty"
+    },
+    "preview": {
+      "title": "Podgląd zmian",
+      "toCreate": "Do dodania",
+      "toUpdate": "Do aktualizacji",
+      "notFound": "Nie znaleziono",
+      "errors": "Błędy",
+      "warnings": "Ostrzeżenia"
+    },
+    "results": {
+      "title": "Import zakończony pomyślnie!",
+      "created": "Dodano",
+      "updated": "Zaktualizowano",
+      "skipped": "Pominięto"
     }
   }
 }

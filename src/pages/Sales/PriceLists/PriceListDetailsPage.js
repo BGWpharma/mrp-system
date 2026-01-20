@@ -12,15 +12,18 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
+import UploadIcon from '@mui/icons-material/Upload';
 import { format } from 'date-fns';
 
-import { getPriceListById, deletePriceList } from '../../../services/priceListService';
+import { getPriceListById, deletePriceList, exportPriceListToCSV } from '../../../services/priceListService';
 import { useNotification } from '../../../hooks/useNotification';
 import { useTranslation } from '../../../hooks/useTranslation';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Loader from '../../../components/common/Loader';
 import GoBackButton from '../../../components/common/GoBackButton';
 import PriceListItemsTable from '../../../components/sales/priceLists/PriceListItemsTable';
+import ImportPriceListDialog from '../../../components/sales/priceLists/ImportPriceListDialog';
 
 const PriceListDetailsPage = () => {
   const { id } = useParams();
@@ -29,6 +32,9 @@ const PriceListDetailsPage = () => {
   const [priceList, setPriceList] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [exportingCSV, setExportingCSV] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   const { showNotification } = useNotification();
   const { t } = useTranslation();
@@ -68,6 +74,32 @@ const PriceListDetailsPage = () => {
     }
   };
   
+  const handleExportCSV = async () => {
+    try {
+      setExportingCSV(true);
+      await exportPriceListToCSV(id);
+      showNotification(t('priceLists.messages.success.exported') || 'Lista cenowa została wyeksportowana', 'success');
+    } catch (error) {
+      console.error('Błąd podczas eksportowania listy cenowej:', error);
+      showNotification(error.message || t('priceLists.messages.errors.exportFailed') || 'Błąd podczas eksportowania', 'error');
+    } finally {
+      setExportingCSV(false);
+    }
+  };
+  
+  const handleOpenImportDialog = () => {
+    setImportDialogOpen(true);
+  };
+  
+  const handleCloseImportDialog = () => {
+    setImportDialogOpen(false);
+  };
+  
+  const handleImportComplete = () => {
+    // Odśwież tabelę po pomyślnym imporcie
+    setRefreshKey(prev => prev + 1);
+  };
+  
   if (loading) {
     return <Loader />;
   }
@@ -95,14 +127,30 @@ const PriceListDetailsPage = () => {
           </Typography>
         </Box>
         
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 1 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<UploadIcon />}
+            onClick={handleOpenImportDialog}
+          >
+            {t('priceLists.details.importCSV') || 'Importuj CSV'}
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<DownloadIcon />}
+            onClick={handleExportCSV}
+            disabled={exportingCSV}
+          >
+            {exportingCSV ? t('priceLists.details.exporting') || 'Eksportowanie...' : t('priceLists.details.exportCSV') || 'Eksportuj CSV'}
+          </Button>
           <Button
             component={Link}
             to={`/sales/price-lists/${id}/edit`}
             variant="outlined"
             color="primary"
             startIcon={<EditIcon />}
-            sx={{ mr: 2 }}
           >
             {t('priceLists.details.edit')}
           </Button>
@@ -192,7 +240,7 @@ const PriceListDetailsPage = () => {
             {t('priceLists.details.items')}
           </Typography>
           <Divider sx={{ mb: 2 }} />
-          <PriceListItemsTable priceListId={id} readOnly={true} />
+          <PriceListItemsTable priceListId={id} readOnly={true} key={refreshKey} />
         </Box>
       </Box>
       
@@ -202,6 +250,14 @@ const PriceListDetailsPage = () => {
         message={t('priceLists.confirmations.deleteMessage', { name: priceList.name })}
         onConfirm={handleConfirmDelete}
         onCancel={() => setConfirmDialogOpen(false)}
+      />
+      
+      <ImportPriceListDialog
+        open={importDialogOpen}
+        onClose={handleCloseImportDialog}
+        priceListId={id}
+        priceList={priceList}
+        onImportComplete={handleImportComplete}
       />
     </Container>
   );

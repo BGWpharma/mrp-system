@@ -45,13 +45,19 @@ export const exportToCSV = (data, headers, filename) => {
         } else if (typeof value === 'string') {
           // Check if string represents a number
           const numValue = parseFloat(value);
-          if (!isNaN(numValue) && isFinite(numValue) && value.trim() === numValue.toString()) {
-            // If string is actually a number, export as number
-            return numValue.toString();
-          } else {
-            // Escape quotes in strings by doubling them
-            return `"${value.replace(/"/g, '""')}"`;
+          // Jeśli string zawiera liczbę z miejscami dziesiętnymi (np. "5.00"), zachowaj format
+          if (!isNaN(numValue) && isFinite(numValue)) {
+            // Sprawdź czy ma miejsca dziesiętne w stringu
+            if (value.includes('.')) {
+              // Zachowaj dokładny format z miejscami dziesiętnymi
+              return value.trim();
+            } else if (value.trim() === numValue.toString()) {
+              // Jeśli to liczba całkowita bez kropki, eksportuj bez cudzysłowów
+              return numValue.toString();
+            }
           }
+          // Escape quotes in strings by doubling them
+          return `"${value.replace(/"/g, '""')}"`;
         } else {
           // Other types as quoted strings
           return `"${value}"`;

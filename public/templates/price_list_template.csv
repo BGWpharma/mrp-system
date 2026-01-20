@@ -1,0 +1,4 @@
+SKU,PRICE,CURRENCY,UNIT,MOQ,COMMENTS
+"Nazwa produktu lub receptury 1",100.00,EUR,kg,10,"Pakowanie 25kg"
+"Nazwa produktu lub receptury 2",75.50,EUR,szt,5,"Minimum order 5 units"
+"Nazwa produktu lub receptury 3",5.99,EUR,l,1,"UWAGA: Używaj KROPKI w cenach nie przecinka!"
