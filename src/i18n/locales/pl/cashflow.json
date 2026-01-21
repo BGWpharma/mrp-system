@@ -2,6 +2,7 @@
   "cashflow": {
     "title": "Cashflow",
     "subtitle": "Analiza przepływów pieniężnych z zamówień klientów",
+    "subtitleWithPO": "+ wydatki z PO",
     "loading": "Ładowanie danych cashflow...",
     "noData": "Brak danych cashflow dla wybranych filtrów",
     "error": "Wystąpił błąd podczas ładowania danych cashflow",
@@ -10,9 +11,14 @@
     "exportCSV": "Eksport CSV",
     "exportDetailed": "Eksport Szczegółowy",
     "exportPDF": "Eksportuj do PDF",
+    "exportRevenueAndCosts": "Eksport CSV - Przychody i Koszty",
+    "operationalCostsButton": "Koszty operacyjne",
+    "exportSuccess": "Zestawienie przychodów i kosztów zostało wyeksportowane",
+    "exportError": "Błąd podczas eksportowania zestawienia",
     
     "filters": {
       "title": "Filtry",
+      "subtitle": "Wybierz zakres dat i filtruj według klienta lub statusu płatności",
       "dateFrom": "Data od",
       "dateTo": "Data do",
       "customer": "Klient",
@@ -36,10 +42,28 @@
       "days": "dni",
       "totalExpenses": "Wydatki (PO)",
       "totalExpensesPaid": "Zapłacono za PO",
+      "operationalCosts": "Koszty operacyjne",
+      "operationalCostsPaid": "Koszty op. zapłacone",
+      "totalAllExpenses": "Łączne wydatki",
+      "netCashflow": "Cashflow netto",
+      "netProfit": "Zysk netto",
+      "poCount": "Liczba PO",
       "expectedProfit": "Zysk oczekiwany",
       "grossProfit": "Cashflow netto",
       "avgProfitMargin": "Średnia marża",
-      "linkedPOCount": "Powiązane PO"
+      "linkedPOCount": "Powiązane PO",
+      "tooltips": {
+        "totalExpenses": "Wartość wszystkich PO z datami dostaw w wybranym okresie",
+        "totalExpensesPaid": "Zapłacone faktury za zamówienia zakupu",
+        "operationalCosts": "Miesięczne koszty operacyjne (czynsz, media, wynagrodzenia itp.)",
+        "operationalCostsPaid": "Zapłacone koszty operacyjne",
+        "totalAllExpenses": "Suma: wydatki PO + koszty operacyjne",
+        "netCashflow": "Rzeczywisty przepływ gotówki: wpłacono - zapłacono (PO + koszty op.)",
+        "netProfit": "Wartość zamówień CO - wszystkie wydatki (PO + koszty op.)",
+        "poCount": "Liczba zamówień zakupu z datami dostaw w okresie",
+        "paymentRate": "Procent zamówień w pełni opłaconych",
+        "avgPaymentTime": "Średni czas od zamówienia do pierwszej płatności"
+      }
     },
     
     "chart": {
@@ -81,6 +105,8 @@
     
     "expenses": {
       "title": "Wydatki (Zamówienia Zakupu)",
+      "periodTitle": "Wydatki w okresie",
+      "periodDescription": "Wszystkie zamówienia zakupu (PO) z datami dostaw w wybranym okresie",
       "noExpenses": "Brak powiązanych wydatków",
       "linkedPO": "Powiązane PO",
       "deliveryDate": "Data dostawy",

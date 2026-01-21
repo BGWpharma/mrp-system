@@ -1237,15 +1237,10 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
           
           if (orchestratorResult.executedTools.length > 0) {
             const queryNames = orchestratorResult.executedTools.map(t => t.name).join(', ');
-            const totalQueryTime = orchestratorResult.executedTools.reduce((sum, t) => sum + t.executionTime, 0);
             const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
             
-            // Emoji dla modelu
-            const modelEmoji = orchestratorResult.model.includes('2.5') ? '🧠' : 
-                              orchestratorResult.model.includes('1.5') ? '📚' : '⚡';
-            
-            response += `\n\n_🎯 Wykonano ${orchestratorResult.executedTools.length} zoptymalizowanych zapytań do bazy (${totalQueryTime.toFixed(0)}ms)_`;
-            response += `\n_${modelEmoji} Model: ${orchestratorResult.model} | Czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+            // Tylko koszt w stopce
+            response += `\n\n_Koszt: ~$${estimatedCost.toFixed(4)}_`;
           }
           
           console.log(`[processAIQuery] 🎁 Zwracam odpowiedź (długość: ${response?.length} znaków):`, response?.substring(0, 200) + '...');
@@ -1305,16 +1300,9 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
               
               let response = orchestratorResult.response;
               
-              // Dodaj informację o trybie Vision
+              // Tylko koszt w stopce
               const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
-              const modelEmoji = orchestratorResult.model.includes('2.5') ? '🧠' : 
-                                orchestratorResult.model.includes('1.5') ? '📚' : '⚡';
-              
-              response += `\n\n_🖼️ Tryb Vision - analiza ${mediaAttachments.length} dokumentów_`;
-              if (orchestratorResult.executedTools?.length > 0) {
-                response += `\n_🔧 Wykonano ${orchestratorResult.executedTools.length} zapytań do bazy_`;
-              }
-              response += `\n_${modelEmoji} Model: ${orchestratorResult.model} | Czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+              response += `\n\n_Koszt: ~$${estimatedCost.toFixed(4)}_`;
               
               return response;
             } else {

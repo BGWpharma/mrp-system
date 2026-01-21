@@ -311,19 +311,19 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
         >
           <Tab 
             icon={<TrendIcon />} 
-            label="Analiza czasu" 
+            label={t('productionReport.tabs.timeAnalysis')} 
             iconPosition="start"
             sx={{ minHeight: 48 }}
           />
           <Tab 
             icon={<WeeklyIcon />} 
-            label="Tygodniówki" 
+            label={t('productionReport.tabs.weeklyProductivity')} 
             iconPosition="start"
             sx={{ minHeight: 48 }}
           />
           <Tab 
             icon={<TimelineIcon />} 
-            label="Analiza luk" 
+            label={t('productionReport.tabs.gapAnalysis')} 
             iconPosition="start"
             sx={{ minHeight: 48 }}
           />
@@ -635,7 +635,7 @@ const TimeAnalysisContent = ({
                 {filteredAnalysis.totalQuantity.toLocaleString('pl-PL')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Łączna wyprodukowana ilość
+                {t('productionReport.timeAnalysis.totalProducedQuantity')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Chip 
@@ -670,7 +670,7 @@ const TimeAnalysisContent = ({
                 {formatMinutes(filteredAnalysis.averageTimePerUnit)}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Łączny czas / Łączną wyprodukowaną ilość
+                {t('productionReport.timeAnalysis.timePerProducedQuantity')}
               </Typography>
               {(selectedTask !== 'all' || selectedCustomer !== 'all') && (
                 <Chip 
@@ -722,16 +722,16 @@ const TimeAnalysisContent = ({
                 <Tooltip 
                   formatter={(value, name) => {
                     if (name === 'timeHours') {
-                      return [`${value} h`, 'Czas pracy'];
+                      return [`${value} h`, t('productionReport.timeAnalysis.workTime')];
                     } else if (name === 'sessions') {
-                      return [value, 'Sesje'];
+                      return [value, t('productionReport.timeAnalysis.sessions')];
                     }
                     return [value, name];
                   }}
                 />
                 <Legend />
-                <Bar dataKey="timeHours" fill={chartColors[0]} name="Czas pracy" />
-                <Bar dataKey="sessions" fill={chartColors[1]} name="Sesje" />
+                <Bar dataKey="timeHours" fill={chartColors[0]} name={t('productionReport.timeAnalysis.workTime')} />
+                <Bar dataKey="sessions" fill={chartColors[1]} name={t('productionReport.timeAnalysis.sessions')} />
               </BarChart>
             </ResponsiveContainer>
           </Paper>
@@ -840,7 +840,7 @@ const TimeAnalysisContent = ({
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.endTime')}</TableCell>
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.timeSpent')}</TableCell>
                 <TableCell align="right">{t('productionReport.timeAnalysis.tableHeaders.quantity')}</TableCell>
-                <TableCell align="right">Koszt zakładu</TableCell>
+                <TableCell align="right">{t('productionReport.timeAnalysis.facilityCost')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

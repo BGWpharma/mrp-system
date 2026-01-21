@@ -1,5 +1,28 @@
 {
   "title": "Asystent AI",
+  "fab": {
+    "tooltip": "Asystent AI",
+    "title": "Asystent AI",
+    "openFullPage": "Otwórz pełną wersję",
+    "welcomeMessage": "Cześć! Jak mogę Ci pomóc? Zadaj pytanie dotyczące systemu MRP.",
+    "noApiKey": "Skonfiguruj klucz API w pełnej wersji asystenta",
+    "history": "Historia",
+    "historyTitle": "Historia czatów",
+    "newChat": "Nowa konwersacja",
+    "noHistory": "Brak historii konwersacji",
+    "attachFile": "Załącz plik",
+    "uploadSuccess": "Przesłano",
+    "uploadError": "Błąd przesyłania",
+    "deleteAttachmentError": "Błąd usuwania załącznika",
+    "files": "plik(ów)"
+  },
+  "errors": {
+    "notLoggedIn": "Musisz być zalogowany, aby korzystać z asystenta AI",
+    "quotaExceeded": "Przekroczono miesięczny limit wiadomości do asystenta AI",
+    "sendError": "Wystąpił błąd podczas wysyłania wiadomości. Spróbuj ponownie.",
+    "loadError": "Nie udało się załadować konwersacji",
+    "deleteError": "Nie udało się usunąć konwersacji"
+  },
   "buttons": {
     "apiSettings": "Ustawienia API",
     "configureApi": "Skonfiguruj API",
@@ -89,7 +112,8 @@
     "newConversation": "Nowa konwersacja",
     "empty": "Brak historii konwersacji",
     "today": "Dzisiaj",
-    "clearConversation": "Wyczyść konwersację"
+    "clearConversation": "Wyczyść konwersację",
+    "deleted": "Konwersacja usunięta"
   },
   "welcome": {
     "title": "Witaj w Asystencie AI dla systemu MRP",

@@ -342,16 +342,17 @@ export const generateWeeklyInsights = (weeksData) => {
 /**
  * Formatuje week string (np. "2026-W02") na czytelny format
  * @param {string} weekString - Format ISO week (YYYY-Www)
+ * @param {string} weekPrefix - Prefix dla tygodnia (np. "Tydz." lub "Week")
  * @returns {string} - Sformatowany string
  */
-export const formatWeekString = (weekString) => {
+export const formatWeekString = (weekString, weekPrefix = 'Tydz.') => {
   try {
     const [year, weekNum] = weekString.split('-W');
     const weekDate = new Date(parseInt(year), 0, 1 + (parseInt(weekNum) - 1) * 7);
     const weekStart = startOfISOWeek(weekDate);
     const weekEnd = endOfISOWeek(weekDate);
     
-    return `Tydz. ${weekNum}/${year.slice(2)} (${format(weekStart, 'dd.MM', { locale: pl })} - ${format(weekEnd, 'dd.MM', { locale: pl })})`;
+    return `${weekPrefix} ${weekNum}/${year.slice(2)} (${format(weekStart, 'dd.MM', { locale: pl })} - ${format(weekEnd, 'dd.MM', { locale: pl })})`;
   } catch (error) {
     return weekString;
   }

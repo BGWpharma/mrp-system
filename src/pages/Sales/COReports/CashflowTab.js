@@ -147,10 +147,10 @@ const CashflowTab = () => {
     try {
       const filename = `przychody_koszty_${filters.dateFrom?.toISOString().split('T')[0]}_${filters.dateTo?.toISOString().split('T')[0]}.csv`;
       exportCashflowRevenueAndCostsToCSV(cashflowData, statistics, filters, filename);
-      showSuccess('Zestawienie przychodów i kosztów zostało wyeksportowane');
+      showSuccess(t('cashflow.exportSuccess'));
     } catch (error) {
       console.error('Błąd podczas eksportowania:', error);
-      showError('Błąd podczas eksportowania zestawienia');
+      showError(t('cashflow.exportError'));
     }
   };
 
@@ -182,7 +182,7 @@ const CashflowTab = () => {
               💰 {t('cashflow.title')}
             </Typography>
             <Typography variant="body1" sx={{ opacity: 0.95 }}>
-              {t('cashflow.subtitle')} + wydatki z PO
+              {t('cashflow.subtitle')} {t('cashflow.subtitleWithPO')}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -227,7 +227,7 @@ const CashflowTab = () => {
                 }
               }}
             >
-              Koszty operacyjne
+              {t('cashflow.operationalCostsButton')}
             </Button>
             <Button
               variant="contained"
@@ -243,7 +243,7 @@ const CashflowTab = () => {
                 }
               }}
             >
-              Eksport CSV - Przychody i Koszty
+              {t('cashflow.exportRevenueAndCosts')}
             </Button>
           </Box>
         </Box>
@@ -260,7 +260,7 @@ const CashflowTab = () => {
               </Typography>
             </Box>
             <Typography variant="caption" color="text.secondary">
-              Wybierz zakres dat i filtruj według klienta lub statusu płatności
+              {t('cashflow.filters.subtitle')}
             </Typography>
           </Box>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -393,13 +393,13 @@ const CashflowTab = () => {
                 borderColor: 'error.main'
               }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-                  💸 Wydatki w okresie
+                  💸 {t('cashflow.expenses.periodTitle')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {filters.dateFrom?.toLocaleDateString()} - {filters.dateTo?.toLocaleDateString()}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  Wszystkie zamówienia zakupu (PO) z datami dostaw w wybranym okresie
+                  {t('cashflow.expenses.periodDescription')}
                 </Typography>
               </Box>
               <Box sx={{ mt: 2 }}>

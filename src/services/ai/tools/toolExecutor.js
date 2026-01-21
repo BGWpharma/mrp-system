@@ -508,9 +508,17 @@ export class ToolExecutor {
       constraints.push(where('assignedTo', '==', params.assignedTo));
     }
     
-    // Limit - zmniejszony domyślny limit z 100 do 50 dla optymalizacji tokenów
-    const limitValue = params.limit || 50;
+    // Limit - UWAGA: gdy filtrujemy po productName (klient-side), pobieramy więcej danych
+    // bo filtrowanie następuje PO pobraniu z bazy
+    const needsClientSideFiltering = !!params.productName;
+    const limitValue = needsClientSideFiltering 
+      ? (params.limit || 500) // Większy limit dla filtrowania client-side
+      : (params.limit || 50);
     constraints.push(firestoreLimit(limitValue));
+    
+    if (needsClientSideFiltering) {
+      console.log(`[ToolExecutor] ⚠️ Filtrowanie client-side - zwiększony limit do ${limitValue}`);
+    }
     
     if (constraints.length > 0) {
       q = query(q, ...constraints);
@@ -568,13 +576,35 @@ export class ToolExecutor {
       console.log(`[ToolExecutor] ✅ Filtrowanie klienckie: ${beforeCount} → ${tasks.length} zadań`);
     }
     
-    // Filtruj po nazwie produktu (po stronie klienta)
+    // Filtruj po nazwie/kodzie produktu (po stronie klienta)
     if (params.productName) {
       const searchTerm = params.productName.toLowerCase();
+      const beforeFilter = tasks.length;
+      
+      // Debug: pokaż przykłady wartości pól w zadaniach
+      if (tasks.length > 0) {
+        const uniqueProductNames = [...new Set(tasks.slice(0, 20).map(t => t.productName).filter(Boolean))];
+        console.log(`[ToolExecutor] 🔍 Przykładowe productNames w bazie:`, uniqueProductNames.slice(0, 5));
+      }
+      
       tasks = tasks.filter(task => 
         (task.productName || '').toLowerCase().includes(searchTerm) ||
-        (task.moNumber || '').toLowerCase().includes(searchTerm)
+        (task.productId || '').toLowerCase().includes(searchTerm) ||
+        (task.productCode || '').toLowerCase().includes(searchTerm) ||
+        (task.sku || '').toLowerCase().includes(searchTerm) ||
+        (task.moNumber || '').toLowerCase().includes(searchTerm) ||
+        (task.name || '').toLowerCase().includes(searchTerm) ||
+        (task.recipeId || '').toLowerCase().includes(searchTerm)
       );
+      
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po productName: "${searchTerm}", przed: ${beforeFilter}, po: ${tasks.length}`);
+      
+      // Po filtrowaniu zastosuj docelowy limit (żeby nie zwracać 500 wyników do AI)
+      const finalLimit = params.limit || 50;
+      if (tasks.length > finalLimit) {
+        console.log(`[ToolExecutor] ✂️ Ograniczam wyniki z ${tasks.length} do ${finalLimit}`);
+        tasks = tasks.slice(0, finalLimit);
+      }
     }
     
     // ✅ NOWE: Rozwiąż nazwy użytkowników

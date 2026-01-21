@@ -126,5 +126,104 @@
             "invalidCategoriesData": "Nieprawidłowy format danych wykresu kategorii",
             "mismatchedArrays": "Niezgodność długości tablic labels i data"
         }
+    },
+    "common": {
+        "errors": {
+            "fetchData": "Nie udało się pobrać danych"
+        },
+        "filters": {
+            "title": "Filtry",
+            "startDate": "Data początkowa",
+            "endDate": "Data końcowa"
+        },
+        "period": "Okres"
+    },
+    "moConsumptionReport": {
+        "unknownMaterial": "Nieznany materiał",
+        "unknownUser": "Nieznany użytkownik",
+        "noBatchNumber": "Brak numeru",
+        "filters": {
+            "order": "Zamówienie (CO)",
+            "allOrders": "Wszystkie zamówienia",
+            "material": "Materiał",
+            "allMaterials": "Wszystkie materiały"
+        },
+        "summary": {
+            "title": "Podsumowanie konsumpcji materiałów",
+            "noData": "Brak danych konsumpcji w wybranym okresie"
+        },
+        "table": {
+            "material": "Materiał",
+            "totalQuantity": "Ilość całkowita",
+            "unit": "Jednostka",
+            "avgUnitPrice": "Śr. cena jedn.",
+            "totalCost": "Koszt całkowity",
+            "batchCount": "Liczba partii",
+            "taskCount": "Liczba zadań",
+            "sum": "SUMA:"
+        },
+        "details": {
+            "title": "Szczegółowa lista konsumpcji",
+            "noData": "Brak danych konsumpcji",
+            "date": "Data",
+            "task": "Zadanie",
+            "product": "Produkt",
+            "batch": "Partia",
+            "quantity": "Ilość",
+            "unitShort": "Jedn.",
+            "cost": "Koszt",
+            "user": "Użytkownik"
+        }
+    },
+    "productionCostsReport": {
+        "errors": {
+            "fetchData": "Nie udało się pobrać danych",
+            "fetchCosts": "Nie udało się pobrać danych kosztów produkcji"
+        },
+        "unknownProduct": "Nieznany produkt",
+        "refreshData": "Odśwież dane",
+        "filters": {
+            "title": "Filtry raportu",
+            "startDate": "Data początkowa",
+            "endDate": "Data końcowa",
+            "product": "Produkt",
+            "customer": "Klient",
+            "allCustomers": "Wszyscy klienci"
+        },
+        "stats": {
+            "tasksCount": "Liczba zadań",
+            "materialCost": "Koszt materiałów",
+            "fullProductionCost": "Pełny koszt produkcji",
+            "avgFullUnitCost": "Śr. pełny koszt/jedn."
+        },
+        "table": {
+            "title": "Koszty według produktu",
+            "period": "Okres",
+            "product": "Produkt",
+            "tasks": "Zadania",
+            "quantity": "Ilość",
+            "materialCost": "Koszt materiałów",
+            "fullCost": "Pełny koszt",
+            "avgFullUnitCost": "Śr. pełny koszt/jedn.",
+            "sum": "SUMA"
+        },
+        "details": {
+            "openRecipe": "Otwórz recepturę",
+            "productionTasksFor": "Zadania produkcyjne dla",
+            "mo": "MO",
+            "completionDate": "Data zakończenia",
+            "status": "Status",
+            "productionTime": "Czas prod. (h)",
+            "materialCostShort": "Koszt mat.",
+            "unitCost": "Koszt/jedn.",
+            "actions": "Akcje",
+            "openTask": "Otwórz zadanie",
+            "plan": "plan",
+            "noStatus": "Brak"
+        },
+        "emptyState": {
+            "title": "Brak danych kosztów produkcji w wybranym okresie",
+            "description": "Zmień zakres dat lub sprawdź czy zadania produkcyjne mają uzupełnione koszty."
+        }
     }
 }

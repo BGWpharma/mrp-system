@@ -126,5 +126,104 @@
             "invalidCategoriesData": "Invalid category chart data format",
             "mismatchedArrays": "Mismatched length of labels and data arrays"
         }
+    },
+    "common": {
+        "errors": {
+            "fetchData": "Failed to fetch data"
+        },
+        "filters": {
+            "title": "Filters",
+            "startDate": "Start date",
+            "endDate": "End date"
+        },
+        "period": "Period"
+    },
+    "moConsumptionReport": {
+        "unknownMaterial": "Unknown material",
+        "unknownUser": "Unknown user",
+        "noBatchNumber": "No number",
+        "filters": {
+            "order": "Order (CO)",
+            "allOrders": "All orders",
+            "material": "Material",
+            "allMaterials": "All materials"
+        },
+        "summary": {
+            "title": "Material consumption summary",
+            "noData": "No consumption data in selected period"
+        },
+        "table": {
+            "material": "Material",
+            "totalQuantity": "Total quantity",
+            "unit": "Unit",
+            "avgUnitPrice": "Avg. unit price",
+            "totalCost": "Total cost",
+            "batchCount": "Batches",
+            "taskCount": "Tasks",
+            "sum": "TOTAL:"
+        },
+        "details": {
+            "title": "Detailed consumption list",
+            "noData": "No consumption data",
+            "date": "Date",
+            "task": "Task",
+            "product": "Product",
+            "batch": "Batch",
+            "quantity": "Quantity",
+            "unitShort": "Unit",
+            "cost": "Cost",
+            "user": "User"
+        }
+    },
+    "productionCostsReport": {
+        "errors": {
+            "fetchData": "Failed to fetch data",
+            "fetchCosts": "Failed to fetch production costs data"
+        },
+        "unknownProduct": "Unknown product",
+        "refreshData": "Refresh data",
+        "filters": {
+            "title": "Report filters",
+            "startDate": "Start date",
+            "endDate": "End date",
+            "product": "Product",
+            "customer": "Customer",
+            "allCustomers": "All customers"
+        },
+        "stats": {
+            "tasksCount": "Tasks count",
+            "materialCost": "Material cost",
+            "fullProductionCost": "Full production cost",
+            "avgFullUnitCost": "Avg. full cost/unit"
+        },
+        "table": {
+            "title": "Costs by product",
+            "period": "Period",
+            "product": "Product",
+            "tasks": "Tasks",
+            "quantity": "Quantity",
+            "materialCost": "Material cost",
+            "fullCost": "Full cost",
+            "avgFullUnitCost": "Avg. full cost/unit",
+            "sum": "TOTAL"
+        },
+        "details": {
+            "openRecipe": "Open recipe",
+            "productionTasksFor": "Production tasks for",
+            "mo": "MO",
+            "completionDate": "Completion date",
+            "status": "Status",
+            "productionTime": "Prod. time (h)",
+            "materialCostShort": "Mat. cost",
+            "unitCost": "Cost/unit",
+            "actions": "Actions",
+            "openTask": "Open task",
+            "plan": "plan",
+            "noStatus": "None"
+        },
+        "emptyState": {
+            "title": "No production cost data in selected period",
+            "description": "Change date range or check if production tasks have costs filled in."
+        }
     }
 }

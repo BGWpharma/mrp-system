@@ -54,6 +54,7 @@ import {
   CalendarToday as CalendarIcon,
   Timer as TimerIcon
 } from '@mui/icons-material';
+import { useTranslation } from '../../hooks/useTranslation';
 import {
   Line,
   XAxis,
@@ -68,6 +69,7 @@ import {
 } from 'recharts';
 
 const ProgressReportTab = ({ tasks, loading, isMobile }) => {
+  const { t } = useTranslation('production');
   const theme = useTheme();
   const [sortConfig, setSortConfig] = useState({ 
     key: 'percentComplete', 
@@ -579,7 +581,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <Typography>Ładowanie danych...</Typography>
+        <Typography>{t('progressReport.loading')}</Typography>
       </Box>
     );
   }
@@ -591,7 +593,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
         <Box display="flex" alignItems="center" mb={2}>
           <CalendarIcon sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Zakres dat
+            {t('progressReport.dateRange.title')}
           </Typography>
         </Box>
         
@@ -599,14 +601,14 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
           {/* Szybki wybór */}
           <Grid item xs={12} md={6}>
             <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-              Szybki wybór:
+              {t('progressReport.dateRange.quickSelect')}
             </Typography>
             <ButtonGroup size="small" variant="outlined" sx={{ flexWrap: 'wrap' }}>
-              <Button onClick={() => setQuickDateRange('thisYear')}>Bieżący rok</Button>
-              <Button onClick={() => setQuickDateRange('lastYear')}>Poprzedni rok</Button>
-              <Button onClick={() => setQuickDateRange('thisQuarter')}>Bieżący kwartał</Button>
-              <Button onClick={() => setQuickDateRange('thisMonth')}>Bieżący miesiąc</Button>
-              <Button onClick={() => setQuickDateRange('lastMonth')}>Poprzedni miesiąc</Button>
+              <Button onClick={() => setQuickDateRange('thisYear')}>{t('progressReport.dateRange.thisYear')}</Button>
+              <Button onClick={() => setQuickDateRange('lastYear')}>{t('progressReport.dateRange.lastYear')}</Button>
+              <Button onClick={() => setQuickDateRange('thisQuarter')}>{t('progressReport.dateRange.thisQuarter')}</Button>
+              <Button onClick={() => setQuickDateRange('thisMonth')}>{t('progressReport.dateRange.thisMonth')}</Button>
+              <Button onClick={() => setQuickDateRange('lastMonth')}>{t('progressReport.dateRange.lastMonth')}</Button>
             </ButtonGroup>
           </Grid>
           
@@ -615,7 +617,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <Box display="flex" gap={2} flexWrap="wrap">
                 <DatePicker
-                  label="Data od"
+                  label={t('progressReport.dateRange.from')}
                   value={dateRangeStart}
                   onChange={(newValue) => setDateRangeStart(newValue)}
                   slotProps={{ 
@@ -626,7 +628,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                   }}
                 />
                 <DatePicker
-                  label="Data do"
+                  label={t('progressReport.dateRange.to')}
                   value={dateRangeEnd}
                   onChange={(newValue) => setDateRangeEnd(newValue)}
                   slotProps={{ 
@@ -645,12 +647,12 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
         <Box mt={2}>
           <Chip 
             icon={<CalendarIcon />}
-            label={`Wybrany zakres: ${format(dateRangeStart, 'dd.MM.yyyy')} - ${format(dateRangeEnd, 'dd.MM.yyyy')}`}
+            label={`${t('progressReport.dateRange.selectedRange')}: ${format(dateRangeStart, 'dd.MM.yyyy')} - ${format(dateRangeEnd, 'dd.MM.yyyy')}`}
             color="primary"
             variant="outlined"
           />
           <Chip 
-            label={`Znaleziono zadań: ${processedTasks.length}`}
+            label={`${t('progressReport.dateRange.tasksFound')}: ${processedTasks.length}`}
             color="success"
             variant="outlined"
             sx={{ ml: 1 }}
@@ -666,7 +668,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="body2" color="textSecondary">
-                    Wszystkie zadania
+                    {t('progressReport.stats.allTasks')}
                   </Typography>
                   <Typography variant="h4">
                     {statistics.totalTasks}
@@ -684,7 +686,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="body2" color="textSecondary">
-                    Zakończone
+                    {t('progressReport.stats.completed')}
                   </Typography>
                   <Typography variant="h4" color="success.main">
                     {statistics.completedTasks}
@@ -702,7 +704,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="body2" color="textSecondary">
-                    W trakcie
+                    {t('progressReport.stats.inProgress')}
                   </Typography>
                   <Typography variant="h4" color="primary.main">
                     {statistics.inProgressTasks}
@@ -720,7 +722,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="body2" color="textSecondary">
-                    Średni postęp
+                    {t('progressReport.stats.averageProgress')}
                   </Typography>
                   <Typography variant="h4">
                     {statistics.averageProgress.toFixed(1)}%
@@ -748,7 +750,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
                     <Typography variant="body2" color="textSecondary">
-                      Efektywność czasowa
+                      {t('progressReport.stats.timeEfficiency')}
                     </Typography>
                     <Typography 
                       variant="h4" 
@@ -757,12 +759,12 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       {statistics.averageTimeEfficiency.toFixed(1)}%
                     </Typography>
                     <Typography variant="caption" color="textSecondary">
-                      Oczek: {(statistics.expectedTimeForCompleted / 60).toFixed(1)}h / Rzecz: {(statistics.totalActualTime / 60).toFixed(1)}h
+                      {t('progressReport.stats.expected')}: {(statistics.expectedTimeForCompleted / 60).toFixed(1)}h / {t('progressReport.stats.actual')}: {(statistics.totalActualTime / 60).toFixed(1)}h
                     </Typography>
                     <Typography variant="caption" display="block" color="textSecondary" sx={{ mt: 0.5 }}>
                       {statistics.averageTimeEfficiency >= 100 
-                        ? '✓ Produkcja szybsza niż plan' 
-                        : '⚠ Produkcja wolniejsza niż plan'}
+                        ? `✓ ${t('progressReport.stats.fasterThanPlan')}` 
+                        : `⚠ ${t('progressReport.stats.slowerThanPlan')}`}
                     </Typography>
                   </Box>
                   <TimerIcon color="primary" sx={{ fontSize: 40 }} />
@@ -776,7 +778,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
       {processedTasks.length === 0 ? (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
           <Typography variant="h6" color="textSecondary">
-            Brak zadań produkcyjnych w wybranym okresie
+            {t('progressReport.noTasksInPeriod')}
           </Typography>
         </Box>
       ) : (
@@ -787,33 +789,33 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
               value={viewMode}
               exclusive
               onChange={(e, newMode) => newMode && setViewMode(newMode)}
-              aria-label="widok danych"
+              aria-label={t('progressReport.viewMode.label')}
               size={isMobile ? "small" : "medium"}
             >
-              <ToggleButton value="table" aria-label="tabela">
+              <ToggleButton value="table" aria-label={t('progressReport.viewMode.table')}>
                 <TableChartIcon sx={{ mr: 1 }} />
-                Tabela
+                {t('progressReport.viewMode.table')}
               </ToggleButton>
-              <ToggleButton value="timeline" aria-label="wykres timeline">
+              <ToggleButton value="timeline" aria-label={t('progressReport.viewMode.timeline')}>
                 <ShowChartIcon sx={{ mr: 1 }} />
-                Postęp w czasie
+                {t('progressReport.viewMode.timeline')}
               </ToggleButton>
-              <ToggleButton value="cumulative" aria-label="wykres skumulowany">
+              <ToggleButton value="cumulative" aria-label={t('progressReport.viewMode.cumulative')}>
                 <TrendingUpIcon sx={{ mr: 1 }} />
-                Produkcja skumulowana
+                {t('progressReport.viewMode.cumulative')}
               </ToggleButton>
             </ToggleButtonGroup>
 
             {/* Selektor zadania dla widoku pojedynczego */}
             {(viewMode === 'timeline') && (
               <FormControl sx={{ minWidth: 300 }} size="small">
-                <InputLabel>Wybierz zadanie (opcjonalnie)</InputLabel>
+                <InputLabel>{t('progressReport.selectTask')}</InputLabel>
                 <Select
                   value={selectedTask}
-                  label="Wybierz zadanie (opcjonalnie)"
+                  label={t('progressReport.selectTask')}
                   onChange={(e) => setSelectedTask(e.target.value)}
                 >
-                  <MenuItem value="all">Wszystkie zadania (agregat)</MenuItem>
+                  <MenuItem value="all">{t('progressReport.allTasksAggregate')}</MenuItem>
                   {processedTasks.map(task => (
                     <MenuItem key={task.id} value={task.id}>
                       {task.moNumber} - {task.productName}
@@ -836,7 +838,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('moNumber')}
                       >
-                        Numer MO
+                        {t('progressReport.table.moNumber')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell>
@@ -845,7 +847,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('productName')}
                       >
-                        Produkt
+                        {t('progressReport.table.product')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell align="right">
@@ -854,7 +856,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('plannedQty')}
                       >
-                        Planowana
+                        {t('progressReport.table.planned')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell align="right">
@@ -863,7 +865,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('completedQty')}
                       >
-                        Wyprodukowana
+                        {t('progressReport.table.produced')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell sx={{ minWidth: 200 }}>
@@ -872,7 +874,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('percentComplete')}
                       >
-                        % Wykonania
+                        {t('progressReport.table.completion')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell>
@@ -881,7 +883,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('status')}
                       >
-                        Status
+                        {t('progressReport.table.status')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell>
@@ -890,7 +892,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('scheduledDate')}
                       >
-                        Data Plan. Rozp.
+                        {t('progressReport.table.plannedStart')}
                       </TableSortLabel>
                     </TableCell>
                     <TableCell>
@@ -899,10 +901,10 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                         direction={sortConfig.direction}
                         onClick={() => handleSort('endDate')}
                       >
-                        Data Plan. Zak.
+                        {t('progressReport.table.plannedEnd')}
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="center">Sesje</TableCell>
+                    <TableCell align="center">{t('progressReport.table.sessions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1001,8 +1003,8 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {selectedTask === 'all' 
-                    ? 'Postęp produkcji w czasie - wszystkie zadania (średnia)'
-                    : `Analiza postępu, ilości i czasu - ${processedTasks.find(t => t.id === selectedTask)?.moNumber || ''}`
+                    ? t('progressReport.charts.timelineAllTasks')
+                    : `${t('progressReport.charts.timelineSingleTask')} - ${processedTasks.find(t => t.id === selectedTask)?.moNumber || ''}`
                   }
                 </Typography>
               </Box>
@@ -1013,20 +1015,20 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis 
-                      label={{ value: '% Wykonania', angle: -90, position: 'insideLeft' }}
+                      label={{ value: t('progressReport.charts.completionPercent'), angle: -90, position: 'insideLeft' }}
                       domain={[0, 100]}
                     />
                     <Tooltip 
                       formatter={(value) => `${parseFloat(value).toFixed(1)}%`}
                     />
                     <Legend />
-                    <ReferenceLine y={100} stroke="red" strokeDasharray="3 3" label="Cel: 100%" />
+                    <ReferenceLine y={100} stroke="red" strokeDasharray="3 3" label={`${t('progressReport.charts.target')}: 100%`} />
                     <Line 
                       type="monotone" 
                       dataKey="plannedProgress" 
                       stroke={theme.palette.warning.main}
                       strokeWidth={2}
-                      name="Planowany postęp"
+                      name={t('progressReport.charts.plannedProgress')}
                       dot={false}
                     />
                     <Line 
@@ -1034,7 +1036,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       dataKey="actualProgress" 
                       stroke={theme.palette.success.main}
                       strokeWidth={3}
-                      name="Rzeczywisty postęp"
+                      name={t('progressReport.charts.actualProgress')}
                       dot={{ r: 4 }}
                     />
                   </ComposedChart>
@@ -1048,7 +1050,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                     {/* Oś Y 1: Procenty (lewa) */}
                     <YAxis 
                       yAxisId="left"
-                      label={{ value: '% Wykonania', angle: -90, position: 'insideLeft' }}
+                      label={{ value: t('progressReport.charts.completionPercent'), angle: -90, position: 'insideLeft' }}
                       domain={[0, 'dataMax + 10']}
                     />
                     
@@ -1056,7 +1058,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                     <YAxis 
                       yAxisId="right"
                       orientation="right"
-                      label={{ value: 'Ilość (szt.)', angle: 90, position: 'insideRight' }}
+                      label={{ value: t('progressReport.charts.quantityUnit'), angle: 90, position: 'insideRight' }}
                     />
                     
                     {/* Oś Y 3: Czas (prawa, przesunięta) */}
@@ -1064,7 +1066,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       yAxisId="time"
                       orientation="right"
                       domain={[0, 'dataMax + 20']}
-                      label={{ value: 'Czas (min)', angle: 90, position: 'outside', dx: 35 }}
+                      label={{ value: t('progressReport.charts.timeMin'), angle: 90, position: 'outside', dx: 35 }}
                       axisLine={{ stroke: '#ff7300' }}
                       tickLine={{ stroke: '#ff7300' }}
                       tick={{ fill: '#ff7300' }}
@@ -1073,12 +1075,12 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                     <Tooltip 
                       formatter={(value, name) => {
                         if (value === null) return ['-', name];
-                        const unit = name.includes('%') ? '%' : name.includes('ilość') ? ' szt.' : ' min';
+                        const unit = name.includes('%') ? '%' : name.includes(t('progressReport.charts.quantity')) ? ` ${t('progressReport.charts.pcs')}` : ' min';
                         return [`${parseFloat(value).toFixed(1)}${unit}`, name];
                       }}
                     />
                     <Legend />
-                    <ReferenceLine y={100} stroke="red" strokeDasharray="3 3" label="Cel: 100%" yAxisId="left" />
+                    <ReferenceLine y={100} stroke="red" strokeDasharray="3 3" label={`${t('progressReport.charts.target')}: 100%`} yAxisId="left" />
                     
                     {/* Linie dla osi % */}
                     <Line 
@@ -1089,6 +1091,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       strokeWidth={2}
                       dot={false}
                       connectNulls
+                      name={t('progressReport.charts.singleTask.plannedPercent')}
                     />
                     <Line 
                       yAxisId="left"
@@ -1098,6 +1101,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       strokeWidth={3}
                       dot={{ r: 5 }}
                       connectNulls
+                      name={t('progressReport.charts.singleTask.actualPercent')}
                     />
                     
                     {/* Linie dla osi Ilość */}
@@ -1110,6 +1114,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       strokeDasharray="5 5"
                       dot={false}
                       connectNulls
+                      name={t('progressReport.charts.singleTask.plannedQuantity')}
                     />
                     <Line 
                       yAxisId="right"
@@ -1119,6 +1124,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       strokeWidth={2}
                       dot={{ r: 4 }}
                       connectNulls
+                      name={t('progressReport.charts.singleTask.actualQuantity')}
                     />
                     
                     {/* NOWE LINIE: Linie dla osi Czas */}
@@ -1131,7 +1137,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       strokeDasharray="3 3"
                       dot={false}
                       connectNulls
-                      name="Planowany czas"
+                      name={t('progressReport.charts.singleTask.plannedTime')}
                     />
                     <Line 
                       yAxisId="time"
@@ -1141,7 +1147,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                       strokeWidth={2}
                       dot={{ r: 3 }}
                       connectNulls
-                      name="Rzeczywisty czas"
+                      name={t('progressReport.charts.singleTask.actualTime')}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1168,7 +1174,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                   <TrendingUpIcon sx={{ color: 'success.main', fontSize: 24 }} />
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Skumulowana produkcja w czasie
+                  {t('progressReport.charts.cumulativeTitle')}
                 </Typography>
               </Box>
 
@@ -1177,10 +1183,10 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis 
-                    label={{ value: 'Ilość skumulowana', angle: -90, position: 'insideLeft' }}
+                    label={{ value: t('progressReport.charts.cumulativeQuantity'), angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip 
-                    formatter={(value) => `${parseFloat(value).toLocaleString('pl-PL')} szt.`}
+                    formatter={(value) => `${parseFloat(value).toLocaleString('pl-PL')} ${t('progressReport.charts.pcs')}`}
                   />
                   <Legend />
                   <Area 
@@ -1189,6 +1195,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                     fill={theme.palette.warning.light}
                     stroke={theme.palette.warning.main}
                     fillOpacity={0.3}
+                    name={t('progressReport.charts.plannedCumulative')}
                   />
                   <Line 
                     type="monotone" 
@@ -1196,6 +1203,7 @@ const ProgressReportTab = ({ tasks, loading, isMobile }) => {
                     stroke={theme.palette.success.main}
                     strokeWidth={3}
                     dot={{ r: 4 }}
+                    name={t('progressReport.charts.producedCumulative')}
                   />
                 </ComposedChart>
               </ResponsiveContainer>

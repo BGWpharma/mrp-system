@@ -451,7 +451,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                 backgroundColor: '#2e7d32'
               }} />
             </Box>
-            <Typography variant="caption" sx={{ fontSize: isMobileView ? '0.6rem' : '0.65rem' }}>Nakładające się sesje</Typography>
+            <Typography variant="caption" sx={{ fontSize: isMobileView ? '0.6rem' : '0.65rem' }}>{t('productionReport.timeAnalysis.gapAnalysis.timeline.legend.overlappingSessions')}</Typography>
           </Box>
         </Box>
 
@@ -987,7 +987,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                       {gapAnalysis.period.startDate} - {gapAnalysis.period.endDate}
                     </Typography>
                     <Chip 
-                      label={`${gapAnalysis.period.totalDays} dni roboczych`}
+                      label={`${gapAnalysis.period.totalDays} ${t('productionReport.timeAnalysis.gapAnalysis.summary.workingDays')}`}
                       size="small"
                       color="info"
                       variant="outlined"
@@ -1166,10 +1166,10 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                       {gapAnalysis.summary.daysWithGaps}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, mt: 0.5 }}>
-                      Dni z problemami
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.daysWithProblems')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      dni z lukami
+                      {t('productionReport.timeAnalysis.gapAnalysis.summary.daysWithGaps')}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -1200,7 +1200,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                 <TimelineIcon sx={{ color: 'secondary.main', fontSize: 24 }} />
               </Box>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                Timeline produkcji i luk
+                {t('productionReport.timeAnalysis.gapAnalysis.timeline.title')}
               </Typography>
             </Box>
             <ProductionTimeline 
@@ -1253,11 +1253,11 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                       formatter={(value, name) => {
                         const formattedValue = `${Math.round(value * 100) / 100}h`;
                         if (name === 'workHours') {
-                          return [formattedValue, 'Czas pracy'];
+                          return [formattedValue, t('productionReport.timeAnalysis.gapAnalysis.charts.workTime')];
                         } else if (name === 'productionHours') {
-                          return [formattedValue, 'Produkcja'];
+                          return [formattedValue, t('productionReport.timeAnalysis.gapAnalysis.charts.production')];
                         } else if (name === 'gapHours') {
-                          return [formattedValue, 'Luki'];
+                          return [formattedValue, t('productionReport.timeAnalysis.gapAnalysis.charts.gaps')];
                         }
                         return [formattedValue, name];
                       }}
@@ -1270,18 +1270,18 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                     <Bar 
                       dataKey="workHours" 
                       fill={chartColors.work} 
-                      name="Czas pracy"
+                      name={t('productionReport.timeAnalysis.gapAnalysis.charts.workTime')}
                       opacity={0.3}
                     />
                     <Bar 
                       dataKey="productionHours" 
                       fill={chartColors.production} 
-                      name="Produkcja"
+                      name={t('productionReport.timeAnalysis.gapAnalysis.charts.production')}
                     />
                     <Bar 
                       dataKey="gapHours" 
                       fill={chartColors.gap} 
-                      name="Luki"
+                      name={t('productionReport.timeAnalysis.gapAnalysis.charts.gaps')}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1313,7 +1313,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                   <PieChartIcon sx={{ color: 'secondary.main', fontSize: 24 }} />
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Rodzaje wykrytych luk
+                  {t('productionReport.timeAnalysis.gapAnalysis.gapTypes.title')}
                 </Typography>
               </Box>
               <Grid container spacing={2}>
@@ -1334,7 +1334,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                           <Cell key={`cell-${index}`} fill={['#ff6b6b', '#4ecdc4', '#45b7d1', '#f7dc6f'][index % 4]} />
                         ))}
                       </Pie>
-                      <ChartTooltip formatter={(value) => [`${value}h`, 'Czas luk']} />
+                      <ChartTooltip formatter={(value) => [`${value}h`, t('productionReport.timeAnalysis.gapAnalysis.gapTypes.gapTime')]} />
                     </PieChart>
                   </ResponsiveContainer>
                 </Grid>
@@ -1343,9 +1343,9 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Typ luki</TableCell>
-                          <TableCell align="right">Liczba</TableCell>
-                          <TableCell align="right">Czas</TableCell>
+                          <TableCell>{t('productionReport.timeAnalysis.gapAnalysis.gapTypes.gapType')}</TableCell>
+                          <TableCell align="right">{t('productionReport.timeAnalysis.gapAnalysis.gapTypes.count')}</TableCell>
+                          <TableCell align="right">{t('productionReport.timeAnalysis.gapAnalysis.gapTypes.time')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1458,14 +1458,14 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                             {gap.previousSession && renderTaskInfo(gap.previousSession, 'Poprzednia sesja:')}
                             {gap.type === 'full_day' && (
                               <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                Brak sesji produkcyjnych w tym dniu
+                                {t('productionReport.timeAnalysis.gapAnalysis.noProductionSessions')}
                               </Typography>
                             )}
                           </Box>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {gap.description}
+                            {t(`productionReport.timeAnalysis.gapAnalysis.descriptions.${gap.descriptionKey}`, gap.descriptionParams)}
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -1476,7 +1476,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
 
               {gapAnalysis.gaps.length > 20 && (
                 <Alert severity="info" sx={{ mt: 2 }}>
-                  Pokazano 20 z {gapAnalysis.gaps.length} luk. Największe luki zostały wyświetlone na górze.
+                  {t('productionReport.timeAnalysis.gapAnalysis.gaps.shown', { shown: 20, total: gapAnalysis.gaps.length })}
                 </Alert>
               )}
             </Paper>
@@ -1497,7 +1497,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                       {getRecommendationIcon(recommendation.severity)}
                       <Box>
                         <Typography variant="subtitle1">
-                          {recommendation.title}
+                          {t(`productionReport.timeAnalysis.gapAnalysis.recommendations.${recommendation.titleKey}`)}
                         </Typography>
                         <Chip
                           label={t(`productionReport.timeAnalysis.gapAnalysis.recommendations.severity.${recommendation.severity}`)}
@@ -1510,14 +1510,14 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                   </AccordionSummary>
                   <AccordionDetails>
                     <Typography variant="body2" paragraph>
-                      {recommendation.description}
+                      {t(`productionReport.timeAnalysis.gapAnalysis.recommendations.${recommendation.descriptionKey}`, recommendation.descriptionParams)}
                     </Typography>
-                    {recommendation.suggestions && (
+                    {recommendation.suggestionsKeys && (
                       <List dense>
-                        {recommendation.suggestions.map((suggestion, suggestionIndex) => (
+                        {recommendation.suggestionsKeys.map((suggestionKey, suggestionIndex) => (
                           <ListItem key={suggestionIndex}>
                             <ListItemText
-                              primary={suggestion}
+                              primary={t(`productionReport.timeAnalysis.gapAnalysis.recommendations.${suggestionKey}`)}
                               primaryTypographyProps={{ variant: 'body2' }}
                             />
                           </ListItem>
@@ -1538,7 +1538,7 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
                 {t('productionReport.timeAnalysis.gapAnalysis.noGapsFound')}
               </Typography>
               <Typography color="text.secondary">
-                Produkcja w wybranym okresie nie wykazuje znaczących luk w czasie.
+                {t('productionReport.timeAnalysis.gapAnalysis.noSignificantGaps')}
               </Typography>
             </Paper>
           )}
@@ -1549,10 +1549,10 @@ const ProductionGapAnalysisTab = ({ startDate, endDate, isMobile }) => {
         <Paper sx={{ p: 3, textAlign: 'center' }}>
           <ScheduleIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
-            Kliknij "Analizuj" aby rozpocząć sprawdzanie luk w produkcji
+            {t('productionReport.timeAnalysis.gapAnalysis.startPrompt')}
           </Typography>
           <Typography color="text.secondary">
-            Analiza sprawdzi ciągłość czasu produkcji w zadanym okresie względem godzin pracy zakładu.
+            {t('productionReport.timeAnalysis.gapAnalysis.startPromptDescription')}
           </Typography>
         </Paper>
       )}

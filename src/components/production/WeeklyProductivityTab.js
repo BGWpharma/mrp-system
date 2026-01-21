@@ -76,6 +76,7 @@ import {
   formatWeekString
 } from '../../services/weeklyProductivityService';
 import { analyzeProductionTime } from '../../services/productionTimeAnalysisService';
+import { useTranslation } from '../../hooks/useTranslation';
 
 // Funkcja obliczająca regresję liniową dla krzywej trendu
 const calculateLinearRegression = (data, dataKey) => {
@@ -110,7 +111,7 @@ const calculateLinearRegression = (data, dataKey) => {
 };
 
 // Custom Tooltip dla wykresu trendu
-const CustomChartTooltip = ({ active, payload, label }) => {
+const CustomChartTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload || !payload.length) {
     return null;
   }
@@ -126,7 +127,7 @@ const CustomChartTooltip = ({ active, payload, label }) => {
       }}
     >
       <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-        Tydzień {label}
+        {t ? t('productionReport.weeklyProductivity.tooltip.weekLabel', { label }) : `Tydzień ${label}`}
       </Typography>
       {payload.map((entry, index) => (
         <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
@@ -296,7 +297,7 @@ const TrendVisualization = ({ week, weekIndex, allWeeks, trends, theme }) => {
 };
 
 // Komponent karty porównania tygodnia
-const WeekComparisonCard = ({ week, label }) => {
+const WeekComparisonCard = ({ week, label, t, formatWeek }) => {
   return (
     <Card variant="outlined">
       <CardContent>
@@ -304,36 +305,36 @@ const WeekComparisonCard = ({ week, label }) => {
           {label}
         </Typography>
         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-          {formatWeekString(week.week)}
+          {formatWeek(week.week)}
         </Typography>
         <Divider sx={{ my: 1 }} />
         <Stack spacing={1}>
           <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2">Wydajność:</Typography>
+            <Typography variant="body2">{t('productionReport.weeklyProductivity.comparison.productivity')}</Typography>
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-              {week.productivity} szt/h
+              {week.productivity} {t('productionReport.weeklyProductivity.metrics.productivityUnit')}
             </Typography>
           </Box>
           <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2">Wyprodukowano:</Typography>
+            <Typography variant="body2">{t('productionReport.weeklyProductivity.comparison.produced')}</Typography>
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
               {week.totalQuantity.toLocaleString('pl-PL')} szt
             </Typography>
           </Box>
           <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2">Czas pracy:</Typography>
+            <Typography variant="body2">{t('productionReport.weeklyProductivity.comparison.workTime')}</Typography>
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
               {week.totalTimeHours} h
             </Typography>
           </Box>
           <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2">Sesji:</Typography>
+            <Typography variant="body2">{t('productionReport.weeklyProductivity.comparison.sessions')}</Typography>
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
               {week.sessionsCount}
             </Typography>
           </Box>
           <Box display="flex" justifyContent="space-between">
-            <Typography variant="body2">Efektywność:</Typography>
+            <Typography variant="body2">{t('productionReport.weeklyProductivity.comparison.efficiency')}</Typography>
             <Chip 
               label={`${week.efficiency}%`} 
               size="small"
@@ -345,7 +346,7 @@ const WeekComparisonCard = ({ week, label }) => {
           <>
             <Divider sx={{ my: 1 }} />
             <Typography variant="subtitle2" gutterBottom>
-              Top 3 produkty:
+              {t('productionReport.weeklyProductivity.comparison.topProducts')}
             </Typography>
             {week.breakdown.slice(0, 3).map((item, index) => (
               <Box key={index} display="flex" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
@@ -372,7 +373,7 @@ const WeekComparisonCard = ({ week, label }) => {
 };
 
 // Panel szczegółów tygodnia (rozwijany panel)
-const WeekDetailsPanel = ({ week }) => {
+const WeekDetailsPanel = ({ week, t }) => {
   const dailyBreakdown = useMemo(() => {
     return getDailyBreakdown(week.sessions, week.weekStart, week.weekEnd);
   }, [week]);
@@ -383,7 +384,7 @@ const WeekDetailsPanel = ({ week }) => {
         {/* Breakdown dzienny */}
         <Grid item xs={12} md={7}>
           <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Rozkład dzienny
+            {t('productionReport.weeklyProductivity.details.dailyBreakdown')}
           </Typography>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyBreakdown}>
@@ -392,19 +393,19 @@ const WeekDetailsPanel = ({ week }) => {
               <YAxis />
               <RechartTooltip />
               <Legend />
-              <Bar dataKey="productivity" fill="#8884d8" name="Wydajność (szt/h)" />
-              <Bar dataKey="totalQuantity" fill="#82ca9d" name="Ilość" />
+              <Bar dataKey="productivity" fill="#8884d8" name={t('productionReport.weeklyProductivity.charts.productivityWithUnit')} />
+              <Bar dataKey="totalQuantity" fill="#82ca9d" name={t('productionReport.weeklyProductivity.table.quantity')} />
             </BarChart>
           </ResponsiveContainer>
           <TableContainer sx={{ mt: 1 }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Dzień</TableCell>
-                  <TableCell align="right">Czas (h)</TableCell>
-                  <TableCell align="right">Ilość</TableCell>
-                  <TableCell align="right">Wydajność</TableCell>
-                  <TableCell align="right">Sesje</TableCell>
+                  <TableCell>{t('productionReport.weeklyProductivity.details.day')}</TableCell>
+                  <TableCell align="right">{t('productionReport.weeklyProductivity.table.time')}</TableCell>
+                  <TableCell align="right">{t('productionReport.weeklyProductivity.table.quantity')}</TableCell>
+                  <TableCell align="right">{t('productionReport.weeklyProductivity.metrics.productivity')}</TableCell>
+                  <TableCell align="right">{t('productionReport.weeklyProductivity.details.sessions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -425,14 +426,14 @@ const WeekDetailsPanel = ({ week }) => {
         {/* Breakdown według produktów */}
         <Grid item xs={12} md={5}>
           <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Breakdown według produktów
+            {t('productionReport.weeklyProductivity.details.productBreakdown')}
           </Typography>
           <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Produkt</TableCell>
-                  <TableCell align="right">Czas</TableCell>
+                  <TableCell>{t('productionReport.weeklyProductivity.details.product')}</TableCell>
+                  <TableCell align="right">{t('productionReport.weeklyProductivity.charts.typeTime')}</TableCell>
                   <TableCell align="right">Ilość</TableCell>
                   <TableCell align="right">%</TableCell>
                 </TableRow>
@@ -479,7 +480,11 @@ const WeekDetailsPanel = ({ week }) => {
 };
 
 const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate, endDate, onDateChange }) => {
+  const { t } = useTranslation('production');
   const theme = useTheme();
+  
+  // Helper function for formatting week string with translated prefix
+  const formatWeekWithPrefix = (weekString) => formatWeekString(weekString, t('productionReport.weeklyProductivity.summary.weekPrefix'));
   const [expandedWeek, setExpandedWeek] = useState(null);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedWeek1, setSelectedWeek1] = useState(null);
@@ -649,7 +654,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
   // Dane do wykresu trendu
   const trendChartData = useMemo(() => {
     const baseData = weeksData.map(week => ({
-      week: formatWeekString(week.week),
+      week: formatWeekWithPrefix(week.week),
       weekShort: week.week.split('-W')[1],
       productivity: week.productivity,
       quantity: week.totalQuantity,
@@ -776,7 +781,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
         }
         
         return [
-          formatWeekString(week.week),
+          formatWeekWithPrefix(week.week),
           format(week.weekStart, 'dd.MM.yyyy', { locale: plLocale }),
           format(week.weekEnd, 'dd.MM.yyyy', { locale: plLocale }),
           week.totalTimeHours,
@@ -946,7 +951,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <WeightIcon sx={{ fontSize: 20, color: weightFilter.enabled ? 'primary.main' : 'text.secondary' }} />
                 <Typography variant="body2" sx={{ fontWeight: weightFilter.enabled ? 600 : 400 }}>
-                  Filtruj według wagi produktu końcowego
+                  {t('productionReport.weeklyProductivity.filters.weightFilter')}
                 </Typography>
               </Box>
             }
@@ -958,7 +963,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <TextField
                 fullWidth
                 size="small"
-                label="Waga minimalna (kg)"
+                label={t('productionReport.weeklyProductivity.filters.minWeight')}
                 type="number"
                 value={inputWeightFilter.min}
                 onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, min: e.target.value })}
@@ -975,7 +980,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <TextField
                 fullWidth
                 size="small"
-                label="Waga maksymalna (kg)"
+                label={t('productionReport.weeklyProductivity.filters.maxWeight')}
                 type="number"
                 value={inputWeightFilter.max}
                 onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, max: e.target.value })}
@@ -991,8 +996,8 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             <Grid item xs={12} sm={12} md={6}>
               <Alert severity="info" sx={{ py: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
                 {isFilterPending && <CircularProgress size={16} />}
-                Filtr obejmuje tylko produkcje, których waga produktu końcowego mieści się w podanym zakresie
-                {isFilterPending && ' - przetwarzanie...'}
+                {t('productionReport.weeklyProductivity.filters.weightFilterInfo')}
+                {isFilterPending && ` - ${t('productionReport.weeklyProductivity.filters.weightFilterProcessing')}`}
               </Alert>
             </Grid>
           </Grid>
@@ -1001,8 +1006,8 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
         <Divider sx={{ my: 2 }} />
         <Alert severity="info">
           {weightFilter.enabled && (weightFilter.min !== '' || weightFilter.max !== '') 
-            ? `Brak danych tygodniowych spełniających kryteria filtra. Odfiltrowano ${filterStats.rejected} z ${filterStats.original} sesji. Zmień zakres dat lub filtr wagi.`
-            : 'Brak danych tygodniowych do wyświetlenia. Zmień zakres dat aby zobaczyć analizę tygodniową.'
+            ? t('productionReport.weeklyProductivity.noDataWithFilter', { rejected: filterStats.rejected, original: filterStats.original })
+            : t('productionReport.weeklyProductivity.noData')
           }
         </Alert>
       </Paper>
@@ -1034,11 +1039,11 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 {trends.avgProductivity}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Średnia wydajność (szt/h)
+                {t('productionReport.weeklyProductivity.metrics.avgProductivityUnit')}
               </Typography>
               <Divider sx={{ my: 1.5 }} />
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
-                <Tooltip title="Rozstęp wydajności" arrow>
+                <Tooltip title={t('productionReport.weeklyProductivity.metrics.productivityRange')} arrow>
                   <Typography variant="caption" color="text.secondary">
                     {trends.minProductivity} - {trends.maxProductivity}
                   </Typography>
@@ -1068,16 +1073,16 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 {trends.maxProductivity}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Najlepsza wydajność
+                {t('productionReport.weeklyProductivity.metrics.maxProductivity')}
               </Typography>
               <Divider sx={{ my: 1.5 }} />
               {trends.bestWeek && (
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
-                    Rekord tygodnia:
+                    {t('productionReport.weeklyProductivity.metrics.recordWeek')}
                   </Typography>
                   <Chip 
-                    label={formatWeekString(trends.bestWeek.week).replace('Tydz. ', 'W')}
+                    label={formatWeekWithPrefix(trends.bestWeek.week).replace(`${t('productionReport.weeklyProductivity.summary.weekPrefix')} `, 'W')}
                     size="small"
                     color="success"
                     variant="outlined"
@@ -1109,11 +1114,11 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 {weeksData.length}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Analizowanych tygodni
+                {t('productionReport.weeklyProductivity.summary.analyzedWeeks')}
               </Typography>
               <Divider sx={{ my: 1.5 }} />
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                <Tooltip title="Zakres dat" arrow>
+                <Tooltip title={t('productionReport.weeklyProductivity.summary.dateRange')} arrow>
                   <Typography variant="caption" color="text.secondary">
                     {weeksData.length > 0 && `${format(weeksData[0].weekStart, 'dd.MM', { locale: plLocale })} - ${format(weeksData[weeksData.length - 1].weekEnd, 'dd.MM.yy', { locale: plLocale })}`}
                   </Typography>
@@ -1135,7 +1140,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 {getTrendIcon(trends.trend)}
                 {trends.trend === 'improving' && (
                   <Chip 
-                    label="Wzrost" 
+                    label={t('productionReport.weeklyProductivity.trends.improving')} 
                     color="success" 
                     size="small"
                     icon={<TrendingUpIcon />}
@@ -1143,7 +1148,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 )}
                 {trends.trend === 'declining' && (
                   <Chip 
-                    label="Spadek" 
+                    label={t('productionReport.weeklyProductivity.trends.declining')} 
                     color="error" 
                     size="small"
                     icon={<TrendingDownIcon />}
@@ -1151,7 +1156,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 )}
                 {trends.trend === 'stable' && (
                   <Chip 
-                    label="Stabilnie" 
+                    label={t('productionReport.weeklyProductivity.trends.stable')} 
                     color="default" 
                     size="small"
                     icon={<TrendingFlatIcon />}
@@ -1166,11 +1171,13 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                        trends.trend === 'declining' ? 'error.main' : 
                        'text.primary'
               }}>
-                {trends.trendDescription}
+                {trends.trend === 'improving' ? t('productionReport.weeklyProductivity.insights.productivityRising') :
+                 trends.trend === 'declining' ? t('productionReport.weeklyProductivity.insights.productivityFalling') :
+                 t('productionReport.weeklyProductivity.trends.stable')}
               </Typography>
               
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Ogólny trend
+                {t('productionReport.weeklyProductivity.trends.generalTrend')}
               </Typography>
               
               {/* Mini wizualizacja trendu dla wszystkich tygodni */}
@@ -1266,25 +1273,25 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             <TimeIcon sx={{ color: 'primary.main', fontSize: 24 }} />
           </Box>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Filtry
+            {t('productionReport.weeklyProductivity.filters.title')}
           </Typography>
         </Box>
         <Grid container spacing={2} alignItems="center">
           {/* Szybkie zakresy */}
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Zakres</InputLabel>
+              <InputLabel>{t('productionReport.weeklyProductivity.filters.dateRange')}</InputLabel>
               <Select
                 value={quickRange}
-                label="Zakres"
+                label={t('productionReport.weeklyProductivity.filters.dateRange')}
                 onChange={(e) => handleQuickRange(e.target.value)}
                 disabled={isRefreshing}
               >
-                <MenuItem value="4weeks">Ostatnie 4 tygodnie</MenuItem>
-                <MenuItem value="8weeks">Ostatnie 8 tygodni</MenuItem>
-                <MenuItem value="12weeks">Ostatnie 12 tygodni</MenuItem>
-                <MenuItem value="year">Cały rok</MenuItem>
-                <MenuItem value="custom">Niestandardowy</MenuItem>
+                <MenuItem value="4weeks">{t('productionReport.weeklyProductivity.filters.ranges.4weeks')}</MenuItem>
+                <MenuItem value="8weeks">{t('productionReport.weeklyProductivity.filters.ranges.8weeks')}</MenuItem>
+                <MenuItem value="12weeks">{t('productionReport.weeklyProductivity.filters.ranges.12weeks')}</MenuItem>
+                <MenuItem value="year">{t('productionReport.weeklyProductivity.filters.ranges.year')}</MenuItem>
+                <MenuItem value="custom">{t('productionReport.weeklyProductivity.filters.ranges.custom')}</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -1295,7 +1302,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <Grid item xs={12} sm={6} md={3}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
-                    label="Data początkowa"
+                    label={t('productionReport.weeklyProductivity.filters.startDate')}
                     value={startDate}
                     onChange={(newDate) => onDateChange(newDate, endDate)}
                     slotProps={{ 
@@ -1310,7 +1317,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <Grid item xs={12} sm={6} md={3}>
                 <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
                   <DatePicker
-                    label="Data końcowa"
+                    label={t('productionReport.weeklyProductivity.filters.endDate')}
                     value={endDate}
                     onChange={(newDate) => onDateChange(startDate, newDate)}
                     slotProps={{ 
@@ -1345,7 +1352,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <WeightIcon sx={{ fontSize: 20, color: weightFilter.enabled ? 'primary.main' : 'text.secondary' }} />
                 <Typography variant="body2" sx={{ fontWeight: weightFilter.enabled ? 600 : 400 }}>
-                  Filtruj według wagi produktu końcowego
+                  {t('productionReport.weeklyProductivity.filters.weightFilter')}
                 </Typography>
               </Box>
             }
@@ -1357,7 +1364,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <TextField
                 fullWidth
                 size="small"
-                label="Waga minimalna (kg)"
+                label={t('productionReport.weeklyProductivity.filters.minWeight')}
                 type="number"
                 value={inputWeightFilter.min}
                 onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, min: e.target.value })}
@@ -1374,7 +1381,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <TextField
                 fullWidth
                 size="small"
-                label="Waga maksymalna (kg)"
+                label={t('productionReport.weeklyProductivity.filters.maxWeight')}
                 type="number"
                 value={inputWeightFilter.max}
                 onChange={(e) => setInputWeightFilter({ ...inputWeightFilter, max: e.target.value })}
@@ -1390,8 +1397,8 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             <Grid item xs={12} sm={12} md={6}>
               <Alert severity="info" sx={{ py: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
                 {isFilterPending && <CircularProgress size={16} />}
-                Filtr obejmuje tylko produkcje, których waga produktu końcowego mieści się w podanym zakresie
-                {isFilterPending && ' - przetwarzanie...'}
+                {t('productionReport.weeklyProductivity.filters.weightFilterInfo')}
+                {isFilterPending && ` - ${t('productionReport.weeklyProductivity.filters.weightFilterProcessing')}`}
               </Alert>
             </Grid>
           </Grid>
@@ -1439,7 +1446,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             boxShadow: comparisonMode ? 2 : 0
           }}
         >
-          Porównaj tygodnie
+          {t('productionReport.weeklyProductivity.comparison.compare')}
         </Button>
         <FormControl size="small" sx={{ minWidth: 220 }}>
           <InputLabel>Typ wykresu</InputLabel>
@@ -1452,25 +1459,25 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
             <MenuItem value="productivity">
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <SpeedIcon fontSize="small" color="primary" />
-                Wydajność
+                {t('productionReport.weeklyProductivity.charts.typeProductivity')}
               </Box>
             </MenuItem>
             <MenuItem value="quantity">
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <QuantityIcon fontSize="small" color="secondary" />
-                Ilość
+                {t('productionReport.weeklyProductivity.charts.typeQuantity')}
               </Box>
             </MenuItem>
             <MenuItem value="time">
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <TimeIcon fontSize="small" color="success" />
-                Czas pracy
+                {t('productionReport.weeklyProductivity.charts.typeTime')}
               </Box>
             </MenuItem>
             <MenuItem value="all">
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <AssessmentIcon fontSize="small" color="info" />
-                Wszystkie
+                {t('productionReport.weeklyProductivity.charts.typeAll')}
               </Box>
             </MenuItem>
           </Select>
@@ -1509,7 +1516,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <CompareIcon sx={{ color: 'white', fontSize: 28 }} />
             </Box>
             <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-              Porównanie dwóch tygodni
+              {t('productionReport.weeklyProductivity.comparison.title')}
             </Typography>
           </Box>
           <Grid container spacing={2}>
@@ -1523,22 +1530,22 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 }}
               >
                 <Chip 
-                  label="Tydzień 1" 
+                  label={t('productionReport.weeklyProductivity.comparison.week1')} 
                   color="primary" 
                   size="small" 
                   sx={{ mb: 1.5, fontWeight: 'bold' }}
                 />
                 <FormControl fullWidth size="medium">
-                  <InputLabel>Wybierz tydzień 1</InputLabel>
+                  <InputLabel>{t('productionReport.weeklyProductivity.comparison.selectWeek1')}</InputLabel>
                   <Select
                     value={selectedWeek1 || ''}
                     onChange={(e) => setSelectedWeek1(e.target.value)}
-                    label="Wybierz tydzień 1"
+                    label={t('productionReport.weeklyProductivity.comparison.selectWeek1')}
                   >
                     {weeksData.map(week => (
                       <MenuItem key={week.week} value={week.week}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <Typography>{formatWeekString(week.week)}</Typography>
+                          <Typography>{formatWeekWithPrefix(week.week)}</Typography>
                           <Chip 
                             label={`${week.productivity} szt/h`}
                             size="small"
@@ -1562,22 +1569,22 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 }}
               >
                 <Chip 
-                  label="Tydzień 2" 
+                  label={t('productionReport.weeklyProductivity.comparison.week2')} 
                   color="secondary" 
                   size="small" 
                   sx={{ mb: 1.5, fontWeight: 'bold' }}
                 />
                 <FormControl fullWidth size="medium">
-                  <InputLabel>Wybierz tydzień 2</InputLabel>
+                  <InputLabel>{t('productionReport.weeklyProductivity.comparison.selectWeek2')}</InputLabel>
                   <Select
                     value={selectedWeek2 || ''}
                     onChange={(e) => setSelectedWeek2(e.target.value)}
-                    label="Wybierz tydzień 2"
+                    label={t('productionReport.weeklyProductivity.comparison.selectWeek2')}
                   >
                     {weeksData.map(week => (
                       <MenuItem key={week.week} value={week.week}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <Typography>{formatWeekString(week.week)}</Typography>
+                          <Typography>{formatWeekWithPrefix(week.week)}</Typography>
                           <Chip 
                             label={`${week.productivity} szt/h`}
                             size="small"
@@ -1598,35 +1605,35 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               {/* Wykres porównawczy */}
               <Box sx={{ mt: 2, mb: 2 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-                  Porównanie metryk
+                  {t('productionReport.weeklyProductivity.comparison.metricsComparison')}
                 </Typography>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart
                     data={[
                       {
-                        metric: 'Wydajność\n(szt/h)',
-                        [formatWeekString(week1Data.week)]: week1Data.productivity,
-                        [formatWeekString(week2Data.week)]: week2Data.productivity
+                        metric: `${t('productionReport.weeklyProductivity.metrics.productivity')}\n(${t('productionReport.weeklyProductivity.metrics.productivityUnit')})`,
+                        [formatWeekWithPrefix(week1Data.week)]: week1Data.productivity,
+                        [formatWeekWithPrefix(week2Data.week)]: week2Data.productivity
                       },
                       {
-                        metric: 'Ilość\n(szt)',
-                        [formatWeekString(week1Data.week)]: week1Data.totalQuantity,
-                        [formatWeekString(week2Data.week)]: week2Data.totalQuantity
+                        metric: `${t('productionReport.weeklyProductivity.table.quantity')}\n(szt)`,
+                        [formatWeekWithPrefix(week1Data.week)]: week1Data.totalQuantity,
+                        [formatWeekWithPrefix(week2Data.week)]: week2Data.totalQuantity
                       },
                       {
-                        metric: 'Czas pracy\n(h)',
-                        [formatWeekString(week1Data.week)]: week1Data.totalTimeHours,
-                        [formatWeekString(week2Data.week)]: week2Data.totalTimeHours
+                        metric: `${t('productionReport.weeklyProductivity.charts.typeTime')}\n(h)`,
+                        [formatWeekWithPrefix(week1Data.week)]: week1Data.totalTimeHours,
+                        [formatWeekWithPrefix(week2Data.week)]: week2Data.totalTimeHours
                       },
                       {
-                        metric: 'Sesje',
-                        [formatWeekString(week1Data.week)]: week1Data.sessionsCount,
-                        [formatWeekString(week2Data.week)]: week2Data.sessionsCount
+                        metric: t('productionReport.weeklyProductivity.details.sessions'),
+                        [formatWeekWithPrefix(week1Data.week)]: week1Data.sessionsCount,
+                        [formatWeekWithPrefix(week2Data.week)]: week2Data.sessionsCount
                       },
                       {
-                        metric: 'Efektywność\n(%)',
-                        [formatWeekString(week1Data.week)]: week1Data.efficiency,
-                        [formatWeekString(week2Data.week)]: week2Data.efficiency
+                        metric: `${t('productionReport.weeklyProductivity.metrics.efficiency')}\n(%)`,
+                        [formatWeekWithPrefix(week1Data.week)]: week1Data.efficiency,
+                        [formatWeekWithPrefix(week2Data.week)]: week2Data.efficiency
                       }
                     ]}
                     margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
@@ -1643,14 +1650,14 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                     <RechartTooltip />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
                     <Bar 
-                      dataKey={formatWeekString(week1Data.week)} 
+                      dataKey={formatWeekWithPrefix(week1Data.week)} 
                       fill={theme.palette.primary.main}
-                      name={formatWeekString(week1Data.week)}
+                      name={formatWeekWithPrefix(week1Data.week)}
                     />
                     <Bar 
-                      dataKey={formatWeekString(week2Data.week)} 
+                      dataKey={formatWeekWithPrefix(week2Data.week)} 
                       fill={theme.palette.secondary.main}
-                      name={formatWeekString(week2Data.week)}
+                      name={formatWeekWithPrefix(week2Data.week)}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1662,7 +1669,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   <Card variant="outlined">
                     <CardContent sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Różnica Wydajności
+                        {t('productionReport.weeklyProductivity.comparison.productivityDiff')}
                       </Typography>
                       <Typography 
                         variant="h5" 
@@ -1683,7 +1690,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   <Card variant="outlined">
                     <CardContent sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Różnica Ilości
+                        {t('productionReport.weeklyProductivity.comparison.quantityDiff')}
                       </Typography>
                       <Typography 
                         variant="h5" 
@@ -1704,7 +1711,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   <Card variant="outlined">
                     <CardContent sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Różnica Czasu
+                        {t('productionReport.weeklyProductivity.comparison.timeDiff')}
                       </Typography>
                       <Typography 
                         variant="h5" 
@@ -1725,7 +1732,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   <Card variant="outlined">
                     <CardContent sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Różnica Sesji
+                        {t('productionReport.weeklyProductivity.comparison.sessionsDiff')}
                       </Typography>
                       <Typography 
                         variant="h5" 
@@ -1745,7 +1752,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   <Card variant="outlined">
                     <CardContent sx={{ textAlign: 'center', py: 2 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Różnica Efektywności
+                        {t('productionReport.weeklyProductivity.comparison.efficiencyDiff')}
                       </Typography>
                       <Typography 
                         variant="h5" 
@@ -1766,10 +1773,10 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               {/* Karty szczegółów tygodni */}
               <Grid container spacing={2} sx={{ mt: 2 }}>
                 <Grid item xs={12} md={6}>
-                  <WeekComparisonCard week={week1Data} label="Tydzień 1" />
+                  <WeekComparisonCard week={week1Data} label={t('productionReport.weeklyProductivity.comparison.week1')} t={t} formatWeek={formatWeekWithPrefix} />
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <WeekComparisonCard week={week2Data} label="Tydzień 2" />
+                  <WeekComparisonCard week={week2Data} label={t('productionReport.weeklyProductivity.comparison.week2')} t={t} formatWeek={formatWeekWithPrefix} />
                 </Grid>
               </Grid>
             </>
@@ -1790,10 +1797,10 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <ShowChartIcon sx={{ mr: 1, color: 'primary.main', fontSize: 28 }} />
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Trend wydajności w czasie
+            {t('productionReport.weeklyProductivity.charts.trendTitle')}
           </Typography>
           <Chip 
-            label={`${weeksData.length} ${weeksData.length === 1 ? 'tydzień' : weeksData.length < 5 ? 'tygodnie' : 'tygodni'}`}
+            label={`${weeksData.length} ${weeksData.length === 1 ? t('productionReport.weeklyProductivity.summary.week') : weeksData.length < 5 ? t('productionReport.weeklyProductivity.summary.weeks') : t('productionReport.weeklyProductivity.summary.weeksPlural')}`}
             size="small"
             sx={{ ml: 2 }}
             color="primary"
@@ -1806,11 +1813,11 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="weekShort" 
-                label={{ value: 'Tydzień', position: 'insideBottom', offset: -5 }}
+                label={{ value: t('productionReport.weeklyProductivity.charts.week'), position: 'insideBottom', offset: -5 }}
               />
               <YAxis 
                 yAxisId="left"
-                label={{ value: 'Wydajność (szt/h) / Czas (h)', angle: -90, position: 'insideLeft' }}
+                label={{ value: `${t('productionReport.weeklyProductivity.charts.productivityWithUnit')} / ${t('productionReport.weeklyProductivity.charts.typeTime')} (h)`, angle: -90, position: 'insideLeft' }}
               />
               <YAxis 
                 yAxisId="right" 
@@ -1830,7 +1837,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 fill={`url(#colorProductivity)`}
                 stroke={theme.palette.primary.main}
                 strokeWidth={2}
-                name="Wydajność (szt/h)"
+                name={t('productionReport.weeklyProductivity.charts.productivityWithUnit')}
               />
               <defs>
                 <linearGradient id="colorProductivity" x1="0" y1="0" x2="0" y2="1">
@@ -1846,7 +1853,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   stroke={theme.palette.warning.dark}
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  name="Trend wydajności"
+                  name={t('productionReport.weeklyProductivity.tooltip.trendProductivity')}
                   dot={false}
                   activeDot={{ r: 4 }}
                 />
@@ -1857,7 +1864,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 dataKey="quantity" 
                 stroke={theme.palette.secondary.main}
                 strokeWidth={2}
-                name="Ilość"
+                name={t('productionReport.weeklyProductivity.table.quantity')}
                 dot={{ r: 3 }}
                 activeDot={{ r: 5 }}
               />
@@ -1867,7 +1874,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                 dataKey="timeHours" 
                 stroke={theme.palette.success.main}
                 strokeWidth={2}
-                name="Czas (h)"
+                name={`${t('productionReport.weeklyProductivity.charts.typeTime')} (h)`}
                 dot={{ r: 3 }}
                 activeDot={{ r: 5 }}
               />
@@ -1877,13 +1884,13 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="weekShort"
-                label={{ value: 'Tydzień', position: 'insideBottom', offset: -5 }}
+                label={{ value: t('productionReport.weeklyProductivity.charts.week'), position: 'insideBottom', offset: -5 }}
               />
               <YAxis 
                 label={{ 
-                  value: chartType === 'productivity' ? 'Wydajność (szt/h)' : 
-                         chartType === 'quantity' ? 'Ilość (szt)' : 
-                         'Czas pracy (h)', 
+                  value: chartType === 'productivity' ? t('productionReport.weeklyProductivity.charts.productivityWithUnit') : 
+                         chartType === 'quantity' ? t('productionReport.weeklyProductivity.charts.quantityWithUnit') : 
+                         t('productionReport.weeklyProductivity.charts.timeWithUnit'), 
                   angle: -90, 
                   position: 'insideLeft' 
                 }}
@@ -1900,7 +1907,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   dataKey="productivity" 
                   stroke={theme.palette.primary.main}
                   strokeWidth={3}
-                  name="Wydajność (szt/h)"
+                  name={t('productionReport.weeklyProductivity.charts.productivityWithUnit')}
                   dot={{ r: 5, fill: theme.palette.primary.main, strokeWidth: 2, stroke: theme.palette.background.paper }}
                   activeDot={{ r: 7, strokeWidth: 2 }}
                 />
@@ -1912,7 +1919,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   stroke={theme.palette.warning.dark}
                   strokeWidth={2.5}
                   strokeDasharray="8 4"
-                  name="Trend"
+                  name={t('productionReport.weeklyProductivity.charts.trendLine')}
                   dot={false}
                   activeDot={{ r: 4 }}
                 />
@@ -1923,7 +1930,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   dataKey="quantity" 
                   stroke={theme.palette.secondary.main}
                   strokeWidth={3}
-                  name="Ilość"
+                  name={t('productionReport.weeklyProductivity.table.quantity')}
                   dot={{ r: 5, fill: theme.palette.secondary.main, strokeWidth: 2, stroke: theme.palette.background.paper }}
                   activeDot={{ r: 7, strokeWidth: 2 }}
                 />
@@ -1934,7 +1941,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                   dataKey="timeHours" 
                   stroke={theme.palette.success.main}
                   strokeWidth={3}
-                  name="Czas pracy (h)"
+                  name={t('productionReport.weeklyProductivity.charts.timeWithUnit')}
                   dot={{ r: 5, fill: theme.palette.success.main, strokeWidth: 2, stroke: theme.palette.background.paper }}
                   activeDot={{ r: 7, strokeWidth: 2 }}
                 />
@@ -1957,7 +1964,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <AssessmentIcon sx={{ mr: 1, color: 'secondary.main', fontSize: 28 }} />
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              Szczegółowe zestawienie tygodniowe
+              {t('productionReport.weeklyProductivity.table.title')}
             </Typography>
           </Box>
           <Chip 
@@ -1983,7 +1990,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      direction={sortBy === 'week' ? sortDirection : 'asc'}
                      onClick={() => handleSort('week')}
                    >
-                     Tydzień
+                     {t('productionReport.weeklyProductivity.table.week')}
                    </TableSortLabel>
                  </TableCell>
                  <TableCell align="right">
@@ -1992,7 +1999,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      direction={sortBy === 'time' ? sortDirection : 'asc'}
                      onClick={() => handleSort('time')}
                    >
-                     Czas (h)
+                     {t('productionReport.weeklyProductivity.table.time')}
                    </TableSortLabel>
                  </TableCell>
                  <TableCell align="right">
@@ -2001,7 +2008,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      direction={sortBy === 'quantity' ? sortDirection : 'asc'}
                      onClick={() => handleSort('quantity')}
                    >
-                     Ilość
+                     {t('productionReport.weeklyProductivity.table.quantity')}
                    </TableSortLabel>
                  </TableCell>
                  <TableCell align="right">
@@ -2010,7 +2017,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      direction={sortBy === 'productivity' ? sortDirection : 'asc'}
                      onClick={() => handleSort('productivity')}
                    >
-                     Wydajność (szt/h)
+                     {t('productionReport.weeklyProductivity.table.productivity')}
                    </TableSortLabel>
                  </TableCell>
                  <TableCell align="center">
@@ -2019,7 +2026,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      direction={sortBy === 'trend' ? sortDirection : 'asc'}
                      onClick={() => handleSort('trend')}
                    >
-                     Trend
+                     {t('productionReport.weeklyProductivity.table.trend')}
                    </TableSortLabel>
                  </TableCell>
                  <TableCell align="center">
@@ -2028,12 +2035,12 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                      direction={sortBy === 'efficiency' ? sortDirection : 'asc'}
                      onClick={() => handleSort('efficiency')}
                    >
-                     Efekt.
+                     {t('productionReport.weeklyProductivity.table.efficiency')}
                    </TableSortLabel>
                  </TableCell>
-                 <TableCell>Top produkt</TableCell>
-                 <TableCell align="center">Porównaj</TableCell>
-                 <TableCell align="center">Szczegóły</TableCell>
+                 <TableCell>{t('productionReport.weeklyProductivity.table.topProduct')}</TableCell>
+                 <TableCell align="center">{t('productionReport.weeklyProductivity.table.compare')}</TableCell>
+                 <TableCell align="center">{t('productionReport.weeklyProductivity.table.details')}</TableCell>
                </TableRow>
              </TableHead>
             <TableBody>
@@ -2068,7 +2075,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                     <TableCell>
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                          {formatWeekString(week.week)}
+                          {formatWeekWithPrefix(week.week)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {week.weekLabel}
@@ -2109,19 +2116,19 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                         title={
                           <Box>
                             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                              Trend wydajności
+                              {t('productionReport.weeklyProductivity.tooltip.trendProductivity')}
                             </Typography>
                             <Typography variant="caption" component="div">
-                              Zmiana vs poprzedni tydzień: {week.productivityChange > 0 ? '+' : ''}{week.productivityChange.toFixed(1)}%
+                              {t('productionReport.weeklyProductivity.insights.trendChangeVsPrevious', { change: `${week.productivityChange > 0 ? '+' : ''}${week.productivityChange.toFixed(1)}` })}
                             </Typography>
                             <Typography variant="caption" component="div">
-                              Obecna: {week.productivity} szt/h
+                              {t('productionReport.weeklyProductivity.insights.currentProductivity', { value: week.productivity })}
                             </Typography>
                             <Typography variant="caption" component="div">
-                              Średnia: {trends.avgProductivity} szt/h
+                              {t('productionReport.weeklyProductivity.insights.avgProductivity', { value: trends.avgProductivity })}
                             </Typography>
                             <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
-                              Mini wykres pokazuje ostatnie 5 tygodni
+                              {t('productionReport.weeklyProductivity.insights.miniChartInfo')}
                             </Typography>
                           </Box>
                         }
@@ -2160,7 +2167,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                              {week.topProduct.taskName}
                            </Typography>
                            <Typography variant="caption" color="text.secondary">
-                             {week.topProduct.timePercentage}% czasu
+                             {week.topProduct.timePercentage}% {t('productionReport.weeklyProductivity.table.timeOfTotal')}
                            </Typography>
                          </Box>
                        ) : (
@@ -2213,7 +2220,7 @@ const WeeklyProductivityTab = ({ timeAnalysis, tasksMap, isMobileView, startDate
                    <TableRow>
                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
                        <Collapse in={expandedWeek === week.week} timeout="auto" unmountOnExit>
-                         <WeekDetailsPanel week={week} />
+                         <WeekDetailsPanel week={week} t={t} />
                        </Collapse>
                      </TableCell>
                    </TableRow>

@@ -51,15 +51,26 @@
     "table": {
       "material": "Material",
       "availableQuantity": "Available Quantity",
-      "requiredQuantity": "Required Quantity",
+      "requiredQuantity": "Required",
       "balance": "Balance",
       "expectedDeliveries": "Expected Deliveries",
       "balanceAfterDeliveries": "Balance with Deliveries",
       "estimatedCost": "Estimated Cost",
       "status": "Status",
-      "actions": "Actions"
+      "actions": "Actions",
+      "price": "Price",
+      "eta": "ETA"
     },
+    "calculatingDescription": "Analyzing production tasks, checking inventory levels and calculating material requirements",
     "thirtyDays": "30 days",
+    "timeRanges": {
+      "7days": "7 days",
+      "14days": "14 days",
+      "30days": "30 days",
+      "60days": "60 days",
+      "90days": "90 days",
+      "custom": "Custom"
+    },
     "category": "Category",
     "noCategory": "No category",
     "expectedDeliveriesDetails": "Expected deliveries ({{total}} {{unit}})",
@@ -79,10 +90,27 @@
     },
     "tooltips": {
       "showDetails": "Show Details",
-      "orderMaterial": "Order Material"
+      "orderMaterial": "Order Material",
+      "excelReport": "Generates detailed Excel report with colors and formatting - 3 sheets: material forecast, unused materials, summary"
     },
     "productionTasksInPeriod": "Production Tasks in Selected Period",
-    "taskWithoutName": "Task without name"
+    "taskWithoutName": "Task without name",
+    "excludedCategories": "(excluded categories \"Other\" and \"Finished products\" and materials with quantity 0)",
+    "unusedMaterials": {
+      "title": "Materials not used in any production order ({{count}})",
+      "description": "The following materials are in stock but are not used in any MO in the selected period",
+      "totalAvailable": "Available with deliveries"
+    },
+    "noMaterialsMatchingFilters": "No materials matching filters",
+    "details": {
+      "availableQuantity": "Available quantity",
+      "requiredQuantity": "Required quantity (remaining)",
+      "alreadyConsumed": "Already consumed",
+      "balance": "Balance",
+      "supplier": "Supplier",
+      "quantity": "Quantity",
+      "noSupplier": "No supplier"
+    }
   },
   "reports": {
     "startDate": "Start Date",
@@ -145,13 +173,23 @@
       "taskList": "Task List",
       "detailedTaskList": "Detailed Task List"
     },
-    "timeAnalysis": {
+    "tabs": {
+        "timeAnalysis": "Time Analysis",
+        "weeklyProductivity": "Weekly Reports",
+        "gapAnalysis": "Gap Analysis"
+      },
+      "timeAnalysis": {
       "title": "Production Time Analysis",
       "totalTime": "Total Time",
       "totalSessions": "Total Sessions",
       "totalQuantity": "Total Quantity",
+      "totalProducedQuantity": "Total Produced Quantity",
+      "timePerProducedQuantity": "Total Time / Total Produced Quantity",
       "averageTimePerSession": "Average Time per Session",
       "averageTimePerUnit": "Average Time per Unit",
+      "facilityCost": "Facility Cost",
+      "workTime": "Work Time",
+      "sessions": "Sessions",
       "timeByPeriod": "Time by Period",
       "sessionsList": "Production Sessions List",
       "taskBreakdown": "Breakdown by Task",
@@ -210,25 +248,189 @@
         "dataRange": "Data for period from {{startDate}} to {{endDate}}",
         "totalTimeSpent": "Total time spent on production",
         "productionEfficiency": "Production Efficiency"
+      },
+      "gapAnalysis": {
+        "title": "Production Gap Analysis",
+        "description": "Check production time continuity",
+        "workingHours": "Facility working hours",
+        "from": "from",
+        "to": "to",
+        "includeWeekends": "Include weekends",
+        "minGapMinutes": "Minimum gap (minutes)",
+        "analyze": "Analyze",
+        "summary": {
+          "title": "Analysis Summary",
+          "period": "Analysis period",
+          "totalWorkTime": "Total work time",
+          "totalProductionTime": "Total production time",
+          "totalGapTime": "Total gap time",
+          "coverage": "Production coverage",
+          "gapsFound": "Gaps found",
+          "daysWithGaps": "Days with gaps",
+          "daysWithProblems": "Days with problems",
+          "daysWithoutProduction": "Days without production",
+          "workingDays": "working days"
+        },
+        "gaps": {
+          "title": "Detected production gaps",
+          "type": "Gap type",
+          "date": "Date",
+          "time": "Time",
+          "duration": "Duration",
+          "relatedTasks": "Related MO tasks",
+          "description": "Description",
+          "count": "Count",
+          "shown": "Showing {{shown}} of {{total}} gaps. Largest gaps are displayed at the top.",
+          "types": {
+            "full_day": "Full day without production",
+            "before_first_session": "Before first session",
+            "between_sessions": "Between sessions",
+            "after_last_session": "After last session"
+          }
+        },
+        "dailyAnalysis": {
+          "title": "Daily Analysis",
+          "day": "Day",
+          "workTime": "Work time",
+          "productionTime": "Production time",
+          "gapTime": "Gap time",
+          "coverage": "Coverage",
+          "sessions": "Sessions",
+          "gaps": "Gaps"
+        },
+        "gapTypes": {
+          "title": "Detected gap types",
+          "gapType": "Gap type",
+          "count": "Count",
+          "time": "Time",
+          "gapTime": "Gap time"
+        },
+        "recommendations": {
+          "title": "Recommendations",
+          "severity": {
+            "high": "High priority",
+            "medium": "Medium priority",
+            "low": "Low priority"
+          },
+          "longGaps": {
+            "title": "Long production breaks detected",
+            "description": "Found {{count}} gaps longer than 2 hours. Longest gap: {{maxHours}} hours.",
+            "suggestion1": "Check if all production sessions have been properly recorded",
+            "suggestion2": "Verify if production was not occurring during long breaks",
+            "suggestion3": "Consider implementing automatic work time monitoring"
+          },
+          "noProductionDays": {
+            "title": "Days without registered production",
+            "description": "Detected {{count}} working days without any registered production.",
+            "suggestion1": "Check if production was actually not happening on these days",
+            "suggestion2": "Verify the correctness of session registration",
+            "suggestion3": "Ensure employees are properly using the system"
+          },
+          "lowCoverage": {
+            "title": "Low work time coverage",
+            "description": "Detected {{count}} days with production coverage below 50% of work time.",
+            "suggestion1": "Check if session duration is being recorded correctly",
+            "suggestion2": "Verify if all production activities are being included",
+            "suggestion3": "Consider optimizing production processes"
+          },
+          "earlyGaps": {
+            "title": "Late work start pattern",
+            "description": "Detected {{count}} cases of delayed production start relative to facility work hours.",
+            "suggestion1": "Check if work start hours are correctly set",
+            "suggestion2": "Verify production preparation procedures",
+            "suggestion3": "Consider adjusting work schedule"
+          },
+          "lateGaps": {
+            "title": "Early work end pattern",
+            "description": "Detected {{count}} cases of early production end relative to facility work hours.",
+            "suggestion1": "Check if work end hours are correctly set",
+            "suggestion2": "Verify production closure procedures",
+            "suggestion3": "Consider optimizing work schedule"
+          }
+        },
+        "descriptions": {
+          "noProductionWholeDay": "No production throughout entire working day ({{startTime}} - {{endTime}})",
+          "gapBeforeFirst": "Gap before first production period ({{startTime}} - {{endTime}})",
+          "gapBetweenPeriods": "Gap between production periods ({{startTime}} - {{endTime}})",
+          "gapAfterLast": "Gap after last production period ({{startTime}} - {{endTime}})"
+        },
+        "noGapsFound": "No production gaps found for selected period",
+        "noSignificantGaps": "Production in selected period shows no significant gaps in time.",
+        "analysisInProgress": "Analysis in progress...",
+        "errorDuringAnalysis": "Error during analysis",
+        "limitedToToday": "Analysis limited to today (originally to {{originalEndDate}})",
+        "startPrompt": "Click \"Analyze\" to start checking production gaps",
+        "startPromptDescription": "Analysis will check production time continuity in the specified period against facility working hours.",
+        "noProductionSessions": "No production sessions on this day",
+        "charts": {
+          "workTime": "Work time",
+          "production": "Production",
+          "gaps": "Gaps"
+        },
+        "timeline": {
+          "title": "Production and gaps timeline",
+          "legend": {
+            "workTime": "Work time",
+            "production": "Production",
+            "gaps": "Gaps",
+            "overlappingSessions": "Overlapping sessions"
+          },
+          "noGapsInPeriod": "No production gaps for this period",
+          "coverage": "Coverage",
+          "duration": "Duration",
+          "quantity": "Quantity",
+          "product": "Product",
+          "productionSession": "Production session",
+          "showingDays": "Showing {{shown}}/{{total}} days",
+          "before": "Before:",
+          "after": "After:",
+          "nextSession": "Next session:",
+          "previousSession": "Previous session:"
+        }
       }
     },
     "weeklyProductivity": {
       "title": "Weekly Productivity Reports",
       "description": "Analysis of production efficiency in weekly view",
       "noData": "No weekly data to display. Change date range to see weekly analysis.",
+      "noDataWithFilter": "No weekly data matching filter criteria. Filtered out {{rejected}} of {{original}} sessions. Change date range or weight filter.",
+      "filters": {
+        "title": "Filters",
+        "dateRange": "Range",
+        "startDate": "Start Date",
+        "endDate": "End Date",
+        "weightFilter": "Filter by final product weight",
+        "minWeight": "Minimum weight (kg)",
+        "maxWeight": "Maximum weight (kg)",
+        "weightFilterInfo": "Filter includes only productions where final product weight is within the specified range",
+        "weightFilterProcessing": "processing...",
+        "weightFilterActive": "Weight filter active:",
+        "sessionsMatchCriteria": "{{filtered}} of {{original}} sessions match criteria",
+        "filteredOut": "filtered out: {{count}}",
+        "ranges": {
+          "4weeks": "Last 4 weeks",
+          "8weeks": "Last 8 weeks",
+          "12weeks": "Last 12 weeks",
+          "year": "Whole year",
+          "custom": "Custom"
+        }
+      },
       "metrics": {
         "productivity": "Productivity",
         "avgProductivity": "Average Productivity",
+        "avgProductivityUnit": "Average Productivity (pcs/h)",
         "maxProductivity": "Best Productivity",
         "minProductivity": "Worst Productivity",
         "efficiency": "Efficiency",
         "trend": "Trend",
-        "productivityUnit": "pcs/h"
+        "productivityUnit": "pcs/h",
+        "productivityRange": "Productivity Range",
+        "recordWeek": "Record week:"
       },
       "trends": {
-        "improving": "Productivity improving",
-        "declining": "Productivity declining",
-        "stable": "Productivity stable",
+        "improving": "Growth",
+        "declining": "Decline",
+        "stable": "Stable",
         "generalTrend": "General trend"
       },
       "insights": {
@@ -239,19 +441,38 @@
         "significantDecrease": "Significant decrease",
         "newRecord": "New record!",
         "lowEfficiency": "Low time efficiency",
-        "dominantProduct": "Dominant product"
+        "dominantProduct": "Dominant product",
+        "aboveAverage": "Above",
+        "belowAverage": "Below",
+        "averageByPercent": "average by {{percent}}%",
+        "trendChangeVsPrevious": "Change vs previous week: {{change}}%",
+        "currentProductivity": "Current: {{value}} pcs/h",
+        "avgProductivity": "Average: {{value}} pcs/h",
+        "miniChartInfo": "Mini chart shows last 5 weeks",
+        "utilizationTime": "Time utilization: {{value}}%"
       },
       "comparison": {
         "title": "Compare two weeks",
         "compare": "Compare weeks",
+        "comparisonActive": "Comparison mode active",
+        "inComparison": "In comparison",
+        "addToComparison": "Add to comparison",
         "week1": "Week 1",
         "week2": "Week 2",
+        "selectWeek1": "Select week 1",
+        "selectWeek2": "Select week 2",
+        "metricsComparison": "Metrics Comparison",
         "productivity": "Productivity:",
         "produced": "Produced:",
         "workTime": "Work time:",
         "sessions": "Sessions:",
         "efficiency": "Efficiency:",
-        "topProducts": "Top 3 products:"
+        "topProducts": "Top 3 products:",
+        "productivityDiff": "Productivity Difference",
+        "quantityDiff": "Quantity Difference",
+        "timeDiff": "Time Difference",
+        "sessionsDiff": "Sessions Difference",
+        "efficiencyDiff": "Efficiency Difference"
       },
       "table": {
         "week": "Week",
@@ -261,26 +482,49 @@
         "trend": "Trend",
         "efficiency": "Effic.",
         "topProduct": "Top product",
-        "details": "Details"
+        "compare": "Compare",
+        "details": "Details",
+        "title": "Detailed weekly summary",
+        "records": "records",
+        "record": "record",
+        "recordsPlural": "records",
+        "timeOfTotal": "% of time"
       },
       "details": {
         "title": "Week details",
         "dailyBreakdown": "Daily breakdown",
         "productBreakdown": "Breakdown by products",
         "day": "Day",
-        "product": "Product"
+        "product": "Product",
+        "sessions": "Sessions"
       },
       "charts": {
         "trendTitle": "Productivity trend over time",
         "typeProductivity": "Productivity",
         "typeQuantity": "Quantity",
         "typeTime": "Work time",
-        "typeAll": "All"
+        "typeAll": "All",
+        "chartType": "Chart Type",
+        "week": "Week",
+        "productivityWithUnit": "Productivity (pcs/h)",
+        "quantityWithUnit": "Quantity (pcs)",
+        "timeWithUnit": "Work time (h)",
+        "trendLine": "Trend"
       },
       "summary": {
         "analyzedWeeks": "Analyzed weeks",
         "bestWeek": "Best week",
-        "worstWeek": "Worst week"
+        "worstWeek": "Worst week",
+        "weeks": "weeks",
+        "weeksPlural": "weeks",
+        "week": "week",
+        "weekPrefix": "Week",
+        "dateRange": "Date range"
+      },
+      "tooltip": {
+        "weekLabel": "Week {{label}}",
+        "trend": "Trend",
+        "trendProductivity": "Productivity trend"
       }
     },
     "tableHeaders": {
@@ -613,6 +857,77 @@
         "completedMO": "Completed MO",
         "productionControl": "Production Control",
         "productionShift": "Production Shift"
+      }
+    }
+  },
+  "progressReport": {
+    "loading": "Loading data...",
+    "noTasksInPeriod": "No production tasks in selected period",
+    "dateRange": {
+      "title": "Date Range",
+      "quickSelect": "Quick select:",
+      "thisYear": "This year",
+      "lastYear": "Last year",
+      "thisQuarter": "This quarter",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "from": "From date",
+      "to": "To date",
+      "selectedRange": "Selected range",
+      "tasksFound": "Tasks found"
+    },
+    "stats": {
+      "allTasks": "All tasks",
+      "completed": "Completed",
+      "inProgress": "In progress",
+      "averageProgress": "Average progress",
+      "timeEfficiency": "Time efficiency",
+      "expected": "Exp",
+      "actual": "Act",
+      "fasterThanPlan": "Production faster than planned",
+      "slowerThanPlan": "Production slower than planned"
+    },
+    "viewMode": {
+      "label": "View mode",
+      "table": "Table",
+      "timeline": "Progress over time",
+      "cumulative": "Cumulative production"
+    },
+    "selectTask": "Select task (optional)",
+    "allTasksAggregate": "All tasks (aggregate)",
+    "table": {
+      "moNumber": "MO Number",
+      "product": "Product",
+      "planned": "Planned",
+      "produced": "Produced",
+      "completion": "% Complete",
+      "status": "Status",
+      "plannedStart": "Planned Start",
+      "plannedEnd": "Planned End",
+      "sessions": "Sessions"
+    },
+    "charts": {
+      "timelineAllTasks": "Production progress over time - all tasks (average)",
+      "timelineSingleTask": "Progress, quantity and time analysis",
+      "completionPercent": "% Complete",
+      "target": "Target",
+      "plannedProgress": "Planned progress",
+      "actualProgress": "Actual progress",
+      "quantityUnit": "Quantity (pcs)",
+      "timeMin": "Time (min)",
+      "quantity": "quantity",
+      "pcs": "pcs",
+      "cumulativeTitle": "Cumulative production over time",
+      "cumulativeQuantity": "Cumulative quantity",
+      "plannedCumulative": "Planned (cumulative)",
+      "producedCumulative": "Produced (cumulative)",
+      "singleTask": {
+        "plannedPercent": "Planned %",
+        "actualPercent": "Actual %",
+        "plannedQuantity": "Planned quantity",
+        "actualQuantity": "Actual quantity",
+        "plannedTime": "Planned time",
+        "actualTime": "Actual time"
       }
     }
   }

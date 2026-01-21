@@ -42,8 +42,6 @@ import {
   ChevronLeft as ChevronLeftIcon,
   Menu as MenuIcon,
   LocalShipping as ShippingIcon,
-  SmartToy as AIAssistantIcon,
-
   Calculate as CalculateIcon,
   Factory as FactoryIcon,
   PrecisionManufacturing as PrecisionManufacturingIcon,
@@ -381,14 +379,6 @@ const Sidebar = ({ onToggle }) => {
   };
   
   const allMenuItems = [
-    { 
-      id: 'ai-assistant',
-      text: t('aiAssistant'),
-      icon: <AIAssistantIcon />,
-      path: '/ai-assistant',
-      hasSubmenu: false
-    },
-
     { 
       id: 'dashboard',
       text: t('dashboard'), 

@@ -15,16 +15,19 @@ import {
 import { formatCurrency } from '../../../utils/formatUtils';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { useTranslation } from '../../../hooks/useTranslation';
 
 /**
  * Komponent wyświetlający timeline wydatków z Purchase Orders
  */
 const ExpenseTimeline = ({ expenses, currency = 'EUR' }) => {
+  const { t } = useTranslation('cashflow');
+
   if (!expenses || !expenses.expenseTimeline || expenses.expenseTimeline.length === 0) {
     return (
       <Paper sx={{ p: 2, mt: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Brak powiązanych wydatków (PO)
+          {t('cashflow.expenses.noExpenses')}
         </Typography>
       </Paper>
     );
@@ -33,23 +36,23 @@ const ExpenseTimeline = ({ expenses, currency = 'EUR' }) => {
   return (
     <Paper sx={{ p: 2, mt: 2 }}>
       <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
-        💸 Wydatki (Zamówienia Zakupu)
+        💸 {t('cashflow.expenses.title')}
       </Typography>
       
       <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-        Powiązanych PO: {expenses.linkedPOCount}
+        {t('cashflow.expenses.linkedPO')}: {expenses.linkedPOCount}
       </Typography>
 
       <TableContainer>
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Data dostawy</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>PO</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Dostawca</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Pozycja</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Wartość</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('cashflow.expenses.deliveryDate')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('cashflow.expenses.poNumber')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('cashflow.expenses.supplier')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('cashflow.expenses.item')}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{t('cashflow.expenses.value')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('cashflow.expenses.status')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -62,7 +65,7 @@ const ExpenseTimeline = ({ expenses, currency = 'EUR' }) => {
                     </Typography>
                     {expense.isOverdue && (
                       <Chip 
-                        label="Przeterminowane" 
+                        label={t('cashflow.expenses.overdue')} 
                         size="small" 
                         color="error" 
                         sx={{ height: 20, fontSize: '0.65rem' }}
@@ -82,7 +85,7 @@ const ExpenseTimeline = ({ expenses, currency = 'EUR' }) => {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">
-                    {expense.itemName || 'Całe PO'}
+                    {expense.itemName || t('cashflow.expenses.wholePO')}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
@@ -92,7 +95,7 @@ const ExpenseTimeline = ({ expenses, currency = 'EUR' }) => {
                 </TableCell>
                 <TableCell>
                   <Chip 
-                    label={expense.isPaid ? 'Zapłacone' : 'Niezapłacone'}
+                    label={expense.isPaid ? t('cashflow.expenses.paid') : t('cashflow.expenses.unpaid')}
                     color={expense.isPaid ? 'success' : 'default'}
                     size="small"
                     sx={{ height: 20, fontSize: '0.7rem' }}

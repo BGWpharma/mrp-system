@@ -68,71 +68,71 @@ const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) 
     },
     // GLOBALNE WYDATKI Z PO
     {
-      title: 'Wydatki (PO)',
+      title: t('cashflow.summary.totalExpenses'),
       value: statistics.totalExpenses || 0,
       icon: <ShoppingBasketIcon />,
       color: 'error',
       format: 'currency',
-      tooltip: 'Wartość wszystkich PO z datami dostaw w wybranym okresie'
+      tooltip: t('cashflow.summary.tooltips.totalExpenses')
     },
     {
-      title: 'Zapłacono za PO',
+      title: t('cashflow.summary.totalExpensesPaid'),
       value: statistics.totalExpensesPaid || 0,
       icon: <AttachMoneyIcon />,
       color: 'error',
       format: 'currency',
-      tooltip: 'Zapłacone faktury za zamówienia zakupu'
+      tooltip: t('cashflow.summary.tooltips.totalExpensesPaid')
     },
     // KOSZTY OPERACYJNE
     {
-      title: 'Koszty operacyjne',
+      title: t('cashflow.summary.operationalCosts'),
       value: statistics.totalOperationalCosts || 0,
       icon: <BusinessIcon />,
       color: 'warning',
       format: 'currency',
-      tooltip: 'Miesięczne koszty operacyjne (czynsz, media, wynagrodzenia itp.)'
+      tooltip: t('cashflow.summary.tooltips.operationalCosts')
     },
     {
-      title: 'Koszty op. zapłacone',
+      title: t('cashflow.summary.operationalCostsPaid'),
       value: statistics.totalOperationalCostsPaid || 0,
       icon: <SettingsIcon />,
       color: 'warning',
       format: 'currency',
-      tooltip: 'Zapłacone koszty operacyjne'
+      tooltip: t('cashflow.summary.tooltips.operationalCostsPaid')
     },
     // ŁĄCZNE WYDATKI
     {
-      title: 'Łączne wydatki',
+      title: t('cashflow.summary.totalAllExpenses'),
       value: statistics.totalAllExpenses || 0,
       icon: <Receipt />,
       color: 'error',
       format: 'currency',
-      tooltip: 'Suma: wydatki PO + koszty operacyjne'
+      tooltip: t('cashflow.summary.tooltips.totalAllExpenses')
     },
     // BILANS
     {
-      title: 'Cashflow netto',
+      title: t('cashflow.summary.netCashflow'),
       value: statistics.netCashflow || 0,
       icon: <AccountBalanceIcon />,
       color: (statistics.netCashflow || 0) >= 0 ? 'success' : 'error',
       format: 'currency',
-      tooltip: 'Rzeczywisty przepływ gotówki: wpłacono - zapłacono (PO + koszty op.)'
+      tooltip: t('cashflow.summary.tooltips.netCashflow')
     },
     {
-      title: 'Zysk netto',
+      title: t('cashflow.summary.netProfit'),
       value: statistics.netProfit || 0,
       icon: <TrendingUpIcon />,
       color: (statistics.netProfit || 0) >= 0 ? 'success' : 'error',
       format: 'currency',
-      tooltip: 'Wartość zamówień CO - wszystkie wydatki (PO + koszty op.)'
+      tooltip: t('cashflow.summary.tooltips.netProfit')
     },
     {
-      title: 'Liczba PO',
+      title: t('cashflow.summary.poCount'),
       value: statistics.totalPOCount || 0,
       icon: <ShoppingBasketIcon />,
       color: 'secondary',
       format: 'number',
-      tooltip: 'Liczba zamówień zakupu z datami dostaw w okresie'
+      tooltip: t('cashflow.summary.tooltips.poCount')
     },
     {
       title: t('cashflow.summary.paymentRate'),
@@ -140,7 +140,7 @@ const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) 
       icon: <TrendingUpIcon />,
       color: 'success',
       format: 'percentage',
-      tooltip: 'Procent zamówień w pełni opłaconych'
+      tooltip: t('cashflow.summary.tooltips.paymentRate')
     },
     {
       title: t('cashflow.summary.avgPaymentTime'),
@@ -148,7 +148,7 @@ const CashflowSummaryCards = ({ statistics, globalExpenses, currency = 'EUR' }) 
       icon: <TimerIcon />,
       color: 'info',
       format: 'days',
-      tooltip: 'Średni czas od zamówienia do pierwszej płatności'
+      tooltip: t('cashflow.summary.tooltips.avgPaymentTime')
     }
   ];
 

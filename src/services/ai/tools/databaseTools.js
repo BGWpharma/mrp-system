@@ -178,7 +178,7 @@ export const DATABASE_TOOLS = [
           },
           productName: {
             type: "string",
-            description: "Nazwa produktu (częściowe dopasowanie - filtrowane po stronie klienta)"
+            description: "Nazwa produktu, kod produktu (SKU), ID produktu lub numer MO (częściowe dopasowanie). Szuka w: productName, productId, productCode, sku, name, moNumber. Wpisz to co podał użytkownik."
           },
           includeDetails: {
             type: "boolean",

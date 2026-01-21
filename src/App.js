@@ -37,6 +37,7 @@ import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import PrivateRoute from './components/common/PrivateRoute';
 import AdminRoute from './components/common/AdminRoute';
+import AIChatFAB from './components/common/AIChatFAB';
 
 // Styles
 import './assets/styles/global.css';
@@ -586,6 +587,9 @@ function PrivateLayout({ children }) {
             </Suspense>
           </main>
         </div>
+        
+        {/* 🤖 AI Chat FAB - przycisk asystenta AI */}
+        <AIChatFAB />
       </div>
     </PrivateRoute>
   );

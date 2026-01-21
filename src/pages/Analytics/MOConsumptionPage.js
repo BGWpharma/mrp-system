@@ -96,7 +96,7 @@ const MOConsumptionPage = () => {
             const material = task.materials?.find(m => 
               (m.inventoryItemId || m.id) === materialId
             );
-            const materialName = material?.name || consumed.materialName || 'Nieznany materiał';
+            const materialName = material?.name || consumed.materialName || t('moConsumptionReport.unknownMaterial');
             
             if (!materialSet.has(materialId)) {
               materialSet.add(materialId);
@@ -127,7 +127,7 @@ const MOConsumptionPage = () => {
       
     } catch (error) {
       console.error('Błąd podczas pobierania danych:', error);
-      showError('Nie udało się pobrać danych');
+      showError(t('common.errors.fetchData'));
     } finally {
       setLoading(false);
     }
@@ -150,9 +150,9 @@ const MOConsumptionPage = () => {
             (m.inventoryItemId || m.id) === materialId
           );
           
-          const materialName = material?.name || consumed.materialName || 'Nieznany materiał';
+          const materialName = material?.name || consumed.materialName || t('moConsumptionReport.unknownMaterial');
           const materialUnit = material?.unit || consumed.unit || 'szt';
-          const batchNumber = consumed.batchNumber || consumed.batchId || 'Brak numeru';
+          const batchNumber = consumed.batchNumber || consumed.batchId || t('moConsumptionReport.noBatchNumber');
           const quantity = Number(consumed.quantity) || 0;
           const unitPrice = Number(consumed.unitPrice) || 0;
           const totalCost = quantity * unitPrice;
@@ -188,7 +188,7 @@ const MOConsumptionPage = () => {
               unitPrice,
               totalCost,
               consumptionDate: consumptionDate || new Date(),
-              userName: consumed.userName || 'Nieznany użytkownik',
+              userName: consumed.userName || t('moConsumptionReport.unknownUser'),
               includeInCosts: consumed.includeInCosts !== false
             });
 
@@ -360,12 +360,12 @@ const MOConsumptionPage = () => {
 
       {/* Filtry */}
       <Paper sx={{ p: isMobile ? 1.5 : 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Filtry</Typography>
+        <Typography variant="h6" gutterBottom>{t('common.filters.title')}</Typography>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label="Data początkowa"
+                label={t('common.filters.startDate')}
                 value={startDate}
                 onChange={setStartDate}
                 slotProps={{ textField: { fullWidth: true, size: "small" } }}
@@ -375,7 +375,7 @@ const MOConsumptionPage = () => {
           <Grid item xs={12} sm={6} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={plLocale}>
               <DatePicker
-                label="Data końcowa"
+                label={t('common.filters.endDate')}
                 value={endDate}
                 onChange={setEndDate}
                 slotProps={{ textField: { fullWidth: true, size: "small" } }}
@@ -384,13 +384,13 @@ const MOConsumptionPage = () => {
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Zamówienie (CO)</InputLabel>
+              <InputLabel>{t('moConsumptionReport.filters.order')}</InputLabel>
               <Select
                 value={selectedOrder}
                 onChange={(e) => setSelectedOrder(e.target.value)}
-                label="Zamówienie (CO)"
+                label={t('moConsumptionReport.filters.order')}
               >
-                <MenuItem value="all">Wszystkie zamówienia</MenuItem>
+                <MenuItem value="all">{t('moConsumptionReport.filters.allOrders')}</MenuItem>
                 {ordersList.map(order => (
                   <MenuItem key={order.id} value={order.id}>
                     CO #{order.number}
@@ -402,13 +402,13 @@ const MOConsumptionPage = () => {
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <FormControl fullWidth size="small">
-              <InputLabel>Materiał</InputLabel>
+              <InputLabel>{t('moConsumptionReport.filters.material')}</InputLabel>
               <Select
                 value={selectedMaterial}
                 onChange={(e) => setSelectedMaterial(e.target.value)}
-                label="Materiał"
+                label={t('moConsumptionReport.filters.material')}
               >
-                <MenuItem value="all">Wszystkie materiały</MenuItem>
+                <MenuItem value="all">{t('moConsumptionReport.filters.allMaterials')}</MenuItem>
                 {materialsList.map(material => (
                   <MenuItem key={material.id} value={material.id}>
                     {material.name}
@@ -422,15 +422,15 @@ const MOConsumptionPage = () => {
 
       {/* Podsumowanie konsumpcji */}
       <Paper sx={{ p: isMobile ? 1.5 : 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>Podsumowanie konsumpcji materiałów</Typography>
+        <Typography variant="h6" gutterBottom>{t('moConsumptionReport.summary.title')}</Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Okres: {format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}
+          {t('common.period')}: {format(startDate, 'dd.MM.yyyy')} - {format(endDate, 'dd.MM.yyyy')}
         </Typography>
         
         {consumptionData.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="h6" color="text.secondary">
-              Brak danych konsumpcji w wybranym okresie
+              {t('moConsumptionReport.summary.noData')}
             </Typography>
           </Box>
         ) : (
@@ -438,13 +438,13 @@ const MOConsumptionPage = () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Materiał</TableCell>
-                  <TableCell align="right">Ilość całkowita</TableCell>
-                  <TableCell>Jednostka</TableCell>
-                  <TableCell align="right">Śr. cena jedn.</TableCell>
-                  <TableCell align="right">Koszt całkowity</TableCell>
-                  <TableCell align="center">Liczba partii</TableCell>
-                  <TableCell align="center">Liczba zadań</TableCell>
+                  <TableCell>{t('moConsumptionReport.table.material')}</TableCell>
+                  <TableCell align="right">{t('moConsumptionReport.table.totalQuantity')}</TableCell>
+                  <TableCell>{t('moConsumptionReport.table.unit')}</TableCell>
+                  <TableCell align="right">{t('moConsumptionReport.table.avgUnitPrice')}</TableCell>
+                  <TableCell align="right">{t('moConsumptionReport.table.totalCost')}</TableCell>
+                  <TableCell align="center">{t('moConsumptionReport.table.batchCount')}</TableCell>
+                  <TableCell align="center">{t('moConsumptionReport.table.taskCount')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -464,7 +464,7 @@ const MOConsumptionPage = () => {
                   </TableRow>
                 ))}
                 <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'rgba(0, 0, 0, 0.04)' } }}>
-                  <TableCell>SUMA:</TableCell>
+                  <TableCell>{t('moConsumptionReport.table.sum')}</TableCell>
                   <TableCell align="right">-</TableCell>
                   <TableCell>-</TableCell>
                   <TableCell align="right">-</TableCell>
@@ -482,12 +482,12 @@ const MOConsumptionPage = () => {
 
       {/* Szczegółowa lista */}
       <Paper sx={{ p: isMobile ? 1.5 : 3 }}>
-        <Typography variant="h6" gutterBottom>Szczegółowa lista konsumpcji</Typography>
+        <Typography variant="h6" gutterBottom>{t('moConsumptionReport.details.title')}</Typography>
         
         {filteredConsumption.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography variant="h6" color="text.secondary">
-              Brak danych konsumpcji
+              {t('moConsumptionReport.details.noData')}
             </Typography>
           </Box>
         ) : (
@@ -495,15 +495,15 @@ const MOConsumptionPage = () => {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <SortableTableCell field="consumptionDate">Data</SortableTableCell>
-                  <TableCell>Zadanie</TableCell>
-                  <TableCell>Produkt</TableCell>
-                  <SortableTableCell field="materialName">Materiał</SortableTableCell>
-                  <TableCell>Partia</TableCell>
-                  <SortableTableCell field="quantity" align="right">Ilość</SortableTableCell>
-                  <TableCell>Jedn.</TableCell>
-                  <SortableTableCell field="totalCost" align="right">Koszt</SortableTableCell>
-                  <TableCell>Użytkownik</TableCell>
+                  <SortableTableCell field="consumptionDate">{t('moConsumptionReport.details.date')}</SortableTableCell>
+                  <TableCell>{t('moConsumptionReport.details.task')}</TableCell>
+                  <TableCell>{t('moConsumptionReport.details.product')}</TableCell>
+                  <SortableTableCell field="materialName">{t('moConsumptionReport.table.material')}</SortableTableCell>
+                  <TableCell>{t('moConsumptionReport.details.batch')}</TableCell>
+                  <SortableTableCell field="quantity" align="right">{t('moConsumptionReport.details.quantity')}</SortableTableCell>
+                  <TableCell>{t('moConsumptionReport.details.unitShort')}</TableCell>
+                  <SortableTableCell field="totalCost" align="right">{t('moConsumptionReport.details.cost')}</SortableTableCell>
+                  <TableCell>{t('moConsumptionReport.details.user')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>

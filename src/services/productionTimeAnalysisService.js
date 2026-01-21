@@ -469,7 +469,8 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
           formattedStartTime: format(dayStart, 'HH:mm'),
           formattedEndTime: format(dayEnd, 'HH:mm'),
           gapMinutes: workMinutesInDay,
-          description: `Brak produkcji przez cały dzień roboczy (${format(dayStart, 'HH:mm')} - ${format(dayEnd, 'HH:mm')})`
+          descriptionKey: 'noProductionWholeDay',
+          descriptionParams: { startTime: format(dayStart, 'HH:mm'), endTime: format(dayEnd, 'HH:mm') }
         };
         
         gaps.push(gap);
@@ -542,7 +543,8 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
                 quantity: session.quantity,
                 task: tasksMap[session.taskId] || null
               })),
-              description: `Luka przed pierwszym okresem produkcyjnym (${format(dayStart, 'HH:mm')} - ${format(firstPeriod.startTime, 'HH:mm')})`
+              descriptionKey: 'gapBeforeFirst',
+              descriptionParams: { startTime: format(dayStart, 'HH:mm'), endTime: format(firstPeriod.startTime, 'HH:mm') }
             };
             
             gaps.push(gap);
@@ -583,7 +585,8 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
               quantity: session.quantity,
               task: tasksMap[session.taskId] || null
             })),
-            description: `Luka między okresami produkcyjnymi (${format(currentPeriod.endTime, 'HH:mm')} - ${format(nextPeriod.startTime, 'HH:mm')})`
+            descriptionKey: 'gapBetweenPeriods',
+            descriptionParams: { startTime: format(currentPeriod.endTime, 'HH:mm'), endTime: format(nextPeriod.startTime, 'HH:mm') }
           };
           
           gaps.push(gap);
@@ -615,7 +618,8 @@ export const analyzeProductionGaps = async (startDate, endDate, options = {}) =>
                 quantity: session.quantity,
                 task: tasksMap[session.taskId] || null
               })),
-              description: `Luka po ostatnim okresie produkcyjnym (${format(lastPeriod.endTime, 'HH:mm')} - ${format(dayEnd, 'HH:mm')})`
+              descriptionKey: 'gapAfterLast',
+              descriptionParams: { startTime: format(lastPeriod.endTime, 'HH:mm'), endTime: format(dayEnd, 'HH:mm') }
             };
             
             gaps.push(gap);
@@ -707,12 +711,16 @@ const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
     recommendations.push({
       type: 'long_gaps',
       severity: 'high',
-      title: 'Wykryto długie przerwy w produkcji',
-      description: `Znaleziono ${longGaps.length} luk dłuższych niż 2 godziny. Najdłuższa luka: ${Math.round(Math.max(...longGaps.map(g => g.gapMinutes)) / 60 * 100) / 100} godzin.`,
-      suggestions: [
-        'Sprawdź czy wszystkie sesje produkcyjne zostały prawidłowo zarejestrowane',
-        'Zweryfikuj czy w czasie długich przerw nie odbywała się produkcja',
-        'Rozważ wprowadzenie automatycznego monitorowania czasu pracy'
+      titleKey: 'longGaps.title',
+      descriptionKey: 'longGaps.description',
+      descriptionParams: { 
+        count: longGaps.length, 
+        maxHours: Math.round(Math.max(...longGaps.map(g => g.gapMinutes)) / 60 * 100) / 100 
+      },
+      suggestionsKeys: [
+        'longGaps.suggestion1',
+        'longGaps.suggestion2',
+        'longGaps.suggestion3'
       ]
     });
   }
@@ -723,12 +731,13 @@ const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
     recommendations.push({
       type: 'no_production_days',
       severity: 'medium',
-      title: 'Dni bez zarejestrowanej produkcji',
-      description: `Wykryto ${daysWithoutProduction.length} dni roboczych bez żadnej zarejestrowanej produkcji.`,
-      suggestions: [
-        'Sprawdź czy w te dni faktycznie nie odbywała się produkcja',
-        'Zweryfikuj poprawność rejestrowania sesji produkcyjnych',
-        'Upewnij się, że pracownicy prawidłowo korzystają z systemu'
+      titleKey: 'noProductionDays.title',
+      descriptionKey: 'noProductionDays.description',
+      descriptionParams: { count: daysWithoutProduction.length },
+      suggestionsKeys: [
+        'noProductionDays.suggestion1',
+        'noProductionDays.suggestion2',
+        'noProductionDays.suggestion3'
       ]
     });
   }
@@ -739,12 +748,13 @@ const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
     recommendations.push({
       type: 'low_coverage',
       severity: 'medium',
-      title: 'Niskie pokrycie czasu pracy',
-      description: `Wykryto ${lowCoverageDays.length} dni z pokryciem produkcją poniżej 50% czasu pracy.`,
-      suggestions: [
-        'Sprawdź czy czas trwania sesji jest prawidłowo rejestrowany',
-        'Zweryfikuj czy wszystkie czynności produkcyjne są uwzględniane',
-        'Rozważ optymalizację procesów produkcyjnych'
+      titleKey: 'lowCoverage.title',
+      descriptionKey: 'lowCoverage.description',
+      descriptionParams: { count: lowCoverageDays.length },
+      suggestionsKeys: [
+        'lowCoverage.suggestion1',
+        'lowCoverage.suggestion2',
+        'lowCoverage.suggestion3'
       ]
     });
   }
@@ -757,12 +767,13 @@ const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
     recommendations.push({
       type: 'early_gaps_pattern',
       severity: 'low',
-      title: 'Wzorzec opóźnień rozpoczęcia pracy',
-      description: `Wykryto ${earlyGaps.length} przypadków opóźnionego rozpoczęcia produkcji względem godzin pracy zakładu.`,
-      suggestions: [
-        'Sprawdź czy godziny rozpoczęcia pracy są prawidłowo ustawione',
-        'Zweryfikuj procedury przygotowania do produkcji',
-        'Rozważ dostosowanie harmonogramu pracy'
+      titleKey: 'earlyGaps.title',
+      descriptionKey: 'earlyGaps.description',
+      descriptionParams: { count: earlyGaps.length },
+      suggestionsKeys: [
+        'earlyGaps.suggestion1',
+        'earlyGaps.suggestion2',
+        'earlyGaps.suggestion3'
       ]
     });
   }
@@ -771,12 +782,13 @@ const generateProductionRecommendations = (gaps, dailyAnalysis, options) => {
     recommendations.push({
       type: 'late_gaps_pattern',
       severity: 'low',
-      title: 'Wzorzec przedwczesnego zakończenia pracy',
-      description: `Wykryto ${lateGaps.length} przypadków przedwczesnego zakończenia produkcji względem godzin pracy zakładu.`,
-      suggestions: [
-        'Sprawdź czy godziny zakończenia pracy są prawidłowo ustawione',
-        'Zweryfikuj procedury kończenia produkcji',
-        'Rozważ optymalizację harmonogramu pracy'
+      titleKey: 'lateGaps.title',
+      descriptionKey: 'lateGaps.description',
+      descriptionParams: { count: lateGaps.length },
+      suggestionsKeys: [
+        'lateGaps.suggestion1',
+        'lateGaps.suggestion2',
+        'lateGaps.suggestion3'
       ]
     });
   }

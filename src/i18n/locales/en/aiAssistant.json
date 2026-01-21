@@ -1,5 +1,28 @@
 {
   "title": "AI Assistant",
+  "fab": {
+    "tooltip": "AI Assistant",
+    "title": "AI Assistant",
+    "openFullPage": "Open full version",
+    "welcomeMessage": "Hi! How can I help you? Ask a question about the MRP system.",
+    "noApiKey": "Configure API key in the full assistant version",
+    "history": "History",
+    "historyTitle": "Chat history",
+    "newChat": "New conversation",
+    "noHistory": "No conversation history",
+    "attachFile": "Attach file",
+    "uploadSuccess": "Uploaded",
+    "uploadError": "Upload error",
+    "deleteAttachmentError": "Error deleting attachment",
+    "files": "file(s)"
+  },
+  "errors": {
+    "notLoggedIn": "You must be logged in to use the AI assistant",
+    "quotaExceeded": "Monthly message limit exceeded for the AI assistant",
+    "sendError": "An error occurred while sending the message. Please try again.",
+    "loadError": "Failed to load conversation",
+    "deleteError": "Failed to delete conversation"
+  },
   "buttons": {
     "apiSettings": "API Settings",
     "configureApi": "Configure API",
@@ -89,7 +112,8 @@
     "newConversation": "New conversation",
     "empty": "No conversation history",
     "today": "Today",
-    "clearConversation": "Clear conversation"
+    "clearConversation": "Clear conversation",
+    "deleted": "Conversation deleted"
   },
   "welcome": {
     "title": "Welcome to the AI Assistant for the MRP system",

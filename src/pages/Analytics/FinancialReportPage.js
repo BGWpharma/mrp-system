@@ -330,7 +330,7 @@ const FinancialReportPage = () => {
               </Typography>
             </Box>
           }
-          subheader="Analiza łańcucha: PO → Partia → MO → CO → Faktura"
+          subheader={t('subtitle')}
         />
         <Divider />
         <CardContent>

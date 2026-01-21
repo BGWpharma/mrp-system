@@ -41,7 +41,7 @@ const ProductionTimePage = () => {
       setCustomers(fetchedCustomers);
     } catch (error) {
       console.error('Błąd podczas pobierania danych:', error);
-      showError('Nie udało się pobrać danych');
+      showError(t('common.errors.fetchData'));
     } finally {
       setLoading(false);
     }

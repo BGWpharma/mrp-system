@@ -77,6 +77,7 @@ import { getTasksByDateRangeOptimized } from '../../services/productionService';
 import { getAllInventoryItems } from '../../services/inventory';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
+import { useTranslation } from '../../hooks/useTranslation';
 import { formatCurrency } from '../../utils/formatUtils';
 import { formatDateTime } from '../../utils/formatters';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
@@ -84,6 +85,7 @@ import { toast } from 'react-hot-toast';
 import ExcelJS from 'exceljs';
 
 const ForecastPage = () => {
+  const { t } = useTranslation('production');
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
@@ -1292,7 +1294,7 @@ const ForecastPage = () => {
     if (balance >= 0) {
       return (
         <Chip 
-          label="Wystarczająca ilość" 
+          label={t('forecast.statusLabels.sufficient')} 
           color="success" 
           size="small" 
         />
@@ -1300,7 +1302,7 @@ const ForecastPage = () => {
     } else if (balance > -item.requiredQuantity * 0.2) {
       return (
         <Chip 
-          label="Prawie wystarczająca" 
+          label={t('forecast.statusLabels.almostSufficient')} 
           color="warning" 
           size="small" 
         />
@@ -1308,7 +1310,7 @@ const ForecastPage = () => {
     } else {
       return (
         <Chip 
-          label="Niewystarczająca ilość" 
+          label={t('forecast.statusLabels.insufficient')} 
           color="error" 
           size="small" 
         />
@@ -1402,7 +1404,7 @@ const ForecastPage = () => {
       <Box sx={{ ...mb3, ...flexBetween, flexDirection: { xs: 'column', md: 'row' } }}>
         <Typography variant="h5" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: { xs: 2, md: 0 } }}>
           <FilterIcon sx={mr1} color="primary" />
-          Prognoza zapotrzebowania materiałów
+          {t('forecast.title')}
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', md: 'auto' }, gap: 1 }}>
           <Button 
@@ -1413,9 +1415,9 @@ const ForecastPage = () => {
             disabled={loading || calculatingForecast}
             color="primary"
           >
-            Odśwież
+            {t('forecast.refresh')}
           </Button>
-          <Tooltip title="Generuje szczegółowy raport Excel z kolorami i formatowaniem - 3 arkusze: prognoza materiałów, nieużywane materiały, podsumowanie">
+          <Tooltip title={t('forecast.tooltips.excelReport')}>
             <Button 
               variant="contained"
               startIcon={<DownloadIcon />}
@@ -1439,11 +1441,11 @@ const ForecastPage = () => {
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
             <FormControl fullWidth variant="outlined" sx={mb1}>
-              <InputLabel>Zakres czasowy</InputLabel>
+              <InputLabel>{t('forecast.timeRange')}</InputLabel>
               <Select
                 value={timeRange}
                 onChange={handleTimeRangeChange}
-                label="Zakres czasowy"
+                label={t('forecast.timeRange')}
                 disabled={loading || calculatingForecast}
                 startAdornment={
                   <InputAdornment position="start">
@@ -1451,12 +1453,12 @@ const ForecastPage = () => {
                   </InputAdornment>
                 }
               >
-                <MenuItem value="7days">7 dni</MenuItem>
-                <MenuItem value="14days">14 dni</MenuItem>
-                <MenuItem value="30days">30 dni</MenuItem>
-                <MenuItem value="60days">60 dni</MenuItem>
-                <MenuItem value="90days">90 dni</MenuItem>
-                <MenuItem value="custom">Niestandardowy</MenuItem>
+                <MenuItem value="7days">{t('forecast.timeRanges.7days')}</MenuItem>
+                <MenuItem value="14days">{t('forecast.timeRanges.14days')}</MenuItem>
+                <MenuItem value="30days">{t('forecast.timeRanges.30days')}</MenuItem>
+                <MenuItem value="60days">{t('forecast.timeRanges.60days')}</MenuItem>
+                <MenuItem value="90days">{t('forecast.timeRanges.90days')}</MenuItem>
+                <MenuItem value="custom">{t('forecast.timeRanges.custom')}</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -1464,7 +1466,7 @@ const ForecastPage = () => {
           <Grid item xs={12} md={4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data początkowa"
+                label={t('forecast.startDate')}
                 value={startDate}
                 onChange={(newDate) => {
                   if (newDate && !isNaN(new Date(newDate).getTime())) {
@@ -1499,7 +1501,7 @@ const ForecastPage = () => {
           <Grid item xs={12} md={4}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
-                label="Data końcowa"
+                label={t('forecast.endDate')}
                 value={endDate}
                 minDate={startDate}
                 onChange={(newDate) => {
@@ -1543,7 +1545,7 @@ const ForecastPage = () => {
               fullWidth
               sx={{ mt: 1 }}
             >
-              Szukaj
+              {t('forecast.search')}
             </Button>
           </Grid>
         </Grid>
@@ -1551,7 +1553,7 @@ const ForecastPage = () => {
         {!loading && !calculatingForecast && forecastData.length > 0 && (
           <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField
-              label="Szukaj materiału"
+              label={t('forecast.searchMaterial')}
               variant="outlined"
               size="small"
               value={searchTerm}
@@ -1567,18 +1569,18 @@ const ForecastPage = () => {
             />
             
             <FormControl variant="outlined" size="small" sx={{ minWidth: 200, flex: 1 }}>
-              <InputLabel>Filtruj po kategorii</InputLabel>
+              <InputLabel>{t('forecast.filterByCategory')}</InputLabel>
               <Select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                label="Filtruj po kategorii"
+                label={t('forecast.filterByCategory')}
                 startAdornment={
                   <InputAdornment position="start">
                     <FilterIcon />
                   </InputAdornment>
                 }
               >
-                <MenuItem value="">Wszystkie kategorie</MenuItem>
+                <MenuItem value="">{t('forecast.allCategories')}</MenuItem>
                 {getUniqueCategories().map(category => (
                   <MenuItem key={category} value={category}>
                     {category}
@@ -1592,7 +1594,7 @@ const ForecastPage = () => {
       
       {!loading && !calculatingForecast && forecastData.length === 0 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Wybierz zakres dat i kliknij "Szukaj", aby wyświetlić prognozę zapotrzebowania materiałów.
+          {t('forecast.selectDateRange')}
         </Alert>
       ) : (
         <>
@@ -1600,7 +1602,7 @@ const ForecastPage = () => {
             <Box sx={mb2}>
               <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                 <InfoIcon sx={{ mr: 1 }} color="info" />
-                Prognoza na okres: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
+                {t('forecast.forecastPeriod', { startDate: formatDateDisplay(startDate), endDate: formatDateDisplay(endDate) })}
               </Typography>
               
               {summary && (
@@ -1642,7 +1644,7 @@ const ForecastPage = () => {
                               justifyContent: 'center'
                             }}>
                               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                Łączna liczba materiałów
+                                {t('forecast.totalMaterials')}
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{summary.totalItems}</Typography>
                             </Paper>
@@ -1662,7 +1664,7 @@ const ForecastPage = () => {
                               justifyContent: 'center'
                             }}>
                               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                Materiały wymagające zakupu
+                                {t('forecast.materialsRequiringPurchase')}
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{summary.requiredItems}</Typography>
                             </Paper>
@@ -1682,7 +1684,7 @@ const ForecastPage = () => {
                               justifyContent: 'center'
                             }}>
                               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                Materiały z niedoborem po dostawach
+                                {t('forecast.materialsWithShortageAfterDeliveries')}
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{summary.requiredItemsAfterDeliveries}</Typography>
                             </Paper>
@@ -1702,7 +1704,7 @@ const ForecastPage = () => {
                               justifyContent: 'center'
                             }}>
                               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                Wartość niedoborów
+                                {t('forecast.shortageValue')}
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>{formatCurrency(summary.shortageValue)}</Typography>
                             </Paper>
@@ -1722,7 +1724,7 @@ const ForecastPage = () => {
                               justifyContent: 'center'
                             }}>
                               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                Wartość niedoborów po dostawach
+                                {t('forecast.shortageValueAfterDeliveries')}
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>{formatCurrency(summary.shortageValueAfterDeliveries)}</Typography>
                             </Paper>
@@ -1742,7 +1744,7 @@ const ForecastPage = () => {
                               justifyContent: 'center'
                             }}>
                               <Typography variant="body2" color="text.secondary" sx={{ mb: 1, minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                Szacowany koszt całkowity
+                                {t('forecast.estimatedTotalCost')}
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'info.main' }}>{formatCurrency(summary.totalCost)}</Typography>
                             </Paper>
@@ -1796,10 +1798,10 @@ const ForecastPage = () => {
                   </Box>
                 </Box>
                 <Typography variant="h6" sx={{ mb: 1, fontWeight: 'medium' }}>
-                  Obliczanie prognozy zapotrzebowania...
+                  {t('forecast.calculating')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 400 }}>
-                  Analizujemy zadania produkcyjne, sprawdzamy stany magazynowe i obliczamy zapotrzebowanie na materiały
+                  {t('forecast.calculatingDescription')}
                 </Typography>
               </Box>
             </Fade>
@@ -1824,7 +1826,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Materiał {renderSortIcon('name')}
+                          {t('forecast.table.material')} {renderSortIcon('name')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1841,7 +1843,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Dostępna ilość {renderSortIcon('availableQuantity')}
+                          {t('forecast.table.availableQuantity')} {renderSortIcon('availableQuantity')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1858,7 +1860,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Potrzebna {renderSortIcon('requiredQuantity')}
+                          {t('forecast.table.requiredQuantity')} {renderSortIcon('requiredQuantity')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1875,7 +1877,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Bilans {renderSortIcon('balance')}
+                          {t('forecast.table.balance')} {renderSortIcon('balance')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1890,7 +1892,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Oczekiwane dostawy
+                          {t('forecast.table.expectedDeliveries')}
                         </TableCell>
                         <TableCell 
                           align="center" 
@@ -1922,7 +1924,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Bilans z dostawami {renderSortIcon('balanceWithDeliveries')}
+                          {t('forecast.table.balanceAfterDeliveries')} {renderSortIcon('balanceWithDeliveries')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1939,7 +1941,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Cena {renderSortIcon('price')}
+                          {t('forecast.table.price')} {renderSortIcon('price')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -1956,7 +1958,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Szacowany koszt {renderSortIcon('cost')}
+                          {t('forecast.table.estimatedCost')} {renderSortIcon('cost')}
                         </TableCell>
                         <TableCell 
                           width="10%" 
@@ -1972,7 +1974,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Status {renderSortIcon('status')}
+                          {t('forecast.table.status')} {renderSortIcon('status')}
                         </TableCell>
                         <TableCell 
                           align="center" 
@@ -1987,7 +1989,7 @@ const ForecastPage = () => {
                             zIndex: 1
                           }}
                         >
-                          Akcje
+                          {t('forecast.table.actions')}
                         </TableCell>
                       </TableRow>
                     </TableHead>
@@ -2205,7 +2207,7 @@ const ForecastPage = () => {
                                 </TableCell>
                                 <TableCell align="center">
                                   <Stack direction="row" spacing={1} justifyContent="center">
-                                    <Tooltip title="Pokaż szczegóły">
+                                    <Tooltip title={t('forecast.tooltips.showDetails')}>
                                       <IconButton 
                                         size="small" 
                                         color="info" 
@@ -2216,7 +2218,7 @@ const ForecastPage = () => {
                                       </IconButton>
                                     </Tooltip>
                                     {balance < 0 && (
-                                      <Tooltip title="Zamów materiał">
+                                      <Tooltip title={t('forecast.tooltips.orderMaterial')}>
                                         <IconButton
                                           size="small"
                                           color="error"
@@ -2269,14 +2271,14 @@ const ForecastPage = () => {
                 <Box sx={{ p: 2, bgcolor: 'info.lighter', borderBottom: 1, borderColor: 'divider' }}>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
                     <InfoIcon sx={{ mr: 1 }} color="info" />
-                    Materiały nieużywane w żadnym zleceniu produkcyjnym ({filteredUnusedMaterials().length})
+                    {t('forecast.unusedMaterials.title', { count: filteredUnusedMaterials().length })}
                     {loadingUnusedDeliveries && (
                       <CircularProgress size={16} sx={{ ml: 1 }} />
                     )}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Poniższe materiały znajdują się w magazynie, ale nie są wykorzystywane w żadnym MO w wybranym okresie
-                    (wykluczono kategorie "Inne" i "Gotowe produkty" oraz materiały ze stanem 0)
+                    {t('forecast.unusedMaterials.description')}
+                    {t('forecast.excludedCategories')}
                   </Typography>
                 </Box>
                 <TableContainer sx={{ maxHeight: '50vh' }}>
@@ -2298,7 +2300,7 @@ const ForecastPage = () => {
                             '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
                           }}
                         >
-                          Materiał {renderUnusedSortIcon('name')}
+                          {t('forecast.table.material')} {renderUnusedSortIcon('name')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -2316,7 +2318,7 @@ const ForecastPage = () => {
                             '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
                           }}
                         >
-                          Dostępna ilość {renderUnusedSortIcon('availableQuantity')}
+                          {t('forecast.table.availableQuantity')} {renderUnusedSortIcon('availableQuantity')}
                         </TableCell>
                         <TableCell 
                           align="right" 
@@ -2334,7 +2336,7 @@ const ForecastPage = () => {
                             '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
                           }}
                         >
-                          Oczekiwane dostawy {renderUnusedSortIcon('futureDeliveries')}
+                          {t('forecast.table.expectedDeliveries')} {renderUnusedSortIcon('futureDeliveries')}
                         </TableCell>
                         <TableCell 
                           align="center" 
@@ -2370,7 +2372,7 @@ const ForecastPage = () => {
                             '&:hover': { bgcolor: (theme) => theme.palette.mode === 'dark' ? '#2d3b4f' : '#e0e0e0' }
                           }}
                         >
-                          Dostępne z dostawami {renderUnusedSortIcon('availableWithDeliveries')}
+                          {t('forecast.unusedMaterials.totalAvailable')} {renderUnusedSortIcon('availableWithDeliveries')}
                         </TableCell>
                       </TableRow>
                     </TableHead>
@@ -2379,7 +2381,7 @@ const ForecastPage = () => {
                         <TableRow>
                           <TableCell colSpan={5} align="center">
                             <Typography color="text.secondary" sx={{ py: 2 }}>
-                              Nie znaleziono materiałów pasujących do filtrów
+                              {t('forecast.noMaterialsMatchingFilters')}
                             </Typography>
                           </TableCell>
                         </TableRow>
@@ -2621,36 +2623,36 @@ const ForecastPage = () => {
       
       {/* Dialog ze szczegółami materiału */}
       <Dialog open={detailsDialogOpen} onClose={handleCloseDetailsDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Szczegóły materiału</DialogTitle>
+        <DialogTitle>{t('forecast.materialDetails')}</DialogTitle>
         <DialogContent>
           {selectedMaterial && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="h6">{selectedMaterial.name}</Typography>
               <Typography variant="body2" color="text.secondary" sx={mb2}>
-                Kategoria: {selectedMaterial.category}
+                {t('forecast.category')}: {selectedMaterial.category}
               </Typography>
               
               <Grid container spacing={2} sx={mb3}>
                 <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">Dostępna ilość:</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('forecast.details.availableQuantity')}:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
                     {formatNumber(selectedMaterial.availableQuantity)} {selectedMaterial.unit}
                   </Typography>
                 </Grid>
                 <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">Potrzebna ilość (pozostała):</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('forecast.details.requiredQuantity')}:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
                     {formatNumber(selectedMaterial.requiredQuantity)} {selectedMaterial.unit}
                   </Typography>
                 </Grid>
                 <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">Już skonsumowano:</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('forecast.details.alreadyConsumed')}:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 'medium', color: 'info.main' }}>
                     {formatNumber(selectedMaterial.consumedQuantity || 0)} {selectedMaterial.unit}
                   </Typography>
                 </Grid>
                 <Grid item xs={6} md={3}>
-                  <Typography variant="body2" color="text.secondary">Bilans:</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('forecast.details.balance')}:</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 'medium' }} color={selectedMaterial.balance < 0 ? 'error.main' : 'success.main'}>
                     {formatNumber(selectedMaterial.balance)} {selectedMaterial.unit}
                   </Typography>
@@ -2660,17 +2662,17 @@ const ForecastPage = () => {
               {selectedMaterial.futureDeliveries && selectedMaterial.futureDeliveries.length > 0 && (
                 <>
                   <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                    Oczekiwane dostawy ({formatNumber(selectedMaterial.futureDeliveriesTotal)} {selectedMaterial.unit})
+                    {t('forecast.expectedDeliveriesDetails', { total: formatNumber(selectedMaterial.futureDeliveriesTotal), unit: selectedMaterial.unit })}
                   </Typography>
                   <TableContainer component={Paper} variant="outlined" sx={mb2}>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Numer PO</TableCell>
-                          <TableCell>Dostawca</TableCell>
-                          <TableCell>Status</TableCell>
-                          <TableCell align="right">Ilość</TableCell>
-                          <TableCell align="right">Data dostawy</TableCell>
+                          <TableCell>{t('forecast.poNumber')}</TableCell>
+                          <TableCell>{t('forecast.details.supplier')}</TableCell>
+                          <TableCell>{t('forecast.table.status')}</TableCell>
+                          <TableCell align="right">{t('forecast.details.quantity')}</TableCell>
+                          <TableCell align="right">{t('forecast.deliveryDate')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2691,7 +2693,7 @@ const ForecastPage = () => {
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2" color="text.secondary">
-                                {delivery.supplierName || 'Brak dostawcy'}
+                                {delivery.supplierName || t('forecast.details.noSupplier')}
                               </Typography>
                             </TableCell>
                             <TableCell>{delivery.status}</TableCell>
@@ -2700,9 +2702,9 @@ const ForecastPage = () => {
                               {delivery.expectedDeliveryDate && delivery.expectedDeliveryDate !== ''
                                 ? (() => {
                                     const formatted = formatDateDisplay(new Date(delivery.expectedDeliveryDate));
-                                    return formatted || 'Brak daty';
+                                    return formatted || t('forecast.noDate');
                                   })()
-                                : 'Brak daty'
+                                : t('forecast.noDate')
                               }
                             </TableCell>
                           </TableRow>
@@ -2716,17 +2718,17 @@ const ForecastPage = () => {
               {selectedMaterial.tasks && selectedMaterial.tasks.length > 0 && (
                 <>
                   <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
-                    Zadania używające tego materiału
+                    {t('forecast.tasksUsingMaterial')}
                   </Typography>
                   <TableContainer component={Paper} variant="outlined">
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Zadanie</TableCell>
-                          <TableCell>Numer MO</TableCell>
-                          <TableCell align="right">Ilość produktu</TableCell>
-                          <TableCell align="right">Materiału na jedn.</TableCell>
-                          <TableCell align="right">Data wykonania</TableCell>
+                          <TableCell>{t('forecast.taskName')}</TableCell>
+                          <TableCell>{t('forecast.moNumber')}</TableCell>
+                          <TableCell align="right">{t('forecast.productQuantity')}</TableCell>
+                          <TableCell align="right">{t('forecast.materialPerUnit')}</TableCell>
+                          <TableCell align="right">{t('forecast.executionDate')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2788,17 +2790,17 @@ const ForecastPage = () => {
                                         } else if (task.scheduledDate instanceof Date) {
                                           taskDate = task.scheduledDate;
                                         } else {
-                                          return 'Brak daty';
+                                          return t('forecast.noDate');
                                         }
                                         
                                         const formatted = formatDateDisplay(taskDate);
-                                        return formatted || 'Brak daty';
+                                        return formatted || t('forecast.noDate');
                                       } catch (error) {
                                         console.error('Błąd formatowania daty zadania:', error);
-                                        return 'Brak daty';
+                                        return t('forecast.noDate');
                                       }
                                     })()
-                                  : 'Brak daty'
+                                  : t('forecast.noDate')
                                 }
                               </TableCell>
                             </TableRow>
@@ -2823,7 +2825,7 @@ const ForecastPage = () => {
                       handleCloseDetailsDialog();
                     }}
                   >
-                    Zamów materiał
+                    {t('forecast.orderMaterial')}
                   </Button>
                 </Box>
               )}
@@ -2831,7 +2833,7 @@ const ForecastPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDetailsDialog}>Zamknij</Button>
+          <Button onClick={handleCloseDetailsDialog}>{t('forecast.close')}</Button>
         </DialogActions>
       </Dialog>
     </Container>
