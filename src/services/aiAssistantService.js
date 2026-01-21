@@ -1222,7 +1222,8 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
           {
             // Gemini sam wybierze najlepszy model dla tego zapytania
             // forceModel: 'gemini-2.5-pro' - opcjonalnie można wymusić konkretny model
-            enableThinking: true  // Włącz thinking mode dla 2.5 Pro
+            enableThinking: true,  // Włącz thinking mode dla 2.5 Pro
+            userId  // 🆕 Przekaż userId dla AI Feedback
           }
         );
         
@@ -1291,7 +1292,8 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
               context,
               {
                 mediaAttachments: mediaAttachments,
-                enableThinking: true  // Włącz thinking mode dla lepszej analizy dokumentów
+                enableThinking: true,  // Włącz thinking mode dla lepszej analizy dokumentów
+                userId  // 🆕 Przekaż userId dla AI Feedback
               }
             );
             
@@ -1336,7 +1338,8 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
             context,
             {
               disableTools: true,  // 💬 Wyłącz narzędzia - tylko konwersacja
-              enableThinking: false  // Wyłącz thinking mode dla prostszych pytań
+              enableThinking: false,  // Wyłącz thinking mode dla prostszych pytań
+              userId  // 🆕 Przekaż userId dla AI Feedback
             }
           );
           

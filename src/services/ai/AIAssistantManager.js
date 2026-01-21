@@ -2,6 +2,7 @@
 
 import { AIAssistantV2 } from './AIAssistantV2.js';
 import { processAIQuery as processAIQueryV1 } from '../aiAssistantService.js';
+import { AIFeedback } from '../bugReportService.js';
 
 /**
  * Manager zarządzający różnymi wersjami asystenta AI
@@ -111,6 +112,11 @@ export class AIAssistantManager {
     // Fallback do V1
     console.log('[AIAssistantManager] Używam V1 (standardowy)');
     
+    // 🆕 Automatyczne logowanie fallbacku do AI Feedback
+    AIFeedback.logFallbackToV1(query, { intent: 'unknown', confidence: 0 }, options.userId).catch(err => {
+      console.warn('[AIAssistantManager] ⚠️ Nie udało się zalogować fallback:', err.message);
+    });
+    
     try {
       const { userId, context = [], attachments = [] } = options;
       const response = await processAIQueryV1(query, context, userId, attachments);
@@ -123,6 +129,11 @@ export class AIAssistantManager {
         recommendation: 'Rozważ optymalizację tego typu zapytań dla V2'
       };
     } catch (error) {
+      // 🆕 Automatyczne logowanie błędu obu systemów
+      AIFeedback.logBothFailed(query, error.message, options.userId).catch(err => {
+        console.warn('[AIAssistantManager] ⚠️ Nie udało się zalogować błąd:', err.message);
+      });
+      
       return {
         success: false,
         error: error.message,

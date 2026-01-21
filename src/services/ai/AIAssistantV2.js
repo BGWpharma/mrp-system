@@ -5,6 +5,7 @@ import { QueryExecutor } from './data/QueryExecutor.js';
 import { ResponseGenerator } from './response/ResponseGenerator.js';
 import { SemanticCache } from './cache/SemanticCache.js';
 import { MetricsCollector } from './monitoring/MetricsCollector.js';
+import { AIFeedback } from '../bugReportService.js';
 
 /**
  * Nowy system asystenta AI - wersja 2.0
@@ -61,6 +62,11 @@ export class AIAssistantV2 {
 
       // Sprawdź poziom pewności
       if (analysisResult.confidence < 0.3) {
+        // 🆕 Automatyczne logowanie do AI Feedback (ciche, bez wiedzy użytkownika)
+        AIFeedback.logLowConfidence(query, analysisResult, options.userId).catch(err => {
+          console.warn('[AIAssistantV2] ⚠️ Nie udało się zalogować AI feedback:', err.message);
+        });
+        
         return {
           success: false,
           response: "❓ Nie jestem pewien, o co pytasz. Czy możesz sprecyzować swoje pytanie? Przykłady:\n\n• \"Ile jest receptur w systemie?\"\n• \"Które produkty mają niski stan?\"\n• \"Ile receptur ma sumę składników ponad 900g?\"",
@@ -89,6 +95,13 @@ export class AIAssistantV2 {
       const processingTime = performance.now() - startTime;
 
       console.log(`[AIAssistantV2] Zapytanie przetworzone w ${processingTime.toFixed(2)}ms`);
+      
+      // 🆕 Automatyczne logowanie wolnych odpowiedzi (>10s)
+      if (processingTime > 10000) {
+        AIFeedback.logSlowResponse(query, processingTime, 'v2_optimized', options.userId).catch(err => {
+          console.warn('[AIAssistantV2] ⚠️ Nie udało się zalogować wolnej odpowiedzi:', err.message);
+        });
+      }
 
       const result = {
         success: true,
@@ -131,6 +144,11 @@ export class AIAssistantV2 {
 
     } catch (error) {
       console.error('[AIAssistantV2] Błąd podczas przetwarzania:', error);
+      
+      // 🆕 Automatyczne logowanie błędu do AI Feedback
+      AIFeedback.logBothFailed(query, error.message, options.userId).catch(err => {
+        console.warn('[AIAssistantV2] ⚠️ Nie udało się zalogować AI feedback:', err.message);
+      });
       
       return {
         success: false,

@@ -46,7 +46,9 @@ import {
   Computer as ComputerIcon,
   Download as DownloadIcon,
   Remove as RemoveIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  SmartToy as AIIcon,
+  Psychology as PsychologyIcon
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -105,13 +107,23 @@ const BugReportsPage = () => {
   }, []);
   
   // Filtrowanie zgłoszeń błędów
-  const filterReports = (reports, status) => {
-    if (status === 'wszystkie') {
+  const filterReports = (reports, filter) => {
+    if (filter === 'wszystkie') {
       setFilteredReports(reports);
+    } else if (filter === 'ai_feedback') {
+      // Filtruj tylko zgłoszenia AI (automatyczne)
+      setFilteredReports(reports.filter(report => report.source === 'ai_assistant'));
+    } else if (filter === 'user_reports') {
+      // Filtruj tylko zgłoszenia użytkowników (bez AI)
+      setFilteredReports(reports.filter(report => report.source !== 'ai_assistant'));
     } else {
-      setFilteredReports(reports.filter(report => report.status === status));
+      setFilteredReports(reports.filter(report => report.status === filter));
     }
   };
+  
+  // Liczba zgłoszeń AI
+  const aiReportsCount = bugReports.filter(r => r.source === 'ai_assistant').length;
+  const userReportsCount = bugReports.filter(r => r.source !== 'ai_assistant').length;
   
   // Obsługa zmiany zakładki (statusu)
   const handleTabChange = (event, newValue) => {
@@ -214,14 +226,36 @@ const BugReportsPage = () => {
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Brak daty';
     
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return new Intl.DateTimeFormat('pl-PL', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+    try {
+      // Obsługa Firestore Timestamp
+      let date;
+      if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+        date = timestamp.toDate();
+      } else if (timestamp.seconds) {
+        // Firestore Timestamp jako obiekt z seconds/nanoseconds
+        date = new Date(timestamp.seconds * 1000);
+      } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+        date = new Date(timestamp);
+      } else {
+        return 'Brak daty';
+      }
+      
+      // Sprawdzenie czy data jest prawidłowa
+      if (isNaN(date.getTime())) {
+        return 'Nieprawidłowa data';
+      }
+      
+      return new Intl.DateTimeFormat('pl-PL', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch (error) {
+      console.warn('[BugReportsPage] Błąd formatowania daty:', error, timestamp);
+      return 'Błąd daty';
+    }
   };
   
   // Renderowanie chipa statusu
@@ -315,6 +349,40 @@ const BugReportsPage = () => {
           <Tab value="w trakcie" label="W trakcie" />
           <Tab value="rozwiązany" label="Rozwiązane" />
           <Tab value="odrzucony" label="Odrzucone" />
+          <Tab 
+            value="ai_feedback" 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <AIIcon fontSize="small" />
+                AI Feedback
+                {aiReportsCount > 0 && (
+                  <Chip 
+                    size="small" 
+                    label={aiReportsCount}
+                    color="secondary"
+                    sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                  />
+                )}
+              </Box>
+            }
+          />
+          <Tab 
+            value="user_reports" 
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <BugIcon fontSize="small" />
+                Użytkownicy
+                {userReportsCount > 0 && (
+                  <Chip 
+                    size="small" 
+                    label={userReportsCount}
+                    color="primary"
+                    sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+                  />
+                )}
+              </Box>
+            }
+          />
         </Tabs>
         
         {loading ? (
@@ -323,13 +391,21 @@ const BugReportsPage = () => {
           </Box>
         ) : filteredReports.length === 0 ? (
           <Alert severity="info" sx={{ mt: 2 }}>
-            Brak zgłoszeń błędów o statusie {activeTab !== 'wszystkie' ? `"${activeTab}"` : ''}
+            {activeTab === 'ai_feedback' 
+              ? 'Brak automatycznych zgłoszeń AI. System uczy się na podstawie problemów z odpowiedziami.'
+              : activeTab === 'user_reports'
+              ? 'Brak zgłoszeń od użytkowników.'
+              : activeTab === 'wszystkie'
+              ? 'Brak zgłoszeń błędów.'
+              : `Brak zgłoszeń błędów o statusie "${activeTab}"`
+            }
           </Alert>
         ) : (
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell>Źródło</TableCell>
                   <TableCell>Tytuł</TableCell>
                   <TableCell>Zgłaszający</TableCell>
                   <TableCell>Data zgłoszenia</TableCell>
@@ -340,8 +416,40 @@ const BugReportsPage = () => {
               </TableHead>
               <TableBody>
                 {filteredReports.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell>{report.title}</TableCell>
+                  <TableRow key={report.id} sx={{ 
+                    bgcolor: report.source === 'ai_assistant' 
+                      ? theme => theme.palette.mode === 'dark' 
+                        ? 'rgba(156, 39, 176, 0.08)' 
+                        : 'rgba(156, 39, 176, 0.04)'
+                      : 'inherit'
+                  }}>
+                    <TableCell>
+                      {report.source === 'ai_assistant' ? (
+                        <Chip 
+                          icon={<AIIcon />} 
+                          label="AI" 
+                          size="small" 
+                          color="secondary"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Chip 
+                          icon={<BugIcon />} 
+                          label="User" 
+                          size="small" 
+                          color="default"
+                          variant="outlined"
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {report.title}
+                      {report.aiType && (
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          {report.aiType.replace('ai_', '').replace(/_/g, ' ')}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{report.createdBy}</TableCell>
                     <TableCell>{formatDate(report.createdAt)}</TableCell>
                     <TableCell>{getStatusChip(report.status)}</TableCell>
@@ -470,6 +578,49 @@ const BugReportsPage = () => {
               </Grid>
               
               <Grid item xs={12} md={4}>
+                {/* Karta danych AI - jeśli to zgłoszenie AI */}
+                {selectedReport.source === 'ai_assistant' && selectedReport.aiData && (
+                  <Card variant="outlined" sx={{ mb: 3, borderColor: 'secondary.main' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <AIIcon color="secondary" />
+                        <Typography variant="subtitle2">
+                          Dane AI Feedback
+                        </Typography>
+                      </Box>
+                      <Divider sx={{ my: 1 }} />
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Typ:</strong> {selectedReport.aiType?.replace('ai_', '').replace(/_/g, ' ') || 'brak'}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Intencja:</strong> {selectedReport.aiData.intent || 'nieznana'}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Pewność:</strong> {((selectedReport.aiData.confidence || 0) * 100).toFixed(1)}%
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Czas odpowiedzi:</strong> {(selectedReport.aiData.processingTime || 0).toFixed(0)}ms
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Metoda:</strong> {selectedReport.aiData.method || 'unknown'}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Wersja:</strong> {selectedReport.aiData.version || 'unknown'}
+                      </Typography>
+                      {selectedReport.aiData.query && (
+                        <Paper variant="outlined" sx={{ p: 1, mt: 2, bgcolor: 'action.hover' }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Zapytanie użytkownika:
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                            "{selectedReport.aiData.query}"
+                          </Typography>
+                        </Paper>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+                
                 <Card variant="outlined" sx={{ mb: 3 }}>
                   <CardContent>
                     <Typography variant="subtitle2" gutterBottom>

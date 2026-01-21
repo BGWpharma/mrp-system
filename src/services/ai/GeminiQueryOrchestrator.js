@@ -2,6 +2,7 @@
 
 import { DATABASE_TOOLS } from './tools/databaseTools.js';
 import { ToolExecutor } from './tools/toolExecutor.js';
+import { AIFeedback, addAutomaticAIFeedback, AI_FEEDBACK_TYPES } from '../bugReportService.js';
 
 /**
  * Orchestrator zapytań AI używający Google Gemini 2.5 Pro
@@ -385,6 +386,30 @@ export class GeminiQueryOrchestrator {
       console.log(`[GeminiQueryOrchestrator] 📊 Łącznie tokenów: ${totalTokensUsed}`);
       console.log(`[GeminiQueryOrchestrator] 🔧 Wykonano funkcji: ${executedTools.length}`);
       
+      // 🆕 Automatyczne logowanie gdy AI nie może wykonać zadania
+      if (this.isUnableToHandleResponse(finalResponse)) {
+        console.log('[GeminiQueryOrchestrator] 📊 Wykryto odpowiedź "nie mogę" - logowanie do AI Feedback');
+        addAutomaticAIFeedback(AI_FEEDBACK_TYPES.NO_RESULTS, {
+          query,
+          intent: 'gemini_unable_to_handle',
+          confidence: 1.0,
+          response: finalResponse,
+          processingTime,
+          method: 'gemini_orchestrator',
+          version: model,
+          userId: options.userId
+        }).catch(err => {
+          console.warn('[GeminiQueryOrchestrator] ⚠️ Nie udało się zalogować AI feedback:', err.message);
+        });
+      }
+      
+      // 🆕 Logowanie wolnych odpowiedzi (>15s dla Gemini)
+      if (processingTime > 15000) {
+        AIFeedback.logSlowResponse(query, processingTime, `gemini_${model}`, options.userId).catch(err => {
+          console.warn('[GeminiQueryOrchestrator] ⚠️ Nie udało się zalogować wolnej odpowiedzi:', err.message);
+        });
+      }
+      
       return {
         success: true,
         response: finalResponse,
@@ -396,6 +421,12 @@ export class GeminiQueryOrchestrator {
       
     } catch (error) {
       console.error('[GeminiQueryOrchestrator] ❌ Błąd:', error);
+      
+      // 🆕 Automatyczne logowanie błędu do AI Feedback
+      AIFeedback.logBothFailed(query, `Gemini error: ${error.message}`, options.userId).catch(err => {
+        console.warn('[GeminiQueryOrchestrator] ⚠️ Nie udało się zalogować błąd:', err.message);
+      });
+      
       return {
         success: false,
         error: error.message,
@@ -676,6 +707,64 @@ NOWE MOŻLIWOŚCI FILTROWANIA (server-side - bardzo szybkie!):
 - query_production_tasks: możesz teraz filtrować po 'orderId' (znajdź wszystkie MO dla zamówienia) i 'lotNumber' (znajdź MO po numerze LOT)
 - query_inventory_batches: możesz filtrować po 'expirationDateBefore' (partie wygasające przed określoną datą)
 
+🧾 FAKTURY (query_invoices) - NOWE MOŻLIWOŚCI:
+═══════════════════════════════════════════════════════════════
+- invoiceNumber: wyszukaj fakturę po numerze (częściowe dopasowanie, np. "FV/2025", "2025/01")
+- orderId: znajdź faktury dla konkretnego zamówienia CO/PO
+- isProforma: filtruj tylko proformy (true) lub tylko zwykłe faktury (false)
+- isCorrectionInvoice: filtruj tylko faktury korygujące (true)
+- currency: filtruj po walucie (EUR, PLN, USD)
+- status: statusy płatności (opłacona, nieopłacona, częściowo opłacona, przeterminowana)
+
+🎯 PRZYKŁADY DLA FAKTUR:
+- "Pokaż fakturę FV/2025/01/0001" → query_invoices({ invoiceNumber: "FV/2025/01/0001" })
+- "Faktury dla zamówienia CO00123" → query_invoices({ orderId: "ID_ZAMÓWIENIA" })
+- "Wszystkie proformy" → query_invoices({ isProforma: true })
+- "Niezapłacone faktury w EUR" → query_invoices({ status: ["nieopłacona"], currency: "EUR" })
+- "Faktury korygujące z ostatniego miesiąca" → query_invoices({ isCorrectionInvoice: true, dateFrom: "..." })
+
+📦 ZAMÓWIENIA ZAKUPU PO (query_purchase_orders) - NOWE MOŻLIWOŚCI:
+═══════════════════════════════════════════════════════════════
+- expectedDeliveryDateFrom/To: filtruj po planowanej dacie dostawy (YYYY-MM-DD)
+- hasUndeliveredItems: true = pokaż tylko PO z niedostarczonymi pozycjami
+- dateFrom/dateTo: filtruj po dacie utworzenia zamówienia (orderDate)
+
+🎯 PRZYKŁADY DLA PO:
+- "PO z dostawą przed 1 lutego" → query_purchase_orders({ expectedDeliveryDateTo: "2025-02-01" })
+- "PO z dostawą w przyszłym tygodniu" → query_purchase_orders({ expectedDeliveryDateFrom: "...", expectedDeliveryDateTo: "..." })
+- "Które PO mają niekompletne dostawy?" → query_purchase_orders({ hasUndeliveredItems: true })
+- "PO od dostawcy XYZ" → query_purchase_orders({ supplierName: "XYZ" })
+
+📋 ZAMÓWIENIA KLIENTÓW CO (query_orders) - NOWE MOŻLIWOŚCI:
+═══════════════════════════════════════════════════════════════
+- deliveryDateFrom/To: filtruj po dacie dostawy (YYYY-MM-DD)
+- dateFrom/dateTo: filtruj po dacie utworzenia zamówienia (orderDate)
+
+🎯 PRZYKŁADY DLA CO:
+- "Zamówienia z dostawą przed 1 lutego" → query_orders({ deliveryDateTo: "2025-02-01" })
+- "Zamówienia z dostawą w tym miesiącu" → query_orders({ deliveryDateFrom: "2025-01-01", deliveryDateTo: "2025-01-31" })
+- "Zamówienia klienta ABC" → query_orders({ customerName: "ABC" })
+
+🚛 DOKUMENTY CMR (query_cmr_documents) - NOWE MOŻLIWOŚCI:
+═══════════════════════════════════════════════════════════════
+- cmrNumber: wyszukaj CMR po numerze (częściowe dopasowanie, np. "CMR-2025")
+- linkedOrderId: znajdź CMR dla konkretnego zamówienia klienta (CO)
+- carrier: filtruj po przewoźniku (częściowe dopasowanie, np. "DHL")
+- sender: filtruj po nadawcy (częściowe dopasowanie)
+- recipient: filtruj po odbiorcy (częściowe dopasowanie)
+- loadingPlace: filtruj po miejscu załadunku (częściowe dopasowanie, np. "Warszawa")
+- deliveryPlace: filtruj po miejscu dostawy (częściowe dopasowanie, np. "Berlin")
+- dateFrom/dateTo: filtruj po dacie wystawienia (issueDate)
+- deliveryDateFrom/deliveryDateTo: filtruj po dacie dostawy
+
+🎯 PRZYKŁADY DLA CMR:
+- "Pokaż CMR-2025-001" → query_cmr_documents({ cmrNumber: "CMR-2025-001" })
+- "CMR dla zamówienia CO00123" → query_cmr_documents({ linkedOrderId: "ID_ZAMÓWIENIA" })
+- "CMR z transportem przez DHL" → query_cmr_documents({ carrier: "DHL" })
+- "CMR z dostawą do Berlina" → query_cmr_documents({ deliveryPlace: "Berlin" })
+- "CMR wystawione w styczniu 2025" → query_cmr_documents({ dateFrom: "2025-01-01", dateTo: "2025-01-31" })
+- "CMR z dostawą w przyszłym tygodniu" → query_cmr_documents({ deliveryDateFrom: "...", deliveryDateTo: "..." })
+
 ZASADY SZCZEGÓŁOWOŚCI:
 ⭐ Generuj PEŁNE, SZCZEGÓŁOWE odpowiedzi - użytkownicy preferują kompletne informacje
 ⭐ Pokazuj WSZYSTKIE dostępne dane - jeśli jest 10 rekordów, pokaż wszystkie 10
@@ -709,6 +798,34 @@ ZASADY:
 - Formatuj odpowiedzi czytelnie (używaj list, nagłówków, podziałów)
 
 Pamiętaj: Jesteś ekspertem w zarządzaniu produkcją i można Cię pytać o wszystko! 💬`;
+  }
+  
+  /**
+   * Sprawdza czy odpowiedź AI wskazuje na niemożność wykonania zadania
+   * Te odpowiedzi powinny być logowane do AI Feedback dla udoskonalania systemu
+   */
+  static isUnableToHandleResponse(response) {
+    if (!response || typeof response !== 'string') return false;
+    
+    const unablePatterns = [
+      // Polski
+      /przepraszam.*nie\s+(mam|mogę|jestem\s+w\s+stanie)/i,
+      /nie\s+mam\s+możliwości/i,
+      /nie\s+mogę\s+(wykonać|zrealizować|pomóc)/i,
+      /nie\s+jestem\s+w\s+stanie/i,
+      /brak\s+(dostępu|możliwości|funkcji)/i,
+      /ta\s+funkcja\s+nie\s+jest\s+(dostępna|obsługiwana)/i,
+      /nie\s+obsługuję/i,
+      /funkcja\s+nie\s+pozwala/i,
+      /nie\s+można\s+filtrować/i,
+      // Angielski (na wszelki wypadek)
+      /sorry.*can('|no)?t/i,
+      /unable\s+to/i,
+      /not\s+supported/i,
+      /cannot\s+(access|perform|do)/i
+    ];
+    
+    return unablePatterns.some(pattern => pattern.test(response));
   }
   
   /**

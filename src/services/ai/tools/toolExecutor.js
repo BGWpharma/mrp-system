@@ -15,6 +15,7 @@ import {
 import { db } from '../../firebase/config';
 import { COLLECTION_MAPPING } from './databaseTools.js';
 import { getUsersDisplayNames } from '../../userService.js';
+import { AIFeedback } from '../../bugReportService.js';
 
 /**
  * Wykonuje narzędzia (funkcje) wywołane przez GPT
@@ -200,6 +201,12 @@ export class ToolExecutor {
       
     } catch (error) {
       console.error(`[ToolExecutor] ❌ Błąd podczas wykonywania ${functionName}:`, error);
+      
+      // 🆕 Automatyczne logowanie błędu narzędzia do AI Feedback
+      AIFeedback.logToolError(functionName, parameters, error).catch(err => {
+        console.warn('[ToolExecutor] ⚠️ Nie udało się zalogować błąd narzędzia:', err.message);
+      });
+      
       return {
         success: false,
         error: error.message,
@@ -696,6 +703,13 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // 🆕 Flaga czy potrzebujemy filtrowania client-side (zwiększamy limit)
+    const needsClientSideFiltering = !!(
+      params.deliveryDateFrom || 
+      params.deliveryDateTo ||
+      params.customerName
+    );
+    
     // Filtr po numerze zamówienia (exact match - po stronie serwera)
     if (params.orderNumber) {
       constraints.push(where('orderNumber', '==', params.orderNumber));
@@ -735,19 +749,21 @@ export class ToolExecutor {
       constraints.push(where('customerId', '==', params.customerId));
     }
     
-    // Filtr po dacie
+    // Filtr po dacie utworzenia zamówienia
     if (params.dateFrom) {
       const fromDate = Timestamp.fromDate(new Date(params.dateFrom));
       constraints.push(where('orderDate', '>=', fromDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie CO od orderDate: ${params.dateFrom}`);
     }
     
     if (params.dateTo) {
       const toDate = Timestamp.fromDate(new Date(params.dateTo));
       constraints.push(where('orderDate', '<=', toDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie CO do orderDate: ${params.dateTo}`);
     }
     
-    // Limit
-    const limitValue = params.limit || 100;
+    // Zwiększ limit jeśli potrzebujemy filtrowania client-side
+    const limitValue = needsClientSideFiltering ? 500 : (params.limit || 100);
     constraints.push(firestoreLimit(limitValue));
     
     if (constraints.length > 0) {
@@ -759,19 +775,60 @@ export class ToolExecutor {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
+        orderNumber: data.orderNumber,
+        status: data.status,
+        customerId: data.customerId,
+        customerName: data.customerName,
         orderDate: data.orderDate?.toDate?.()?.toISOString?.() || data.orderDate,
         deliveryDate: data.deliveryDate?.toDate?.()?.toISOString?.() || data.deliveryDate,
-        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
+        totalValue: data.totalValue || data.total,
+        currency: data.currency || 'EUR',
+        items: data.items,
+        notes: data.notes
       };
     });
+    
+    console.log(`[ToolExecutor] 📋 Pobrano ${orders.length} zamówień klientów z Firestore`);
     
     // Filtruj po nazwie klienta (po stronie klienta)
     if (params.customerName) {
       const searchTerm = params.customerName.toLowerCase();
+      const beforeCount = orders.length;
       orders = orders.filter(order => 
         (order.customerName || '').toLowerCase().includes(searchTerm)
       );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po nazwie klienta "${params.customerName}": ${beforeCount} → ${orders.length}`);
+    }
+    
+    // 🆕 Filtrowanie po dacie dostawy (client-side)
+    if (params.deliveryDateFrom) {
+      const fromDate = new Date(params.deliveryDateFrom);
+      const beforeCount = orders.length;
+      orders = orders.filter(order => {
+        if (!order.deliveryDate) return false;
+        const deliveryDate = new Date(order.deliveryDate);
+        return deliveryDate >= fromDate;
+      });
+      console.log(`[ToolExecutor] 📅 Filtrowanie CO po deliveryDate od ${params.deliveryDateFrom}: ${beforeCount} → ${orders.length}`);
+    }
+    
+    if (params.deliveryDateTo) {
+      const toDate = new Date(params.deliveryDateTo);
+      const beforeCount = orders.length;
+      orders = orders.filter(order => {
+        if (!order.deliveryDate) return false;
+        const deliveryDate = new Date(order.deliveryDate);
+        return deliveryDate <= toDate;
+      });
+      console.log(`[ToolExecutor] 📅 Filtrowanie CO po deliveryDate do ${params.deliveryDateTo}: ${beforeCount} → ${orders.length}`);
+    }
+    
+    // Po filtrowaniu client-side zastosuj docelowy limit
+    const finalLimit = params.limit || 100;
+    if (orders.length > finalLimit) {
+      console.log(`[ToolExecutor] ✂️ Ograniczam wyniki CO z ${orders.length} do ${finalLimit}`);
+      orders = orders.slice(0, finalLimit);
     }
     
     // ZAWSZE usuń pozycje jeśli nie są wyraźnie wymagane (oszczędność tokenów)
@@ -787,7 +844,12 @@ export class ToolExecutor {
       count: orders.length,
       isEmpty: orders.length === 0,
       warning: orders.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zamówień klientów spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
-      limitApplied: limitValue
+      limitApplied: finalLimit,
+      filtersApplied: {
+        deliveryDateFrom: params.deliveryDateFrom || null,
+        deliveryDateTo: params.deliveryDateTo || null,
+        customerName: params.customerName || null
+      }
     };
   }
   
@@ -798,6 +860,14 @@ export class ToolExecutor {
     const collectionName = COLLECTION_MAPPING.purchase_orders;
     let q = collection(db, collectionName);
     const constraints = [];
+    
+    // 🆕 Flaga czy potrzebujemy filtrowania client-side (zwiększamy limit)
+    const needsClientSideFiltering = !!(
+      params.expectedDeliveryDateFrom || 
+      params.expectedDeliveryDateTo || 
+      params.hasUndeliveredItems ||
+      params.supplierName
+    );
     
     // Filtr po numerze PO (exact match - po stronie serwera)
     // UWAGA: W Firestore pole nazywa się 'number' a nie 'poNumber'
@@ -841,19 +911,21 @@ export class ToolExecutor {
       constraints.push(where('supplierId', '==', params.supplierId));
     }
     
-    // Filtr po dacie
+    // Filtr po dacie utworzenia zamówienia
     if (params.dateFrom) {
       const fromDate = Timestamp.fromDate(new Date(params.dateFrom));
       constraints.push(where('orderDate', '>=', fromDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie PO od orderDate: ${params.dateFrom}`);
     }
     
     if (params.dateTo) {
       const toDate = Timestamp.fromDate(new Date(params.dateTo));
       constraints.push(where('orderDate', '<=', toDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie PO do orderDate: ${params.dateTo}`);
     }
     
-    // Limit
-    const limitValue = params.limit || 100;
+    // Zwiększ limit jeśli potrzebujemy filtrowania client-side
+    const limitValue = needsClientSideFiltering ? 500 : (params.limit || 100);
     constraints.push(firestoreLimit(limitValue));
     
     if (constraints.length > 0) {
@@ -865,27 +937,90 @@ export class ToolExecutor {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
+        number: data.number,
+        status: data.status,
+        supplierId: data.supplierId,
+        supplierName: data.supplierName || data.supplier?.name,
         orderDate: data.orderDate?.toDate?.()?.toISOString?.() || data.orderDate,
         expectedDeliveryDate: data.expectedDeliveryDate?.toDate?.()?.toISOString?.() || data.expectedDeliveryDate,
-        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt
+        actualDeliveryDate: data.actualDeliveryDate?.toDate?.()?.toISOString?.() || data.actualDeliveryDate,
+        createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
+        totalValue: data.totalValue || data.total,
+        currency: data.currency || 'EUR',
+        items: data.items,
+        notes: data.notes
       };
     });
     
-    // Filtruj po nazwie dostawcy
+    console.log(`[ToolExecutor] 📦 Pobrano ${purchaseOrders.length} zamówień zakupu z Firestore`);
+    
+    // Filtruj po nazwie dostawcy (client-side)
     if (params.supplierName) {
       const searchTerm = params.supplierName.toLowerCase();
+      const beforeCount = purchaseOrders.length;
       purchaseOrders = purchaseOrders.filter(po => 
         (po.supplierName || '').toLowerCase().includes(searchTerm)
       );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po nazwie dostawcy "${params.supplierName}": ${beforeCount} → ${purchaseOrders.length}`);
+    }
+    
+    // 🆕 Filtrowanie po planowanej dacie dostawy (client-side)
+    if (params.expectedDeliveryDateFrom) {
+      const fromDate = new Date(params.expectedDeliveryDateFrom);
+      const beforeCount = purchaseOrders.length;
+      purchaseOrders = purchaseOrders.filter(po => {
+        if (!po.expectedDeliveryDate) return false;
+        const deliveryDate = new Date(po.expectedDeliveryDate);
+        return deliveryDate >= fromDate;
+      });
+      console.log(`[ToolExecutor] 📅 Filtrowanie PO po expectedDeliveryDate od ${params.expectedDeliveryDateFrom}: ${beforeCount} → ${purchaseOrders.length}`);
+    }
+    
+    if (params.expectedDeliveryDateTo) {
+      const toDate = new Date(params.expectedDeliveryDateTo);
+      const beforeCount = purchaseOrders.length;
+      purchaseOrders = purchaseOrders.filter(po => {
+        if (!po.expectedDeliveryDate) return false;
+        const deliveryDate = new Date(po.expectedDeliveryDate);
+        return deliveryDate <= toDate;
+      });
+      console.log(`[ToolExecutor] 📅 Filtrowanie PO po expectedDeliveryDate do ${params.expectedDeliveryDateTo}: ${beforeCount} → ${purchaseOrders.length}`);
+    }
+    
+    // 🆕 Filtrowanie PO z niedostarczonymi pozycjami (client-side)
+    if (params.hasUndeliveredItems === true) {
+      const beforeCount = purchaseOrders.length;
+      purchaseOrders = purchaseOrders.filter(po => {
+        if (!po.items || !Array.isArray(po.items)) return false;
+        // Sprawdź czy którakolwiek pozycja ma received < quantity
+        return po.items.some(item => {
+          const received = item.received || 0;
+          const quantity = item.quantity || 0;
+          return received < quantity;
+        });
+      });
+      console.log(`[ToolExecutor] 🔍 Filtrowanie PO z niedostarczonymi pozycjami: ${beforeCount} → ${purchaseOrders.length}`);
+    }
+    
+    // Po filtrowaniu client-side zastosuj docelowy limit
+    const finalLimit = params.limit || 100;
+    if (purchaseOrders.length > finalLimit) {
+      console.log(`[ToolExecutor] ✂️ Ograniczam wyniki PO z ${purchaseOrders.length} do ${finalLimit}`);
+      purchaseOrders = purchaseOrders.slice(0, finalLimit);
     }
     
     return {
       purchaseOrders,
       count: purchaseOrders.length,
-      limitApplied: limitValue,
+      limitApplied: finalLimit,
       isEmpty: purchaseOrders.length === 0,
-      warning: purchaseOrders.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zamówień zakupu spełniających kryteria. NIE WYMYŚLAJ danych!" : null
+      warning: purchaseOrders.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych zamówień zakupu spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
+      filtersApplied: {
+        expectedDeliveryDateFrom: params.expectedDeliveryDateFrom || null,
+        expectedDeliveryDateTo: params.expectedDeliveryDateTo || null,
+        hasUndeliveredItems: params.hasUndeliveredItems || null,
+        supplierName: params.supplierName || null
+      }
     };
   }
   
@@ -1152,6 +1287,9 @@ export class ToolExecutor {
     let q = collection(db, collectionName);
     const constraints = [];
     
+    // 🆕 Flaga czy potrzebujemy filtrowania client-side (zwiększamy limit)
+    const needsClientSideFiltering = !!(params.invoiceNumber || params.isProforma !== undefined || params.isCorrectionInvoice !== undefined || params.currency);
+    
     // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
     // UWAGA: Faktury mają DWA pola: 'status' (draft/issued/cancelled) i 'paymentStatus' (paid/unpaid/partially_paid)
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
@@ -1205,6 +1343,12 @@ export class ToolExecutor {
       console.log(`[ToolExecutor] 🔍 Filtrowanie faktur po customer.id: ${params.customerId}`);
     }
     
+    // 🆕 Filtr po powiązanym zamówieniu (server-side)
+    if (params.orderId) {
+      constraints.push(where('orderId', '==', params.orderId));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie faktur po orderId: ${params.orderId}`);
+    }
+    
     if (params.dateFrom) {
       // Filtruj po issueDate (data wystawienia), nie createdAt
       const fromDate = Timestamp.fromDate(new Date(params.dateFrom));
@@ -1219,7 +1363,8 @@ export class ToolExecutor {
       console.log(`[ToolExecutor] 📅 Filtrowanie faktur do: ${params.dateTo}`);
     }
     
-    const limitValue = params.limit || 100;
+    // Zwiększ limit jeśli potrzebujemy filtrowania client-side
+    const limitValue = needsClientSideFiltering ? 500 : (params.limit || 100);
     constraints.push(firestoreLimit(limitValue));
     
     if (constraints.length > 0) {
@@ -1227,7 +1372,7 @@ export class ToolExecutor {
     }
     
     const snapshot = await getDocs(q);
-    const invoices = snapshot.docs.map(doc => {
+    let invoices = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -1239,10 +1384,12 @@ export class ToolExecutor {
         currency: data.currency || 'EUR',
         customer: data.customer,
         isProforma: data.isProforma || data.type === 'proforma',
+        isCorrectionInvoice: data.isCorrectionInvoice || false,
         issueDate: data.issueDate?.toDate?.()?.toISOString?.() || data.issueDate,
         dueDate: data.dueDate?.toDate?.()?.toISOString?.() || data.dueDate,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
         orderId: data.orderId,
+        orderNumber: data.orderNumber,
         items: data.items?.map(item => ({
           name: item.name,
           quantity: item.quantity,
@@ -1253,6 +1400,49 @@ export class ToolExecutor {
       };
     });
     
+    console.log(`[ToolExecutor] 📊 Pobrano ${invoices.length} faktur z Firestore`);
+    
+    // 🆕 Filtrowanie po numerze faktury (client-side, częściowe dopasowanie)
+    if (params.invoiceNumber) {
+      const searchTerm = params.invoiceNumber.toLowerCase();
+      const beforeCount = invoices.length;
+      invoices = invoices.filter(inv => 
+        (inv.number || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po numerze faktury "${params.invoiceNumber}": ${beforeCount} → ${invoices.length}`);
+    }
+    
+    // 🆕 Filtrowanie faktur proforma (client-side)
+    if (params.isProforma !== undefined) {
+      const beforeCount = invoices.length;
+      invoices = invoices.filter(inv => inv.isProforma === params.isProforma);
+      console.log(`[ToolExecutor] 🔍 Filtrowanie proform (isProforma=${params.isProforma}): ${beforeCount} → ${invoices.length}`);
+    }
+    
+    // 🆕 Filtrowanie faktur korygujących (client-side)
+    if (params.isCorrectionInvoice !== undefined) {
+      const beforeCount = invoices.length;
+      invoices = invoices.filter(inv => inv.isCorrectionInvoice === params.isCorrectionInvoice);
+      console.log(`[ToolExecutor] 🔍 Filtrowanie korekt (isCorrectionInvoice=${params.isCorrectionInvoice}): ${beforeCount} → ${invoices.length}`);
+    }
+    
+    // 🆕 Filtrowanie po walucie (client-side)
+    if (params.currency) {
+      const currencyUpper = params.currency.toUpperCase();
+      const beforeCount = invoices.length;
+      invoices = invoices.filter(inv => 
+        (inv.currency || '').toUpperCase() === currencyUpper
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po walucie "${currencyUpper}": ${beforeCount} → ${invoices.length}`);
+    }
+    
+    // Po filtrowaniu client-side zastosuj docelowy limit
+    const finalLimit = params.limit || 100;
+    if (invoices.length > finalLimit) {
+      console.log(`[ToolExecutor] ✂️ Ograniczam wyniki z ${invoices.length} do ${finalLimit}`);
+      invoices = invoices.slice(0, finalLimit);
+    }
+    
     // Oblicz sumę wartości dla szybkiego podglądu
     const totalSum = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
     
@@ -1262,7 +1452,14 @@ export class ToolExecutor {
       warning: invoices.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych faktur spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
       count: invoices.length,
       totalSum: parseFloat(totalSum.toFixed(2)),
-      limitApplied: limitValue
+      limitApplied: finalLimit,
+      filtersApplied: {
+        invoiceNumber: params.invoiceNumber || null,
+        isProforma: params.isProforma,
+        isCorrectionInvoice: params.isCorrectionInvoice,
+        currency: params.currency || null,
+        orderId: params.orderId || null
+      }
     };
   }
   
@@ -1273,6 +1470,16 @@ export class ToolExecutor {
     const collectionName = COLLECTION_MAPPING.cmr_documents;
     let q = collection(db, collectionName);
     const constraints = [];
+    
+    // 🆕 Flaga czy potrzebujemy filtrowania client-side (zwiększamy limit)
+    const needsClientSideFiltering = !!(
+      params.cmrNumber || 
+      params.carrier || 
+      params.sender || 
+      params.recipient || 
+      params.loadingPlace || 
+      params.deliveryPlace
+    );
     
     // Filtr po statusie - NORMALIZUJ statusy przed zapytaniem (case-sensitive!)
     if (params.status && params.status.length > 0 && params.status.length <= 10) {
@@ -1306,17 +1513,29 @@ export class ToolExecutor {
       constraints.push(where('status', 'in', normalizedStatuses));
     }
     
+    // 🆕 Filtr po powiązanym zamówieniu (server-side) - sprawdź oba pola
+    if (params.linkedOrderId) {
+      // CMR może mieć linkedOrderId (pojedyncze) lub linkedOrderIds (tablica)
+      // Użyjemy array-contains dla linkedOrderIds lub == dla linkedOrderId
+      constraints.push(where('linkedOrderIds', 'array-contains', params.linkedOrderId));
+      console.log(`[ToolExecutor] 🔍 Filtrowanie CMR po linkedOrderIds: ${params.linkedOrderId}`);
+    }
+    
+    // 🆕 POPRAWKA: Filtruj po issueDate zamiast createdAt (data wystawienia CMR)
     if (params.dateFrom) {
       const fromDate = Timestamp.fromDate(new Date(params.dateFrom));
-      constraints.push(where('createdAt', '>=', fromDate));
+      constraints.push(where('issueDate', '>=', fromDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie CMR od issueDate: ${params.dateFrom}`);
     }
     
     if (params.dateTo) {
       const toDate = Timestamp.fromDate(new Date(params.dateTo));
-      constraints.push(where('createdAt', '<=', toDate));
+      constraints.push(where('issueDate', '<=', toDate));
+      console.log(`[ToolExecutor] 📅 Filtrowanie CMR do issueDate: ${params.dateTo}`);
     }
     
-    const limitValue = params.limit || 100;
+    // Zwiększ limit jeśli potrzebujemy filtrowania client-side
+    const limitValue = needsClientSideFiltering ? 500 : (params.limit || 100);
     constraints.push(firestoreLimit(limitValue));
     
     if (constraints.length > 0) {
@@ -1324,22 +1543,152 @@ export class ToolExecutor {
     }
     
     const snapshot = await getDocs(q);
-    const cmrDocuments = snapshot.docs.map(doc => {
+    let cmrDocuments = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
+        cmrNumber: data.cmrNumber,
+        status: data.status,
+        paymentStatus: data.paymentStatus,
+        // Nadawca
+        sender: data.sender,
+        senderAddress: data.senderAddress,
+        senderCity: data.senderCity,
+        senderCountry: data.senderCountry,
+        // Odbiorca
+        recipient: data.recipient,
+        recipientAddress: data.recipientAddress,
+        // Przewoźnik
+        carrier: data.carrier,
+        carrierAddress: data.carrierAddress,
+        // Miejsca
+        loadingPlace: data.loadingPlace,
+        deliveryPlace: data.deliveryPlace,
+        // Daty
+        issueDate: data.issueDate?.toDate?.()?.toISOString?.() || data.issueDate,
+        deliveryDate: data.deliveryDate?.toDate?.()?.toISOString?.() || data.deliveryDate,
+        loadingDate: data.loadingDate?.toDate?.()?.toISOString?.() || data.loadingDate,
         createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt,
-        transportDate: data.transportDate?.toDate?.()?.toISOString?.() || data.transportDate
+        transportDate: data.transportDate?.toDate?.()?.toISOString?.() || data.transportDate,
+        // Powiązane zamówienia
+        linkedOrderId: data.linkedOrderId,
+        linkedOrderIds: data.linkedOrderIds,
+        linkedOrderNumbers: data.linkedOrderNumbers,
+        // Dodatkowe
+        transportType: data.transportType,
+        vehicleRegistration: data.vehicleRegistration,
+        trailerRegistration: data.trailerRegistration,
+        notes: data.notes
       };
     });
+    
+    console.log(`[ToolExecutor] 🚛 Pobrano ${cmrDocuments.length} dokumentów CMR z Firestore`);
+    
+    // 🆕 Filtrowanie po numerze CMR (client-side, częściowe dopasowanie)
+    if (params.cmrNumber) {
+      const searchTerm = params.cmrNumber.toLowerCase();
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => 
+        (cmr.cmrNumber || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po numerze CMR "${params.cmrNumber}": ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // 🆕 Filtrowanie po przewoźniku (client-side, częściowe dopasowanie)
+    if (params.carrier) {
+      const searchTerm = params.carrier.toLowerCase();
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => 
+        (cmr.carrier || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po przewoźniku "${params.carrier}": ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // 🆕 Filtrowanie po nadawcy (client-side, częściowe dopasowanie)
+    if (params.sender) {
+      const searchTerm = params.sender.toLowerCase();
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => 
+        (cmr.sender || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po nadawcy "${params.sender}": ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // 🆕 Filtrowanie po odbiorcy (client-side, częściowe dopasowanie)
+    if (params.recipient) {
+      const searchTerm = params.recipient.toLowerCase();
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => 
+        (cmr.recipient || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po odbiorcy "${params.recipient}": ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // 🆕 Filtrowanie po miejscu załadunku (client-side, częściowe dopasowanie)
+    if (params.loadingPlace) {
+      const searchTerm = params.loadingPlace.toLowerCase();
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => 
+        (cmr.loadingPlace || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po miejscu załadunku "${params.loadingPlace}": ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // 🆕 Filtrowanie po miejscu dostawy (client-side, częściowe dopasowanie)
+    if (params.deliveryPlace) {
+      const searchTerm = params.deliveryPlace.toLowerCase();
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => 
+        (cmr.deliveryPlace || '').toLowerCase().includes(searchTerm)
+      );
+      console.log(`[ToolExecutor] 🔍 Filtrowanie po miejscu dostawy "${params.deliveryPlace}": ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // 🆕 Filtrowanie po dacie dostawy (client-side)
+    if (params.deliveryDateFrom) {
+      const fromDate = new Date(params.deliveryDateFrom);
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => {
+        if (!cmr.deliveryDate) return false;
+        const deliveryDate = new Date(cmr.deliveryDate);
+        return deliveryDate >= fromDate;
+      });
+      console.log(`[ToolExecutor] 📅 Filtrowanie po deliveryDate od ${params.deliveryDateFrom}: ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    if (params.deliveryDateTo) {
+      const toDate = new Date(params.deliveryDateTo);
+      const beforeCount = cmrDocuments.length;
+      cmrDocuments = cmrDocuments.filter(cmr => {
+        if (!cmr.deliveryDate) return false;
+        const deliveryDate = new Date(cmr.deliveryDate);
+        return deliveryDate <= toDate;
+      });
+      console.log(`[ToolExecutor] 📅 Filtrowanie po deliveryDate do ${params.deliveryDateTo}: ${beforeCount} → ${cmrDocuments.length}`);
+    }
+    
+    // Po filtrowaniu client-side zastosuj docelowy limit
+    const finalLimit = params.limit || 100;
+    if (cmrDocuments.length > finalLimit) {
+      console.log(`[ToolExecutor] ✂️ Ograniczam wyniki CMR z ${cmrDocuments.length} do ${finalLimit}`);
+      cmrDocuments = cmrDocuments.slice(0, finalLimit);
+    }
     
     return {
       cmrDocuments,
       count: cmrDocuments.length,
-      limitApplied: limitValue,
+      limitApplied: finalLimit,
       isEmpty: cmrDocuments.length === 0,
-      warning: cmrDocuments.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych dokumentów CMR spełniających kryteria. NIE WYMYŚLAJ danych!" : null
+      warning: cmrDocuments.length === 0 ? "⚠️ BRAK DANYCH - Nie znaleziono żadnych dokumentów CMR spełniających kryteria. NIE WYMYŚLAJ danych!" : null,
+      filtersApplied: {
+        cmrNumber: params.cmrNumber || null,
+        linkedOrderId: params.linkedOrderId || null,
+        carrier: params.carrier || null,
+        sender: params.sender || null,
+        recipient: params.recipient || null,
+        loadingPlace: params.loadingPlace || null,
+        deliveryPlace: params.deliveryPlace || null
+      }
     };
   }
   

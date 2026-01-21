@@ -327,4 +327,234 @@ export const deleteBugReport = async (reportId) => {
 };
 
 // Zachowujemy starą nazwę funkcji dla zachowania kompatybilności wstecznej
-export const addBugReportWithBase64Screenshot = addBugReportWithScreenshot; 
+export const addBugReportWithBase64Screenshot = addBugReportWithScreenshot;
+
+// ============================================================================
+// AUTOMATYCZNE LOGOWANIE PROBLEMÓW AI
+// ============================================================================
+
+/**
+ * Typy automatycznych zgłoszeń AI
+ */
+export const AI_FEEDBACK_TYPES = {
+  LOW_CONFIDENCE: 'ai_low_confidence',
+  FALLBACK_TO_V1: 'ai_fallback',
+  BOTH_FAILED: 'ai_both_failed',
+  NO_RESULTS: 'ai_no_results',
+  SLOW_RESPONSE: 'ai_slow_response',
+  TOOL_ERROR: 'ai_tool_error',
+  UNKNOWN_INTENT: 'ai_unknown_intent'
+};
+
+/**
+ * Mapowanie typów AI na tytuły zgłoszeń
+ */
+const AI_FEEDBACK_TITLES = {
+  [AI_FEEDBACK_TYPES.LOW_CONFIDENCE]: '[AI] Niska pewność odpowiedzi',
+  [AI_FEEDBACK_TYPES.FALLBACK_TO_V1]: '[AI] Fallback do starszego systemu',
+  [AI_FEEDBACK_TYPES.BOTH_FAILED]: '[AI] Oba systemy zawiodły',
+  [AI_FEEDBACK_TYPES.NO_RESULTS]: '[AI] Brak wyników dla zapytania',
+  [AI_FEEDBACK_TYPES.SLOW_RESPONSE]: '[AI] Zbyt wolna odpowiedź',
+  [AI_FEEDBACK_TYPES.TOOL_ERROR]: '[AI] Błąd wykonania narzędzia',
+  [AI_FEEDBACK_TYPES.UNKNOWN_INTENT]: '[AI] Nierozpoznana intencja'
+};
+
+/**
+ * Usuwa pola z wartością undefined z obiektu (rekurencyjnie)
+ * Firestore nie akceptuje wartości undefined
+ */
+const removeUndefinedFields = (obj) => {
+  if (obj === null || typeof obj !== 'object') return obj;
+  
+  const cleaned = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        cleaned[key] = removeUndefinedFields(value);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  }
+  return cleaned;
+};
+
+/**
+ * Automatycznie dodaje zgłoszenie błędu AI (ciche, bez wiedzy użytkownika)
+ * Zgłoszenia te są widoczne w panelu "Zgłoszenia błędów" z filtrem AI Feedback
+ * 
+ * @param {string} type - Typ zdarzenia AI (z AI_FEEDBACK_TYPES)
+ * @param {Object} data - Dane zdarzenia
+ * @returns {Promise<string|null>} - ID zgłoszenia lub null przy błędzie
+ */
+export const addAutomaticAIFeedback = async (type, data) => {
+  try {
+    const title = AI_FEEDBACK_TITLES[type] || '[AI] Problem z asystentem';
+    
+    // Przygotuj szczegółowy opis
+    const descriptionParts = [
+      `**Zapytanie użytkownika:**`,
+      data.query || '(brak)',
+      '',
+      `**Rozpoznana intencja:** ${data.intent || 'nieznana'}`,
+      `**Pewność:** ${((data.confidence || 0) * 100).toFixed(1)}%`,
+      '',
+      data.errorMessage ? `**Błąd:** ${data.errorMessage}` : '',
+      data.response ? `**Odpowiedź AI:** ${String(data.response).substring(0, 300)}${String(data.response).length > 300 ? '...' : ''}` : '',
+      '',
+      `**Czas przetwarzania:** ${(data.processingTime || 0).toFixed(0)}ms`,
+      `**Metoda:** ${data.method || 'unknown'}`,
+      `**Wersja:** ${data.version || 'unknown'}`,
+    ].filter(Boolean).join('\n');
+
+    // Dane AI - użyj null zamiast undefined (Firestore nie akceptuje undefined)
+    const aiData = {
+      query: data.query || null,
+      intent: data.intent || null,
+      confidence: data.confidence ?? null,
+      processingTime: data.processingTime ?? null,
+      method: data.method || null,
+      version: data.version || null,
+      parameters: data.parameters || {},
+      errorMessage: data.errorMessage || null,
+      response: data.response ? String(data.response).substring(0, 500) : null
+    };
+
+    const reportData = {
+      title,
+      description: descriptionParts,
+      priority: type === AI_FEEDBACK_TYPES.BOTH_FAILED ? 'wysoki' : 'niski',
+      
+      // Oznaczenie jako automatyczne zgłoszenie AI
+      source: 'ai_assistant',
+      aiType: type,
+      
+      // Dane AI do analizy (oczyszczone z undefined)
+      aiData: removeUndefinedFields(aiData),
+      
+      // Informacje o kontekście
+      browserInfo: {
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server',
+        platform: typeof navigator !== 'undefined' ? navigator.platform : 'server',
+        screenWidth: typeof window !== 'undefined' ? (window.screen?.width || 0) : 0,
+        screenHeight: typeof window !== 'undefined' ? (window.screen?.height || 0) : 0
+      },
+      path: typeof window !== 'undefined' ? (window.location?.pathname || '/') : '/api',
+      
+      // Bez logów konsoli dla automatycznych zgłoszeń
+      consoleLogs: null,
+      includeConsoleLogs: false
+    };
+
+    // Dodaj zgłoszenie do bazy (z oczyszczonymi danymi)
+    const reportRef = await addDoc(collection(db, BUG_REPORTS_COLLECTION), removeUndefinedFields({
+      ...reportData,
+      status: 'nowy',
+      createdAt: serverTimestamp(),
+      createdBy: data.userId || 'system_ai_feedback',
+      updatedAt: serverTimestamp(),
+      updatedBy: data.userId || 'system_ai_feedback'
+    }));
+
+    console.log(`[AIFeedback] 📊 Automatycznie utworzono zgłoszenie: ${reportRef.id} (${type})`);
+    return reportRef.id;
+
+  } catch (error) {
+    // Błędy logowania nie powinny wpływać na działanie aplikacji
+    console.error('[AIFeedback] ⚠️ Błąd tworzenia zgłoszenia (ignorowany):', error.message);
+    return null;
+  }
+};
+
+/**
+ * Pomocnicze funkcje do szybkiego logowania konkretnych typów problemów AI
+ * Wszystkie metody są asynchroniczne i "ciche" - nie blokują działania aplikacji
+ */
+export const AIFeedback = {
+  /**
+   * Loguj niską pewność odpowiedzi (confidence < 0.3)
+   */
+  logLowConfidence: (query, analysisResult, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.LOW_CONFIDENCE, {
+      query,
+      intent: analysisResult?.intent,
+      confidence: analysisResult?.confidence,
+      parameters: analysisResult?.parameters,
+      userId
+    });
+  },
+
+  /**
+   * Loguj fallback z V2 do V1
+   */
+  logFallbackToV1: (query, v2Result, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.FALLBACK_TO_V1, {
+      query,
+      intent: v2Result?.intent,
+      confidence: v2Result?.confidence,
+      errorMessage: v2Result?.error || 'V2 nie obsłużył zapytania',
+      version: 'v2_to_v1',
+      userId
+    });
+  },
+
+  /**
+   * Loguj błąd obu systemów
+   */
+  logBothFailed: (query, errorMessage, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.BOTH_FAILED, {
+      query,
+      errorMessage,
+      version: 'none',
+      userId
+    });
+  },
+
+  /**
+   * Loguj brak wyników
+   */
+  logNoResults: (query, intent, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.NO_RESULTS, {
+      query,
+      intent,
+      userId
+    });
+  },
+
+  /**
+   * Loguj wolną odpowiedź (>10s)
+   */
+  logSlowResponse: (query, processingTime, method, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.SLOW_RESPONSE, {
+      query,
+      processingTime,
+      method,
+      userId
+    });
+  },
+
+  /**
+   * Loguj błąd narzędzia (tool execution error)
+   */
+  logToolError: (functionName, parameters, error, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.TOOL_ERROR, {
+      query: `Narzędzie: ${functionName}`,
+      errorMessage: error?.message || String(error),
+      parameters,
+      method: 'tool_executor',
+      userId
+    });
+  },
+
+  /**
+   * Loguj nierozpoznaną intencję
+   */
+  logUnknownIntent: (query, analysisResult, userId = null) => {
+    return addAutomaticAIFeedback(AI_FEEDBACK_TYPES.UNKNOWN_INTENT, {
+      query,
+      intent: analysisResult?.intent || 'unknown',
+      confidence: analysisResult?.confidence,
+      userId
+    });
+  }
+}; 

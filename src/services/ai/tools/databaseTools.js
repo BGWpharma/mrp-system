@@ -198,7 +198,11 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_orders",
-      description: "Pobiera zamówienia klientów (Customer Orders - CO) z filtrami. Użyj gdy użytkownik pyta o zamówienia, sprzedaż, CO.",
+      description: `Pobiera zamówienia klientów (Customer Orders - CO) z filtrami. Użyj gdy użytkownik pyta o zamówienia, sprzedaż, CO.
+
+NOWE MOŻLIWOŚCI:
+- Filtrowanie po dacie dostawy (deliveryDateFrom/deliveryDateTo) - odpowiedz na pytania typu "zamówienia z dostawą przed X"
+- dateFrom/dateTo filtrują po dacie utworzenia zamówienia (orderDate)`,
       parameters: {
         type: "object",
         properties: {
@@ -223,11 +227,19 @@ export const DATABASE_TOOLS = [
           },
           dateFrom: {
             type: "string",
-            description: "Data początkowa (ISO format)"
+            description: "Data początkowa utworzenia zamówienia - orderDate (YYYY-MM-DD)"
           },
           dateTo: {
             type: "string",
-            description: "Data końcowa (ISO format)"
+            description: "Data końcowa utworzenia zamówienia - orderDate (YYYY-MM-DD)"
+          },
+          deliveryDateFrom: {
+            type: "string",
+            description: "Data początkowa dostawy - deliveryDate (YYYY-MM-DD). Użyj dla pytań 'zamówienia z dostawą od X'"
+          },
+          deliveryDateTo: {
+            type: "string",
+            description: "Data końcowa dostawy - deliveryDate (YYYY-MM-DD). Użyj dla pytań 'zamówienia z dostawą przed X' lub 'do X'"
           },
           includeItems: {
             type: "boolean",
@@ -247,7 +259,12 @@ export const DATABASE_TOOLS = [
     type: "function",
     function: {
       name: "query_purchase_orders",
-      description: "Pobiera zamówienia zakupu (Purchase Orders - PO) od dostawców. Użyj gdy użytkownik pyta o zakupy, zamówienia do dostawców, PO.",
+      description: `Pobiera zamówienia zakupu (Purchase Orders - PO) od dostawców. Użyj gdy użytkownik pyta o zakupy, zamówienia do dostawców, PO.
+
+NOWE MOŻLIWOŚCI:
+- Filtrowanie po planowanej dacie dostawy (expectedDeliveryDateFrom/expectedDeliveryDateTo) - odpowiedz na pytania typu "PO z dostawą przed X"
+- dateFrom/dateTo filtrują po dacie utworzenia zamówienia (orderDate)
+- hasUndeliveredItems: true = pokaż tylko PO z niedostarczonymi pozycjami`,
       parameters: {
         type: "object",
         properties: {
@@ -258,7 +275,7 @@ export const DATABASE_TOOLS = [
           status: {
             type: "array",
             items: { type: "string" },
-            description: "Statusy zamówień zakupu"
+            description: "Statusy zamówień zakupu: oczekujące, potwierdzone, częściowo dostarczone, dostarczone, anulowane"
           },
           supplierId: {
             type: "string",
@@ -270,15 +287,28 @@ export const DATABASE_TOOLS = [
           },
           dateFrom: {
             type: "string",
-            description: "Data początkowa (ISO)"
+            description: "Data początkowa utworzenia zamówienia - orderDate (YYYY-MM-DD)"
           },
           dateTo: {
             type: "string",
-            description: "Data końcowa (ISO)"
+            description: "Data końcowa utworzenia zamówienia - orderDate (YYYY-MM-DD)"
+          },
+          expectedDeliveryDateFrom: {
+            type: "string",
+            description: "Data początkowa planowanej dostawy - expectedDeliveryDate (YYYY-MM-DD). Użyj dla pytań 'PO z dostawą od X'"
+          },
+          expectedDeliveryDateTo: {
+            type: "string",
+            description: "Data końcowa planowanej dostawy - expectedDeliveryDate (YYYY-MM-DD). Użyj dla pytań 'PO z dostawą przed X' lub 'do X'"
+          },
+          hasUndeliveredItems: {
+            type: "boolean",
+            description: "Filtruj tylko PO z niedostarczonymi pozycjami (gdzie received < quantity). Użyj dla pytań 'które PO mają niekompletne dostawy'"
           },
           limit: {
             type: "number",
-            default: 100
+            default: 100,
+            description: "Maksymalna liczba wyników"
           }
         }
       }
@@ -456,10 +486,21 @@ WYNIK zawiera:
 - totalSum: SUMA wartości wszystkich znalezionych faktur (obliczona automatycznie!)
 - count: liczba znalezionych faktur
 
-UŻYJ TEGO ZAMIAST aggregate_data dla zapytań o sumę faktur - totalSum jest już obliczone!`,
+UŻYJ TEGO ZAMIAST aggregate_data dla zapytań o sumę faktur - totalSum jest już obliczone!
+
+NOWE MOŻLIWOŚCI:
+- Wyszukiwanie po numerze faktury (invoiceNumber) - częściowe dopasowanie
+- Filtrowanie po powiązanym zamówieniu (orderId)
+- Filtrowanie faktur proforma (isProforma: true/false)
+- Filtrowanie faktur korygujących (isCorrectionInvoice: true/false)
+- Filtrowanie po walucie (currency: EUR/PLN/USD)`,
       parameters: {
         type: "object",
         properties: {
+          invoiceNumber: {
+            type: "string",
+            description: "Numer faktury do wyszukania (częściowe dopasowanie, case-insensitive) - np. 'FV/2025', '2025/01'"
+          },
           status: {
             type: "array",
             items: { type: "string" },
@@ -468,6 +509,22 @@ UŻYJ TEGO ZAMIAST aggregate_data dla zapytań o sumę faktur - totalSum jest ju
           customerId: {
             type: "string",
             description: "ID klienta (automatycznie mapowane na customer.id)"
+          },
+          orderId: {
+            type: "string",
+            description: "ID powiązanego zamówienia (CO lub PO) - znajdzie faktury wystawione dla tego zamówienia"
+          },
+          isProforma: {
+            type: "boolean",
+            description: "Filtruj tylko faktury proforma (true) lub tylko zwykłe faktury (false). Jeśli nie podano - zwraca wszystkie."
+          },
+          isCorrectionInvoice: {
+            type: "boolean",
+            description: "Filtruj tylko faktury korygujące (true) lub tylko zwykłe faktury (false). Jeśli nie podano - zwraca wszystkie."
+          },
+          currency: {
+            type: "string",
+            description: "Waluta faktury: EUR, PLN, USD, GBP"
           },
           dateFrom: {
             type: "string",
@@ -490,26 +547,71 @@ UŻYJ TEGO ZAMIAST aggregate_data dla zapytań o sumę faktur - totalSum jest ju
     type: "function",
     function: {
       name: "query_cmr_documents",
-      description: "Pobiera dokumenty CMR (dokumenty przewozowe) z filtrami. Użyj gdy użytkownik pyta o CMR, transport, przewozy.",
+      description: `Pobiera dokumenty CMR (dokumenty przewozowe) z filtrami. Użyj gdy użytkownik pyta o CMR, transport, przewozy.
+
+NOWE MOŻLIWOŚCI:
+- Wyszukiwanie po numerze CMR (cmrNumber) - częściowe dopasowanie
+- Filtrowanie po powiązanym zamówieniu klienta (linkedOrderId)
+- Filtrowanie po przewoźniku (carrier) - częściowe dopasowanie
+- Filtrowanie po nadawcy/odbiorcy (sender/recipient) - częściowe dopasowanie
+- Filtrowanie po miejscu załadunku/dostawy (loadingPlace/deliveryPlace) - częściowe dopasowanie
+- Filtrowanie po dacie wystawienia (issueDate) lub dostawy (deliveryDate)`,
       parameters: {
         type: "object",
         properties: {
+          cmrNumber: {
+            type: "string",
+            description: "Numer CMR do wyszukania (częściowe dopasowanie, case-insensitive) - np. 'CMR-2025', '2025/01'"
+          },
           status: {
             type: "array",
             items: { type: "string" },
-            description: "Statusy dokumentów CMR"
+            description: "Statusy dokumentów CMR: szkic, wystawiony, w transporcie, dostarczone, zakończony, anulowany"
+          },
+          linkedOrderId: {
+            type: "string",
+            description: "ID powiązanego zamówienia klienta (CO) - znajdzie CMR dla tego zamówienia"
+          },
+          carrier: {
+            type: "string",
+            description: "Nazwa przewoźnika (częściowe dopasowanie, case-insensitive)"
+          },
+          sender: {
+            type: "string",
+            description: "Nazwa nadawcy (częściowe dopasowanie, case-insensitive)"
+          },
+          recipient: {
+            type: "string",
+            description: "Nazwa odbiorcy (częściowe dopasowanie, case-insensitive)"
+          },
+          loadingPlace: {
+            type: "string",
+            description: "Miejsce załadunku (częściowe dopasowanie, case-insensitive)"
+          },
+          deliveryPlace: {
+            type: "string",
+            description: "Miejsce dostawy (częściowe dopasowanie, case-insensitive)"
           },
           dateFrom: {
             type: "string",
-            description: "Data początkowa (ISO)"
+            description: "Data początkowa wystawienia CMR - issueDate (YYYY-MM-DD)"
           },
           dateTo: {
             type: "string",
-            description: "Data końcowa (ISO)"
+            description: "Data końcowa wystawienia CMR - issueDate (YYYY-MM-DD)"
+          },
+          deliveryDateFrom: {
+            type: "string",
+            description: "Data początkowa dostawy - deliveryDate (YYYY-MM-DD)"
+          },
+          deliveryDateTo: {
+            type: "string",
+            description: "Data końcowa dostawy - deliveryDate (YYYY-MM-DD)"
           },
           limit: {
             type: "number",
-            default: 100
+            default: 100,
+            description: "Maksymalna liczba dokumentów do pobrania"
           }
         }
       }

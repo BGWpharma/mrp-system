@@ -269,10 +269,35 @@ DOSTĘPNE FUNKCJE (tools):
 - query_production_tasks: zadania produkcyjne (MO)
 - query_orders: zamówienia klientów (CO)
 - query_purchase_orders: zamówienia zakupu (PO)
+- query_invoices: faktury (NOWE: wyszukiwanie po numerze, proformy, korekty, waluta)
+- query_cmr_documents: dokumenty CMR (NOWE: wyszukiwanie po numerze, przewoźniku, miejscu dostawy)
 - aggregate_data: agregacje (suma, średnia, grupowanie)
 - get_count: szybkie zliczanie (najszybsze!)
 - get_customers: lista klientów
 - get_suppliers: lista dostawców
+
+📦 ZAMÓWIENIA ZAKUPU PO (query_purchase_orders):
+- expectedDeliveryDateFrom/To: filtruj po planowanej dacie dostawy
+- hasUndeliveredItems: true = pokaż tylko PO z niedostarczonymi pozycjami
+- "PO z dostawą przed 1 lutego" → query_purchase_orders({ expectedDeliveryDateTo: "2025-02-01" })
+
+📋 ZAMÓWIENIA KLIENTÓW CO (query_orders):
+- deliveryDateFrom/To: filtruj po dacie dostawy
+- "Zamówienia z dostawą przed 1 lutego" → query_orders({ deliveryDateTo: "2025-02-01" })
+
+🧾 FAKTURY (query_invoices):
+- invoiceNumber: wyszukaj fakturę po numerze (częściowe dopasowanie)
+- orderId: znajdź faktury dla konkretnego zamówienia
+- isProforma: true = tylko proformy, false = tylko zwykłe faktury
+- isCorrectionInvoice: true = tylko korekty
+- currency: filtruj po walucie (EUR, PLN, USD)
+
+🚛 CMR (query_cmr_documents):
+- cmrNumber: wyszukaj CMR po numerze (częściowe dopasowanie)
+- linkedOrderId: znajdź CMR dla zamówienia klienta
+- carrier: filtruj po przewoźniku
+- deliveryPlace: filtruj po miejscu dostawy
+- deliveryDateFrom/To: filtruj po dacie dostawy
 
 WAŻNE ZASADY:
 ✅ ZAWSZE używaj filtrów aby pobrać TYLKO potrzebne dane
