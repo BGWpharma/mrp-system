@@ -177,15 +177,10 @@ export class GeminiQueryOrchestrator {
       console.log(`[GeminiQueryOrchestrator] ${reason}`);
       console.log(`[GeminiQueryOrchestrator] 📱 Model: ${model}`);
       
-      // Przygotuj tools w formacie Gemini (opcjonalnie wyłączone dla zwykłej konwersacji)
-      const disableTools = options.disableTools || false;
-      const geminiTools = disableTools ? null : [{
+      // ZAWSZE używaj narzędzi - NIE MA trybu konwersacyjnego!
+      const geminiTools = [{
         function_declarations: this.convertToolsToGeminiFormat(DATABASE_TOOLS)
       }];
-      
-      if (disableTools) {
-        console.log('[GeminiQueryOrchestrator] 💬 Tryb konwersacyjny - narzędzia wyłączone');
-      }
       
       // Przygotuj historię konwersacji
       const history = context.map(msg => ({
@@ -193,8 +188,8 @@ export class GeminiQueryOrchestrator {
         parts: [{ text: msg.content }]
       }));
       
-      // System instruction (zmieniony dla trybu konwersacyjnego lub Vision)
-      let systemPrompt = disableTools ? this.getConversationalSystemPrompt() : this.getSystemPrompt();
+      // System instruction (zawsze z narzędziami)
+      let systemPrompt = this.getSystemPrompt();
       
       // Dodaj instrukcje dla Vision jeśli są załączniki
       if (hasMediaAttachments) {
@@ -208,8 +203,8 @@ export class GeminiQueryOrchestrator {
       // Przygotuj parts dla zapytania użytkownika (tekst + opcjonalnie obrazy/PDF)
       const userParts = this.buildUserParts(query, options.mediaAttachments);
       
-      // Iteracyjne wywoływanie (max 5 rund dla tools, 1 runda dla konwersacji)
-      const maxRounds = disableTools ? 1 : 5;
+      // Max 5 rund wywoływania narzędzi
+      const maxRounds = 5;
       let currentRound = 0;
       let finalResponse = null;
       
@@ -229,17 +224,13 @@ export class GeminiQueryOrchestrator {
           ],
           systemInstruction: systemInstruction,
           generationConfig: {
-            temperature: disableTools ? 0.7 : 0.3,  // OBNIŻONE: 0.3 dla danych (mniej halucynacji), 0.7 dla rozmów
+            temperature: 0.3,  // Niska temperatura dla dokładnych danych (mniej halucynacji)
             maxOutputTokens: model === 'gemini-2.5-pro' ? 65536 : 8192,
-            topP: disableTools ? 0.9 : 0.7,  // OBNIŻONE: 0.7 dla danych (bardziej deterministyczne)
-            topK: disableTools ? 40 : 20     // OBNIŻONE: 20 dla danych (mniej kreatywności)
-          }
+            topP: 0.7,  // Bardziej deterministyczne odpowiedzi
+            topK: 20    // Mniej kreatywności = dokładniejsze dane
+          },
+          tools: geminiTools
         };
-        
-        // Dodaj tools tylko jeśli nie są wyłączone
-        if (geminiTools) {
-          requestBody.tools = geminiTools;
-        }
         
         // Gemini 2.5 Pro automatycznie używa thinking mode - nie wymaga jawnej konfiguracji
         // API nie wspiera pola 'thinkingConfig' - thinking jest wbudowany w model
@@ -596,12 +587,34 @@ aby zaktualizować zamówienie zakupowe danymi z dokumentu.
   static getSystemPrompt() {
     return `Jesteś inteligentnym asystentem AI dla systemu MRP (Manufacturing Resource Planning).
 
-🚨 KRYTYCZNE ZASADY - ABSOLUTNY PRIORYTET (CZYTAJ TO NAJPIERW!):
+🔴🔴🔴 ABSOLUTNIE KRYTYCZNE - CZYTAJ NAJPIERW! 🔴🔴🔴
+═══════════════════════════════════════════════════════════════
+🚨 ZAWSZE WYWOŁUJ FUNKCJE! Gdy użytkownik pyta o dane (zamówienia, faktury, produkcję, itp.):
+   → MUSISZ wywołać odpowiednią funkcję narzędziową
+   → NIGDY nie mów "nie mam możliwości" - ZAWSZE spróbuj wywołać funkcję!
+   → Sprawdź dostępne parametry funkcji - masz WIELE opcji filtrowania!
+
+❌ ZABRONIONE ODPOWIEDZI (NIGDY tego nie pisz!):
+   - "Nie mam możliwości filtrowania po..."
+   - "Nie mogę wyszukać..."
+   - "Ten parametr nie jest dostępny..."
+   
+✅ ZAMIAST TEGO: Wywołaj funkcję z dostępnymi parametrami i pokaż wyniki!
+
+PRZYKŁAD - Zapytanie "PO z dostawą przed 1 lutego":
+❌ ŹLE: "Nie mam możliwości filtrowania po dacie dostawy"
+✅ DOBRZE: Wywołaj query_purchase_orders({ expectedDeliveryDateTo: "2026-02-01" })
+
+PRZYKŁAD - Zapytanie "Zamówienia CO z dostawą w styczniu":
+❌ ŹLE: "Nie mogę filtrować po dacie dostawy"
+✅ DOBRZE: Wywołaj query_orders({ deliveryDateFrom: "2026-01-01", deliveryDateTo: "2026-01-31" })
+═══════════════════════════════════════════════════════════════
+
+🚨 KRYTYCZNE ZASADY DLA DANYCH:
 ═══════════════════════════════════════════════════════════════
 🚫 NIE WYMYŚLAJ DANYCH! Używaj WYŁĄCZNIE informacji z wyników funkcji.
 🚫 Jeśli wynik funkcji ma count: 0 lub pusta lista [] - powiedz jasno "Brak danych w systemie" i ZATRZYMAJ SIĘ.
 🚫 NIE generuj przykładowych danych, NIE twórz hipotetycznych wartości, NIE "uzupełniaj" braków.
-🚫 NIE używaj swojej wiedzy o systemach MRP do tworzenia danych - tylko CYTUJ wyniki funkcji.
 ✅ Jeśli nie ma danych - po prostu powiedz: "W systemie nie ma [czego szukano]." i zakończ.
 ✅ Lepiej krótka prawdziwa odpowiedź niż długa wymyślona.
 
@@ -610,13 +623,6 @@ WYKRYWANIE PUSTYCH WYNIKÓW (ABSOLUTNIE OBOWIĄZKOWE):
 - isEmpty: true → STOP! Powiedz "Brak danych" i nie dodawaj nic więcej.
 - warning w wynikach → STOP! Powtórz warning użytkownikowi.
 - Pusta lista [] → STOP! Powiedz "Nie znaleziono wyników".
-
-PRZYKŁADY POPRAWNYCH ODPOWIEDZI:
-❌ ŹLE (halucynacja): "Oto 3 wstrzymane MO: MO00123 (Produkt A, 100 szt.), MO00124..." [gdy count: 0]
-✅ DOBRZE: "Obecnie w systemie nie ma żadnych zadań produkcyjnych o statusie 'wstrzymane'."
-
-❌ ŹLE: "Typowo w produkcji używa się następujących materiałów: mąka, cukier..." [gdy brak danych]
-✅ DOBRZE: "Nie znaleziono danych o materiałach dla tego produktu."
 ═══════════════════════════════════════════════════════════════
 
 Twoje zadanie: Analizujesz zapytania użytkowników i decydujesz jakie dane pobrać z bazy danych, używając dostępnych funkcji.
@@ -778,29 +784,6 @@ Jesteś ekspertem w zarządzaniu produkcją i optymalizacji procesów.`;
   }
   
   /**
-   * System prompt dla trybu konwersacyjnego (bez dostępu do bazy danych)
-   */
-  static getConversationalSystemPrompt() {
-    return `Jesteś pomocnym asystentem AI dla systemu MRP (Manufacturing Resource Planning).
-
-Obecnie jesteś w trybie konwersacyjnym - nie masz dostępu do bazy danych, ale możesz:
-- Odpowiadać na ogólne pytania o system MRP
-- Udzielać porad dotyczących zarządzania produkcją
-- Wyjaśniać pojęcia i koncepcje
-- Prowadzić przyjazną rozmowę
-- Pomagać zrozumieć funkcje systemu
-
-ZASADY:
-- Zawsze odpowiadaj po polsku
-- Bądź pomocny, przyjazny i profesjonalny
-- Jeśli użytkownik chce konkretne dane z systemu, poinformuj go, że może zadać konkretne pytanie o dane (np. "Pokaż ostatnie MO", "Ile mamy receptur?")
-- Używaj emoji dla lepszej czytelności, ale z umiarem
-- Formatuj odpowiedzi czytelnie (używaj list, nagłówków, podziałów)
-
-Pamiętaj: Jesteś ekspertem w zarządzaniu produkcją i można Cię pytać o wszystko! 💬`;
-  }
-  
-  /**
    * Sprawdza czy odpowiedź AI wskazuje na niemożność wykonania zadania
    * Te odpowiedzi powinny być logowane do AI Feedback dla udoskonalania systemu
    */
@@ -826,30 +809,6 @@ Pamiętaj: Jesteś ekspertem w zarządzaniu produkcją i można Cię pytać o ws
     ];
     
     return unablePatterns.some(pattern => pattern.test(response));
-  }
-  
-  /**
-   * Sprawdza czy zapytanie powinno być obsłużone przez orchestrator
-   */
-  static shouldHandle(query) {
-    const dataKeywords = [
-      // Czasowniki akcji
-      'ile', 'pokaż', 'wyświetl', 'lista', 'jaki', 'jakie', 'który', 'które',
-      'podaj', 'daj', 'znajdź', 'szukaj', 'pobierz', 'sprawdź', 'zobacz',
-      
-      // Rzeczowniki i obszary
-      'receptur', 'magazyn', 'produkcj', 'zamówi', 'mo', 'co', 'po',
-      'klient', 'dostawc', 'faktur', 'cmr', 'stan', 'alert', 'koszt',
-      'użytkownik', 'pracownik', 'wydajność', 'produktywn', 'transakcj',
-      'partii', 'partie', 'wygasa', 'opóźnion', 'uwag', 'problem',
-      'rentowność', 'marża', 'zysk', 'analiz', 'porówna', 'optymalizuj',
-      
-      // Dodatkowe słowa kluczowe
-      'historia', 'sesj', 'raport', 'statystyk', 'zużyc', 'rezerwacj'
-    ];
-    
-    const lowerQuery = query.toLowerCase();
-    return dataKeywords.some(keyword => lowerQuery.includes(keyword));
   }
   
   /**

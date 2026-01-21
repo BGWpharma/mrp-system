@@ -1196,135 +1196,17 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
   }
   
   try {
-    // ✨ NOWY SYSTEM: Gemini Query Orchestrator - Gemini 2.5 Pro sam decyduje jakie dane pobrać
-    // Sprawdź czy orchestrator powinien obsłużyć zapytanie (nie obsługuje załączników)
+    // ✨ SYSTEM: Gemini Query Orchestrator - ZAWSZE używa narzędzi do pobierania danych
     const hasAttachments = attachments && attachments.length > 0;
-    const shouldUseOrchestrator = !hasAttachments && GeminiQueryOrchestrator.shouldHandle(query);
     
-    if (shouldUseOrchestrator) {
-      console.log('[processAIQuery] 🎯 Używam Gemini Query Orchestrator - Gemini zdecyduje jakie dane pobrać');
+    // 🖼️ VISION MODE: Jeśli są załączniki obrazowe/PDF
+    if (hasAttachments) {
+      const mediaAttachments = await extractMediaAttachments(attachments);
       
-      try {
-        // Pobierz klucz API Gemini
-        const apiKey = await getGeminiApiKey(userId);
-        
-        if (!apiKey) {
-          return "❌ Nie znaleziono klucza API Gemini. Proszę skonfigurować klucz w ustawieniach systemu.\n\n" +
-                 "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
-        }
-        
-        // Użyj orchestratora - Gemini sam wykona targetowane zapytania
-        // Inteligentnie wybierze model (2.5 Pro, 1.5 Pro, 2.0 Flash) na podstawie zapytania
-        const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
-          query, 
-          apiKey, 
-          context,
-          {
-            // Gemini sam wybierze najlepszy model dla tego zapytania
-            // forceModel: 'gemini-2.5-pro' - opcjonalnie można wymusić konkretny model
-            enableThinking: true,  // Włącz thinking mode dla 2.5 Pro
-            userId  // 🆕 Przekaż userId dla AI Feedback
-          }
-        );
-        
-        if (orchestratorResult.success) {
-          console.log(`[processAIQuery] ✅ Gemini Orchestrator zakończył w ${orchestratorResult.processingTime.toFixed(2)}ms`);
-          console.log(`[processAIQuery] 🤖 Użyty model: ${orchestratorResult.model}`);
-          console.log(`[processAIQuery] 📊 Wykonano ${orchestratorResult.executedTools.length} targetowanych zapytań do bazy`);
-          console.log(`[processAIQuery] 📝 Otrzymano odpowiedź (długość: ${orchestratorResult.response?.length} znaków):`, orchestratorResult.response?.substring(0, 200) + '...');
-          
-          // Dodaj informację o zoptymalizowanym przetwarzaniu
-          let response = orchestratorResult.response;
-          
-          if (orchestratorResult.executedTools.length > 0) {
-            const queryNames = orchestratorResult.executedTools.map(t => t.name).join(', ');
-            const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
-            
-            // Tylko koszt w stopce
-            response += `\n\n_Koszt: ~$${estimatedCost.toFixed(4)}_`;
-          }
-          
-          console.log(`[processAIQuery] 🎁 Zwracam odpowiedź (długość: ${response?.length} znaków):`, response?.substring(0, 200) + '...');
-          
-          return response;
-        } else {
-          // Orchestrator nie zdołał przetworzyć - zwróć błąd zamiast fallbacku
-          console.error('[processAIQuery] ❌ Gemini Orchestrator nie zdołał przetworzyć zapytania');
-          console.error('[processAIQuery] Błąd:', orchestratorResult.error);
-          
-          return `❌ **Nie udało się przetworzyć zapytania**\n\n` +
-                 `Szczegóły: ${orchestratorResult.error}\n\n` +
-                 `💡 Spróbuj:\n` +
-                 `• Uprość zapytanie\n` +
-                 `• Zmniejsz liczbę żądanych elementów\n` +
-                 `• Podziel zapytanie na mniejsze części\n` +
-                 `• Sprawdź czy klucz API Gemini jest poprawny`;
-        }
-        
-      } catch (orchestratorError) {
-        console.error('[processAIQuery] ❌ Błąd w Gemini Orchestrator:', orchestratorError);
-        
-        return `❌ **Wystąpił błąd podczas przetwarzania zapytania**\n\n` +
-               `Szczegóły: ${orchestratorError.message}\n\n` +
-               `💡 Spróbuj ponownie lub skontaktuj się z administratorem.\n` +
-               `Jeśli problem dotyczy klucza API, sprawdź konfigurację w ustawieniach.`;
-      }
-    } else {
-      if (hasAttachments) {
-        // 🆕 VISION MODE: Sprawdź czy są załączniki obrazowe/PDF
-        const mediaAttachments = await extractMediaAttachments(attachments);
-        
-        if (mediaAttachments.length > 0) {
-          console.log(`[processAIQuery] 🖼️ Wykryto ${mediaAttachments.length} załącznik(ów) multimedialnych - używam Gemini Vision`);
-          
-          try {
-            const apiKey = await getGeminiApiKey(userId);
-            
-            if (!apiKey) {
-              return "❌ Nie znaleziono klucza API Gemini. Proszę skonfigurować klucz w ustawieniach systemu.\n\n" +
-                     "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
-            }
-            
-            // Użyj Gemini z Vision API
-            const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
-              query, 
-              apiKey, 
-              context,
-              {
-                mediaAttachments: mediaAttachments,
-                enableThinking: true,  // Włącz thinking mode dla lepszej analizy dokumentów
-                userId  // 🆕 Przekaż userId dla AI Feedback
-              }
-            );
-            
-            if (orchestratorResult.success) {
-              console.log(`[processAIQuery] ✅ Gemini Vision odpowiedział: ${orchestratorResult.response?.substring(0, 100)}...`);
-              
-              let response = orchestratorResult.response;
-              
-              // Tylko koszt w stopce
-              const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
-              response += `\n\n_Koszt: ~$${estimatedCost.toFixed(4)}_`;
-              
-              return response;
-            } else {
-              console.error('[processAIQuery] ❌ Gemini Vision nie zdołał przetworzyć:', orchestratorResult.error);
-              return `❌ Nie udało się przeanalizować dokumentu: ${orchestratorResult.error}`;
-            }
-          } catch (visionError) {
-            console.error('[processAIQuery] ❌ Błąd w trybie Vision:', visionError);
-            return `❌ Wystąpił błąd podczas analizy dokumentu: ${visionError.message}`;
-          }
-        } else {
-          console.log('[processAIQuery] 📎 Załączniki nie są obrazami/PDF - używam standardowego systemu');
-          // Kontynuuj do standardowego systemu poniżej
-        }
-      } else {
-        // Zapytanie konwersacyjne - użyj Gemini bez narzędzi
-        console.log('[processAIQuery] 💬 Zapytanie konwersacyjne - używam Gemini w trybie konwersacyjnym (bez dostępu do bazy)');
+      if (mediaAttachments.length > 0) {
+        console.log(`[processAIQuery] 🖼️ Wykryto ${mediaAttachments.length} załącznik(ów) multimedialnych - używam Gemini Vision`);
         
         try {
-          // Pobierz klucz API Gemini
           const apiKey = await getGeminiApiKey(userId);
           
           if (!apiKey) {
@@ -1332,40 +1214,98 @@ export const processAIQuery = async (query, context = [], userId, attachments = 
                    "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
           }
           
+          // Użyj Gemini z Vision API + narzędzia
           const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
             query, 
             apiKey, 
             context,
             {
-              disableTools: true,  // 💬 Wyłącz narzędzia - tylko konwersacja
-              enableThinking: false,  // Wyłącz thinking mode dla prostszych pytań
-              userId  // 🆕 Przekaż userId dla AI Feedback
+              mediaAttachments: mediaAttachments,
+              enableThinking: true,
+              userId
             }
           );
           
           if (orchestratorResult.success) {
-            console.log(`[processAIQuery] ✅ Gemini odpowiedział (tryb konwersacyjny): ${orchestratorResult.response?.substring(0, 100)}...`);
+            console.log(`[processAIQuery] ✅ Gemini Vision odpowiedział: ${orchestratorResult.response?.substring(0, 100)}...`);
             
             let response = orchestratorResult.response;
-            
-            // Dodaj informację o trybie konwersacyjnym
             const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
-            const modelEmoji = orchestratorResult.model.includes('2.5') ? '🧠' : 
-                              orchestratorResult.model.includes('1.5') ? '📚' : '⚡';
-            
-            response += `\n\n_💬 Tryb konwersacyjny (bez dostępu do bazy danych)_`;
-            response += `\n_${modelEmoji} Model: ${orchestratorResult.model} | Czas: ${orchestratorResult.processingTime.toFixed(0)}ms | Tokeny: ${orchestratorResult.tokensUsed} | Koszt: ~$${estimatedCost.toFixed(4)}_`;
+            response += `\n\n_Koszt: ~$${estimatedCost.toFixed(4)}_`;
             
             return response;
           } else {
-            console.error('[processAIQuery] ❌ Gemini nie zdołał odpowiedzieć (tryb konwersacyjny)');
-            return `❌ Nie udało się przetworzyć zapytania: ${orchestratorResult.error}`;
+            console.error('[processAIQuery] ❌ Gemini Vision nie zdołał przetworzyć:', orchestratorResult.error);
+            return `❌ Nie udało się przeanalizować dokumentu: ${orchestratorResult.error}`;
           }
-        } catch (conversationError) {
-          console.error('[processAIQuery] ❌ Błąd w trybie konwersacyjnym:', conversationError);
-          return `❌ Wystąpił błąd: ${conversationError.message}`;
+        } catch (visionError) {
+          console.error('[processAIQuery] ❌ Błąd w trybie Vision:', visionError);
+          return `❌ Wystąpił błąd podczas analizy dokumentu: ${visionError.message}`;
         }
+      } else {
+        console.log('[processAIQuery] 📎 Załączniki nie są obrazami/PDF - używam standardowego systemu');
+        // Kontynuuj do standardowego systemu poniżej
       }
+    }
+    
+    // 🎯 STANDARDOWY TRYB: Gemini Query Orchestrator z narzędziami (ZAWSZE!)
+    console.log('[processAIQuery] 🎯 Używam Gemini Query Orchestrator - Gemini zdecyduje jakie dane pobrać');
+    
+    try {
+      const apiKey = await getGeminiApiKey(userId);
+      
+      if (!apiKey) {
+        return "❌ Nie znaleziono klucza API Gemini. Proszę skonfigurować klucz w ustawieniach systemu.\n\n" +
+               "💡 Uzyskaj klucz API na: https://aistudio.google.com/app/apikey";
+      }
+      
+      // ZAWSZE używaj orchestratora z narzędziami - NIE MA trybu konwersacyjnego!
+      const orchestratorResult = await GeminiQueryOrchestrator.processQuery(
+        query, 
+        apiKey, 
+        context,
+        {
+          enableThinking: true,
+          userId
+        }
+      );
+      
+      if (orchestratorResult.success) {
+        console.log(`[processAIQuery] ✅ Gemini Orchestrator zakończył w ${orchestratorResult.processingTime.toFixed(2)}ms`);
+        console.log(`[processAIQuery] 🤖 Użyty model: ${orchestratorResult.model}`);
+        console.log(`[processAIQuery] 📊 Wykonano ${orchestratorResult.executedTools.length} targetowanych zapytań do bazy`);
+        console.log(`[processAIQuery] 📝 Otrzymano odpowiedź (długość: ${orchestratorResult.response?.length} znaków):`, orchestratorResult.response?.substring(0, 200) + '...');
+        
+        let response = orchestratorResult.response;
+        
+        if (orchestratorResult.executedTools.length > 0) {
+          const estimatedCost = GeminiQueryOrchestrator.estimateCost(orchestratorResult.tokensUsed, orchestratorResult.model);
+          response += `\n\n_Koszt: ~$${estimatedCost.toFixed(4)}_`;
+        }
+        
+        console.log(`[processAIQuery] 🎁 Zwracam odpowiedź (długość: ${response?.length} znaków):`, response?.substring(0, 200) + '...');
+        
+        return response;
+      } else {
+        console.error('[processAIQuery] ❌ Gemini Orchestrator nie zdołał przetworzyć zapytania');
+        console.error('[processAIQuery] Błąd:', orchestratorResult.error);
+        
+        return `❌ **Nie udało się przetworzyć zapytania**\n\n` +
+               `Szczegóły: ${orchestratorResult.error}\n\n` +
+               `💡 Spróbuj:\n` +
+               `• Uprość zapytanie\n` +
+               `• Zmniejsz liczbę żądanych elementów\n` +
+               `• Podziel zapytanie na mniejsze części\n` +
+               `• Sprawdź czy klucz API Gemini jest poprawny`;
+      }
+      
+    } catch (orchestratorError) {
+      console.error('[processAIQuery] ❌ Błąd w Gemini Orchestrator:', orchestratorError);
+      
+      return `❌ **Wystąpił błąd podczas przetwarzania zapytania**\n\n` +
+             `Szczegóły: ${orchestratorError.message}\n\n` +
+             `💡 Spróbuj ponownie lub skontaktuj się z administratorem.\n` +
+             `Jeśli problem dotyczy klucza API, sprawdź konfigurację w ustawieniach.`;
     }
   } catch (error) {
     console.error('[processAIQuery] ❌ Błąd podczas wyboru systemu:', error);
