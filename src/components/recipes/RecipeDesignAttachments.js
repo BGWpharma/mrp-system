@@ -409,32 +409,32 @@ const RecipeDesignAttachments = ({
       {attachments.length === 0 && (
         <Alert severity="info" sx={{ mt: compact ? 1 : 2 }}>
           {viewOnly 
-            ? "Brak załączników designu dla tej receptury." 
-            : "Brak załączników designu. Dodaj pierwszy design produktu powyżej."
+            ? t('recipes.designAttachments.noAttachmentsViewOnly')
+            : t('recipes.designAttachments.noAttachments')
           }
         </Alert>
       )}
 
       {/* Dialog edycji opisu */}
       <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edytuj opis designu</DialogTitle>
+        <DialogTitle>{t('recipes.designAttachments.editDescription')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Opis designu"
+            label={t('recipes.designAttachments.description')}
             fullWidth
             multiline
             rows={3}
             variant="outlined"
             value={editingAttachment?.description || ''}
             onChange={(e) => setEditingAttachment(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Dodaj opis tego designu (np. wersja kolorystyczna, wymiary, szczegóły techniczne...)"
+            placeholder={t('recipes.designAttachments.descriptionPlaceholder')}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Anuluj</Button>
-          <Button onClick={handleSaveDescription} variant="contained">Zapisz</Button>
+          <Button onClick={() => setEditDialogOpen(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSaveDescription} variant="contained">{t('common.save')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -446,7 +446,7 @@ const RecipeDesignAttachments = ({
         fullWidth
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Podgląd: {previewAttachment?.fileName}</span>
+          <span>{t('recipes.designAttachments.previewTitle', { fileName: previewAttachment?.fileName })}</span>
           <IconButton onClick={() => setPreviewDialogOpen(false)}>
             <DeleteIcon />
           </IconButton>

@@ -338,6 +338,19 @@ const RecipeForm = ({ recipeId }) => {
   const [costUnitDisplay, setCostUnitDisplay] = useState(null);
   const [timeUnitDisplay, setTimeUnitDisplay] = useState(null);
   
+  // Stany dla dialogu dodawania nowej pozycji magazynowej (składnika)
+  const [addInventoryItemDialogOpen, setAddInventoryItemDialogOpen] = useState(false);
+  const [newInventoryItemData, setNewInventoryItemData] = useState({
+    name: '',
+    description: '',
+    category: 'Surowce',
+    unit: 'kg',
+    casNumber: '',
+    barcode: '',
+    location: ''
+  });
+  const [addingInventoryItem, setAddingInventoryItem] = useState(false);
+  
   // Stany dla dialogu dodawania nowego składnika odżywczego
   const [addNutrientDialogOpen, setAddNutrientDialogOpen] = useState(false);
   const [newNutrientData, setNewNutrientData] = useState({
@@ -846,20 +859,6 @@ const RecipeForm = ({ recipeId }) => {
     }));
   };
 
-  const addIngredient = () => {
-    setRecipeData(prev => ({
-      ...prev,
-      ingredients: [...prev.ingredients, { 
-        _sortId: generateIngredientId(),
-        name: '', 
-        quantity: '', 
-        unit: 'g', 
-        allergens: [], 
-        casNumber: '' 
-      }]
-    }));
-  };
-
   const removeIngredient = (index) => {
     const newIngredients = [...recipeData.ingredients];
     newIngredients.splice(index, 1);
@@ -898,6 +897,75 @@ const RecipeForm = ({ recipeId }) => {
       ...recipeData,
       ingredients: [...recipeData.ingredients, newIngredient]
     });
+  };
+
+  // Funkcja do obsługi dodawania nowej pozycji magazynowej
+  const handleAddNewInventoryItem = async () => {
+    if (!newInventoryItemData.name.trim()) {
+      showError(t('recipes.ingredients.newItemDialog.nameRequired'));
+      return;
+    }
+
+    try {
+      setAddingInventoryItem(true);
+      
+      // Przygotuj dane pozycji magazynowej
+      const itemData = {
+        name: newInventoryItemData.name.trim(),
+        description: newInventoryItemData.description.trim(),
+        category: newInventoryItemData.category,
+        unit: newInventoryItemData.unit,
+        casNumber: newInventoryItemData.casNumber.trim(),
+        barcode: newInventoryItemData.barcode.trim(),
+        location: newInventoryItemData.location.trim(),
+        minStock: 0,
+        maxStock: 0,
+        minOrderQuantity: 0
+      };
+      
+      // Utwórz nową pozycję magazynową
+      const result = await createInventoryItem(itemData, currentUser.uid);
+      
+      showSuccess(`Dodano pozycję magazynową: ${result.name}`);
+      
+      // Odśwież listę pozycji magazynowych
+      const items = await getAllInventoryItems();
+      setInventoryItems(items);
+      
+      // Automatycznie dodaj nowo utworzoną pozycję do składników receptury
+      const newIngredient = {
+        _sortId: generateIngredientId(),
+        id: result.id,
+        name: result.name,
+        quantity: '',
+        unit: result.unit || 'g',
+        notes: '',
+        casNumber: result.casNumber || ''
+      };
+      
+      setRecipeData({
+        ...recipeData,
+        ingredients: [...recipeData.ingredients, newIngredient]
+      });
+      
+      // Zamknij dialog i zresetuj formularz
+      setAddInventoryItemDialogOpen(false);
+      setNewInventoryItemData({
+        name: '',
+        description: '',
+        category: 'Surowce',
+        unit: 'kg',
+        casNumber: '',
+        barcode: '',
+        location: ''
+      });
+      
+    } catch (error) {
+      showError('Błąd podczas dodawania pozycji magazynowej: ' + error.message);
+      console.error('Error adding inventory item:', error);
+    } finally {
+      setAddingInventoryItem(false);
+    }
   };
 
   // Funkcja naprawiająca wydajność receptury
@@ -1839,25 +1907,6 @@ const RecipeForm = ({ recipeId }) => {
             <Button 
               variant="outlined"
               size="small"
-              onClick={addIngredient}
-              startIcon={<AddIcon />}
-              sx={{ borderRadius: '20px' }}
-            >
-              {t('recipes.ingredients.addIngredient')}
-            </Button>
-            <Button 
-              variant="outlined"
-              size="small"
-              color="secondary"
-              onClick={handleAddInventoryItem}
-              startIcon={<InventoryIcon />}
-              sx={{ borderRadius: '20px' }}
-            >
-              {t('recipes.ingredients.fromInventory')}
-            </Button>
-            <Button 
-              variant="outlined"
-              size="small"
               color="primary"
               onClick={() => linkAllIngredientsWithInventory(false)}
               sx={{ borderRadius: '20px' }}
@@ -1877,6 +1926,21 @@ const RecipeForm = ({ recipeId }) => {
         </Box>
         
         <Box sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => setAddInventoryItemDialogOpen(true)}
+              sx={{ borderRadius: '20px' }}
+            >
+              {t('recipes.ingredients.addNewInventoryItem')}
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              {t('recipes.ingredients.addNewInventoryItemHelper')}
+            </Typography>
+          </Box>
+          
           <Box sx={mb3}>
             <Autocomplete
               options={inventoryItems}
@@ -2516,7 +2580,7 @@ const RecipeForm = ({ recipeId }) => {
             rows={4}
             placeholder="Dodatkowe informacje, instrukcje, uwagi dotyczące receptury..."
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-            helperText="Te notatki będą widoczne w szczegółach receptury i mogą zawierać instrukcje produkcyjne, uwagi o bezpieczeństwie lub inne istotne informacje."
+            helperText={t('recipes.additionalNotesHelper')}
           />
         </Box>
       </Paper>
@@ -2851,6 +2915,172 @@ const RecipeForm = ({ recipeId }) => {
             }}
           >
             Dodaj składnik
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog dodawania nowej pozycji magazynowej */}
+      <Dialog 
+        open={addInventoryItemDialogOpen} 
+        onClose={() => setAddInventoryItemDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.5)' 
+            : 'rgba(245, 247, 250, 0.8)'
+        }}>
+          <InventoryIcon color="primary" />
+          <DialogTitle sx={{ p: 0 }}>{t('recipes.ingredients.newItemDialog.title')}</DialogTitle>
+        </Box>
+        
+        <DialogContent sx={mt2}>
+          <DialogContentText sx={mb2}>
+            {t('recipes.ingredients.newItemDialog.description')}
+          </DialogContentText>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>{t('recipes.ingredients.newItemDialog.alertTitle')}</strong> {t('recipes.ingredients.newItemDialog.alertMessage')}
+          </Alert>
+          
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                required
+                label={t('recipes.ingredients.newItemDialog.nameSKU')}
+                value={newInventoryItemData.name}
+                onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, name: e.target.value })}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                autoFocus
+                placeholder={t('recipes.ingredients.newItemDialog.namePlaceholder')}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel>{t('recipes.ingredients.newItemDialog.category')}</InputLabel>
+                <Select
+                  value={newInventoryItemData.category}
+                  onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, category: e.target.value })}
+                  label={t('recipes.ingredients.newItemDialog.category')}
+                >
+                  <MenuItem value="Surowce">{t('recipes.ingredients.newItemDialog.categoryRawMaterials')}</MenuItem>
+                  <MenuItem value="Opakowania zbiorcze">{t('recipes.ingredients.newItemDialog.categoryCollectivePackaging')}</MenuItem>
+                  <MenuItem value="Opakowania jednostkowe">{t('recipes.ingredients.newItemDialog.categoryIndividualPackaging')}</MenuItem>
+                  <MenuItem value="Gotowe produkty">{t('recipes.ingredients.newItemDialog.categoryFinishedProducts')}</MenuItem>
+                  <MenuItem value="Inne">{t('recipes.ingredients.newItemDialog.categoryOther')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
+                <InputLabel>{t('recipes.ingredients.newItemDialog.unit')}</InputLabel>
+                <Select
+                  value={newInventoryItemData.unit}
+                  onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, unit: e.target.value })}
+                  label={t('recipes.ingredients.newItemDialog.unit')}
+                >
+                  <MenuItem value="szt.">szt.</MenuItem>
+                  <MenuItem value="kg">kg</MenuItem>
+                  <MenuItem value="caps">caps</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={t('recipes.ingredients.newItemDialog.description')}
+                value={newInventoryItemData.description}
+                onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, description: e.target.value })}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                multiline
+                rows={2}
+                placeholder={t('recipes.ingredients.newItemDialog.descriptionPlaceholder')}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label={t('recipes.ingredients.newItemDialog.casNumber')}
+                value={newInventoryItemData.casNumber}
+                onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, casNumber: e.target.value })}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder={t('recipes.ingredients.newItemDialog.casPlaceholder')}
+                helperText={t('recipes.ingredients.newItemDialog.casHelper')}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label={t('recipes.ingredients.newItemDialog.barcode')}
+                value={newInventoryItemData.barcode}
+                onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, barcode: e.target.value })}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder={t('recipes.ingredients.newItemDialog.barcodePlaceholder')}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={t('recipes.ingredients.newItemDialog.location')}
+                value={newInventoryItemData.location}
+                onChange={(e) => setNewInventoryItemData({ ...newInventoryItemData, location: e.target.value })}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+                placeholder={t('recipes.ingredients.newItemDialog.locationPlaceholder')}
+                helperText={t('recipes.ingredients.newItemDialog.locationHelper')}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        
+        <DialogActions sx={{
+          p: 2,
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.3)' 
+            : 'rgba(245, 247, 250, 0.5)',
+          borderTop: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Button 
+            onClick={() => setAddInventoryItemDialogOpen(false)} 
+            variant="outlined" 
+            color="inherit"
+            disabled={addingInventoryItem}
+            sx={{ borderRadius: '8px' }}
+          >
+            {t('recipes.ingredients.newItemDialog.cancel')}
+          </Button>
+          <Button 
+            onClick={handleAddNewInventoryItem} 
+            variant="contained" 
+            color="primary"
+            disabled={addingInventoryItem || !newInventoryItemData.name.trim() || !newInventoryItemData.category || !newInventoryItemData.unit}
+            startIcon={addingInventoryItem ? <CircularProgress size={20} /> : <AddIcon />}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
+          >
+            {addingInventoryItem ? t('recipes.ingredients.newItemDialog.adding') : t('recipes.ingredients.newItemDialog.addButton')}
           </Button>
         </DialogActions>
       </Dialog>
