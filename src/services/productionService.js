@@ -1175,6 +1175,25 @@ import {
   };
   
   // Tworzenie nowego zadania produkcyjnego
+// Funkcja pomocnicza do usuwania pól z wartością undefined z obiektu
+const removeUndefinedFields = (obj) => {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefinedFields(item));
+  }
+  
+  const cleaned = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = removeUndefinedFields(value);
+    }
+  }
+  return cleaned;
+};
+
 export const createTask = async (taskData, userId, autoReserveMaterials = true) => {
   let docRef = null;
   let taskWithMeta = null;
@@ -1187,7 +1206,18 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
         orderNumber: taskData.orderNumber,
       }, null, 2));
       
-      // Wygeneruj numer MO
+      // WALIDACJA: Sprawdź czy taskData.materials nie zawiera undefined
+      if (taskData.materials && Array.isArray(taskData.materials)) {
+        const materialsWithUndefined = taskData.materials.filter(m => 
+          Object.values(m).some(v => v === undefined)
+        );
+        if (materialsWithUndefined.length > 0) {
+          console.error('[WALIDACJA] Wykryto materiały z wartościami undefined:', materialsWithUndefined);
+          throw new Error('Nie można utworzyć zadania: materiały zawierają nieprawidłowe wartości. Sprawdź, czy wszystkie składniki receptury istnieją w magazynie.');
+        }
+      }
+      
+      // Wygeneruj numer MO (dopiero po walidacji!)
       const moNumber = await generateMONumber();
       console.log(`[DEBUG-MO] Wygenerowano numer MO: ${moNumber}`);
       
@@ -1243,6 +1273,49 @@ export const createTask = async (taskData, userId, autoReserveMaterials = true) 
       }
       
       // Data ważności nie jest już automatycznie ustawiana - będzie wymagana przy starcie produkcji
+      
+      // SPRAWDŹ UNDEFINED PRZED ZAPISEM DO FIRESTORE
+      const findUndefinedFields = (obj, prefix = '') => {
+        const undefinedFields = [];
+        for (const [key, value] of Object.entries(obj)) {
+          const fullPath = prefix ? `${prefix}.${key}` : key;
+          if (value === undefined) {
+            undefinedFields.push(fullPath);
+          } else if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+            undefinedFields.push(...findUndefinedFields(value, fullPath));
+          } else if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+              if (item === undefined) {
+                undefinedFields.push(`${fullPath}[${index}]`);
+              } else if (item !== null && typeof item === 'object') {
+                undefinedFields.push(...findUndefinedFields(item, `${fullPath}[${index}]`));
+              }
+            });
+          }
+        }
+        return undefinedFields;
+      };
+      
+      const undefinedFields = findUndefinedFields(taskWithMeta);
+      if (undefinedFields.length > 0) {
+        console.error(`[ERROR-UNDEFINED] Znaleziono pola z wartością undefined w taskWithMeta:`, undefinedFields);
+        console.error(`[ERROR-UNDEFINED] Pełny obiekt taskWithMeta:`, JSON.stringify(taskWithMeta, (key, value) => {
+          if (value === undefined) return '__UNDEFINED__';
+          if (value instanceof Date) return value.toISOString();
+          return value;
+        }, 2));
+        
+        // Wyczyść obiekt z pól undefined przed zapisem
+        console.log(`[FIX-UNDEFINED] Czyszczenie obiektu z wartości undefined...`);
+        taskWithMeta = removeUndefinedFields(taskWithMeta);
+        console.log(`[FIX-UNDEFINED] Obiekt oczyszczony, ponowna weryfikacja...`);
+        
+        const stillUndefined = findUndefinedFields(taskWithMeta);
+        if (stillUndefined.length > 0) {
+          console.error(`[ERROR-UNDEFINED] Nadal pozostały pola undefined po czyszczeniu:`, stillUndefined);
+          throw new Error('Nie można utworzyć zadania: wystąpiły błędy walidacji danych.');
+        }
+      }
       
       // Zapisz zadanie w bazie danych
       console.log(`[DEBUG-MO] Tworzenie zadania z numerem MO: ${moNumber}`, 

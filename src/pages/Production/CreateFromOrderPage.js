@@ -289,14 +289,26 @@ const CreateFromOrderPage = () => {
     const scaleFactor = quantity / recipeYield;
     
     // Stwórz listę materiałów z odpowiednio przeliczonymi ilościami
-    const materials = recipe.ingredients.map(ingredient => ({
-      id: ingredient.id || ingredient.inventoryItemId,
-      name: ingredient.name,
-      quantity: preciseMultiply(ingredient.quantity, scaleFactor),
-      unit: ingredient.unit,
-      inventoryItemId: ingredient.inventoryItemId || ingredient.id || null,
-      notes: `Z receptury: ${recipe.name}`
-    }));
+    const materials = recipe.ingredients.map(ingredient => {
+      const materialId = ingredient.id || ingredient.inventoryItemId;
+      const inventoryItemId = ingredient.inventoryItemId || ingredient.id || null;
+      
+      // Buduj obiekt materiału tylko z polami, które mają wartości
+      const material = {
+        name: ingredient.name,
+        quantity: preciseMultiply(ingredient.quantity, scaleFactor),
+        unit: ingredient.unit,
+        inventoryItemId: inventoryItemId,
+        notes: `Z receptury: ${recipe.name}`
+      };
+      
+      // Dodaj pole 'id' tylko jeśli ma wartość (nie jest undefined)
+      if (materialId !== undefined && materialId !== null) {
+        material.id = materialId;
+      }
+      
+      return material;
+    });
     
     console.log(`Utworzono ${materials.length} materiałów dla przepisu ${recipe.name}`);
     return materials;
@@ -912,6 +924,15 @@ const CreateFromOrderPage = () => {
           // Utworzenie listy materiałów na podstawie receptury
           const materials = recipeData ? createMaterialsFromRecipe(recipeData, orderItem.quantity) : [];
           
+          // WALIDACJA: Sprawdź, czy wszystkie materiały mają pozycje magazynowe
+          const missingInventoryItems = materials.filter(m => !m.inventoryItemId);
+          if (missingInventoryItems.length > 0) {
+            const missingNames = missingInventoryItems.map(m => m.name).join(', ');
+            errors.push(`Nie można utworzyć zadania dla "${orderItem.name}". Brakujące pozycje magazynowe: ${missingNames}. Dodaj te pozycje do magazynu lub zaktualizuj recepturę.`);
+            console.error(`[WALIDACJA] Brakujące pozycje magazynowe dla ${orderItem.name}:`, missingInventoryItems);
+            continue; // Pomiń tworzenie tego zadania
+          }
+          
           // Sprawdź czy mamy czas produkcji z receptury
           let productionTimePerUnit = 0;
           if (recipeData && recipeData.productionTimePerUnit) {
@@ -999,6 +1020,18 @@ const CreateFromOrderPage = () => {
         // Odśwież szczegóły zamówienia, aby pokazać nowo utworzone zadania
         // Nie dodawaj ręcznie do existingTasks - fetchOrderDetails pobierze aktualne dane
         await fetchOrderDetails(selectedOrder.id);
+      }
+      
+      // Pokaż błędy walidacji, jeśli wystąpiły
+      if (errors.length > 0) {
+        const errorMessage = errors.join('\n\n');
+        showError(errorMessage);
+        console.error('[WALIDACJA] Błędy podczas tworzenia zadań:', errors);
+      }
+      
+      // Jeśli nie utworzono żadnego zadania i nie ma błędów, pokaż ogólny komunikat
+      if (createdTasks.length === 0 && errors.length === 0) {
+        showError('Nie udało się utworzyć żadnego zadania produkcyjnego.');
       }
     } catch (error) {
       console.error('Błąd podczas tworzenia zadań produkcyjnych:', error);

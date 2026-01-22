@@ -16,7 +16,9 @@ import {
   ListItemText,
   CircularProgress,
   Grid,
-  TextField
+  TextField,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -26,7 +28,10 @@ import {
   LocalShipping as LocalShippingIcon,
   SmartToy as AIIcon,
   Assessment as ReportIcon,
-  BugReport as BugReportIcon
+  BugReport as BugReportIcon,
+  Storage as StorageIcon,
+  Build as BuildIcon,
+  Science as ScienceIcon
 } from '@mui/icons-material';
 import * as Sentry from '@sentry/react';
 import { addBreadcrumb } from '../../utils/errorHandler';
@@ -63,6 +68,7 @@ import {
 const SystemManagementPage = () => {
   const { currentUser } = useAuth();
   const { showSuccess, showError, showNotification } = useNotification();
+  const [activeTab, setActiveTab] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [migrationResults, setMigrationResults] = useState(null);
   const [isLoadingComponents, setIsLoadingComponents] = useState(false);
@@ -481,238 +487,302 @@ const SystemManagementPage = () => {
         <Typography variant="h4">Zarządzanie systemem</Typography>
       </Box>
 
-      <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h5" gutterBottom>
-          Narzędzia administracyjne
-        </Typography>
-        
-        <Divider sx={{ my: 2 }} />
-        
-        {/* Sekcja konfiguracji Asystenta AI */}
-        <APIKeySettings />
-        
-        {/* Edytor liczników systemowych */}
-        <CounterEditor />
-        
-        {/* Zarządzanie opcjami formularzy */}
-        <FormOptionsManager />
-        
-        {/* Zarządzanie składnikami odżywczymi */}
-        <NutritionalComponentsManager />
-        
-        {/* SEKCJA: Test Cloud Functions - Łańcuch aktualizacji */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              ⚡ Cloud Functions - Test łańcucha aktualizacji PO → Batch → MO → CO
-            </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              To narzędzie testuje czy Cloud Functions poprawnie obsługują automatyczną aktualizację łańcucha wartości:
-              Purchase Order → Inventory Batch → Manufacturing Order → Customer Order.
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Test sprawdza: status Cloud Functions, przykładowe dane z bazy, oraz kompletność łańcucha.
-            </Typography>
-            
-            {cfTestStep && (
-              <Box sx={{ mt: 2, mb: 2 }}>
-                <Alert severity="info">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={20} />
-                    <Typography variant="body2">{cfTestStep}</Typography>
-                  </Box>
-                </Alert>
-              </Box>
-            )}
-            
-            {cfTestResults && (
-              <Box sx={{ mt: 2 }}>
-                {/* Status Cloud Functions */}
-                <Alert 
-                  severity={
-                    cfTestResults.functionsStatus === 'confirmed' ? 'success' :
-                    cfTestResults.functionsStatus === 'active' ? 'info' : 'warning'
-                  } 
-                  sx={{ mb: 2 }}
-                >
-                  <Typography variant="subtitle2" gutterBottom>
-                    Status Cloud Functions: {
-                      cfTestResults.functionsStatus === 'confirmed' ? '✅ Potwierdzone - Działają' :
-                      cfTestResults.functionsStatus === 'active' ? 'ℹ️ Aktywne (eventy wykryte)' :
-                      cfTestResults.functionsStatus === 'no_events' ? '⚠️ Brak eventów' :
-                      '❓ Nieznany'
-                    }
+      <Paper elevation={2} sx={{ mb: 4 }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            px: 2
+          }}
+        >
+          <Tab icon={<SettingsIcon />} label="Konfiguracja" iconPosition="start" />
+          <Tab icon={<StorageIcon />} label="Baza danych" iconPosition="start" />
+          <Tab icon={<BuildIcon />} label="Migracje" iconPosition="start" />
+          <Tab icon={<ScienceIcon />} label="Testy i diagnostyka" iconPosition="start" />
+        </Tabs>
+
+        <Box sx={{ p: 3 }}>
+          {/* ZAKŁADKA 1: KONFIGURACJA */}
+          {activeTab === 0 && (
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+                Konfiguracja systemu
+              </Typography>
+              
+              {/* Sekcja konfiguracji Asystenta AI */}
+              <APIKeySettings />
+              
+              {/* Edytor liczników systemowych */}
+              <CounterEditor />
+              
+              {/* Zarządzanie opcjami formularzy */}
+              <FormOptionsManager />
+              
+              {/* Zarządzanie składnikami odżywczymi */}
+              <NutritionalComponentsManager />
+            </Box>
+          )}
+
+          {/* ZAKŁADKA 2: BAZA DANYCH */}
+          {activeTab === 1 && (
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+                Narzędzia bazy danych
+              </Typography>
+
+              {/* SEKCJA: Czyszczenie ujemnych wpisów CMR */}
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    🗑️ Czyszczenie ujemnych wpisów CMR
                   </Typography>
-                </Alert>
-                
-                {/* Ostatnie eventy */}
-                {cfTestResults.events.length > 0 && (
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      📊 Ostatnie eventy systemowe ({cfTestResults.events.length}):
-                    </Typography>
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Typ</TableCell>
-                            <TableCell>Przetworzony</TableCell>
-                            <TableCell>Data</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {cfTestResults.events.map((event) => (
-                            <TableRow key={event.id}>
-                              <TableCell>{event.type}</TableCell>
-                              <TableCell>{event.processed ? '✅ Tak' : '⏳ Nie'}</TableCell>
-                              <TableCell>{event.timestamp}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Box>
-                )}
-                
-                {/* Testowy łańcuch danych */}
-                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                  🔗 Testowy łańcuch danych:
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  {/* Purchase Order */}
-                  <Grid item xs={12} md={6}>
-                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testPO ? 'success.light' : 'grey.100' }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        1️⃣ Purchase Order {cfTestResults.testPO ? '✅' : '❌'}
-                      </Typography>
-                      {cfTestResults.testPO ? (
-                        <>
-                          <Typography variant="body2">PO: {cfTestResults.testPO.poNumber}</Typography>
-                          <Typography variant="body2">Dostawca: {cfTestResults.testPO.supplier}</Typography>
-                          <Typography variant="body2">Pozycji: {cfTestResults.testPO.itemsCount}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Aktualizacja: {cfTestResults.testPO.updatedAt}
-                          </Typography>
-                        </>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">Brak testowego PO</Typography>
-                      )}
-                    </Paper>
-                  </Grid>
+                  <Typography variant="body2" color="text.secondary">
+                    To narzędzie znajdzie i usunie ujemne wpisy w historii CMR (cmrHistory) z zamówień.
+                    Ujemne wartości mogą powstać przez błędy w systemie anulowania CMR i powodują nieprawidłowe wyświetlanie ilości wysłanych w tabeli CO.
+                    Po oczyszczeniu ilości wysłane będą przeliczone na podstawie pozostałych pozytywnych wpisów CMR.
+                  </Typography>
                   
-                  {/* Batch */}
-                  <Grid item xs={12} md={6}>
-                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testBatch ? 'success.light' : 'grey.100' }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        2️⃣ Inventory Batch {cfTestResults.testBatch ? '✅' : '❌'}
-                      </Typography>
-                      {cfTestResults.testBatch ? (
-                        <>
-                          <Typography variant="body2">Nr: {cfTestResults.testBatch.batchNumber}</Typography>
-                          <Typography variant="body2">Cena: {cfTestResults.testBatch.unitPrice}€</Typography>
-                          <Typography variant="body2" sx={{ 
-                            color: cfTestResults.testBatch.lastPriceUpdateReason?.includes('Cloud Function') ? 'success.main' : 'text.primary'
-                          }}>
-                            Aktualizacja: {cfTestResults.testBatch.lastPriceUpdateReason}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {cfTestResults.testBatch.updatedAt}
-                          </Typography>
-                        </>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">Brak powiązanej partii</Typography>
-                      )}
-                    </Paper>
-                  </Grid>
-                  
-                  {/* Task (MO) */}
-                  <Grid item xs={12} md={6}>
-                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testTask ? 'success.light' : 'grey.100' }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        3️⃣ Manufacturing Order {cfTestResults.testTask ? '✅' : '❌'}
-                      </Typography>
-                      {cfTestResults.testTask ? (
-                        <>
-                          <Typography variant="body2">MO: {cfTestResults.testTask.moNumber}</Typography>
-                          <Typography variant="body2">Produkt: {cfTestResults.testTask.productName}</Typography>
-                          <Typography variant="body2">Koszt: {cfTestResults.testTask.totalMaterialCost?.toFixed(2) || 'N/A'}€</Typography>
-                          <Typography variant="body2" sx={{ 
-                            color: cfTestResults.testTask.lastCostUpdateReason?.includes('Cloud Function') ? 'success.main' : 'text.primary'
-                          }}>
-                            Aktualizacja: {cfTestResults.testTask.lastCostUpdateReason}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {cfTestResults.testTask.updatedAt}
-                          </Typography>
-                        </>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">Brak powiązanego zadania</Typography>
-                      )}
-                    </Paper>
-                  </Grid>
-                  
-                  {/* Order (CO) */}
-                  <Grid item xs={12} md={6}>
-                    <Paper variant="outlined" sx={{ p: 2, bgcolor: cfTestResults.testOrder ? 'success.light' : 'grey.100' }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        4️⃣ Customer Order {cfTestResults.testOrder ? '✅' : '❌'}
-                      </Typography>
-                      {cfTestResults.testOrder ? (
-                        <>
-                          <Typography variant="body2">CO: {cfTestResults.testOrder.orderNumber}</Typography>
-                          <Typography variant="body2">Klient: {cfTestResults.testOrder.customerName}</Typography>
-                          <Typography variant="body2">Wartość: {cfTestResults.testOrder.totalValue?.toFixed(2) || 'N/A'}€</Typography>
-                          <Typography variant="body2" sx={{ 
-                            color: cfTestResults.testOrder.lastCostUpdateReason?.includes('Cloud Function') ? 'success.main' : 'text.primary'
-                          }}>
-                            Aktualizacja: {cfTestResults.testOrder.lastCostUpdateReason || 'N/A'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {cfTestResults.testOrder.updatedAt}
-                          </Typography>
-                        </>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">Brak powiązanego zamówienia</Typography>
-                      )}
-                    </Paper>
-                  </Grid>
-                </Grid>
-                
-                {/* Rekomendacje */}
-                {cfTestResults.recommendations.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      💡 Rekomendacje i następne kroki:
-                    </Typography>
-                    {cfTestResults.recommendations.map((rec, index) => (
-                      <Alert 
-                        key={index} 
-                        severity={rec.includes('✅') ? 'success' : rec.includes('⚠️') ? 'warning' : 'info'}
-                        sx={{ mb: 1 }}
-                      >
-                        {rec}
+                  {cmrCleanupResults && (
+                    <Box sx={{ mt: 2 }}>
+                      <Alert severity="success">
+                        Oczyszczanie ujemnych wpisów CMR zakończone pomyślnie!
                       </Alert>
-                    ))}
-                  </Box>
-                )}
-              </Box>
-            )}
-          </CardContent>
-          <CardActions>
-            <Button 
-              startIcon={cfTestLoading ? <CircularProgress size={20} /> : <SettingsIcon />}
-              variant="contained" 
-              color="primary"
-              onClick={handleTestCloudFunctionsChain}
-              disabled={cfTestLoading}
-            >
-              {cfTestLoading ? 'Testowanie...' : 'Testuj Cloud Functions'}
-            </Button>
-          </CardActions>
-        </Card>
-        
-        {/* NOWA SEKCJA: Czyszczenie ujemnych wpisów CMR */}
+                      <List dense>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Przetworzono zamówień: ${cmrCleanupResults.processedOrders}`} 
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Oczyszczono zamówień: ${cmrCleanupResults.cleanedOrders}`} 
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Usunięto ujemnych wpisów: ${cmrCleanupResults.cleanedEntries}`} 
+                          />
+                        </ListItem>
+                      </List>
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        Szczegóły operacji zostały wyświetlone w konsoli przeglądarki (F12).
+                      </Alert>
+                    </Box>
+                  )}
+                </CardContent>
+                <CardActions>
+                  <Button 
+                    startIcon={cmrCleanupLoading ? <CircularProgress size={20} /> : <CleaningIcon />}
+                    variant="contained" 
+                    color="warning"
+                    onClick={handleCleanNegativeCmrEntries}
+                    disabled={cmrCleanupLoading}
+                  >
+                    {cmrCleanupLoading ? 'Oczyszczanie...' : 'Wyczyść ujemne wpisy CMR'}
+                  </Button>
+                </CardActions>
+              </Card>
+
+              {/* SEKCJA: Czyszczenie historii produkcji */}
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    🧹 Czyszczenie historii produkcji
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    To narzędzie znajdzie i usunie wpisy z historii produkcji, które nie mają odpowiadających im zadań produkcyjnych.
+                    Takie "sierocze" wpisy mogą powstać gdy zadanie produkcyjne zostało usunięte, ale jego historia nie została oczyszczona.
+                    Wpisy te powodują wyświetlanie "Brak MO" w raportach czasu produkcji.
+                  </Typography>
+                  
+                  {cleanupResults && (
+                    <Box sx={{ mt: 2 }}>
+                      <Alert 
+                        severity={
+                          cleanupResults.orphanedCount === 0 ? "success" :
+                          cleanupResults.dryRun ? "warning" : "info"
+                        }
+                      >
+                        {cleanupResults.dryRun ? 'Sprawdzanie zakończone' : 'Czyszczenie zakończone'}. Wyniki:
+                      </Alert>
+                      <List dense>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Sierocze wpisy: ${cleanupResults.orphanedCount}`} 
+                          />
+                        </ListItem>
+                        {!cleanupResults.dryRun && (
+                          <ListItem>
+                            <ListItemText 
+                              primary={`Usunięto: ${cleanupResults.deletedCount} wpisów`} 
+                            />
+                          </ListItem>
+                        )}
+                        {cleanupResults.errors > 0 && (
+                          <ListItem>
+                            <ListItemText 
+                              primary={`Błędy: ${cleanupResults.errors}`} 
+                              secondary="Sprawdź konsolę dla szczegółów" 
+                            />
+                          </ListItem>
+                        )}
+                      </List>
+                      {cleanupResults.dryRun && cleanupResults.orphanedCount > 0 && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          Szczegóły sierocych wpisów zostały wyświetlone w konsoli przeglądarki (F12).
+                        </Alert>
+                      )}
+                    </Box>
+                  )}
+                </CardContent>
+                <CardActions>
+                  <Button 
+                    startIcon={cleanupLoading ? <CircularProgress size={20} /> : <SearchIcon />}
+                    variant="outlined" 
+                    color="primary"
+                    onClick={handleCheckOrphanedHistory}
+                    disabled={cleanupLoading}
+                    sx={{ mr: 1 }}
+                  >
+                    {cleanupLoading ? 'Sprawdzanie...' : 'Sprawdź sierocze wpisy'}
+                  </Button>
+                  
+                  <Button 
+                    startIcon={cleanupLoading ? <CircularProgress size={20} /> : <CleaningIcon />}
+                    variant="contained" 
+                    color="warning"
+                    onClick={handleCleanupOrphanedHistory}
+                    disabled={cleanupLoading || !cleanupResults || cleanupResults.orphanedCount === 0}
+                  >
+                    {cleanupLoading ? 'Usuwanie...' : `Usuń ${cleanupResults?.orphanedCount || 0} wpisów`}
+                  </Button>
+                </CardActions>
+              </Card>
+
+              {/* Sekcja zarządzania cenami dostawców */}
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    💰 Zarządzanie cenami dostawców
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Narzędzia do automatycznej aktualizacji cen dostawców na podstawie zakończonych zamówień zakupu.
+                  </Typography>
+
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                      <Box>
+                        <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                          Masowa aktualizacja cen
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          Automatycznie aktualizuje ceny dostawców na podstawie najnowszych zakończonych zamówień zakupu.
+                        </Typography>
+
+                        <TextField
+                          type="number"
+                          label="Liczba dni wstecz"
+                          value={priceUpdateDays}
+                          onChange={(e) => setPriceUpdateDays(parseInt(e.target.value) || 30)}
+                          InputProps={{
+                            inputProps: { min: 1, max: 365 }
+                          }}
+                          helperText="Ile dni wstecz sprawdzać zakończone zamówienia"
+                          size="small"
+                          fullWidth
+                          sx={{ mb: 2 }}
+                        />
+
+                        <Button
+                          variant="contained"
+                          onClick={handleBulkUpdateSupplierPrices}
+                          disabled={updatingPrices}
+                          startIcon={updatingPrices ? <CircularProgress size={20} /> : <RefreshIcon />}
+                        >
+                          {updatingPrices ? 'Aktualizowanie...' : 'Aktualizuj ceny dostawców'}
+                        </Button>
+                      </Box>
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <Alert severity="info">
+                        <Typography variant="subtitle2" gutterBottom>
+                          Jak to działa?
+                        </Typography>
+                        <Typography variant="body2" component="div">
+                          <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.875rem' }}>
+                            <li>Przeszukuje zamówienia ze statusem "zakończone"</li>
+                            <li>Sprawdza ceny dla każdej pozycji</li>
+                            <li>Aktualizuje lub tworzy nowe ceny dostawców</li>
+                            <li>Zachowuje historię zmian cen</li>
+                          </ul>
+                        </Typography>
+                      </Alert>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            </Box>
+          )}
+
+          {/* ZAKŁADKA 3: MIGRACJE */}
+          {activeTab === 2 && (
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+                Narzędzia migracji danych
+              </Typography>
+
+              {/* SEKCJA: Migracja limitów wiadomości AI */}
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    🤖 Migracja limitów wiadomości AI
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    To narzędzie zaktualizuje wszystkich istniejących użytkowników, dodając im limity wiadomości AI
+                    w zależności od ich roli (Administrator: 250, Pracownik: 50).
+                    Użyj tego narzędzia tylko raz po dodaniu funkcji limitów wiadomości.
+                  </Typography>
+                  
+                  {migrationResults && (
+                    <Box sx={{ mt: 2 }}>
+                      <Alert severity={migrationResults.errors > 0 ? "warning" : "success"}>
+                        Migracja zakończona. Wyniki:
+                      </Alert>
+                      <List dense>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Zaktualizowano: ${migrationResults.updated} użytkowników`} 
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Błędy: ${migrationResults.errors}`} 
+                            secondary={migrationResults.error || ''} 
+                          />
+                        </ListItem>
+                      </List>
+                    </Box>
+                  )}
+                </CardContent>
+                <CardActions>
+                  <Button 
+                    startIcon={isLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                    variant="contained" 
+                    color="primary"
+                    onClick={handleRunAILimitsMigration}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Przetwarzanie...' : 'Uruchom migrację'}
+                  </Button>
+                </CardActions>
+              </Card>
+
+              {/* SEKCJA: Migracja składników odżywczych */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -765,147 +835,71 @@ const SystemManagementPage = () => {
           </CardActions>
         </Card>
 
-        {/* NOWA SEKCJA: Migracja informacji o paletach w CMR */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              📦 Migracja informacji o paletach w CMR
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              To narzędzie zaktualizuje stare pozycje CMR, dodając informacje o ilościach palet i kartonów.
-              Obecnie przy zapisywaniu CMR system automatycznie oblicza i zapisuje te informacje, ale stare CMR ich nie zawierają.
-              Migracja wykorzysta dane z powiązanych partii magazynowych do obliczenia brakujących informacji.
-            </Typography>
-            
-            {cmrMigrationResults && (
-              <Box sx={{ mt: 2 }}>
-                <Alert severity="success">
-                  Migracja pozycji CMR zakończona pomyślnie!
-                </Alert>
-                <List dense>
-                  <ListItem>
-                    <ListItemText 
-                      primary={`Wszystkie pozycje CMR: ${cmrMigrationResults.total}`} 
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={`Zaktualizowano: ${cmrMigrationResults.updated} pozycji`} 
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={`Pominięto: ${cmrMigrationResults.skipped} pozycji`} 
-                    />
-                  </ListItem>
-                  {cmrMigrationResults.errors > 0 && (
-                    <ListItem>
-                      <ListItemText 
-                        primary={`Błędy: ${cmrMigrationResults.errors}`}
-                        secondary="Sprawdź konsolę dla szczegółów"
-                      />
-                    </ListItem>
+              {/* SEKCJA: Migracja informacji o paletach w CMR */}
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    📦 Migracja informacji o paletach w CMR
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    To narzędzie zaktualizuje stare pozycje CMR, dodając informacje o ilościach palet i kartonów.
+                    Obecnie przy zapisywaniu CMR system automatycznie oblicza i zapisuje te informacje, ale stare CMR ich nie zawierają.
+                    Migracja wykorzysta dane z powiązanych partii magazynowych do obliczenia brakujących informacji.
+                  </Typography>
+                  
+                  {cmrMigrationResults && (
+                    <Box sx={{ mt: 2 }}>
+                      <Alert severity="success">
+                        Migracja pozycji CMR zakończona pomyślnie!
+                      </Alert>
+                      <List dense>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Wszystkie pozycje CMR: ${cmrMigrationResults.total}`} 
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Zaktualizowano: ${cmrMigrationResults.updated} pozycji`} 
+                          />
+                        </ListItem>
+                        <ListItem>
+                          <ListItemText 
+                            primary={`Pominięto: ${cmrMigrationResults.skipped} pozycji`} 
+                          />
+                        </ListItem>
+                        {cmrMigrationResults.errors > 0 && (
+                          <ListItem>
+                            <ListItemText 
+                              primary={`Błędy: ${cmrMigrationResults.errors}`}
+                              secondary="Sprawdź konsolę dla szczegółów"
+                            />
+                          </ListItem>
+                        )}
+                      </List>
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        Szczegóły operacji zostały wyświetlone w konsoli przeglądarki (F12).
+                      </Alert>
+                    </Box>
                   )}
-                </List>
-                <Alert severity="info" sx={{ mt: 1 }}>
-                  Szczegóły operacji zostały wyświetlone w konsoli przeglądarki (F12).
-                </Alert>
-              </Box>
-            )}
-          </CardContent>
-          <CardActions>
-            <Button 
-              startIcon={cmrMigrationLoading ? <CircularProgress size={20} /> : <LocalShippingIcon />}
-              variant="contained" 
-              color="primary"
-              onClick={handleCheckCmrMigration}
-              disabled={cmrMigrationLoading}
-            >
-              {cmrMigrationLoading ? 'Sprawdzanie...' : 'Sprawdź CMR do migracji'}
-            </Button>
-          </CardActions>
-        </Card>
+                </CardContent>
+                <CardActions>
+                  <Button 
+                    startIcon={cmrMigrationLoading ? <CircularProgress size={20} /> : <LocalShippingIcon />}
+                    variant="contained" 
+                    color="primary"
+                    onClick={handleCheckCmrMigration}
+                    disabled={cmrMigrationLoading}
+                  >
+                    {cmrMigrationLoading ? 'Sprawdzanie...' : 'Sprawdź CMR do migracji'}
+                  </Button>
+                </CardActions>
+              </Card>
 
-        {/* SEKCJA: Czyszczenie sierocych wpisów historii produkcji */}
-        <Card sx={{ mb: 3 }}>
+              <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              🧹 Czyszczenie historii produkcji
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              To narzędzie znajdzie i usunie wpisy z historii produkcji, które nie mają odpowiadających im zadań produkcyjnych.
-              Takie "sierocze" wpisy mogą powstać gdy zadanie produkcyjne zostało usunięte, ale jego historia nie została oczyszczona.
-              Wpisy te powodują wyświetlanie "Brak MO" w raportach czasu produkcji.
-            </Typography>
-            
-            {cleanupResults && (
-              <Box sx={{ mt: 2 }}>
-                <Alert 
-                  severity={
-                    cleanupResults.orphanedCount === 0 ? "success" :
-                    cleanupResults.dryRun ? "warning" : "info"
-                  }
-                >
-                  {cleanupResults.dryRun ? 'Sprawdzanie zakończone' : 'Czyszczenie zakończone'}. Wyniki:
-                </Alert>
-                <List dense>
-                  <ListItem>
-                    <ListItemText 
-                      primary={`Sierocze wpisy: ${cleanupResults.orphanedCount}`} 
-                    />
-                  </ListItem>
-                  {!cleanupResults.dryRun && (
-                    <ListItem>
-                      <ListItemText 
-                        primary={`Usunięto: ${cleanupResults.deletedCount} wpisów`} 
-                      />
-                    </ListItem>
-                  )}
-                  {cleanupResults.errors > 0 && (
-                    <ListItem>
-                      <ListItemText 
-                        primary={`Błędy: ${cleanupResults.errors}`} 
-                        secondary="Sprawdź konsolę dla szczegółów" 
-                      />
-                    </ListItem>
-                  )}
-                </List>
-                {cleanupResults.dryRun && cleanupResults.orphanedCount > 0 && (
-                  <Alert severity="info" sx={{ mt: 1 }}>
-                    Szczegóły sierocych wpisów zostały wyświetlone w konsoli przeglądarki (F12).
-                  </Alert>
-                )}
-              </Box>
-            )}
-          </CardContent>
-          <CardActions>
-            <Button 
-              startIcon={cleanupLoading ? <CircularProgress size={20} /> : <SearchIcon />}
-              variant="outlined" 
-              color="primary"
-              onClick={handleCheckOrphanedHistory}
-              disabled={cleanupLoading}
-              sx={{ mr: 1 }}
-            >
-              {cleanupLoading ? 'Sprawdzanie...' : 'Sprawdź sierocze wpisy'}
-            </Button>
-            
-            <Button 
-              startIcon={cleanupLoading ? <CircularProgress size={20} /> : <CleaningIcon />}
-              variant="contained" 
-              color="warning"
-              onClick={handleCleanupOrphanedHistory}
-              disabled={cleanupLoading || !cleanupResults || cleanupResults.orphanedCount === 0}
-            >
-              {cleanupLoading ? 'Usuwanie...' : `Usuń ${cleanupResults?.orphanedCount || 0} wpisów`}
-            </Button>
-          </CardActions>
-        </Card>
-        
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Migracja limitów wiadomości AI
+              🤖 Migracja limitów wiadomości AI
             </Typography>
             <Typography variant="body2" color="text.secondary">
               To narzędzie zaktualizuje wszystkich istniejących użytkowników, dodając im limity wiadomości AI
@@ -947,10 +941,10 @@ const SystemManagementPage = () => {
           </CardActions>
         </Card>
 
-        <Card sx={{ mb: 3 }}>
+              <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Migracja składników odżywczych
+              🥗 Migracja składników odżywczych
             </Typography>
             <Typography variant="body2" color="text.secondary">
               To narzędzie przeniesie wszystkie składniki odżywcze z kodu do bazy danych. 
@@ -1000,79 +994,18 @@ const SystemManagementPage = () => {
               {isLoadingComponents ? 'Przetwarzanie...' : 'Migruj składniki odżywcze'}
             </Button>
           </CardActions>
-        </Card>
-        
-        {/* Sekcja zarządzania cenami dostawców */}
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Zarządzanie cenami dostawców
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Narzędzia do automatycznej aktualizacji cen dostawców na podstawie zakończonych zamówień zakupu.
-            </Typography>
+              </Card>
+            </Box>
+          )}
 
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Masowa aktualizacja cen dostawców
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Automatycznie aktualizuje ceny dostawców na podstawie najnowszych zakończonych zamówień zakupu.
-                    </Typography>
+          {/* ZAKŁADKA 4: TESTY I DIAGNOSTYKA */}
+          {activeTab === 3 && (
+            <Box>
+              <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+                Testy i diagnostyka systemu
+              </Typography>
 
-                    <Box sx={{ mb: 2 }}>
-                      <TextField
-                        type="number"
-                        label="Liczba dni wstecz"
-                        value={priceUpdateDays}
-                        onChange={(e) => setPriceUpdateDays(parseInt(e.target.value) || 30)}
-                        InputProps={{
-                          inputProps: { min: 1, max: 365 }
-                        }}
-                        helperText="Ile dni wstecz sprawdzać zakończone zamówienia"
-                        size="small"
-                        sx={{ mb: 2 }}
-                      />
-                    </Box>
-
-                    <Button
-                      variant="contained"
-                      onClick={handleBulkUpdateSupplierPrices}
-                      disabled={updatingPrices}
-                      startIcon={updatingPrices ? <CircularProgress size={20} /> : <RefreshIcon />}
-                    >
-                      {updatingPrices ? 'Aktualizowanie...' : 'Aktualizuj ceny dostawców'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Jak to działa?
-                    </Typography>
-                    <Typography variant="body2" component="div">
-                      <ul>
-                        <li>System przeszukuje zamówienia zakupu ze statusem "zakończone" z wybranego okresu</li>
-                        <li>Dla każdej pozycji w zamówieniu sprawdza czy dostawca ma już przypisaną cenę</li>
-                        <li>Jeśli cena istnieje i różni się od ceny w zamówieniu - aktualizuje ją</li>
-                        <li>Jeśli ceny nie ma - tworzy nową z danymi z zamówienia</li>
-                        <li>Zachowuje historię zmian cen dla każdego dostawcy</li>
-                      </ul>
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-
-        {/* Sekcja testowania Sentry.io */}
+              {/* SEKCJA: Test Cloud Functions - Łańcuch aktualizacji */}
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1188,6 +1121,9 @@ const SystemManagementPage = () => {
             </Grid>
           </CardContent>
         </Card>
+            </Box>
+          )}
+        </Box>
       </Paper>
 
       {/* Dialog potwierdzenia migracji CMR */}
