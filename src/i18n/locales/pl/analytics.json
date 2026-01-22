@@ -178,7 +178,14 @@
     "productionCostsReport": {
         "errors": {
             "fetchData": "Nie udało się pobrać danych",
-            "fetchCosts": "Nie udało się pobrać danych kosztów produkcji"
+            "fetchCosts": "Nie udało się pobrać danych kosztów produkcji",
+            "noDataToExport": "Brak danych do eksportu"
+        },
+        "export": {
+            "success": "Wyeksportowano raport kosztów produkcji do plików CSV",
+            "error": "Nie udało się wyeksportować raportu",
+            "csvTooltip": "Eksportuj raport do CSV",
+            "hasSessionsOutsidePeriod": "Ma sesje poza okresem"
         },
         "unknownProduct": "Nieznany produkt",
         "refreshData": "Odśwież dane",
@@ -192,6 +199,7 @@
         },
         "stats": {
             "tasksCount": "Liczba zadań",
+            "sessionsCount": "Sesji produkcyjnych",
             "materialCost": "Koszt materiałów",
             "fullProductionCost": "Pełny koszt produkcji",
             "avgFullUnitCost": "Śr. pełny koszt/jedn."
@@ -201,7 +209,9 @@
             "period": "Okres",
             "product": "Produkt",
             "tasks": "Zadania",
+            "sessions": "Sesje",
             "quantity": "Ilość",
+            "quantityInPeriod": "Ilość w okresie",
             "materialCost": "Koszt materiałów",
             "fullCost": "Pełny koszt",
             "avgFullUnitCost": "Śr. pełny koszt/jedn.",
@@ -213,6 +223,10 @@
             "mo": "MO",
             "completionDate": "Data zakończenia",
             "status": "Status",
+            "totalQuantity": "Ilość całkowita",
+            "totalQuantityInfo": "Całkowita ilość wyprodukowana (również poza wybranym okresem)",
+            "periodInfo": "Wartości w okresie / całkowite",
+            "sessionsInPeriod": "Sesji w okresie",
             "productionTime": "Czas prod. (h)",
             "materialCostShort": "Koszt mat.",
             "unitCost": "Koszt/jedn.",

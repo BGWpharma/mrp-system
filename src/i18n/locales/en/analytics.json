@@ -178,7 +178,14 @@
     "productionCostsReport": {
         "errors": {
             "fetchData": "Failed to fetch data",
-            "fetchCosts": "Failed to fetch production costs data"
+            "fetchCosts": "Failed to fetch production costs data",
+            "noDataToExport": "No data to export"
+        },
+        "export": {
+            "success": "Production costs report exported to CSV files",
+            "error": "Failed to export report",
+            "csvTooltip": "Export report to CSV",
+            "hasSessionsOutsidePeriod": "Has sessions outside period"
         },
         "unknownProduct": "Unknown product",
         "refreshData": "Refresh data",
@@ -192,6 +199,7 @@
         },
         "stats": {
             "tasksCount": "Tasks count",
+            "sessionsCount": "Production Sessions",
             "materialCost": "Material cost",
             "fullProductionCost": "Full production cost",
             "avgFullUnitCost": "Avg. full cost/unit"
@@ -201,7 +209,9 @@
             "period": "Period",
             "product": "Product",
             "tasks": "Tasks",
+            "sessions": "Sessions",
             "quantity": "Quantity",
+            "quantityInPeriod": "Quantity in Period",
             "materialCost": "Material cost",
             "fullCost": "Full cost",
             "avgFullUnitCost": "Avg. full cost/unit",
@@ -213,6 +223,10 @@
             "mo": "MO",
             "completionDate": "Completion date",
             "status": "Status",
+            "totalQuantity": "Total Quantity",
+            "totalQuantityInfo": "Total quantity produced (including outside selected period)",
+            "periodInfo": "Values in period / total",
+            "sessionsInPeriod": "Sessions in period",
             "productionTime": "Prod. time (h)",
             "materialCostShort": "Mat. cost",
             "unitCost": "Cost/unit",

@@ -6707,83 +6707,119 @@ export const getTasksWithCosts = async (startDate, endDate, statusFilter = 'comp
         return;
       }
       
-      // Określ datę zakończenia zadania
-      let completionDate = null;
+      // NOWE: Analiza sesji produkcyjnych
+      const productionSessions = task.productionSessions || [];
       
-      // Priorytet 1: completionDate (rzeczywista data zakończenia)
-      if (task.completionDate) {
-        completionDate = task.completionDate.toDate ? task.completionDate.toDate() : new Date(task.completionDate);
-      } 
-      // Priorytet 2: Ostatnia sesja produkcyjna
-      else if (task.productionSessions && Array.isArray(task.productionSessions) && task.productionSessions.length > 0) {
-        const lastSession = task.productionSessions[task.productionSessions.length - 1];
+      // Filtruj sesje według zakresu dat
+      const sessionsInPeriod = productionSessions.filter(session => {
+        if (!session.endDate && !session.startDate) return false;
+        
+        // Użyj daty zakończenia sesji, jeśli dostępna, w przeciwnym razie daty rozpoczęcia
+        const sessionDate = session.endDate 
+          ? (session.endDate.toDate ? session.endDate.toDate() : new Date(session.endDate))
+          : (session.startDate.toDate ? session.startDate.toDate() : new Date(session.startDate));
+        
+        if (!sessionDate || isNaN(sessionDate.getTime())) return false;
+        
+        return sessionDate >= startDate && sessionDate <= endDate;
+      });
+      
+      // Pomiń zadanie jeśli nie ma żadnych sesji w okresie
+      if (sessionsInPeriod.length === 0) {
+        return;
+      }
+      
+      // Oblicz ilość wyprodukowaną w okresie
+      const quantityInPeriod = sessionsInPeriod.reduce((sum, session) => 
+        sum + (parseFloat(session.completedQuantity) || 0), 0
+      );
+      
+      if (quantityInPeriod <= 0) {
+        return; // Pomiń jeśli nie wyprodukowano nic w okresie
+      }
+      
+      // Pobierz dane kosztowe z zadania
+      const totalMaterialCost = parseFloat(task.totalMaterialCost) || 0;
+      const totalFullProductionCost = parseFloat(task.totalFullProductionCost) || 0;
+      const processingCostPerUnit = parseFloat(task.processingCostPerUnit) || 0;
+      const completedQuantity = parseFloat(task.totalCompletedQuantity) || 0;
+      const plannedQuantity = parseFloat(task.quantity) || 0;
+      
+      // Oblicz koszty jednostkowe (dla całego zadania)
+      const unitMaterialCost = completedQuantity > 0 ? totalMaterialCost / completedQuantity : 0;
+      const unitFullCost = completedQuantity > 0 ? totalFullProductionCost / completedQuantity : 0;
+      
+      // NOWE: Oblicz koszty dla okresu (koszt jednostkowy × ilość w okresie)
+      const materialCostInPeriod = unitMaterialCost * quantityInPeriod;
+      const fullCostInPeriod = unitFullCost * quantityInPeriod;
+      const processingCostInPeriod = processingCostPerUnit * quantityInPeriod;
+      
+      // Sprawdź czy są sesje poza okresem
+      const hasSessionsOutsidePeriod = productionSessions.length > sessionsInPeriod.length;
+      
+      // Określ datę zakończenia (z ostatniej sesji w okresie)
+      let completionDate = null;
+      if (sessionsInPeriod.length > 0) {
+        const sortedSessions = [...sessionsInPeriod].sort((a, b) => {
+          const dateA = a.endDate ? (a.endDate.toDate ? a.endDate.toDate() : new Date(a.endDate)) : new Date(0);
+          const dateB = b.endDate ? (b.endDate.toDate ? b.endDate.toDate() : new Date(b.endDate)) : new Date(0);
+          return dateB - dateA;
+        });
+        const lastSession = sortedSessions[0];
         if (lastSession.endDate) {
           completionDate = lastSession.endDate.toDate ? lastSession.endDate.toDate() : new Date(lastSession.endDate);
         }
       }
-      // Priorytet 3: endDate (planowana data zakończenia)
-      else if (task.endDate) {
-        completionDate = task.endDate.toDate ? task.endDate.toDate() : new Date(task.endDate);
-      }
-      // Priorytet 4: scheduledDate (planowana data rozpoczęcia)
-      else if (task.scheduledDate) {
-        completionDate = task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate);
-      }
       
-      // Sprawdź czy data jest prawidłowa
-      if (!completionDate || isNaN(completionDate.getTime())) {
-        console.log(`[COST REPORT] Pominięto zadanie ${task.moNumber || task.id} - brak prawidłowej daty`);
-        return;
-      }
+      // Oblicz całkowity czas produkcji w okresie
+      const totalProductionTimeInPeriod = sessionsInPeriod.reduce((sum, session) => 
+        sum + (parseFloat(session.timeSpent) || 0), 0
+      );
       
-      // Filtruj według zakresu dat
-      if (completionDate >= startDate && completionDate <= endDate) {
-        // Oblicz koszty z precyzją
-        const totalMaterialCost = parseFloat(task.totalMaterialCost) || 0;
-        const totalFullProductionCost = parseFloat(task.totalFullProductionCost) || 0;
-        const processingCostPerUnit = parseFloat(task.processingCostPerUnit) || 0;
-        const completedQuantity = parseFloat(task.totalCompletedQuantity) || 0;
-        const plannedQuantity = parseFloat(task.quantity) || 0;
+      // Oblicz efektywność w okresie
+      const efficiencyInPeriod = plannedQuantity > 0 ? (quantityInPeriod / plannedQuantity) * 100 : 0;
+      
+      tasks.push({
+        ...task,
+        // Dane całego zadania (dla kontekstu)
+        totalCompletedQuantity: completedQuantity,
+        totalMaterialCost,
+        totalFullProductionCost,
+        unitMaterialCost,
+        unitFullCost,
         
-        // Oblicz całkowity koszt procesowy
-        const totalProcessingCost = processingCostPerUnit * completedQuantity;
+        // NOWE: Dane dla wybranego okresu
+        sessionsInPeriod: sessionsInPeriod.length,
+        quantityInPeriod,
+        materialCostInPeriod,
+        fullCostInPeriod,
+        processingCostInPeriod,
+        hasSessionsOutsidePeriod,
+        totalProductionTimeInPeriod,
+        totalProductionTimeInPeriodHours: totalProductionTimeInPeriod > 0 
+          ? (totalProductionTimeInPeriod / 60).toFixed(2) 
+          : 0,
+        efficiencyInPeriod,
         
-        // Oblicz koszty jednostkowe
-        const unitMaterialCost = completedQuantity > 0 ? totalMaterialCost / completedQuantity : 0;
-        const unitFullCost = completedQuantity > 0 ? totalFullProductionCost / completedQuantity : 0;
+        // Data zakończenia (ostatniej sesji w okresie)
+        completionDate,
+        completedQuantity, // alias dla kompatybilności
+        plannedQuantity,
         
-        // Oblicz całkowity czas produkcji z sesji
-        let totalProductionTime = 0;
-        if (task.productionSessions && Array.isArray(task.productionSessions)) {
-          totalProductionTime = task.productionSessions.reduce((sum, session) => 
-            sum + (parseFloat(session.timeSpent) || 0), 0
-          );
-        }
-        
-        // Oblicz efektywność produkcji
-        const efficiency = plannedQuantity > 0 ? (completedQuantity / plannedQuantity) * 100 : 0;
-        
-        tasks.push({
-          ...task,
-          completionDate,
-          totalMaterialCost,
-          totalFullProductionCost,
-          totalProcessingCost,
-          unitMaterialCost,
-          unitFullCost,
-          completedQuantity,
-          plannedQuantity,
-          totalProductionTime,
-          totalProductionTimeHours: totalProductionTime > 0 ? (totalProductionTime / 60).toFixed(2) : 0,
-          efficiency
-        });
-      }
+        // Sesje dla szczegółów
+        allSessions: productionSessions,
+        filteredSessions: sessionsInPeriod
+      });
     });
     
     // Sortuj według daty zakończenia (najnowsze najpierw)
-    tasks.sort((a, b) => b.completionDate - a.completionDate);
+    tasks.sort((a, b) => {
+      if (!a.completionDate) return 1;
+      if (!b.completionDate) return -1;
+      return b.completionDate - a.completionDate;
+    });
     
-    console.log(`[COST REPORT] Znaleziono ${tasks.length} zadań z kosztami w podanym zakresie`);
+    console.log(`[COST REPORT] Znaleziono ${tasks.length} zadań z sesjami w podanym zakresie`);
     return tasks;
   } catch (error) {
     console.error('[COST REPORT] Błąd podczas pobierania zadań z kosztami:', error);
