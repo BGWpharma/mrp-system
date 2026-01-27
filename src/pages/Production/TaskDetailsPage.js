@@ -540,6 +540,7 @@ const TaskDetailsPage = () => {
   const [consumedBatchPrices, setConsumedBatchPrices] = useState({});
   const [consumedIncludeInCosts, setConsumedIncludeInCosts] = useState({});
   const [fixingRecipeData, setFixingRecipeData] = useState(false);
+  const [syncingNamesWithRecipe, setSyncingNamesWithRecipe] = useState(false);
   
   // ✅ FAZA 1: Stany załączników (clinicalAttachments, additionalAttachments, uploading*, loading*) przeniesione do useAttachmentsState
   
@@ -8140,6 +8141,76 @@ const TaskDetailsPage = () => {
     }
   };
 
+  // Funkcja synchronizacji nazw z aktualną recepturą
+  const handleSyncNamesWithRecipe = async () => {
+    if (!task?.recipeId) {
+      showError(t('syncNames.noRecipeId'));
+      return;
+    }
+
+    try {
+      setSyncingNamesWithRecipe(true);
+      showInfo(t('syncNames.syncing'));
+      
+      // Pobierz aktualną recepturę
+      const { getRecipeById } = await import('../../services/recipeService');
+      const recipe = await getRecipeById(task.recipeId);
+      
+      if (!recipe) {
+        throw new Error(t('syncNames.recipeNotFound'));
+      }
+
+      // Pobierz pozycję magazynową powiązaną z recepturą
+      const { getInventoryItemByRecipeId } = await import('../../services/inventory');
+      let inventoryItem = null;
+      try {
+        inventoryItem = await getInventoryItemByRecipeId(task.recipeId);
+      } catch (error) {
+        console.warn('Nie znaleziono pozycji magazynowej dla receptury:', error);
+      }
+
+      // Przygotuj dane do aktualizacji
+      const updateData = {
+        name: recipe.name,
+        productName: recipe.name,
+        recipeName: recipe.name,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser.uid
+      };
+
+      // Jeśli znaleziono pozycję magazynową, zaktualizuj też inventoryProductId
+      if (inventoryItem) {
+        updateData.inventoryProductId = inventoryItem.id;
+      }
+
+      // Zaktualizuj zadanie w bazie
+      const taskRef = doc(db, 'productionTasks', id);
+      await updateDoc(taskRef, updateData);
+
+      // Zaktualizuj lokalny stan
+      setTask(prevTask => ({
+        ...prevTask,
+        name: recipe.name,
+        productName: recipe.name,
+        recipeName: recipe.name,
+        inventoryProductId: inventoryItem?.id || prevTask.inventoryProductId
+      }));
+
+      const inventoryInfo = inventoryItem 
+        ? t('syncNames.successWithInventory', { recipeName: recipe.name, inventoryName: inventoryItem.name })
+        : t('syncNames.success', { recipeName: recipe.name });
+      
+      showSuccess(inventoryInfo);
+      console.log('Zsynchronizowano nazwy z recepturą:', recipe.name);
+
+    } catch (error) {
+      console.error('Błąd podczas synchronizacji nazw z recepturą:', error);
+      showError(t('syncNames.error', { error: error.message }));
+    } finally {
+      setSyncingNamesWithRecipe(false);
+    }
+  };
+
   // Funkcja do pobierania danych firmy
   const fetchCompanyData = async () => {
     try {
@@ -8631,6 +8702,7 @@ const TaskDetailsPage = () => {
                 getStatusColor={getStatusColor}
                 getStatusActions={getStatusActions}
                 onTabChange={setMainTab}
+                onStatusChange={handleStatusChange}
               />
             </Suspense>
           )}

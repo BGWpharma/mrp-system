@@ -91,6 +91,7 @@ const translations = {
     itemWeight: 'Waga (kg)',
     itemVolume: 'Objętość (m³)',
     itemOrderNumber: 'Numer CO',
+    itemBatchNumber: 'Numer partii',
     summary: 'Podsumowanie',
     totalDocuments: 'Całkowita liczba dokumentów',
     reportPeriod: 'Okres raportu',
@@ -122,6 +123,7 @@ const translations = {
     itemWeight: 'Weight (kg)',
     itemVolume: 'Volume (m³)',
     itemOrderNumber: 'CO Number',
+    itemBatchNumber: 'Batch Number',
     summary: 'Summary',
     totalDocuments: 'Total Documents',
     reportPeriod: 'Report Period',
@@ -586,10 +588,15 @@ const CmrListPage = () => {
       // Jeśli dokument ma pozycje i opcja includeItems jest włączona, dodaj je
       if (reportFilters.includeItems && doc.items && doc.items.length > 0) {
         // Dodaj nagłówki pozycji
-        rows.push(['', '', t.itemId, t.itemDescription, t.itemQuantity, t.itemUnit, t.itemWeight, t.itemVolume, t.itemOrderNumber]);
+        rows.push(['', '', t.itemId, t.itemDescription, t.itemQuantity, t.itemUnit, t.itemWeight, t.itemVolume, t.itemOrderNumber, t.itemBatchNumber]);
         
         // Dodaj wiersze dla każdej pozycji
         doc.items.forEach((item, index) => {
+          // Wyciągnij numery partii z linkedBatches
+          const batchNumbers = item.linkedBatches && item.linkedBatches.length > 0
+            ? item.linkedBatches.map(batch => batch.batchNumber || batch.lotNumber || '').filter(Boolean).join(', ')
+            : '-';
+          
           rows.push([
             '', '', 
             (index + 1).toString(), 
@@ -598,7 +605,8 @@ const CmrListPage = () => {
             item.unit || item.packagingMethod, 
             item.weight, 
             item.volume,
-            item.orderNumber || item.originalOrderItem?.orderNumber || '-'
+            item.orderNumber || item.originalOrderItem?.orderNumber || '-',
+            batchNumbers
           ]);
         });
         
@@ -1253,20 +1261,29 @@ const CmrListPage = () => {
                             <TableCell>{t.itemWeight}</TableCell>
                             <TableCell>{t.itemVolume}</TableCell>
                             <TableCell>{t.itemOrderNumber}</TableCell>
+                            <TableCell>{t.itemBatchNumber}</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {doc.items.map((item, index) => (
-                            <TableRow key={item.id || index}>
-                              <TableCell>{index + 1}</TableCell>
-                              <TableCell>{item.description}</TableCell>
-                              <TableCell>{item.quantity || item.numberOfPackages}</TableCell>
-                              <TableCell>{item.unit || item.packagingMethod}</TableCell>
-                              <TableCell>{item.weight}</TableCell>
-                              <TableCell>{item.volume}</TableCell>
-                              <TableCell>{item.orderNumber || item.originalOrderItem?.orderNumber || '-'}</TableCell>
-                            </TableRow>
-                          ))}
+                          {doc.items.map((item, index) => {
+                            // Wyciągnij numery partii z linkedBatches
+                            const batchNumbers = item.linkedBatches && item.linkedBatches.length > 0
+                              ? item.linkedBatches.map(batch => batch.batchNumber || batch.lotNumber || '').filter(Boolean).join(', ')
+                              : '-';
+                            
+                            return (
+                              <TableRow key={item.id || index}>
+                                <TableCell>{index + 1}</TableCell>
+                                <TableCell>{item.description}</TableCell>
+                                <TableCell>{item.quantity || item.numberOfPackages}</TableCell>
+                                <TableCell>{item.unit || item.packagingMethod}</TableCell>
+                                <TableCell>{item.weight}</TableCell>
+                                <TableCell>{item.volume}</TableCell>
+                                <TableCell>{item.orderNumber || item.originalOrderItem?.orderNumber || '-'}</TableCell>
+                                <TableCell>{batchNumbers}</TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </TableContainer>

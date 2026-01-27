@@ -718,6 +718,59 @@ export const deleteOrder = async (orderId) => {
 };
 
 /**
+ * Aktualizuje nazwę pozycji zamówienia (bez zmiany recipeId ani innych powiązań)
+ * Używane do synchronizacji nazwy z recepturą
+ * @param {string} orderId - ID zamówienia
+ * @param {string} orderItemId - ID pozycji zamówienia
+ * @param {string} newName - Nowa nazwa pozycji
+ * @param {string} userId - ID użytkownika wykonującego operację
+ */
+export const updateOrderItemName = async (orderId, orderItemId, newName, userId) => {
+  try {
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const orderDoc = await getDoc(orderRef);
+    
+    if (!orderDoc.exists()) {
+      throw new Error('Zamówienie nie istnieje');
+    }
+    
+    const orderData = orderDoc.data();
+    const items = orderData.items || [];
+    
+    // Znajdź pozycję i zaktualizuj tylko nazwę (zachowaj recipeId i inne pola)
+    const updatedItems = items.map(item => {
+      if (item.id === orderItemId) {
+        return {
+          ...item,
+          name: newName
+          // recipeId i inne pola pozostają niezmienione
+        };
+      }
+      return item;
+    });
+    
+    // Sprawdź czy pozycja została znaleziona
+    const itemFound = items.some(item => item.id === orderItemId);
+    if (!itemFound) {
+      throw new Error('Nie znaleziono pozycji zamówienia o podanym ID');
+    }
+    
+    // Zaktualizuj zamówienie
+    await updateDoc(orderRef, {
+      items: updatedItems,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId
+    });
+    
+    console.log(`✅ Zaktualizowano nazwę pozycji ${orderItemId} w zamówieniu ${orderId}: "${newName}"`);
+    return true;
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji nazwy pozycji zamówienia:', error);
+    throw error;
+  }
+};
+
+/**
  * Aktualizuje ilość wysłaną dla pozycji zamówienia na podstawie CMR
  */
 export const updateOrderItemShippedQuantity = async (orderId, itemUpdates, userId) => {

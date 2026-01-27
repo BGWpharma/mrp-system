@@ -317,6 +317,38 @@ export const validateInventoryItemData = (itemData) => {
     validated.bookedQuantity = validateQuantity(itemData.bookedQuantity);
   }
   
+  // Pola związane z powiązaniem z recepturą (dla produktów gotowych)
+  if (itemData.hasOwnProperty('recipeId') && itemData.recipeId) {
+    validated.recipeId = itemData.recipeId;
+  }
+  
+  if (itemData.hasOwnProperty('recipeInfo') && itemData.recipeInfo) {
+    validated.recipeInfo = itemData.recipeInfo;
+  }
+  
+  // Pola typu produktu
+  if (itemData.hasOwnProperty('type')) {
+    validated.type = validateRequiredString(itemData.type || '', 'type', false);
+  }
+  
+  if (itemData.hasOwnProperty('isFinishedProduct')) {
+    validated.isFinishedProduct = Boolean(itemData.isFinishedProduct);
+  }
+  
+  if (itemData.hasOwnProperty('isRawMaterial')) {
+    validated.isRawMaterial = Boolean(itemData.isRawMaterial);
+  }
+  
+  // Cena produkcji
+  if (itemData.productionCost !== undefined && itemData.productionCost !== null && itemData.productionCost !== '') {
+    validated.productionCost = validatePrice(itemData.productionCost);
+  }
+  
+  // Cena z partii
+  if (itemData.batchPrice !== undefined && itemData.batchPrice !== null) {
+    validated.batchPrice = itemData.batchPrice;
+  }
+  
   return validated;
 };
 

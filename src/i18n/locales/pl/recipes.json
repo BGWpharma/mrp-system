@@ -186,6 +186,9 @@
   "messages": {
     "recipeCreated": "Receptura została utworzona",
     "recipeUpdated": "Receptura została zaktualizowana",
+    "recipeAndInventoryUpdated": "Receptura i pozycja magazynowa zostały zaktualizowane",
+    "recipeAndPriceListsUpdated": "Receptura została zaktualizowana. Zaktualizowano nazwę w {{priceListsCount}} listach cenowych.",
+    "recipeInventoryAndPriceListsUpdated": "Receptura, pozycja magazynowa i {{priceListsCount}} list cenowych zostały zaktualizowane",
     "saveError": "Błąd podczas zapisywania receptury: {{error}}",
     "skuRequired": "SKU jest wymagany",
     "linkedIngredients": "Powiązano {{count}} składników ze stanami",
@@ -196,6 +199,39 @@
     "recipeDeleted": "Receptura została usunięta",
     "confirmDelete": "Czy na pewno chcesz usunąć tę recepturę?",
     "deleteError": "Nie udało się usunąć receptury: {{error}}"
+  },
+  "syncNameDialog": {
+    "title": "Zmiana nazwy receptury",
+    "nameChangeDetected": "Wykryto zmianę nazwy receptury z",
+    "to": "na",
+    "linkedInventoryInfo": "Ta receptura ma powiązaną pozycję magazynową:",
+    "syncQuestion": "Czy chcesz również zaktualizować nazwę pozycji magazynowej?",
+    "keepOldName": "Nie, zostaw starą nazwę",
+    "syncNames": "Tak, synchronizuj nazwy",
+    "updating": "Aktualizowanie..."
+  },
+  "inventoryButtons": {
+    "createNew": "Utwórz nową pozycję",
+    "linkExisting": "Powiąż z istniejącą"
+  },
+  "linkInventoryDialog": {
+    "title": "Powiąż z pozycją magazynową",
+    "description": "Wybierz istniejącą pozycję magazynową, którą chcesz powiązać z tą recepturą. Wyświetlane są tylko pozycje, które nie są jeszcze powiązane z żadną recepturą.",
+    "searchPlaceholder": "Szukaj pozycji magazynowej...",
+    "noResults": "Nie znaleziono pozycji pasujących do wyszukiwania",
+    "noAvailableItems": "Brak dostępnych pozycji do powiązania",
+    "columns": {
+      "name": "Nazwa (SKU)",
+      "category": "Kategoria",
+      "unit": "Jednostka",
+      "description": "Opis"
+    },
+    "selectedItem": "Wybrana pozycja",
+    "linkButton": "Powiąż pozycję",
+    "linking": "Łączenie...",
+    "selectItemError": "Wybierz pozycję magazynową",
+    "successMessage": "Pozycja \"{{itemName}}\" została powiązana z recepturą",
+    "errorMessage": "Błąd podczas wiązania pozycji: {{error}}"
   },
   "status": {
     "draft": "Robocza",

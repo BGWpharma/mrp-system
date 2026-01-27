@@ -82,47 +82,63 @@ import {
    * @returns {Promise<Array>} - Tablica receptur z podstawowymi polami
    */
   export const getActiveRecipesMinimal = async (maxResults = 150) => {
+    // Helper do mapowania dokumentów na minimalną strukturę
+    const mapDocToMinimal = (doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || '',
+        productName: data.productName || data.name || '',
+        category: data.category || '',
+        unit: data.unit || 'szt.',
+        expectedYield: data.expectedYield || null,
+        // Pola potrzebne do TaskForm
+        productMaterialId: data.productMaterialId || null,
+        lotNumber: data.lotNumber || null,
+        processingCostPerUnit: data.processingCostPerUnit || 0,
+        productionTimePerUnit: data.productionTimePerUnit || null
+      };
+    };
+
     try {
       const recipesRef = collection(db, RECIPES_COLLECTION);
       
-      // Pobierz tylko aktywne receptury, posortowane po nazwie
-      // Używamy query z limitem dla lepszej wydajności
-      const q = query(
+      // Najpierw próbuj pobrać tylko aktywne receptury
+      const activeQuery = query(
         recipesRef,
         where('status', '==', 'active'),
         orderBy('name', 'asc')
       );
       
-      const querySnapshot = await getDocs(q);
+      const activeSnapshot = await getDocs(activeQuery);
       
-      // Mapuj tylko potrzebne pola dla wydajności
-      const recipes = querySnapshot.docs.slice(0, maxResults).map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || '',
-          productName: data.productName || data.name || '',
-          category: data.category || '',
-          unit: data.unit || 'szt.',
-          expectedYield: data.expectedYield || null,
-          // Pola potrzebne do TaskForm
-          productMaterialId: data.productMaterialId || null,
-          lotNumber: data.lotNumber || null,
-          processingCostPerUnit: data.processingCostPerUnit || 0,
-          productionTimePerUnit: data.productionTimePerUnit || null
-        };
-      });
+      // Jeśli znaleziono aktywne receptury, zwróć je
+      if (activeSnapshot.docs.length > 0) {
+        const recipes = activeSnapshot.docs.slice(0, maxResults).map(mapDocToMinimal);
+        console.log(`⚡ getActiveRecipesMinimal: Pobrano ${recipes.length} aktywnych receptur (limit: ${maxResults})`);
+        return recipes;
+      }
       
-      console.log(`⚡ getActiveRecipesMinimal: Pobrano ${recipes.length} aktywnych receptur (limit: ${maxResults})`);
+      // Fallback: jeśli nie ma receptur ze statusem 'active', pobierz wszystkie
+      // (wiele receptur może nie mieć ustawionego pola status)
+      console.log('⚡ getActiveRecipesMinimal: Brak receptur ze statusem active, pobieram wszystkie');
+      const allQuery = query(
+        recipesRef,
+        orderBy('name', 'asc')
+      );
       
+      const allSnapshot = await getDocs(allQuery);
+      const recipes = allSnapshot.docs.slice(0, maxResults).map(mapDocToMinimal);
+      
+      console.log(`⚡ getActiveRecipesMinimal: Pobrano ${recipes.length} receptur (wszystkie, limit: ${maxResults})`);
       return recipes;
+      
     } catch (error) {
       console.error('Błąd w getActiveRecipesMinimal:', error);
       // Fallback do getAllRecipes w przypadku błędu (np. brak indeksu)
       console.warn('Fallback: Używam getAllRecipes');
       const allRecipes = await getAllRecipes();
       return allRecipes
-        .filter(r => r.status === 'active')
         .slice(0, maxResults)
         .map(r => ({
           id: r.id,

@@ -1,4 +1,13 @@
 {
+    "syncNames": {
+        "button": "Synchronizuj nazwy",
+        "syncing": "Synchronizowanie...",
+        "noRecipeId": "Brak ID receptury w zadaniu",
+        "recipeNotFound": "Nie znaleziono receptury",
+        "success": "Nazwy zostały zsynchronizowane z recepturą: {{recipeName}}",
+        "successWithInventory": "Nazwy zsynchronizowane z recepturą \"{{recipeName}}\" i powiązano z pozycją magazynową \"{{inventoryName}}\"",
+        "error": "Błąd podczas synchronizacji nazw: {{error}}"
+    },
     "backToTaskList": "Powrót do listy zadań",
     "editTask": "Edytuj zadanie",
     "deleteTask": "Usuń zadanie",

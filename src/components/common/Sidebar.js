@@ -49,7 +49,9 @@ import {
   HelpOutline as FaqIcon,
   Assignment as FormIcon,
   TrendingUp as ForecastIcon,
-  ViewKanban as TaskboardIcon
+  ViewKanban as TaskboardIcon,
+  Home as HomeIcon,
+  Insights as InsightsIcon
 } from '@mui/icons-material';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -388,8 +390,8 @@ const Sidebar = ({ onToggle }) => {
       path: '/',
       hasSubmenu: true,
       children: [
-        { text: t('submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
-        { text: t('submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
+        { text: t('submenu.dashboard.main'), icon: <HomeIcon />, path: '/' },
+        { text: t('submenu.dashboard.analytics'), icon: <InsightsIcon />, path: '/analytics' },
         { text: t('submenu.dashboard.taskboard'), icon: <TaskboardIcon />, path: '/taskboard' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },

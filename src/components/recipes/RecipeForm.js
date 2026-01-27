@@ -55,7 +55,9 @@ import {
   KeyboardArrowUp as ArrowUpIcon,
   KeyboardArrowDown as ArrowDownIcon,
   PhotoCamera as PhotoCameraIcon,
-  DragIndicator as DragIndicatorIcon
+  DragIndicator as DragIndicatorIcon,
+  Link as LinkIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import {
   DndContext,
@@ -74,8 +76,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { createRecipe, updateRecipe, getRecipeById, fixRecipeYield } from '../../services/recipeService';
-import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses } from '../../services/inventory';
-import { getAllPriceLists, addPriceListItem } from '../../services/priceListService';
+import { getAllInventoryItems, getIngredientPrices, createInventoryItem, getAllWarehouses, getInventoryItemByRecipeId, updateInventoryItem } from '../../services/inventory';
+import { getAllPriceLists, addPriceListItem, updateProductNameInPriceLists } from '../../services/priceListService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -360,6 +362,12 @@ const RecipeForm = ({ recipeId }) => {
     category: ''
   });
   
+  // Stany dla dialogu powiązania z istniejącą pozycją magazynową
+  const [linkInventoryDialogOpen, setLinkInventoryDialogOpen] = useState(false);
+  const [linkingInventory, setLinkingInventory] = useState(false);
+  const [inventorySearchQuery, setInventorySearchQuery] = useState('');
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState(null);
+  
   // Stany dla dialogu dodawania receptury do listy cenowej
   const [addToPriceListDialogOpen, setAddToPriceListDialogOpen] = useState(false);
   const [priceLists, setPriceLists] = useState([]);
@@ -376,6 +384,13 @@ const RecipeForm = ({ recipeId }) => {
   const [designAttachments, setDesignAttachments] = useState([]);
   // Stan dla załączników zasad
   const [rulesAttachments, setRulesAttachments] = useState([]);
+  
+  // Stany dla dialogu synchronizacji nazwy z pozycją magazynową
+  const [originalRecipeName, setOriginalRecipeName] = useState('');
+  const [syncNameDialogOpen, setSyncNameDialogOpen] = useState(false);
+  const [linkedInventoryItem, setLinkedInventoryItem] = useState(null);
+  const [pendingRecipeData, setPendingRecipeData] = useState(null);
+  const [syncingName, setSyncingName] = useState(false);
 
   // Sensory dla drag-and-drop
   const sensors = useSensors(
@@ -596,6 +611,9 @@ const RecipeForm = ({ recipeId }) => {
           
           setRecipeData(recipeWithMicronutrients);
           
+          // Zapisz oryginalną nazwę dla wykrywania zmian
+          setOriginalRecipeName(recipe.name);
+          
           // Ustawiamy domyślne dane produktu na podstawie receptury
           setProductData(prev => ({
             ...prev,
@@ -706,6 +724,55 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
+  // Funkcja pomocnicza do zapisywania receptury
+  const saveRecipe = async (recipeDataToSave, syncInventoryName = false) => {
+    if (recipeId) {
+      await updateRecipe(recipeId, recipeDataToSave, currentUser.uid);
+      
+      // Sprawdź czy nazwa się zmieniła
+      const nameChanged = originalRecipeName !== '' && recipeData.name !== originalRecipeName;
+      
+      // Jeśli nazwa się zmieniła, automatycznie aktualizuj listy cenowe
+      let priceListsUpdated = 0;
+      if (nameChanged) {
+        try {
+          priceListsUpdated = await updateProductNameInPriceLists(recipeId, recipeData.name, currentUser.uid);
+        } catch (error) {
+          console.warn('Nie udało się zaktualizować nazwy w listach cenowych:', error);
+        }
+      }
+      
+      // Jeśli trzeba zsynchronizować nazwę z pozycją magazynową
+      if (syncInventoryName && linkedInventoryItem) {
+        await updateInventoryItem(linkedInventoryItem.id, {
+          name: recipeData.name
+        }, currentUser.uid);
+        
+        if (priceListsUpdated > 0) {
+          showSuccess(t('recipes.messages.recipeInventoryAndPriceListsUpdated', { priceListsCount: priceListsUpdated }));
+        } else {
+          showSuccess(t('recipes.messages.recipeAndInventoryUpdated'));
+        }
+      } else {
+        if (priceListsUpdated > 0) {
+          showSuccess(t('recipes.messages.recipeAndPriceListsUpdated', { priceListsCount: priceListsUpdated }));
+        } else {
+          showSuccess(t('recipes.messages.recipeUpdated'));
+        }
+      }
+      
+      navigate(`/recipes/${recipeId}`);
+    } else {
+      const newRecipe = await createRecipe(recipeDataToSave, currentUser.uid);
+      setNewRecipeId(newRecipe.id);
+      showSuccess(t('recipes.messages.recipeCreated'));
+      
+      // Pokaż dialog pytający o dodanie do listy cenowej
+      await fetchPriceLists();
+      setAddToPriceListDialogOpen(true);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -727,24 +794,67 @@ const RecipeForm = ({ recipeId }) => {
         rulesAttachments: rulesAttachments
       };
       
-      if (recipeId) {
-        await updateRecipe(recipeId, recipeDataWithAttachments, currentUser.uid);
-        showSuccess(t('recipes.messages.recipeUpdated'));
-        navigate(`/recipes/${recipeId}`);
-      } else {
-        const newRecipe = await createRecipe(recipeDataWithAttachments, currentUser.uid);
-        setNewRecipeId(newRecipe.id);
-        showSuccess(t('recipes.messages.recipeCreated'));
-        
-        // Pokaż dialog pytający o dodanie do listy cenowej
-        await fetchPriceLists();
-        setAddToPriceListDialogOpen(true);
+      // Sprawdź czy to edycja i czy nazwa się zmieniła
+      if (recipeId && recipeData.name !== originalRecipeName && originalRecipeName !== '') {
+        // Sprawdź czy jest powiązana pozycja magazynowa
+        try {
+          const linkedItem = await getInventoryItemByRecipeId(recipeId);
+          
+          if (linkedItem) {
+            // Zapisz dane i pokaż dialog
+            setPendingRecipeData(recipeDataWithAttachments);
+            setLinkedInventoryItem(linkedItem);
+            setSyncNameDialogOpen(true);
+            setSaving(false);
+            return; // Przerwij - użytkownik zdecyduje w dialogu
+          }
+        } catch (error) {
+          console.warn('Nie udało się sprawdzić powiązanej pozycji magazynowej:', error);
+          // Kontynuuj normalny zapis jeśli nie udało się sprawdzić
+        }
       }
+      
+      // Normalny zapis bez synchronizacji
+      await saveRecipe(recipeDataWithAttachments, false);
     } catch (error) {
       showError(t('recipes.messages.saveError', { error: error.message }));
       console.error('Error saving recipe:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Obsługa dialogu synchronizacji nazwy - zapisz bez synchronizacji
+  const handleSaveWithoutSync = async () => {
+    setSyncNameDialogOpen(false);
+    setSyncingName(true);
+    
+    try {
+      await saveRecipe(pendingRecipeData, false);
+    } catch (error) {
+      showError(t('recipes.messages.saveError', { error: error.message }));
+      console.error('Error saving recipe:', error);
+    } finally {
+      setSyncingName(false);
+      setPendingRecipeData(null);
+      setLinkedInventoryItem(null);
+    }
+  };
+
+  // Obsługa dialogu synchronizacji nazwy - zapisz z synchronizacją
+  const handleSaveWithSync = async () => {
+    setSyncNameDialogOpen(false);
+    setSyncingName(true);
+    
+    try {
+      await saveRecipe(pendingRecipeData, true);
+    } catch (error) {
+      showError(t('recipes.messages.saveError', { error: error.message }));
+      console.error('Error saving recipe:', error);
+    } finally {
+      setSyncingName(false);
+      setPendingRecipeData(null);
+      setLinkedInventoryItem(null);
     }
   };
 
@@ -1052,21 +1162,88 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
-  // Dodajemy przycisk do tworzenia produktu w magazynie
-  const renderCreateProductButton = () => {
-    // Przycisk dostępny tylko przy edycji istniejącej receptury
+  // Funkcja do powiązania istniejącej pozycji magazynowej z recepturą
+  const handleLinkExistingInventoryItem = async () => {
+    if (!selectedInventoryItem) {
+      showError(t('recipes.linkInventoryDialog.selectItemError'));
+      return;
+    }
+    
+    try {
+      setLinkingInventory(true);
+      
+      // Aktualizuj pozycję magazynową - dodaj recipeId i recipeInfo
+      await updateInventoryItem(selectedInventoryItem.id, {
+        recipeId: recipeId,
+        recipeInfo: {
+          name: recipeData.name,
+          yield: recipeData.yield,
+          version: recipeData.version || 1
+        },
+        isFinishedProduct: true
+      }, currentUser.uid);
+      
+      showSuccess(t('recipes.linkInventoryDialog.successMessage', { itemName: selectedInventoryItem.name }));
+      setLinkInventoryDialogOpen(false);
+      setSelectedInventoryItem(null);
+      setInventorySearchQuery('');
+      
+      // Odśwież listę pozycji magazynowych
+      const updatedItems = await getAllInventoryItems();
+      setInventoryItems(updatedItems);
+      
+    } catch (error) {
+      showError(t('recipes.linkInventoryDialog.errorMessage', { error: error.message }));
+      console.error('Error linking inventory item:', error);
+    } finally {
+      setLinkingInventory(false);
+    }
+  };
+
+  // Filtrowanie pozycji magazynowych dla dialogu powiązania
+  const getFilteredInventoryItemsForLinking = () => {
+    if (!inventoryItems) return [];
+    
+    // Filtruj pozycje które NIE mają jeszcze przypisanej receptury
+    let filtered = inventoryItems.filter(item => !item.recipeId);
+    
+    // Filtruj po wyszukiwaniu
+    if (inventorySearchQuery.trim()) {
+      const query = inventorySearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(item => 
+        item.name?.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query) ||
+        item.category?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered.slice(0, 50); // Ogranicz do 50 wyników
+  };
+
+  // Dodajemy przyciski do zarządzania powiązaniem z magazynem
+  const renderInventoryLinkButtons = () => {
+    // Przyciski dostępne tylko przy edycji istniejącej receptury
     if (!recipeId) return null;
     
     return (
-      <Button
-        variant="outlined"
-        color="primary"
-        startIcon={<ProductIcon />}
-        onClick={() => setCreateProductDialogOpen(true)}
-        sx={{ ml: 2 }}
-      >
-        Dodaj produkt do stanów
-      </Button>
+      <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<ProductIcon />}
+          onClick={() => setCreateProductDialogOpen(true)}
+        >
+          {t('recipes.inventoryButtons.createNew')}
+        </Button>
+        <Button
+          variant="outlined"
+          color="secondary"
+          startIcon={<LinkIcon />}
+          onClick={() => setLinkInventoryDialogOpen(true)}
+        >
+          {t('recipes.inventoryButtons.linkExisting')}
+        </Button>
+      </Box>
     );
   };
 
@@ -1541,7 +1718,7 @@ const RecipeForm = ({ recipeId }) => {
           >
             {saving ? t('recipes.buttons.saving') : t('recipes.buttons.save')}
           </Button>
-          {recipeId && renderCreateProductButton()}
+          {recipeId && renderInventoryLinkButtons()}
           <Tooltip title={t('recipes.buttons.unitConversion')}>
             <IconButton color="info">
               <SwapIcon />
@@ -2777,6 +2954,162 @@ const RecipeForm = ({ recipeId }) => {
         </DialogActions>
       </Dialog>
 
+      {/* Dialog powiązania z istniejącą pozycją magazynową */}
+      <Dialog 
+        open={linkInventoryDialogOpen} 
+        onClose={() => {
+          setLinkInventoryDialogOpen(false);
+          setSelectedInventoryItem(null);
+          setInventorySearchQuery('');
+        }}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.5)' 
+            : 'rgba(245, 247, 250, 0.8)'
+        }}>
+          <LinkIcon color="secondary" />
+          <DialogTitle sx={{ p: 0 }}>{t('recipes.linkInventoryDialog.title')}</DialogTitle>
+        </Box>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <DialogContentText sx={{ mb: 2 }}>
+            {t('recipes.linkInventoryDialog.description')}
+          </DialogContentText>
+          
+          {/* Wyszukiwarka */}
+          <TextField
+            fullWidth
+            placeholder={t('recipes.linkInventoryDialog.searchPlaceholder')}
+            value={inventorySearchQuery}
+            onChange={(e) => setInventorySearchQuery(e.target.value)}
+            sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+            }}
+          />
+          
+          {/* Lista pozycji magazynowych */}
+          <Box sx={{ 
+            maxHeight: 400, 
+            overflow: 'auto',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: '8px'
+          }}>
+            {getFilteredInventoryItemsForLinking().length === 0 ? (
+              <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
+                {inventorySearchQuery 
+                  ? t('recipes.linkInventoryDialog.noResults')
+                  : t('recipes.linkInventoryDialog.noAvailableItems')
+                }
+              </Box>
+            ) : (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox"></TableCell>
+                    <TableCell>{t('recipes.linkInventoryDialog.columns.name')}</TableCell>
+                    <TableCell>{t('recipes.linkInventoryDialog.columns.category')}</TableCell>
+                    <TableCell>{t('recipes.linkInventoryDialog.columns.unit')}</TableCell>
+                    <TableCell>{t('recipes.linkInventoryDialog.columns.description')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {getFilteredInventoryItemsForLinking().map((item) => (
+                    <TableRow 
+                      key={item.id}
+                      hover
+                      selected={selectedInventoryItem?.id === item.id}
+                      onClick={() => setSelectedInventoryItem(item)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedInventoryItem?.id === item.id}
+                          onChange={() => setSelectedInventoryItem(
+                            selectedInventoryItem?.id === item.id ? null : item
+                          )}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">
+                          {item.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={item.category || '-'} 
+                          size="small" 
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>{item.unit || '-'}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
+                          {item.description || '-'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Box>
+          
+          {/* Informacja o wybranej pozycji */}
+          {selectedInventoryItem && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {t('recipes.linkInventoryDialog.selectedItem')}: <strong>{selectedInventoryItem.name}</strong>
+            </Alert>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button 
+            onClick={() => {
+              setLinkInventoryDialogOpen(false);
+              setSelectedInventoryItem(null);
+              setInventorySearchQuery('');
+            }}
+            sx={{ borderRadius: '8px' }}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button 
+            onClick={handleLinkExistingInventoryItem} 
+            variant="contained" 
+            color="secondary"
+            disabled={linkingInventory || !selectedInventoryItem}
+            startIcon={linkingInventory ? <CircularProgress size={20} /> : <LinkIcon />}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
+          >
+            {linkingInventory 
+              ? t('recipes.linkInventoryDialog.linking') 
+              : t('recipes.linkInventoryDialog.linkButton')
+            }
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Dialog dodawania nowego składnika odżywczego */}
       <Dialog 
         open={addNutrientDialogOpen} 
@@ -3237,6 +3570,95 @@ const RecipeForm = ({ recipeId }) => {
             }}
           >
             {addingToPriceList ? 'Dodawanie...' : 'Dodaj do listy cenowej'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog synchronizacji nazwy z pozycją magazynową */}
+      <Dialog 
+        open={syncNameDialogOpen} 
+        onClose={() => !syncingName && setSyncNameDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <Box sx={{ 
+          p: 2, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: theme => theme.palette.mode === 'dark' 
+            ? 'rgba(25, 35, 55, 0.5)' 
+            : 'rgba(245, 247, 250, 0.8)'
+        }}>
+          <SyncIcon color="primary" />
+          <DialogTitle sx={{ p: 0 }}>{t('recipes.syncNameDialog.title')}</DialogTitle>
+        </Box>
+        
+        <DialogContent sx={{ pt: 3 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {t('recipes.syncNameDialog.nameChangeDetected')} "<strong>{originalRecipeName}</strong>" {t('recipes.syncNameDialog.to')} "<strong>{recipeData.name}</strong>".
+          </Alert>
+          
+          <Typography sx={{ mb: 1 }}>
+            {t('recipes.syncNameDialog.linkedInventoryInfo')}
+          </Typography>
+          
+          <Paper 
+            elevation={0} 
+            sx={{ 
+              p: 2, 
+              mb: 2, 
+              bgcolor: theme => theme.palette.mode === 'dark' 
+                ? 'rgba(255,255,255,0.05)' 
+                : 'rgba(0,0,0,0.03)',
+              borderRadius: '8px',
+              border: '1px solid',
+              borderColor: 'divider'
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <InventoryIcon color="action" />
+              <Typography variant="body1" fontWeight="medium">
+                {linkedInventoryItem?.name}
+              </Typography>
+            </Box>
+          </Paper>
+          
+          <Typography>
+            {t('recipes.syncNameDialog.syncQuestion')}
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button 
+            onClick={handleSaveWithoutSync}
+            variant="outlined"
+            disabled={syncingName}
+            sx={{ borderRadius: '8px' }}
+          >
+            {t('recipes.syncNameDialog.keepOldName')}
+          </Button>
+          <Button 
+            onClick={handleSaveWithSync} 
+            variant="contained" 
+            color="primary"
+            disabled={syncingName}
+            startIcon={syncingName ? <CircularProgress size={20} /> : <SyncIcon />}
+            sx={{ 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 6px rgba(0,0,0,0.15)',
+              px: 3
+            }}
+          >
+            {syncingName ? t('recipes.syncNameDialog.updating') : t('recipes.syncNameDialog.syncNames')}
           </Button>
         </DialogActions>
       </Dialog>

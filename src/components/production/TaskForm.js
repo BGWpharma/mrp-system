@@ -164,6 +164,10 @@ const TaskForm = ({ taskId }) => {
   const [updatingRecipe, setUpdatingRecipe] = useState(false);
   const [availableRecipeVersions, setAvailableRecipeVersions] = useState([]);
   const [refreshingProductName, setRefreshingProductName] = useState(false);
+  
+  // Stany dla dialogu synchronizacji nazwy pozycji CO
+  const [syncCODialogOpen, setSyncCODialogOpen] = useState(false);
+  const [syncCOData, setSyncCOData] = useState(null); // Dane do synchronizacji CO
 
   // Stany dla dialogu przeliczania materiałów przy zmianie ilości
   const [quantityChangeDialogOpen, setQuantityChangeDialogOpen] = useState(false);
@@ -1627,59 +1631,169 @@ const TaskForm = ({ taskId }) => {
     }));
   };
 
-  // Funkcja do odświeżania nazwy produktu z powiązanego zamówienia
+  // Funkcja do synchronizacji wszystkich nazw z receptury (name, productName, recipeName)
   const handleRefreshProductName = async () => {
-    if (!taskData.orderId || !taskData.orderItemId) {
-      showWarning('To zadanie nie jest powiązane z zamówieniem klienta');
+    // Sprawdź czy jest powiązanie z recepturą lub zamówieniem
+    if (!taskData.recipeId && (!taskData.orderId || !taskData.orderItemId)) {
+      showWarning('To zadanie nie jest powiązane z recepturą ani zamówieniem klienta');
       return;
     }
 
     try {
       setRefreshingProductName(true);
       
-      // Pobierz zamówienie
-      const order = await getOrderById(taskData.orderId);
+      let newName = '';
+      let source = '';
+      let inventoryItemId = null;
+      let orderItemOldName = null;
       
-      if (!order || !order.items || !Array.isArray(order.items)) {
-        showError('Nie znaleziono zamówienia lub pozycji zamówienia');
+      // Priorytet 1: Pobierz dane z receptury (jeśli jest powiązana)
+      if (taskData.recipeId) {
+        const recipeData = await getRecipeById(taskData.recipeId);
+        if (recipeData) {
+          newName = recipeData.name || '';
+          source = 'receptury';
+          
+          // Spróbuj też pobrać pozycję magazynową powiązaną z recepturą
+          try {
+            const { getInventoryItemByRecipeId } = await import('../../services/inventory');
+            const inventoryItem = await getInventoryItemByRecipeId(taskData.recipeId);
+            if (inventoryItem) {
+              inventoryItemId = inventoryItem.id;
+            }
+          } catch (invError) {
+            console.warn('Nie znaleziono pozycji magazynowej dla receptury:', invError);
+          }
+        }
+      }
+      
+      // Priorytet 2: Jeśli nie ma receptury lub nie znaleziono, pobierz z zamówienia
+      if (!newName && taskData.orderId && taskData.orderItemId) {
+        const order = await getOrderById(taskData.orderId);
+        
+        if (order && order.items && Array.isArray(order.items)) {
+          const orderItem = order.items.find(item => item.id === taskData.orderItemId);
+          
+          if (orderItem) {
+            newName = orderItem.name || '';
+            source = 'zamówienia';
+          }
+        }
+      }
+      
+      if (!newName) {
+        showError('Nie udało się pobrać aktualnej nazwy');
         return;
       }
       
-      // Znajdź pozycję zamówienia odpowiadającą temu zadaniu
-      const orderItem = order.items.find(item => item.id === taskData.orderItemId);
-      
-      if (!orderItem) {
-        showError('Nie znaleziono pozycji zamówienia powiązanej z tym zadaniem');
-        return;
+      // Sprawdź czy pozycja CO ma starą nazwę (tylko jeśli źródłem jest receptura i jest powiązanie z CO)
+      if (source === 'receptury' && taskData.orderId && taskData.orderItemId) {
+        try {
+          const order = await getOrderById(taskData.orderId);
+          if (order && order.items && Array.isArray(order.items)) {
+            const orderItem = order.items.find(item => item.id === taskData.orderItemId);
+            if (orderItem && orderItem.name !== newName) {
+              orderItemOldName = orderItem.name;
+            }
+          }
+        } catch (orderError) {
+          console.warn('Nie udało się sprawdzić pozycji zamówienia:', orderError);
+        }
       }
       
+      // Sprawdź czy wszystkie nazwy są już aktualne
+      const currentName = taskData.name || '';
       const currentProductName = taskData.productName || '';
-      const newProductName = orderItem.name || '';
+      const currentRecipeName = taskData.recipeName || '';
+      const currentInventoryProductId = taskData.inventoryProductId || null;
       
-      if (currentProductName === newProductName) {
-        showSuccess('Nazwa produktu jest już aktualna');
+      const nameChanged = currentName !== newName;
+      const productNameChanged = currentProductName !== newName;
+      const recipeNameChanged = source === 'receptury' && currentRecipeName !== newName;
+      const inventoryChanged = inventoryItemId && currentInventoryProductId !== inventoryItemId;
+      
+      if (!nameChanged && !productNameChanged && !recipeNameChanged && !inventoryChanged && !orderItemOldName) {
+        showSuccess('Wszystkie nazwy są już aktualne');
         return;
       }
       
-      // Zaktualizuj nazwę produktu
+      // Zaktualizuj wszystkie pola nazw
+      const updates = {
+        name: newName,
+        productName: newName
+      };
+      
+      // Dodaj recipeName tylko jeśli źródłem jest receptura
+      if (source === 'receptury') {
+        updates.recipeName = newName;
+      }
+      
+      // Dodaj inventoryProductId jeśli znaleziono pozycję magazynową
+      if (inventoryItemId) {
+        updates.inventoryProductId = inventoryItemId;
+      }
+      
       setTaskData(prev => ({
         ...prev,
-        productName: newProductName
+        ...updates
       }));
       
-      // Poinformuj użytkownika o różnych sytuacjach
-      if (taskData.inventoryProductId) {
-        showSuccess(`Zaktualizowano nazwę produktu z zamówienia: "${currentProductName}" → "${newProductName}"\n\nUwaga: Nazwa została nadpisana względem produktu z magazynu. Zapisz zadanie aby zachować zmiany.`);
+      // Przygotuj informację o zmianach
+      const changes = [];
+      if (nameChanged) changes.push(`nazwa zadania: "${currentName}" → "${newName}"`);
+      if (productNameChanged) changes.push(`nazwa produktu: "${currentProductName}" → "${newName}"`);
+      if (recipeNameChanged) changes.push(`nazwa receptury: "${currentRecipeName}" → "${newName}"`);
+      if (inventoryChanged) changes.push('powiązanie z pozycją magazynową');
+      
+      // Jeśli pozycja CO ma starą nazwę, pokaż dialog z pytaniem
+      if (orderItemOldName) {
+        setSyncCOData({
+          orderId: taskData.orderId,
+          orderItemId: taskData.orderItemId,
+          oldName: orderItemOldName,
+          newName: newName,
+          changes: changes
+        });
+        setSyncCODialogOpen(true);
       } else {
-        showSuccess(`Zaktualizowano nazwę produktu: "${currentProductName}" → "${newProductName}"`);
+        showSuccess(`Zsynchronizowano z ${source}:\n• ${changes.join('\n• ')}\n\nZapisz zadanie aby zachować zmiany.`);
       }
       
     } catch (error) {
-      console.error('Błąd podczas odświeżania nazwy produktu:', error);
-      showError('Nie udało się odświeżyć nazwy produktu: ' + error.message);
+      console.error('Błąd podczas synchronizacji nazw:', error);
+      showError('Nie udało się zsynchronizować nazw: ' + error.message);
     } finally {
       setRefreshingProductName(false);
     }
+  };
+
+  // Funkcja do aktualizacji nazwy pozycji CO
+  const handleSyncCOName = async (shouldUpdate) => {
+    setSyncCODialogOpen(false);
+    
+    if (shouldUpdate && syncCOData) {
+      try {
+        const { updateOrderItemName } = await import('../../services/orderService');
+        await updateOrderItemName(
+          syncCOData.orderId, 
+          syncCOData.orderItemId, 
+          syncCOData.newName, 
+          currentUser.uid
+        );
+        showSuccess(
+          `Zsynchronizowano nazwy:\n• ${syncCOData.changes.join('\n• ')}\n• nazwa w pozycji zamówienia: "${syncCOData.oldName}" → "${syncCOData.newName}"\n\nZapisz zadanie aby zachować zmiany.`
+        );
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji nazwy w CO:', error);
+        showError('Nie udało się zaktualizować nazwy w zamówieniu: ' + error.message);
+        // Ale zmiany w MO zostały już zastosowane
+        showSuccess(`Zsynchronizowano nazwy w MO:\n• ${syncCOData.changes.join('\n• ')}\n\nZapisz zadanie aby zachować zmiany.`);
+      }
+    } else if (syncCOData) {
+      showSuccess(`Zsynchronizowano nazwy w MO:\n• ${syncCOData.changes.join('\n• ')}\n\nNazwa w zamówieniu pozostała bez zmian.\n\nZapisz zadanie aby zachować zmiany.`);
+    }
+    
+    setSyncCOData(null);
   };
 
   if (loading) {
@@ -2146,16 +2260,21 @@ const TaskForm = ({ taskId }) => {
                       required
                       variant="outlined"
                       helperText={
-                        taskData.inventoryProductId 
-                          ? "Nazwa produktu pochodzi z magazynu. Możesz ją edytować lub odświeżyć z zamówienia." 
-                          : ""
+                        taskData.recipeId 
+                          ? "Użyj przycisku Synchronizuj aby zaktualizować wszystkie nazwy z receptury." 
+                          : (taskData.inventoryProductId 
+                            ? "Nazwa produktu pochodzi z magazynu. Możesz ją edytować lub zsynchronizować." 
+                            : "")
                       }
                       sx={{ flexGrow: 1 }}
                     />
-                    {/* Przycisk do odświeżenia nazwy produktu - tylko w trybie edycji */}
-                    {taskId && taskId !== 'new' && taskData.orderId && taskData.orderItemId && (
+                    {/* Przycisk do synchronizacji nazw - tylko w trybie edycji */}
+                    {taskId && taskId !== 'new' && (taskData.recipeId || (taskData.orderId && taskData.orderItemId)) && (
                       <Tooltip 
-                        title="Odśwież nazwę produktu z aktualnej pozycji zamówienia" 
+                        title={taskData.recipeId 
+                          ? "Synchronizuj nazwy zadania, produktu i receptury z aktualną recepturą" 
+                          : "Odśwież nazwy z pozycji zamówienia"
+                        }
                         arrow
                       >
                         <Button
@@ -2166,11 +2285,11 @@ const TaskForm = ({ taskId }) => {
                           startIcon={refreshingProductName ? <CircularProgress size={16} /> : <RefreshIcon />}
                           sx={{ 
                             height: 56, 
-                            minWidth: 120,
+                            minWidth: 140,
                             whiteSpace: 'nowrap'
                           }}
                         >
-                          {refreshingProductName ? 'Odświeżam...' : 'Odśwież'}
+                          {refreshingProductName ? 'Synchronizuję...' : 'Synchronizuj'}
                         </Button>
                       </Tooltip>
                     )}
@@ -3042,6 +3161,62 @@ const TaskForm = ({ taskId }) => {
             startIcon={updatingRecipe ? <CircularProgress size={16} /> : <UpdateIcon />}
           >
             {updatingRecipe ? 'Aktualizuję...' : 'Aktualizuj'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog potwierdzenia synchronizacji nazwy w pozycji CO */}
+      <Dialog
+        open={syncCODialogOpen}
+        onClose={() => handleSyncCOName(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={flexCenterGap1}>
+            <RefreshIcon color="primary" />
+            Synchronizacja nazwy w zamówieniu
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={mb2}>
+            <AlertTitle>Wykryto starą nazwę w pozycji zamówienia</AlertTitle>
+            <Typography variant="body2">
+              Pozycja w zamówieniu klienta (CO) ma inną nazwę niż aktualna receptura.
+            </Typography>
+          </Alert>
+          
+          {syncCOData && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Stara nazwa w CO:</strong> {syncCOData.oldName}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>Nowa nazwa (z receptury):</strong> {syncCOData.newName}
+              </Typography>
+              
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Uwaga:</strong> Aktualizacja zmieni tylko nazwę wyświetlaną w pozycji zamówienia. 
+                  Wszystkie powiązania (ID receptury, ilości, ceny) pozostaną niezmienione.
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => handleSyncCOName(false)}
+            color="inherit"
+          >
+            Nie, zostaw starą nazwę
+          </Button>
+          <Button 
+            onClick={() => handleSyncCOName(true)}
+            variant="contained"
+            color="primary"
+          >
+            Tak, zaktualizuj nazwę w CO
           </Button>
         </DialogActions>
       </Dialog>

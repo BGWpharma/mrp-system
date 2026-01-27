@@ -544,4 +544,53 @@ export const exportPriceListToCSV = async (priceListId) => {
     console.error('Błąd podczas eksportowania listy cenowej do CSV:', error);
     throw error;
   }
-}; 
+};
+
+/**
+ * Aktualizuje nazwę produktu we wszystkich pozycjach list cenowych dla danej receptury
+ * @param {string} recipeId - ID receptury
+ * @param {string} newProductName - Nowa nazwa produktu (SKU)
+ * @param {string} userId - ID użytkownika wykonującego aktualizację
+ * @returns {Promise<number>} - Liczba zaktualizowanych pozycji
+ */
+export const updateProductNameInPriceLists = async (recipeId, newProductName, userId) => {
+  if (!recipeId || !newProductName) {
+    throw new Error('ID receptury i nowa nazwa produktu są wymagane');
+  }
+  
+  try {
+    // Pobierz wszystkie elementy list cenowych dla danej receptury
+    const itemsQuery = query(
+      collection(db, PRICE_LIST_ITEMS_COLLECTION),
+      where('productId', '==', recipeId),
+      where('isRecipe', '==', true)
+    );
+    
+    const itemsSnapshot = await getDocs(itemsQuery);
+    
+    if (itemsSnapshot.empty) {
+      return 0;
+    }
+    
+    // Aktualizuj każdą pozycję
+    let updatedCount = 0;
+    const updatePromises = [];
+    
+    itemsSnapshot.forEach((docSnapshot) => {
+      const updatePromise = updateDoc(doc(db, PRICE_LIST_ITEMS_COLLECTION, docSnapshot.id), {
+        productName: newProductName,
+        updatedBy: userId,
+        updatedAt: serverTimestamp()
+      });
+      updatePromises.push(updatePromise);
+      updatedCount++;
+    });
+    
+    await Promise.all(updatePromises);
+    
+    return updatedCount;
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji nazwy produktu w listach cenowych:', error);
+    throw error;
+  }
+};

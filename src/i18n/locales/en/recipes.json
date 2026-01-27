@@ -186,6 +186,9 @@
   "messages": {
     "recipeCreated": "Recipe has been created",
     "recipeUpdated": "Recipe has been updated",
+    "recipeAndInventoryUpdated": "Recipe and inventory item have been updated",
+    "recipeAndPriceListsUpdated": "Recipe has been updated. Updated name in {{priceListsCount}} price lists.",
+    "recipeInventoryAndPriceListsUpdated": "Recipe, inventory item and {{priceListsCount}} price lists have been updated",
     "saveError": "Error saving recipe: {{error}}",
     "skuRequired": "SKU is required",
     "linkedIngredients": "Linked {{count}} ingredients with inventory",
@@ -196,6 +199,39 @@
     "recipeDeleted": "Recipe has been deleted",
     "confirmDelete": "Are you sure you want to delete this recipe?",
     "deleteError": "Failed to delete recipe: {{error}}"
+  },
+  "syncNameDialog": {
+    "title": "Recipe Name Change",
+    "nameChangeDetected": "Recipe name change detected from",
+    "to": "to",
+    "linkedInventoryInfo": "This recipe has a linked inventory item:",
+    "syncQuestion": "Would you also like to update the inventory item name?",
+    "keepOldName": "No, keep the old name",
+    "syncNames": "Yes, sync names",
+    "updating": "Updating..."
+  },
+  "inventoryButtons": {
+    "createNew": "Create new item",
+    "linkExisting": "Link existing"
+  },
+  "linkInventoryDialog": {
+    "title": "Link to Inventory Item",
+    "description": "Select an existing inventory item to link with this recipe. Only items not already linked to any recipe are displayed.",
+    "searchPlaceholder": "Search inventory item...",
+    "noResults": "No items found matching your search",
+    "noAvailableItems": "No available items to link",
+    "columns": {
+      "name": "Name (SKU)",
+      "category": "Category",
+      "unit": "Unit",
+      "description": "Description"
+    },
+    "selectedItem": "Selected item",
+    "linkButton": "Link item",
+    "linking": "Linking...",
+    "selectItemError": "Please select an inventory item",
+    "successMessage": "Item \"{{itemName}}\" has been linked to the recipe",
+    "errorMessage": "Error linking item: {{error}}"
   },
   "status": {
     "draft": "Draft",

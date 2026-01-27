@@ -166,6 +166,10 @@ const InventoryList = () => {
   const [importError, setImportError] = useState(null);
   const [importWarnings, setImportWarnings] = useState([]);
   
+  // Stany dla dialogu wyboru kategorii przed eksportem CSV
+  const [exportCategoryDialogOpen, setExportCategoryDialogOpen] = useState(false);
+  const [selectedExportCategories, setSelectedExportCategories] = useState([]);
+  
   // Zamiast lokalnego stanu, użyjmy kontekstu preferencji kolumn
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   
@@ -1079,9 +1083,37 @@ const InventoryList = () => {
     fetchInventoryItems(tableSort.field, tableSort.order);
   };
 
-  // Funkcja do generowania raportu CSV ze stanów magazynowych
+  // Funkcja otwierająca dialog wyboru kategorii przed eksportem CSV
+  const openExportCategoryDialog = () => {
+    // Domyślnie zaznacz wszystkie kategorie
+    setSelectedExportCategories([...Object.values(INVENTORY_CATEGORIES)]);
+    setExportCategoryDialogOpen(true);
+  };
+
+  // Funkcja do obsługi zaznaczenia/odznaczenia kategorii
+  const handleExportCategoryToggle = (category) => {
+    setSelectedExportCategories(prev => {
+      if (prev.includes(category)) {
+        return prev.filter(c => c !== category);
+      } else {
+        return [...prev, category];
+      }
+    });
+  };
+
+  // Funkcja do zaznaczenia/odznaczenia wszystkich kategorii
+  const handleSelectAllCategories = () => {
+    if (selectedExportCategories.length === Object.values(INVENTORY_CATEGORIES).length) {
+      setSelectedExportCategories([]);
+    } else {
+      setSelectedExportCategories([...Object.values(INVENTORY_CATEGORIES)]);
+    }
+  };
+
+  // Funkcja do generowania raportu CSV ze stanów magazynowych z wybranymi kategoriami
   const generateCsvReport = async () => {
     try {
+      setExportCategoryDialogOpen(false);
       setMainTableLoading(true);
       showSuccess('Generowanie raportu CSV...');
 
@@ -1096,12 +1128,54 @@ const InventoryList = () => {
         tableSort.order
       );
 
-      const itemsToExport = Array.isArray(allItems.items) ? allItems.items : allItems;
+      let itemsToExport = Array.isArray(allItems.items) ? allItems.items : allItems;
+
+      // Filtruj pozycje według wybranych kategorii
+      if (selectedExportCategories.length > 0 && selectedExportCategories.length < Object.values(INVENTORY_CATEGORIES).length) {
+        itemsToExport = itemsToExport.filter(item => 
+          selectedExportCategories.includes(item.category)
+        );
+      }
+
+      if (itemsToExport.length === 0) {
+        showError('Brak pozycji do wyeksportowania dla wybranych kategorii');
+        setMainTableLoading(false);
+        return;
+      }
+
+      // Pobierz wszystkie partie, aby obliczyć średnią cenę z aktywnych partii
+      const filterParams = selectedWarehouse ? { warehouseId: selectedWarehouse } : {};
+      const allBatches = await getBatchesWithFilters(filterParams);
+
+      // Oblicz średnią cenę z aktywnych partii (quantity > 0) dla każdej pozycji
+      const avgPriceByItemId = {};
+      if (allBatches && allBatches.length > 0) {
+        allBatches.forEach(batch => {
+          const itemId = batch.itemId;
+          const batchQuantity = batch.quantity || 0;
+          const batchPrice = batch.unitPrice || 0;
+          
+          // Uwzględnij tylko partie z ilością > 0
+          if (batchQuantity > 0) {
+            if (!avgPriceByItemId[itemId]) {
+              avgPriceByItemId[itemId] = { totalValue: 0, totalQuantity: 0 };
+            }
+            avgPriceByItemId[itemId].totalValue += batchQuantity * batchPrice;
+            avgPriceByItemId[itemId].totalQuantity += batchQuantity;
+          }
+        });
+      }
 
       // Przygotuj dane do eksportu
       const data = itemsToExport.map(item => {
         const bookedQuantity = Number(item.bookedQuantity) || 0;
         const availableQuantity = Number(item.quantity) - bookedQuantity;
+        
+        // Oblicz średnią cenę z aktywnych partii
+        const priceData = avgPriceByItemId[item.id];
+        const avgPriceFromActiveBatches = priceData && priceData.totalQuantity > 0
+          ? (priceData.totalValue / priceData.totalQuantity).toFixed(4)
+          : '-';
         
         return {
           category: item.category || '',
@@ -1112,6 +1186,7 @@ const InventoryList = () => {
           unit: item.unit || 'pcs.',
           reservedQuantity: bookedQuantity.toFixed(2),
           availableQuantity: availableQuantity.toFixed(2),
+          avgPriceFromActiveBatches: avgPriceFromActiveBatches,
           location: item.warehouseName || '',
           minStockLevel: item.minStockLevel || '',
           maxStockLevel: item.maxStockLevel || '',
@@ -1132,6 +1207,7 @@ const InventoryList = () => {
         { label: 'Unit', key: 'unit' },
         { label: 'Reserved Quantity', key: 'reservedQuantity' },
         { label: 'Available Quantity', key: 'availableQuantity' },
+        { label: 'Avg Price from Active Batches (EUR)', key: 'avgPriceFromActiveBatches' },
         { label: 'Location', key: 'location' },
         { label: 'Min Stock Level', key: 'minStockLevel' },
         { label: 'Max Stock Level', key: 'maxStockLevel' },
@@ -1144,7 +1220,7 @@ const InventoryList = () => {
       // Generuj CSV
       const success = exportToCSV(data, headers, `Inventory_Stock_Report_${new Date().toISOString().slice(0, 10)}`);
       if (success) {
-        showSuccess('Raport CSV został wygenerowany');
+        showSuccess(`Raport CSV został wygenerowany (${data.length} pozycji)`);
       } else {
         showError('Błąd podczas generowania raportu CSV');
       }
@@ -1197,19 +1273,19 @@ const InventoryList = () => {
         const batchValue = (batch.quantity || 0) * (batch.unitPrice || 0);
         
         return {
-          itemName: item?.name || 'Nieznana pozycja',
+          itemName: item?.name || 'Unknown item',
           itemCategory: item?.category || '',
           batchNumber: batch.batchNumber || batch.lotNumber || '-',
           warehouseName: batch.warehouseName || warehouses.find(w => w.id === batch.warehouseId)?.name || '',
           quantity: (batch.quantity || 0).toFixed(4),
-          unit: item?.unit || batch.unit || 'szt.',
+          unit: item?.unit || batch.unit || 'pcs',
           availableQuantity: Math.max(0, (batch.quantity || 0) - (batch.bookedQuantity || 0)).toFixed(4),
           unitPrice: batch.unitPrice ? (batch.unitPrice).toFixed(4) : '-',
           batchValue: batchValue.toFixed(2),
           baseUnitPrice: batch.baseUnitPrice ? (batch.baseUnitPrice).toFixed(4) : '-',
           additionalCostPerUnit: batch.additionalCostPerUnit ? (batch.additionalCostPerUnit).toFixed(4) : '-',
           expiryDate: batch.expiryDate && !isDefaultDate(convertTimestampToDate(batch.expiryDate)) 
-            ? convertTimestampToDate(batch.expiryDate)?.toLocaleDateString('pl-PL') 
+            ? convertTimestampToDate(batch.expiryDate)?.toLocaleDateString('en-GB') 
             : '-',
           notes: batch.notes || '',
           // Wartości numeryczne do obliczeń sum
@@ -1229,7 +1305,7 @@ const InventoryList = () => {
 
       // Dodaj wiersz z sumami
       batchesData.push({
-        itemName: '--- SUMA ---',
+        itemName: '--- TOTAL ---',
         itemCategory: '',
         batchNumber: '',
         warehouseName: '',
@@ -1245,19 +1321,19 @@ const InventoryList = () => {
       });
 
       const batchesHeaders = [
-        { label: 'Nazwa pozycji', key: 'itemName' },
-        { label: 'Kategoria', key: 'itemCategory' },
-        { label: 'Numer partii/LOT', key: 'batchNumber' },
-        { label: 'Magazyn', key: 'warehouseName' },
-        { label: 'Ilość', key: 'quantity' },
-        { label: 'Jednostka', key: 'unit' },
-        { label: 'Ilość dostępna', key: 'availableQuantity' },
-        { label: 'Cena jednostkowa (EUR)', key: 'unitPrice' },
-        { label: 'Łączna wartość (ilość × cena) (EUR)', key: 'batchValue' },
-        { label: 'Cena bazowa (EUR)', key: 'baseUnitPrice' },
-        { label: 'Koszty dodatkowe/j. (EUR)', key: 'additionalCostPerUnit' },
-        { label: 'Data ważności', key: 'expiryDate' },
-        { label: 'Notatki', key: 'notes' }
+        { label: 'Item Name', key: 'itemName' },
+        { label: 'Category', key: 'itemCategory' },
+        { label: 'Batch/LOT Number', key: 'batchNumber' },
+        { label: 'Warehouse', key: 'warehouseName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Available Quantity', key: 'availableQuantity' },
+        { label: 'Unit Price (EUR)', key: 'unitPrice' },
+        { label: 'Total Value (qty × price) (EUR)', key: 'batchValue' },
+        { label: 'Base Price (EUR)', key: 'baseUnitPrice' },
+        { label: 'Additional Cost/unit (EUR)', key: 'additionalCostPerUnit' },
+        { label: 'Expiry Date', key: 'expiryDate' },
+        { label: 'Notes', key: 'notes' }
       ];
 
       // ARKUSZ 2: Pozycje magazynowe z sumą wartości partii
@@ -1265,12 +1341,13 @@ const InventoryList = () => {
       
       allBatches.forEach(batch => {
         const itemId = batch.itemId;
-        const batchValue = (batch.quantity || 0) * (batch.unitPrice || 0);
+        const batchQuantity = batch.quantity || 0;
+        const batchValue = batchQuantity * (batch.unitPrice || 0);
         
         if (!itemValuesMap[itemId]) {
           const item = itemsMap[itemId];
           itemValuesMap[itemId] = {
-            itemName: item?.name || 'Nieznana pozycja',
+            itemName: item?.name || 'Unknown item',
             itemCategory: item?.category || '',
             warehouseName: item?.warehouseName || '',
             totalQuantity: 0,
@@ -1278,18 +1355,31 @@ const InventoryList = () => {
             totalAvailableQuantity: 0,
             batchesCount: 0,
             totalValue: 0,
-            unit: item?.unit || 'szt.'
+            unit: item?.unit || 'pcs',
+            // Dane do obliczenia średniej ceny tylko z niezużytych partii
+            activeQuantity: 0,
+            activeValue: 0
           };
         }
         
-        itemValuesMap[itemId].totalQuantity += (batch.quantity || 0);
+        itemValuesMap[itemId].totalQuantity += batchQuantity;
         itemValuesMap[itemId].totalReservedQuantity += (batch.bookedQuantity || 0);
         itemValuesMap[itemId].totalValue += batchValue;
         itemValuesMap[itemId].batchesCount += 1;
+        
+        // Dodaj do średniej tylko partie z ilością > 0 (niezużyte)
+        if (batchQuantity > 0) {
+          itemValuesMap[itemId].activeQuantity += batchQuantity;
+          itemValuesMap[itemId].activeValue += batchValue;
+        }
       });
 
       const itemValuesData = Object.values(itemValuesMap).map(item => {
         item.totalAvailableQuantity = Math.max(0, item.totalQuantity - item.totalReservedQuantity);
+        // Oblicz średnią cenę tylko z niezużytych partii (quantity > 0)
+        const avgPriceFromActive = item.activeQuantity > 0 
+          ? (item.activeValue / item.activeQuantity) 
+          : 0;
         return {
           ...item,
           totalQuantity: item.totalQuantity.toFixed(4),
@@ -1298,6 +1388,9 @@ const InventoryList = () => {
           averageUnitPrice: item.totalQuantity > 0 
             ? (item.totalValue / item.totalQuantity).toFixed(4) 
             : '0.0000',
+          avgPriceFromActiveBatches: avgPriceFromActive > 0 
+            ? avgPriceFromActive.toFixed(4) 
+            : '-',
           // Wartości numeryczne do obliczeń sum
           _totalQuantityNum: item.totalQuantity,
           _totalAvailableQuantityNum: item.totalAvailableQuantity,
@@ -1312,36 +1405,38 @@ const InventoryList = () => {
 
       // Dodaj wiersz z sumami do arkusza 2
       itemValuesData.push({
-        itemName: '--- SUMA ---',
+        itemName: '--- TOTAL ---',
         itemCategory: '',
         totalQuantity: sumTotalQuantity.toFixed(4),
         unit: '',
         totalAvailableQuantity: sumTotalAvailable.toFixed(4),
         batchesCount: '',
         totalValue: sumTotalValue.toFixed(2),
-        averageUnitPrice: ''
+        averageUnitPrice: '',
+        avgPriceFromActiveBatches: ''
       });
 
       const itemValuesHeaders = [
-        { label: 'Nazwa pozycji', key: 'itemName' },
-        { label: 'Kategoria', key: 'itemCategory' },
-        { label: 'Suma ilości', key: 'totalQuantity' },
-        { label: 'Jednostka', key: 'unit' },
-        { label: 'Suma dostępnej', key: 'totalAvailableQuantity' },
-        { label: 'Liczba partii', key: 'batchesCount' },
-        { label: 'Suma wartości partii (EUR)', key: 'totalValue' },
-        { label: 'Średnia cena jednostkowa (EUR)', key: 'averageUnitPrice' }
+        { label: 'Item Name', key: 'itemName' },
+        { label: 'Category', key: 'itemCategory' },
+        { label: 'Total Quantity', key: 'totalQuantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Total Available', key: 'totalAvailableQuantity' },
+        { label: 'Batches Count', key: 'batchesCount' },
+        { label: 'Total Batches Value (EUR)', key: 'totalValue' },
+        { label: 'Average Unit Price (EUR)', key: 'averageUnitPrice' },
+        { label: 'Avg Price from Active Batches (EUR)', key: 'avgPriceFromActiveBatches' }
       ];
 
       // Utwórz arkusze dla Excel
       const worksheets = [
         {
-          name: 'Partie magazynowe',
+          name: 'Inventory Batches',
           data: batchesData,
           headers: batchesHeaders
         },
         {
-          name: 'Wartości pozycji',
+          name: 'Item Values',
           data: itemValuesData,
           headers: itemValuesHeaders
         }
@@ -1350,7 +1445,7 @@ const InventoryList = () => {
       // Wyeksportuj do Excel
       const success = exportToExcel(
         worksheets, 
-        `Export_Partii_${new Date().toISOString().slice(0, 10)}`
+        `Batches_Export_${new Date().toISOString().slice(0, 10)}`
       );
 
       if (success) {
@@ -1994,7 +2089,7 @@ const InventoryList = () => {
     handleMoreMenuClose();
     switch (action) {
       case 'csv':
-        generateCsvReport();
+        openExportCategoryDialog();
         break;
       case 'batches':
         generateBatchesExportCSV();
@@ -3192,6 +3287,78 @@ const InventoryList = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseReservationDialog}>{t('common.close')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog wyboru kategorii przed eksportem CSV */}
+      <Dialog 
+        open={exportCategoryDialogOpen} 
+        onClose={() => setExportCategoryDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Select Categories for CSV Export
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Select which product categories should be included in the CSV report.
+            </Typography>
+            
+            {/* Zaznacz/Odznacz wszystkie */}
+            <Box sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+              <FormControl component="fieldset">
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Checkbox
+                    checked={selectedExportCategories.length === Object.values(INVENTORY_CATEGORIES).length}
+                    indeterminate={selectedExportCategories.length > 0 && selectedExportCategories.length < Object.values(INVENTORY_CATEGORIES).length}
+                    onChange={handleSelectAllCategories}
+                  />
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                    Select All ({selectedExportCategories.length}/{Object.values(INVENTORY_CATEGORIES).length})
+                  </Typography>
+                </Box>
+              </FormControl>
+            </Box>
+            
+            {/* Lista kategorii */}
+            <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+              {Object.values(INVENTORY_CATEGORIES).map((category) => (
+                <Box 
+                  key={category} 
+                  sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    '&:hover': { bgcolor: 'action.hover' },
+                    borderRadius: 1,
+                    px: 1
+                  }}
+                >
+                  <Checkbox
+                    checked={selectedExportCategories.includes(category)}
+                    onChange={() => handleExportCategoryToggle(category)}
+                  />
+                  <Typography variant="body2">
+                    {category}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExportCategoryDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={generateCsvReport}
+            variant="contained"
+            color="primary"
+            disabled={selectedExportCategories.length === 0}
+          >
+            Export CSV ({selectedExportCategories.length} categories)
+          </Button>
         </DialogActions>
       </Dialog>
 

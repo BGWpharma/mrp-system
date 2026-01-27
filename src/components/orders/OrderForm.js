@@ -282,7 +282,8 @@ const SortableRow = ({
               <Autocomplete
                 options={recipes}
                 getOptionLabel={(option) => option.name || ''}
-                value={recipes.find(r => r.id === item.recipeId) || null}
+                value={item.recipeId ? { id: item.recipeId, name: item.name } : null}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
                 onChange={(_, newValue) => handleProductSelect(index, newValue, 'recipe')}
                 renderInput={(params) => (
                   <TextField 

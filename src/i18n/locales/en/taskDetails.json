@@ -1,4 +1,13 @@
 {
+    "syncNames": {
+        "button": "Sync names",
+        "syncing": "Syncing...",
+        "noRecipeId": "No recipe ID in task",
+        "recipeNotFound": "Recipe not found",
+        "success": "Names synchronized with recipe: {{recipeName}}",
+        "successWithInventory": "Names synchronized with recipe \"{{recipeName}}\" and linked to inventory item \"{{inventoryName}}\"",
+        "error": "Error syncing names: {{error}}"
+    },
     "backToTaskList": "Back to Task List",
     "editTask": "Edit Task",
     "deleteTask": "Delete Task",
