@@ -48,7 +48,8 @@ import {
   BugReport as BugReportIcon,
   HelpOutline as FaqIcon,
   Assignment as FormIcon,
-  TrendingUp as ForecastIcon
+  TrendingUp as ForecastIcon,
+  ViewKanban as TaskboardIcon
 } from '@mui/icons-material';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
@@ -175,6 +176,7 @@ const Sidebar = ({ onToggle }) => {
       // Dashboard
       '/': 'dashboard-main',
       '/analytics': 'dashboard-analytics',
+      '/taskboard': 'dashboard-taskboard',
       
       // Hall Data
       '/hall-data/conditions': 'hall-data-conditions',
@@ -264,7 +266,7 @@ const Sidebar = ({ onToggle }) => {
       setOpenSubmenu(t('sales'));
     } else if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/purchase-orders') || location.pathname.startsWith('/suppliers')) {
       setOpenSubmenu(t('inventory'));
-    } else if (location.pathname === '/' || location.pathname.startsWith('/analytics')) {
+    } else if (location.pathname === '/' || location.pathname.startsWith('/analytics') || location.pathname.startsWith('/taskboard')) {
       setOpenSubmenu(t('dashboard'));
     } else if (location.pathname.startsWith('/hall-data')) {
       setOpenSubmenu(t('hallData'));
@@ -338,7 +340,7 @@ const Sidebar = ({ onToggle }) => {
   const isMenuActive = (menuPath) => {
     // Specjalne przypadki dla głównych sekcji
     if (menuPath === '/') {
-      return location.pathname === '/' || location.pathname.startsWith('/analytics');
+      return location.pathname === '/' || location.pathname.startsWith('/analytics') || location.pathname.startsWith('/taskboard');
     } else if (menuPath === '/sales') {
       // Sales obejmuje wszystkie ścieżki związane ze sprzedażą
       return location.pathname.startsWith('/customers') || 
@@ -388,6 +390,7 @@ const Sidebar = ({ onToggle }) => {
       children: [
         { text: t('submenu.dashboard.main'), icon: <DashboardIcon />, path: '/' },
         { text: t('submenu.dashboard.analytics'), icon: <AnalyticsIcon />, path: '/analytics' },
+        { text: t('submenu.dashboard.taskboard'), icon: <TaskboardIcon />, path: '/taskboard' },
       ].sort((a, b) => a.text.localeCompare(b.text))
     },
     { 
@@ -441,7 +444,7 @@ const Sidebar = ({ onToggle }) => {
         { text: t('submenu.inventory.status'), icon: <WarehouseIcon />, path: '/inventory' },
         { text: t('submenu.inventory.componentOrders'), icon: <PurchaseOrdersIcon />, path: '/purchase-orders' },
       ].sort((a, b) => a.text.localeCompare(b.text))
-    }
+    },
   ].sort((a, b) => a.text.localeCompare(b.text));
 
   // Filtrowanie menuItems na podstawie ukrytych zakładek użytkownika

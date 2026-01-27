@@ -94,7 +94,7 @@ service firebase.storage {
       allow read: if true; // Publiczny dostęp do odczytu faktur CMR dla portali klientów
       allow write: if request.auth != null; // Tylko uwierzytelnieni użytkownicy mogą przesyłać
     }
-
+    
     // Reguła dla INNYCH ZAŁĄCZNIKÓW CMR - oddzielna ścieżka
     match /cmr-other/{cmrId}/{fileName} {
       allow read: if true;
@@ -118,6 +118,14 @@ service firebase.storage {
     match /end-product-reports/{taskId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
+    }
+    
+    // Reguła dla załączników zadań w taskboardzie
+    // Struktura: /taskboard-attachments/{taskId}/{fileName}
+    match /taskboard-attachments/{taskId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+      allow delete: if request.auth != null;
     }
     
     // NAPRAWKA: PDF faktur - dodano list permission + lepsze bezpieczeństwo  

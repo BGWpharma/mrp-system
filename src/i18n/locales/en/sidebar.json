@@ -5,13 +5,15 @@
   "sales": "Sales",
   "production": "Production",
   "inventory": "Inventory",
+  "taskboard": "Taskboard",
   "reportBug": "Report Bug",
   "faq": "FAQ",
   "submenu": {
     "dashboard": {
       "main": "Main",
       "analytics": "Analytics",
-      "financialReport": "Financial Report"
+      "financialReport": "Financial Report",
+      "taskboard": "Taskboard"
     },
     "hallData": {
       "environmentalConditions": "Environmental Conditions",

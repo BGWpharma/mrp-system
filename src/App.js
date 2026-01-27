@@ -185,6 +185,10 @@ const DefectRegistryFormPage = lazy(() => import('./pages/HallData/DefectRegistr
 const ServiceRepairReportFormPage = lazy(() => import('./pages/HallData/ServiceRepairReportFormPage'));
 const HallDataFormsResponsesPage = lazy(() => import('./pages/HallData/HallDataFormsResponsesPage'));
 
+// Taskboard
+const TaskboardView = lazy(() => import('./pages/Taskboard/TaskboardView'));
+const BoardDetail = lazy(() => import('./pages/Taskboard/BoardDetail'));
+
 // ============================================================================
 // KOMPONENT ŁADOWANIA DLA SUSPENSE
 // ============================================================================
@@ -535,6 +539,10 @@ function App() {
                     
                     {/* Powiadomienia */}
                     <Route path="/notifications/history" element={<PrivateLayout><NotificationsHistoryPage /></PrivateLayout>} />
+                    
+                    {/* Taskboard Routes */}
+                    <Route path="/taskboard" element={<PrivateLayout><TaskboardView /></PrivateLayout>} />
+                    <Route path="/taskboard/:boardId" element={<PrivateLayout><BoardDetail /></PrivateLayout>} />
                     
                     <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
