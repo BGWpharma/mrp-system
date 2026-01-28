@@ -471,6 +471,7 @@ function App() {
                     {/* Sales Routes - nowa struktura z zakładkami */}
                     <Route path="/sales" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
                     <Route path="/sales/material-advances" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
+                    <Route path="/sales/factory-costs" element={<PrivateLayout><SalesPage /></PrivateLayout>} />
                     
                     {/* Invoices Routes */}
                     <Route path="/invoices" element={<PrivateLayout><SalesPage /></PrivateLayout>} /> {/* Legacy route - przekierowanie do /sales */}

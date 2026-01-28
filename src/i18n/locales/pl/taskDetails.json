@@ -358,6 +358,8 @@
         "unitCost": "Koszt jednostkowy",
         "totalFullProductionCost": "Pełny koszt produkcji",
         "unitFullProductionCost": "Pełny koszt na jednostkę",
+        "factoryCostPerUnit": "Koszt zakładu na jednostkę",
+        "totalUnitCostWithFactory": "Pełny koszt + zakład",
         "consumed": "Skonsumowane",
         "reserved": "Zarezerwowane",
         "updateManually": "Aktualizuj ręcznie",

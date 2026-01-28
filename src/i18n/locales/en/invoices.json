@@ -3,7 +3,8 @@
   "title": "Invoices",
   "tabs": {
     "invoices": "Invoices",
-    "materialAdvances": "Material Advances"
+    "materialAdvances": "Material Advances",
+    "factoryCosts": "Factory Costs"
   },
   "newInvoice": "New Invoice",
   "searchInvoices": "Search invoices...",
@@ -365,6 +366,79 @@
       "fetchRelatedInvoices": "Error fetching related invoices",
       "fetchCompanyData": "Error fetching company data",
       "fetchInvoiceDetails": "Error fetching invoice details"
+    }
+  },
+  "factoryCosts": {
+    "title": "Factory Costs",
+    "addCost": "Add Cost",
+    "addFirstCost": "Add First Cost",
+    "analysisRange": "Analysis Range",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "calculate": "Calculate",
+    "totalCost": "Total Factory Cost",
+    "effectiveTime": "Effective Working Time",
+    "costPerMinute": "Cost per Minute",
+    "duplicatesEliminated": "Duplicates Eliminated",
+    "overlappingSessions": "overlapping sessions",
+    "clippedPeriods": "clipped to range",
+    "costsInRange": "entries in range",
+    "sessions": "sessions",
+    "periods": "periods",
+    "costsList": "Factory Costs List",
+    "noCosts": "No factory cost entries",
+    "infoAlert": "Cost per minute is calculated based on effective working time. Overlapping production sessions are automatically merged to avoid double counting time.",
+    "table": {
+      "period": "Period",
+      "amount": "Amount",
+      "effectiveTime": "Effective Time",
+      "costPerMinute": "Cost/min",
+      "description": "Description",
+      "createdAt": "Created At",
+      "actions": "Actions",
+      "excludedTasks": "Excluded MO from calculation"
+    },
+    "dialog": {
+      "addTitle": "Add Factory Cost",
+      "editTitle": "Edit Factory Cost",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "amount": "Amount",
+      "description": "Description (optional)",
+      "add": "Add",
+      "exclusions": "Excluded MO from calculation",
+      "noTasksInRange": "No production tasks in selected date range",
+      "selectToExclude": "Select MO to exclude from effective time calculation:",
+      "moNumber": "MO No.",
+      "product": "Product",
+      "orderNumber": "CO No.",
+      "time": "Time",
+      "excludedInfo": "Sessions from selected production tasks will be excluded"
+    },
+    "deleteDialog": {
+      "title": "Confirm Deletion",
+      "message": "Are you sure you want to delete this factory cost entry?"
+    },
+    "notifications": {
+      "costAdded": "Cost has been added",
+      "costUpdated": "Cost has been updated",
+      "costDeleted": "Cost has been deleted",
+      "recalculated": "Costs recalculated",
+      "recalculatedWithTasks": "Costs recalculated and production tasks updated"
+    },
+    "recalculateAll": "Recalculate all costs (updates effective time and cost/min)",
+    "recalculate": "Recalculate",
+    "sessions": "sessions",
+    "periods": "periods",
+    "excluded": "excl.",
+    "errors": {
+      "fetchData": "Error fetching data",
+      "calculateAnalysis": "Error calculating analysis",
+      "saveCost": "Error saving cost",
+      "deleteCost": "Error deleting cost",
+      "invalidAmount": "Amount must be greater than zero",
+      "invalidDateRange": "Start date must be earlier than end date",
+      "recalculate": "Error recalculating costs"
     }
   }
 }

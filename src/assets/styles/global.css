@@ -79,6 +79,8 @@ a {
     gap: 0;
     position: relative;
     overflow-x: hidden;
+    /* Minimalny szerokość żeby uniknąć problemów z scrollem na mobile */
+    min-width: 0;
 }
 
 .main-content {
@@ -89,6 +91,8 @@ a {
     /* Wysokość - navbar */
     background-color: transparent;
     box-sizing: border-box;
+    /* Ważne dla flexbox - pozwala na kurczenie poniżej zawartości */
+    min-width: 0;
 }
 
 /* Klasa dla zwiniętego sidebar */
@@ -416,10 +420,23 @@ a {
 
 /* Responsywność */
 @media (max-width: 1100px) {
+    /* Na urządzeniach mobilnych sidebar jest w trybie overlay (temporary),
+       więc nie wpływa na layout - można włączyć horizontal scroll dla treści */
+    .app-container,
+    .layout {
+        overflow-x: visible;
+    }
+
+    .content-container {
+        overflow-x: auto;
+    }
+
     .main-content {
         padding: 16px;
         margin-left: 0 !important;
         width: 100% !important;
+        /* Pozwól na scroll horyzontalny dla treści (np. tablica kanban) */
+        overflow-x: auto;
     }
 
     /* Wyśrodkuj treść względem pełnej szerokości ekranu */

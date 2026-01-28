@@ -3,11 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
 import {
   Receipt as InvoicesIcon,
-  AccountBalance as ReinvoiceIcon
+  AccountBalance as ReinvoiceIcon,
+  Factory as FactoryIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import InvoicesList from '../../components/invoices/InvoicesList';
 import ReinvoicesList from '../../components/invoices/ReinvoicesList';
+import FactoryCostsTab from '../../components/sales/FactoryCostsTab';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const SalesPage = () => {
@@ -23,6 +25,8 @@ const SalesPage = () => {
   useEffect(() => {
     if (location.pathname.includes('/sales/material-advances')) {
       setActiveTab(1);
+    } else if (location.pathname.includes('/sales/factory-costs')) {
+      setActiveTab(2);
     } else if (location.pathname === '/sales' || location.pathname === '/invoices') {
       setActiveTab(0);
     }
@@ -38,6 +42,9 @@ const SalesPage = () => {
       case 1:
         navigate('/sales/material-advances');
         break;
+      case 2:
+        navigate('/sales/factory-costs');
+        break;
       default:
         navigate('/sales');
     }
@@ -45,7 +52,8 @@ const SalesPage = () => {
   
   const tabData = [
     { icon: <InvoicesIcon />, label: t('tabs.invoices'), value: 0 },
-    { icon: <ReinvoiceIcon />, label: t('tabs.materialAdvances'), value: 1 }
+    { icon: <ReinvoiceIcon />, label: t('tabs.materialAdvances'), value: 1 },
+    { icon: <FactoryIcon />, label: t('tabs.factoryCosts'), value: 2 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki
@@ -53,6 +61,7 @@ const SalesPage = () => {
     switch (activeTab) {
       case 0: return <InvoicesList />;
       case 1: return <ReinvoicesList />;
+      case 2: return <FactoryCostsTab />;
       default: return <InvoicesList />;
     }
   };

@@ -1017,12 +1017,28 @@ export const getInventoryBatch = async (batchId) => {
     const batchSnapshot = await getDoc(batchRef);
 
     if (!batchSnapshot.exists()) {
+      // 🔴 DIAGNOSTYKA: Partia nie istnieje
+      console.warn(`🔴 [getInventoryBatch] Partia ${batchId} NIE ISTNIEJE w bazie danych!`);
       return null;
+    }
+
+    const batchData = batchSnapshot.data();
+    
+    // 🔴 DIAGNOSTYKA: Sprawdź czy partia ma cenę
+    if (batchData.unitPrice === undefined || batchData.unitPrice === null) {
+      console.warn(`🔴 [getInventoryBatch] Partia ${batchId} istnieje, ale BEZ CENY:`, {
+        batchNumber: batchData.batchNumber,
+        itemId: batchData.itemId,
+        quantity: batchData.quantity,
+        unitPrice: batchData.unitPrice,
+        pricePerUnit: batchData.pricePerUnit,
+        allKeys: Object.keys(batchData)
+      });
     }
 
     return {
       id: batchSnapshot.id,
-      ...batchSnapshot.data()
+      ...batchData
     };
   } catch (error) {
     if (error instanceof ValidationError) {

@@ -19,6 +19,7 @@
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
  * - onProductionTaskScheduleUpdate (trigger: productionTasks)
  * - onCmrStatusUpdate         (trigger: cmrDocuments)
+ * - onProductionHistoryChange (trigger: productionHistory)
  * - updateExpiryStats         (scheduled: every day 01:00)
  * - checkUnorderedPOReservations (scheduled: every day 08:00)
  */
@@ -41,6 +42,7 @@ const {onBatchPriceUpdate} = require("./triggers/batchPrice");
 const {onProductionTaskCostUpdate} = require("./triggers/productionTask");
 const {onProductionTaskScheduleUpdate} = require("./triggers/productionTaskSchedule");
 const {onCmrStatusUpdate} = require("./triggers/cmrStatus");
+const {onProductionHistoryChange} = require("./triggers/factoryCost");
 
 // ============================================================================
 // SCHEDULED FUNCTIONS - Zadania cron
@@ -59,5 +61,6 @@ exports.onBatchPriceUpdate = onBatchPriceUpdate;
 exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;
 exports.onProductionTaskScheduleUpdate = onProductionTaskScheduleUpdate;
 exports.onCmrStatusUpdate = onCmrStatusUpdate;
+exports.onProductionHistoryChange = onProductionHistoryChange;
 exports.updateExpiryStats = updateExpiryStats;
 exports.checkUnorderedPOReservations = checkUnorderedPOReservations;

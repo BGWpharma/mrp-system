@@ -3,7 +3,8 @@
   "title": "Faktury",
   "tabs": {
     "invoices": "Faktury",
-    "materialAdvances": "Zaliczki materiałowe"
+    "materialAdvances": "Zaliczki materiałowe",
+    "factoryCosts": "Koszty zakładu"
   },
   "newInvoice": "Nowa faktura",
   "searchInvoices": "Szukaj faktur...",
@@ -364,6 +365,79 @@
       "fetchRelatedInvoices": "Błąd podczas pobierania powiązanych faktur",
       "fetchCompanyData": "Błąd podczas pobierania danych firmy",
       "fetchInvoiceDetails": "Błąd podczas pobierania szczegółów faktury"
+    }
+  },
+  "factoryCosts": {
+    "title": "Koszty zakładu",
+    "addCost": "Dodaj koszt",
+    "addFirstCost": "Dodaj pierwszy koszt",
+    "analysisRange": "Zakres analizy",
+    "startDate": "Data od",
+    "endDate": "Data do",
+    "calculate": "Przelicz",
+    "totalCost": "Łączny koszt zakładu",
+    "effectiveTime": "Efektywny czas pracy",
+    "costPerMinute": "Koszt na minutę",
+    "duplicatesEliminated": "Wyeliminowane duplikaty",
+    "overlappingSessions": "nakładających się sesji",
+    "clippedPeriods": "przyciętych do zakresu",
+    "costsInRange": "wpisów w zakresie",
+    "sessions": "sesji",
+    "periods": "okresów",
+    "costsList": "Lista kosztów zakładu",
+    "noCosts": "Brak wpisów kosztów zakładu",
+    "infoAlert": "Koszt na minutę jest obliczany na podstawie efektywnego czasu pracy. Nakładające się sesje produkcyjne są automatycznie łączone, aby uniknąć podwójnego liczenia czasu.",
+    "table": {
+      "period": "Okres",
+      "amount": "Kwota",
+      "effectiveTime": "Efektywny czas",
+      "costPerMinute": "Koszt/min",
+      "description": "Opis",
+      "createdAt": "Utworzono",
+      "actions": "Akcje",
+      "excludedTasks": "Wykluczone MO z kalkulacji"
+    },
+    "dialog": {
+      "addTitle": "Dodaj koszt zakładu",
+      "editTitle": "Edytuj koszt zakładu",
+      "startDate": "Data od",
+      "endDate": "Data do",
+      "amount": "Kwota",
+      "description": "Opis (opcjonalnie)",
+      "add": "Dodaj",
+      "exclusions": "Wykluczone MO z kalkulacji",
+      "noTasksInRange": "Brak zadań produkcyjnych w wybranym zakresie dat",
+      "selectToExclude": "Zaznacz MO do wykluczenia z kalkulacji efektywnego czasu:",
+      "moNumber": "Nr MO",
+      "product": "Produkt",
+      "orderNumber": "Nr CO",
+      "time": "Czas",
+      "excludedInfo": "Wykluczone zostaną sesje z zaznaczonych zadań produkcyjnych"
+    },
+    "deleteDialog": {
+      "title": "Potwierdzenie usunięcia",
+      "message": "Czy na pewno chcesz usunąć ten wpis kosztu zakładu?"
+    },
+    "notifications": {
+      "costAdded": "Koszt został dodany",
+      "costUpdated": "Koszt został zaktualizowany",
+      "costDeleted": "Koszt został usunięty",
+      "recalculated": "Przeliczono koszty",
+      "recalculatedWithTasks": "Przeliczono koszty i zaktualizowano zadania produkcyjne"
+    },
+    "recalculateAll": "Przelicz wszystkie koszty (aktualizuje efektywny czas i koszt/min)",
+    "recalculate": "Przelicz",
+    "sessions": "sesji",
+    "periods": "okresów",
+    "excluded": "wyklucz.",
+    "errors": {
+      "fetchData": "Błąd podczas pobierania danych",
+      "calculateAnalysis": "Błąd podczas obliczania analizy",
+      "saveCost": "Błąd podczas zapisywania kosztu",
+      "deleteCost": "Błąd podczas usuwania kosztu",
+      "invalidAmount": "Kwota musi być większa od zera",
+      "invalidDateRange": "Data początkowa musi być wcześniejsza od daty końcowej",
+      "recalculate": "Błąd podczas przeliczania kosztów"
     }
   }
 }

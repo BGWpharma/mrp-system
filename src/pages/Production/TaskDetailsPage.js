@@ -4809,6 +4809,18 @@ const TaskDetailsPage = () => {
     try {
       console.log('🔄 [PRICE-UPDATE] Rozpoczynam aktualizację cen konsumpcji z aktualnych partii...');
       
+      // 🔴 DIAGNOSTYKA: Pokaż wszystkie konsumpcje
+      console.log('🔴 [PRICE-UPDATE-DEBUG] Wszystkie konsumpcje w zadaniu:', 
+        task.consumedMaterials.map((c, idx) => ({
+          idx,
+          batchId: c.batchId,
+          materialId: c.materialId,
+          materialName: c.materialName,
+          quantity: c.quantity,
+          unitPrice: c.unitPrice
+        }))
+      );
+      
       const { getInventoryBatch } = await import('../../services/inventory');
       let hasChanges = false;
       let updateCount = 0;
@@ -4865,7 +4877,8 @@ const TaskDetailsPage = () => {
               console.log(`💰 [PRICE-UPDATE] ${materialName} (${batchNumber}): ${currentPrice.toFixed(6)}€ → ${newPrice.toFixed(6)}€`);
             }
           } else {
-            console.warn(`⚠️ [PRICE-UPDATE] Brak ceny w partii ${consumed.batchId}`);
+            // 🔴 DIAGNOSTYKA: Szczegółowe info o brakującej partii - WSZYSTKO W JEDNYM LOGU
+            console.warn(`⚠️ [PRICE-UPDATE] Brak ceny w partii ${consumed.batchId} | Materiał: ${consumed.materialName || consumed.materialId} | Ilość: ${consumed.quantity} | Cena w konsumpcji: ${consumed.unitPrice} | batchData:`, batchData, '| pełna konsumpcja:', consumed);
             errorCount++;
           }
         } catch (error) {
@@ -5289,7 +5302,11 @@ const TaskDetailsPage = () => {
               // Pobrana cena partii ${batchId}
             } else {
               consumedBatchPricesCache[batchId] = 0;
-              console.warn(`⚠️ [UI-COSTS] Nie znaleziono partii ${batchId}`);
+              // 🔴 DIAGNOSTYKA: Znajdź konsumpcje używające tej partii - WSZYSTKO W JEDNYM LOGU
+              const consumptionsUsingThisBatch = currentConsumedMaterials.filter(c => c.batchId === batchId);
+              console.warn(`⚠️ [UI-COSTS] Nie znaleziono partii ${batchId} | Używana przez ${consumptionsUsingThisBatch.length} konsumpcji:`, 
+                consumptionsUsingThisBatch.map(c => `${c.materialName || c.materialId} (qty:${c.quantity}, price:${c.unitPrice})`)
+              );
             }
           } catch (error) {
             console.warn(`⚠️ [UI-COSTS] Błąd podczas pobierania ceny skonsumowanej partii ${batchId}:`, error);
@@ -5924,6 +5941,23 @@ const TaskDetailsPage = () => {
                 </Typography>
               )}
             </Typography>
+            {/* Koszt zakładu na jednostkę */}
+            {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
+              <Typography variant="body1" sx={{ ...mt1, color: 'secondary.main' }}>
+                <strong>{t('taskDetails:materialsSummary.factoryCostPerUnit', 'Koszt zakładu na jednostkę')}:</strong> ~{task.factoryCostPerUnit.toFixed(4)} €/{task.unit}
+                {task.factoryCostTotal !== undefined && (
+                  <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
+                    (Łącznie: {task.factoryCostTotal.toFixed(2)} €, czas: {task.factoryCostMinutes?.toFixed(0) || 0} min)
+                  </Typography>
+                )}
+              </Typography>
+            )}
+            {/* Pełny koszt z kosztem zakładu */}
+            {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
+              <Typography variant="body1" sx={{ ...mt1, color: 'success.main', fontWeight: 'bold' }}>
+                <strong>{t('taskDetails:materialsSummary.totalUnitCostWithFactory', 'Pełny koszt + zakład')}:</strong> ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
+              </Typography>
+            )}
             <Box sx={{ ...mt1, display: 'flex', flexDirection: 'column', gap: 1 }}>
               {costChanged && (
                 <Button 
