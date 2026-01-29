@@ -222,7 +222,7 @@
         "endTime": "End",
         "timeSpent": "Time",
         "quantity": "Quantity",
-        "timePerUnit": "Time/Unit",
+        "timePerUnit": "Time/Unit (s)",
         "totalTime": "Total Time",
         "sessionsCount": "Sessions Count",
         "averageTime": "Average Time",

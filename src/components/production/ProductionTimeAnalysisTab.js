@@ -431,7 +431,7 @@ const TimeAnalysisContent = ({
       'Time Spent (min)',
       'Quantity',
       'Unit',
-      'Time per Unit (min)',
+      'Time per Unit (s)',
       'Facility Cost (EUR)'
     ];
 
@@ -440,14 +440,10 @@ const TimeAnalysisContent = ({
       const task = tasksMap[session.taskId];
       const quantity = parseFloat(session.quantity) || 0;
       const timeSpent = parseFloat(session.timeSpent) || 0;
-      const timePerUnit = quantity > 0 ? (timeSpent / quantity).toFixed(2) : '0';
+      const timePerUnitSeconds = quantity > 0 ? ((timeSpent * 60) / quantity).toFixed(1) : '0'; // w sekundach
       
-      // Oblicz koszt zakładu
-      let processingCostPerUnit = parseFloat(task?.processingCostPerUnit) || 0;
-      if (processingCostPerUnit === 0 && task?.recipeId && recipesMap[task.recipeId]) {
-        processingCostPerUnit = parseFloat(recipesMap[task.recipeId]?.processingCostPerUnit) || 0;
-      }
-      const facilityCost = processingCostPerUnit * quantity;
+      // Pełny koszt zakładu z MO (kalkulowany proporcjonalnie do czasu pracy)
+      const facilityCost = parseFloat(task?.factoryCostTotal) || 0;
 
       return [
         format(session.startTime, 'yyyy-MM-dd'),
@@ -458,7 +454,7 @@ const TimeAnalysisContent = ({
         timeSpent.toFixed(2),
         quantity,
         task?.unit || 'pcs',
-        timePerUnit,
+        timePerUnitSeconds,
         facilityCost > 0 ? facilityCost.toFixed(2) : '0'
       ];
     });
@@ -466,10 +462,10 @@ const TimeAnalysisContent = ({
     // Dodaj wiersz sumaryczny
     const totalTimeSpent = filteredSessions.reduce((sum, s) => sum + (parseFloat(s.timeSpent) || 0), 0);
     const totalQuantity = filteredSessions.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
-    const avgTimePerUnit = totalQuantity > 0 ? (totalTimeSpent / totalQuantity).toFixed(2) : '0';
+    const avgTimePerUnitSeconds = totalQuantity > 0 ? ((totalTimeSpent * 60) / totalQuantity).toFixed(1) : '0'; // w sekundach
     
     rows.push([]);  // Pusty wiersz
-    rows.push(['SUMMARY', '', '', '', '', totalTimeSpent.toFixed(2), totalQuantity, '', avgTimePerUnit, '']);
+    rows.push(['SUMMARY', '', '', '', '', totalTimeSpent.toFixed(2), totalQuantity, '', avgTimePerUnitSeconds, '']);
 
     // Konwertuj do CSV
     const csvContent = [
@@ -1016,10 +1012,10 @@ const TimeAnalysisContent = ({
                       const quantity = parseFloat(session.quantity) || 0;
                       const timeSpent = parseFloat(session.timeSpent) || 0;
                       if (quantity > 0 && timeSpent > 0) {
-                        const timePerUnit = timeSpent / quantity;
+                        const timePerUnitSeconds = (timeSpent * 60) / quantity; // konwersja minut na sekundy
                         return (
                           <Chip 
-                            label={`${timePerUnit.toFixed(2)} min`} 
+                            label={`${timePerUnitSeconds.toFixed(1)} s`} 
                             size="small" 
                             color="secondary" 
                             variant="outlined"
@@ -1032,17 +1028,9 @@ const TimeAnalysisContent = ({
                   <TableCell align="right">
                     {(() => {
                       const task = tasksMap[session.taskId];
-                      const quantity = parseFloat(session.quantity) || 0;
                       
-                      // Pobierz koszt procesowy: najpierw z task, potem z receptury
-                      let processingCostPerUnit = parseFloat(task?.processingCostPerUnit) || 0;
-                      
-                      // Jeśli task nie ma kosztu, sprawdź recepturę
-                      if (processingCostPerUnit === 0 && task?.recipeId && recipesMap[task.recipeId]) {
-                        processingCostPerUnit = parseFloat(recipesMap[task.recipeId]?.processingCostPerUnit) || 0;
-                      }
-                      
-                      const facilityCost = processingCostPerUnit * quantity;
+                      // Pełny koszt zakładu z MO
+                      const facilityCost = parseFloat(task?.factoryCostTotal) || 0;
                       
                       return facilityCost > 0 
                         ? `${facilityCost.toFixed(2)} €` 

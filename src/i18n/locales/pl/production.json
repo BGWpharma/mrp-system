@@ -225,7 +225,7 @@
         "endTime": "Koniec",
         "timeSpent": "Czas trwania",
         "quantity": "Ilość",
-        "timePerUnit": "Czas/szt."
+        "timePerUnit": "Czas/szt. (s)"
       },
       "exportCsv": "Eksport CSV",
       "gapAnalysis": {
