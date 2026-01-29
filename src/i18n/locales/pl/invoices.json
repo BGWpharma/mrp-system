@@ -392,10 +392,15 @@
       "amount": "Kwota",
       "effectiveTime": "Efektywny czas",
       "costPerMinute": "Koszt/min",
+      "status": "Status",
       "description": "Opis",
       "createdAt": "Utworzono",
       "actions": "Akcje",
       "excludedTasks": "Wykluczone MO z kalkulacji"
+    },
+    "status": {
+      "paid": "Opłacone",
+      "unpaid": "Nieopłacone"
     },
     "dialog": {
       "addTitle": "Dodaj koszt zakładu",
@@ -404,6 +409,7 @@
       "endDate": "Data do",
       "amount": "Kwota",
       "description": "Opis (opcjonalnie)",
+      "isPaid": "Opłacone",
       "add": "Dodaj",
       "exclusions": "Wykluczone MO z kalkulacji",
       "noTasksInRange": "Brak zadań produkcyjnych w wybranym zakresie dat",

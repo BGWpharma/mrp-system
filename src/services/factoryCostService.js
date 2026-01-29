@@ -152,6 +152,7 @@ export const addFactoryCost = async (costData, userId) => {
     const endDate = new Date(costData.endDate);
     const amount = parseFloat(costData.amount) || 0;
     const excludedTaskIds = costData.excludedTaskIds || [];
+    const isPaid = costData.isPaid !== undefined ? costData.isPaid : true; // Domyślnie opłacone
 
     // Oblicz efektywny czas od razu przy tworzeniu (z uwzględnieniem wykluczeń)
     const effectiveTime = await calculateEffectiveProductionTime(startDate, endDate, excludedTaskIds);
@@ -168,6 +169,7 @@ export const addFactoryCost = async (costData, userId) => {
       amount: amount,
       description: costData.description || '',
       excludedTaskIds: excludedTaskIds, // Lista wykluczonych zadań
+      isPaid: isPaid, // Status płatności
       createdBy: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -308,6 +310,9 @@ export const updateFactoryCost = async (id, updates) => {
     }
     if (updates.excludedTaskIds !== undefined) {
       updateData.excludedTaskIds = updates.excludedTaskIds;
+    }
+    if (updates.isPaid !== undefined) {
+      updateData.isPaid = updates.isPaid;
     }
 
     // Oblicz efektywny czas na nowo (z uwzględnieniem wykluczeń)
@@ -1105,15 +1110,36 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
     for (const [taskId, costData] of Object.entries(taskCostMap)) {
       try {
         const taskRef = doc(db, 'productionTasks', taskId);
+        
+        // Pobierz aktualne dane zadania aby obliczyć totalCostWithFactory
+        const taskDoc = await getDoc(taskRef);
+        const taskData = taskDoc.exists() ? taskDoc.data() : {};
+        
+        const totalFullProductionCost = parseFloat(taskData.totalFullProductionCost) || 0;
+        const unitFullProductionCost = parseFloat(taskData.unitFullProductionCost) || 0;
+        
+        // Oblicz pełne koszty z zakładem
+        const totalCostWithFactory = totalFullProductionCost + costData.factoryCostTotal;
+        const unitCostWithFactory = unitFullProductionCost + costData.factoryCostPerUnit;
+        
         await updateDoc(taskRef, {
           factoryCostTotal: costData.factoryCostTotal,
           factoryCostPerUnit: costData.factoryCostPerUnit,
           factoryCostMinutes: costData.proportionalMinutes,
           factoryCostId: factoryCostId,
-          factoryCostUpdatedAt: serverTimestamp()
+          factoryCostUpdatedAt: serverTimestamp(),
+          // Nowe pola z pełnym kosztem (materiały + zakład)
+          totalCostWithFactory: Math.round(totalCostWithFactory * 100) / 100,
+          unitCostWithFactory: Math.round(unitCostWithFactory * 10000) / 10000
         });
+        
+        // Zaktualizuj taskCostMap o pełne koszty (do propagacji do zamówień)
+        taskCostMap[taskId].totalCostWithFactory = totalCostWithFactory;
+        taskCostMap[taskId].unitCostWithFactory = unitCostWithFactory;
+        taskCostMap[taskId].totalFullProductionCost = totalFullProductionCost;
+        
         updatedCount++;
-        console.log(`[FACTORY COST] Zaktualizowano zadanie ${costData.moNumber}: ${costData.factoryCostPerUnit.toFixed(4)} EUR/szt`);
+        console.log(`[FACTORY COST] Zaktualizowano zadanie ${costData.moNumber}: ${costData.factoryCostPerUnit.toFixed(4)} EUR/szt (pełny koszt: ${unitCostWithFactory.toFixed(4)} EUR/szt)`);
       } catch (error) {
         console.error(`[FACTORY COST] Błąd aktualizacji zadania ${taskId}:`, error);
       }
@@ -1141,10 +1167,125 @@ export const updateFactoryCostInTasks = async (factoryCostId) => {
     }
 
     console.log(`[FACTORY COST] Zaktualizowano ${updatedCount} zadań produkcyjnych`);
+
+    // Propaguj koszty do zamówień (CO)
+    const taskIds = Object.keys(taskCostMap);
+    const allTaskIds = [...taskIds, ...excludedTaskIds];
+    
+    if (allTaskIds.length > 0) {
+      console.log(`[FACTORY COST] Propagowanie kosztów do zamówień dla ${allTaskIds.length} zadań...`);
+      await propagateFactoryCostToOrders(allTaskIds, taskCostMap, excludedTaskIds);
+    }
+
     return { updated: updatedCount, taskCostMap };
   } catch (error) {
     console.error('Błąd podczas aktualizacji kosztów zakładu w zadaniach:', error);
     throw error;
+  }
+};
+
+/**
+ * Propaguje koszty zakładu do zamówień (CO)
+ * @param {Array} taskIds - Lista ID zadań do sprawdzenia
+ * @param {Object} taskCostMap - Mapa kosztów dla zadań (już obliczone, nie trzeba pobierać z bazy)
+ * @param {Array} excludedTaskIds - Lista wykluczonych zadań
+ */
+const propagateFactoryCostToOrders = async (taskIds, taskCostMap, excludedTaskIds) => {
+  try {
+    const ordersRef = collection(db, 'orders');
+    const ordersSnapshot = await getDocs(ordersRef);
+    
+    let ordersUpdated = 0;
+    
+    for (const orderDoc of ordersSnapshot.docs) {
+      const orderData = orderDoc.data();
+      let orderNeedsUpdate = false;
+      const updatedItems = [...(orderData.items || [])];
+      
+      for (let i = 0; i < updatedItems.length; i++) {
+        const item = updatedItems[i];
+        const taskId = item.productionTaskId;
+        
+        if (!taskId) continue;
+        
+        // Sprawdź czy to zadanie jest na liście
+        if (taskIds.includes(taskId)) {
+          // Pobierz dane zadania z bazy
+          const taskRef = doc(db, 'productionTasks', taskId);
+          const taskDoc = await getDoc(taskRef);
+          
+          if (taskDoc.exists()) {
+            const taskData = taskDoc.data();
+            const isExcluded = excludedTaskIds.includes(taskId);
+            
+            // Użyj danych z taskCostMap (już obliczone) jeśli dostępne
+            const factoryCostData = taskCostMap[taskId];
+            const factoryCostTotal = factoryCostData ? factoryCostData.factoryCostTotal : 0;
+            const factoryCostPerUnit = factoryCostData ? factoryCostData.factoryCostPerUnit : 0;
+            
+            // Oblicz pełny koszt z zakładem
+            const totalFullProductionCost = parseFloat(taskData.totalFullProductionCost) || 0;
+            const unitFullProductionCost = parseFloat(taskData.unitFullProductionCost) || 0;
+            
+            const totalCostWithFactory = isExcluded ? totalFullProductionCost : (totalFullProductionCost + factoryCostTotal);
+            const unitCostWithFactory = isExcluded ? unitFullProductionCost : (unitFullProductionCost + factoryCostPerUnit);
+            
+            updatedItems[i] = {
+              ...item,
+              productionCost: totalCostWithFactory,
+              fullProductionCost: totalCostWithFactory,
+              fullProductionUnitCost: Math.round(unitCostWithFactory * 10000) / 10000,
+              factoryCostIncluded: !isExcluded && factoryCostTotal > 0
+            };
+            orderNeedsUpdate = true;
+            
+            console.log(`[FACTORY COST] Zaktualizowano pozycję ${item.name} w zamówieniu ${orderData.orderNumber}: ${totalCostWithFactory.toFixed(2)} EUR (materiały: ${totalFullProductionCost.toFixed(2)} + zakład: ${factoryCostTotal.toFixed(2)})`);
+          }
+        }
+      }
+      
+      if (orderNeedsUpdate) {
+        // Przelicz totalValue zamówienia
+        const calculateItemTotalValue = (item) => {
+          const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+          if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
+            return itemValue;
+          }
+          if (item.productionTaskId && item.productionCost !== undefined) {
+            return itemValue + parseFloat(item.productionCost || 0);
+          }
+          return itemValue;
+        };
+        
+        const subtotal = updatedItems.reduce((sum, item) => sum + calculateItemTotalValue(item), 0);
+        const shippingCost = parseFloat(orderData.shippingCost) || 0;
+        const additionalCosts = orderData.additionalCostsItems ?
+          orderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+        const discounts = orderData.additionalCostsItems ?
+          Math.abs(orderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+        
+        const newTotalValue = subtotal + shippingCost + additionalCosts - discounts;
+        
+        await updateDoc(orderDoc.ref, {
+          items: updatedItems,
+          totalValue: Math.round(newTotalValue * 100) / 100,
+          updatedAt: serverTimestamp()
+        });
+        
+        ordersUpdated++;
+        console.log(`[FACTORY COST] Zaktualizowano zamówienie ${orderData.orderNumber}: totalValue=${newTotalValue.toFixed(2)} EUR`);
+      }
+    }
+    
+    console.log(`[FACTORY COST] Zaktualizowano ${ordersUpdated} zamówień`);
+    return { ordersUpdated };
+  } catch (error) {
+    console.error('[FACTORY COST] Błąd podczas propagacji do zamówień:', error);
+    // Nie rzucaj błędu - to jest operacja dodatkowa
   }
 };
 

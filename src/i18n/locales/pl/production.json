@@ -224,8 +224,10 @@
         "startTime": "Start",
         "endTime": "Koniec",
         "timeSpent": "Czas trwania",
-        "quantity": "Ilość"
+        "quantity": "Ilość",
+        "timePerUnit": "Czas/szt."
       },
+      "exportCsv": "Eksport CSV",
       "gapAnalysis": {
       "title": "Tygodniówki wydajności",
       "description": "Analiza wydajności produkcji w układzie tygodniowym",

@@ -5814,6 +5814,24 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
       // Usuń stare szacunkowe koszty jeśli już nie ma materiałów bez rezerwacji
       updateData.estimatedMaterialCosts = null;
     }
+
+    // NOWE: Jeśli zadanie ma koszt zakładu, zaktualizuj też pola *WithFactory
+    const existingFactoryCostTotal = fixFloatingPointPrecision(parseFloat(task.factoryCostTotal) || 0);
+    const existingFactoryCostPerUnit = fixFloatingPointPrecision(parseFloat(task.factoryCostPerUnit) || 0);
+
+    if (existingFactoryCostTotal > 0 || existingFactoryCostPerUnit > 0) {
+      updateData.totalCostWithFactory = fixFloatingPointPrecision(
+        finalTotalFullProductionCost + existingFactoryCostTotal
+      );
+      updateData.unitCostWithFactory = fixFloatingPointPrecision(
+        finalUnitFullProductionCost + existingFactoryCostPerUnit
+      );
+      console.log(`[AUTO] Zaktualizowano koszty z zakładem: totalCostWithFactory=${updateData.totalCostWithFactory.toFixed(2)}€, unitCostWithFactory=${updateData.unitCostWithFactory.toFixed(4)}€`);
+    } else {
+      // Jeśli nie ma kosztu zakładu, *WithFactory = koszty produkcji
+      updateData.totalCostWithFactory = finalTotalFullProductionCost;
+      updateData.unitCostWithFactory = finalUnitFullProductionCost;
+    }
     
     await updateDoc(taskRef, updateData);
 
@@ -5873,20 +5891,27 @@ export const updateTaskCostsAutomatically = async (taskId, userId, reason = 'Aut
             const item = updatedItems[i];
             
             if (item.productionTaskId === taskId) {
+              // Użyj totalCostWithFactory (z zakładem) jeśli dostępne
+              const costWithFactory = updateData.totalCostWithFactory || finalTotalFullProductionCost;
+              const unitCostWithFactoryVal = updateData.unitCostWithFactory || (costWithFactory / (parseFloat(task.quantity) || 1));
+              
               // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
-              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, finalTotalFullProductionCost);
+              const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, costWithFactory);
               const calculatedProductionUnitCost = calculateProductionUnitCost(item, finalTotalMaterialCost);
               
               updatedItems[i] = {
                 ...item,
-                productionCost: finalTotalMaterialCost,
-                fullProductionCost: finalTotalFullProductionCost,
+                productionCost: costWithFactory, // Pełny koszt z zakładem
+                fullProductionCost: costWithFactory,
                 productionUnitCost: calculatedProductionUnitCost,
-                fullProductionUnitCost: calculatedFullProductionUnitCost
+                fullProductionUnitCost: calculatedFullProductionUnitCost,
+                // Zapisz też składowe kosztów dla debugowania
+                materialCostOnly: finalTotalMaterialCost,
+                factoryCostIncluded: existingFactoryCostTotal > 0
               };
               orderUpdated = true;
               
-              console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt=${finalTotalMaterialCost.toFixed(4)}€, pełny koszt=${finalTotalFullProductionCost.toFixed(4)}€`);
+              console.log(`[AUTO] Zaktualizowano pozycję "${item.name}" w zamówieniu ${order.orderNumber}: koszt z zakładem=${costWithFactory.toFixed(4)}€, pełny koszt/szt=${calculatedFullProductionUnitCost.toFixed(4)}€`);
             }
           }
             

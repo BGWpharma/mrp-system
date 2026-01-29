@@ -284,14 +284,18 @@ const verifyProductionTasks = async (orderToVerify) => {
         if (orderToVerify.items) {
           orderToVerify.items = orderToVerify.items.map(item => {
             if (item.productionTaskId === task.id) {
+              // Użyj totalCostWithFactory (z kosztem zakładu) jeśli dostępny
+              const fullCost = taskDoc.totalCostWithFactory || taskDoc.totalFullProductionCost || 0;
+              const unitCost = taskDoc.unitCostWithFactory || taskDoc.unitFullProductionCost || 0;
               return {
                 ...item,
                 productionStatus: taskDoc.status,
                 productionTaskNumber: taskDoc.moNumber,
-                productionCost: taskDoc.totalMaterialCost || 0,
-                fullProductionCost: taskDoc.totalFullProductionCost || 0,
-                productionUnitCost: taskDoc.unitMaterialCost || 0,
-                fullProductionUnitCost: taskDoc.unitFullProductionCost || 0
+                productionCost: fullCost, // Pełny koszt z zakładem
+                fullProductionCost: fullCost,
+                productionUnitCost: unitCost,
+                fullProductionUnitCost: unitCost,
+                factoryCostIncluded: (taskDoc.factoryCostTotal || 0) > 0
               };
             }
             return item;
@@ -762,8 +766,10 @@ const OrderDetails = () => {
                 // Pobierz szczegółowe dane zadania z bazy danych
                 const taskDetails = await getTaskById(associatedTask.id);
                 
-                const fullProductionCost = taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
-                const productionCost = taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0;
+                // Użyj totalCostWithFactory (z kosztem zakładu) jeśli dostępny
+                const fullProductionCost = taskDetails.totalCostWithFactory || taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
+                const unitCostWithFactory = taskDetails.unitCostWithFactory || taskDetails.unitFullProductionCost || 0;
+                const productionCost = fullProductionCost; // Teraz productionCost = pełny koszt z zakładem
                 
                 // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
                 const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
@@ -775,20 +781,21 @@ const OrderDetails = () => {
                   productionTaskId: associatedTask.id,
                   productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                   productionStatus: associatedTask.status || taskDetails.status,
-                  // Używaj totalMaterialCost jako podstawowy koszt produkcji (tylko materiały wliczane do kosztów)
+                  // Pełny koszt z zakładem
                   productionCost: productionCost,
-                  // Dodaj pełny koszt produkcji (wszystkie materiały niezależnie od flagi "wliczaj")
                   fullProductionCost: fullProductionCost,
-                  // Dodaj obliczone koszty jednostkowe
+                  // Koszty jednostkowe z zakładem
                   productionUnitCost: calculatedProductionUnitCost,
-                  fullProductionUnitCost: calculatedFullProductionUnitCost
+                  fullProductionUnitCost: unitCostWithFactory || calculatedFullProductionUnitCost,
+                  // Zapisz też czy koszt zakładu jest wliczony
+                  factoryCostIncluded: (taskDetails.factoryCostTotal || 0) > 0
                 };
               } catch (error) {
                 console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
                 
                 // W przypadku błędu, użyj podstawowych danych z associatedTask
-                const fullProductionCost = associatedTask.totalFullProductionCost || 0;
-                const productionCost = associatedTask.totalMaterialCost || 0;
+                const fullProductionCost = associatedTask.totalCostWithFactory || associatedTask.totalFullProductionCost || 0;
+                const productionCost = fullProductionCost;
                 
                 updatedOrderData.items[i] = {
                   ...item,
@@ -805,11 +812,56 @@ const OrderDetails = () => {
           }
         }
         
+        // Przelicz totalValue zamówienia
+        const calculateItemTotalValue = (item) => {
+          const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+          if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
+            return itemValue;
+          }
+          if (item.productionTaskId && item.productionCost !== undefined) {
+            return itemValue + parseFloat(item.productionCost || 0);
+          }
+          return itemValue;
+        };
+
+        const subtotal = (updatedOrderData.items || []).reduce((sum, item) => {
+          return sum + calculateItemTotalValue(item);
+        }, 0);
+
+        const shippingCost = parseFloat(updatedOrderData.shippingCost) || 0;
+        const additionalCosts = updatedOrderData.additionalCostsItems ?
+          updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) : 0;
+        const discounts = updatedOrderData.additionalCostsItems ?
+          Math.abs(updatedOrderData.additionalCostsItems
+            .filter(cost => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) : 0;
+
+        const newTotalValue = subtotal + shippingCost + additionalCosts - discounts;
+        updatedOrderData.totalValue = Math.round(newTotalValue * 100) / 100;
+
+        // Zapisz zaktualizowane dane do bazy
+        try {
+          const { updateOrder } = await import('../../services/orderService');
+          await updateOrder(orderId, {
+            items: updatedOrderData.items,
+            totalValue: updatedOrderData.totalValue,
+            orderNumber: updatedOrderData.orderNumber,
+            orderDate: updatedOrderData.orderDate,
+            status: updatedOrderData.status,
+            customer: updatedOrderData.customer
+          }, 'system');
+          console.log(`[refreshProductionCosts] Zapisano zamówienie ${orderId} z nową wartością: ${newTotalValue}€`);
+        } catch (saveError) {
+          console.error('Błąd podczas zapisywania zamówienia:', saveError);
+        }
+
         // Zaktualizuj dane zamówienia
         setOrder(updatedOrderData);
-            showSuccess(t('orderDetails.notifications.productionCostsRefreshed'));
-  } else {
-    showInfo(t('orderDetails.notifications.noProductionTasks'));
+        showSuccess(t('orderDetails.notifications.productionCostsRefreshed'));
+      } else {
+        showInfo(t('orderDetails.notifications.noProductionTasks'));
       }
     } catch (error) {
       if (!location.pathname.includes('/purchase-orders/')) {

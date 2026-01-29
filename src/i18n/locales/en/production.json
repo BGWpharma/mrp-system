@@ -222,6 +222,7 @@
         "endTime": "End",
         "timeSpent": "Time",
         "quantity": "Quantity",
+        "timePerUnit": "Time/Unit",
         "totalTime": "Total Time",
         "sessionsCount": "Sessions Count",
         "averageTime": "Average Time",
@@ -229,6 +230,7 @@
         "taskName": "Task Name",
         "moNumber": "MO Number"
       },
+      "exportCsv": "Export CSV",
       "charts": {
         "timeDistribution": "Time Distribution",
         "dailyTrend": "Daily Trend",

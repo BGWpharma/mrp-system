@@ -393,10 +393,15 @@
       "amount": "Amount",
       "effectiveTime": "Effective Time",
       "costPerMinute": "Cost/min",
+      "status": "Status",
       "description": "Description",
       "createdAt": "Created At",
       "actions": "Actions",
       "excludedTasks": "Excluded MO from calculation"
+    },
+    "status": {
+      "paid": "Paid",
+      "unpaid": "Unpaid"
     },
     "dialog": {
       "addTitle": "Add Factory Cost",
@@ -405,6 +410,7 @@
       "endDate": "End Date",
       "amount": "Amount",
       "description": "Description (optional)",
+      "isPaid": "Paid",
       "add": "Add",
       "exclusions": "Excluded MO from calculation",
       "noTasksInRange": "No production tasks in selected date range",

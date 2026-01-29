@@ -89,7 +89,8 @@ const FactoryCostsTab = () => {
     endDate: endOfMonth(new Date()),
     amount: '',
     description: '',
-    excludedTaskIds: []
+    excludedTaskIds: [],
+    isPaid: true // Domyślnie opłacone
   });
 
   // Dostępne zadania produkcyjne w wybranym zakresie dat (do wykluczenia)
@@ -164,7 +165,8 @@ const FactoryCostsTab = () => {
       endDate,
       amount: '',
       description: '',
-      excludedTaskIds: []
+      excludedTaskIds: [],
+      isPaid: true // Domyślnie opłacone
     });
     setAvailableTasks([]);
     setDialogOpen(true);
@@ -180,7 +182,8 @@ const FactoryCostsTab = () => {
       endDate: cost.endDate,
       amount: cost.amount.toString(),
       description: cost.description || '',
-      excludedTaskIds: cost.excludedTaskIds || []
+      excludedTaskIds: cost.excludedTaskIds || [],
+      isPaid: cost.isPaid !== undefined ? cost.isPaid : true // Domyślnie true dla starych rekordów
     });
     setAvailableTasks([]);
     setDialogOpen(true);
@@ -373,6 +376,7 @@ const FactoryCostsTab = () => {
                   <TableCell align="right">{t('factoryCosts.table.amount', 'Kwota')}</TableCell>
                   <TableCell align="right">{t('factoryCosts.table.effectiveTime', 'Efektywny czas')}</TableCell>
                   <TableCell align="right">{t('factoryCosts.table.costPerMinute', 'Koszt/min')}</TableCell>
+                  <TableCell align="center">{t('factoryCosts.table.status', 'Status')}</TableCell>
                   <TableCell>{t('factoryCosts.table.description', 'Opis')}</TableCell>
                   <TableCell align="center">{t('factoryCosts.table.actions', 'Akcje')}</TableCell>
                 </TableRow>
@@ -380,7 +384,7 @@ const FactoryCostsTab = () => {
               <TableBody>
                 {costs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {t('factoryCosts.noCosts', 'Brak wpisów kosztów zakładu')}
                       </Typography>
@@ -436,6 +440,16 @@ const FactoryCostsTab = () => {
                             sx={{ fontWeight: 600 }}
                           />
                         </Tooltip>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={cost.isPaid !== false 
+                            ? t('factoryCosts.status.paid', 'Opłacone') 
+                            : t('factoryCosts.status.unpaid', 'Nieopłacone')
+                          }
+                          color={cost.isPaid !== false ? 'success' : 'warning'}
+                          size="small"
+                        />
                       </TableCell>
                       <TableCell>
                         <Box>
@@ -526,6 +540,29 @@ const FactoryCostsTab = () => {
                 fullWidth
                 multiline
                 rows={2}
+              />
+              
+              {/* Status płatności */}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.isPaid}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isPaid: e.target.checked }))}
+                    color="success"
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography>
+                      {t('factoryCosts.dialog.isPaid', 'Opłacone')}
+                    </Typography>
+                    <Chip 
+                      label={formData.isPaid ? t('common.yes', 'Tak') : t('common.no', 'Nie')}
+                      size="small"
+                      color={formData.isPaid ? 'success' : 'warning'}
+                    />
+                  </Box>
+                }
               />
               
               {/* Sekcja wykluczeń MO/CO */}

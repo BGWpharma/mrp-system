@@ -108,7 +108,7 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
           ))}
           
           <Typography variant="caption" display="block" sx={{ mt: 1, mb: 0.5, fontWeight: 'bold' }}>
-            Koszty operacyjne:
+            Koszty zakładu:
           </Typography>
           {payload.filter(p => p.dataKey.includes('operational')).map((entry, index) => (
             <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -211,24 +211,24 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
               dot={false}
             />
             
-            {/* Koszty operacyjne - zapłacone */}
+            {/* Koszty zakładu - zapłacone */}
             <Line
               type="monotone"
               dataKey="operationalPaid"
               stroke={theme.palette.warning.main}
               strokeWidth={2}
-              name="Koszty op. (zapłacone)"
+              name="Koszty zakładu (zapłacone)"
               dot={false}
             />
             
-            {/* Koszty operacyjne - z oczekiwanymi */}
+            {/* Koszty zakładu - z oczekiwanymi */}
             <Line
               type="monotone"
               dataKey="operationalTotal"
               stroke={theme.palette.warning.light}
               strokeWidth={1}
               strokeDasharray="5 5"
-              name="Koszty op. (z oczekiwanymi)"
+              name="Koszty zakładu (z oczekiwanymi)"
               dot={false}
             />
             
@@ -264,11 +264,11 @@ const CashflowChart = ({ chartData, currency = 'EUR' }) => {
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 20, height: 3, bgcolor: 'error.main' }} />
-          <Typography variant="caption" color="text.secondary">Wydatki (PO + op.)</Typography>
+          <Typography variant="caption" color="text.secondary">Wydatki (PO + zakład)</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 20, height: 3, bgcolor: 'warning.main' }} />
-          <Typography variant="caption" color="text.secondary">Koszty operacyjne</Typography>
+          <Typography variant="caption" color="text.secondary">Koszty zakładu</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 20, height: 3, bgcolor: 'primary.main' }} />

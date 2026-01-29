@@ -269,13 +269,41 @@ const OrdersList = () => {
         paginationFilters
       );
       
+      // Przelicz productsValue dla każdego zamówienia
+      const calculateItemTotalValue = (item) => {
+        const itemValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+        if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
+          return itemValue;
+        }
+        if (item.productionTaskId && item.productionCost !== undefined) {
+          return itemValue + parseFloat(item.productionCost || 0);
+        }
+        return itemValue;
+      };
+
+      const ordersWithCalculatedValues = result.data.map(order => {
+        const subtotal = (order.items || []).reduce((sum, item) => {
+          return sum + calculateItemTotalValue(item);
+        }, 0);
+        
+        const dbTotalValue = parseFloat(order.totalValue) || 0;
+        const calculatedValue = subtotal + (parseFloat(order.shippingCost) || 0);
+        
+        // Console log dla diagnostyki
+        if (Math.abs(calculatedValue - dbTotalValue) > 0.01) {
+          console.log(`[fetchOrders] Zamówienie ${order.orderNumber}: DB totalValue=${dbTotalValue}€, obliczona=${calculatedValue}€, różnica=${(calculatedValue - dbTotalValue).toFixed(2)}€`);
+        }
+        
+        return {
+          ...order,
+          productsValue: subtotal
+        };
+      });
+      
       // Aktualizacja danych i metadanych paginacji
-      setOrders(result.data);
+      setOrders(ordersWithCalculatedValues);
       setTotalItems(result.pagination.totalItems);
       setTotalPages(result.pagination.totalPages);
-      
-      // Usuwamy zbędne logowanie, które generuje wielokrotne komunikaty
-      // console.log("Pobrano zamówienia z paginacją:", result);
     } catch (error) {
       console.error('Błąd podczas pobierania zamówień:', error);
       showError(t('orders.notifications.fetchError'));
@@ -1785,11 +1813,18 @@ const OrdersList = () => {
                           <TableCell align="right">
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                               <Typography variant="body2" fontWeight="medium">
-                                {formatCurrency(order.totalValue || 0)}
+                                {/* Użyj przeliczonej wartości productsValue jeśli dostępna, inaczej totalValue z bazy */}
+                                {formatCurrency(order.productsValue !== undefined ? (order.productsValue + (order.shippingCost || 0)) : (order.totalValue || 0))}
                               </Typography>
                               {order.purchaseOrdersValue > 0 && (
                                 <Typography variant="caption" color="text.secondary">
                                   (PO: {formatCurrency(order.purchaseOrdersValue || 0)})
+                                </Typography>
+                              )}
+                              {/* Debug: pokaż różnicę jeśli istnieje */}
+                              {order.productsValue !== undefined && Math.abs((order.productsValue + (order.shippingCost || 0)) - (order.totalValue || 0)) > 0.01 && (
+                                <Typography variant="caption" color="warning.main">
+                                  (DB: {formatCurrency(order.totalValue || 0)})
                                 </Typography>
                               )}
                             </Box>

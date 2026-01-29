@@ -859,28 +859,34 @@ const OrderForm = ({ orderId }) => {
                   }
                   
                   // Aktualizuj informacje o zadaniu produkcyjnym w elemencie zamówienia
+                  // Użyj totalCostWithFactory jeśli dostępny (zawiera koszt zakładu)
+                  const productionCostValue = taskDetails.totalCostWithFactory || taskDetails.totalFullProductionCost || taskDetails.totalMaterialCost || taskToUse.totalCostWithFactory || taskToUse.totalFullProductionCost || taskToUse.totalMaterialCost || 0;
+                  
                   fetchedOrder.items[i] = {
                     ...item,
                     productionTaskId: taskToUse.id,
                     productionTaskNumber: taskToUse.moNumber || taskDetails.moNumber,
                     productionStatus: taskToUse.status || taskDetails.status,
-                    productionCost: taskDetails.totalMaterialCost || taskToUse.totalMaterialCost || 0,
-                    fullProductionCost: taskDetails.totalFullProductionCost || taskToUse.totalFullProductionCost || 0
+                    productionCost: productionCostValue,
+                    fullProductionCost: productionCostValue,
+                    factoryCostIncluded: (taskDetails.factoryCostTotal || 0) > 0
                   };
                   
-                  console.log(`Przypisano zadanie produkcyjne ${taskToUse.moNumber} do elementu zamówienia ${item.name} z kosztem ${fetchedOrder.items[i].productionCost}`);
+                  console.log(`[OrderForm] Załadowano koszt produkcji dla ${item.name}: ${productionCostValue}€ (factoryCost: ${taskDetails.factoryCostTotal || 0}€)`);
                 } else {
                   console.error(`Nie znaleziono szczegółów zadania ${taskToUse.id} w załadowanych danych`);
                   
                   // Fallback - użyj podstawowych danych z fetchedOrder.productionTasks
+                  const fallbackCost = taskToUse.totalCostWithFactory || taskToUse.totalFullProductionCost || taskToUse.totalMaterialCost || 0;
                   fetchedOrder.items[i] = {
                     ...item,
                     productionTaskId: taskToUse.id,
                     productionTaskNumber: taskToUse.moNumber,
                     productionStatus: taskToUse.status,
-                    productionCost: taskToUse.totalMaterialCost || 0,
-                    fullProductionCost: taskToUse.totalFullProductionCost || 0
+                    productionCost: fallbackCost,
+                    fullProductionCost: fallbackCost
                   };
+                  console.log(`[OrderForm] Fallback - załadowano koszt produkcji dla ${item.name}: ${fallbackCost}€`);
                 }
               } else {
                 console.log(`Nie znaleziono dopasowanego zadania dla elementu ${item.name}`);

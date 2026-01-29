@@ -5909,55 +5909,100 @@ const TaskDetailsPage = () => {
             )}
           </Grid>
           <Grid item xs={12} md={6} sx={textRight}>
-            <Typography variant="body1">
-              <strong>{t('materialsSummary.totalCost')}:</strong> {totalMaterialCost.toFixed(2)} €
-              {task.totalMaterialCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
-                  (W bazie: {task.totalMaterialCost.toFixed(2)} €)
+            {/* Sekcja: Koszty materiałów */}
+            <Box sx={{ mb: 1.5 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('materialsSummary.totalCost')}:
                 </Typography>
-              )}
-            </Typography>
-            <Typography variant="body1">
-              <strong>{t('materialsSummary.unitCost')}:</strong> ~{unitMaterialCost.toFixed(4)} €/{task.unit}
-              {task.unitMaterialCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
-                  (W bazie: ~{task.unitMaterialCost.toFixed(4)} €/{task.unit})
+                <Typography variant="body1">
+                  {totalMaterialCost.toFixed(2)} €
                 </Typography>
-              )}
-            </Typography>
-            <Typography variant="body1" sx={{ ...mt1, color: 'primary.main' }}>
-              <strong>{t('taskDetails:materialsSummary.totalFullProductionCost')}:</strong> {totalFullProductionCost.toFixed(2)} €
-              {task.totalFullProductionCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
-                  (W bazie: {task.totalFullProductionCost.toFixed(2)} €)
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('materialsSummary.unitCost')}:
                 </Typography>
-              )}
-            </Typography>
-            <Typography variant="body1" sx={{ color: 'primary.main' }}>
-              <strong>{t('taskDetails:materialsSummary.unitFullProductionCost')}:</strong> ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
-              {task.unitFullProductionCost !== undefined && costChanged && (
-                <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
-                  (W bazie: ~{task.unitFullProductionCost.toFixed(4)} €/{task.unit})
+                <Typography variant="body1">
+                  ~{unitMaterialCost.toFixed(4)} €/{task.unit}
                 </Typography>
-              )}
-            </Typography>
-            {/* Koszt zakładu na jednostkę */}
+              </Box>
+            </Box>
+
+            {/* Sekcja: Koszty produkcji */}
+            <Box sx={{ mb: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Typography variant="body2" sx={{ color: 'primary.main' }}>
+                  {t('taskDetails:materialsSummary.totalFullProductionCost')}:
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'primary.main' }}>
+                  {totalFullProductionCost.toFixed(2)} €
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Typography variant="body2" sx={{ color: 'primary.main' }}>
+                  {t('taskDetails:materialsSummary.unitFullProductionCost')}:
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'primary.main' }}>
+                  ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Sekcja: Koszt zakładu */}
             {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
-              <Typography variant="body1" sx={{ ...mt1, color: 'secondary.main' }}>
-                <strong>{t('taskDetails:materialsSummary.factoryCostPerUnit', 'Koszt zakładu na jednostkę')}:</strong> ~{task.factoryCostPerUnit.toFixed(4)} €/{task.unit}
-                {task.factoryCostTotal !== undefined && (
-                  <Typography variant="caption" color="text.secondary" sx={captionWithMargin}>
-                    (Łącznie: {task.factoryCostTotal.toFixed(2)} €, czas: {task.factoryCostMinutes?.toFixed(0) || 0} min)
+              <Box sx={{ mb: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <Typography variant="body2" sx={{ color: 'secondary.main' }}>
+                    {t('taskDetails:materialsSummary.factoryCostPerUnit', 'Koszt zakładu na jednostkę')}:
                   </Typography>
-                )}
-              </Typography>
+                  <Typography variant="body1" sx={{ color: 'secondary.main' }}>
+                    ~{task.factoryCostPerUnit.toFixed(4)} €/{task.unit}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', opacity: 0.7 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    ({task.factoryCostMinutes?.toFixed(0) || 0} min proporcjonalnie)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Łącznie: {task.factoryCostTotal?.toFixed(2) || '0.00'} €
+                  </Typography>
+                </Box>
+              </Box>
             )}
-            {/* Pełny koszt z kosztem zakładu */}
+
+            {/* Sekcja: SUMA - Pełny koszt z zakładem */}
             {(task.factoryCostPerUnit !== undefined && task.factoryCostPerUnit > 0) && (
-              <Typography variant="body1" sx={{ ...mt1, color: 'success.main', fontWeight: 'bold' }}>
-                <strong>{t('taskDetails:materialsSummary.totalUnitCostWithFactory', 'Pełny koszt + zakład')}:</strong> ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
-              </Typography>
+              <Box sx={{ 
+                pt: 1.5, 
+                borderTop: 2, 
+                borderColor: 'success.main',
+                bgcolor: 'success.main',
+                borderRadius: 1,
+                px: 1.5,
+                py: 1,
+                mx: -1
+              }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <Typography variant="body1" sx={{ color: 'success.contrastText', fontWeight: 'bold' }}>
+                    {t('taskDetails:materialsSummary.totalUnitCostWithFactory', 'Pełny koszt + zakład')}:
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: 'success.contrastText', fontWeight: 'bold' }}>
+                    {/* Zawsze obliczaj na bieżąco: pełny koszt produkcji + koszt zakładu */}
+                    ~{(unitFullProductionCost + (task.factoryCostPerUnit || 0)).toFixed(4)} €/{task.unit}
+                  </Typography>
+                </Box>
+                {/* Pokaż łączny koszt z zakładem */}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: 'success.contrastText', opacity: 0.85 }}>
+                    {/* Zawsze obliczaj na bieżąco */}
+                    Łącznie: {(totalFullProductionCost + (task.factoryCostTotal || 0)).toFixed(2)} €
+                  </Typography>
+                </Box>
+              </Box>
             )}
+
+            {/* Przycisk aktualizacji */}
             <Box sx={{ ...mt1, display: 'flex', flexDirection: 'column', gap: 1 }}>
               {costChanged && (
                 <Button 

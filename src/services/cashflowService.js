@@ -9,7 +9,7 @@ import {
 import { db } from '../firebase';
 import { getInvoicesByOrderId } from './invoiceService';
 import { safeParseDate } from '../utils/dateUtils';
-import { generateOperationalCostsTimeline } from './operationalCostService';
+import { getFactoryCostsByDateRange } from './factoryCostService';
 
 /**
  * Generuje raport cashflow dla zamówień klientów (CO)
@@ -1039,6 +1039,119 @@ export const generateGlobalExpenseTimeline = async (dateFrom, dateTo) => {
 };
 
 /**
+ * Generuje timeline kosztów zakładu dla wykresu cashflow
+ * Pobiera koszty zakładu z factoryCosts (automatycznie obliczane na podstawie produkcji)
+ * @param {Date} dateFrom - Data początkowa
+ * @param {Date} dateTo - Data końcowa
+ * @returns {Promise<Object>} - Dane timeline kosztów zakładu
+ */
+export const generateFactoryCostsTimeline = async (dateFrom, dateTo) => {
+  try {
+    console.log(`🏭 [CASHFLOW] Pobieranie kosztów zakładu dla zakresu ${dateFrom?.toLocaleDateString()} - ${dateTo?.toLocaleDateString()}`);
+    
+    // Pobierz koszty zakładu nachodzące na zakres dat
+    const factoryCosts = await getFactoryCostsByDateRange(dateFrom, dateTo);
+    
+    if (!factoryCosts || factoryCosts.length === 0) {
+      console.log('🏭 [CASHFLOW] Brak kosztów zakładu w podanym zakresie');
+      return {
+        timeline: [],
+        totalValue: 0,
+        totalPaid: 0,
+        totalRemaining: 0,
+        costsCount: 0
+      };
+    }
+
+    const timeline = [];
+    let totalValue = 0;
+    let totalPaid = 0;
+    let totalRemaining = 0;
+
+    factoryCosts.forEach(cost => {
+      // Oblicz proporcjonalną kwotę dla zakresu dat
+      const costStart = cost.startDate instanceof Date ? cost.startDate : new Date(cost.startDate);
+      const costEnd = cost.endDate instanceof Date ? cost.endDate : new Date(cost.endDate);
+      
+      // Faktyczny okres nachodzenia na zakres analizy
+      const overlapStart = new Date(Math.max(costStart.getTime(), dateFrom.getTime()));
+      const overlapEnd = new Date(Math.min(costEnd.getTime(), dateTo.getTime()));
+      
+      // Czas nachodzenia w dniach
+      const overlapDays = Math.max(0, (overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Całkowity czas kosztu w dniach
+      const totalCostDays = Math.max(1, (costEnd.getTime() - costStart.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Proporcjonalna kwota dla nachodzącego okresu
+      const proportionalAmount = (cost.amount || 0) * (overlapDays / totalCostDays);
+      
+      // Użyj środka nachodzącego okresu jako daty dla timeline
+      const midDate = new Date((overlapStart.getTime() + overlapEnd.getTime()) / 2);
+
+      // Oblicz efektywne godziny proporcjonalnie
+      const proportionalHours = (cost.effectiveHours || 0) * (overlapDays / totalCostDays);
+      
+      // Status płatności z bazy (domyślnie true dla starych rekordów)
+      const isPaid = cost.isPaid !== undefined ? cost.isPaid : true;
+      
+      timeline.push({
+        date: midDate,
+        costId: cost.id,
+        name: cost.description || `Koszt zakładu ${costStart.toLocaleDateString()} - ${costEnd.toLocaleDateString()}`,
+        amount: Math.round(proportionalAmount * 100) / 100,
+        originalAmount: cost.amount || 0,
+        effectiveHours: Math.round(proportionalHours * 100) / 100,
+        costPerMinute: cost.costPerMinute || 0,
+        costPerHour: cost.costPerHour || 0,
+        startDate: costStart,
+        endDate: costEnd,
+        overlapStart,
+        overlapEnd,
+        isPaid: isPaid, // Status płatności z bazy
+        type: 'factory_cost'
+      });
+
+      totalValue += proportionalAmount;
+      // Zlicz zapłacone lub oczekiwane
+      if (isPaid) {
+        totalPaid += proportionalAmount;
+      } else {
+        totalRemaining += proportionalAmount;
+      }
+    });
+
+    // Sortuj chronologicznie
+    timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    console.log(`🏭 [CASHFLOW] Znaleziono ${factoryCosts.length} kosztów zakładu:`);
+    console.log(`🏭 [CASHFLOW]   - Wartość proporcjonalna: ${totalValue.toFixed(2)} EUR`);
+    console.log(`🏭 [CASHFLOW]   - Zapłacone: ${totalPaid.toFixed(2)} EUR`);
+    console.log(`🏭 [CASHFLOW]   - Oczekiwane: ${totalRemaining.toFixed(2)} EUR`);
+    timeline.forEach(item => {
+      console.log(`🏭 [CASHFLOW]   - ${item.name}: ${item.amount.toFixed(2)} EUR (isPaid: ${item.isPaid})`);
+    });
+
+    return {
+      timeline,
+      totalValue: Math.round(totalValue * 100) / 100,
+      totalPaid: Math.round(totalPaid * 100) / 100,
+      totalRemaining: Math.round(totalRemaining * 100) / 100,
+      costsCount: factoryCosts.length
+    };
+  } catch (error) {
+    console.error('❌ Błąd podczas generowania timeline kosztów zakładu:', error);
+    return {
+      timeline: [],
+      totalValue: 0,
+      totalPaid: 0,
+      totalRemaining: 0,
+      costsCount: 0
+    };
+  }
+};
+
+/**
  * Rozszerza dane cashflow o GLOBALNE wydatki z wszystkich PO
  * @param {Object} filters - Filtry raportu (jak w generateCashflowReport)
  * @returns {Promise<Object>} - Dane cashflow z globalnymi wydatkami
@@ -1056,18 +1169,18 @@ export const generateCashflowReportWithExpenses = async (filters = {}) => {
       filters.dateTo
     );
 
-    // Pobierz koszty operacyjne w zakresie dat
-    const operationalCosts = await generateOperationalCostsTimeline(
+    // Pobierz koszty zakładu w zakresie dat (zastępuje koszty operacyjne)
+    const factoryCosts = await generateFactoryCostsTimeline(
       filters.dateFrom,
       filters.dateTo
     );
 
-    console.log(`✅ Wygenerowano raport cashflow: ${cashflowData.length} zamówień, ${globalExpenses.totalPOCount} PO z wydatkami, ${operationalCosts.monthsCount} miesięcy kosztów operacyjnych`);
+    console.log(`✅ Wygenerowano raport cashflow: ${cashflowData.length} zamówień, ${globalExpenses.totalPOCount} PO z wydatkami, ${factoryCosts.costsCount} kosztów zakładu`);
     
     return {
       orders: cashflowData,
       globalExpenses,
-      operationalCosts
+      factoryCosts // Zastępuje operationalCosts
     };
   } catch (error) {
     console.error('❌ Błąd podczas generowania raportu cashflow z wydatkami:', error);
@@ -1085,7 +1198,7 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
     return [];
   }
   
-  const { orders, globalExpenses, operationalCosts } = cashflowDataWithExpenses;
+  const { orders, globalExpenses, factoryCosts } = cashflowDataWithExpenses;
   
   // Zbierz wszystkie płatności (przychody) i wydatki
   const allTransactions = [];
@@ -1121,15 +1234,15 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
     });
   }
   
-  // Koszty operacyjne
-  if (operationalCosts && operationalCosts.timeline) {
-    operationalCosts.timeline.forEach(cost => {
+  // Koszty zakładu (zastępują koszty operacyjne)
+  if (factoryCosts && factoryCosts.timeline) {
+    factoryCosts.timeline.forEach(cost => {
       const costDate = new Date(cost.date);
       
       allTransactions.push({
         date: costDate,
         type: 'expense',
-        subType: 'operational',
+        subType: 'factory', // Zmienione z 'operational' na 'factory'
         amount: cost.amount,
         status: cost.isPaid ? 'confirmed' : 'expected',
         name: cost.name
@@ -1145,8 +1258,8 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
   let cumulativeRevenueExpected = 0;
   let cumulativeExpensePaid = 0;
   let cumulativeExpenseExpected = 0;
-  let cumulativeOperationalPaid = 0;
-  let cumulativeOperationalExpected = 0;
+  let cumulativeFactoryCostPaid = 0;
+  let cumulativeFactoryCostExpected = 0;
   
   const dateMap = new Map();
   
@@ -1160,12 +1273,12 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
         cumulativeRevenueExpected += transaction.amount;
       }
     } else if (transaction.type === 'expense') {
-      if (transaction.subType === 'operational') {
-        // Koszty operacyjne
+      if (transaction.subType === 'factory') {
+        // Koszty zakładu
         if (transaction.status === 'confirmed') {
-          cumulativeOperationalPaid += transaction.amount;
+          cumulativeFactoryCostPaid += transaction.amount;
         } else {
-          cumulativeOperationalExpected += transaction.amount;
+          cumulativeFactoryCostExpected += transaction.amount;
         }
       } else {
         // Wydatki PO
@@ -1177,9 +1290,9 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
       }
     }
     
-    // Łączne wydatki = PO + operacyjne
-    const totalExpensePaid = cumulativeExpensePaid + cumulativeOperationalPaid;
-    const totalExpenseExpected = cumulativeExpenseExpected + cumulativeOperationalExpected;
+    // Łączne wydatki = PO + koszty zakładu
+    const totalExpensePaid = cumulativeExpensePaid + cumulativeFactoryCostPaid;
+    const totalExpenseExpected = cumulativeExpenseExpected + cumulativeFactoryCostExpected;
     
     // Utwórz lub zaktualizuj wpis dla daty
     if (!dateMap.has(dateKey)) {
@@ -1189,13 +1302,17 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
         cumulativeRevenueTotal: cumulativeRevenuePaid + cumulativeRevenueExpected,
         cumulativeExpensePaid: totalExpensePaid,
         cumulativeExpenseTotal: totalExpensePaid + totalExpenseExpected,
-        cumulativeOperationalPaid,
-        cumulativeOperationalTotal: cumulativeOperationalPaid + cumulativeOperationalExpected,
+        cumulativeFactoryCostPaid,
+        cumulativeFactoryCostTotal: cumulativeFactoryCostPaid + cumulativeFactoryCostExpected,
+        // Aliasy dla kompatybilności z wykresem (operational -> factory)
+        cumulativeOperationalPaid: cumulativeFactoryCostPaid,
+        cumulativeOperationalTotal: cumulativeFactoryCostPaid + cumulativeFactoryCostExpected,
         netPaid: cumulativeRevenuePaid - totalExpensePaid,
         netTotal: (cumulativeRevenuePaid + cumulativeRevenueExpected) - (totalExpensePaid + totalExpenseExpected),
         dailyRevenue: 0,
         dailyExpense: 0,
-        dailyOperational: 0
+        dailyFactoryCost: 0,
+        dailyOperational: 0 // Alias
       });
     }
     
@@ -1204,8 +1321,11 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
     dayData.cumulativeRevenueTotal = cumulativeRevenuePaid + cumulativeRevenueExpected;
     dayData.cumulativeExpensePaid = totalExpensePaid;
     dayData.cumulativeExpenseTotal = totalExpensePaid + totalExpenseExpected;
-    dayData.cumulativeOperationalPaid = cumulativeOperationalPaid;
-    dayData.cumulativeOperationalTotal = cumulativeOperationalPaid + cumulativeOperationalExpected;
+    dayData.cumulativeFactoryCostPaid = cumulativeFactoryCostPaid;
+    dayData.cumulativeFactoryCostTotal = cumulativeFactoryCostPaid + cumulativeFactoryCostExpected;
+    // Aliasy dla kompatybilności z wykresem
+    dayData.cumulativeOperationalPaid = cumulativeFactoryCostPaid;
+    dayData.cumulativeOperationalTotal = cumulativeFactoryCostPaid + cumulativeFactoryCostExpected;
     dayData.netPaid = cumulativeRevenuePaid - totalExpensePaid;
     dayData.netTotal = (cumulativeRevenuePaid + cumulativeRevenueExpected) - (totalExpensePaid + totalExpenseExpected);
     
@@ -1213,8 +1333,9 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
     if (transaction.type === 'revenue' && transaction.status === 'confirmed') {
       dayData.dailyRevenue += transaction.amount;
     } else if (transaction.type === 'expense') {
-      if (transaction.subType === 'operational' && transaction.status === 'confirmed') {
-        dayData.dailyOperational += transaction.amount;
+      if (transaction.subType === 'factory' && transaction.status === 'confirmed') {
+        dayData.dailyFactoryCost += transaction.amount;
+        dayData.dailyOperational += transaction.amount; // Alias
       } else if (transaction.status === 'confirmed') {
         dayData.dailyExpense += transaction.amount;
       }
@@ -1228,7 +1349,7 @@ export const prepareCashflowChartDataWithExpenses = (cashflowDataWithExpenses) =
 };
 
 /**
- * Rozszerzone statystyki cashflow z globalnymi wydatkami
+ * Rozszerzone statystyki cashflow z globalnymi wydatkami i kosztami zakładu
  */
 export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses) => {
   if (!cashflowDataWithExpenses || !cashflowDataWithExpenses.orders) {
@@ -1240,19 +1361,20 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
       totalExpenses: 0,
       totalExpensesPaid: 0,
       totalExpensesRemaining: 0,
-      totalOperationalCosts: 0,
-      totalOperationalCostsPaid: 0,
-      totalOperationalCostsRemaining: 0,
+      totalFactoryCosts: 0,
+      totalFactoryCostsPaid: 0,
+      totalFactoryCostsRemaining: 0,
       totalAllExpenses: 0,
       totalAllExpensesPaid: 0,
       netProfit: 0,
       netCashflow: 0,
       totalPOCount: 0,
+      factoryCostsCount: 0,
       profitMargin: 0
     };
   }
   
-  const { orders, globalExpenses, operationalCosts } = cashflowDataWithExpenses;
+  const { orders, globalExpenses, factoryCosts } = cashflowDataWithExpenses;
   const baseStats = calculateCashflowStatistics(orders);
   
   // Wydatki z PO
@@ -1260,14 +1382,14 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
   const totalExpensesPaid = globalExpenses?.totalExpensePaid || 0;
   const totalExpensesRemaining = globalExpenses?.totalExpenseRemaining || 0;
   
-  // Koszty operacyjne
-  const totalOperationalCosts = operationalCosts?.totalValue || 0;
-  const totalOperationalCostsPaid = operationalCosts?.totalPaid || 0;
-  const totalOperationalCostsRemaining = operationalCosts?.totalRemaining || 0;
+  // Koszty zakładu (zastępują koszty operacyjne)
+  const totalFactoryCosts = factoryCosts?.totalValue || 0;
+  const totalFactoryCostsPaid = factoryCosts?.totalPaid || 0;
+  const totalFactoryCostsRemaining = factoryCosts?.totalRemaining || 0;
   
-  // Łączne wszystkie wydatki (PO + operacyjne)
-  const totalAllExpenses = totalExpenses + totalOperationalCosts;
-  const totalAllExpensesPaid = totalExpensesPaid + totalOperationalCostsPaid;
+  // Łączne wszystkie wydatki (PO + koszty zakładu)
+  const totalAllExpenses = totalExpenses + totalFactoryCosts;
+  const totalAllExpensesPaid = totalExpensesPaid + totalFactoryCostsPaid;
   
   // Zysk netto okresu = suma przychodów - suma wszystkich wydatków
   const netProfit = baseStats.totalOrderValue - totalAllExpenses;
@@ -1279,10 +1401,14 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
     totalExpenses,
     totalExpensesPaid,
     totalExpensesRemaining,
-    // Koszty operacyjne
-    totalOperationalCosts,
-    totalOperationalCostsPaid,
-    totalOperationalCostsRemaining,
+    // Koszty zakładu (zastępują totalOperationalCosts dla kompatybilności wstecznej)
+    totalFactoryCosts,
+    totalFactoryCostsPaid,
+    totalFactoryCostsRemaining,
+    // Aliasy dla kompatybilności wstecznej z UI
+    totalOperationalCosts: totalFactoryCosts,
+    totalOperationalCostsPaid: totalFactoryCostsPaid,
+    totalOperationalCostsRemaining: totalFactoryCostsRemaining,
     // Łączne wydatki
     totalAllExpenses,
     totalAllExpensesPaid,
@@ -1290,6 +1416,7 @@ export const calculateCashflowStatisticsWithExpenses = (cashflowDataWithExpenses
     netProfit,
     netCashflow,
     totalPOCount: globalExpenses?.totalPOCount || 0,
+    factoryCostsCount: factoryCosts?.costsCount || 0,
     profitMargin: baseStats.totalOrderValue > 0 
       ? ((netProfit / baseStats.totalOrderValue) * 100).toFixed(2)
       : 0

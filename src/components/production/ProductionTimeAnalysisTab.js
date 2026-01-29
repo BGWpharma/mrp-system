@@ -55,8 +55,10 @@ import {
   Timeline as TimelineIcon,
   CalendarToday as WeeklyIcon,
   BarChart as BarChartIcon,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  FileDownload as ExportIcon
 } from '@mui/icons-material';
+import { Button } from '@mui/material';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNotification } from '../../hooks/useNotification';
 import {
@@ -411,6 +413,92 @@ const TimeAnalysisContent = ({
   t
 }) => {
   const theme = useTheme();
+
+  // Funkcja eksportu do CSV (w języku angielskim)
+  const handleExportCSV = () => {
+    if (!filteredSessions || filteredSessions.length === 0) {
+      showError('No data to export');
+      return;
+    }
+
+    // Nagłówki CSV w języku angielskim
+    const headers = [
+      'Date',
+      'MO Number',
+      'Task Name',
+      'Start Time',
+      'End Time',
+      'Time Spent (min)',
+      'Quantity',
+      'Unit',
+      'Time per Unit (min)',
+      'Facility Cost (EUR)'
+    ];
+
+    // Przygotuj dane
+    const rows = filteredSessions.map(session => {
+      const task = tasksMap[session.taskId];
+      const quantity = parseFloat(session.quantity) || 0;
+      const timeSpent = parseFloat(session.timeSpent) || 0;
+      const timePerUnit = quantity > 0 ? (timeSpent / quantity).toFixed(2) : '0';
+      
+      // Oblicz koszt zakładu
+      let processingCostPerUnit = parseFloat(task?.processingCostPerUnit) || 0;
+      if (processingCostPerUnit === 0 && task?.recipeId && recipesMap[task.recipeId]) {
+        processingCostPerUnit = parseFloat(recipesMap[task.recipeId]?.processingCostPerUnit) || 0;
+      }
+      const facilityCost = processingCostPerUnit * quantity;
+
+      return [
+        format(session.startTime, 'yyyy-MM-dd'),
+        task?.moNumber || 'No MO',
+        task?.name || task?.productName || 'Unknown Task',
+        session.formattedStartTime,
+        session.formattedEndTime,
+        timeSpent.toFixed(2),
+        quantity,
+        task?.unit || 'pcs',
+        timePerUnit,
+        facilityCost > 0 ? facilityCost.toFixed(2) : '0'
+      ];
+    });
+
+    // Dodaj wiersz sumaryczny
+    const totalTimeSpent = filteredSessions.reduce((sum, s) => sum + (parseFloat(s.timeSpent) || 0), 0);
+    const totalQuantity = filteredSessions.reduce((sum, s) => sum + (parseFloat(s.quantity) || 0), 0);
+    const avgTimePerUnit = totalQuantity > 0 ? (totalTimeSpent / totalQuantity).toFixed(2) : '0';
+    
+    rows.push([]);  // Pusty wiersz
+    rows.push(['SUMMARY', '', '', '', '', totalTimeSpent.toFixed(2), totalQuantity, '', avgTimePerUnit, '']);
+
+    // Konwertuj do CSV
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => {
+        // Escapuj przecinki i cudzysłowy
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // Dodaj BOM dla poprawnego kodowania UTF-8 w Excel
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const startDateStr = format(timeAnalysisStartDate, 'yyyy-MM-dd');
+    const endDateStr = format(timeAnalysisEndDate, 'yyyy-MM-dd');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `production_time_report_${startDateStr}_${endDateStr}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   
   if (!timeAnalysis || timeAnalysis.totalSessions === 0) {
     return (
@@ -813,15 +901,27 @@ const TimeAnalysisContent = ({
               {t('productionReport.timeAnalysis.sessionsList')}
             </Typography>
           </Box>
-          {selectedTask !== 'all' && (
-            <Chip 
-              label={tasksMap[selectedTask]?.moNumber || tasksMap[selectedTask]?.name || selectedTask} 
-              size="small"
-              color="primary"
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {selectedTask !== 'all' && (
+              <Chip 
+                label={tasksMap[selectedTask]?.moNumber || tasksMap[selectedTask]?.name || selectedTask} 
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: 'bold' }}
+              />
+            )}
+            <Button
               variant="outlined"
-              sx={{ fontWeight: 'bold' }}
-            />
-          )}
+              size="small"
+              startIcon={<ExportIcon />}
+              onClick={handleExportCSV}
+              disabled={!filteredSessions || filteredSessions.length === 0}
+              sx={{ textTransform: 'none' }}
+            >
+              {t('productionReport.timeAnalysis.exportCsv')}
+            </Button>
+          </Box>
         </Box>
         
         <TableContainer>
@@ -840,6 +940,7 @@ const TimeAnalysisContent = ({
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.endTime')}</TableCell>
                 <TableCell>{t('productionReport.timeAnalysis.tableHeaders.timeSpent')}</TableCell>
                 <TableCell align="right">{t('productionReport.timeAnalysis.tableHeaders.quantity')}</TableCell>
+                <TableCell align="right">{t('productionReport.timeAnalysis.tableHeaders.timePerUnit')}</TableCell>
                 <TableCell align="right">{t('productionReport.timeAnalysis.facilityCost')}</TableCell>
               </TableRow>
             </TableHead>
@@ -909,6 +1010,24 @@ const TimeAnalysisContent = ({
                   </TableCell>
                   <TableCell align="right">
                     {session.quantity} {tasksMap[session.taskId]?.unit || 'szt'}
+                  </TableCell>
+                  <TableCell align="right">
+                    {(() => {
+                      const quantity = parseFloat(session.quantity) || 0;
+                      const timeSpent = parseFloat(session.timeSpent) || 0;
+                      if (quantity > 0 && timeSpent > 0) {
+                        const timePerUnit = timeSpent / quantity;
+                        return (
+                          <Chip 
+                            label={`${timePerUnit.toFixed(2)} min`} 
+                            size="small" 
+                            color="secondary" 
+                            variant="outlined"
+                          />
+                        );
+                      }
+                      return '—';
+                    })()}
                   </TableCell>
                   <TableCell align="right">
                     {(() => {
