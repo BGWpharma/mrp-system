@@ -11,6 +11,9 @@ const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const {admin} = require("../config");
 
+// Marker używany do wykrywania zmian pochodzących z funkcji (zapobieganie pętlom)
+const FUNCTION_TRIGGER_MARKER = "_triggeredByFunction";
+
 /**
  * Konwertuje Firestore Timestamp lub inne formaty daty na Date
  * @param {any} dateValue - Wartość daty
@@ -26,7 +29,22 @@ const toDate = (dateValue) => {
 };
 
 /**
+ * Dzieli tablicę na mniejsze chunki
+ * @param {Array} array - Tablica do podzielenia
+ * @param {number} size - Rozmiar chunka
+ * @return {Array} - Tablica chunków
+ */
+const chunkArray = (array, size) => {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+};
+
+/**
  * Pobiera sesje produkcyjne nachodzące na podany zakres dat
+ * ZOPTYMALIZOWANE: używa filtrowania po stronie Firestore
  * @param {Firestore} db - Instancja Firestore
  * @param {Date} rangeStart - Początek zakresu
  * @param {Date} rangeEnd - Koniec zakresu
@@ -34,7 +52,14 @@ const toDate = (dateValue) => {
  */
 const getOverlappingSessions = async (db, rangeStart, rangeEnd) => {
   const historyRef = db.collection("productionHistory");
-  const snapshot = await historyRef.orderBy("startTime", "asc").get();
+
+  // Używamy filtrowania po stronie Firestore zamiast pobierania całej kolekcji
+  // Sesja nachodzi na zakres jeśli: startTime <= rangeEnd
+  // (drugie sprawdzenie endTime >= rangeStart robimy w kodzie)
+  const snapshot = await historyRef
+      .where("startTime", "<=", admin.firestore.Timestamp.fromDate(rangeEnd))
+      .orderBy("startTime", "asc")
+      .get();
 
   const sessions = [];
   snapshot.forEach((doc) => {
@@ -44,13 +69,13 @@ const getOverlappingSessions = async (db, rangeStart, rangeEnd) => {
 
     if (!startTime || !endTime) return;
 
-    // Sesja nachodzi na zakres jeśli: startTime <= rangeEnd AND endTime >= rangeStart
-    if (startTime <= rangeEnd && endTime >= rangeStart) {
+    // Dodatkowe sprawdzenie: endTime >= rangeStart
+    if (endTime >= rangeStart) {
       sessions.push({
         id: doc.id,
         taskId: data.taskId,
-        startTime, // Już skonwertowane na Date
-        endTime, // Już skonwertowane na Date
+        startTime,
+        endTime,
       });
     }
   });
@@ -217,7 +242,7 @@ const updateAffectedFactoryCosts = async (db, sessionStart, sessionEnd) => {
         amount / effectiveTime.totalMinutes : 0;
       const costPerHour = costPerMinute * 60;
 
-      // Aktualizuj dokument
+      // Aktualizuj dokument z markerem zapobiegającym pętlom
       batch.update(costDoc.ref, {
         effectiveMinutes: effectiveTime.totalMinutes,
         effectiveHours: effectiveTime.totalHours,
@@ -229,6 +254,7 @@ const updateAffectedFactoryCosts = async (db, sessionStart, sessionEnd) => {
         costPerMinute: Math.round(costPerMinute * 100) / 100,
         costPerHour: Math.round(costPerHour * 100) / 100,
         lastCalculatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        [FUNCTION_TRIGGER_MARKER]: true,
       });
 
       updatedCount++;
@@ -463,6 +489,7 @@ const calculateProportionalTimePerTask = (sessions, rangeStart, rangeEnd, exclud
 /**
  * Aktualizuje koszty zakładu we wszystkich zadaniach produkcyjnych
  * dla danego kosztu zakładu
+ * ZOPTYMALIZOWANE: używa batch queries zamiast N+1
  * @param {Firestore} db - Instancja Firestore
  * @param {string} factoryCostId - ID kosztu zakładu
  * @param {Object} factoryCostData - Dane kosztu zakładu
@@ -498,26 +525,27 @@ const updateTasksWithFactoryCost = async (db, factoryCostId, factoryCostData) =>
     return {updated: 0};
   }
 
-  // Pobierz dane o ilości dla każdego zadania
+  // Pobierz i aktualizuj zadania batch'ami (max 10 w zapytaniu "in")
   const tasksRef = db.collection("productionTasks");
   let updatedCount = 0;
+  const updatedTaskIds = [];
 
-  // Pobierz i aktualizuj zadania batch'ami
-  const batchSize = 10;
-  for (let i = 0; i < taskIds.length; i += batchSize) {
-    const batchIds = taskIds.slice(i, i + batchSize);
+  const taskChunks = chunkArray(taskIds, 10);
+
+  for (const chunk of taskChunks) {
     const tasksSnapshot = await tasksRef
-        .where(admin.firestore.FieldPath.documentId(), "in", batchIds)
+        .where(admin.firestore.FieldPath.documentId(), "in", chunk)
         .get();
 
     const writeBatch = db.batch();
+    const taskDocs = tasksSnapshot.docs;
 
-    tasksSnapshot.forEach((taskDoc) => {
+    for (const taskDoc of taskDocs) {
       const taskData = taskDoc.data();
       const taskId = taskDoc.id;
       const timeData = taskTimeMap[taskId];
 
-      if (!timeData) return;
+      if (!timeData) continue;
 
       const factoryCostTotal = timeData.proportionalMinutes * costPerMinute;
       const quantity = parseFloat(taskData.quantity) || 1;
@@ -548,6 +576,7 @@ const updateTasksWithFactoryCost = async (db, factoryCostId, factoryCostData) =>
       });
 
       updatedCount++;
+      updatedTaskIds.push(taskId);
 
       logger.info(`Task ${taskData.moNumber || taskId} updated`, {
         factoryCostPerUnit: factoryCostPerUnit.toFixed(4),
@@ -555,52 +584,60 @@ const updateTasksWithFactoryCost = async (db, factoryCostId, factoryCostData) =>
         totalCostWithFactory: totalCostWithFactory.toFixed(2),
         unitCostWithFactory: unitCostWithFactory.toFixed(4),
       });
-    });
+    }
 
     await writeBatch.commit();
   }
 
-  // Wyczyść koszty dla wykluczonych zadań
-  for (const taskId of excludedTaskIds) {
-    try {
-      const taskRef = tasksRef.doc(taskId);
-      const taskDoc = await taskRef.get();
-      if (taskDoc.exists()) {
+  // Wyczyść koszty dla wykluczonych zadań - BATCH QUERY
+  if (excludedTaskIds.length > 0) {
+    const excludedChunks = chunkArray(excludedTaskIds, 10);
+
+    for (const chunk of excludedChunks) {
+      const excludedSnapshot = await tasksRef
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+          .get();
+
+      if (excludedSnapshot.empty) continue;
+
+      const clearBatch = db.batch();
+
+      excludedSnapshot.forEach((taskDoc) => {
         const taskData = taskDoc.data();
-        // Przywróć wartości bez kosztu zakładu
         const existingTotalFullProductionCost =
           parseFloat(taskData.totalFullProductionCost) || 0;
         const existingUnitFullProductionCost =
           parseFloat(taskData.unitFullProductionCost) || 0;
 
-        await taskRef.update({
+        clearBatch.update(taskDoc.ref, {
           factoryCostTotal: 0,
           factoryCostPerUnit: 0,
           factoryCostMinutes: 0,
           factoryCostId: null,
           factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          // Dla wykluczonych: *WithFactory = koszty produkcji bez zakładu
           totalCostWithFactory: existingTotalFullProductionCost,
           unitCostWithFactory: existingUnitFullProductionCost,
         });
-        logger.info(`Cleared factory cost for excluded task ${taskId}`);
-      }
-    } catch (error) {
-      logger.warn(`Failed to clear excluded task ${taskId}`, {error: error.message});
+
+        logger.info(`Cleared factory cost for excluded task ${taskDoc.id}`);
+      });
+
+      await clearBatch.commit();
     }
   }
 
   logger.info(`✅ Updated ${updatedCount} tasks with factory cost`);
 
   // Propaguj zmiany do powiązanych zamówień
-  await propagateToOrders(db, taskIds, excludedTaskIds);
+  await propagateToOrders(db, updatedTaskIds, excludedTaskIds);
 
   return {updated: updatedCount};
 };
 
 /**
  * Propaguje koszty z zakładem do powiązanych zamówień
+ * ZOPTYMALIZOWANE: używa batch queries, usunięta "Metoda 4" (skanowanie wszystkich zamówień)
  * @param {Firestore} db - Instancja Firestore
  * @param {Array} taskIds - Lista ID zadań do zaktualizowania
  * @param {Array} excludedTaskIds - Lista wykluczonych ID zadań
@@ -611,156 +648,164 @@ const propagateToOrders = async (db, taskIds, excludedTaskIds) => {
 
   logger.info(`Propagating costs to orders for ${allTaskIds.length} tasks`);
 
-  // Znajdź zamówienia powiązane z tymi zadaniami
+  const tasksRef = db.collection("productionTasks");
   const ordersRef = db.collection("orders");
 
-  for (const taskId of allTaskIds) {
-    try {
-      // Pobierz aktualne dane zadania
-      const taskDoc = await db.collection("productionTasks").doc(taskId).get();
-      if (!taskDoc.exists()) continue;
+  // Pobierz wszystkie zadania batch'ami
+  const taskChunks = chunkArray(allTaskIds, 10);
+  const taskDataMap = new Map();
 
-      const taskData = taskDoc.data();
-      const totalCostWithFactory = parseFloat(taskData.totalCostWithFactory) || 0;
-      const quantity = parseFloat(taskData.quantity) || 1;
+  for (const chunk of taskChunks) {
+    const tasksSnapshot = await tasksRef
+        .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+        .get();
 
-      // Znajdź zamówienia z tym zadaniem - metoda 1: przez productionTaskIds
-      let ordersSnapshot = await ordersRef
-          .where("productionTaskIds", "array-contains", taskId)
+    tasksSnapshot.forEach((doc) => {
+      taskDataMap.set(doc.id, doc.data());
+    });
+  }
+
+  // Zbierz unikalne orderId i orderNumber z zadań
+  const orderIds = new Set();
+  const orderNumbers = new Set();
+
+  taskDataMap.forEach((taskData) => {
+    if (taskData.orderId) orderIds.add(taskData.orderId);
+    if (taskData.orderNumber) orderNumbers.add(taskData.orderNumber);
+  });
+
+  // Pobierz zamówienia po ID (batch)
+  const ordersToUpdate = new Map();
+
+  if (orderIds.size > 0) {
+    const orderIdChunks = chunkArray(Array.from(orderIds), 10);
+    for (const chunk of orderIdChunks) {
+      const ordersSnapshot = await ordersRef
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
           .get();
 
-      logger.info(`Search method 1 (productionTaskIds): ${ordersSnapshot.empty ? "not found" : `found ${ordersSnapshot.docs.length}`}`);
+      ordersSnapshot.forEach((doc) => {
+        ordersToUpdate.set(doc.id, {ref: doc.ref, data: doc.data()});
+      });
+    }
+  }
 
-      // Metoda 2: szukaj przez orderId w zadaniu
-      if (ordersSnapshot.empty && taskData.orderId) {
-        const orderDoc = await ordersRef.doc(taskData.orderId).get();
-        if (orderDoc.exists) {
-          ordersSnapshot = {
-            empty: false,
-            docs: [orderDoc],
-          };
-          logger.info(`Search method 2 (task.orderId): found order ${taskData.orderId}`);
+  // Pobierz brakujące zamówienia po orderNumber (batch)
+  const missingOrderNumbers = Array.from(orderNumbers).filter((num) => {
+    // Sprawdź czy już mamy to zamówienie
+    for (const [, order] of ordersToUpdate) {
+      if (order.data.orderNumber === num) return false;
+    }
+    return true;
+  });
+
+  if (missingOrderNumbers.length > 0) {
+    const orderNumChunks = chunkArray(missingOrderNumbers, 10);
+    for (const chunk of orderNumChunks) {
+      const ordersSnapshot = await ordersRef
+          .where("orderNumber", "in", chunk)
+          .get();
+
+      ordersSnapshot.forEach((doc) => {
+        if (!ordersToUpdate.has(doc.id)) {
+          ordersToUpdate.set(doc.id, {ref: doc.ref, data: doc.data()});
         }
-      }
+      });
+    }
+  }
 
-      // Metoda 3: szukaj przez orderNumber w zadaniu
-      if (ordersSnapshot.empty && taskData.orderNumber) {
-        const orderByNumberSnapshot = await ordersRef
-            .where("orderNumber", "==", taskData.orderNumber)
-            .limit(1)
-            .get();
-        if (!orderByNumberSnapshot.empty) {
-          ordersSnapshot = orderByNumberSnapshot;
-          logger.info(`Search method 3 (orderNumber): found order ${taskData.orderNumber}`);
+  // Pobierz zamówienia przez productionTaskIds (batch)
+  for (const chunk of taskChunks) {
+    for (const taskId of chunk) {
+      const ordersSnapshot = await ordersRef
+          .where("productionTaskIds", "array-contains", taskId)
+          .limit(5) // Ograniczenie - zadanie nie powinno być w wielu zamówieniach
+          .get();
+
+      ordersSnapshot.forEach((doc) => {
+        if (!ordersToUpdate.has(doc.id)) {
+          ordersToUpdate.set(doc.id, {ref: doc.ref, data: doc.data()});
         }
-      }
+      });
+    }
+  }
 
-      // Metoda 4: przeszukaj wszystkie zamówienia i sprawdź items[].productionTaskId
-      if (ordersSnapshot.empty) {
-        logger.info(`Trying method 4: scanning all orders for task ${taskId}`);
-        const allOrdersSnapshot = await ordersRef.get();
-        const matchingOrders = [];
+  logger.info(`Found ${ordersToUpdate.size} orders to update`);
 
-        for (const orderDoc of allOrdersSnapshot.docs) {
-          const orderData = orderDoc.data();
-          const hasTask = (orderData.items || []).some(
-              (item) => item.productionTaskId === taskId,
-          );
-          if (hasTask) {
-            matchingOrders.push(orderDoc);
-            logger.info(`Search method 4: found order ${orderData.orderNumber} with task ${taskId}`);
-          }
+  // Aktualizuj zamówienia
+  for (const [, orderInfo] of ordersToUpdate) {
+    const orderData = orderInfo.data;
+    let orderUpdated = false;
+    const updatedItems = [...(orderData.items || [])];
+
+    for (let i = 0; i < updatedItems.length; i++) {
+      const item = updatedItems[i];
+      const taskId = item.productionTaskId;
+
+      if (!taskId || !taskDataMap.has(taskId)) continue;
+
+      const taskData = taskDataMap.get(taskId);
+      const totalCostWithFactory = parseFloat(taskData.totalCostWithFactory) || 0;
+      const quantity = parseFloat(taskData.quantity) || 1;
+      const fullProductionUnitCost = totalCostWithFactory / quantity;
+
+      updatedItems[i] = {
+        ...item,
+        productionCost: totalCostWithFactory,
+        fullProductionCost: totalCostWithFactory,
+        fullProductionUnitCost: Math.round(fullProductionUnitCost * 10000) / 10000,
+        factoryCostIncluded: true,
+      };
+      orderUpdated = true;
+
+      logger.info(`Updated order item in ${orderData.orderNumber}`, {
+        taskId,
+        totalCostWithFactory,
+        fullProductionUnitCost,
+      });
+    }
+
+    if (orderUpdated) {
+      // Przelicz totalValue zamówienia
+      const calculateItemTotalValue = (item) => {
+        const itemValue = (parseFloat(item.quantity) || 0) *
+          (parseFloat(item.price) || 0);
+        if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
+          return itemValue;
         }
-
-        if (matchingOrders.length > 0) {
-          ordersSnapshot = {
-            empty: false,
-            docs: matchingOrders,
-          };
+        if (item.productionTaskId && item.productionCost !== undefined) {
+          return itemValue + parseFloat(item.productionCost || 0);
         }
-      }
+        return itemValue;
+      };
 
-      if (ordersSnapshot.empty) {
-        logger.info(`No orders found for task ${taskId} (moNumber: ${taskData.moNumber})`);
-        continue;
-      }
+      const subtotal = updatedItems.reduce((sum, item) => {
+        return sum + calculateItemTotalValue(item);
+      }, 0);
 
-      for (const orderDoc of ordersSnapshot.docs) {
-        const orderData = orderDoc.data();
-        let orderUpdated = false;
-        const updatedItems = [...(orderData.items || [])];
+      const shippingCost = parseFloat(orderData.shippingCost) || 0;
+      const additionalCosts = orderData.additionalCostsItems ?
+        orderData.additionalCostsItems
+            .filter((cost) => parseFloat(cost.value) > 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) :
+        0;
+      const discounts = orderData.additionalCostsItems ?
+        Math.abs(orderData.additionalCostsItems
+            .filter((cost) => parseFloat(cost.value) < 0)
+            .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) :
+        0;
 
-        for (let i = 0; i < updatedItems.length; i++) {
-          if (updatedItems[i].productionTaskId === taskId) {
-            const item = updatedItems[i];
+      const newTotalValue = subtotal + shippingCost + additionalCosts - discounts;
 
-            // Oblicz koszt jednostkowy dla tej pozycji
-            const fullProductionUnitCost = totalCostWithFactory / quantity;
+      await orderInfo.ref.update({
+        items: updatedItems,
+        totalValue: Math.round(newTotalValue * 100) / 100,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
-            updatedItems[i] = {
-              ...item,
-              productionCost: totalCostWithFactory,
-              fullProductionCost: totalCostWithFactory,
-              fullProductionUnitCost: Math.round(fullProductionUnitCost * 10000) / 10000,
-              factoryCostIncluded: true,
-            };
-            orderUpdated = true;
-
-            logger.info(`Updated order item in ${orderData.orderNumber}`, {
-              taskId,
-              totalCostWithFactory,
-              fullProductionUnitCost,
-            });
-          }
-        }
-
-        if (orderUpdated) {
-          // Przelicz totalValue zamówienia
-          const calculateItemTotalValue = (item) => {
-            const itemValue = (parseFloat(item.quantity) || 0) *
-              (parseFloat(item.price) || 0);
-            if (item.fromPriceList && parseFloat(item.price || 0) > 0) {
-              return itemValue;
-            }
-            if (item.productionTaskId && item.productionCost !== undefined) {
-              return itemValue + parseFloat(item.productionCost || 0);
-            }
-            return itemValue;
-          };
-
-          const subtotal = updatedItems.reduce((sum, item) => {
-            return sum + calculateItemTotalValue(item);
-          }, 0);
-
-          const shippingCost = parseFloat(orderData.shippingCost) || 0;
-          const additionalCosts = orderData.additionalCostsItems ?
-            orderData.additionalCostsItems
-                .filter((cost) => parseFloat(cost.value) > 0)
-                .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0) :
-            0;
-          const discounts = orderData.additionalCostsItems ?
-            Math.abs(orderData.additionalCostsItems
-                .filter((cost) => parseFloat(cost.value) < 0)
-                .reduce((sum, cost) => sum + (parseFloat(cost.value) || 0), 0)) :
-            0;
-
-          const newTotalValue = subtotal + shippingCost + additionalCosts - discounts;
-
-          await orderDoc.ref.update({
-            items: updatedItems,
-            totalValue: Math.round(newTotalValue * 100) / 100,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          logger.info(`Updated order ${orderData.orderNumber} totalValue`, {
-            oldValue: orderData.totalValue,
-            newValue: newTotalValue,
-          });
-        }
-      }
-    } catch (error) {
-      logger.warn(`Failed to propagate to orders for task ${taskId}`, {
-        error: error.message,
+      logger.info(`Updated order ${orderData.orderNumber} totalValue`, {
+        oldValue: orderData.totalValue,
+        newValue: newTotalValue,
       });
     }
   }
@@ -814,6 +859,7 @@ const recalculateAllFactoryCosts = async (db) => {
       costPerMinute: Math.round(costPerMinute * 100) / 100,
       costPerHour: Math.round(costPerHour * 100) / 100,
       lastCalculatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      [FUNCTION_TRIGGER_MARKER]: true,
     });
 
     processedCosts.push({
@@ -866,6 +912,47 @@ const onFactoryCostChange = onDocumentWritten(
       const beforeData = event.data?.before?.data();
       const afterData = event.data?.after?.data();
 
+      // ZAPOBIEGANIE PĘTLOM: sprawdź czy zmiana pochodzi z funkcji
+      if (afterData?.[FUNCTION_TRIGGER_MARKER] && beforeData?.[FUNCTION_TRIGGER_MARKER]) {
+        // Obie wersje mają marker - sprawdź czy tylko marker/timestamp się zmienił
+        const beforeWithoutMeta = {...beforeData};
+        const afterWithoutMeta = {...afterData};
+
+        // Usuń pola meta do porównania
+        delete beforeWithoutMeta[FUNCTION_TRIGGER_MARKER];
+        delete afterWithoutMeta[FUNCTION_TRIGGER_MARKER];
+        delete beforeWithoutMeta.lastCalculatedAt;
+        delete afterWithoutMeta.lastCalculatedAt;
+        delete beforeWithoutMeta.effectiveMinutes;
+        delete afterWithoutMeta.effectiveMinutes;
+        delete beforeWithoutMeta.effectiveHours;
+        delete afterWithoutMeta.effectiveHours;
+        delete beforeWithoutMeta.costPerMinute;
+        delete afterWithoutMeta.costPerMinute;
+        delete beforeWithoutMeta.costPerHour;
+        delete afterWithoutMeta.costPerHour;
+        delete beforeWithoutMeta.sessionsCount;
+        delete afterWithoutMeta.sessionsCount;
+        delete beforeWithoutMeta.mergedPeriodsCount;
+        delete afterWithoutMeta.mergedPeriodsCount;
+        delete beforeWithoutMeta.duplicatesEliminated;
+        delete afterWithoutMeta.duplicatesEliminated;
+        delete beforeWithoutMeta.clippedPeriods;
+        delete afterWithoutMeta.clippedPeriods;
+        delete beforeWithoutMeta.excludedSessionsCount;
+        delete afterWithoutMeta.excludedSessionsCount;
+
+        const beforeJson = JSON.stringify(beforeWithoutMeta);
+        const afterJson = JSON.stringify(afterWithoutMeta);
+
+        if (beforeJson === afterJson) {
+          logger.info(`⏭️ Skipping factory cost change - triggered by function (no user data change)`, {
+            costId,
+          });
+          return null;
+        }
+      }
+
       // Określ typ zmiany
       const isCreate = !beforeData && afterData;
       const isDelete = beforeData && !afterData;
@@ -885,10 +972,13 @@ const onFactoryCostChange = onDocumentWritten(
         return null;
       }
 
-      const startDate = costData.startDate?.toDate ?
-        costData.startDate.toDate() : new Date(costData.startDate);
-      const endDate = costData.endDate?.toDate ?
-        costData.endDate.toDate() : new Date(costData.endDate);
+      const startDate = toDate(costData.startDate);
+      const endDate = toDate(costData.endDate);
+
+      if (!startDate || !endDate) {
+        logger.warn(`Invalid date range for cost ${costId}`);
+        return null;
+      }
 
       logger.info(`Processing factory cost change for period`, {
         costId,
@@ -898,13 +988,9 @@ const onFactoryCostChange = onDocumentWritten(
 
       try {
         // Znajdź wszystkie sesje produkcyjne w tym zakresie dat
-        const historyRef = db.collection("productionHistory");
-        const historySnapshot = await historyRef
-            .where("startTime", ">=", admin.firestore.Timestamp.fromDate(startDate))
-            .where("startTime", "<=", admin.firestore.Timestamp.fromDate(endDate))
-            .get();
+        const sessions = await getOverlappingSessions(db, startDate, endDate);
 
-        if (historySnapshot.empty) {
+        if (sessions.length === 0) {
           logger.info(`No production history in date range for cost ${costId}`);
 
           // Mimo braku historii, zaktualizuj sam koszt zakładu
@@ -916,10 +1002,9 @@ const onFactoryCostChange = onDocumentWritten(
 
         // Zbierz unikalne taskId z historii produkcji
         const taskIds = new Set();
-        historySnapshot.docs.forEach((doc) => {
-          const data = doc.data();
-          if (data.taskId) {
-            taskIds.add(data.taskId);
+        sessions.forEach((session) => {
+          if (session.taskId) {
+            taskIds.add(session.taskId);
           }
         });
 
@@ -957,10 +1042,8 @@ const onFactoryCostChange = onDocumentWritten(
  * @param {Object} costData - Dane kosztu zakładu (z bazy, już obliczone przez frontend)
  */
 const recalculateSingleFactoryCost = async (db, costId, costData) => {
-  const startDate = costData.startDate?.toDate ?
-    costData.startDate.toDate() : new Date(costData.startDate);
-  const endDate = costData.endDate?.toDate ?
-    costData.endDate.toDate() : new Date(costData.endDate);
+  const startDate = toDate(costData.startDate);
+  const endDate = toDate(costData.endDate);
   const excludedTaskIds = costData.excludedTaskIds || [];
 
   // Użyj costPerMinute zapisanego przez frontend (NIE przeliczaj od nowa!)
@@ -978,97 +1061,95 @@ const recalculateSingleFactoryCost = async (db, costId, costData) => {
     return;
   }
 
-  // Pobierz historię produkcji w zakresie dat
-  const historyRef = db.collection("productionHistory");
-  const historySnapshot = await historyRef
-      .where("startTime", ">=", admin.firestore.Timestamp.fromDate(startDate))
-      .where("startTime", "<=", admin.firestore.Timestamp.fromDate(endDate))
-      .get();
+  // Pobierz historię produkcji w zakresie dat (zoptymalizowane)
+  const sessions = await getOverlappingSessions(db, startDate, endDate);
 
-  if (historySnapshot.empty) {
+  if (sessions.length === 0) {
     logger.info(`No production history for cost ${costId}`);
     return;
   }
 
-  // Przetwórz sesje produkcji
-  const sessions = historySnapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      taskId: data.taskId,
-      startTime: data.startTime?.toDate ? data.startTime.toDate() : new Date(data.startTime),
-      endTime: data.endTime?.toDate ? data.endTime.toDate() : new Date(data.endTime),
-    };
-  }).filter((s) => !excludedTaskIds.includes(s.taskId));
+  // Filtruj wykluczone sesje
+  const filteredSessions = sessions.filter((s) => !excludedTaskIds.includes(s.taskId));
 
   // Oblicz proporcjonalny czas dla każdego zadania
-  const taskTimeMap = calculateProportionalTime(sessions, startDate, endDate);
+  const taskTimeMap = calculateProportionalTime(filteredSessions, startDate, endDate);
 
-  // Zaktualizuj zadania produkcyjne
+  // Zaktualizuj zadania produkcyjne - BATCH QUERIES
   const tasksRef = db.collection("productionTasks");
-  let writeBatch = db.batch();
-  let batchCount = 0;
+  const taskIds = Array.from(taskTimeMap.keys());
   let tasksUpdated = 0;
 
-  for (const [taskId, timeData] of taskTimeMap) {
-    const taskDoc = await tasksRef.doc(taskId).get();
-    if (!taskDoc.exists) continue;
+  const taskChunks = chunkArray(taskIds, 10);
 
-    const taskData = taskDoc.data();
-    const quantity = parseFloat(taskData.quantity) || 1;
-    const factoryCostTotal = timeData.proportionalMinutes * costPerMinute;
-    const factoryCostPerUnit = factoryCostTotal / quantity;
+  for (const chunk of taskChunks) {
+    const tasksSnapshot = await tasksRef
+        .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+        .get();
 
-    const existingTotalFullProductionCost =
-      parseFloat(taskData.totalFullProductionCost) || 0;
-    const existingUnitFullProductionCost =
-      parseFloat(taskData.unitFullProductionCost) || 0;
+    let writeBatch = db.batch();
+    let batchCount = 0;
 
-    const totalCostWithFactory = existingTotalFullProductionCost + factoryCostTotal;
-    const unitCostWithFactory = existingUnitFullProductionCost + factoryCostPerUnit;
+    for (const taskDoc of tasksSnapshot.docs) {
+      const taskData = taskDoc.data();
+      const taskId = taskDoc.id;
+      const timeData = taskTimeMap.get(taskId);
 
-    logger.info(`Updating task ${taskData.moNumber || taskId}`, {
-      factoryCostTotal,
-      factoryCostPerUnit,
-      existingTotalFullProductionCost,
-      existingUnitFullProductionCost,
-      totalCostWithFactory,
-      unitCostWithFactory,
-    });
+      if (!timeData) continue;
 
-    writeBatch.update(taskDoc.ref, {
-      factoryCostTotal: Math.round(factoryCostTotal * 100) / 100,
-      factoryCostPerUnit: Math.round(factoryCostPerUnit * 10000) / 10000,
-      factoryCostMinutes: timeData.proportionalMinutes,
-      factoryCostId: costId,
-      factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      totalCostWithFactory: Math.round(totalCostWithFactory * 100) / 100,
-      unitCostWithFactory: Math.round(unitCostWithFactory * 10000) / 10000,
-    });
+      const quantity = parseFloat(taskData.quantity) || 1;
+      const factoryCostTotal = timeData.proportionalMinutes * costPerMinute;
+      const factoryCostPerUnit = factoryCostTotal / quantity;
 
-    batchCount++;
-    tasksUpdated++;
-    if (batchCount >= 400) {
-      await writeBatch.commit();
-      writeBatch = db.batch(); // Utwórz nowy batch po commicie!
-      batchCount = 0;
+      const existingTotalFullProductionCost =
+        parseFloat(taskData.totalFullProductionCost) || 0;
+      const existingUnitFullProductionCost =
+        parseFloat(taskData.unitFullProductionCost) || 0;
+
+      const totalCostWithFactory = existingTotalFullProductionCost + factoryCostTotal;
+      const unitCostWithFactory = existingUnitFullProductionCost + factoryCostPerUnit;
+
+      logger.info(`Updating task ${taskData.moNumber || taskId}`, {
+        factoryCostTotal,
+        factoryCostPerUnit,
+        totalCostWithFactory,
+        unitCostWithFactory,
+      });
+
+      writeBatch.update(taskDoc.ref, {
+        factoryCostTotal: Math.round(factoryCostTotal * 100) / 100,
+        factoryCostPerUnit: Math.round(factoryCostPerUnit * 10000) / 10000,
+        factoryCostMinutes: timeData.proportionalMinutes,
+        factoryCostId: costId,
+        factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalCostWithFactory: Math.round(totalCostWithFactory * 100) / 100,
+        unitCostWithFactory: Math.round(unitCostWithFactory * 10000) / 10000,
+      });
+
+      batchCount++;
+      tasksUpdated++;
+
+      if (batchCount >= 400) {
+        await writeBatch.commit();
+        writeBatch = db.batch();
+        batchCount = 0;
+      }
     }
-  }
 
-  if (batchCount > 0) {
-    await writeBatch.commit();
+    if (batchCount > 0) {
+      await writeBatch.commit();
+    }
   }
 
   logger.info(`Updated ${tasksUpdated} tasks with factory costs`);
 
   // Propaguj do zamówień
-  const taskIds = Array.from(taskTimeMap.keys());
   await propagateToOrders(db, taskIds, excludedTaskIds);
 
   logger.info(`✅ Propagated factory cost ${costId}`, {
     costPerMinute,
-    tasksUpdated: taskTimeMap.size,
+    tasksUpdated,
   });
 };
 
@@ -1129,55 +1210,67 @@ const calculateProportionalTime = (sessions, startDate, endDate) => {
 
 /**
  * Wyzeruj koszty zakładu dla zadań przy usunięciu kosztu
+ * ZOPTYMALIZOWANE: używa batch queries
  * @param {Firestore} db - Instancja Firestore
  * @param {string} costId - ID usuniętego kosztu
  * @param {Set} taskIds - Zestaw ID zadań do aktualizacji
  */
 const clearFactoryCostFromTasks = async (db, costId, taskIds) => {
   const tasksRef = db.collection("productionTasks");
-  const writeBatch = db.batch();
-  let batchCount = 0;
+  const taskIdArray = Array.from(taskIds);
+  const taskChunks = chunkArray(taskIdArray, 10);
+  const clearedTaskIds = [];
 
-  for (const taskId of taskIds) {
-    const taskDoc = await tasksRef.doc(taskId).get();
-    if (!taskDoc.exists) continue;
+  for (const chunk of taskChunks) {
+    const tasksSnapshot = await tasksRef
+        .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+        .get();
 
-    const taskData = taskDoc.data();
+    const writeBatch = db.batch();
+    let batchCount = 0;
 
-    // Sprawdź czy to zadanie miało ten koszt zakładu
-    if (taskData.factoryCostId !== costId) continue;
+    for (const taskDoc of tasksSnapshot.docs) {
+      const taskData = taskDoc.data();
 
-    const existingTotalFullProductionCost =
-      parseFloat(taskData.totalFullProductionCost) || 0;
-    const existingUnitFullProductionCost =
-      parseFloat(taskData.unitFullProductionCost) || 0;
+      // Sprawdź czy to zadanie miało ten koszt zakładu
+      if (taskData.factoryCostId !== costId) continue;
 
-    writeBatch.update(taskDoc.ref, {
-      factoryCostTotal: 0,
-      factoryCostPerUnit: 0,
-      factoryCostMinutes: 0,
-      factoryCostId: null,
-      factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      totalCostWithFactory: existingTotalFullProductionCost,
-      unitCostWithFactory: existingUnitFullProductionCost,
-    });
+      const existingTotalFullProductionCost =
+        parseFloat(taskData.totalFullProductionCost) || 0;
+      const existingUnitFullProductionCost =
+        parseFloat(taskData.unitFullProductionCost) || 0;
 
-    batchCount++;
-    if (batchCount >= 400) {
+      writeBatch.update(taskDoc.ref, {
+        factoryCostTotal: 0,
+        factoryCostPerUnit: 0,
+        factoryCostMinutes: 0,
+        factoryCostId: null,
+        factoryCostUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalCostWithFactory: existingTotalFullProductionCost,
+        unitCostWithFactory: existingUnitFullProductionCost,
+      });
+
+      batchCount++;
+      clearedTaskIds.push(taskDoc.id);
+
+      if (batchCount >= 400) {
+        await writeBatch.commit();
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
       await writeBatch.commit();
-      batchCount = 0;
     }
   }
 
-  if (batchCount > 0) {
-    await writeBatch.commit();
+  // Propaguj zerowe koszty do zamówień
+  if (clearedTaskIds.length > 0) {
+    await propagateToOrders(db, clearedTaskIds, []);
   }
 
-  // Propaguj zerowe koszty do zamówień
-  await propagateToOrders(db, Array.from(taskIds), []);
-
-  logger.info(`✅ Cleared factory cost ${costId} from ${taskIds.size} tasks`);
+  logger.info(`✅ Cleared factory cost ${costId} from ${clearedTaskIds.length} tasks`);
 };
 
 module.exports = {

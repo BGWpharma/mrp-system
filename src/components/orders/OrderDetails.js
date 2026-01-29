@@ -73,7 +73,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { useAuth } from '../../contexts/AuthContext';
 import { getAllPurchaseOrders } from '../../services/purchaseOrderService';
 import { db } from '../../services/firebase/config';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { getUsersDisplayNames } from '../../services/userService';
 import { calculateFullProductionUnitCost, calculateProductionUnitCost } from '../../utils/costCalculator';
 import { getInvoicesByOrderId, getInvoicedAmountsByOrderItems, getProformaAmountsByOrderItems, migrateInvoiceItemsOrderIds, getAvailableProformasForOrder } from '../../services/invoiceService';
@@ -614,6 +614,48 @@ const OrderDetails = () => {
       fetchOrderDetails();
     }
   }, [orderId, showError, navigate, location.pathname]);
+
+  // 📡 Real-time listener dla aktualizacji zamówienia (np. z Cloud Functions)
+  useEffect(() => {
+    if (!orderId || !order) return;
+    
+    // Listener na dokument zamówienia - aktualizuje tylko gdy zmienią się dane
+    const orderRef = doc(db, 'orders', orderId);
+    let lastUpdateTimestamp = order.updatedAt?.toMillis?.() || order.updatedAt?.seconds * 1000 || 0;
+    
+    const unsubscribe = onSnapshot(
+      orderRef,
+      { includeMetadataChanges: false },
+      (docSnapshot) => {
+        if (!docSnapshot.exists()) return;
+        
+        const newData = docSnapshot.data();
+        const newTimestamp = newData.updatedAt?.toMillis?.() || newData.updatedAt?.seconds * 1000 || 0;
+        
+        // Aktualizuj tylko jeśli dane są nowsze
+        if (newTimestamp > lastUpdateTimestamp) {
+          console.log('📡 [REAL-TIME] Otrzymano aktualizację zamówienia:', {
+            orderNumber: newData.orderNumber,
+            timestamp: new Date(newTimestamp).toISOString()
+          });
+          
+          lastUpdateTimestamp = newTimestamp;
+          
+          // Aktualizuj stan zamówienia zachowując strukturę
+          setOrder(prev => ({
+            ...prev,
+            ...newData,
+            id: docSnapshot.id
+          }));
+        }
+      },
+      (error) => {
+        console.error('❌ [REAL-TIME] Błąd listenera zamówienia:', error);
+      }
+    );
+    
+    return () => unsubscribe();
+  }, [orderId, order?.id]); // Uruchom po pierwszym załadowaniu order
 
   // Automatyczne odświeżanie danych co 30 sekund - WYŁĄCZONE aby uniknąć niepotrzebnych zapytań do bazy
   /*

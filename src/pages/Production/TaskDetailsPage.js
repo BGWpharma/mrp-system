@@ -866,8 +866,10 @@ const TaskDetailsPage = () => {
           const updateTimestamp = taskData.updatedAt?.toMillis?.() || Date.now();
           
           // Smart update - porównaj timestamp aby uniknąć duplikacji aktualizacji
-          if (lastUpdateTimestamp && updateTimestamp <= lastUpdateTimestamp) {
-            console.log('📡 [REAL-TIME] Pominięto starszy/duplikat snapshot');
+          // Używamy < zamiast <= aby nie blokować aktualizacji gdy timestamp jest równy
+          // (może się zdarzyć przy szybkich aktualizacjach z Cloud Functions)
+          if (lastUpdateTimestamp && updateTimestamp < lastUpdateTimestamp) {
+            console.log('📡 [REAL-TIME] Pominięto starszy snapshot');
             return;
           }
           
@@ -1167,7 +1169,16 @@ const TaskDetailsPage = () => {
         taskData.actualEndDate?.toMillis?.() !== previousTask.actualEndDate?.toMillis?.() ||
         // 💬 Wykrywanie zmian w komentarzach
         taskData.comments?.length !== previousTask.comments?.length ||
-        JSON.stringify(taskData.comments) !== JSON.stringify(previousTask.comments);
+        JSON.stringify(taskData.comments) !== JSON.stringify(previousTask.comments) ||
+        // 💰 Wykrywanie zmian w kosztach (materiały + zakład) - aktualizowane przez Cloud Functions
+        taskData.totalMaterialCost !== previousTask.totalMaterialCost ||
+        taskData.unitMaterialCost !== previousTask.unitMaterialCost ||
+        taskData.totalFullProductionCost !== previousTask.totalFullProductionCost ||
+        taskData.unitFullProductionCost !== previousTask.unitFullProductionCost ||
+        taskData.factoryCostTotal !== previousTask.factoryCostTotal ||
+        taskData.factoryCostPerUnit !== previousTask.factoryCostPerUnit ||
+        taskData.totalCostWithFactory !== previousTask.totalCostWithFactory ||
+        taskData.unitCostWithFactory !== previousTask.unitCostWithFactory;
       
       // Tylko aktualizuj task jeśli rzeczywiście się zmienił (po wzbogaceniu danych)
       if (hasActualChanges) {
@@ -2015,14 +2026,24 @@ const TaskDetailsPage = () => {
     totalMaterialCost: task?.totalMaterialCost || 0,
     unitMaterialCost: task?.unitMaterialCost || 0,
     totalFullProductionCost: task?.totalFullProductionCost || 0,
-    unitFullProductionCost: task?.unitFullProductionCost || 0
+    unitFullProductionCost: task?.unitFullProductionCost || 0,
+    // Koszty zakładu (aktualizowane przez Cloud Functions)
+    factoryCostTotal: task?.factoryCostTotal || 0,
+    factoryCostPerUnit: task?.factoryCostPerUnit || 0,
+    totalCostWithFactory: task?.totalCostWithFactory || 0,
+    unitCostWithFactory: task?.unitCostWithFactory || 0
   }), [
     task?.consumedMaterials?.length,
     task?.materialBatches,
     task?.totalMaterialCost,
     task?.unitMaterialCost,
     task?.totalFullProductionCost,
-    task?.unitFullProductionCost
+    task?.unitFullProductionCost,
+    // Koszty zakładu
+    task?.factoryCostTotal,
+    task?.factoryCostPerUnit,
+    task?.totalCostWithFactory,
+    task?.unitCostWithFactory
   ]);
   
   // Zunifikowana automatyczna aktualizacja kosztów z kontrolą pętli i szczegółowymi logami diagnostycznymi
