@@ -9,12 +9,26 @@ import {
   Tooltip,
   Collapse,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Divider
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import EditIcon from '@mui/icons-material/Edit';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import {
   DndContext,
   DragOverlay,
@@ -33,9 +47,175 @@ import {
 } from '@dnd-kit/sortable';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import TaskCard from './TaskCard';
-import { createTask, moveTask, updateTask } from '../../services/taskboardService';
+import { createTask, moveTask, updateTask, updateColumn } from '../../services/taskboardService';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+
+// Komponent nagłówka kolumny z menu edycji
+const ColumnHeader = React.memo(({ 
+  column, 
+  taskCount, 
+  onDelete, 
+  onRename, 
+  onMoveLeft, 
+  onMoveRight,
+  canMoveLeft,
+  canMoveRight,
+  t 
+}) => {
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState(column.title);
+
+  const handleMenuOpen = (event) => {
+    event.stopPropagation();
+    setMenuAnchor(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+  };
+
+  const handleOpenRenameDialog = () => {
+    setNewTitle(column.title);
+    setEditDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleRename = () => {
+    if (newTitle.trim() && newTitle.trim() !== column.title) {
+      onRename(column.id, newTitle.trim());
+    }
+    setEditDialogOpen(false);
+  };
+
+  const handleMoveLeft = () => {
+    onMoveLeft(column.id);
+    handleMenuClose();
+  };
+
+  const handleMoveRight = () => {
+    onMoveRight(column.id);
+    handleMenuClose();
+  };
+
+  const handleDelete = () => {
+    onDelete(column.id);
+    handleMenuClose();
+  };
+
+  return (
+    <>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+        <Typography variant="h6" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }} noWrap>
+          {column.title}
+        </Typography>
+        <Box display="flex" alignItems="center" gap={0.5}>
+          <Typography variant="caption" color="text.secondary" mr={0.5}>
+            {taskCount}
+          </Typography>
+          <Tooltip title={t('columnOptions')}>
+            <IconButton
+              size="small"
+              onClick={handleMenuOpen}
+              sx={{ p: 0.5 }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Box>
+
+      {/* Menu opcji kolumny */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem onClick={handleOpenRenameDialog}>
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('renameColumn')}</ListItemText>
+        </MenuItem>
+        
+        <Divider />
+        
+        <MenuItem onClick={handleMoveLeft} disabled={!canMoveLeft}>
+          <ListItemIcon>
+            <ArrowBackIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('moveLeft')}</ListItemText>
+        </MenuItem>
+        
+        <MenuItem onClick={handleMoveRight} disabled={!canMoveRight}>
+          <ListItemIcon>
+            <ArrowForwardIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('moveRight')}</ListItemText>
+        </MenuItem>
+        
+        <Divider />
+        
+        <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+          <ListItemIcon>
+            <DeleteIcon fontSize="small" color="error" />
+          </ListItemIcon>
+          <ListItemText>{t('deleteColumn')}</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      {/* Dialog zmiany nazwy */}
+      <Dialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#1a1a2e',
+            backgroundImage: 'none',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.12)', pb: 2 }}>
+          {t('renameColumn')}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            label={t('columnName')}
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && newTitle.trim()) {
+                handleRename();
+              }
+            }}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ borderTop: '1px solid rgba(255, 255, 255, 0.12)', px: 2.5, py: 2 }}>
+          <Button onClick={() => setEditDialogOpen(false)}>{t('cancel')}</Button>
+          <Button
+            onClick={handleRename}
+            variant="contained"
+            disabled={!newTitle.trim()}
+          >
+            {t('save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+});
+
+ColumnHeader.displayName = 'ColumnHeader';
 
 // Wyodrębniony komponent AddTaskInput z własnym stanem lokalnym
 // Zapobiega re-renderom całej kolumny przy wpisywaniu tekstu
@@ -351,6 +531,53 @@ const ColumnList = ({
     }));
   }, []);
 
+  // Zmień nazwę kolumny
+  const handleRenameColumn = useCallback(async (columnId, newTitle) => {
+    try {
+      await updateColumn(columnId, { title: newTitle });
+    } catch (error) {
+      console.error('Błąd podczas zmiany nazwy kolumny:', error);
+    }
+  }, []);
+
+  // Przesuń kolumnę w lewo
+  const handleMoveColumnLeft = useCallback(async (columnId) => {
+    const columnIndex = columns.findIndex(c => c.id === columnId);
+    if (columnIndex <= 0) return;
+
+    try {
+      const currentColumn = columns[columnIndex];
+      const leftColumn = columns[columnIndex - 1];
+      
+      // Zamień pozycje
+      await Promise.all([
+        updateColumn(currentColumn.id, { position: leftColumn.position }),
+        updateColumn(leftColumn.id, { position: currentColumn.position })
+      ]);
+    } catch (error) {
+      console.error('Błąd podczas przesuwania kolumny:', error);
+    }
+  }, [columns]);
+
+  // Przesuń kolumnę w prawo
+  const handleMoveColumnRight = useCallback(async (columnId) => {
+    const columnIndex = columns.findIndex(c => c.id === columnId);
+    if (columnIndex >= columns.length - 1) return;
+
+    try {
+      const currentColumn = columns[columnIndex];
+      const rightColumn = columns[columnIndex + 1];
+      
+      // Zamień pozycje
+      await Promise.all([
+        updateColumn(currentColumn.id, { position: rightColumn.position }),
+        updateColumn(rightColumn.id, { position: currentColumn.position })
+      ]);
+    } catch (error) {
+      console.error('Błąd podczas przesuwania kolumny:', error);
+    }
+  }, [columns]);
+
   return (
     <DndContext
       sensors={sensors}
@@ -416,26 +643,18 @@ const ColumnList = ({
                   overflow: 'hidden'
                 }}
               >
-                {/* Nagłówek kolumny */}
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                  <Typography variant="h6" fontWeight="bold">
-                    {column.title}
-                  </Typography>
-                  <Box display="flex" alignItems="center" gap={0.5}>
-                    <Typography variant="caption" color="text.secondary" mr={1}>
-                      {activeTasks.length}
-                    </Typography>
-                    <Tooltip title={t('deleteColumn')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => onDeleteColumn(column.id)}
-                        sx={{ p: 0.5 }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
+                {/* Nagłówek kolumny z menu */}
+                <ColumnHeader
+                  column={column}
+                  taskCount={activeTasks.length}
+                  onDelete={onDeleteColumn}
+                  onRename={handleRenameColumn}
+                  onMoveLeft={handleMoveColumnLeft}
+                  onMoveRight={handleMoveColumnRight}
+                  canMoveLeft={columns.findIndex(c => c.id === column.id) > 0}
+                  canMoveRight={columns.findIndex(c => c.id === column.id) < columns.length - 1}
+                  t={t}
+                />
 
                 {/* Lista zadań - teraz jako droppable */}
                 <DroppableColumn column={column}>

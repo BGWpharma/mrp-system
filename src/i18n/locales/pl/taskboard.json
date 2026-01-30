@@ -111,5 +111,9 @@
   "searchDocument": "Szukaj po numerze...",
   "noResults": "Brak wyników",
   "preview": "Podgląd",
-  "descriptionPlaceholder": "Dodaj opis zadania... Użyj @ aby dodać odnośnik do MO, CO, PO lub Partii"
+  "descriptionPlaceholder": "Dodaj opis zadania... Użyj @ aby dodać odnośnik do MO, CO, PO lub Partii",
+  "columnOptions": "Opcje kolumny",
+  "renameColumn": "Zmień nazwę",
+  "moveLeft": "Przesuń w lewo",
+  "moveRight": "Przesuń w prawo"
 }

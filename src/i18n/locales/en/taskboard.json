@@ -111,5 +111,9 @@
   "searchDocument": "Search by number...",
   "noResults": "No results",
   "preview": "Preview",
-  "descriptionPlaceholder": "Add task description... Use @ to add reference to MO, CO, PO or Batch"
+  "descriptionPlaceholder": "Add task description... Use @ to add reference to MO, CO, PO or Batch",
+  "columnOptions": "Column options",
+  "renameColumn": "Rename",
+  "moveLeft": "Move left",
+  "moveRight": "Move right"
 }
