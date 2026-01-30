@@ -158,7 +158,8 @@ import {
   Assignment as FormIcon,
   Refresh as RefreshIcon,
   Calculate as CalculateIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  BugReport as BugReportIcon
 } from '@mui/icons-material';
 import { getTaskById, updateTaskStatus, deleteTask, updateActualMaterialUsage, confirmMaterialConsumption, addTaskProductToInventory, startProduction, stopProduction, getProductionHistory, reserveMaterialsForTask, generateMaterialsAndLotsReport, updateProductionSession, addProductionSession, deleteProductionSession, addTaskComment, deleteTaskComment, markTaskCommentsAsRead } from '../../services/productionService';
 import { getProductionDataForHistory, getAvailableMachines } from '../../services/machineDataService';
@@ -505,6 +506,11 @@ const TaskDetailsPage = () => {
   const [completedMODialogOpen, setCompletedMODialogOpen] = useState(false);
   const [productionShiftDialogOpen, setProductionShiftDialogOpen] = useState(false);
   const [formTab, setFormTab] = useState(0);
+
+  // 🔍 DEBUG: Stan dla dialogu debugowania spójności partii
+  const [debugBatchDialogOpen, setDebugBatchDialogOpen] = useState(false);
+  const [debugResults, setDebugResults] = useState([]);
+  const [debugLoading, setDebugLoading] = useState(false);
 
   // ✅ REFAKTORYZACJA: startProductionDialog przeniesiony do useTaskDialogs
   // Stan startProductionDialogOpen zastąpiony przez: dialogs.startProduction
@@ -5905,12 +5911,20 @@ const TaskDetailsPage = () => {
       unitFullProductionCost
     } = costsSummary;
     
-    // Sprawdź czy koszty uległy zmianie
-    const costChanged = 
-      Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.01 ||
-      Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.01 ||
-      Math.abs((task.totalFullProductionCost || 0) - totalFullProductionCost) > 0.01 ||
-      Math.abs((task.unitFullProductionCost || 0) - unitFullProductionCost) > 0.01;
+    // Pobierz koszty z bazy danych
+    const dbTotalMaterialCost = task.totalMaterialCost || 0;
+    const dbUnitMaterialCost = task.unitMaterialCost || 0;
+    const dbTotalFullProductionCost = task.totalFullProductionCost || 0;
+    const dbUnitFullProductionCost = task.unitFullProductionCost || 0;
+    
+    // Sprawdź czy poszczególne koszty uległy zmianie
+    const totalMaterialCostChanged = Math.abs(dbTotalMaterialCost - totalMaterialCost) > 0.01;
+    const unitMaterialCostChanged = Math.abs(dbUnitMaterialCost - unitMaterialCost) > 0.0001;
+    const totalFullProductionCostChanged = Math.abs(dbTotalFullProductionCost - totalFullProductionCost) > 0.01;
+    const unitFullProductionCostChanged = Math.abs(dbUnitFullProductionCost - unitFullProductionCost) > 0.0001;
+    
+    const costChanged = totalMaterialCostChanged || unitMaterialCostChanged || 
+                        totalFullProductionCostChanged || unitFullProductionCostChanged;
     
     return (
       <Box sx={{ ...mt2, ...p2, bgcolor: 'background.default', borderRadius: 1 }}>
@@ -5936,17 +5950,31 @@ const TaskDetailsPage = () => {
                 <Typography variant="body2" color="text.secondary">
                   {t('materialsSummary.totalCost')}:
                 </Typography>
-                <Typography variant="body1">
-                  {totalMaterialCost.toFixed(2)} €
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Typography variant="body1">
+                    {totalMaterialCost.toFixed(2)} €
+                  </Typography>
+                  {totalMaterialCostChanged && (
+                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                      (w bazie: {dbTotalMaterialCost.toFixed(2)} €)
+                    </Typography>
+                  )}
+                </Box>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <Typography variant="body2" color="text.secondary">
                   {t('materialsSummary.unitCost')}:
                 </Typography>
-                <Typography variant="body1">
-                  ~{unitMaterialCost.toFixed(4)} €/{task.unit}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Typography variant="body1">
+                    ~{unitMaterialCost.toFixed(4)} €/{task.unit}
+                  </Typography>
+                  {unitMaterialCostChanged && (
+                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                      (w bazie: ~{dbUnitMaterialCost.toFixed(4)} €/{task.unit})
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </Box>
 
@@ -5956,17 +5984,31 @@ const TaskDetailsPage = () => {
                 <Typography variant="body2" sx={{ color: 'primary.main' }}>
                   {t('taskDetails:materialsSummary.totalFullProductionCost')}:
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'primary.main' }}>
-                  {totalFullProductionCost.toFixed(2)} €
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Typography variant="body1" sx={{ color: 'primary.main' }}>
+                    {totalFullProductionCost.toFixed(2)} €
+                  </Typography>
+                  {totalFullProductionCostChanged && (
+                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                      (w bazie: {dbTotalFullProductionCost.toFixed(2)} €)
+                    </Typography>
+                  )}
+                </Box>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <Typography variant="body2" sx={{ color: 'primary.main' }}>
                   {t('taskDetails:materialsSummary.unitFullProductionCost')}:
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'primary.main' }}>
-                  ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <Typography variant="body1" sx={{ color: 'primary.main' }}>
+                    ~{unitFullProductionCost.toFixed(4)} €/{task.unit}
+                  </Typography>
+                  {unitFullProductionCostChanged && (
+                    <Typography variant="caption" sx={{ color: 'warning.main', fontStyle: 'italic' }}>
+                      (w bazie: ~{dbUnitFullProductionCost.toFixed(4)} €/{task.unit})
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </Box>
 
@@ -6550,6 +6592,434 @@ const TaskDetailsPage = () => {
     return isValid;
   };
 
+  // 🔍 DEBUG: Funkcja sprawdzająca spójność partii w zadaniu
+  const debugBatchConsistency = async () => {
+    setDebugLoading(true);
+    setDebugResults([]);
+    const results = [];
+    
+    console.log('🔬 [DEBUG] Rozpoczynam sprawdzanie spójności partii w zadaniu...');
+    console.log('🔬 [DEBUG] Task ID:', task?.id, 'MO:', task?.moNumber);
+    
+    try {
+      // 1. Sprawdź zarezerwowane partie (materialBatches)
+      if (task.materialBatches && Object.keys(task.materialBatches).length > 0) {
+        results.push({ type: 'header', text: '📦 ZAREZERWOWANE PARTIE (materialBatches)' });
+        
+        for (const [materialId, batches] of Object.entries(task.materialBatches)) {
+          const materialName = materials.find(m => (m.inventoryItemId || m.id) === materialId)?.name || materialId;
+          results.push({ type: 'material', text: `Materiał: ${materialName} (${materialId})` });
+          
+          for (const batch of batches) {
+            const batchRef = doc(db, 'inventoryBatches', batch.batchId);
+            const batchDoc = await getDoc(batchRef);
+            
+            if (batchDoc.exists()) {
+              const dbData = batchDoc.data();
+              results.push({
+                type: 'success',
+                text: `✅ Partia ${batch.batchId} istnieje`,
+                details: {
+                  'W zadaniu': { batchId: batch.batchId, lotNumber: batch.batchNumber, quantity: batch.quantity },
+                  'W bazie': { lotNumber: dbData.lotNumber, quantity: dbData.quantity, warehouseId: dbData.warehouseId }
+                }
+              });
+              console.log(`   ✅ Partia ${batch.batchId} istnieje:`, {
+                'W zadaniu': { batchId: batch.batchId, lotNumber: batch.batchNumber, quantity: batch.quantity },
+                'W bazie': { lotNumber: dbData.lotNumber, quantity: dbData.quantity, warehouseId: dbData.warehouseId }
+              });
+            } else {
+              // 🚨 Partia nie istnieje - szukaj po LOT
+              results.push({
+                type: 'error',
+                text: `❌ PARTIA ${batch.batchId} NIE ISTNIEJE!`,
+                details: { 'W zadaniu': { batchId: batch.batchId, lotNumber: batch.batchNumber, quantity: batch.quantity } }
+              });
+              console.error(`   ❌ PARTIA ${batch.batchId} NIE ISTNIEJE W BAZIE!`);
+              
+              // Sprawdź czy istnieje partia z tym samym LOT
+              if (batch.batchNumber) {
+                const lotQuery = query(
+                  collection(db, 'inventoryBatches'),
+                  where('lotNumber', '==', batch.batchNumber)
+                );
+                const lotsSnapshot = await getDocs(lotQuery);
+                
+                if (!lotsSnapshot.empty) {
+                  results.push({ type: 'warning', text: `🔄 Znaleziono partię z tym samym LOT (${batch.batchNumber}) pod innym ID:` });
+                  lotsSnapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    results.push({
+                      type: 'info',
+                      text: `   → ID: ${docSnap.id}`,
+                      details: { warehouseId: data.warehouseId, quantity: data.quantity, itemName: data.itemName }
+                    });
+                    console.warn(`      - ID: ${docSnap.id}, warehouseId: ${data.warehouseId}, quantity: ${data.quantity}`);
+                  });
+                }
+              }
+            }
+          }
+        }
+      } else {
+        results.push({ type: 'info', text: '⚠️ Brak zarezerwowanych partii (materialBatches) w zadaniu' });
+      }
+      
+      // 2. Sprawdź skonsumowane partie (consumedMaterials)
+      if (task.consumedMaterials && task.consumedMaterials.length > 0) {
+        results.push({ type: 'header', text: '🔥 SKONSUMOWANE PARTIE (consumedMaterials)' });
+        
+        for (const consumed of task.consumedMaterials) {
+          const batchRef = doc(db, 'inventoryBatches', consumed.batchId);
+          const batchDoc = await getDoc(batchRef);
+          
+          if (batchDoc.exists()) {
+            const dbData = batchDoc.data();
+            results.push({
+              type: 'success',
+              text: `✅ Skonsumowana partia ${consumed.batchId} istnieje`,
+              details: {
+                'Skonsumowano': { batchId: consumed.batchId, lotNumber: consumed.batchNumber, quantity: consumed.quantity },
+                'Aktualnie w bazie': { lotNumber: dbData.lotNumber, quantity: dbData.quantity }
+              }
+            });
+          } else {
+            // Partia nie istnieje - sprawdź czy została przeniesiona (TRANSFER)
+            let transferInfo = null;
+            try {
+              // Szukaj transakcji TRANSFER dla tej partii
+              const transferQuery = query(
+                collection(db, 'inventoryTransactions'),
+                where('type', '==', 'TRANSFER'),
+                where('sourceBatchId', '==', consumed.batchId),
+                orderBy('createdAt', 'desc'),
+                limit(1)
+              );
+              const transferSnapshot = await getDocs(transferQuery);
+              
+              if (!transferSnapshot.empty) {
+                const transferData = transferSnapshot.docs[0].data();
+                const transferDate = transferData.createdAt?.toDate?.();
+                transferInfo = {
+                  newBatchId: transferData.targetBatchId,
+                  targetWarehouse: transferData.targetWarehouseName,
+                  transferDate: transferDate ? transferDate.toLocaleString('pl-PL') : 'nieznana'
+                };
+              } else {
+                // Sprawdź też DELETE_BATCH_AFTER_TRANSFER (może być tylko ta transakcja)
+                const deleteQuery = query(
+                  collection(db, 'inventoryTransactions'),
+                  where('type', '==', 'DELETE_BATCH_AFTER_TRANSFER'),
+                  where('batchId', '==', consumed.batchId),
+                  orderBy('createdAt', 'desc'),
+                  limit(1)
+                );
+                const deleteSnapshot = await getDocs(deleteQuery);
+                
+                if (!deleteSnapshot.empty) {
+                  const deleteData = deleteSnapshot.docs[0].data();
+                  const deleteDate = deleteData.createdAt?.toDate?.();
+                  // Wyciągnij nazwę magazynu z reference (format: "Transfer do magazynu: NazwaMagazynu")
+                  const warehouseMatch = deleteData.reference?.match(/Transfer do magazynu: (.+)/);
+                  transferInfo = {
+                    newBatchId: 'nieznane (sprawdź magazyn docelowy)',
+                    targetWarehouse: warehouseMatch ? warehouseMatch[1] : deleteData.reference || 'nieznany',
+                    transferDate: deleteDate ? deleteDate.toLocaleString('pl-PL') : 'nieznana',
+                    isFromDeleteRecord: true
+                  };
+                }
+              }
+            } catch (transferError) {
+              console.warn('Nie można sprawdzić transferu partii:', transferError);
+            }
+            
+            if (transferInfo) {
+              // Sprawdź czy można naprawić powiązanie (mamy nowe ID partii)
+              const canRepair = transferInfo.newBatchId && 
+                               !transferInfo.newBatchId.includes('nieznane') && 
+                               transferInfo.newBatchId !== consumed.batchId;
+              
+              results.push({
+                type: 'warning',
+                text: `⚠️ Skonsumowana partia ${consumed.batchId} została PRZENIESIONA do innego magazynu`,
+                details: { 
+                  batchId: consumed.batchId, 
+                  lotNumber: consumed.batchNumber, 
+                  consumedQuantity: consumed.quantity,
+                  '🔄 TRANSFER': {
+                    'Nowe ID partii': transferInfo.newBatchId,
+                    'Magazyn docelowy': transferInfo.targetWarehouse,
+                    'Data transferu': transferInfo.transferDate
+                  }
+                },
+                // Dane do naprawy powiązania
+                canRepair,
+                repairData: canRepair ? {
+                  oldBatchId: consumed.batchId,
+                  newBatchId: transferInfo.newBatchId,
+                  lotNumber: consumed.batchNumber,
+                  targetWarehouse: transferInfo.targetWarehouse
+                } : null
+              });
+            } else {
+              results.push({
+                type: 'warning',
+                text: `⚠️ Skonsumowana partia ${consumed.batchId} już nie istnieje (wyczerpana lub usunięta)`,
+                details: { batchId: consumed.batchId, lotNumber: consumed.batchNumber, consumedQuantity: consumed.quantity }
+              });
+            }
+          }
+        }
+      } else {
+        results.push({ type: 'info', text: '⚠️ Brak skonsumowanych partii (consumedMaterials) w zadaniu' });
+      }
+      
+      // 3. Sprawdź transakcje magazynowe powiązane z zadaniem
+      results.push({ type: 'header', text: '📜 TRANSAKCJE MAGAZYNOWE (inventoryTransactions)' });
+      
+      // 3a. Transakcje powiązane z tym zadaniem (referenceId = task.id)
+      const taskTransactionsQuery = query(
+        collection(db, 'inventoryTransactions'),
+        where('referenceId', '==', task.id),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+      const taskTransactionsSnapshot = await getDocs(taskTransactionsQuery);
+      
+      if (!taskTransactionsSnapshot.empty) {
+        results.push({ type: 'info', text: `📋 Znaleziono ${taskTransactionsSnapshot.size} transakcji powiązanych z zadaniem:` });
+        
+        const transactionsByType = {};
+        taskTransactionsSnapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          const type = data.type || 'unknown';
+          if (!transactionsByType[type]) {
+            transactionsByType[type] = [];
+          }
+          transactionsByType[type].push({
+            id: docSnap.id,
+            batchId: data.batchId,
+            batchNumber: data.batchNumber,
+            quantity: data.quantity,
+            date: data.date?.toDate?.()?.toISOString?.() || data.createdAt?.toDate?.()?.toISOString?.() || 'brak daty',
+            notes: data.notes
+          });
+        });
+        
+        // Wyświetl transakcje pogrupowane według typu
+        for (const [type, transactions] of Object.entries(transactionsByType)) {
+          const typeLabel = {
+            'booking': '🔒 Rezerwacja',
+            'booking_cancel': '🔓 Anulowanie rezerwacji',
+            'adjustment_remove': '➖ Konsumpcja/Usunięcie',
+            'adjustment_add': '➕ Dodanie',
+            'transfer': '🔄 Transfer',
+            'receive': '📥 Przyjęcie'
+          }[type] || type;
+          
+          results.push({ type: 'material', text: `${typeLabel} (${transactions.length}x):` });
+          
+          transactions.slice(0, 5).forEach(tx => {
+            results.push({
+              type: type === 'booking' ? 'info' : type === 'adjustment_remove' ? 'warning' : 'info',
+              text: `   → Partia: ${tx.batchId?.substring(0, 8)}... | LOT: ${tx.batchNumber || 'brak'} | Ilość: ${tx.quantity}`,
+              details: { pełneId: tx.batchId, data: tx.date, notatki: tx.notes?.substring(0, 100) }
+            });
+          });
+          
+          if (transactions.length > 5) {
+            results.push({ type: 'info', text: `   ... i ${transactions.length - 5} więcej transakcji tego typu` });
+          }
+        }
+        
+        console.log('🔬 [DEBUG] Transakcje zadania:', transactionsByType);
+      } else {
+        results.push({ type: 'info', text: '⚠️ Brak transakcji magazynowych powiązanych z zadaniem' });
+      }
+      
+      // 3b. Zbierz unikalne batchId z zadania i sprawdź ich pełną historię
+      const allBatchIds = new Set();
+      if (task.materialBatches) {
+        Object.values(task.materialBatches).forEach(batches => {
+          batches.forEach(b => b.batchId && allBatchIds.add(b.batchId));
+        });
+      }
+      if (task.consumedMaterials) {
+        task.consumedMaterials.forEach(c => c.batchId && allBatchIds.add(c.batchId));
+      }
+      
+      if (allBatchIds.size > 0) {
+        results.push({ type: 'header', text: `🔍 HISTORIA PARTII (${allBatchIds.size} partii, wszystkie transakcje)` });
+        
+        for (const batchId of Array.from(allBatchIds)) {
+          const batchHistoryQuery = query(
+            collection(db, 'inventoryTransactions'),
+            where('batchId', '==', batchId),
+            orderBy('createdAt', 'desc'),
+            limit(50) // Limit 50 transakcji na partię
+          );
+          
+          try {
+            const batchHistorySnapshot = await getDocs(batchHistoryQuery);
+            
+            if (!batchHistorySnapshot.empty) {
+              results.push({ type: 'material', text: `Partia ${batchId.substring(0, 12)}... (${batchHistorySnapshot.size} transakcji):` });
+              
+              batchHistorySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const typeEmoji = {
+                  'booking': '🔒',
+                  'booking_cancel': '🔓',
+                  'adjustment_remove': '➖',
+                  'adjustment_add': '➕',
+                  'transfer': '🔄',
+                  'receive': '📥',
+                  'consume': '🔥',
+                  'production': '🏭'
+                }[data.type] || '❓';
+                
+                const date = data.date?.toDate?.() || data.createdAt?.toDate?.();
+                const dateStr = date ? date.toLocaleDateString('pl-PL') + ' ' + date.toLocaleTimeString('pl-PL') : 'brak daty';
+                
+                results.push({
+                  type: 'info',
+                  text: `   ${typeEmoji} ${data.type}: ${data.quantity} | ${dateStr}`,
+                  details: { 
+                    reference: data.reference || data.referenceId,
+                    notatki: data.notes?.substring(0, 80)
+                  }
+                });
+              });
+            } else {
+              results.push({ type: 'warning', text: `Partia ${batchId.substring(0, 12)}... - brak transakcji w historii` });
+            }
+          } catch (historyError) {
+            // Może brakować indeksu - kontynuuj bez historii
+            console.warn(`Nie można pobrać historii partii ${batchId}:`, historyError);
+            results.push({ type: 'warning', text: `Partia ${batchId.substring(0, 12)}... - nie można pobrać historii (brak indeksu?)` });
+          }
+        }
+      }
+      
+      console.log('🔬 [DEBUG] Sprawdzanie zakończone. Wyniki:', results);
+      
+    } catch (error) {
+      console.error('🔬 [DEBUG] Błąd podczas sprawdzania:', error);
+      results.push({ type: 'error', text: `❌ Błąd: ${error.message}` });
+    }
+    
+    setDebugResults(results);
+    setDebugLoading(false);
+    setDebugBatchDialogOpen(true);
+  };
+
+  // 🔧 Funkcja naprawy powiązań konsumpcji gdy partia została przeniesiona
+  const handleRepairConsumedMaterialBatch = async (repairData) => {
+    try {
+      const { oldBatchId, newBatchId, lotNumber, targetWarehouse } = repairData;
+      
+      console.log('🔧 [REPAIR] Rozpoczynam naprawę powiązań konsumpcji:', { oldBatchId, newBatchId });
+      
+      // Znajdź wszystkie konsumpcje z tym batchId i zaktualizuj je
+      const updatedConsumedMaterials = task.consumedMaterials.map(consumed => {
+        if (consumed.batchId === oldBatchId) {
+          console.log(`🔧 [REPAIR] Aktualizuję konsumpcję: ${oldBatchId} → ${newBatchId}`);
+          return {
+            ...consumed,
+            batchId: newBatchId,
+            originalBatchId: oldBatchId,
+            batchRepairedAt: new Date().toISOString(),
+            batchRepairedReason: `Naprawa po transferze partii do magazynu: ${targetWarehouse}`
+          };
+        }
+        return consumed;
+      });
+      
+      // Zaktualizuj zadanie w bazie
+      const taskRef = doc(db, 'productionTasks', task.id);
+      await updateDoc(taskRef, {
+        consumedMaterials: updatedConsumedMaterials,
+        updatedAt: serverTimestamp()
+      });
+      
+      showSuccess(`Naprawiono powiązania konsumpcji dla partii ${lotNumber || oldBatchId.substring(0, 8)}...`);
+      
+      // Odśwież dane zadania
+      const updatedTask = await getTaskById(task.id);
+      setTask(updatedTask);
+      
+      // Odśwież wyniki debugowania
+      await debugBatchConsistency();
+      
+      console.log('🔧 [REPAIR] Naprawa zakończona pomyślnie');
+      
+    } catch (error) {
+      console.error('🔧 [REPAIR] Błąd podczas naprawy powiązań:', error);
+      showError(`Nie udało się naprawić powiązań: ${error.message}`);
+    }
+  };
+
+  // 🔧 Funkcja naprawy WSZYSTKICH powiązań konsumpcji naraz
+  const handleRepairAllConsumedMaterialBatches = async () => {
+    try {
+      // Zbierz wszystkie naprawy do wykonania
+      const repairsToMake = debugResults
+        .filter(r => r.canRepair && r.repairData)
+        .map(r => r.repairData);
+      
+      if (repairsToMake.length === 0) {
+        showInfo('Brak powiązań do naprawy');
+        return;
+      }
+      
+      console.log(`🔧 [REPAIR-ALL] Rozpoczynam naprawę ${repairsToMake.length} powiązań...`);
+      
+      // Utwórz mapę zmian: oldBatchId -> newBatchId
+      const repairMap = {};
+      repairsToMake.forEach(repair => {
+        repairMap[repair.oldBatchId] = repair;
+      });
+      
+      // Zaktualizuj wszystkie konsumpcje
+      const updatedConsumedMaterials = task.consumedMaterials.map(consumed => {
+        const repair = repairMap[consumed.batchId];
+        if (repair) {
+          console.log(`🔧 [REPAIR-ALL] Aktualizuję: ${consumed.batchId} → ${repair.newBatchId}`);
+          return {
+            ...consumed,
+            batchId: repair.newBatchId,
+            originalBatchId: consumed.batchId,
+            batchRepairedAt: new Date().toISOString(),
+            batchRepairedReason: `Naprawa po transferze partii do magazynu: ${repair.targetWarehouse}`
+          };
+        }
+        return consumed;
+      });
+      
+      // Zaktualizuj zadanie w bazie
+      const taskRef = doc(db, 'productionTasks', task.id);
+      await updateDoc(taskRef, {
+        consumedMaterials: updatedConsumedMaterials,
+        updatedAt: serverTimestamp()
+      });
+      
+      showSuccess(`Naprawiono ${repairsToMake.length} powiązań konsumpcji`);
+      
+      // Odśwież dane zadania
+      const updatedTask = await getTaskById(task.id);
+      setTask(updatedTask);
+      
+      // Odśwież wyniki debugowania
+      await debugBatchConsistency();
+      
+      console.log('🔧 [REPAIR-ALL] Naprawa wszystkich powiązań zakończona pomyślnie');
+      
+    } catch (error) {
+      console.error('🔧 [REPAIR-ALL] Błąd podczas naprawy powiązań:', error);
+      showError(`Nie udało się naprawić powiązań: ${error.message}`);
+    }
+  };
+
   const handleConfirmConsumeMaterials = async () => {
     try {
       if (!validateConsumeQuantities()) {
@@ -6946,13 +7416,6 @@ const TaskDetailsPage = () => {
         )
       ];
 
-      // SPRAWDŹ CZY AKTUALIZOWAĆ KOSZTY (frontend vs backend)
-      const { totalMaterialCost, unitMaterialCost } = calculateAllCosts(newConsumedMaterials, updatedMaterialBatches);
-      
-      // Sprawdź czy koszty się zmieniły (różnica > 0.001€)
-      const costChanged = Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.001 ||
-                          Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.001;
-
       // JEDNA ZOPTYMALIZOWANA AKTUALIZACJA BAZY DANYCH
       const updateData = {
         consumedMaterials: newConsumedMaterials,
@@ -6961,28 +7424,51 @@ const TaskDetailsPage = () => {
         updatedBy: currentUser.uid
       };
 
-      // Dodaj koszty TYLKO jeśli się zmieniły
-      if (costChanged) {
-        updateData.totalMaterialCost = totalMaterialCost;
-        updateData.unitMaterialCost = unitMaterialCost;
-        updateData.costLastUpdatedAt = serverTimestamp();
-        updateData.costLastUpdatedBy = currentUser.uid;
+      // SPRAWDŹ CZY AUTOMATYCZNE AKTUALIZACJE KOSZTÓW SĄ WYŁĄCZONE
+      const shouldUpdateCosts = task.disableAutomaticCostUpdates !== true;
+      let costChanged = false;
+      let totalMaterialCost = 0;
+      let unitMaterialCost = 0;
+
+      if (shouldUpdateCosts) {
+        // Oblicz koszty tylko jeśli automatyczne aktualizacje są włączone
+        const calculatedCosts = await calculateAllCosts(newConsumedMaterials, updatedMaterialBatches);
+        totalMaterialCost = calculatedCosts.totalMaterialCost;
+        unitMaterialCost = calculatedCosts.unitMaterialCost;
         
-        console.log(`[OPTIMIZED] Aktualizacja kosztów podczas konsumpcji: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+        // Sprawdź czy koszty się zmieniły (różnica > 0.001€)
+        costChanged = Math.abs((task.totalMaterialCost || 0) - totalMaterialCost) > 0.001 ||
+                      Math.abs((task.unitMaterialCost || 0) - unitMaterialCost) > 0.001;
+
+        // Dodaj koszty TYLKO jeśli się zmieniły
+        if (costChanged) {
+          updateData.totalMaterialCost = totalMaterialCost;
+          updateData.unitMaterialCost = unitMaterialCost;
+          updateData.costLastUpdatedAt = serverTimestamp();
+          updateData.costLastUpdatedBy = currentUser.uid;
+          
+          console.log(`[OPTIMIZED] Aktualizacja kosztów podczas konsumpcji: ${totalMaterialCost.toFixed(2)} € (${unitMaterialCost.toFixed(2)} €/${task.unit})`);
+        } else {
+          console.log('[OPTIMIZED] Koszty nie zmieniły się podczas konsumpcji, pomijam aktualizację kosztów');
+        }
       } else {
-        console.log('[OPTIMIZED] Koszty nie zmieniły się podczas konsumpcji, pomijam aktualizację kosztów');
+        console.log('[OPTIMIZED] Automatyczne aktualizacje kosztów są wyłączone - koszty nie zostaną zaktualizowane podczas konsumpcji');
       }
 
       await updateDoc(doc(db, 'productionTasks', id), updateData);
 
-      // Aktualizuj związane zamówienia klientów TYLKO jeśli koszty się zmieniły
-      if (costChanged) {
+      // Aktualizuj związane zamówienia klientów TYLKO jeśli koszty się zmieniły i automatyczne aktualizacje są włączone
+      if (shouldUpdateCosts && costChanged) {
         await updateRelatedCustomerOrders(task, totalMaterialCost, null, unitMaterialCost, null);
       }
 
-      showSuccess(costChanged ? 
-        'Materiały zostały skonsumowane i koszty zaktualizowane w jednej operacji' : 
-        'Materiały zostały skonsumowane (koszty bez zmian)');
+      showSuccess(
+        !shouldUpdateCosts 
+          ? 'Materiały zostały skonsumowane (koszty ręczne - bez automatycznej aktualizacji)' 
+          : (costChanged 
+              ? 'Materiały zostały skonsumowane i koszty zaktualizowane w jednej operacji' 
+              : 'Materiały zostały skonsumowane (koszty bez zmian)')
+      );
       setConsumeMaterialsDialogOpen(false);
       
       // ✅ Real-time listener automatycznie odświeży dane - fetchTask() USUNIĘTE
@@ -8742,6 +9228,15 @@ const TaskDetailsPage = () => {
                   <CommentIcon />
                 </UnreadCommentsBadge>
               </IconButton>
+              <Tooltip title="Debug: Sprawdź spójność partii">
+                <IconButton
+                  color="warning"
+                  onClick={debugBatchConsistency}
+                  disabled={debugLoading}
+                >
+                  {debugLoading ? <CircularProgress size={24} /> : <BugReportIcon />}
+                </IconButton>
+              </Tooltip>
               <IconButton
                 color="error"
                 onClick={() => setDeleteDialog(true)}
@@ -9600,6 +10095,109 @@ const TaskDetailsPage = () => {
             task={task}
             onSuccess={handleProductionShiftFormSuccess}
           />
+
+          {/* 🔍 DEBUG: Dialog wyników sprawdzania spójności partii */}
+          <Dialog
+            open={debugBatchDialogOpen}
+            onClose={() => setDebugBatchDialogOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BugReportIcon color="warning" />
+              Debug: Spójność partii w zadaniu
+            </DialogTitle>
+            <DialogContent dividers>
+              {debugLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Box sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                  {debugResults.map((result, idx) => (
+                    <Box 
+                      key={idx} 
+                      sx={{ 
+                        mb: 1, 
+                        p: result.type === 'header' ? 1 : 0.5,
+                        bgcolor: result.type === 'header' ? 'grey.100' : 'transparent',
+                        borderLeft: result.type === 'error' ? '4px solid red' : 
+                                   result.type === 'warning' ? '4px solid orange' : 
+                                   result.type === 'success' ? '4px solid green' : 
+                                   result.type === 'material' ? '4px solid blue' : 'none',
+                        pl: result.type !== 'header' ? 2 : 1
+                      }}
+                    >
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontFamily: 'monospace',
+                          fontWeight: result.type === 'header' || result.type === 'material' ? 'bold' : 'normal',
+                          color: result.type === 'error' ? 'error.main' : 
+                                 result.type === 'warning' ? 'warning.main' : 
+                                 result.type === 'success' ? 'success.main' : 'text.primary'
+                        }}
+                      >
+                        {result.text}
+                      </Typography>
+                      {result.details && (
+                        <Box sx={{ pl: 2, mt: 0.5 }}>
+                          {Object.entries(result.details).map(([key, value]) => (
+                            <Typography key={key} variant="caption" component="div" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                              <strong>{key}:</strong> {typeof value === 'object' ? JSON.stringify(value) : value}
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                      {/* Przycisk naprawy powiązania */}
+                      {result.canRepair && result.repairData && (
+                        <Box sx={{ mt: 1, pl: 2 }}>
+                          <Button
+                            variant="contained"
+                            color="warning"
+                            size="small"
+                            startIcon={<BuildCircleIcon />}
+                            onClick={() => handleRepairConsumedMaterialBatch(result.repairData)}
+                          >
+                            Napraw powiązanie: {result.repairData.oldBatchId.substring(0, 8)}... → {result.repairData.newBatchId.substring(0, 8)}...
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                  ))}
+                  {debugResults.length === 0 && (
+                    <Typography color="text.secondary">
+                      Kliknij przycisk debugowania żeby sprawdzić spójność partii
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDebugBatchDialogOpen(false)}>
+                Zamknij
+              </Button>
+              {/* Przycisk naprawy wszystkich powiązań - widoczny tylko gdy są do naprawy */}
+              {debugResults.some(r => r.canRepair && r.repairData) && (
+                <Button 
+                  onClick={handleRepairAllConsumedMaterialBatches}
+                  disabled={debugLoading}
+                  variant="contained"
+                  color="warning"
+                  startIcon={<BuildCircleIcon />}
+                >
+                  Napraw wszystkie ({debugResults.filter(r => r.canRepair).length})
+                </Button>
+              )}
+              <Button 
+                onClick={debugBatchConsistency} 
+                disabled={debugLoading}
+                startIcon={<RefreshIcon />}
+              >
+                Odśwież
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           {/* ✅ REFAKTORYZACJA: Drawer komentarzy - wydzielony komponent */}
           <CommentsDrawer

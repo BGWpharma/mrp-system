@@ -1022,3 +1022,103 @@ const updateMaterialBatchesOnTransfer = async (
     throw new Error(`Błąd aktualizacji materialBatches: ${error.message}`);
   }
 };
+
+/**
+ * Aktualizuje consumedMaterials w zadaniach produkcyjnych po transferze partii
+ * Zapobiega utracie powiązania między konsumpcją a przeniesiną partią
+ * @param {string} sourceBatchId - ID starej partii (przed transferem)
+ * @param {string} targetBatchId - ID nowej partii (po transferze)
+ * @param {string} targetWarehouseName - Nazwa magazynu docelowego
+ * @returns {Promise<Object>} - Wynik operacji z listą zaktualizowanych zadań
+ */
+export const updateConsumedMaterialsOnTransfer = async (
+  sourceBatchId,
+  targetBatchId,
+  targetWarehouseName
+) => {
+  try {
+    console.log(`🔍 [CONSUMED] Szukam zadań MO z consumedMaterials zawierającymi partię: ${sourceBatchId}`);
+    
+    const tasksRef = collection(db, 'productionTasks');
+    const tasksSnapshot = await getDocs(tasksRef);
+    
+    const tasksToUpdate = [];
+    
+    // Znajdź zadania które zawierają sourceBatchId w consumedMaterials
+    tasksSnapshot.docs.forEach(docSnap => {
+      const taskData = docSnap.data();
+      if (taskData.consumedMaterials && Array.isArray(taskData.consumedMaterials)) {
+        const hasConsumedBatch = taskData.consumedMaterials.some(
+          consumed => consumed.batchId === sourceBatchId
+        );
+        if (hasConsumedBatch) {
+          tasksToUpdate.push({
+            id: docSnap.id,
+            ref: docSnap.ref,
+            taskData,
+            moNumber: taskData.moNumber
+          });
+        }
+      }
+    });
+    
+    console.log(`📋 [CONSUMED] Znaleziono ${tasksToUpdate.length} zadań MO z consumedMaterials do aktualizacji`);
+    
+    if (tasksToUpdate.length === 0) {
+      return { success: true, message: 'Brak consumedMaterials do aktualizacji', updatedCount: 0 };
+    }
+    
+    const tasksBatch = writeBatch(db);
+    const updateResults = [];
+    
+    for (const task of tasksToUpdate) {
+      const { taskData, ref, moNumber } = task;
+      
+      // Zaktualizuj batchId w consumedMaterials
+      const updatedConsumedMaterials = taskData.consumedMaterials.map(consumed => {
+        if (consumed.batchId === sourceBatchId) {
+          console.log(`✏️ [CONSUMED] Aktualizuję konsumpcję w MO ${moNumber}: ${sourceBatchId} -> ${targetBatchId}`);
+          return {
+            ...consumed,
+            batchId: targetBatchId,
+            originalBatchId: sourceBatchId, // Zachowaj referencję do oryginalnego ID
+            batchTransferredAt: new Date().toISOString(),
+            batchTransferredTo: targetWarehouseName
+          };
+        }
+        return consumed;
+      });
+      
+      tasksBatch.update(ref, {
+        consumedMaterials: updatedConsumedMaterials,
+        updatedAt: serverTimestamp(),
+        lastConsumedMaterialsTransferUpdate: serverTimestamp()
+      });
+      
+      updateResults.push({
+        taskId: task.id,
+        moNumber,
+        action: 'consumed_materials_batch_updated',
+        fromBatch: sourceBatchId,
+        toBatch: targetBatchId
+      });
+      
+      console.log(`✅ [CONSUMED] Przygotowano aktualizację consumedMaterials w MO ${moNumber}`);
+    }
+    
+    // Wykonaj aktualizację wszystkich zadań MO
+    await tasksBatch.commit();
+    console.log(`✅ [CONSUMED] Zaktualizowano consumedMaterials w ${tasksToUpdate.length} zadaniach MO`);
+    
+    return {
+      success: true,
+      message: `Zaktualizowano consumedMaterials w ${tasksToUpdate.length} zadaniach MO`,
+      updatedCount: tasksToUpdate.length,
+      updatedTasks: updateResults
+    };
+    
+  } catch (error) {
+    console.error('❌ [CONSUMED] Błąd podczas aktualizacji consumedMaterials:', error);
+    throw new Error(`Błąd aktualizacji consumedMaterials: ${error.message}`);
+  }
+};

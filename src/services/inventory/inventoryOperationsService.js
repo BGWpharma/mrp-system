@@ -1416,6 +1416,25 @@ export const transferBatch = async (batchId, sourceWarehouseId, targetWarehouseI
       throw new Error(`Transfer partii zakończony, ale aktualizacja rezerwacji nie powiodła się: ${reservationError.message}`);
     }
 
+    // AKTUALIZACJA CONSUMEDMATERIALS PO TRANSFERZE
+    try {
+      console.log('🔄 Rozpoczynam aktualizację consumedMaterials po transferze partii...');
+      
+      const { updateConsumedMaterialsOnTransfer } = await import('./batchTransferService.js');
+      
+      const consumedMaterialsUpdateResult = await updateConsumedMaterialsOnTransfer(
+        validatedBatchId,
+        targetBatchId,
+        targetWarehouseName
+      );
+      
+      console.log('✅ Aktualizacja consumedMaterials zakończona:', consumedMaterialsUpdateResult);
+      
+    } catch (consumedMaterialsError) {
+      // Nie blokujemy transferu - tylko logujemy błąd
+      console.error('⚠️ Błąd podczas aktualizacji consumedMaterials (transfer kontynuowany):', consumedMaterialsError);
+    }
+
     console.log('✅ Transfer partii zakończony pomyślnie');
 
     return {

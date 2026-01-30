@@ -480,14 +480,15 @@ const TaskForm = ({ taskId }) => {
         linkedPurchaseOrders: task.linkedPurchaseOrders || [],
         workingHoursPerDay: task.workingHoursPerDay || 16, // Domyślnie 16h dla istniejących zadań
         // Przenieś istniejące koszty do pól ręcznych jeśli automatyczne aktualizacje są wyłączone
+        // Zaokrąglij do odpowiedniej precyzji aby uniknąć problemów z walidacją HTML5 input
         manualTotalMaterialCost: task.disableAutomaticCostUpdates && task.totalMaterialCost !== undefined 
-          ? task.totalMaterialCost : '',
+          ? parseFloat(task.totalMaterialCost.toFixed(2)) : '',
         manualUnitMaterialCost: task.disableAutomaticCostUpdates && task.unitMaterialCost !== undefined 
-          ? task.unitMaterialCost : '',
+          ? parseFloat(task.unitMaterialCost.toFixed(4)) : '',
         manualTotalFullProductionCost: task.disableAutomaticCostUpdates && task.totalFullProductionCost !== undefined 
-          ? task.totalFullProductionCost : '',
+          ? parseFloat(task.totalFullProductionCost.toFixed(2)) : '',
         manualUnitFullProductionCost: task.disableAutomaticCostUpdates && task.unitFullProductionCost !== undefined 
-          ? task.unitFullProductionCost : ''
+          ? parseFloat(task.unitFullProductionCost.toFixed(4)) : ''
       };
       
       console.log('Pobrane zadanie z przetworzonymi datami:', taskWithParsedDates);
@@ -2825,12 +2826,12 @@ const TaskForm = ({ taskId }) => {
                           
                           setTaskData(prev => ({
                             ...prev,
-                            manualTotalMaterialCost: totalCost,
-                            manualUnitMaterialCost: totalCost !== '' ? (totalCost / quantity).toFixed(4) : ''
+                            manualTotalMaterialCost: totalCost !== '' ? parseFloat(totalCost.toFixed(2)) : '',
+                            manualUnitMaterialCost: totalCost !== '' ? parseFloat((totalCost / quantity).toFixed(4)) : ''
                           }));
                         }}
                         variant="outlined"
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: "any" }}
                         helperText="Koszt materiałów wliczanych do ceny (bez opakowań)"
                       />
                     </Grid>
@@ -2848,12 +2849,12 @@ const TaskForm = ({ taskId }) => {
                           
                           setTaskData(prev => ({
                             ...prev,
-                            manualUnitMaterialCost: unitCost,
-                            manualTotalMaterialCost: unitCost !== '' ? (unitCost * quantity).toFixed(4) : ''
+                            manualUnitMaterialCost: unitCost !== '' ? parseFloat(unitCost.toFixed(4)) : '',
+                            manualTotalMaterialCost: unitCost !== '' ? parseFloat((unitCost * quantity).toFixed(2)) : ''
                           }));
                         }}
                         variant="outlined"
-                        inputProps={{ min: 0, step: 0.0001 }}
+                        inputProps={{ min: 0, step: "any" }}
                         helperText="Koszt na 1 jednostkę produktu"
                       />
                     </Grid>
@@ -2871,12 +2872,12 @@ const TaskForm = ({ taskId }) => {
                           
                           setTaskData(prev => ({
                             ...prev,
-                            manualTotalFullProductionCost: totalCost,
-                            manualUnitFullProductionCost: totalCost !== '' ? (totalCost / quantity).toFixed(4) : ''
+                            manualTotalFullProductionCost: totalCost !== '' ? parseFloat(totalCost.toFixed(2)) : '',
+                            manualUnitFullProductionCost: totalCost !== '' ? parseFloat((totalCost / quantity).toFixed(4)) : ''
                           }));
                         }}
                         variant="outlined"
-                        inputProps={{ min: 0, step: 0.01 }}
+                        inputProps={{ min: 0, step: "any" }}
                         helperText="Pełny koszt produkcji włącznie z opakowaniami"
                       />
                     </Grid>
@@ -2894,12 +2895,12 @@ const TaskForm = ({ taskId }) => {
                           
                           setTaskData(prev => ({
                             ...prev,
-                            manualUnitFullProductionCost: unitCost,
-                            manualTotalFullProductionCost: unitCost !== '' ? (unitCost * quantity).toFixed(4) : ''
+                            manualUnitFullProductionCost: unitCost !== '' ? parseFloat(unitCost.toFixed(4)) : '',
+                            manualTotalFullProductionCost: unitCost !== '' ? parseFloat((unitCost * quantity).toFixed(2)) : ''
                           }));
                         }}
                         variant="outlined"
-                        inputProps={{ min: 0, step: 0.0001 }}
+                        inputProps={{ min: 0, step: "any" }}
                         helperText="Pełny koszt na 1 jednostkę produktu"
                       />
                     </Grid>
