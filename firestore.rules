@@ -9,6 +9,50 @@ service cloud.firestore {
              (!('attachments' in data) || data.attachments is list);
     }
     
+    // Funkcja sprawdzająca czy użytkownik ma dostęp do tablicy
+    function canAccessBoard(boardData) {
+      // Główna tablica jest dostępna dla wszystkich zalogowanych
+      return boardData.isMainBoard == true ||
+             // Publiczne tablice są dostępne dla wszystkich
+             boardData.isPrivate != true ||
+             // Właściciel ma zawsze dostęp
+             boardData.createdBy == request.auth.uid ||
+             // Użytkownik jest na liście dozwolonych
+             (boardData.allowedUsers != null && request.auth.uid in boardData.allowedUsers);
+    }
+    
+    // Reguły dla tablic (boards)
+    match /boards/{boardId} {
+      // Odczyt: zalogowany użytkownik z dostępem do tablicy
+      allow read: if request.auth != null && canAccessBoard(resource.data);
+      
+      // Tworzenie: zalogowany użytkownik
+      allow create: if request.auth != null;
+      
+      // Aktualizacja: właściciel lub tablica publiczna (dla głównej tablicy - wszyscy)
+      allow update: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.isMainBoard == true
+      );
+      
+      // Usuwanie: tylko właściciel (nie można usunąć głównej tablicy)
+      allow delete: if request.auth != null && 
+                    resource.data.createdBy == request.auth.uid &&
+                    resource.data.isMainBoard != true;
+    }
+    
+    // Reguły dla kolumn - sprawdź dostęp do tablicy nadrzędnej
+    match /columns/{columnId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null;
+    }
+    
+    // Reguły dla zadań - sprawdź dostęp do tablicy nadrzędnej
+    match /tasks/{taskId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null;
+    }
+    
     // Reguły dla zamówień zakupowych (Purchase Orders)
     match /purchaseOrders/{orderId} {
       allow read: if request.auth != null;

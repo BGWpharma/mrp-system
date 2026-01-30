@@ -29,6 +29,8 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import DesignServicesIcon from '@mui/icons-material/DesignServices';
 import BuildIcon from '@mui/icons-material/Build';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LockIcon from '@mui/icons-material/Lock';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +45,7 @@ import { getUsersDisplayNames } from '../../services/userService';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import ColumnList from '../../components/taskboard/ColumnList';
+import BoardSettingsDialog from '../../components/taskboard/BoardSettingsDialog';
 
 const BOARD_ICONS = [
   { name: 'Folder', icon: FolderIcon },
@@ -88,6 +91,7 @@ const BoardDetail = ({
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [userNamesMap, setUserNamesMap] = useState({});
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   // Pobierz nazwy użytkowników dla wszystkich przypisanych osób (zoptymalizowane)
   useEffect(() => {
@@ -365,14 +369,19 @@ const BoardDetail = ({
           </Box>
           
           <Box flex={1} minWidth={0}>
-            <Typography 
-              variant={isMobile ? "h5" : "h4"} 
-              fontWeight="bold"
-              noWrap
-              color={isMainBoard ? 'primary.main' : 'text.primary'}
-            >
-              {board.title}
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography 
+                variant={isMobile ? "h5" : "h4"} 
+                fontWeight="bold"
+                noWrap
+                color={isMainBoard ? 'primary.main' : 'text.primary'}
+              >
+                {board.title}
+              </Typography>
+              {board.isPrivate && (
+                <LockIcon sx={{ color: 'warning.main', fontSize: isMobile ? 20 : 24 }} />
+              )}
+            </Box>
             {board.description && !isMobile && (
               <Typography 
                 variant="body2" 
@@ -387,6 +396,19 @@ const BoardDetail = ({
         
         {/* Przyciski akcji */}
         <Box display="flex" gap={1} width={isMobile ? '100%' : 'auto'}>
+          {/* Przycisk ustawień - tylko dla właściciela i tablic nie-głównych */}
+          {!board.isMainBoard && board.createdBy === currentUser?.uid && (
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<SettingsIcon />}
+              onClick={() => setSettingsDialogOpen(true)}
+              size={isMobile ? "small" : "medium"}
+              sx={{ flexShrink: 0 }}
+            >
+              {isMobile ? '' : t('settings')}
+            </Button>
+          )}
           {embedded && onOpenBoardsDrawer && (
             <Button
               variant="outlined"
@@ -464,6 +486,16 @@ const BoardDetail = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog ustawień tablicy */}
+      <BoardSettingsDialog
+        open={settingsDialogOpen}
+        onClose={() => setSettingsDialogOpen(false)}
+        board={board}
+        onBoardUpdated={() => {
+          // Board zostanie automatycznie zaktualizowany przez real-time listener
+        }}
+      />
     </Container>
   );
 };

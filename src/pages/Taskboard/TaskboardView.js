@@ -46,9 +46,11 @@ import DesignServicesIcon from '@mui/icons-material/DesignServices';
 import BuildIcon from '@mui/icons-material/Build';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
+import LockIcon from '@mui/icons-material/Lock';
+import PublicIcon from '@mui/icons-material/Public';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
-import { getAllBoards, createBoard, updateBoard, deleteBoard, getOrCreateMainBoard } from '../../services/taskboardService';
+import { getAccessibleBoards, createBoard, updateBoard, deleteBoard, getOrCreateMainBoard } from '../../services/taskboardService';
 import BoardDetail from './BoardDetail';
 import { format } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -115,8 +117,8 @@ const TaskboardView = () => {
         setSelectedBoard(mainBoardData);
       }
       
-      // Pobierz pozostałe tablice (bez głównej)
-      const boardsData = await getAllBoards();
+      // Pobierz tablice dostępne dla użytkownika (bez głównej)
+      const boardsData = await getAccessibleBoards(currentUser.uid);
       const otherBoards = boardsData.filter(board => !board.isMainBoard);
       setBoards(otherBoards);
     } catch (error) {
@@ -373,14 +375,22 @@ const TaskboardView = () => {
                         })}
                       </Box>
                       <Box flex={1} sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" fontWeight="bold" noWrap>
-                          {board.title}
-                        </Typography>
-                        {board.description && (
-                          <Typography variant="caption" color="text.secondary" noWrap>
-                            {board.description}
+                        <Box display="flex" alignItems="center" gap={0.5}>
+                          <Typography variant="body2" fontWeight="bold" noWrap>
+                            {board.title}
                           </Typography>
-                        )}
+                          {board.isPrivate && (
+                            <Tooltip title={t('privateBoard')}>
+                              <LockIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                            </Tooltip>
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {board.isPrivate 
+                            ? (board.createdBy === currentUser?.uid ? t('yourPrivateBoard') : t('sharedWithYou'))
+                            : board.description || t('publicBoard')
+                          }
+                        </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <IconButton

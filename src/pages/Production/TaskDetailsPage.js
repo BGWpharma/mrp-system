@@ -2138,7 +2138,7 @@ const TaskDetailsPage = () => {
     currentUser?.uid
   ]);
 
-  // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań z innych miejsc (np. z PO)
+  // Nasłuchiwanie powiadomień o aktualizacji kosztów zadań z innych miejsc (np. z PO, edycji partii)
   useEffect(() => {
     if (!task?.id) return;
 
@@ -2148,10 +2148,13 @@ const TaskDetailsPage = () => {
       channel = new BroadcastChannel('production-costs-update');
       
       const handleCostUpdate = async (event) => {
-        if (event.data.type === 'TASK_COSTS_UPDATED' && event.data.taskId === task.id) {
+        const { type, taskId, batchIds } = event.data;
+        
+        // Obsługa TASK_COSTS_UPDATED - konkretne zadanie zostało zaktualizowane
+        if (type === 'TASK_COSTS_UPDATED' && taskId === task.id) {
           console.log(`[BROADCAST] Otrzymano powiadomienie o aktualizacji kosztów zadania ${task.id}:`, event.data.costs);
           
-          // Odśwież dane zadania po krótkiej przerwie, aby upewnić się, że baza danych została zaktualizowana
+          // Odśwież dane zadania po krótkiej przerwie
           setTimeout(async () => {
             try {
               const { getTaskById } = await import('../../services/productionService');
@@ -2162,6 +2165,50 @@ const TaskDetailsPage = () => {
               console.warn('⚠️ Nie udało się odświeżyć danych zadania po powiadomieniu:', error);
             }
           }, 500);
+        }
+        
+        // ✅ Obsługa BATCH_COSTS_UPDATED - partia została zaktualizowana (np. ręczna edycja ceny)
+        // Sprawdź czy to zadanie używa którejkolwiek z zaktualizowanych partii
+        if (type === 'BATCH_COSTS_UPDATED' && batchIds && batchIds.length > 0) {
+          // Zbierz wszystkie ID partii używane przez to zadanie
+          const taskBatchIds = new Set();
+          
+          // Partie z materialBatches (zarezerwowane)
+          if (task.materialBatches) {
+            Object.values(task.materialBatches).forEach(batches => {
+              if (Array.isArray(batches)) {
+                batches.forEach(batch => {
+                  if (batch.batchId) taskBatchIds.add(batch.batchId);
+                });
+              }
+            });
+          }
+          
+          // Partie z consumedMaterials (skonsumowane)
+          if (task.consumedMaterials) {
+            task.consumedMaterials.forEach(consumed => {
+              if (consumed.batchId) taskBatchIds.add(consumed.batchId);
+            });
+          }
+          
+          // Sprawdź czy któraś z zaktualizowanych partii jest używana przez to zadanie
+          const affectedBatch = batchIds.find(batchId => taskBatchIds.has(batchId));
+          
+          if (affectedBatch) {
+            console.log(`[BROADCAST] Wykryto aktualizację partii ${affectedBatch} używanej przez zadanie ${task.id}`);
+            
+            // Odśwież dane zadania po dłuższej przerwie (Cloud Function potrzebuje czas na przetworzenie)
+            setTimeout(async () => {
+              try {
+                const { getTaskById } = await import('../../services/productionService');
+                const updatedTask = await getTaskById(task.id);
+                setTask(updatedTask);
+                console.log('🔄 Odświeżono dane zadania po aktualizacji partii');
+              } catch (error) {
+                console.warn('⚠️ Nie udało się odświeżyć danych zadania po aktualizacji partii:', error);
+              }
+            }, 2000); // Dłuższy timeout - Cloud Function potrzebuje czas
+          }
         }
       };
 
@@ -2178,7 +2225,7 @@ const TaskDetailsPage = () => {
         console.log(`[BROADCAST] Zamknięto nasłuchiwanie powiadomień o kosztach dla zadania ${task.id}`);
       }
     };
-  }, [task?.id]);
+  }, [task?.id, task?.materialBatches, task?.consumedMaterials]);
 
   // Funkcja do pobierania magazynów
   const fetchWarehouses = async () => {
@@ -2781,17 +2828,11 @@ const TaskDetailsPage = () => {
         showSuccess('Produkcja została wstrzymana');
       }
       
-      // Automatycznie zaktualizuj koszty (w tym koszt procesowy)
-      try {
-        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
-        await updateTaskCostsAutomatically(
-          id, 
-          currentUser.uid, 
-          'Automatyczna aktualizacja kosztów po zatrzymaniu produkcji'
-        );
-      } catch (costError) {
-        console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
-      }
+      // ✅ OPTYMALIZACJA: Usunięto bezpośrednie wywołanie updateTaskCostsAutomatically
+      // Koszty zostaną zaktualizowane przez:
+      // 1. Periodic sync (useEffect z compareCostsWithDatabase) jako fallback
+      // 2. Cloud Functions (backend) przy zmianach cen partii
+      // 3. Ręcznie przez użytkownika (przycisk "Aktualizuj koszty")
       
       // ✅ Real-time listener automatycznie odświeży dane zadania
     } catch (error) {
@@ -4470,17 +4511,8 @@ const TaskDetailsPage = () => {
       // Odśwież dane historii produkcji
       await fetchProductionHistory();
       
-      // Automatycznie zaktualizuj koszty (w tym koszt procesowy)
-      try {
-        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
-        await updateTaskCostsAutomatically(
-          id, 
-          currentUser.uid, 
-          'Automatyczna aktualizacja kosztów po edycji sesji produkcyjnej'
-        );
-      } catch (costError) {
-        console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
-      }
+      // ✅ OPTYMALIZACJA: Usunięto bezpośrednie wywołanie updateTaskCostsAutomatically
+      // Koszty zostaną zaktualizowane przez periodic sync (fallback) lub Cloud Functions
       
       // ✅ Real-time listener automatycznie odświeży dane zadania
       
@@ -4549,17 +4581,8 @@ const TaskDetailsPage = () => {
       // Odśwież dane historii produkcji
       await fetchProductionHistory();
       
-      // Automatycznie zaktualizuj koszty (w tym koszt procesowy)
-      try {
-        const { updateTaskCostsAutomatically } = await import('../../services/productionService');
-        await updateTaskCostsAutomatically(
-          id, 
-          currentUser.uid, 
-          'Automatyczna aktualizacja kosztów po dodaniu sesji produkcyjnej'
-        );
-      } catch (costError) {
-        console.warn('Nie udało się zaktualizować kosztów automatycznie:', costError);
-      }
+      // ✅ OPTYMALIZACJA: Usunięto bezpośrednie wywołanie updateTaskCostsAutomatically
+      // Koszty zostaną zaktualizowane przez periodic sync (fallback) lub Cloud Functions
       
       return { success: true };
     } catch (error) {

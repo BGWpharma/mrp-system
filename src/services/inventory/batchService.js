@@ -499,6 +499,57 @@ export const updateBatch = async (batchId, batchData, userId) => {
     // Aktualizuj partię
     await updateDoc(batchRef, updateData);
     
+    // ✅ Sprawdź czy zmieniono cenę - jeśli tak, wyślij event do _systemEvents
+    // Dzięki temu Cloud Function onBatchPriceUpdate zaktualizuje koszty w MO
+    const priceChanged = validatedData.unitPrice !== undefined && 
+      currentBatch.unitPrice !== validatedData.unitPrice;
+    
+    if (priceChanged) {
+      try {
+        console.log(`[BATCH_PRICE_CHANGE] Wykryto zmianę ceny partii ${validatedBatchId}: ${currentBatch.unitPrice} → ${validatedData.unitPrice}`);
+        
+        // Wyślij event do _systemEvents dla Cloud Function
+        const systemEventsRef = collection(db, '_systemEvents');
+        await addDoc(systemEventsRef, {
+          type: 'batchPriceUpdate',
+          batchIds: [validatedBatchId],
+          sourceType: 'manualBatchEdit',
+          sourceId: validatedBatchId,
+          userId: validatedUserId,
+          timestamp: serverTimestamp(),
+          processed: false,
+          details: {
+            oldPrice: currentBatch.unitPrice || 0,
+            newPrice: validatedData.unitPrice,
+            batchNumber: currentBatch.batchNumber || currentBatch.lotNumber || validatedBatchId
+          }
+        });
+        
+        console.log(`[BATCH_PRICE_CHANGE] Wysłano event batchPriceUpdate do _systemEvents dla partii ${validatedBatchId}`);
+        
+        // ✅ Wyślij BroadcastChannel aby natychmiast powiadomić otwarte zakładki
+        // (zanim Cloud Function przetworzy event)
+        if (typeof BroadcastChannel !== 'undefined') {
+          const channel = new BroadcastChannel('production-costs-update');
+          channel.postMessage({
+            type: 'BATCH_COSTS_UPDATED',
+            batchIds: [validatedBatchId],
+            timestamp: new Date().toISOString(),
+            source: 'manual-batch-edit',
+            details: {
+              oldPrice: currentBatch.unitPrice || 0,
+              newPrice: validatedData.unitPrice
+            }
+          });
+          channel.close();
+          console.log(`[BATCH_PRICE_CHANGE] Wysłano BroadcastChannel powiadomienie o zmianie ceny partii ${validatedBatchId}`);
+        }
+      } catch (eventError) {
+        // Nie przerywaj operacji - aktualizacja partii jest ważniejsza
+        console.error('[BATCH_PRICE_CHANGE] Błąd podczas wysyłania eventu batchPriceUpdate:', eventError);
+      }
+    }
+    
     // Jeśli zmieniono ilość, zaktualizuj główną pozycję magazynową
     if (quantityChanged && itemId) {
       // Dodaj wpis w historii transakcji

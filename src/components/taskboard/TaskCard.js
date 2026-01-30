@@ -29,6 +29,7 @@ import { updateTask, deleteTask } from '../../services/taskboardService';
 import { format, isToday, isTomorrow, isPast, differenceInDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import TaskDetailsDialog from './TaskDetailsDialog';
+import MentionText from './MentionText';
 import { useTranslation } from 'react-i18next';
 
 const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {} }) => {
@@ -273,10 +274,9 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
                 {task.title}
               </Typography>
 
-              {/* Opis (skrócony) */}
+              {/* Opis (skrócony) z obsługą mentions */}
               {task.description && task.status !== 'completed' && (
-                <Typography
-                  variant="caption"
+                <Box
                   sx={{
                     display: '-webkit-box',
                     WebkitLineClamp: 1,
@@ -288,8 +288,13 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
                     opacity: 0.8
                   }}
                 >
-                  {task.description}
-                </Typography>
+                  <MentionText 
+                    text={task.description} 
+                    variant="inline"
+                    truncate={true}
+                    maxLength={60}
+                  />
+                </Box>
               )}
 
               {/* Metadata */}

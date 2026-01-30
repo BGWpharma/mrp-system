@@ -58,8 +58,8 @@ import {
   let enrichmentCacheTimestamp = null;
   const ENRICHMENT_CACHE_TTL = 5 * 60 * 1000; // 5 minut
 
-  // Debounce dla aktualizacji kosztów
-  const costUpdateTimeouts = new Map();
+  // ✅ OPTYMALIZACJA: Usunięto costUpdateTimeouts - automatyczne aktualizacje kosztów
+  // przeniesione do periodic sync (fallback) i Cloud Functions (backend)
   
   // Pobieranie wszystkich zadań produkcyjnych
   export const getAllTasks = async () => {
@@ -1559,41 +1559,16 @@ export const updateTask = async (taskId, taskData, userId) => {
       // Sprawdź czy data ważności została zmieniona i zaktualizuj powiązane partie
       await updateRelatedBatchesExpiryDate(taskId, currentTask, updatedTask, userId);
 
-      // Automatycznie aktualizuj koszty jeśli zmieniono materiały lub skonsumowane materiały
-      // TYLKO jeśli aktualizacja nie zawiera już kosztów
-      const shouldUpdateCosts = 
-        taskData.materials !== undefined || 
-        taskData.consumedMaterials !== undefined ||
-        taskData.materialBatches !== undefined ||
-        Object.keys(taskData).some(key => key.startsWith('materialInCosts.'));
-      
-      const costsAlreadyUpdated = Object.keys(taskData).some(key => 
-        key.includes('Cost') || key === 'costLastUpdatedAt' || key === 'costLastUpdatedBy'
-      );
-        
-      if (shouldUpdateCosts && !costsAlreadyUpdated) {
-        console.log('[AUTO-UPDATE] Wykryto zmiany w materiałach/kosztach, uruchamiam automatyczną aktualizację po 200ms');
-        
-        // Anuluj poprzedni timeout dla tego zadania (debounce)
-        if (costUpdateTimeouts.has(taskId)) {
-          clearTimeout(costUpdateTimeouts.get(taskId));
-        }
-        
-        // Uruchom aktualizację kosztów w tle po krótkim opóźnieniu z debounce
-        const timeoutId = setTimeout(async () => {
-          try {
-            await updateTaskCostsAutomatically(taskId, userId, 'Automatyczna aktualizacja po zmianie danych zadania');
-            costUpdateTimeouts.delete(taskId); // Wyczyść timeout po zakończeniu
-          } catch (error) {
-            console.error('Błąd podczas automatycznej aktualizacji kosztów:', error);
-            costUpdateTimeouts.delete(taskId); // Wyczyść timeout również przy błędzie
-          }
-        }, 200);
-        
-        costUpdateTimeouts.set(taskId, timeoutId);
-      } else if (costsAlreadyUpdated) {
-        console.log('[AUTO-UPDATE] Koszty już zaktualizowane w tej operacji, pomijam automatyczną aktualizację');
-      }
+      // ✅ OPTYMALIZACJA: Usunięto automatyczne wywołanie updateTaskCostsAutomatically
+      // Poprzednio ta funkcja była wywoływana po każdej zmianie materiałów/kosztów,
+      // co generowało ~15-25 zapytań do Firestore per wywołanie.
+      // 
+      // Teraz koszty są aktualizowane przez:
+      // 1. Periodic sync w TaskDetailsPage (useEffect z compareCostsWithDatabase) - fallback frontendowy
+      // 2. Cloud Functions (onBatchPriceUpdate, onProductionTaskCostUpdate) - backend
+      // 3. Ręcznie przez użytkownika (przycisk "Aktualizuj koszty")
+      //
+      // Szacowana oszczędność: 80-90% zapytań związanych z aktualizacją kosztów
       
       return {
         id: taskId,

@@ -55,6 +55,7 @@ import {
 import PersonIcon from '@mui/icons-material/Person';
 import { nanoid } from 'nanoid';
 import { useTranslation } from 'react-i18next';
+import MentionTextarea from './MentionTextarea';
 
 // Helper do rozpoznawania typu pliku po URL lub type
 const getAttachmentIcon = (url, type) => {
@@ -363,18 +364,16 @@ const TaskDetailsDialog = ({ task, board, open, onClose, onSave }) => {
           sx={{ mb: 2, mt: 1 }}
         />
 
-        {/* Opis */}
-        <TextField
-          margin="dense"
-          label={t('taskDescription')}
-          fullWidth
-          variant="outlined"
-          multiline
-          rows={4}
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          sx={{ mb: 2 }}
-        />
+        {/* Opis z obsługą @mentions */}
+        <Box sx={{ mb: 2 }}>
+          <MentionTextarea
+            label={t('taskDescription')}
+            placeholder={t('descriptionPlaceholder')}
+            value={formData.description}
+            onChange={(newValue) => setFormData({ ...formData, description: newValue })}
+            rows={4}
+          />
+        </Box>
 
         {/* Priorytet i termin w jednym rzędzie */}
         <Box display="flex" gap={2} mb={2}>
