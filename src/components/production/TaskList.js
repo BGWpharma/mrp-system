@@ -105,7 +105,7 @@ import { pl } from 'date-fns/locale';
 
 import { useColumnPreferences } from '../../contexts/ColumnPreferencesContext';
 import { useTaskListState } from '../../contexts/TaskListStateContext';
-import { exportToCSV } from '../../utils/exportUtils';
+import { exportToCSV, exportToExcel } from '../../utils/exportUtils';
 import { getUsersDisplayNames } from '../../services/userService';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
@@ -544,6 +544,17 @@ const TaskList = () => {
     taskId: null
   });
   const [startProductionError, setStartProductionError] = useState(null);
+
+  // Stany dla dialogu eksportu z filtrami
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFilters, setExportFilters] = useState({
+    clientName: '',
+    status: '',
+    fromDate: '',
+    toDate: ''
+  });
+  const [uniqueClients, setUniqueClients] = useState([]);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // ===============================================
   // 🚀 OPTYMALIZACJA: Memoizowane funkcje i callbacki
@@ -1529,16 +1540,114 @@ const TaskList = () => {
     handleSortMenuClose();
   };
 
+  // Funkcja otwierania dialogu eksportu
+  const handleOpenExportDialog = async () => {
+    try {
+      setExportLoading(true);
+      // Pobierz wszystkie zadania, aby wyciągnąć unikalnych klientów
+      const allTasks = await getAllTasks();
+      
+      // Wyciągnij unikalnych klientów
+      const clients = [...new Set(
+        allTasks
+          .map(task => task.clientName || task.customerName)
+          .filter(Boolean)
+      )].sort();
+      
+      setUniqueClients(clients);
+      
+      // Ustaw domyślny zakres dat - ostatnie 90 dni
+      const today = new Date();
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(today.getDate() - 90);
+      
+      setExportFilters({
+        clientName: '',
+        status: '',
+        fromDate: '',
+        toDate: ''
+      });
+      
+      setExportDialogOpen(true);
+    } catch (error) {
+      console.error('Błąd podczas przygotowania eksportu:', error);
+      showError('Błąd podczas przygotowania eksportu: ' + error.message);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Funkcja zamykania dialogu eksportu
+  const handleCloseExportDialog = () => {
+    setExportDialogOpen(false);
+    setExportFilters({
+      clientName: '',
+      status: '',
+      fromDate: '',
+      toDate: ''
+    });
+  };
+
   // Funkcja eksportu wszystkich zadań do CSV
   const handleExportCSV = async () => {
     try {
-      setLoading(true);
+      setExportLoading(true);
       
       // Pobierz wszystkie zadania bez paginacji
-      const allTasks = await getAllTasks();
+      let allTasks = await getAllTasks();
       
       if (!allTasks || allTasks.length === 0) {
         showError('Brak zadań do eksportu');
+        return;
+      }
+
+      // Zastosuj filtry eksportu
+      if (exportFilters.clientName) {
+        allTasks = allTasks.filter(task => 
+          (task.clientName || task.customerName) === exportFilters.clientName
+        );
+      }
+
+      if (exportFilters.status) {
+        allTasks = allTasks.filter(task => task.status === exportFilters.status);
+      }
+
+      if (exportFilters.fromDate) {
+        const fromDate = new Date(exportFilters.fromDate);
+        fromDate.setHours(0, 0, 0, 0);
+        allTasks = allTasks.filter(task => {
+          if (!task.createdAt) return false;
+          let taskDate;
+          if (task.createdAt.toDate) {
+            taskDate = task.createdAt.toDate();
+          } else if (task.createdAt.seconds) {
+            taskDate = new Date(task.createdAt.seconds * 1000);
+          } else {
+            taskDate = new Date(task.createdAt);
+          }
+          return taskDate >= fromDate;
+        });
+      }
+
+      if (exportFilters.toDate) {
+        const toDate = new Date(exportFilters.toDate);
+        toDate.setHours(23, 59, 59, 999);
+        allTasks = allTasks.filter(task => {
+          if (!task.createdAt) return false;
+          let taskDate;
+          if (task.createdAt.toDate) {
+            taskDate = task.createdAt.toDate();
+          } else if (task.createdAt.seconds) {
+            taskDate = new Date(task.createdAt.seconds * 1000);
+          } else {
+            taskDate = new Date(task.createdAt);
+          }
+          return taskDate <= toDate;
+        });
+      }
+
+      if (allTasks.length === 0) {
+        showError('Brak zadań spełniających kryteria filtrowania');
         return;
       }
 
@@ -1597,7 +1706,7 @@ const TaskList = () => {
         }
       };
 
-      // Definicja nagłówków dla CSV - angielskie nazwy dla kompatybilności
+      // Definicja nagłówków dla Excel - angielskie nazwy
       const headers = [
         { label: 'MO Number', key: 'moNumber' },
         { label: 'Task Name', key: 'name' },
@@ -1608,6 +1717,8 @@ const TaskList = () => {
         { label: 'Status', key: 'status' },
         { label: 'Planned Start', key: 'scheduledDate' },
         { label: 'Planned End', key: 'endDate' },
+        { label: 'Actual Start', key: 'actualStart' },
+        { label: 'Actual End', key: 'actualEnd' },
         { label: 'Estimated Duration (hours)', key: 'estimatedDurationHours' },
         { label: 'Time per Unit (min)', key: 'productionTimePerUnit' },
         { label: 'Order Number', key: 'orderNumber' },
@@ -1621,7 +1732,7 @@ const TaskList = () => {
         { label: 'Cost per Unit (EUR)', key: 'costPerUnit' }
       ];
       
-      // Przygotuj dane do eksportu
+      // Przygotuj dane do eksportu - Zakładka 1: Zadania MO
       const exportData = allTasks.map(task => {
         const totalCompletedQuantity = task.totalCompletedQuantity || 0;
         const remainingQuantity = Math.max(0, task.quantity - totalCompletedQuantity);
@@ -1635,12 +1746,13 @@ const TaskList = () => {
           name: task.name || '',
           productName: task.productName || '',
           quantity: task.quantity || 0,
-          unit: task.unit || 'szt.',
+          unit: task.unit || 'pcs',
           remainingQuantity: remainingQuantity,
           status: task.status || '',
-  
           scheduledDate: formatDateForCSV(task.scheduledDate),
           endDate: formatDateForCSV(task.endDate),
+          actualStart: formatDateForCSV(task.startDate),
+          actualEnd: formatDateForCSV(task.lastSessionEndDate),
           estimatedDurationHours: task.estimatedDuration ? (task.estimatedDuration / 60).toFixed(2) : '',
           productionTimePerUnit: task.productionTimePerUnit || '',
           orderNumber: task.orderNumber || '',
@@ -1654,22 +1766,128 @@ const TaskList = () => {
           costPerUnit: costPerUnit.toFixed(4)
         };
       });
+
+      // ========================================
+      // Zakładka 2: Średnie daty ważności dla SKU
+      // ========================================
       
-      // Wygeneruj plik CSV
+      // Funkcja pomocnicza do konwersji daty
+      const convertToDate = (dateValue) => {
+        if (!dateValue) return null;
+        if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+          return dateValue.toDate();
+        } else if (dateValue.seconds) {
+          return new Date(dateValue.seconds * 1000);
+        } else if (typeof dateValue === 'string') {
+          return new Date(dateValue);
+        } else if (dateValue instanceof Date) {
+          return dateValue;
+        }
+        return null;
+      };
+
+      // Grupowanie danych po SKU (productName) i obliczanie statystyk
+      const productStats = {};
+      
+      allTasks.forEach(task => {
+        if (!task.productName) return;
+        
+        const expiryDate = convertToDate(task.expiryDate);
+        // Użyj rzeczywistych dat produkcji: lastSessionEndDate (koniec) lub startDate (początek)
+        const productionDate = convertToDate(task.lastSessionEndDate) || 
+                               convertToDate(task.startDate) || 
+                               convertToDate(task.createdAt);
+        
+        // Oblicz dni ważności tylko jeśli mamy obie daty
+        let expiryDays = null;
+        if (expiryDate && productionDate && !isNaN(expiryDate.getTime()) && !isNaN(productionDate.getTime())) {
+          expiryDays = Math.round((expiryDate.getTime() - productionDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+        
+        if (!productStats[task.productName]) {
+          productStats[task.productName] = {
+            productName: task.productName,
+            totalDays: 0,
+            countWithExpiry: 0,
+            totalMOCount: 0,
+            totalQuantity: 0,
+            minDays: Infinity,
+            maxDays: -Infinity,
+            expiryDaysList: []
+          };
+        }
+        
+        const stats = productStats[task.productName];
+        stats.totalMOCount += 1;
+        stats.totalQuantity += parseFloat(task.quantity) || 0;
+        
+        if (expiryDays !== null && expiryDays > 0) {
+          stats.totalDays += expiryDays;
+          stats.countWithExpiry += 1;
+          stats.minDays = Math.min(stats.minDays, expiryDays);
+          stats.maxDays = Math.max(stats.maxDays, expiryDays);
+          stats.expiryDaysList.push(expiryDays);
+        }
+      });
+
+      // Przekształć dane do formatu eksportu
+      const expiryStatsData = Object.values(productStats).map(stats => {
+        const avgDays = stats.countWithExpiry > 0 
+          ? Math.round(stats.totalDays / stats.countWithExpiry) 
+          : null;
+        
+        return {
+          productName: stats.productName,
+          avgExpiryDays: avgDays !== null ? avgDays : 'No data',
+          moCount: stats.totalMOCount,
+          moWithExpiryCount: stats.countWithExpiry,
+          totalQuantity: stats.totalQuantity,
+          minExpiryDays: stats.minDays !== Infinity ? stats.minDays : 'No data',
+          maxExpiryDays: stats.maxDays !== -Infinity ? stats.maxDays : 'No data'
+        };
+      }).sort((a, b) => a.productName.localeCompare(b.productName));
+
+      // Headers for "Average Expiry Days by SKU" worksheet
+      const expiryHeaders = [
+        { label: 'Product Name (SKU)', key: 'productName' },
+        { label: 'Avg Expiry Days', key: 'avgExpiryDays' },
+        { label: 'MO Count', key: 'moCount' },
+        { label: 'MO with Expiry Date', key: 'moWithExpiryCount' },
+        { label: 'Total Quantity', key: 'totalQuantity' },
+        { label: 'Min Expiry Days', key: 'minExpiryDays' },
+        { label: 'Max Expiry Days', key: 'maxExpiryDays' }
+      ];
+
+      // Generate Excel file with two worksheets
       const currentDate = new Date().toISOString().slice(0, 10);
-      const filename = `zadania_produkcyjne_${currentDate}`;
-      const success = exportToCSV(exportData, headers, filename);
+      const filename = `production_tasks_${currentDate}`;
+      
+      const worksheets = [
+        {
+          name: 'MO Tasks',
+          data: exportData,
+          headers: headers
+        },
+        {
+          name: 'Avg Expiry Days by SKU',
+          data: expiryStatsData,
+          headers: expiryHeaders
+        }
+      ];
+      
+      const success = exportToExcel(worksheets, filename);
       
       if (success) {
-        showSuccess(`Wyeksportowano ${allTasks.length} zadań produkcyjnych do pliku CSV`);
+        showSuccess(`Exported ${allTasks.length} production tasks and statistics for ${expiryStatsData.length} products to Excel`);
+        handleCloseExportDialog();
       } else {
-        showError('Nie udało się wyeksportować zadań do CSV');
+        showError('Failed to export data to Excel');
       }
     } catch (error) {
-      console.error('Błąd podczas eksportu CSV:', error);
+      console.error('Błąd podczas eksportu Excel:', error);
       showError('Wystąpił błąd podczas eksportu: ' + error.message);
     } finally {
-      setLoading(false);
+      setExportLoading(false);
     }
   };
 
@@ -1972,9 +2190,9 @@ const TaskList = () => {
             <Button 
               variant="outlined" 
               color="secondary" 
-              startIcon={loading ? <CircularProgress size={12} /> : <DownloadIcon sx={{ fontSize: isMobile ? '1rem' : '1.25rem' }} />}
-              onClick={handleExportCSV}
-              disabled={loading}
+              startIcon={exportLoading ? <CircularProgress size={12} /> : <DownloadIcon sx={{ fontSize: isMobile ? '1rem' : '1.25rem' }} />}
+              onClick={handleOpenExportDialog}
+              disabled={exportLoading}
               size="small"
               sx={{
                 fontSize: isMobile ? '0.7rem' : '0.875rem',
@@ -1983,7 +2201,7 @@ const TaskList = () => {
                 flex: isMobile ? 1 : 'none'
               }}
             >
-              {loading ? (isMobile ? 'Export...' : 'Eksportowanie...') : (isMobile ? 'CSV' : t('production.taskList.exportCsv'))}
+              {exportLoading ? 'Export...' : 'Export'}
             </Button>
             
             {/* Sortowanie - tylko na mobile */}
@@ -2533,6 +2751,127 @@ const TaskList = () => {
           </Button>
           <Button onClick={handleStopProduction} variant="contained">
             {addToInventoryOnStop ? 'Zatrzymaj i dodaj do magazynu' : 'Zatwierdź'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog eksportu z filtrami */}
+      <Dialog
+        open={exportDialogOpen}
+        onClose={handleCloseExportDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Export Production Tasks to Excel</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={mb2}>
+            Export contains two worksheets: <strong>MO Tasks</strong> and <strong>Avg Expiry Days by SKU</strong>. 
+            Select filter criteria or leave empty to export all tasks.
+          </DialogContentText>
+          
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Client filter */}
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="export-client-filter-label">Client</InputLabel>
+                <Select
+                  labelId="export-client-filter-label"
+                  value={exportFilters.clientName}
+                  onChange={(e) => setExportFilters({...exportFilters, clientName: e.target.value})}
+                  label="Client"
+                >
+                  <MenuItem value="">All clients</MenuItem>
+                  {uniqueClients.map(client => (
+                    <MenuItem key={client} value={client}>{client}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            {/* Status filter */}
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="export-status-filter-label">Status</InputLabel>
+                <Select
+                  labelId="export-status-filter-label"
+                  value={exportFilters.status}
+                  onChange={(e) => setExportFilters({...exportFilters, status: e.target.value})}
+                  label="Status"
+                >
+                  <MenuItem value="">All statuses</MenuItem>
+                  <MenuItem value="Zaplanowane">Planned</MenuItem>
+                  <MenuItem value="W trakcie">In Progress</MenuItem>
+                  <MenuItem value="Wstrzymane">On Hold</MenuItem>
+                  <MenuItem value="Zakończone">Completed</MenuItem>
+                  <MenuItem value="Anulowane">Cancelled</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            {/* Date from filter */}
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Created from"
+                type="date"
+                value={exportFilters.fromDate}
+                onChange={(e) => setExportFilters({...exportFilters, fromDate: e.target.value})}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </Grid>
+            
+            {/* Date to filter */}
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Created to"
+                type="date"
+                value={exportFilters.toDate}
+                onChange={(e) => setExportFilters({...exportFilters, toDate: e.target.value})}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </Grid>
+          </Grid>
+          
+          <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="body2" color="textSecondary">
+              <strong>Active filters:</strong>{' '}
+              {!exportFilters.clientName && !exportFilters.status && !exportFilters.fromDate && !exportFilters.toDate 
+                ? 'None (export all tasks)' 
+                : [
+                    exportFilters.clientName && `Client: ${exportFilters.clientName}`,
+                    exportFilters.status && `Status: ${exportFilters.status}`,
+                    exportFilters.fromDate && `From: ${exportFilters.fromDate}`,
+                    exportFilters.toDate && `To: ${exportFilters.toDate}`
+                  ].filter(Boolean).join(', ')
+              }
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseExportDialog} color="secondary">
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => setExportFilters({ clientName: '', status: '', fromDate: '', toDate: '' })}
+            color="inherit"
+          >
+            Clear filters
+          </Button>
+          <Button 
+            onClick={handleExportCSV} 
+            color="primary" 
+            variant="contained"
+            disabled={exportLoading}
+            startIcon={exportLoading ? <CircularProgress size={16} /> : <DownloadIcon />}
+          >
+            {exportLoading ? 'Exporting...' : 'Export'}
           </Button>
         </DialogActions>
       </Dialog>

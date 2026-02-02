@@ -38,6 +38,10 @@
             "forecast": {
                 "title": "Prognoza Zapotrzebowania",
                 "description": "Prognozowanie zapotrzebowania na materiały. Planuj zakupy i unikaj braków."
+            },
+            "mixingAnalytics": {
+                "title": "Analiza Mieszań",
+                "description": "Wydajność mieszalnika - produkcja per SKU. Analiza liczby sztuk i mieszań w czasie."
             }
         },
         "quickAccess": {
@@ -238,6 +242,62 @@
         "emptyState": {
             "title": "Brak danych kosztów produkcji w wybranym okresie",
             "description": "Zmień zakres dat lub sprawdź czy zadania produkcyjne mają uzupełnione koszty."
+        }
+    },
+    "mixingAnalytics": {
+        "title": "Analiza Mieszań",
+        "subtitle": "Wydajność mieszalnika - produkcja per SKU",
+        "refresh": "Odśwież dane",
+        "dataRefreshed": "Dane zostały odświeżone",
+        "period": "Okres",
+        "info": "Raport pokazuje dane produkcji z mieszań (poniedziałek-piątek). Dane są agregowane na podstawie planu mieszań z zadań produkcyjnych.",
+        "errors": {
+            "fetchData": "Nie udało się pobrać danych",
+            "noDataToExport": "Brak danych do eksportu"
+        },
+        "export": {
+            "csvTooltip": "Eksportuj do CSV",
+            "success": "Wyeksportowano raport do pliku CSV",
+            "error": "Nie udało się wyeksportować raportu"
+        },
+        "filters": {
+            "title": "Filtry",
+            "startDate": "Data początkowa",
+            "endDate": "Data końcowa",
+            "product": "SKU / Produkt",
+            "workDays": "Dni robocze",
+            "workWeeks": "Tygodnie"
+        },
+        "stats": {
+            "totalMixings": "Łączna liczba mieszań",
+            "totalPieces": "Łączna ilość sztuk",
+            "avgPiecesPerMixing": "Śr. sztuk/mieszanie",
+            "avgPiecesPerDay": "Śr. sztuk/dzień",
+            "avgMixingsPerWeek": "Śr. mieszań/tydzień"
+        },
+        "table": {
+            "totalMixings": "Liczba mieszań",
+            "totalPieces": "Liczba sztuk",
+            "avgPiecesPerMixing": "Śr. sztuk/mieszanie",
+            "mixingsPerWeek": "Mieszań/tydzień",
+            "piecesPerDay": "Sztuk/dzień",
+            "tasksCount": "Liczba zadań",
+            "total": "SUMA"
+        },
+        "tabs": {
+            "table": "Tabela per SKU",
+            "daily": "Rozkład dzienny",
+            "weekly": "Rozkład tygodniowy",
+            "trend": "Trend"
+        },
+        "chart": {
+            "mixings": "Liczba mieszań",
+            "pieces": "Liczba sztuk"
+        },
+        "emptyState": {
+            "title": "Brak danych mieszań w wybranym okresie",
+            "description": "Zmień zakres dat lub sprawdź czy zadania mają uzupełniony plan mieszań.",
+            "noChartData": "Brak danych do wyświetlenia wykresu"
         }
     }
 }

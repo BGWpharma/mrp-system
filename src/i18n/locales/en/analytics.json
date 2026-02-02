@@ -38,6 +38,10 @@
             "forecast": {
                 "title": "Demand Forecast",
                 "description": "Material demand forecasting. Plan purchases and avoid shortages."
+            },
+            "mixingAnalytics": {
+                "title": "Mixing Analytics",
+                "description": "Mixer efficiency - production per SKU. Analysis of pieces and mixings over time."
             }
         },
         "quickAccess": {
@@ -238,6 +242,62 @@
         "emptyState": {
             "title": "No production cost data in selected period",
             "description": "Change date range or check if production tasks have costs filled in."
+        }
+    },
+    "mixingAnalytics": {
+        "title": "Mixing Analytics",
+        "subtitle": "Mixer efficiency - production per SKU",
+        "refresh": "Refresh data",
+        "dataRefreshed": "Data has been refreshed",
+        "period": "Period",
+        "info": "Report shows production data from mixings (Monday-Friday). Data is aggregated based on mixing plans from production tasks.",
+        "errors": {
+            "fetchData": "Failed to fetch data",
+            "noDataToExport": "No data to export"
+        },
+        "export": {
+            "csvTooltip": "Export to CSV",
+            "success": "Report exported to CSV file",
+            "error": "Failed to export report"
+        },
+        "filters": {
+            "title": "Filters",
+            "startDate": "Start date",
+            "endDate": "End date",
+            "product": "SKU / Product",
+            "workDays": "Work days",
+            "workWeeks": "Weeks"
+        },
+        "stats": {
+            "totalMixings": "Total mixings",
+            "totalPieces": "Total pieces",
+            "avgPiecesPerMixing": "Avg. pieces/mixing",
+            "avgPiecesPerDay": "Avg. pieces/day",
+            "avgMixingsPerWeek": "Avg. mixings/week"
+        },
+        "table": {
+            "totalMixings": "Total mixings",
+            "totalPieces": "Total pieces",
+            "avgPiecesPerMixing": "Avg. pieces/mixing",
+            "mixingsPerWeek": "Mixings/week",
+            "piecesPerDay": "Pieces/day",
+            "tasksCount": "Tasks count",
+            "total": "TOTAL"
+        },
+        "tabs": {
+            "table": "Table per SKU",
+            "daily": "Daily distribution",
+            "weekly": "Weekly distribution",
+            "trend": "Trend"
+        },
+        "chart": {
+            "mixings": "Number of mixings",
+            "pieces": "Number of pieces"
+        },
+        "emptyState": {
+            "title": "No mixing data in selected period",
+            "description": "Change date range or check if tasks have mixing plans filled in.",
+            "noChartData": "No data to display chart"
         }
     }
 }

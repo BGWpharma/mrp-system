@@ -27,7 +27,8 @@ import {
   LocalDining as ConsumptionIcon,
   Speed as ProgressIcon,
   MonetizationOn as CostsIcon,
-  Savings as CashflowIcon
+  Savings as CashflowIcon,
+  Blender as BlenderIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -103,6 +104,15 @@ const getReportTiles = (t) => [
     icon: TrendingUpIcon,
     path: '/production/forecast',
     gradient: 'linear-gradient(135deg, #5f72bd 0%, #9b23ea 100%)',
+    iconBg: 'rgba(255, 255, 255, 0.2)'
+  },
+  {
+    id: 'mixing-analytics',
+    title: t('analyticsDashboard.tiles.mixingAnalytics.title'),
+    description: t('analyticsDashboard.tiles.mixingAnalytics.description'),
+    icon: BlenderIcon,
+    path: '/analytics/mixing',
+    gradient: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',
     iconBg: 'rgba(255, 255, 255, 0.2)'
   }
 ];
