@@ -1014,7 +1014,7 @@ export const getInventoryItemsByCategory = async (
       
       const batchQuery = query(
         batchesRef, 
-        where('inventoryItemId', 'in', idBatch)
+        where('itemId', 'in', idBatch)
       );
       const batchSnapshot = await getDocs(batchQuery);
       return batchSnapshot.docs.map(doc => ({
@@ -1025,12 +1025,15 @@ export const getInventoryItemsByCategory = async (
     
     const allBatches = (await Promise.all(batchPromises)).flat();
     
-    // Organizuj partie w cache według inventoryItemId
+    // Organizuj partie w cache według itemId (pole w bazie to 'itemId', nie 'inventoryItemId')
     allBatches.forEach(batch => {
-      if (!batchesCache[batch.inventoryItemId]) {
-        batchesCache[batch.inventoryItemId] = [];
+      const batchItemId = batch.itemId || batch.inventoryItemId; // Obsługa obu pól dla kompatybilności
+      if (!batchItemId) return;
+      
+      if (!batchesCache[batchItemId]) {
+        batchesCache[batchItemId] = [];
       }
-      batchesCache[batch.inventoryItemId].push(batch);
+      batchesCache[batchItemId].push(batch);
     });
     
     console.log('🔍 getInventoryItemsByCategory - pobrano', allBatches.length, 'partii dla kategorii', category);

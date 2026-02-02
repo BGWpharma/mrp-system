@@ -1,6 +1,6 @@
 {
   "name": "mrp-system",
-  "version": "0.1.278",
+  "version": "0.1.279",
   "private": true,
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -4,12 +4,14 @@ import { Container, Typography, Box, Tabs, Tab, useMediaQuery, useTheme } from '
 import {
   Receipt as InvoicesIcon,
   AccountBalance as ReinvoiceIcon,
-  Factory as FactoryIcon
+  Factory as FactoryIcon,
+  Calculate as QuotationIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import InvoicesList from '../../components/invoices/InvoicesList';
 import ReinvoicesList from '../../components/invoices/ReinvoicesList';
 import FactoryCostsTab from '../../components/sales/FactoryCostsTab';
+import QuotationTool from '../../components/sales/quotation/QuotationTool';
 import { useTranslation } from '../../hooks/useTranslation';
 
 const SalesPage = () => {
@@ -27,6 +29,8 @@ const SalesPage = () => {
       setActiveTab(1);
     } else if (location.pathname.includes('/sales/factory-costs')) {
       setActiveTab(2);
+    } else if (location.pathname.includes('/sales/quotation')) {
+      setActiveTab(3);
     } else if (location.pathname === '/sales' || location.pathname === '/invoices') {
       setActiveTab(0);
     }
@@ -45,6 +49,9 @@ const SalesPage = () => {
       case 2:
         navigate('/sales/factory-costs');
         break;
+      case 3:
+        navigate('/sales/quotation');
+        break;
       default:
         navigate('/sales');
     }
@@ -53,7 +60,8 @@ const SalesPage = () => {
   const tabData = [
     { icon: <InvoicesIcon />, label: t('tabs.invoices'), value: 0 },
     { icon: <ReinvoiceIcon />, label: t('tabs.materialAdvances'), value: 1 },
-    { icon: <FactoryIcon />, label: t('tabs.factoryCosts'), value: 2 }
+    { icon: <FactoryIcon />, label: t('tabs.factoryCosts'), value: 2 },
+    { icon: <QuotationIcon />, label: t('tabs.quotation'), value: 3 }
   ];
   
   // Funkcja renderująca zawartość aktualnie wybranej zakładki
@@ -62,6 +70,7 @@ const SalesPage = () => {
       case 0: return <InvoicesList />;
       case 1: return <ReinvoicesList />;
       case 2: return <FactoryCostsTab />;
+      case 3: return <QuotationTool />;
       default: return <InvoicesList />;
     }
   };
