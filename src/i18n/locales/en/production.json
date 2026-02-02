@@ -582,6 +582,7 @@
     "client": "Client",
     "description": "Description",
     "lotNumber": "Batch Number (LOT)",
+    "expiryDate": "Batch Expiry Date",
     "createdAt": "Created Date",
     "createdBy": "Created By",
     "totalCost": "Total Cost (EUR)",

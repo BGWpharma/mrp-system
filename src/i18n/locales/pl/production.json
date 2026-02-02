@@ -630,6 +630,7 @@
     "client": "Klient",
     "description": "Opis",
     "lotNumber": "Numer partii (LOT)",
+    "expiryDate": "Data ważności partii",
     "createdAt": "Data utworzenia",
     "createdBy": "Utworzony przez",
     "totalCost": "Koszt całkowity (EUR)",

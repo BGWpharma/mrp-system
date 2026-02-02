@@ -21,6 +21,8 @@
  * - onCmrStatusUpdate         (trigger: cmrDocuments)
  * - onProductionHistoryChange (trigger: productionHistory)
  * - onFactoryCostChange       (trigger: factoryCosts)
+ * - onInvoiceAttachmentUploaded (trigger: Storage - PO invoices)
+ * - onCmrInvoiceCreated       (trigger: cmrInvoices)
  * - updateExpiryStats         (scheduled: every day 01:00)
  * - checkUnorderedPOReservations (scheduled: every day 08:00)
  */
@@ -46,6 +48,17 @@ const {onCmrStatusUpdate} = require("./triggers/cmrStatus");
 const {onProductionHistoryChange, onFactoryCostChange} = require("./triggers/factoryCost");
 
 // ============================================================================
+// INVOICE OCR TRIGGERS - Automatyczne przetwarzanie faktur
+// ============================================================================
+const {
+  onInvoiceAttachmentUploaded,
+  onCmrInvoiceCreated,
+  onInvoiceAttachmentDeleted,
+  onCmrInvoiceDeleted,
+  retryInvoiceOcr,
+} = require("./triggers/invoiceOcr");
+
+// ============================================================================
 // SCHEDULED FUNCTIONS - Zadania cron
 // ============================================================================
 const {updateExpiryStats} = require("./scheduled/expiryStats");
@@ -66,3 +79,10 @@ exports.onProductionHistoryChange = onProductionHistoryChange;
 exports.onFactoryCostChange = onFactoryCostChange;
 exports.updateExpiryStats = updateExpiryStats;
 exports.checkUnorderedPOReservations = checkUnorderedPOReservations;
+
+// Invoice OCR Functions
+exports.onInvoiceAttachmentUploaded = onInvoiceAttachmentUploaded;
+exports.onCmrInvoiceCreated = onCmrInvoiceCreated;
+exports.onInvoiceAttachmentDeleted = onInvoiceAttachmentDeleted;
+exports.onCmrInvoiceDeleted = onCmrInvoiceDeleted;
+exports.retryInvoiceOcr = retryInvoiceOcr;

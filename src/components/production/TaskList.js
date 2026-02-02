@@ -1597,28 +1597,28 @@ const TaskList = () => {
         }
       };
 
-      // Definicja nagłówków dla CSV (usunięto "Priorytet")
+      // Definicja nagłówków dla CSV - angielskie nazwy dla kompatybilności
       const headers = [
-        { label: t('production.csvHeaders.moNumber'), key: 'moNumber' },
-        { label: t('production.csvHeaders.taskName'), key: 'name' },
-        { label: t('production.csvHeaders.product'), key: 'productName' },
-        { label: t('production.csvHeaders.quantity'), key: 'quantity' },
-        { label: t('production.csvHeaders.unit'), key: 'unit' },
-        { label: t('production.csvHeaders.remainingQuantity'), key: 'remainingQuantity' },
-        { label: t('production.csvHeaders.status'), key: 'status' },
-  
-        { label: t('production.csvHeaders.plannedStart'), key: 'scheduledDate' },
-        { label: t('production.csvHeaders.plannedEnd'), key: 'endDate' },
-        { label: t('production.csvHeaders.estimatedDurationHours'), key: 'estimatedDurationHours' },
-        { label: t('production.csvHeaders.productionTimePerUnit'), key: 'productionTimePerUnit' },
-        { label: t('production.csvHeaders.orderNumber'), key: 'orderNumber' },
-        { label: t('production.csvHeaders.client'), key: 'clientName' },
-        { label: t('production.csvHeaders.description'), key: 'description' },
-        { label: t('production.csvHeaders.lotNumber'), key: 'lotNumber' },
-        { label: t('production.csvHeaders.createdAt'), key: 'createdAt' },
-        { label: t('production.csvHeaders.createdBy'), key: 'createdBy' },
-        { label: t('production.csvHeaders.totalCost'), key: 'totalCost' },
-        { label: t('production.csvHeaders.costPerUnit'), key: 'costPerUnit' }
+        { label: 'MO Number', key: 'moNumber' },
+        { label: 'Task Name', key: 'name' },
+        { label: 'Product', key: 'productName' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Remaining Quantity', key: 'remainingQuantity' },
+        { label: 'Status', key: 'status' },
+        { label: 'Planned Start', key: 'scheduledDate' },
+        { label: 'Planned End', key: 'endDate' },
+        { label: 'Estimated Duration (hours)', key: 'estimatedDurationHours' },
+        { label: 'Time per Unit (min)', key: 'productionTimePerUnit' },
+        { label: 'Order Number', key: 'orderNumber' },
+        { label: 'Client', key: 'clientName' },
+        { label: 'Description', key: 'description' },
+        { label: 'Batch Number (LOT)', key: 'lotNumber' },
+        { label: 'Batch Expiry Date', key: 'expiryDate' },
+        { label: 'Created Date', key: 'createdAt' },
+        { label: 'Created By', key: 'createdBy' },
+        { label: 'Total Cost (EUR)', key: 'totalCost' },
+        { label: 'Cost per Unit (EUR)', key: 'costPerUnit' }
       ];
       
       // Przygotuj dane do eksportu
@@ -1647,6 +1647,7 @@ const TaskList = () => {
           clientName: task.clientName || task.customerName || '',
           description: task.description || '',
           lotNumber: task.lotNumber || '',
+          expiryDate: formatDateForCSV(task.expiryDate),
           createdAt: formatDateForCSV(task.createdAt),
           createdBy: userNamesMap[task.createdBy] || task.createdBy || '',
           totalCost: totalCost.toFixed(4),
