@@ -162,18 +162,10 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     ocrWarnings: ocrData.warnings,
     ocrRawData: JSON.stringify(ocrData),
 
-    // Workflow status - auto-reject proformas
-    status: isProforma ? "rejected_proforma" : "pending_review",
+    // Workflow status
+    status: "pending_review",
     // Status flow: pending_review → approved → posted (after journal entry)
     //              pending_review → rejected
-    //              rejected_proforma (auto-rejected by OCR)
-
-    // Add rejection info for proformas
-    ...(isProforma && {
-      rejectionReason: "Dokument automatycznie odrzucony - wykryto fakturę pro forma",
-      autoRejected: true,
-      autoRejectedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }),
 
     journalEntryId: null, // Set when posted to accounting
 

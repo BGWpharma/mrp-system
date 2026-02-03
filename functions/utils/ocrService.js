@@ -215,15 +215,6 @@ const checkIfProforma = (ocrData) => {
     }
   }
 
-  // Check warnings array - Gemini often puts proforma detection here
-  if (ocrData.warnings && Array.isArray(ocrData.warnings)) {
-    const warningsText = ocrData.warnings.join(" ").toLowerCase();
-    if (proformaKeywords.some((kw) => warningsText.includes(kw))) {
-      logger.info("[OCR] Proforma detected in warnings array");
-      return true;
-    }
-  }
-
   // Check invoice number for proforma markers
   if (ocrData.invoiceNumber) {
     const invoiceNum = ocrData.invoiceNumber.toLowerCase();
