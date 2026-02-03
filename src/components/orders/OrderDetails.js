@@ -284,17 +284,20 @@ const verifyProductionTasks = async (orderToVerify) => {
         if (orderToVerify.items) {
           orderToVerify.items = orderToVerify.items.map(item => {
             if (item.productionTaskId === task.id) {
-              // Użyj totalCostWithFactory (z kosztem zakładu) jeśli dostępny
+              // Łączny koszt materiałów (tylko z flagą "wliczaj do kosztów") + koszt zakładu
+              const materialCost = (taskDoc.totalMaterialCost || 0) + (taskDoc.factoryCostTotal || 0);
+              const unitMaterialCost = (taskDoc.unitMaterialCost || 0) + (taskDoc.factoryCostPerUnit || 0);
+              // Pełny koszt produkcji (wszystkie materiały) + koszt zakładu
               const fullCost = taskDoc.totalCostWithFactory || taskDoc.totalFullProductionCost || 0;
-              const unitCost = taskDoc.unitCostWithFactory || taskDoc.unitFullProductionCost || 0;
+              const unitFullCost = taskDoc.unitCostWithFactory || taskDoc.unitFullProductionCost || 0;
               return {
                 ...item,
                 productionStatus: taskDoc.status,
                 productionTaskNumber: taskDoc.moNumber,
-                productionCost: fullCost, // Pełny koszt z zakładem
-                fullProductionCost: fullCost,
-                productionUnitCost: unitCost,
-                fullProductionUnitCost: unitCost,
+                productionCost: materialCost, // Łączny koszt materiałów z zakładem
+                fullProductionCost: fullCost, // Pełny koszt produkcji z zakładem
+                productionUnitCost: unitMaterialCost, // Koszt jednostkowy materiałów z zakładem
+                fullProductionUnitCost: unitFullCost, // Pełny koszt jednostkowy z zakładem
                 factoryCostIncluded: (taskDoc.factoryCostTotal || 0) > 0
               };
             }
@@ -808,14 +811,17 @@ const OrderDetails = () => {
                 // Pobierz szczegółowe dane zadania z bazy danych
                 const taskDetails = await getTaskById(associatedTask.id);
                 
-                // Użyj totalCostWithFactory (z kosztem zakładu) jeśli dostępny
+                // Łączny koszt materiałów (tylko z flagą "wliczaj do kosztów") + koszt zakładu
+                const materialCost = (taskDetails.totalMaterialCost || associatedTask.totalMaterialCost || 0) + (taskDetails.factoryCostTotal || 0);
+                const unitMaterialCost = (taskDetails.unitMaterialCost || associatedTask.unitMaterialCost || 0) + (taskDetails.factoryCostPerUnit || 0);
+                
+                // Pełny koszt produkcji (wszystkie materiały) + koszt zakładu
                 const fullProductionCost = taskDetails.totalCostWithFactory || taskDetails.totalFullProductionCost || associatedTask.totalFullProductionCost || 0;
-                const unitCostWithFactory = taskDetails.unitCostWithFactory || taskDetails.unitFullProductionCost || 0;
-                const productionCost = fullProductionCost; // Teraz productionCost = pełny koszt z zakładem
+                const unitFullCost = taskDetails.unitCostWithFactory || taskDetails.unitFullProductionCost || 0;
                 
                 // Oblicz koszty jednostkowe z uwzględnieniem logiki listy cenowej
                 const calculatedFullProductionUnitCost = calculateFullProductionUnitCost(item, fullProductionCost);
-                const calculatedProductionUnitCost = calculateProductionUnitCost(item, productionCost);
+                const calculatedProductionUnitCost = calculateProductionUnitCost(item, materialCost);
                 
                 // Aktualizuj informacje o zadaniu produkcyjnym w pozycji zamówienia
                 updatedOrderData.items[i] = {
@@ -823,12 +829,12 @@ const OrderDetails = () => {
                   productionTaskId: associatedTask.id,
                   productionTaskNumber: associatedTask.moNumber || taskDetails.moNumber,
                   productionStatus: associatedTask.status || taskDetails.status,
-                  // Pełny koszt z zakładem
-                  productionCost: productionCost,
+                  // Łączny koszt materiałów z zakładem
+                  productionCost: materialCost,
                   fullProductionCost: fullProductionCost,
-                  // Koszty jednostkowe z zakładem
-                  productionUnitCost: calculatedProductionUnitCost,
-                  fullProductionUnitCost: unitCostWithFactory || calculatedFullProductionUnitCost,
+                  // Koszty jednostkowe
+                  productionUnitCost: unitMaterialCost || calculatedProductionUnitCost,
+                  fullProductionUnitCost: unitFullCost || calculatedFullProductionUnitCost,
                   // Zapisz też czy koszt zakładu jest wliczony
                   factoryCostIncluded: (taskDetails.factoryCostTotal || 0) > 0
                 };
@@ -836,17 +842,20 @@ const OrderDetails = () => {
                 console.error(`Błąd podczas pobierania szczegółów zadania ${associatedTask.id}:`, error);
                 
                 // W przypadku błędu, użyj podstawowych danych z associatedTask
+                // Łączny koszt materiałów (tylko z flagą "wliczaj do kosztów") + koszt zakładu
+                const materialCost = (associatedTask.totalMaterialCost || 0) + (associatedTask.factoryCostTotal || 0);
+                const unitMaterialCost = (associatedTask.unitMaterialCost || 0) + (associatedTask.factoryCostPerUnit || 0);
+                // Pełny koszt produkcji (wszystkie materiały) + koszt zakładu
                 const fullProductionCost = associatedTask.totalCostWithFactory || associatedTask.totalFullProductionCost || 0;
-                const productionCost = fullProductionCost;
                 
                 updatedOrderData.items[i] = {
                   ...item,
                   productionTaskId: associatedTask.id,
                   productionTaskNumber: associatedTask.moNumber,
                   productionStatus: associatedTask.status,
-                  productionCost: productionCost,
+                  productionCost: materialCost,
                   fullProductionCost: fullProductionCost,
-                  productionUnitCost: productionCost / (parseFloat(item.quantity) || 1),
+                  productionUnitCost: unitMaterialCost || (materialCost / (parseFloat(item.quantity) || 1)),
                   fullProductionUnitCost: fullProductionCost / (parseFloat(item.quantity) || 1)
                 };
               }

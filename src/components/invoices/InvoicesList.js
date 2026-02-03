@@ -48,7 +48,8 @@ import {
   Refresh as RefreshIcon,
   MoreVert as MoreVertIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  KeyboardArrowUp as KeyboardArrowUpIcon
+  KeyboardArrowUp as KeyboardArrowUpIcon,
+  CurrencyExchange as CurrencyExchangeIcon
 } from '@mui/icons-material';
 import { 
   getAllInvoices, 
@@ -56,7 +57,8 @@ import {
   deleteInvoice,
   getAvailableProformaAmount,
   calculateRequiredAdvancePayment,
-  getInvoiceById
+  getInvoiceById,
+  updateInvoicesExchangeRates
 } from '../../services/invoiceService';
 import { preciseCompare, preciseSubtract } from '../../utils/mathUtils';
 import { getAllCustomers } from '../../services/customerService';
@@ -99,6 +101,9 @@ const InvoicesList = () => {
   // Stan dla menu dropdown akcji
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState(null);
   const isActionsMenuOpen = Boolean(actionsMenuAnchor);
+  
+  // Stan dla aktualizacji kursów walut
+  const [updatingExchangeRates, setUpdatingExchangeRates] = useState(false);
 
   // Referencje do komponentów eksportu
   const csvExportRef = useRef(null);
@@ -449,6 +454,37 @@ const InvoicesList = () => {
   const handleAddInvoice = () => {
     navigate('/invoices/new');
   };
+  
+  const handleUpdateExchangeRates = async () => {
+    setUpdatingExchangeRates(true);
+    
+    try {
+      console.log('\n' + '🔄'.repeat(30));
+      console.log('ROZPOCZĘCIE AKTUALIZACJI KURSÓW WALUT DLA FAKTUR');
+      console.log('🔄'.repeat(30) + '\n');
+      
+      const result = await updateInvoicesExchangeRates([], currentUser?.uid);
+      
+      console.log('\n' + '✅'.repeat(30));
+      console.log('AKTUALIZACJA ZAKOŃCZONA POMYŚLNIE');
+      console.log('✅'.repeat(30) + '\n');
+      
+      showSuccess(
+        `Zaktualizowano kursy walut: ${result.updated} faktur. Pominięto: ${result.skipped}.` +
+        (result.errors.length > 0 ? ` Błędy: ${result.errors.length}` : '')
+      );
+      
+      // Odśwież listę faktur
+      await fetchInvoices();
+      
+    } catch (error) {
+      console.error('❌ BŁĄD AKTUALIZACJI KURSÓW:', error);
+      showError(`Błąd podczas aktualizacji kursów walut: ${error.message}`);
+    } finally {
+      setUpdatingExchangeRates(false);
+    }
+  };
+  
   const handleDeleteClick = (invoice) => {
     setInvoiceToDelete(invoice);
     setDeleteDialogOpen(true);
@@ -812,6 +848,18 @@ const InvoicesList = () => {
                   />
                 </div>
               </Box>
+              
+              <Grid item>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={updatingExchangeRates ? <CircularProgress size={20} /> : <CurrencyExchangeIcon />}
+                  onClick={handleUpdateExchangeRates}
+                  disabled={updatingExchangeRates || loading}
+                >
+                  {updatingExchangeRates ? 'Aktualizacja...' : 'Aktualizuj kursy NBP'}
+                </Button>
+              </Grid>
               
               <Grid item>
                 <Button

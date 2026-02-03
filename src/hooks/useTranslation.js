@@ -13,10 +13,19 @@ export const useTranslation = (namespace) => {
    * Zapewnia kompatybilność wsteczną ze starymi kluczami
    */
   const translate = (key, options = {}) => {
+    // Zabezpieczenie przed null/undefined/pustym stringiem
+    if (!key || typeof key !== 'string') {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[useTranslation] Nieprawidłowy klucz tłumaczenia:', key);
+      }
+      return options.defaultValue || options.fallback || '';
+    }
+
     let translationKey = key;
+    let keyFound = false;
     
     // Mapowanie starych kluczy do nowych namespace'ów
-    if (key && typeof key === 'string' && key.includes('.')) {
+    if (key.includes('.')) {
       const [firstPart, ...restParts] = key.split('.');
       const remainingKey = restParts.join('.');
       
@@ -41,7 +50,7 @@ export const useTranslation = (namespace) => {
         'calculator': 'calculator',
         'priceLists': 'priceLists',
         'reports': 'reports',
-        'analytics': 'reports',
+        'analytics': 'analytics',
         'coReports': 'reports',
         'environmentalConditions': 'environmentalConditions',
         'expiryDates': 'expiryDates',
@@ -51,7 +60,13 @@ export const useTranslation = (namespace) => {
         'sidebar': 'sidebar',
         'productionForms': 'forms',
         'inventoryForms': 'forms',
-        'taskDetails': 'taskDetails'
+        'taskDetails': 'taskDetails',
+        'taskboard': 'taskboard',
+        'cashflow': 'cashflow',
+        'financialReport': 'financialReport',
+        'faq': 'faq',
+        'operationalCosts': 'operationalCosts',
+        'users': 'users'
       };
       
       // Sprawdź czy pierwszy część klucza pasuje do namespace'u
@@ -71,6 +86,7 @@ export const useTranslation = (namespace) => {
         for (const keyToTry of keysToTry) {
           if (i18n.exists(keyToTry)) {
             translationKey = keyToTry;
+            keyFound = true;
             break;
           }
         }
@@ -78,14 +94,31 @@ export const useTranslation = (namespace) => {
         // Jeśli nie znaleziono mapowania, spróbuj w common
         if (i18n.exists(`common:${key}`)) {
           translationKey = `common:${key}`;
+          keyFound = true;
         }
       }
     }
     
-    const translation = t(translationKey, { ...options, fallback: key });
+    // Przygotuj opcje dla i18next
+    const i18nextOptions = {
+      ...options,
+      // defaultValue ma priorytet nad fallback
+      defaultValue: options.defaultValue || options.fallback || key
+    };
     
-    // Jeśli tłumaczenie jest równe kluczowi, prawdopodobnie nie zostało znalezione
-    if (translation === translationKey && options.fallback) {
+    const translation = t(translationKey, i18nextOptions);
+    
+    // Loguj brakujące klucze tylko w development
+    if (process.env.NODE_ENV === 'development' && !keyFound && translation === key) {
+      console.warn(
+        `[useTranslation] Brakujący klucz tłumaczenia: "${key}"`,
+        `\n  Namespace: ${namespace || 'default'}`,
+        `\n  Język: ${i18n.language}`
+      );
+    }
+    
+    // Jeśli tłumaczenie jest równe kluczowi i mamy fallback, użyj go
+    if (translation === translationKey && options.fallback && options.fallback !== key) {
       return options.fallback;
     }
     

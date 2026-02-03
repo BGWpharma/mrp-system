@@ -30,7 +30,8 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Tabs,
-  Tab
+  Tab,
+  Collapse
 } from '@mui/material';
 import {
   Blender as BlenderIcon,
@@ -40,7 +41,9 @@ import {
   TableChart as TableIcon,
   BarChart as ChartIcon,
   Timeline as TimelineIcon,
-  CalendarMonth as CalendarIcon
+  CalendarMonth as CalendarIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -77,6 +80,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../services/firebase/config';
 import { exportToCSV, formatDateForExport } from '../../utils/exportUtils';
+import { getAllCustomers } from '../../services/customerService';
 
 const MixingAnalyticsPage = () => {
   const { currentUser } = useAuth();
@@ -89,15 +93,53 @@ const MixingAnalyticsPage = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [productionTasks, setProductionTasks] = useState([]);
-  const [startDate, setStartDate] = useState(subMonths(new Date(), 1));
-  const [endDate, setEndDate] = useState(new Date());
+  const [customers, setCustomers] = useState([]);
+  
+  // ✅ DEBOUNCE dla dat - osobne stany dla wyświetlania i obliczeń
+  const [displayStartDate, setDisplayStartDate] = useState(subMonths(new Date(), 1));
+  const [displayEndDate, setDisplayEndDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(subMonths(new Date(), 1)); // Debounced
+  const [endDate, setEndDate] = useState(new Date()); // Debounced
+  
   const [selectedProduct, setSelectedProduct] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState('all');
   const [viewMode, setViewMode] = useState('table'); // 'table', 'daily', 'weekly', 'trend'
   const [activeTab, setActiveTab] = useState(0);
+  const [dateMode, setDateMode] = useState('execution'); // 'scheduled' lub 'execution'
+  const [expandedRows, setExpandedRows] = useState(new Set()); // Rozwinięte wiersze SKU
+  const [isDebouncing, setIsDebouncing] = useState(false); // ✅ Czy debounce jest aktywny
+
+  // ✅ DEBOUNCE dla dat - opóźnij aktualizację o 500ms (obie daty razem)
+  useEffect(() => {
+    setIsDebouncing(true);
+    const timeoutId = setTimeout(() => {
+      setStartDate(displayStartDate);
+      setEndDate(displayEndDate);
+      setIsDebouncing(false);
+    }, 500);
+
+    return () => {
+      clearTimeout(timeoutId);
+      setIsDebouncing(false);
+    };
+  }, [displayStartDate, displayEndDate]);
 
   useEffect(() => {
     fetchMixingData();
   }, [startDate, endDate]);
+
+  // Pobierz listę klientów
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const data = await getAllCustomers();
+        setCustomers(data || []);
+      } catch (error) {
+        console.error('Błąd podczas pobierania klientów:', error);
+      }
+    };
+    fetchCustomers();
+  }, []);
 
   // Pobierz dane o mieszaniach z zadań produkcyjnych
   const fetchMixingData = async () => {
@@ -157,34 +199,77 @@ const MixingAnalyticsPage = () => {
     const dataByProduct = {};
     const dataByDay = {};
     const dataByWeek = {};
+    let unrealizedCount = 0;
+    let totalMixingsCount = 0;
+    
+    // ✅ PRÓG MINIMALNY: Ignoruj dni z mniej niż X mieszaniami (przełączenia linii)
+    const MIN_MIXINGS_PER_DAY = 2;
 
     productionTasks.forEach(task => {
+      // ✅ Filtruj po kliencie
+      if (selectedCustomer !== 'all') {
+        const taskCustomerId = task.customerId || task.customer?.id;
+        if (taskCustomerId !== selectedCustomer) {
+          return; // Pomiń to zadanie - nie pasuje do wybranego klienta
+        }
+      }
+
       const productName = task.recipeName || task.productName || 'Nieznany produkt';
-      
-      // Pobierz datę zadania
-      let taskDate;
-      if (task.scheduledDate) {
-        taskDate = task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate);
-      } else if (task.createdAt) {
-        taskDate = task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt);
-      } else {
-        taskDate = new Date();
-      }
-
-      // Pomijaj weekendy (sobota=6, niedziela=0)
-      const dayOfWeek = getDay(taskDate);
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        return; // Pomijamy weekendy
-      }
-
-      const dayKey = format(taskDate, 'yyyy-MM-dd');
-      const weekKey = format(startOfWeek(taskDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
       // Znajdź wszystkie nagłówki mieszań (type === 'header')
       const mixingHeaders = task.mixingPlanChecklist?.filter(item => item.type === 'header') || [];
 
       mixingHeaders.forEach(mixing => {
+        totalMixingsCount++;
         const piecesCount = parsePiecesCount(mixing.details);
+
+        // Znajdź checkboxy dla tego mieszania
+        const checkItems = task.mixingPlanChecklist?.filter(
+          item => item.parentId === mixing.id && item.type === 'check'
+        ) || [];
+
+        // Znajdź pierwszą datę wykonania z odchaczonych checkboxów
+        const completedChecks = checkItems
+          .filter(item => item.completed && item.completedAt)
+          .map(item => ({
+            ...item,
+            dateObj: item.completedAt.toDate ? item.completedAt.toDate() : new Date(item.completedAt)
+          }))
+          .sort((a, b) => a.dateObj - b.dateObj);
+
+        let taskDate;
+        let isRealized = false;
+
+        if (dateMode === 'execution') {
+          // Tryb wykonania - użyj daty z pierwszego odchaczonego checkboxa
+          if (completedChecks.length > 0) {
+            taskDate = completedChecks[0].dateObj;
+            isRealized = true;
+          } else {
+            // Mieszanie nie zostało jeszcze wykonane - pomiń je
+            unrealizedCount++;
+            return;
+          }
+        } else {
+          // Tryb planowania - użyj scheduledDate zadania
+          if (task.scheduledDate) {
+            taskDate = task.scheduledDate.toDate ? task.scheduledDate.toDate() : new Date(task.scheduledDate);
+          } else if (task.createdAt) {
+            taskDate = task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt);
+          } else {
+            taskDate = new Date();
+          }
+          isRealized = completedChecks.length > 0;
+        }
+
+        // Pomijaj weekendy (sobota=6, niedziela=0)
+        const dayOfWeek = getDay(taskDate);
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          return; // Pomijamy weekendy
+        }
+
+        const dayKey = format(taskDate, 'yyyy-MM-dd');
+        const weekKey = format(startOfWeek(taskDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
         // Agreguj per SKU/produkt
         if (!dataByProduct[productName]) {
@@ -192,14 +277,22 @@ const MixingAnalyticsPage = () => {
             name: productName,
             totalMixings: 0,
             totalPieces: 0,
+            realizedMixings: 0,
             mixingsByDay: {},
             piecesByDay: {},
-            tasks: new Set()
+            tasks: new Set(),
+            productionDays: new Set(), // ✅ Zbiór unikalnych dni z produkcją
+            productionWeeks: new Set(), // ✅ Zbiór unikalnych tygodni z produkcją
+            excludedDays: new Set() // ✅ Dni pominięte (< MIN_MIXINGS_PER_DAY)
           };
         }
         dataByProduct[productName].totalMixings++;
         dataByProduct[productName].totalPieces += piecesCount;
+        if (isRealized) {
+          dataByProduct[productName].realizedMixings++;
+        }
         dataByProduct[productName].tasks.add(task.id);
+        // ⚠️ NIE dodajemy od razu do productionDays - zrobimy to później po sprawdzeniu progu
 
         // Agreguj per dzień dla produktu
         if (!dataByProduct[productName].mixingsByDay[dayKey]) {
@@ -240,18 +333,41 @@ const MixingAnalyticsPage = () => {
       });
     });
 
-    // Konwertuj Set na liczbę zadań
+    // ✅ Filtruj dni produkcji - dodaj tylko te z >= MIN_MIXINGS_PER_DAY
+    Object.values(dataByProduct).forEach(product => {
+      Object.entries(product.mixingsByDay).forEach(([dayKey, mixingsCount]) => {
+        if (mixingsCount >= MIN_MIXINGS_PER_DAY) {
+          product.productionDays.add(dayKey);
+          // ✅ Dodaj tydzień, w którym był ten dzień produkcji
+          const weekKey = format(startOfWeek(new Date(dayKey), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+          product.productionWeeks.add(weekKey);
+        } else {
+          product.excludedDays.add(dayKey); // ✅ Zapamiętaj pominięte dni
+        }
+      });
+    });
+
+    // Konwertuj Set na liczby
     Object.values(dataByProduct).forEach(product => {
       product.tasksCount = product.tasks.size;
+      product.actualProductionDays = product.productionDays.size; // ✅ Faktyczna liczba dni z produkcją (>= MIN_MIXINGS_PER_DAY)
+      product.actualProductionWeeks = product.productionWeeks.size; // ✅ Faktyczna liczba tygodni z produkcją
+      product.excludedDaysCount = product.excludedDays.size; // ✅ Liczba pominiętych dni
       delete product.tasks;
+      delete product.productionDays;
+      delete product.productionWeeks;
+      delete product.excludedDays;
     });
 
     return {
       byProduct: Object.values(dataByProduct).sort((a, b) => b.totalPieces - a.totalPieces),
       byDay: Object.values(dataByDay).sort((a, b) => a.date.localeCompare(b.date)),
-      byWeek: Object.values(dataByWeek).sort((a, b) => a.week.localeCompare(b.week))
+      byWeek: Object.values(dataByWeek).sort((a, b) => a.week.localeCompare(b.week)),
+      unrealizedCount,
+      totalMixingsCount,
+      realizationRate: totalMixingsCount > 0 ? ((totalMixingsCount - unrealizedCount) / totalMixingsCount * 100).toFixed(1) : 0
     };
-  }, [productionTasks]);
+  }, [productionTasks, dateMode, selectedCustomer]);
 
   // Oblicz liczbę dni roboczych w okresie
   const workDaysInPeriod = useMemo(() => {
@@ -288,13 +404,35 @@ const MixingAnalyticsPage = () => {
     const totalMixings = data.reduce((sum, p) => sum + p.totalMixings, 0);
     const totalPieces = data.reduce((sum, p) => sum + p.totalPieces, 0);
     
+    // ✅ Zbierz unikalne dni produkcji TYLKO z przefiltrowanych dni (>= MIN_MIXINGS_PER_DAY)
+    const allProductionDaysSet = new Set();
+    data.forEach(product => {
+      // Dodaj tylko dni, które spełniają próg MIN_MIXINGS_PER_DAY
+      Object.entries(product.mixingsByDay || {}).forEach(([day, count]) => {
+        if (count >= 2) { // MIN_MIXINGS_PER_DAY = 2
+          allProductionDaysSet.add(day);
+        }
+      });
+    });
+    const totalActualProductionDays = allProductionDaysSet.size;
+    
+    // ✅ Zbierz unikalne tygodnie produkcji
+    const allProductionWeeksSet = new Set();
+    allProductionDaysSet.forEach(dayKey => {
+      const weekKey = format(startOfWeek(new Date(dayKey), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      allProductionWeeksSet.add(weekKey);
+    });
+    const totalActualProductionWeeks = allProductionWeeksSet.size;
+    
     return {
-      totalMixings,
-      totalPieces,
-      avgPiecesPerMixing: totalMixings > 0 ? Math.round(totalPieces / totalMixings) : 0,
-      avgPiecesPerDay: workDaysInPeriod > 0 ? Math.round(totalPieces / workDaysInPeriod) : 0,
-      avgMixingsPerWeek: workWeeksInPeriod > 0 ? (totalMixings / workWeeksInPeriod).toFixed(1) : 0,
-      productsCount: data.length
+      totalMixings, // ✅ Suma z CAŁEGO okresu
+      totalPieces, // ✅ Suma z CAŁEGO okresu
+      avgPiecesPerMixing: totalMixings > 0 ? Math.round(totalPieces / totalMixings) : 0, // ✅ Średnia z CAŁEGO okresu
+      avgPiecesPerDay: totalActualProductionDays > 0 ? Math.round(totalPieces / totalActualProductionDays) : 0, // ✅ Średnia dzienna (pełne dni produkcji)
+      avgMixingsPerWeek: totalActualProductionWeeks > 0 ? (totalMixings / totalActualProductionWeeks).toFixed(1) : 0, // ✅ Średnia tygodniowa z FAKTYCZNYCH tygodni produkcji
+      productsCount: data.length,
+      totalActualProductionDays, // ✅ Liczba pełnych dni produkcji (>=2 mieszań)
+      totalActualProductionWeeks // ✅ Liczba tygodni z produkcją
     };
   }, [filteredProductData, workDaysInPeriod, workWeeksInPeriod]);
 
@@ -334,35 +472,74 @@ const MixingAnalyticsPage = () => {
     }
 
     try {
-      const exportData = filteredProductData.map(product => ({
-        sku: product.name,
-        totalMixings: product.totalMixings,
-        totalPieces: product.totalPieces,
-        avgPiecesPerMixing: product.totalMixings > 0 
-          ? Math.round(product.totalPieces / product.totalMixings) 
-          : 0,
-        mixingsPerWeek: workWeeksInPeriod > 0 
-          ? (product.totalMixings / workWeeksInPeriod).toFixed(2) 
-          : 0,
-        piecesPerDay: workDaysInPeriod > 0 
-          ? Math.round(product.totalPieces / workDaysInPeriod) 
-          : 0,
-        tasksCount: product.tasksCount
-      }));
+      const exportData = filteredProductData.map(product => {
+        const actualDays = product.actualProductionDays || 0;
+        const actualWeeks = product.actualProductionWeeks || 0;
+        const excludedDays = product.excludedDaysCount || 0;
+        
+        // Oblicz średnie dzienne
+        const avgMixingsPerDay = actualDays > 0 
+          ? (product.totalMixings / actualDays).toFixed(2)
+          : 0;
+        const avgPiecesPerDay = actualDays > 0 
+          ? Math.round(product.totalPieces / actualDays)
+          : 0;
+        
+        // Oblicz weekly sprint (pon-czw, 4 dni)
+        const sprintMixings = actualDays > 0 
+          ? (product.totalMixings / actualDays * 4).toFixed(1)
+          : 0;
+        const sprintPieces = actualDays > 0 
+          ? Math.round(product.totalPieces / actualDays * 4)
+          : 0;
+        
+        const baseData = {
+          sku: product.name,
+          totalMixings: product.totalMixings,
+          totalPieces: product.totalPieces,
+          avgPiecesPerMixing: product.totalMixings > 0 
+            ? Math.round(product.totalPieces / product.totalMixings) 
+            : 0,
+          actualProductionDays: actualDays,
+          actualProductionWeeks: actualWeeks,
+          excludedDays: excludedDays,
+          avgMixingsPerDay: avgMixingsPerDay,
+          avgPiecesPerDay: avgPiecesPerDay,
+          sprintMixings: sprintMixings,
+          sprintPieces: sprintPieces,
+          mixingsPerWeek: actualWeeks > 0 
+            ? (product.totalMixings / actualWeeks).toFixed(2) 
+            : 0,
+          utilizationRate: workDaysInPeriod > 0 
+            ? (actualDays / workDaysInPeriod * 100).toFixed(1) + '%'
+            : '0%',
+          tasksCount: product.tasksCount
+        };
+
+        return baseData;
+      });
 
       const headers = [
         { label: 'SKU', key: 'sku' },
-        { label: t('mixingAnalytics.table.totalMixings', 'Liczba mieszań'), key: 'totalMixings' },
-        { label: t('mixingAnalytics.table.totalPieces', 'Liczba sztuk'), key: 'totalPieces' },
-        { label: t('mixingAnalytics.table.avgPiecesPerMixing', 'Śr. sztuk/mieszanie'), key: 'avgPiecesPerMixing' },
-        { label: t('mixingAnalytics.table.mixingsPerWeek', 'Mieszań/tydzień'), key: 'mixingsPerWeek' },
-        { label: t('mixingAnalytics.table.piecesPerDay', 'Sztuk/dzień'), key: 'piecesPerDay' },
-        { label: t('mixingAnalytics.table.tasksCount', 'Liczba zadań'), key: 'tasksCount' }
+        // Weekly Sprint Data (4-day Mon-Thu)
+        { label: 'Sprint Mixings (Mon-Thu)', key: 'sprintMixings' },
+        { label: 'Sprint Pieces (Mon-Thu)', key: 'sprintPieces' },
+        // Daily Averages
+        { label: 'Avg Mixings/Day', key: 'avgMixingsPerDay' },
+        { label: 'Avg Pieces/Day', key: 'avgPiecesPerDay' },
+        // Weekly Averages
+        { label: 'Avg Mixings/Week', key: 'mixingsPerWeek' },
+        // Summary
+        { label: 'Avg Pieces/Mixing', key: 'avgPiecesPerMixing' }
       ];
 
       const startDateStr = formatDateForExport(startDate, 'yyyyMMdd');
       const endDateStr = formatDateForExport(endDate, 'yyyyMMdd');
-      const filename = `analiza_mieszan_${startDateStr}_${endDateStr}`;
+      const modeStr = dateMode === 'execution' ? 'execution' : 'scheduled';
+      const customerStr = selectedCustomer !== 'all' 
+        ? `_${customers.find(c => c.id === selectedCustomer)?.name?.replace(/\s+/g, '_') || 'customer'}`
+        : '';
+      const filename = `mixing_analytics_weekly_sprint_${modeStr}_${startDateStr}_${endDateStr}${customerStr}`;
 
       const success = exportToCSV(exportData, headers, filename);
       if (success) {
@@ -372,7 +549,7 @@ const MixingAnalyticsPage = () => {
       console.error('Błąd podczas eksportu:', error);
       showError(t('mixingAnalytics.export.error', 'Nie udało się wyeksportować raportu'));
     }
-  }, [filteredProductData, startDate, endDate, workDaysInPeriod, workWeeksInPeriod, showSuccess, showError, t]);
+  }, [filteredProductData, startDate, endDate, workDaysInPeriod, workWeeksInPeriod, dateMode, selectedCustomer, customers, showSuccess, showError, t]);
 
   const formatDateDisplay = (date) => {
     try {
@@ -382,12 +559,61 @@ const MixingAnalyticsPage = () => {
     }
   };
 
+  // Funkcja do przełączania rozwinięcia wiersza
+  const toggleRowExpanded = (productName) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productName)) {
+        newSet.delete(productName);
+      } else {
+        newSet.add(productName);
+      }
+      return newSet;
+    });
+  };
+
+  // Funkcja do obliczania weekly sprint (pon-czw) dla produktu
+  const calculateWeeklySprint = (product) => {
+    // ✅ Średnia dzienna na podstawie FAKTYCZNYCH dni produkcji (nie wszystkich dni roboczych)
+    const actualProductionDays = product.actualProductionDays || 0;
+    const excludedDaysCount = product.excludedDaysCount || 0;
+    
+    const avgMixingsPerDay = actualProductionDays > 0 
+      ? product.totalMixings / actualProductionDays 
+      : 0;
+    const avgPiecesPerDay = actualProductionDays > 0 
+      ? product.totalPieces / actualProductionDays 
+      : 0;
+
+    // Szacowana produkcja dla 4-dniowego tygodnia (pon-czw)
+    const sprintDays = 4; // poniedziałek - czwartek
+    const estimatedMixingsPerSprint = avgMixingsPerDay * sprintDays;
+    const estimatedPiecesPerSprint = avgPiecesPerDay * sprintDays;
+
+    // Intensywność wykorzystania dni roboczych
+    const utilizationRate = workDaysInPeriod > 0 
+      ? (actualProductionDays / workDaysInPeriod * 100).toFixed(1)
+      : 0;
+
+    return {
+      actualProductionDays,
+      excludedDaysCount,
+      avgMixingsPerDay: avgMixingsPerDay.toFixed(2),
+      avgPiecesPerDay: Math.round(avgPiecesPerDay),
+      estimatedMixingsPerSprint: estimatedMixingsPerSprint.toFixed(1),
+      estimatedPiecesPerSprint: Math.round(estimatedPiecesPerSprint),
+      sprintDays,
+      utilizationRate
+    };
+  };
+
   // Render tabeli głównej
   const renderMainTable = () => (
     <TableContainer>
       <Table>
         <TableHead>
           <TableRow>
+            <TableCell sx={{ fontWeight: 'bold', width: 50 }} />
             <TableCell sx={{ fontWeight: 'bold' }}>SKU</TableCell>
             <TableCell align="center" sx={{ fontWeight: 'bold' }}>
               {t('mixingAnalytics.table.totalMixings', 'Liczba mieszań')}
@@ -399,10 +625,14 @@ const MixingAnalyticsPage = () => {
               {t('mixingAnalytics.table.avgPiecesPerMixing', 'Śr. sztuk/mieszanie')}
             </TableCell>
             <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-              {t('mixingAnalytics.table.mixingsPerWeek', 'Mieszań/tydzień')}
+              <Tooltip title="Średnia z tygodni, gdy faktycznie produkowano">
+                <span>{t('mixingAnalytics.table.mixingsPerWeek', 'Mieszań/tydzień')} *</span>
+              </Tooltip>
             </TableCell>
             <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-              {t('mixingAnalytics.table.piecesPerDay', 'Sztuk/dzień')}
+              <Tooltip title="Średnia z dni, gdy faktycznie produkowano (nie wszystkich dni roboczych)">
+                <span>{t('mixingAnalytics.table.piecesPerDay', 'Sztuk/dzień')} *</span>
+              </Tooltip>
             </TableCell>
             <TableCell align="center" sx={{ fontWeight: 'bold' }}>
               {t('mixingAnalytics.table.tasksCount', 'Zadań')}
@@ -410,55 +640,210 @@ const MixingAnalyticsPage = () => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {filteredProductData.map((product, index) => (
-            <TableRow key={index} hover>
-              <TableCell sx={{ fontWeight: 'medium' }}>{product.name}</TableCell>
-              <TableCell align="center">
-                <Chip 
-                  label={product.totalMixings} 
-                  size="small" 
-                  color="primary" 
-                  variant="outlined" 
-                />
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                {product.totalPieces.toLocaleString('pl-PL')}
-              </TableCell>
-              <TableCell align="right">
-                {product.totalMixings > 0 
-                  ? Math.round(product.totalPieces / product.totalMixings).toLocaleString('pl-PL')
-                  : '-'}
-              </TableCell>
-              <TableCell align="right">
-                {workWeeksInPeriod > 0 
-                  ? (product.totalMixings / workWeeksInPeriod).toFixed(1)
-                  : '-'}
-              </TableCell>
-              <TableCell align="right">
-                {workDaysInPeriod > 0 
-                  ? Math.round(product.totalPieces / workDaysInPeriod).toLocaleString('pl-PL')
-                  : '-'}
-              </TableCell>
-              <TableCell align="center">
-                <Chip 
-                  label={product.tasksCount} 
-                  size="small" 
-                  color="secondary" 
-                  variant="outlined" 
-                />
-              </TableCell>
-            </TableRow>
-          ))}
+          {filteredProductData.map((product, index) => {
+            const isExpanded = expandedRows.has(product.name);
+            const sprintData = calculateWeeklySprint(product);
+            
+            return (
+              <React.Fragment key={index}>
+                {/* Główny wiersz produktu */}
+                <TableRow hover sx={{ '& > *': { borderBottom: isExpanded ? 'unset' : undefined } }}>
+                  <TableCell>
+                    <IconButton
+                      size="small"
+                      onClick={() => toggleRowExpanded(product.name)}
+                    >
+                      {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                    </IconButton>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'medium' }}>{product.name}</TableCell>
+                  <TableCell align="center">
+                    <Chip 
+                      label={product.totalMixings} 
+                      size="small" 
+                      color="primary" 
+                      variant="outlined" 
+                    />
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                    {product.totalPieces.toLocaleString('pl-PL')}
+                  </TableCell>
+                  <TableCell align="right">
+                    {product.totalMixings > 0 
+                      ? Math.round(product.totalPieces / product.totalMixings).toLocaleString('pl-PL')
+                      : '-'}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={
+                      `Faktyczna produkcja w ${product.actualProductionWeeks || 0} ${(product.actualProductionWeeks || 0) === 1 ? 'tygodniu' : 'tygodniach'} z ${workWeeksInPeriod.toFixed(1)} tygodni w okresie`
+                    }>
+                      <span>
+                        {(product.actualProductionWeeks || 0) > 0 
+                          ? (product.totalMixings / product.actualProductionWeeks).toFixed(1)
+                          : '-'}
+                      </span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={
+                      `Faktyczna produkcja w ${product.actualProductionDays || 0} ${(product.actualProductionDays || 0) === 1 ? 'dniu' : 'dniach'}` +
+                      ((product.excludedDaysCount || 0) > 0 ? ` (pominięto ${product.excludedDaysCount} ${product.excludedDaysCount === 1 ? 'dzień' : 'dni'} z < 2 mieszaniami)` : '') +
+                      ` z ${workDaysInPeriod} dni roboczych w okresie`
+                    }>
+                      <span>
+                        {(product.actualProductionDays || 0) > 0 
+                          ? Math.round(product.totalPieces / product.actualProductionDays).toLocaleString('pl-PL')
+                          : '-'}
+                      </span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip 
+                      label={product.tasksCount} 
+                      size="small" 
+                      color="secondary" 
+                      variant="outlined" 
+                    />
+                  </TableCell>
+                </TableRow>
+                
+                {/* Rozwinięty wiersz - Weekly Sprint (Pon-Czw) */}
+                <TableRow>
+                  <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                    <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                      <Box sx={{ m: 1.5, p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'primary.main', mb: 1.5 }}>
+                          📊 Weekly Sprint (Pon-Czw) • {sprintData.actualProductionDays} dni produkcji ({sprintData.utilizationRate}% wykorzystania)
+                          {sprintData.excludedDaysCount > 0 && (
+                            <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                              • Pominięto {sprintData.excludedDaysCount} {sprintData.excludedDaysCount === 1 ? 'dzień' : 'dni'} z {'<'}2 mieszaniami
+                            </Typography>
+                          )}
+                        </Typography>
+                        
+                        <Grid container spacing={2}>
+                          {/* Średnie dzienne */}
+                          <Grid item xs={12} md={6}>
+                            <Paper sx={{ p: 1.5, bgcolor: 'success.light', color: 'success.contrastText', height: '100%' }} elevation={1}>
+                              <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 600, display: 'block', mb: 1 }}>
+                                📈 ŚREDNIA PER DZIEŃ
+                              </Typography>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">Mieszań:</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {sprintData.avgMixingsPerDay}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2">Sztuk:</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {sprintData.avgPiecesPerDay.toLocaleString('pl-PL')}
+                                </Typography>
+                              </Box>
+                            </Paper>
+                          </Grid>
+
+                          {/* Sprint (Pon-Czw) */}
+                          <Grid item xs={12} md={6}>
+                            <Paper sx={{ p: 1.5, bgcolor: 'primary.light', color: 'primary.contrastText', height: '100%' }} elevation={1}>
+                              <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 600, display: 'block', mb: 1 }}>
+                                🎯 SPRINT (PON-CZW, 4 DNI)
+                              </Typography>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                <Typography variant="body2">Mieszań:</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
+                                  {sprintData.estimatedMixingsPerSprint}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2">Sztuk:</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
+                                  {sprintData.estimatedPiecesPerSprint.toLocaleString('pl-PL')}
+                                </Typography>
+                              </Box>
+                            </Paper>
+                          </Grid>
+
+                          {/* Breakdown dzienny - kompaktowy */}
+                          <Grid item xs={12}>
+                            <Paper sx={{ p: 1.5 }} elevation={1}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+                                📅 BREAKDOWN
+                              </Typography>
+                              <Grid container spacing={1}>
+                                {[
+                                  { day: 'Pon', full: 'Poniedziałek' },
+                                  { day: 'Wt', full: 'Wtorek' },
+                                  { day: 'Śr', full: 'Środa' },
+                                  { day: 'Czw', full: 'Czwartek' },
+                                  { day: 'Pt', full: 'Piątek - SPRZĄTANIE', special: true }
+                                ].map((item, idx) => (
+                                  <Grid item xs={6} sm={2.4} key={idx}>
+                                    <Box sx={{ 
+                                      p: 1, 
+                                      border: '1px solid', 
+                                      borderColor: item.special ? 'warning.main' : 'divider',
+                                      bgcolor: item.special ? 'warning.light' : 'transparent',
+                                      borderRadius: 1,
+                                      textAlign: 'center',
+                                      opacity: item.special ? 0.6 : 1
+                                    }}>
+                                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, mb: 0.5 }}>
+                                        {item.day}
+                                      </Typography>
+                                      {!item.special ? (
+                                        <>
+                                          <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
+                                            ~{sprintData.avgMixingsPerDay}
+                                          </Typography>
+                                          <Typography variant="caption" color="text.secondary">
+                                            ~{sprintData.avgPiecesPerDay.toLocaleString('pl-PL')} szt.
+                                          </Typography>
+                                        </>
+                                      ) : (
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                          Brak produkcji
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            </Paper>
+                          </Grid>
+                        </Grid>
+                      </Box>
+                    </Collapse>
+                  </TableCell>
+                </TableRow>
+              </React.Fragment>
+            );
+          })}
+          
           {/* Wiersz podsumowania */}
           <TableRow sx={{ '& td': { fontWeight: 'bold', bgcolor: 'action.hover' } }}>
-            <TableCell>{t('mixingAnalytics.table.total', 'SUMA')}</TableCell>
+            <TableCell />
+            <TableCell>
+              {t('mixingAnalytics.table.total', 'SUMA')}
+              <Typography variant="caption" display="block" sx={{ fontWeight: 'normal', opacity: 0.7 }}>
+                ({stats.totalActualProductionDays || 0} {(stats.totalActualProductionDays || 0) === 1 ? 'dzień' : 'dni'}, {stats.totalActualProductionWeeks || 0} {(stats.totalActualProductionWeeks || 0) === 1 ? 'tydzień' : 'tygodni'})
+              </Typography>
+            </TableCell>
             <TableCell align="center">
               <Chip label={stats.totalMixings} size="small" color="primary" />
             </TableCell>
             <TableCell align="right">{stats.totalPieces.toLocaleString('pl-PL')}</TableCell>
             <TableCell align="right">{stats.avgPiecesPerMixing.toLocaleString('pl-PL')}</TableCell>
-            <TableCell align="right">{stats.avgMixingsPerWeek}</TableCell>
-            <TableCell align="right">{stats.avgPiecesPerDay.toLocaleString('pl-PL')}</TableCell>
+            <TableCell align="right">
+              <Tooltip title={`${stats.totalActualProductionWeeks} ${(stats.totalActualProductionWeeks || 0) === 1 ? 'tydzień' : 'tygodni'} produkcji z ${workWeeksInPeriod.toFixed(1)} tygodni w okresie`}>
+                <span>{stats.avgMixingsPerWeek}</span>
+              </Tooltip>
+            </TableCell>
+            <TableCell align="right">
+              <Tooltip title={`${stats.totalActualProductionDays} dni produkcji z ${workDaysInPeriod} dni roboczych`}>
+                <span>{stats.avgPiecesPerDay.toLocaleString('pl-PL')}</span>
+              </Tooltip>
+            </TableCell>
             <TableCell align="center">-</TableCell>
           </TableRow>
         </TableBody>
@@ -651,13 +1036,60 @@ const MixingAnalyticsPage = () => {
           </Typography>
         </Box>
         <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Typ daty:
+              </Typography>
+              <ToggleButtonGroup
+                value={dateMode}
+                exclusive
+                onChange={(e, newMode) => {
+                  if (newMode !== null) {
+                    setDateMode(newMode);
+                  }
+                }}
+                size="small"
+              >
+                <ToggleButton value="execution">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CalendarIcon fontSize="small" />
+                    <Typography variant="body2">Data wykonania</Typography>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="scheduled">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TimelineIcon fontSize="small" />
+                    <Typography variant="body2">Data planowania</Typography>
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+              <Tooltip title={dateMode === 'execution' 
+                ? 'Pokazuje dane na podstawie faktycznych dat wykonania (z odchaczonych checkboxów)' 
+                : 'Pokazuje dane na podstawie dat planowania zadań'}>
+                <FilterIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+              </Tooltip>
+            </Box>
+          </Grid>
           <Grid item xs={12} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
                 label={t('mixingAnalytics.filters.startDate', 'Data początkowa')}
-                value={startDate}
-                onChange={setStartDate}
-                slotProps={{ textField: { fullWidth: true } }}
+                value={displayStartDate}
+                onChange={setDisplayStartDate}
+                slotProps={{ 
+                  textField: { 
+                    fullWidth: true,
+                    helperText: isDebouncing ? 'Aktualizacja danych...' : '',
+                    InputProps: {
+                      endAdornment: isDebouncing && (
+                        <Tooltip title="Dane zaktualizują się za chwilę...">
+                          <CircularProgress size={20} sx={{ mr: 1 }} />
+                        </Tooltip>
+                      )
+                    }
+                  } 
+                }}
               />
             </LocalizationProvider>
           </Grid>
@@ -665,13 +1097,25 @@ const MixingAnalyticsPage = () => {
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
                 label={t('mixingAnalytics.filters.endDate', 'Data końcowa')}
-                value={endDate}
-                onChange={setEndDate}
-                slotProps={{ textField: { fullWidth: true } }}
+                value={displayEndDate}
+                onChange={setDisplayEndDate}
+                slotProps={{ 
+                  textField: { 
+                    fullWidth: true,
+                    helperText: isDebouncing ? 'Aktualizacja danych...' : '',
+                    InputProps: {
+                      endAdornment: isDebouncing && (
+                        <Tooltip title="Dane zaktualizują się za chwilę...">
+                          <CircularProgress size={20} sx={{ mr: 1 }} />
+                        </Tooltip>
+                      )
+                    }
+                  } 
+                }}
               />
             </LocalizationProvider>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={3}>
             <Autocomplete
               options={uniqueProducts}
               value={selectedProduct}
@@ -686,23 +1130,34 @@ const MixingAnalyticsPage = () => {
               freeSolo
             />
           </Grid>
-          <Grid item xs={12} md={2}>
-            <Typography variant="body2" color="text.secondary">
-              {t('mixingAnalytics.filters.workDays', 'Dni robocze')}: <strong>{workDaysInPeriod}</strong>
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('mixingAnalytics.filters.workWeeks', 'Tygodnie')}: <strong>{workWeeksInPeriod.toFixed(1)}</strong>
-            </Typography>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>{t('mixingAnalytics.filters.customer', 'Klient')}</InputLabel>
+              <Select
+                value={selectedCustomer}
+                onChange={(e) => setSelectedCustomer(e.target.value)}
+                label={t('mixingAnalytics.filters.customer', 'Klient')}
+              >
+                <MenuItem value="all">{t('mixingAnalytics.filters.allCustomers', 'Wszyscy klienci')}</MenuItem>
+                {customers.map(customer => (
+                  <MenuItem key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Grid>
         </Grid>
       </Paper>
 
-      {/* Alert informacyjny */}
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2">
-          <strong>ℹ️</strong> {t('mixingAnalytics.info', 'Raport pokazuje dane produkcji z mieszań (poniedziałek-piątek). Dane są agregowane na podstawie planu mieszań z zadań produkcyjnych.')}
-        </Typography>
-      </Alert>
+      {/* Alert informacyjny - kompaktowy */}
+      {dateMode === 'execution' && mixingData.unrealizedCount > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Pominięto {mixingData.unrealizedCount} niezrealizowanych mieszań (realizacja: {mixingData.realizationRate}%)
+          </Typography>
+        </Alert>
+      )}
 
       {/* Karty statystyk */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -752,34 +1207,46 @@ const MixingAnalyticsPage = () => {
           </Card>
         </Grid>
         <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-            color: 'white'
-          }}>
-            <CardContent>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                {t('mixingAnalytics.stats.avgPiecesPerDay', 'Śr. sztuk/dzień')}
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                {stats.avgPiecesPerDay.toLocaleString('pl-PL')}
-              </Typography>
-            </CardContent>
-          </Card>
+          <Tooltip title={`Średnia z ${stats.totalActualProductionDays || 0} dni faktycznej produkcji (>=2 mieszań/dzień) z ${workDaysInPeriod} dni roboczych w okresie`}>
+            <Card sx={{ 
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              color: 'white',
+              cursor: 'help'
+            }}>
+              <CardContent>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  {t('mixingAnalytics.stats.avgPiecesPerDay', 'Śr. sztuk/dzień')} *
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                  {stats.avgPiecesPerDay.toLocaleString('pl-PL')}
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                  {stats.totalActualProductionDays || 0} {(stats.totalActualProductionDays || 0) === 1 ? 'dzień' : 'dni'} produkcji
+                </Typography>
+              </CardContent>
+            </Card>
+          </Tooltip>
         </Grid>
         <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            color: 'white'
-          }}>
-            <CardContent>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                {t('mixingAnalytics.stats.avgMixingsPerWeek', 'Śr. mieszań/tydzień')}
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                {stats.avgMixingsPerWeek}
-              </Typography>
-            </CardContent>
-          </Card>
+          <Tooltip title={`Średnia z ${stats.totalActualProductionWeeks || 0} ${(stats.totalActualProductionWeeks || 0) === 1 ? 'tygodnia' : 'tygodni'} z produkcją (nie ${workWeeksInPeriod.toFixed(1)} tygodni w okresie)`}>
+            <Card sx={{ 
+              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              color: 'white',
+              cursor: 'help'
+            }}>
+              <CardContent>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  {t('mixingAnalytics.stats.avgMixingsPerWeek', 'Śr. mieszań/tydzień')} *
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                  {stats.avgMixingsPerWeek}
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                  {stats.totalActualProductionWeeks || 0} {(stats.totalActualProductionWeeks || 0) === 1 ? 'tydzień' : 'tygodni'} produkcji
+                </Typography>
+              </CardContent>
+            </Card>
+          </Tooltip>
         </Grid>
       </Grid>
 
@@ -816,9 +1283,13 @@ const MixingAnalyticsPage = () => {
         </Box>
 
         {/* Nagłówek z okresem */}
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           {t('mixingAnalytics.period', 'Okres')}: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
           {selectedProduct && ` | SKU: ${selectedProduct}`}
+          {selectedCustomer !== 'all' && ` | Klient: ${customers.find(c => c.id === selectedCustomer)?.name || selectedCustomer}`}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+          Dni robocze: {workDaysInPeriod} | Tygodnie: {workWeeksInPeriod.toFixed(1)}
         </Typography>
 
         {/* Zawartość zakładek */}

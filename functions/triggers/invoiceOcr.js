@@ -25,6 +25,7 @@ const {
   normalizeOcrResult,
   SUPPORTED_MIME_TYPES,
 } = require("../utils/ocrService");
+const {convertToPLN} = require("../utils/exchangeRates");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -88,6 +89,29 @@ const getContentTypeFromFileName = (fileName) => {
  * @return {Promise<string>} Created document ID
  */
 const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
+  // Get exchange rate if currency is not PLN
+  let exchangeRateData = null;
+  const totalGross = ocrData.summary?.totalGross || 0;
+
+  if (ocrData.currency && ocrData.currency !== "PLN") {
+    try {
+      logger.info(`[OCR] Fetching exchange rate for ${ocrData.currency}`);
+      const invoiceDate = ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date();
+      // Polish tax law (Art. 31a VAT): use NBP rate from day BEFORE invoice date
+      const rateDateForNBP = new Date(invoiceDate);
+      rateDateForNBP.setDate(rateDateForNBP.getDate() - 1);
+      exchangeRateData = await convertToPLN(totalGross, ocrData.currency, rateDateForNBP);
+      logger.info(`[OCR] Rate: ${exchangeRateData.rate}, Total in PLN: ${exchangeRateData.amountInPLN.toFixed(2)}`);
+    } catch (error) {
+      logger.error(`[OCR] Failed to fetch exchange rate for ${ocrData.currency}:`, error);
+      // Continue without exchange rate
+    }
+  }
+
+  // Check if document is a proforma
+  const {checkIfProforma} = require("../utils/ocrService");
+  const isProforma = checkIfProforma(ocrData);
+
   const purchaseInvoice = {
     // Invoice data from OCR
     invoiceNumber: ocrData.invoiceNumber,
@@ -108,6 +132,22 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     paymentMethod: ocrData.paymentMethod,
     bankAccount: ocrData.bankAccount,
 
+    // Document type detection
+    documentType: ocrData.documentType || "invoice",
+    isPossibleProforma: isProforma,
+
+    // Multi-currency support
+    ...(exchangeRateData && {
+      exchangeRate: exchangeRateData.rate,
+      exchangeRateDate: admin.firestore.Timestamp.fromDate(new Date(exchangeRateData.rateDate)),
+      exchangeRateSource: "nbp",
+      totalInPLN: exchangeRateData.amountInPLN,
+    }),
+    ...(!exchangeRateData && {
+      exchangeRate: 1,
+      totalInPLN: totalGross,
+    }),
+
     // Source tracking
     sourceType: sourceInfo.type, // 'po' or 'cmr'
     sourceId: sourceInfo.id,
@@ -122,10 +162,18 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     ocrWarnings: ocrData.warnings,
     ocrRawData: JSON.stringify(ocrData),
 
-    // Workflow status
-    status: "pending_review",
+    // Workflow status - auto-reject proformas
+    status: isProforma ? "rejected_proforma" : "pending_review",
     // Status flow: pending_review → approved → posted (after journal entry)
     //              pending_review → rejected
+    //              rejected_proforma (auto-rejected by OCR)
+
+    // Add rejection info for proformas
+    ...(isProforma && {
+      rejectionReason: "Dokument automatycznie odrzucony - wykryto fakturę pro forma",
+      autoRejected: true,
+      autoRejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }),
 
     journalEntryId: null, // Set when posted to accounting
 
@@ -137,7 +185,10 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
   };
 
   const docRef = await db.collection("purchaseInvoices").add(purchaseInvoice);
-  logger.info(`[OCR] Created purchaseInvoice: ${docRef.id}`);
+  logger.info(`[OCR] Created purchaseInvoice: ${docRef.id}`, {
+    isPossibleProforma: isProforma,
+    documentType: ocrData.documentType,
+  });
   return docRef.id;
 };
 
@@ -674,8 +725,27 @@ const retryInvoiceOcr = onCall(
           itemsCount: ocrData.items.length,
         });
 
+        // Get exchange rate if currency is not PLN
+        let exchangeRateData = null;
+        const totalGross = ocrData.summary?.totalGross || 0;
+
+        if (ocrData.currency && ocrData.currency !== "PLN") {
+          try {
+            logger.info(`[OCR Retry] Fetching exchange rate for ${ocrData.currency}`);
+            const invoiceDate = ocrData.invoiceDate ? new Date(ocrData.invoiceDate) : new Date();
+            // Polish tax law (Art. 31a VAT): use NBP rate from day BEFORE invoice date
+            const rateDateForNBP = new Date(invoiceDate);
+            rateDateForNBP.setDate(rateDateForNBP.getDate() - 1);
+            exchangeRateData = await convertToPLN(totalGross, ocrData.currency, rateDateForNBP);
+            logger.info(`[OCR Retry] Rate: ${exchangeRateData.rate}, Total in PLN: ${exchangeRateData.amountInPLN.toFixed(2)}`);
+          } catch (rateError) {
+            logger.error(`[OCR Retry] Failed to fetch exchange rate:`, rateError);
+            // Continue without exchange rate
+          }
+        }
+
         // Update the invoice with new OCR data
-        await db.collection("purchaseInvoices").doc(invoiceId).update({
+        const updateData = {
           invoiceNumber: ocrData.invoiceNumber,
           invoiceDate: ocrData.invoiceDate ?
             admin.firestore.Timestamp.fromDate(new Date(ocrData.invoiceDate)) :
@@ -697,7 +767,22 @@ const retryInvoiceOcr = onCall(
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryBy: request.auth.uid,
-        });
+        };
+
+        // Add exchange rate data if available
+        if (exchangeRateData) {
+          updateData.exchangeRate = exchangeRateData.rate;
+          updateData.exchangeRateDate = admin.firestore.Timestamp.fromDate(
+              new Date(exchangeRateData.rateDate),
+          );
+          updateData.exchangeRateSource = "nbp";
+          updateData.totalInPLN = exchangeRateData.amountInPLN;
+        } else {
+          updateData.exchangeRate = 1;
+          updateData.totalInPLN = totalGross;
+        }
+
+        await db.collection("purchaseInvoices").doc(invoiceId).update(updateData);
 
         logger.info("[OCR Retry] ✅ Invoice updated successfully", {
           invoiceId,

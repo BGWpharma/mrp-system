@@ -23,6 +23,8 @@
  * - onFactoryCostChange       (trigger: factoryCosts)
  * - onInvoiceAttachmentUploaded (trigger: Storage - PO invoices)
  * - onCmrInvoiceCreated       (trigger: cmrInvoices)
+ * - onExpenseInvoiceUploaded  (trigger: Storage - expense invoices)
+ * - processExpenseInvoiceOcr  (callable: retry OCR for expense)
  * - updateExpiryStats         (scheduled: every day 01:00)
  * - checkUnorderedPOReservations (scheduled: every day 08:00)
  */
@@ -59,6 +61,15 @@ const {
 } = require("./triggers/invoiceOcr");
 
 // ============================================================================
+// EXPENSE INVOICE OCR TRIGGERS - Faktury kosztowe od pracowników
+// ============================================================================
+const {
+  onExpenseInvoiceUploaded,
+  onExpenseInvoiceDeleted,
+  processExpenseInvoiceOcr,
+} = require("./triggers/expenseInvoiceOcr");
+
+// ============================================================================
 // SCHEDULED FUNCTIONS - Zadania cron
 // ============================================================================
 const {updateExpiryStats} = require("./scheduled/expiryStats");
@@ -86,3 +97,8 @@ exports.onCmrInvoiceCreated = onCmrInvoiceCreated;
 exports.onInvoiceAttachmentDeleted = onInvoiceAttachmentDeleted;
 exports.onCmrInvoiceDeleted = onCmrInvoiceDeleted;
 exports.retryInvoiceOcr = retryInvoiceOcr;
+
+// Expense Invoice OCR Functions
+exports.onExpenseInvoiceUploaded = onExpenseInvoiceUploaded;
+exports.onExpenseInvoiceDeleted = onExpenseInvoiceDeleted;
+exports.processExpenseInvoiceOcr = processExpenseInvoiceOcr;

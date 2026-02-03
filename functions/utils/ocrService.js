@@ -29,10 +29,16 @@ TASK: Extract complete invoice information including:
 2. ALL line items with quantities, prices, VAT
 3. Summary totals
 
+IMPORTANT: Identify document type carefully:
+- "invoice" = standard invoice / faktura VAT
+- "proforma" = pro forma invoice / faktura pro forma / advance invoice
+- "credit_note" = nota kredytowa
+- "debit_note" = nota obciążeniowa
+
 RETURN JSON in this EXACT format:
 \`\`\`json
 {
-  "documentType": "invoice",
+  "documentType": "invoice" or "proforma" or "credit_note" or "debit_note",
   "invoiceNumber": "EXACT number from document",
   "invoiceDate": "YYYY-MM-DD",
   "dueDate": "YYYY-MM-DD or null",
@@ -69,6 +75,11 @@ RETURN JSON in this EXACT format:
 \`\`\`
 
 CRITICAL RULES:
+- Set documentType to "proforma" if document contains ANY of these markers:
+  * "Pro Forma", "Proforma", "PRO-FORMA" (any case)
+  * "Faktura Pro Forma", "Invoice Proforma"
+  * "Advance Invoice", "Faktura Zaliczkowa"
+  * Document number contains "PRO", "PROF", "PF"
 - ALL numeric values MUST be numbers (not strings)
 - Dates in YYYY-MM-DD format
 - quantity, unitPriceNet, vatRate, totalNet, totalGross - all NUMBERS
@@ -181,12 +192,61 @@ const callGeminiVision = async (apiKey, base64Data, mimeType) => {
 };
 
 /**
+ * Check if OCR data indicates a proforma invoice
+ * @param {Object} ocrData - Normalized OCR data
+ * @return {boolean} True if document appears to be proforma
+ */
+const checkIfProforma = (ocrData) => {
+  const proformaKeywords = [
+    "proforma", "pro forma", "pro-forma",
+    "advance invoice", "faktura zaliczkowa",
+    "faktura pro forma", "invoice proforma",
+    "proforma invoice", "profaktura",
+  ];
+
+  // Check document type from OCR
+  if (ocrData.documentType) {
+    const docType = ocrData.documentType.toLowerCase().trim();
+    if (docType === "proforma") {
+      return true;
+    }
+    if (proformaKeywords.some((kw) => docType.includes(kw))) {
+      return true;
+    }
+  }
+
+  // Check warnings array - Gemini often puts proforma detection here
+  if (ocrData.warnings && Array.isArray(ocrData.warnings)) {
+    const warningsText = ocrData.warnings.join(" ").toLowerCase();
+    if (proformaKeywords.some((kw) => warningsText.includes(kw))) {
+      logger.info("[OCR] Proforma detected in warnings array");
+      return true;
+    }
+  }
+
+  // Check invoice number for proforma markers
+  if (ocrData.invoiceNumber) {
+    const invoiceNum = ocrData.invoiceNumber.toLowerCase();
+    if (proformaKeywords.some((kw) => invoiceNum.includes(kw))) {
+      return true;
+    }
+    // Check for common proforma number patterns: PRO/2024/001, PF-123, etc.
+    if (/\b(pro|pf|prof)\b/i.test(invoiceNum)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
  * Validate and normalize OCR result
  * @param {Object} ocrData - Raw OCR data
  * @return {Object} Normalized data
  */
 const normalizeOcrResult = (ocrData) => {
-  return {
+  const normalized = {
+    documentType: ocrData.documentType || "invoice",
     invoiceNumber: ocrData.invoiceNumber || "UNKNOWN",
     invoiceDate: ocrData.invoiceDate || null,
     dueDate: ocrData.dueDate || null,
@@ -217,10 +277,19 @@ const normalizeOcrResult = (ocrData) => {
     parseConfidence: parseFloat(ocrData.parseConfidence) || 0.5,
     warnings: ocrData.warnings || [],
   };
+
+  // Check if this is a proforma and add warning
+  const isProforma = checkIfProforma(normalized);
+  if (isProforma && !normalized.warnings.includes("⚠️ UWAGA: Dokument rozpoznany jako FAKTURA PRO FORMA")) {
+    normalized.warnings.push("⚠️ UWAGA: Dokument rozpoznany jako FAKTURA PRO FORMA");
+  }
+
+  return normalized;
 };
 
 module.exports = {
   callGeminiVision,
   normalizeOcrResult,
+  checkIfProforma,
   SUPPORTED_MIME_TYPES,
 };

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { useNotification } from '../../hooks/useNotification';
 import {
   IconButton,
   Menu,
@@ -8,7 +9,8 @@ import {
   ListItemText,
   Tooltip,
   Box,
-  Typography
+  Typography,
+  CircularProgress
 } from '@mui/material';
 import {
   Translate as TranslateIcon,
@@ -31,7 +33,9 @@ const languages = [
 
 const LanguageSwitcher = ({ variant = 'icon' }) => {
   const { i18n, t } = useTranslation();
+  const { showSuccess, showError } = useNotification();
   const [anchorEl, setAnchorEl] = useState(null);
+  const [isChanging, setIsChanging] = useState(false);
   const open = Boolean(anchorEl);
 
   const handleClick = (event) => {
@@ -42,9 +46,39 @@ const LanguageSwitcher = ({ variant = 'icon' }) => {
     setAnchorEl(null);
   };
 
-  const handleLanguageChange = (languageCode) => {
-    i18n.changeLanguage(languageCode);
-    handleClose();
+  const handleLanguageChange = async (languageCode) => {
+    // Nie zmieniaj jeśli to już aktualny język
+    if (languageCode === i18n.language) {
+      handleClose();
+      return;
+    }
+
+    setIsChanging(true);
+    
+    try {
+      await i18n.changeLanguage(languageCode);
+      
+      // Sprawdź czy zmiana się powiodła
+      if (i18n.language === languageCode) {
+        const languageName = languages.find(lang => lang.code === languageCode)?.name || languageCode;
+        showSuccess(`Język zmieniony na: ${languageName}`);
+      } else {
+        throw new Error('Language change failed - language not updated');
+      }
+    } catch (error) {
+      console.error('[LanguageSwitcher] Błąd zmiany języka:', error);
+      showError('Nie udało się zmienić języka. Spróbuj ponownie.');
+      
+      // Spróbuj przywrócić do domyślnego języka
+      try {
+        await i18n.changeLanguage('pl');
+      } catch (fallbackError) {
+        console.error('[LanguageSwitcher] Błąd przywracania języka domyślnego:', fallbackError);
+      }
+    } finally {
+      setIsChanging(false);
+      handleClose();
+    }
   };
 
   const currentLanguage = languages.find(lang => lang.code === i18n.language) || languages[0];
@@ -60,12 +94,19 @@ const LanguageSwitcher = ({ variant = 'icon' }) => {
             aria-controls={open ? 'language-menu' : undefined}
             aria-haspopup="true"
             aria-expanded={open ? 'true' : undefined}
+            disabled={isChanging}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography variant="body2" component="span">
-                {currentLanguage.flag}
-              </Typography>
-              <TranslateIcon fontSize="small" />
+              {isChanging ? (
+                <CircularProgress size={16} />
+              ) : (
+                <>
+                  <Typography variant="body2" component="span">
+                    {currentLanguage.flag}
+                  </Typography>
+                  <TranslateIcon fontSize="small" />
+                </>
+              )}
             </Box>
           </IconButton>
         </Tooltip>
@@ -86,6 +127,7 @@ const LanguageSwitcher = ({ variant = 'icon' }) => {
               key={language.code}
               onClick={() => handleLanguageChange(language.code)}
               selected={language.code === i18n.language}
+              disabled={isChanging}
             >
               <ListItemIcon>
                 <Typography variant="body1" component="span">
@@ -110,8 +152,9 @@ const LanguageSwitcher = ({ variant = 'icon' }) => {
           aria-controls={open ? 'language-menu' : undefined}
           aria-haspopup="true"
           aria-expanded={open ? 'true' : undefined}
+          disabled={isChanging}
         >
-          <LanguageIcon />
+          {isChanging ? <CircularProgress size={20} /> : <LanguageIcon />}
         </IconButton>
       </Tooltip>
 

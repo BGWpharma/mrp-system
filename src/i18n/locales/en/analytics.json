@@ -265,6 +265,8 @@
             "startDate": "Start date",
             "endDate": "End date",
             "product": "SKU / Product",
+            "customer": "Customer",
+            "allCustomers": "All customers",
             "workDays": "Work days",
             "workWeeks": "Weeks"
         },

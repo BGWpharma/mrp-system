@@ -1104,6 +1104,16 @@ export const DEFAULT_INVOICE = {
   items: [],
   total: 0,
   currency: 'EUR',
+  // Pola dla przeliczenia na PLN (zgodnie z Art. 31a - kurs z dnia poprzedzającego)
+  totalInPLN: null, // Kwota faktury przeliczona na PLN
+  exchangeRate: null, // Kurs wymiany użyty do przeliczenia
+  exchangeRateDate: null, // Data kursu wymiany (dzień poprzedzający datę wystawienia)
+  exchangeRateSource: null, // Źródło kursu: 'nbp', 'ecb', 'manual'
+  // Pola z przeliczonymi kwotami dla aplikacji księgowej
+  itemsInPLN: null, // Pozycje faktury z cenami w PLN [{...item, unitPricePLN, totalPricePLN}]
+  additionalCostsItemsInPLN: null, // Koszty dodatkowe z wartościami w PLN [{...cost, valuePLN}]
+  settledAdvancePaymentsInPLN: null, // Zaliczki przeliczone na PLN
+  shippingInfoInPLN: null, // Informacje o wysyłce z kosztem w PLN {costPLN}
   selectedBankAccount: '',
   notes: '',
   status: 'draft',
@@ -2724,6 +2734,200 @@ export const getInvoicesUsingProforma = async (proformaId) => {
     
   } catch (error) {
     console.error('Błąd podczas wyszukiwania faktur wykorzystujących proformę:', error);
+    throw error;
+  }
+};
+
+/**
+ * Aktualizuje kursy walut dla istniejących faktur (które nie mają jeszcze pól totalInPLN)
+ * Pobiera kursy z NBP zgodnie z Art. 31a (dzień poprzedzający datę wystawienia)
+ * 
+ * @param {Array<string>} invoiceIds - Lista ID faktur do aktualizacji (opcjonalna - jeśli pusta, aktualizuje wszystkie)
+ * @param {string} userId - ID użytkownika wykonującego aktualizację
+ * @returns {Promise<{success: boolean, updated: number, skipped: number, errors: Array}>}
+ */
+export const updateInvoicesExchangeRates = async (invoiceIds = [], userId = null) => {
+  try {
+    // Dynamiczny import aby uniknąć circular dependency
+    const { calculateInvoiceTotalInPLN } = await import('../utils/nbpExchangeRates');
+    
+    console.log('🔄 Rozpoczynanie aktualizacji kursów walut dla faktur...');
+    
+    let invoicesToUpdate = [];
+    
+    // Jeśli podano konkretne ID, pobierz tylko te faktury
+    if (invoiceIds && invoiceIds.length > 0) {
+      console.log(`Pobieranie ${invoiceIds.length} konkretnych faktur...`);
+      for (const id of invoiceIds) {
+        const docSnap = await getDoc(doc(db, INVOICES_COLLECTION, id));
+        if (docSnap.exists()) {
+          invoicesToUpdate.push({ id: docSnap.id, ...docSnap.data() });
+        }
+      }
+    } else {
+      // Pobierz wszystkie faktury
+      console.log('Pobieranie wszystkich faktur...');
+      const querySnapshot = await getDocs(collection(db, INVOICES_COLLECTION));
+      invoicesToUpdate = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    
+    console.log(`📊 Znaleziono ${invoicesToUpdate.length} faktur do sprawdzenia`);
+    
+    let updatedCount = 0;
+    let skippedCount = 0;
+    let errorsList = [];
+    
+    for (const invoice of invoicesToUpdate) {
+      try {
+        // Pomiń faktury które:
+        // 1. Już mają totalInPLN
+        // 2. Są w PLN
+        // 3. Nie mają waluty lub kwoty
+        
+        if (invoice.totalInPLN !== null && invoice.totalInPLN !== undefined) {
+          console.log(`⏭️  Pomijam fakturę ${invoice.number} - już ma totalInPLN: ${invoice.totalInPLN}`);
+          skippedCount++;
+          continue;
+        }
+        
+        if (!invoice.currency || invoice.currency === 'PLN') {
+          console.log(`⏭️  Pomijam fakturę ${invoice.number} - waluta PLN lub brak waluty`);
+          skippedCount++;
+          continue;
+        }
+        
+        if (!invoice.total || invoice.total === 0) {
+          console.log(`⏭️  Pomijam fakturę ${invoice.number} - brak kwoty total`);
+          skippedCount++;
+          continue;
+        }
+        
+        if (!invoice.issueDate) {
+          console.log(`⏭️  Pomijam fakturę ${invoice.number} - brak daty wystawienia`);
+          skippedCount++;
+          continue;
+        }
+        
+        // Konwertuj Timestamp na Date jeśli potrzeba
+        const issueDate = invoice.issueDate?.toDate ? invoice.issueDate.toDate() : new Date(invoice.issueDate);
+        
+        console.log(`\n💱 Przetwarzam fakturę: ${invoice.number}`);
+        console.log(`   Waluta: ${invoice.currency}`);
+        console.log(`   Kwota: ${invoice.total} ${invoice.currency}`);
+        console.log(`   Data wystawienia: ${issueDate.toISOString().split('T')[0]}`);
+        
+        // Pobierz kurs i przelicz na PLN
+        const plnConversion = await calculateInvoiceTotalInPLN(
+          invoice.total,
+          invoice.currency,
+          issueDate
+        );
+        
+        const exchangeRate = plnConversion.exchangeRate;
+        
+        console.log(`   ✅ Przeliczono total: ${plnConversion.totalInPLN} PLN`);
+        console.log(`   📈 Kurs: ${exchangeRate} (z dnia ${plnConversion.exchangeRateDate})`);
+        console.log(`   🔗 Źródło: ${plnConversion.exchangeRateSource}`);
+        
+        // Przygotuj obiekt z przeliczonymi wartościami
+        const updateData = {
+          totalInPLN: plnConversion.totalInPLN,
+          exchangeRate: exchangeRate,
+          exchangeRateDate: plnConversion.exchangeRateDate,
+          exchangeRateSource: plnConversion.exchangeRateSource,
+          updatedAt: serverTimestamp(),
+          ...(userId && { updatedBy: userId })
+        };
+        
+        // Przelicz pozycje faktury (items)
+        if (invoice.items && invoice.items.length > 0) {
+          updateData.itemsInPLN = invoice.items.map(item => {
+            const unitPrice = parseFloat(item.price || item.unitPrice || 0);
+            const quantity = parseFloat(item.quantity || 0);
+            const totalPrice = parseFloat(item.totalPrice || (unitPrice * quantity) || 0);
+            
+            return {
+              ...item,
+              unitPricePLN: parseFloat((unitPrice * exchangeRate).toFixed(2)),
+              totalPricePLN: parseFloat((totalPrice * exchangeRate).toFixed(2))
+            };
+          });
+          console.log(`   📦 Przeliczono ${invoice.items.length} pozycji`);
+        }
+        
+        // Przelicz dodatkowe koszty (additionalCostsItems)
+        if (invoice.additionalCostsItems && invoice.additionalCostsItems.length > 0) {
+          updateData.additionalCostsItemsInPLN = invoice.additionalCostsItems.map(cost => {
+            const value = parseFloat(cost.value || 0);
+            
+            return {
+              ...cost,
+              valuePLN: parseFloat((value * exchangeRate).toFixed(2))
+            };
+          });
+          console.log(`   💰 Przeliczono ${invoice.additionalCostsItems.length} kosztów dodatkowych`);
+        }
+        
+        // Przelicz zaliczki (settledAdvancePayments)
+        if (invoice.settledAdvancePayments && invoice.settledAdvancePayments > 0) {
+          updateData.settledAdvancePaymentsInPLN = parseFloat(
+            (invoice.settledAdvancePayments * exchangeRate).toFixed(2)
+          );
+          console.log(`   💳 Przeliczono zaliczki: ${updateData.settledAdvancePaymentsInPLN} PLN`);
+        }
+        
+        // Przelicz informacje o wysyłce jeśli istnieją
+        if (invoice.shippingInfo && invoice.shippingInfo.cost) {
+          updateData.shippingInfoInPLN = {
+            ...invoice.shippingInfo,
+            costPLN: parseFloat((invoice.shippingInfo.cost * exchangeRate).toFixed(2))
+          };
+          console.log(`   🚚 Przeliczono koszt wysyłki: ${updateData.shippingInfoInPLN.costPLN} PLN`);
+        }
+        
+        // Zaktualizuj fakturę w bazie
+        await updateDoc(doc(db, INVOICES_COLLECTION, invoice.id), updateData);
+        
+        updatedCount++;
+        console.log(`   💾 Zapisano w bazie danych\n`);
+        
+      } catch (error) {
+        console.error(`❌ Błąd dla faktury ${invoice.number}:`, error.message);
+        errorsList.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          error: error.message
+        });
+        skippedCount++;
+      }
+    }
+    
+    const result = {
+      success: true,
+      updated: updatedCount,
+      skipped: skippedCount,
+      total: invoicesToUpdate.length,
+      errors: errorsList
+    };
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('📋 PODSUMOWANIE AKTUALIZACJI KURSÓW WALUT');
+    console.log('='.repeat(60));
+    console.log(`✅ Zaktualizowano: ${updatedCount} faktur`);
+    console.log(`⏭️  Pominięto: ${skippedCount} faktur`);
+    console.log(`📊 Razem sprawdzono: ${invoicesToUpdate.length} faktur`);
+    if (errorsList.length > 0) {
+      console.log(`❌ Błędy: ${errorsList.length}`);
+      errorsList.forEach(err => {
+        console.log(`   - ${err.invoiceNumber}: ${err.error}`);
+      });
+    }
+    console.log('='.repeat(60) + '\n');
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Błąd podczas aktualizacji kursów walut:', error);
     throw error;
   }
 };

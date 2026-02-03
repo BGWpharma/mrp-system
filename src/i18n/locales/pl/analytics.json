@@ -265,6 +265,8 @@
             "startDate": "Data początkowa",
             "endDate": "Data końcowa",
             "product": "SKU / Produkt",
+            "customer": "Klient",
+            "allCustomers": "Wszyscy klienci",
             "workDays": "Dni robocze",
             "workWeeks": "Tygodnie"
         },

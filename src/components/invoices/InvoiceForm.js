@@ -73,6 +73,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import plLocale from 'date-fns/locale/pl';
 import { formatDateForInput } from '../../utils/dateUtils';
 import { preciseCompare } from '../../utils/mathUtils';
+import { calculateInvoiceTotalInPLN } from '../../utils/nbpExchangeRates';
 import { COMPANY_INFO } from '../../config';
 import { getCompanyInfo } from '../../services/companyService';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -1453,6 +1454,76 @@ const InvoiceForm = ({ invoiceId }) => {
       
       if (isPurchaseInvoice) {
         invoiceToSubmit.invoiceType = 'purchase';
+      }
+      
+      // Wylicz wszystkie kwoty w PLN dla walut obcych (zgodnie z Art. 31a - kurs z dnia poprzedzającego)
+      if (invoiceToSubmit.currency && invoiceToSubmit.currency !== 'PLN') {
+        try {
+          const plnConversion = await calculateInvoiceTotalInPLN(
+            invoiceToSubmit.total,
+            invoiceToSubmit.currency,
+            invoiceToSubmit.issueDate
+          );
+          
+          const exchangeRate = plnConversion.exchangeRate;
+          
+          // Przelicz total
+          invoiceToSubmit.totalInPLN = plnConversion.totalInPLN;
+          invoiceToSubmit.exchangeRate = exchangeRate;
+          invoiceToSubmit.exchangeRateDate = plnConversion.exchangeRateDate;
+          invoiceToSubmit.exchangeRateSource = plnConversion.exchangeRateSource;
+          
+          // Przelicz pozycje faktury (items)
+          if (invoiceToSubmit.items && invoiceToSubmit.items.length > 0) {
+            invoiceToSubmit.itemsInPLN = invoiceToSubmit.items.map(item => {
+              const unitPrice = parseFloat(item.price || item.unitPrice || 0);
+              const quantity = parseFloat(item.quantity || 0);
+              const totalPrice = parseFloat(item.totalPrice || (unitPrice * quantity) || 0);
+              
+              return {
+                ...item,
+                unitPricePLN: parseFloat((unitPrice * exchangeRate).toFixed(2)),
+                totalPricePLN: parseFloat((totalPrice * exchangeRate).toFixed(2))
+              };
+            });
+          }
+          
+          // Przelicz dodatkowe koszty (additionalCostsItems)
+          if (invoiceToSubmit.additionalCostsItems && invoiceToSubmit.additionalCostsItems.length > 0) {
+            invoiceToSubmit.additionalCostsItemsInPLN = invoiceToSubmit.additionalCostsItems.map(cost => {
+              const value = parseFloat(cost.value || 0);
+              
+              return {
+                ...cost,
+                valuePLN: parseFloat((value * exchangeRate).toFixed(2))
+              };
+            });
+          }
+          
+          // Przelicz zaliczki (settledAdvancePayments)
+          if (invoiceToSubmit.settledAdvancePayments && invoiceToSubmit.settledAdvancePayments > 0) {
+            invoiceToSubmit.settledAdvancePaymentsInPLN = parseFloat(
+              (invoiceToSubmit.settledAdvancePayments * exchangeRate).toFixed(2)
+            );
+          }
+          
+          // Przelicz informacje o wysyłce jeśli istnieją
+          if (invoiceToSubmit.shippingInfo && invoiceToSubmit.shippingInfo.cost) {
+            invoiceToSubmit.shippingInfoInPLN = {
+              ...invoiceToSubmit.shippingInfo,
+              costPLN: parseFloat((invoiceToSubmit.shippingInfo.cost * exchangeRate).toFixed(2))
+            };
+          }
+          
+          console.log(`[Invoice] Przeliczono wszystkie kwoty z ${invoiceToSubmit.currency} na PLN (kurs: ${exchangeRate} z ${plnConversion.exchangeRateDate})`);
+          console.log(`  - Total: ${invoiceToSubmit.total} → ${plnConversion.totalInPLN} PLN`);
+          console.log(`  - Pozycji: ${invoiceToSubmit.items?.length || 0}`);
+          console.log(`  - Kosztów dodatkowych: ${invoiceToSubmit.additionalCostsItems?.length || 0}`);
+        } catch (error) {
+          console.error('[Invoice] Błąd pobierania kursu NBP:', error);
+          showError(`Nie udało się pobrać kursu wymiany z NBP: ${error.message}. Faktura zostanie zapisana bez przeliczenia na PLN.`);
+          // Kontynuuj zapisywanie faktury nawet jeśli nie udało się pobrać kursu
+        }
       }
       
       if (invoiceId) {

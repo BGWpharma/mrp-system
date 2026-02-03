@@ -186,7 +186,19 @@ if (!i18n.isInitialized) {
       caches: ['localStorage'],
       
       // Sprawdź tylko główne kody języków (pl, en zamiast pl-PL, en-US)
-      checkWhitelist: true
+      checkWhitelist: true,
+      
+      // Walidacja wykrytego języka - zabezpieczenie przed nieprawidłowymi wartościami
+      convertDetectedLanguage: (lng) => {
+        // Akceptuj tylko pl lub en
+        if (lng === 'pl' || lng === 'en') return lng;
+        // Konwertuj pl-PL na pl, en-US na en, en-GB na en, etc.
+        if (lng && lng.startsWith('pl')) return 'pl';
+        if (lng && lng.startsWith('en')) return 'en';
+        // Dla nieprawidłowych wartości (null, undefined, inne języki) zwróć domyślny
+        console.warn(`[i18n] Nieprawidłowy kod języka: ${lng}, używam domyślnego: pl`);
+        return 'pl';
+      }
     },
     
     // Konfiguracja dla HttpApi (do przyszłego użycia)
@@ -209,8 +221,35 @@ if (!i18n.isInitialized) {
     // Obsługa brakujących kluczy
     saveMissing: process.env.NODE_ENV === 'development',
     missingKeyHandler: (lng, ns, key) => {
+      const message = `Missing translation key: ${ns}:${key} for language: ${lng}`;
+      
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`Missing translation key: ${key} for language: ${lng}`);
+        console.warn(`[i18n] ${message}`);
+      }
+      
+      // Wyślij do Sentry również w produkcji (jako warning, nie error)
+      if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
+        try {
+          // Dynamiczny import Sentry aby uniknąć circular dependencies
+          import('@sentry/react').then(Sentry => {
+            Sentry.captureMessage(message, {
+              level: 'warning',
+              tags: {
+                type: 'i18n',
+                language: lng,
+                namespace: ns
+              },
+              extra: {
+                key: key,
+                fullKey: `${ns}:${key}`
+              }
+            });
+          }).catch(() => {
+            // Sentry nie jest dostępny, ignoruj
+          });
+        } catch (error) {
+          // Ignoruj błędy Sentry aby nie zakłócać działania aplikacji
+        }
       }
     },
     
