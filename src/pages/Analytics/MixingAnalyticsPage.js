@@ -103,6 +103,7 @@ const MixingAnalyticsPage = () => {
   
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState('all');
+  const [productType, setProductType] = useState('all'); // 'all', 'powder', 'capsules'
   const [viewMode, setViewMode] = useState('table'); // 'table', 'daily', 'weekly', 'trend'
   const [activeTab, setActiveTab] = useState(0);
   const [dateMode, setDateMode] = useState('execution'); // 'scheduled' lub 'execution'
@@ -194,6 +195,24 @@ const MixingAnalyticsPage = () => {
     return 0;
   };
 
+  // Kategoryzuj produkt na podstawie jednostki i nazwy
+  const getProductCategory = (unit, productName = '') => {
+    // 🔍 Najpierw sprawdź nazwę produktu (fallback dla błędnych jednostek)
+    const nameLower = productName.toLowerCase();
+    if (nameLower.includes('caps') || nameLower.includes('capsule') || nameLower.includes('kapsułk')) {
+      return 'capsules';
+    }
+    
+    // 🔍 Następnie sprawdź jednostkę
+    if (!unit) return 'powder';
+    const unitLower = unit.toLowerCase();
+    if (unitLower === 'caps' || unitLower.includes('cap')) {
+      return 'capsules';
+    }
+    
+    return 'powder'; // szt., kg, g itp. = proszki
+  };
+
   // Przetwórz dane o mieszaniach
   const mixingData = useMemo(() => {
     const dataByProduct = {};
@@ -215,6 +234,24 @@ const MixingAnalyticsPage = () => {
       }
 
       const productName = task.recipeName || task.productName || 'Nieznany produkt';
+      
+      // 🔍 Znajdź jednostkę z różnych możliwych lokalizacji
+      const productUnit = task.unit || task.output?.unit || task.recipe?.unit || 'szt.';
+      
+      // DEBUG: Loguj strukturę dla pierwszego zadania (tylko raz)
+      if (!window.__mixingDebugLogged && task.mixingPlanChecklist?.length > 0) {
+        const detectedCategory = getProductCategory(productUnit, productName);
+        console.log('🔍 DEBUG - Struktura zadania produkcyjnego:', {
+          productName,
+          unit: task.unit,
+          'output.unit': task.output?.unit,
+          'recipe.unit': task.recipe?.unit,
+          productUnit,
+          detectedCategory: detectedCategory === 'capsules' ? '💊 KAPSUŁKI' : '📊 PROSZKI',
+          fullTask: task
+        });
+        window.__mixingDebugLogged = true;
+      }
 
       // Znajdź wszystkie nagłówki mieszań (type === 'header')
       const mixingHeaders = task.mixingPlanChecklist?.filter(item => item.type === 'header') || [];
@@ -275,6 +312,8 @@ const MixingAnalyticsPage = () => {
         if (!dataByProduct[productName]) {
           dataByProduct[productName] = {
             name: productName,
+            unit: productUnit,
+            category: getProductCategory(productUnit, productName), // ✅ Przekaż nazwę do detekcji
             totalMixings: 0,
             totalPieces: 0,
             realizedMixings: 0,
@@ -394,9 +433,20 @@ const MixingAnalyticsPage = () => {
 
   // Filtrowane dane
   const filteredProductData = useMemo(() => {
-    if (!selectedProduct) return mixingData.byProduct;
-    return mixingData.byProduct.filter(p => p.name === selectedProduct);
-  }, [mixingData.byProduct, selectedProduct]);
+    let filtered = mixingData.byProduct;
+    
+    // Filtruj po typie produktu (proszki/kapsułki)
+    if (productType !== 'all') {
+      filtered = filtered.filter(p => p.category === productType);
+    }
+    
+    // Filtruj po nazwie produktu
+    if (selectedProduct) {
+      filtered = filtered.filter(p => p.name === selectedProduct);
+    }
+    
+    return filtered;
+  }, [mixingData.byProduct, selectedProduct, productType]);
 
   // Statystyki ogólne
   const stats = useMemo(() => {
@@ -493,8 +543,18 @@ const MixingAnalyticsPage = () => {
           ? Math.round(product.totalPieces / actualDays * 4)
           : 0;
         
+        // 🛢️ Oblicz beczki dla kapsułek
+        const BARREL_SIZE = 15000;
+        const fullBarrels = product.category === 'capsules' 
+          ? Math.floor(sprintPieces / BARREL_SIZE)
+          : 0;
+        const remainingPieces = product.category === 'capsules' 
+          ? Math.round(sprintPieces % BARREL_SIZE)
+          : 0;
+        
         const baseData = {
           sku: product.name,
+          category: product.category === 'capsules' ? 'Capsules' : 'Powder',
           totalMixings: product.totalMixings,
           totalPieces: product.totalPieces,
           avgPiecesPerMixing: product.totalMixings > 0 
@@ -507,6 +567,9 @@ const MixingAnalyticsPage = () => {
           avgPiecesPerDay: avgPiecesPerDay,
           sprintMixings: sprintMixings,
           sprintPieces: sprintPieces,
+          // 🛢️ Beczki (tylko dla kapsułek)
+          fullBarrels: fullBarrels,
+          remainingPieces: remainingPieces,
           mixingsPerWeek: actualWeeks > 0 
             ? (product.totalMixings / actualWeeks).toFixed(2) 
             : 0,
@@ -521,9 +584,13 @@ const MixingAnalyticsPage = () => {
 
       const headers = [
         { label: 'SKU', key: 'sku' },
+        { label: 'Category', key: 'category' },
         // Weekly Sprint Data (4-day Mon-Thu)
         { label: 'Sprint Mixings (Mon-Thu)', key: 'sprintMixings' },
         { label: 'Sprint Pieces (Mon-Thu)', key: 'sprintPieces' },
+        // Barrels (for capsules only)
+        { label: 'Full Barrels (15k pcs)', key: 'fullBarrels' },
+        { label: 'Remaining Pieces', key: 'remainingPieces' },
         // Daily Averages
         { label: 'Avg Mixings/Day', key: 'avgMixingsPerDay' },
         { label: 'Avg Pieces/Day', key: 'avgPiecesPerDay' },
@@ -536,10 +603,13 @@ const MixingAnalyticsPage = () => {
       const startDateStr = formatDateForExport(startDate, 'yyyyMMdd');
       const endDateStr = formatDateForExport(endDate, 'yyyyMMdd');
       const modeStr = dateMode === 'execution' ? 'execution' : 'scheduled';
+      const typeStr = productType !== 'all' 
+        ? `_${productType === 'powder' ? 'powders' : 'capsules'}`
+        : '';
       const customerStr = selectedCustomer !== 'all' 
         ? `_${customers.find(c => c.id === selectedCustomer)?.name?.replace(/\s+/g, '_') || 'customer'}`
         : '';
-      const filename = `mixing_analytics_weekly_sprint_${modeStr}_${startDateStr}_${endDateStr}${customerStr}`;
+      const filename = `mixing_analytics_weekly_sprint_${modeStr}_${startDateStr}_${endDateStr}${typeStr}${customerStr}`;
 
       const success = exportToCSV(exportData, headers, filename);
       if (success) {
@@ -549,7 +619,7 @@ const MixingAnalyticsPage = () => {
       console.error('Błąd podczas eksportu:', error);
       showError(t('mixingAnalytics.export.error', 'Nie udało się wyeksportować raportu'));
     }
-  }, [filteredProductData, startDate, endDate, workDaysInPeriod, workWeeksInPeriod, dateMode, selectedCustomer, customers, showSuccess, showError, t]);
+  }, [filteredProductData, startDate, endDate, workDaysInPeriod, workWeeksInPeriod, dateMode, productType, selectedCustomer, customers, showSuccess, showError, t]);
 
   const formatDateDisplay = (date) => {
     try {
@@ -571,6 +641,9 @@ const MixingAnalyticsPage = () => {
       return newSet;
     });
   };
+
+  // Stała: rozmiar beczki dla kapsułek
+  const BARREL_SIZE = 15000; // sztuk kapsułek w jednej beczce
 
   // Funkcja do obliczania weekly sprint (pon-czw) dla produktu
   const calculateWeeklySprint = (product) => {
@@ -595,6 +668,13 @@ const MixingAnalyticsPage = () => {
       ? (actualProductionDays / workDaysInPeriod * 100).toFixed(1)
       : 0;
 
+    // 🛢️ Oblicz beczki dla kapsułek (na podstawie historii produkcji)
+    const fullBarrels = Math.floor(estimatedPiecesPerSprint / BARREL_SIZE);
+    const remainingPieces = Math.round(estimatedPiecesPerSprint % BARREL_SIZE);
+    const partialBarrelPercent = BARREL_SIZE > 0 
+      ? ((remainingPieces / BARREL_SIZE) * 100).toFixed(1) 
+      : 0;
+
     return {
       actualProductionDays,
       excludedDaysCount,
@@ -603,7 +683,11 @@ const MixingAnalyticsPage = () => {
       estimatedMixingsPerSprint: estimatedMixingsPerSprint.toFixed(1),
       estimatedPiecesPerSprint: Math.round(estimatedPiecesPerSprint),
       sprintDays,
-      utilizationRate
+      utilizationRate,
+      // 🛢️ Dane dla beczek (kapsułki)
+      fullBarrels,
+      remainingPieces,
+      partialBarrelPercent
     };
   };
 
@@ -713,7 +797,12 @@ const MixingAnalyticsPage = () => {
                     <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                       <Box sx={{ m: 1.5, p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'primary.main', mb: 1.5 }}>
-                          📊 Weekly Sprint (Pon-Czw) • {sprintData.actualProductionDays} dni produkcji ({sprintData.utilizationRate}% wykorzystania)
+                          {product.category === 'capsules' ? '💊' : '📊'} Weekly Sprint (Pon-Czw) • {sprintData.actualProductionDays} dni produkcji ({sprintData.utilizationRate}% wykorzystania)
+                          {product.category === 'capsules' && sprintData.fullBarrels > 0 && (
+                            <Typography component="span" variant="caption" sx={{ ml: 1, color: 'info.main', fontWeight: 'bold' }}>
+                              • 🛢️ {sprintData.fullBarrels} {sprintData.fullBarrels === 1 ? 'beczka' : sprintData.fullBarrels < 5 ? 'beczki' : 'beczek'}
+                            </Typography>
+                          )}
                           {sprintData.excludedDaysCount > 0 && (
                             <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
                               • Pominięto {sprintData.excludedDaysCount} {sprintData.excludedDaysCount === 1 ? 'dzień' : 'dni'} z {'<'}2 mieszaniami
@@ -723,7 +812,7 @@ const MixingAnalyticsPage = () => {
                         
                         <Grid container spacing={2}>
                           {/* Średnie dzienne */}
-                          <Grid item xs={12} md={6}>
+                          <Grid item xs={12} md={product.category === 'capsules' ? 4 : 6}>
                             <Paper sx={{ p: 1.5, bgcolor: 'success.light', color: 'success.contrastText', height: '100%' }} elevation={1}>
                               <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 600, display: 'block', mb: 1 }}>
                                 📈 ŚREDNIA PER DZIEŃ
@@ -744,7 +833,7 @@ const MixingAnalyticsPage = () => {
                           </Grid>
 
                           {/* Sprint (Pon-Czw) */}
-                          <Grid item xs={12} md={6}>
+                          <Grid item xs={12} md={product.category === 'capsules' ? 4 : 6}>
                             <Paper sx={{ p: 1.5, bgcolor: 'primary.light', color: 'primary.contrastText', height: '100%' }} elevation={1}>
                               <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 600, display: 'block', mb: 1 }}>
                                 🎯 SPRINT (PON-CZW, 4 DNI)
@@ -763,6 +852,29 @@ const MixingAnalyticsPage = () => {
                               </Box>
                             </Paper>
                           </Grid>
+
+                          {/* 🛢️ Beczki - TYLKO dla kapsułek */}
+                          {product.category === 'capsules' && (
+                            <Grid item xs={12} md={4}>
+                              <Paper sx={{ p: 1.5, bgcolor: 'info.light', color: 'info.contrastText', height: '100%' }} elevation={1}>
+                                <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 600, display: 'block', mb: 1 }}>
+                                  🛢️ BECZKI (15 000 szt.)
+                                </Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                  <Typography variant="body2">Pełne beczki:</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
+                                    {sprintData.fullBarrels}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <Typography variant="body2">Reszta:</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                    {sprintData.remainingPieces.toLocaleString('pl-PL')} szt. ({sprintData.partialBarrelPercent}%)
+                                  </Typography>
+                                </Box>
+                              </Paper>
+                            </Grid>
+                          )}
 
                           {/* Breakdown dzienny - kompaktowy */}
                           <Grid item xs={12}>
@@ -1071,6 +1183,49 @@ const MixingAnalyticsPage = () => {
               </Tooltip>
             </Box>
           </Grid>
+          
+          {/* Przełącznik typu produktu */}
+          <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ToggleButtonGroup
+                value={productType}
+                exclusive
+                onChange={(e, newValue) => {
+                  if (newValue !== null) {
+                    setProductType(newValue);
+                  }
+                }}
+                size="small"
+                fullWidth
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    textTransform: 'none',
+                    px: 2
+                  }
+                }}
+              >
+                <ToggleButton value="all">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2">{t('mixingAnalytics.filters.allTypes', 'Wszystkie')}</Typography>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="powder">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2">📊 {t('mixingAnalytics.filters.powder', 'Proszki')}</Typography>
+                  </Box>
+                </ToggleButton>
+                <ToggleButton value="capsules">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2">💊 {t('mixingAnalytics.filters.capsules', 'Kapsułki')}</Typography>
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+              <Tooltip title={t('mixingAnalytics.filters.productTypeTooltip', 'Filtruj produkty według typu: proszki (szt., kg) lub kapsułki (caps)')}>
+                <FilterIcon sx={{ color: 'text.secondary', cursor: 'help' }} />
+              </Tooltip>
+            </Box>
+          </Grid>
+
           <Grid item xs={12} md={3}>
             <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={pl}>
               <DatePicker
@@ -1285,6 +1440,7 @@ const MixingAnalyticsPage = () => {
         {/* Nagłówek z okresem */}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
           {t('mixingAnalytics.period', 'Okres')}: {formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
+          {productType !== 'all' && ` | ${productType === 'powder' ? '📊 ' + t('mixingAnalytics.filters.powder', 'Proszki') : '💊 ' + t('mixingAnalytics.filters.capsules', 'Kapsułki')}`}
           {selectedProduct && ` | SKU: ${selectedProduct}`}
           {selectedCustomer !== 'all' && ` | Klient: ${customers.find(c => c.id === selectedCustomer)?.name || selectedCustomer}`}
         </Typography>

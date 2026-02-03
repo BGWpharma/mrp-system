@@ -107,14 +107,24 @@ const getReportTiles = (t) => [
     iconBg: 'rgba(255, 255, 255, 0.2)'
   },
   {
-    id: 'mixing-analytics',
-    title: t('analyticsDashboard.tiles.mixingAnalytics.title'),
-    description: t('analyticsDashboard.tiles.mixingAnalytics.description'),
-    icon: BlenderIcon,
-    path: '/analytics/mixing',
-    gradient: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',
+    id: 'weekly-sprint',
+    title: t('analyticsDashboard.tiles.weeklySprint.title', 'Weekly Sprint'),
+    description: t('analyticsDashboard.tiles.weeklySprint.description', 'Planowanie sprintu produkcyjnego Pon-Czw'),
+    icon: ScheduleIcon,
+    path: '/analytics/weekly-sprint',
+    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     iconBg: 'rgba(255, 255, 255, 0.2)'
   }
+  // TYMCZASOWO UKRYTY - Raport mieszań
+  // {
+  //   id: 'mixing-analytics',
+  //   title: t('analyticsDashboard.tiles.mixingAnalytics.title'),
+  //   description: t('analyticsDashboard.tiles.mixingAnalytics.description'),
+  //   icon: BlenderIcon,
+  //   path: '/analytics/mixing',
+  //   gradient: 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)',
+  //   iconBg: 'rgba(255, 255, 255, 0.2)'
+  // }
 ];
 
 // Komponent kafelka raportu

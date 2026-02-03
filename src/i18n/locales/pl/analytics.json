@@ -42,6 +42,10 @@
             "mixingAnalytics": {
                 "title": "Analiza Mieszań",
                 "description": "Wydajność mieszalnika - produkcja per SKU. Analiza liczby sztuk i mieszań w czasie."
+            },
+            "weeklySprint": {
+                "title": "Weekly Sprint",
+                "description": "Planowanie sprintu produkcyjnego Pon-Czw. Analiza i optymalizacja tygodniowej produkcji."
             }
         },
         "quickAccess": {
@@ -267,6 +271,11 @@
             "product": "SKU / Produkt",
             "customer": "Klient",
             "allCustomers": "Wszyscy klienci",
+            "productType": "Typ produktu",
+            "allTypes": "Wszystkie",
+            "powder": "Proszki",
+            "capsules": "Kapsułki",
+            "productTypeTooltip": "Filtruj produkty według typu: proszki (szt., kg) lub kapsułki (caps)",
             "workDays": "Dni robocze",
             "workWeeks": "Tygodnie"
         },
@@ -286,6 +295,13 @@
             "tasksCount": "Liczba zadań",
             "total": "SUMA"
         },
+        "barrels": {
+            "title": "Beczki",
+            "size": "15 000 szt.",
+            "full": "Pełne beczki",
+            "remaining": "Reszta",
+            "percent": "wypełnienia"
+        },
         "tabs": {
             "table": "Tabela per SKU",
             "daily": "Rozkład dzienny",
@@ -300,6 +316,42 @@
             "title": "Brak danych mieszań w wybranym okresie",
             "description": "Zmień zakres dat lub sprawdź czy zadania mają uzupełniony plan mieszań.",
             "noChartData": "Brak danych do wyświetlenia wykresu"
+        }
+    },
+    "weeklySprint": {
+        "title": "Weekly Sprint (Pon-Czw)",
+        "subtitle": "Planowanie i analiza cotygodniowego sprintu produkcyjnego",
+        "refresh": "Odśwież dane",
+        "dataRefreshed": "Dane zostały odświeżone",
+        "errors": {
+            "fetchData": "Nie udało się pobrać danych",
+            "noDataToExport": "Brak danych do eksportu"
+        },
+        "export": {
+            "csvTooltip": "Eksportuj do CSV",
+            "success": "Wyeksportowano raport do pliku CSV",
+            "error": "Nie udało się wyeksportować raportu",
+            "headers": {
+                "sku": "SKU",
+                "category": "Category",
+                "tasksCount": "Tasks Count",
+                "packagesPerHour": "Packages/Hour",
+                "packagesPerDay": "Packages/Day",
+                "sprintPackages": "Sprint Packages (Mon-Thu)",
+                "totalPackagings": "Total Packagings",
+                "piecesPerMixing": "Pieces/Mixing",
+                "timePerMixing": "Time/Mixing (min)",
+                "mixingsPerDay": "Mixings/Day",
+                "piecesPerDay": "Pieces/Day",
+                "sprintMixings": "Sprint Mixings (Mon-Thu)",
+                "sprintPieces": "Sprint Pieces (Mon-Thu)",
+                "totalMixings": "Total Mixings",
+                "totalProduction": "Total Production"
+            },
+            "categories": {
+                "capsules": "Capsules",
+                "powder": "Powders"
+            }
         }
     }
 }

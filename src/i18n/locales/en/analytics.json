@@ -42,6 +42,10 @@
             "mixingAnalytics": {
                 "title": "Mixing Analytics",
                 "description": "Mixer efficiency - production per SKU. Analysis of pieces and mixings over time."
+            },
+            "weeklySprint": {
+                "title": "Weekly Sprint",
+                "description": "Mon-Thu production sprint planning. Weekly production analysis and optimization."
             }
         },
         "quickAccess": {
@@ -267,6 +271,11 @@
             "product": "SKU / Product",
             "customer": "Customer",
             "allCustomers": "All customers",
+            "productType": "Product type",
+            "allTypes": "All types",
+            "powder": "Powders",
+            "capsules": "Capsules",
+            "productTypeTooltip": "Filter products by type: powders (pcs, kg) or capsules (caps)",
             "workDays": "Work days",
             "workWeeks": "Weeks"
         },
@@ -286,6 +295,13 @@
             "tasksCount": "Tasks count",
             "total": "TOTAL"
         },
+        "barrels": {
+            "title": "Barrels",
+            "size": "15,000 pcs",
+            "full": "Full barrels",
+            "remaining": "Remaining",
+            "percent": "filled"
+        },
         "tabs": {
             "table": "Table per SKU",
             "daily": "Daily distribution",
@@ -300,6 +316,42 @@
             "title": "No mixing data in selected period",
             "description": "Change date range or check if tasks have mixing plans filled in.",
             "noChartData": "No data to display chart"
+        }
+    },
+    "weeklySprint": {
+        "title": "Weekly Sprint (Mon-Thu)",
+        "subtitle": "Weekly production sprint planning and analysis",
+        "refresh": "Refresh data",
+        "dataRefreshed": "Data has been refreshed",
+        "errors": {
+            "fetchData": "Failed to fetch data",
+            "noDataToExport": "No data to export"
+        },
+        "export": {
+            "csvTooltip": "Export to CSV",
+            "success": "Report exported to CSV file",
+            "error": "Failed to export report",
+            "headers": {
+                "sku": "SKU",
+                "category": "Category",
+                "tasksCount": "Tasks Count",
+                "packagesPerHour": "Packages/Hour",
+                "packagesPerDay": "Packages/Day",
+                "sprintPackages": "Sprint Packages (Mon-Thu)",
+                "totalPackagings": "Total Packagings",
+                "piecesPerMixing": "Pieces/Mixing",
+                "timePerMixing": "Time/Mixing (min)",
+                "mixingsPerDay": "Mixings/Day",
+                "piecesPerDay": "Pieces/Day",
+                "sprintMixings": "Sprint Mixings (Mon-Thu)",
+                "sprintPieces": "Sprint Pieces (Mon-Thu)",
+                "totalMixings": "Total Mixings",
+                "totalProduction": "Total Production"
+            },
+            "categories": {
+                "capsules": "Capsules",
+                "powder": "Powders"
+            }
         }
     }
 }
