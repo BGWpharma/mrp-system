@@ -32,7 +32,7 @@ import TaskDetailsDialog from './TaskDetailsDialog';
 import MentionText from './MentionText';
 import { useTranslation } from 'react-i18next';
 
-const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {} }) => {
+const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {}, disableDrag = false }) => {
   const { t } = useTranslation('taskboard');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -49,7 +49,10 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ 
+    id: task.id,
+    disabled: disableDrag
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -189,7 +192,7 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
         ref={setNodeRef}
         style={style}
         {...attributes}
-        {...listeners}
+        {...(!disableDrag ? listeners : {})}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         sx={{
@@ -211,7 +214,7 @@ const TaskCard = ({ task, board, onRefresh, onOptimisticUpdate, userNamesMap = {
             : '1px solid rgba(255, 255, 255, 0.06)',
           opacity: task.status === 'completed' ? 0.6 : 1,
           transition: 'all 0.2s ease',
-          cursor: isDragging ? 'grabbing' : isMobile ? 'pointer' : 'grab',
+          cursor: disableDrag ? 'pointer' : (isDragging ? 'grabbing' : (isMobile ? 'pointer' : 'grab')),
           position: 'relative',
           '&:hover': {
             backgroundColor: 'rgba(255, 255, 255, 0.05)',

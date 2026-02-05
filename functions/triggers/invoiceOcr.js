@@ -112,6 +112,12 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
   const {checkIfProforma} = require("../utils/ocrService");
   const isProforma = checkIfProforma(ocrData);
 
+  // AUTO-REJECT PROFORMA INVOICES
+  const shouldAutoReject = isProforma;
+  const autoRejectReason = isProforma ?
+    "Automatycznie odrzucone: Faktura Pro Forma nie jest fakturą VAT. Prosimy o przesłanie właściwej faktury." :
+    null;
+
   const purchaseInvoice = {
     // Invoice data from OCR
     invoiceNumber: ocrData.invoiceNumber,
@@ -134,7 +140,7 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
 
     // Document type detection
     documentType: ocrData.documentType || "invoice",
-    isPossibleProforma: isProforma,
+    isProforma: isProforma,
 
     // Multi-currency support
     ...(exchangeRateData && {
@@ -162,12 +168,19 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     ocrWarnings: ocrData.warnings,
     ocrRawData: JSON.stringify(ocrData),
 
-    // Workflow status
-    status: "pending_review",
+    // Workflow status - AUTO-REJECT PROFORMA
+    status: shouldAutoReject ? "rejected" : "pending_review",
     // Status flow: pending_review → approved → posted (after journal entry)
-    //              pending_review → rejected
+    //              rejected (auto-reject for proforma invoices)
 
     journalEntryId: null, // Set when posted to accounting
+
+    // Review tracking (for auto-rejected proforma)
+    ...(shouldAutoReject && {
+      reviewedBy: "cloud_function_ocr_auto_reject",
+      reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+      reviewNotes: autoRejectReason,
+    }),
 
     // Audit
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -178,7 +191,9 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
 
   const docRef = await db.collection("purchaseInvoices").add(purchaseInvoice);
   logger.info(`[OCR] Created purchaseInvoice: ${docRef.id}`, {
-    isPossibleProforma: isProforma,
+    isProforma: isProforma,
+    status: purchaseInvoice.status,
+    autoRejected: shouldAutoReject,
     documentType: ocrData.documentType,
   });
   return docRef.id;
@@ -736,6 +751,14 @@ const retryInvoiceOcr = onCall(
           }
         }
 
+        // Check if proforma
+        const {checkIfProforma} = require("../utils/ocrService");
+        const isProforma = checkIfProforma(ocrData);
+        const shouldAutoReject = isProforma;
+        const autoRejectReason = isProforma ?
+          "Automatycznie odrzucone: Faktura Pro Forma nie jest fakturą VAT. Prosimy o przesłanie właściwej faktury." :
+          null;
+
         // Update the invoice with new OCR data
         const updateData = {
           invoiceNumber: ocrData.invoiceNumber,
@@ -751,15 +774,24 @@ const retryInvoiceOcr = onCall(
           summary: ocrData.summary,
           paymentMethod: ocrData.paymentMethod,
           bankAccount: ocrData.bankAccount,
+          documentType: ocrData.documentType || "invoice",
+          isProforma: isProforma,
           ocrConfidence: ocrData.parseConfidence,
           ocrWarnings: ocrData.warnings,
           ocrError: admin.firestore.FieldValue.delete(),
           ocrRawData: JSON.stringify(ocrData),
-          status: "pending_review",
+          status: shouldAutoReject ? "rejected" : "pending_review",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryBy: request.auth.uid,
         };
+
+        // Add review notes if auto-rejected
+        if (shouldAutoReject) {
+          updateData.reviewedBy = "cloud_function_ocr_auto_reject";
+          updateData.reviewedAt = admin.firestore.FieldValue.serverTimestamp();
+          updateData.reviewNotes = autoRejectReason;
+        }
 
         // Add exchange rate data if available
         if (exchangeRateData) {

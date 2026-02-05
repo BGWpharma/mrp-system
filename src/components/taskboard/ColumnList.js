@@ -29,6 +29,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import SortIcon from '@mui/icons-material/Sort';
 import {
   DndContext,
   DragOverlay,
@@ -61,9 +62,11 @@ const ColumnHeader = React.memo(({
   onMoveRight,
   canMoveLeft,
   canMoveRight,
+  onSortChange,
   t 
 }) => {
   const [menuAnchor, setMenuAnchor] = useState(null);
+  const [sortMenuAnchor, setSortMenuAnchor] = useState(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(column.title);
 
@@ -104,12 +107,56 @@ const ColumnHeader = React.memo(({
     handleMenuClose();
   };
 
+  const handleSortMenuOpen = (event) => {
+    setSortMenuAnchor(event.currentTarget);
+    handleMenuClose();
+  };
+
+  const handleSortMenuClose = () => {
+    setSortMenuAnchor(null);
+  };
+
+  const handleSortChange = (sortBy) => {
+    onSortChange(column.id, sortBy);
+    handleSortMenuClose();
+  };
+
+  // Pobierz aktualną opcję sortowania
+  const currentSort = column.sortBy || 'manual';
+
+  // Funkcja zwracająca tooltip dla aktywnego sortowania
+  const getSortTooltip = () => {
+    if (!currentSort || currentSort === 'manual') return null;
+    const sortLabels = {
+      priority: t('sortByPriority'),
+      dueDate: t('sortByDueDate'),
+      createdDate: t('sortByCreatedDate'),
+      updatedDate: t('sortByUpdatedDate'),
+      titleAsc: t('sortByTitle'),
+      titleDesc: t('sortByTitleDesc')
+    };
+    return `${t('autoSort')}: ${sortLabels[currentSort] || currentSort}`;
+  };
+
   return (
     <>
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h6" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }} noWrap>
-          {column.title}
-        </Typography>
+        <Box display="flex" alignItems="center" gap={0.5} flex={1} minWidth={0}>
+          <Typography variant="h6" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }} noWrap>
+            {column.title}
+          </Typography>
+          {currentSort && currentSort !== 'manual' && (
+            <Tooltip title={getSortTooltip()}>
+              <SortIcon 
+                sx={{ 
+                  fontSize: 16, 
+                  color: 'primary.main',
+                  opacity: 0.8 
+                }} 
+              />
+            </Tooltip>
+          )}
+        </Box>
         <Box display="flex" alignItems="center" gap={0.5}>
           <Typography variant="caption" color="text.secondary" mr={0.5}>
             {taskCount}
@@ -155,6 +202,15 @@ const ColumnHeader = React.memo(({
             <ArrowForwardIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>{t('moveRight')}</ListItemText>
+        </MenuItem>
+        
+        <Divider />
+        
+        <MenuItem onClick={handleSortMenuOpen}>
+          <ListItemIcon>
+            <SortIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('sortBy')}</ListItemText>
         </MenuItem>
         
         <Divider />
@@ -211,6 +267,58 @@ const ColumnHeader = React.memo(({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Menu sortowania */}
+      <Menu
+        anchorEl={sortMenuAnchor}
+        open={Boolean(sortMenuAnchor)}
+        onClose={handleSortMenuClose}
+        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem 
+          onClick={() => handleSortChange('manual')}
+          selected={currentSort === 'manual'}
+        >
+          <ListItemText primary={t('sortByManual')} />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortChange('priority')}
+          selected={currentSort === 'priority'}
+        >
+          <ListItemText primary={t('sortByPriority')} />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortChange('dueDate')}
+          selected={currentSort === 'dueDate'}
+        >
+          <ListItemText primary={t('sortByDueDate')} />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortChange('createdDate')}
+          selected={currentSort === 'createdDate'}
+        >
+          <ListItemText primary={t('sortByCreatedDate')} />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortChange('updatedDate')}
+          selected={currentSort === 'updatedDate'}
+        >
+          <ListItemText primary={t('sortByUpdatedDate')} />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortChange('titleAsc')}
+          selected={currentSort === 'titleAsc'}
+        >
+          <ListItemText primary={t('sortByTitle')} />
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortChange('titleDesc')}
+          selected={currentSort === 'titleDesc'}
+        >
+          <ListItemText primary={t('sortByTitleDesc')} />
+        </MenuItem>
+      </Menu>
     </>
   );
 });
@@ -339,6 +447,7 @@ const ColumnList = ({
   
   const [activeTask, setActiveTask] = useState(null);
   const [showCompletedTasks, setShowCompletedTasks] = useState({});
+  const [columnSortOverrides, setColumnSortOverrides] = useState({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -507,22 +616,74 @@ const ColumnList = ({
     }
   }, [tasks, board?.id, currentUser]);
 
+  // Funkcja sortująca zadania na podstawie wybranej opcji
+  const sortTasks = useCallback((tasksToSort, sortBy) => {
+    if (!sortBy || sortBy === 'manual') {
+      return [...tasksToSort].sort((a, b) => a.position - b.position);
+    }
+
+    const sorted = [...tasksToSort];
+    
+    switch (sortBy) {
+      case 'priority': {
+        const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3, none: 4, undefined: 5 };
+        return sorted.sort((a, b) => {
+          const aPriority = a.priority || 'none';
+          const bPriority = b.priority || 'none';
+          const orderA = priorityOrder[aPriority] ?? priorityOrder.undefined;
+          const orderB = priorityOrder[bPriority] ?? priorityOrder.undefined;
+          return orderA - orderB;
+        });
+      }
+      case 'dueDate':
+        return sorted.sort((a, b) => {
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return a.dueDate.getTime() - b.dueDate.getTime();
+        });
+      case 'createdDate':
+        return sorted.sort((a, b) => {
+          const aTime = a.createdAt?.getTime() || 0;
+          const bTime = b.createdAt?.getTime() || 0;
+          return bTime - aTime; // Najnowsze na górze
+        });
+      case 'updatedDate':
+        return sorted.sort((a, b) => {
+          const aTime = a.updatedAt?.getTime() || 0;
+          const bTime = b.updatedAt?.getTime() || 0;
+          return bTime - aTime; // Najnowsze na górze
+        });
+      case 'titleAsc':
+        return sorted.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'pl'));
+      case 'titleDesc':
+        return sorted.sort((a, b) => (b.title || '').localeCompare(a.title || '', 'pl'));
+      default:
+        return sorted.sort((a, b) => a.position - b.position);
+    }
+  }, []);
+
   // useMemo dla zadań w poszczególnych kolumnach - zapobiega niepotrzebnym obliczeniom
   const tasksByColumn = useMemo(() => {
     const result = {};
     columns.forEach(column => {
       const columnTasks = tasks.filter(task => task.columnId === column.id);
+      const activeTasks = columnTasks.filter(task => task.status !== 'completed');
+      const completedTasks = columnTasks.filter(task => task.status === 'completed');
+      
+      // Użyj nadpisania jeśli istnieje, w przeciwnym razie użyj wartości z kolumny
+      const effectiveSortBy = columnSortOverrides[column.id] !== undefined 
+        ? columnSortOverrides[column.id] 
+        : column.sortBy;
+      
       result[column.id] = {
-        active: columnTasks
-          .filter(task => task.status !== 'completed')
-          .sort((a, b) => a.position - b.position),
-        completed: columnTasks
-          .filter(task => task.status === 'completed')
-          .sort((a, b) => a.position - b.position)
+        active: sortTasks(activeTasks, effectiveSortBy),
+        completed: sortTasks(completedTasks, effectiveSortBy),
+        effectiveSortBy // Zapisz efektywne sortowanie dla komponentów potomnych
       };
     });
     return result;
-  }, [tasks, columns]);
+  }, [tasks, columns, columnSortOverrides, sortTasks]);
 
   const toggleCompletedSection = useCallback((columnId) => {
     setShowCompletedTasks(prev => ({
@@ -531,12 +692,53 @@ const ColumnList = ({
     }));
   }, []);
 
+  // Usuń nadpisania sortowania gdy dane z Firestore są już zsynchronizowane
+  useEffect(() => {
+    const newOverrides = { ...columnSortOverrides };
+    let hasChanges = false;
+    
+    columns.forEach(column => {
+      if (columnSortOverrides[column.id] !== undefined) {
+        // Jeśli wartość z Firestore odpowiada nadpisaniu, usuń nadpisanie
+        if (column.sortBy === columnSortOverrides[column.id]) {
+          delete newOverrides[column.id];
+          hasChanges = true;
+        }
+      }
+    });
+    
+    if (hasChanges) {
+      setColumnSortOverrides(newOverrides);
+    }
+  }, [columns, columnSortOverrides]);
+
   // Zmień nazwę kolumny
   const handleRenameColumn = useCallback(async (columnId, newTitle) => {
     try {
       await updateColumn(columnId, { title: newTitle });
     } catch (error) {
       console.error('Błąd podczas zmiany nazwy kolumny:', error);
+    }
+  }, []);
+
+  // Zmień sortowanie kolumny
+  const handleSortChange = useCallback(async (columnId, sortBy) => {
+    // Optimistic update - natychmiastowa aktualizacja UI
+    setColumnSortOverrides(prev => ({
+      ...prev,
+      [columnId]: sortBy
+    }));
+    
+    try {
+      await updateColumn(columnId, { sortBy });
+    } catch (error) {
+      console.error('Błąd podczas zmiany sortowania kolumny:', error);
+      // W przypadku błędu, usuń nadpisanie
+      setColumnSortOverrides(prev => {
+        const newOverrides = { ...prev };
+        delete newOverrides[columnId];
+        return newOverrides;
+      });
     }
   }, []);
 
@@ -624,7 +826,7 @@ const ColumnList = ({
           </Box>
         ) : (
           columns.map((column) => {
-            const { active: activeTasks, completed: completedTasks } = tasksByColumn[column.id] || { active: [], completed: [] };
+            const { active: activeTasks, completed: completedTasks, effectiveSortBy } = tasksByColumn[column.id] || { active: [], completed: [], effectiveSortBy: 'manual' };
             const allTaskIds = [...activeTasks, ...completedTasks].map(t => t.id);
 
             return (
@@ -645,12 +847,13 @@ const ColumnList = ({
               >
                 {/* Nagłówek kolumny z menu */}
                 <ColumnHeader
-                  column={column}
+                  column={{ ...column, sortBy: effectiveSortBy }}
                   taskCount={activeTasks.length}
                   onDelete={onDeleteColumn}
                   onRename={handleRenameColumn}
                   onMoveLeft={handleMoveColumnLeft}
                   onMoveRight={handleMoveColumnRight}
+                  onSortChange={handleSortChange}
                   canMoveLeft={columns.findIndex(c => c.id === column.id) > 0}
                   canMoveRight={columns.findIndex(c => c.id === column.id) < columns.length - 1}
                   t={t}
@@ -661,6 +864,7 @@ const ColumnList = ({
                   <SortableContext
                     items={allTaskIds}
                     strategy={verticalListSortingStrategy}
+                    disabled={effectiveSortBy && effectiveSortBy !== 'manual'}
                   >
                     {/* Aktywne zadania */}
                     {activeTasks.map((task) => (
@@ -671,6 +875,7 @@ const ColumnList = ({
                         onRefresh={onRefresh}
                         onOptimisticUpdate={onOptimisticTaskUpdate}
                         userNamesMap={userNamesMap}
+                        disableDrag={effectiveSortBy && effectiveSortBy !== 'manual'}
                       />
                     ))}
 
@@ -690,7 +895,10 @@ const ColumnList = ({
                           justifyContent: 'center'
                         }}
                       >
-                        {t('dragTaskHere')}
+                        {effectiveSortBy && effectiveSortBy !== 'manual' 
+                          ? t('noTasks')
+                          : t('dragTaskHere')
+                        }
                       </Box>
                     )}
 
@@ -740,6 +948,7 @@ const ColumnList = ({
                                 onRefresh={onRefresh}
                                 onOptimisticUpdate={onOptimisticTaskUpdate}
                                 userNamesMap={userNamesMap}
+                                disableDrag={effectiveSortBy && effectiveSortBy !== 'manual'}
                               />
                             ))}
                           </Box>

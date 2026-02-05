@@ -181,6 +181,11 @@
             "unitShort": "Unit",
             "cost": "Cost",
             "user": "User"
+        },
+        "export": {
+            "success": "Consumption report exported to CSV files",
+            "error": "Failed to export report",
+            "csv": "Export CSV"
         }
     },
     "productionCostsReport": {

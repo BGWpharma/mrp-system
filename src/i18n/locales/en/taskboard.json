@@ -115,5 +115,16 @@
   "columnOptions": "Column options",
   "renameColumn": "Rename",
   "moveLeft": "Move left",
-  "moveRight": "Move right"
+  "moveRight": "Move right",
+  "sortBy": "Sort by",
+  "sortByManual": "Position (manual)",
+  "sortByCreatedDate": "Created date",
+  "sortByDueDate": "Due date",
+  "sortByPriority": "Priority",
+  "sortByTitle": "Title (A-Z)",
+  "sortByTitleDesc": "Title (Z-A)",
+  "sortByUpdatedDate": "Updated date",
+  "sortOrderAsc": "Ascending",
+  "sortOrderDesc": "Descending",
+  "autoSort": "Automatic sorting"
 }

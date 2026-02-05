@@ -181,6 +181,11 @@
             "unitShort": "Jedn.",
             "cost": "Koszt",
             "user": "Użytkownik"
+        },
+        "export": {
+            "success": "Wyeksportowano raport konsumpcji do plików CSV",
+            "error": "Nie udało się wyeksportować raportu",
+            "csv": "Eksportuj CSV"
         }
     },
     "productionCostsReport": {

@@ -115,5 +115,16 @@
   "columnOptions": "Opcje kolumny",
   "renameColumn": "Zmień nazwę",
   "moveLeft": "Przesuń w lewo",
-  "moveRight": "Przesuń w prawo"
+  "moveRight": "Przesuń w prawo",
+  "sortBy": "Sortuj według",
+  "sortByManual": "Pozycja (ręcznie)",
+  "sortByCreatedDate": "Data utworzenia",
+  "sortByDueDate": "Termin wykonania",
+  "sortByPriority": "Priorytet",
+  "sortByTitle": "Tytuł (A-Z)",
+  "sortByTitleDesc": "Tytuł (Z-A)",
+  "sortByUpdatedDate": "Data aktualizacji",
+  "sortOrderAsc": "Rosnąco",
+  "sortOrderDesc": "Malejąco",
+  "autoSort": "Sortowanie automatyczne"
 }

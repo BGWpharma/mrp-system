@@ -227,6 +227,14 @@ const checkIfProforma = (ocrData) => {
     }
   }
 
+  // Check warnings array for proforma indicators
+  if (ocrData.warnings && Array.isArray(ocrData.warnings)) {
+    const warningsText = ocrData.warnings.join(" ").toLowerCase();
+    if (proformaKeywords.some((kw) => warningsText.includes(kw))) {
+      return true;
+    }
+  }
+
   return false;
 };
 

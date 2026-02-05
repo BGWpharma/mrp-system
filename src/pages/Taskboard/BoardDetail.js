@@ -167,6 +167,7 @@ const BoardDetail = ({
             boardId: data.boardId,
             title: data.title,
             position: data.position,
+            sortBy: data.sortBy || 'manual',
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date()
           };

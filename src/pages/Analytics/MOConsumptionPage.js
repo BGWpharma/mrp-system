@@ -15,18 +15,19 @@ import {
   TableRow,
   TableCell,
   Chip,
-  Button,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   CircularProgress,
   useMediaQuery,
-  useTheme
+  useTheme,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import {
   LocalDining as ConsumptionIcon,
-  GetApp as ExportIcon,
+  Download as DownloadIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
@@ -40,10 +41,11 @@ import { getAllOrders } from '../../services/orderService';
 import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
+import { exportToCSV, formatDateForExport } from '../../utils/exportUtils';
 
 const MOConsumptionPage = () => {
   const { t } = useTranslation('analytics');
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isDarkMode = theme.palette.mode === 'dark';
@@ -279,6 +281,80 @@ const MOConsumptionPage = () => {
     return Number(value).toFixed(precision);
   };
 
+  const handleExportCSV = () => {
+    try {
+      // Export Summary
+      const summaryData = consumptionData.map(material => ({
+        materialName: material.materialName,
+        totalQuantity: formatQuantity(material.totalQuantity),
+        unit: material.unit,
+        avgUnitPrice: material.avgUnitPrice.toFixed(2),
+        totalCost: material.totalCost.toFixed(2),
+        batchCount: material.batchCount,
+        taskCount: material.taskCount
+      }));
+
+      const summaryHeaders = [
+        { label: 'Material', key: 'materialName' },
+        { label: 'Total Quantity', key: 'totalQuantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Avg Unit Price (EUR)', key: 'avgUnitPrice' },
+        { label: 'Total Cost (EUR)', key: 'totalCost' },
+        { label: 'Batch Count', key: 'batchCount' },
+        { label: 'Task Count', key: 'taskCount' }
+      ];
+
+      // Export Details
+      const detailsData = filteredConsumption.map(item => ({
+        consumptionDate: item.consumptionDate ? format(item.consumptionDate, 'yyyy-MM-dd HH:mm:ss') : '',
+        taskName: item.taskName,
+        moNumber: item.moNumber || '',
+        productName: item.productName,
+        materialName: item.materialName,
+        batchNumber: item.batchNumber,
+        quantity: formatQuantity(item.quantity),
+        unit: item.unit,
+        unitPrice: item.unitPrice.toFixed(2),
+        totalCost: item.totalCost.toFixed(2),
+        userName: item.userName,
+        includeInCosts: item.includeInCosts ? 'Yes' : 'No'
+      }));
+
+      const detailsHeaders = [
+        { label: 'Consumption Date', key: 'consumptionDate' },
+        { label: 'Task Name', key: 'taskName' },
+        { label: 'MO Number', key: 'moNumber' },
+        { label: 'Product Name', key: 'productName' },
+        { label: 'Material Name', key: 'materialName' },
+        { label: 'Batch Number', key: 'batchNumber' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Unit', key: 'unit' },
+        { label: 'Unit Price (EUR)', key: 'unitPrice' },
+        { label: 'Total Cost (EUR)', key: 'totalCost' },
+        { label: 'User', key: 'userName' },
+        { label: 'Include In Costs', key: 'includeInCosts' }
+      ];
+
+      // Filename with date range
+      const startDateStr = formatDateForExport(startDate, 'yyyyMMdd');
+      const endDateStr = formatDateForExport(endDate, 'yyyyMMdd');
+      const filename = `mo_consumption_report_${startDateStr}_${endDateStr}`;
+
+      // Export both summary and details
+      const summarySuccess = exportToCSV(summaryData, summaryHeaders, `${filename}_summary`);
+      const detailsSuccess = exportToCSV(detailsData, detailsHeaders, `${filename}_details`);
+
+      if (summarySuccess && detailsSuccess) {
+        showSuccess(t('moConsumptionReport.export.success') || 'Dane zostały wyeksportowane do pliku CSV');
+      } else {
+        showError(t('moConsumptionReport.export.error') || 'Błąd podczas eksportowania danych');
+      }
+    } catch (error) {
+      console.error('Błąd podczas eksportu CSV:', error);
+      showError(t('moConsumptionReport.export.error') || 'Błąd podczas eksportowania danych');
+    }
+  };
+
   const SortableTableCell = ({ field, children, align = 'left', ...props }) => {
     const isActive = sortField === field;
     const isDesc = sortDirection === 'desc';
@@ -332,29 +408,40 @@ const MOConsumptionPage = () => {
           borderRadius: 3
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 2,
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mr: 2
-            }}
-          >
-            <ConsumptionIcon sx={{ fontSize: 24, color: 'white' }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2,
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mr: 2
+              }}
+            >
+              <ConsumptionIcon sx={{ fontSize: 24, color: 'white' }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+                {t('analyticsDashboard.tiles.moConsumption.title')}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                {t('analyticsDashboard.tiles.moConsumption.description')}
+              </Typography>
+            </Box>
           </Box>
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-              {t('analyticsDashboard.tiles.moConsumption.title')}
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-              {t('analyticsDashboard.tiles.moConsumption.description')}
-            </Typography>
-          </Box>
+          <Tooltip title={t('moConsumptionReport.export.csv') || 'Eksportuj CSV'}>
+            <IconButton 
+              onClick={handleExportCSV} 
+              sx={{ color: 'white' }}
+              disabled={loading || (consumptionData.length === 0 && filteredConsumption.length === 0)}
+            >
+              <DownloadIcon />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Paper>
 
