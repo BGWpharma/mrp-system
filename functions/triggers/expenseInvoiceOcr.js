@@ -31,6 +31,7 @@ const {
   SUPPORTED_MIME_TYPES,
 } = require("../utils/ocrService");
 const {convertToPLN} = require("../utils/exchangeRates");
+const {checkForDuplicateInvoice} = require("../utils/duplicateDetection");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -118,14 +119,44 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
   const {checkIfProforma} = require("../utils/ocrService");
   const isProforma = checkIfProforma(ocrData);
 
+  // DUPLICATE DETECTION - check by invoice number + supplier
+  const duplicateResult = await checkForDuplicateInvoice(db, {
+    invoiceNumber: ocrData.invoiceNumber,
+    supplierTaxId: ocrData.supplier?.taxId || null,
+    supplierName: ocrData.supplier?.name || "",
+    excludeId: invoiceId,
+    excludeCollection: "expenseInvoices",
+  });
+
+  if (duplicateResult.isDuplicate) {
+    logger.warn("[Expense OCR] Duplicate detected", {
+      invoiceId,
+      invoiceNumber: ocrData.invoiceNumber,
+      duplicateType: duplicateResult.duplicateType,
+      existingId: duplicateResult.existingInvoiceId,
+      message: duplicateResult.message,
+    });
+  }
+
+  // AUTO-REJECT: duplicate invoices (like proformas)
+  const shouldAutoReject = duplicateResult.isDuplicate;
+  let autoRejectReason = null;
+  if (shouldAutoReject) {
+    autoRejectReason = "Automatycznie odrzucone: " +
+      "Duplikat faktury. " +
+      (duplicateResult.message || "");
+  }
+
   const updateData = {
     // Invoice data from OCR
     "invoiceNumber": ocrData.invoiceNumber,
     "invoiceDate": ocrData.invoiceDate ?
-      admin.firestore.Timestamp.fromDate(new Date(ocrData.invoiceDate)) :
+      admin.firestore.Timestamp.fromDate(
+          new Date(ocrData.invoiceDate)) :
       null,
     "dueDate": ocrData.dueDate ?
-      admin.firestore.Timestamp.fromDate(new Date(ocrData.dueDate)) :
+      admin.firestore.Timestamp.fromDate(
+          new Date(ocrData.dueDate)) :
       null,
 
     // Supplier
@@ -145,7 +176,8 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     // Multi-currency support
     ...(exchangeRateData && {
       "exchangeRate": exchangeRateData.rate,
-      "exchangeRateDate": admin.firestore.Timestamp.fromDate(new Date(exchangeRateData.rateDate)),
+      "exchangeRateDate": admin.firestore.Timestamp.fromDate(
+          new Date(exchangeRateData.rateDate)),
       "exchangeRateSource": "nbp",
       "totalInPLN": exchangeRateData.amountInPLN,
     }),
@@ -157,24 +189,47 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
 
     // OCR metadata
     "ocrConfidence": ocrData.parseConfidence,
-    "ocrWarnings": ocrData.warnings,
+    "ocrWarnings": duplicateResult.isDuplicate ?
+      [...(ocrData.warnings || []),
+        `DUPLIKAT: ${duplicateResult.message}`] :
+      ocrData.warnings,
     "ocrProcessed": true,
     "ocrProcessedAt": admin.firestore.FieldValue.serverTimestamp(),
+
+    // Duplicate detection
+    ...(duplicateResult.isDuplicate && {
+      "duplicateOf": duplicateResult.existingInvoiceId,
+      "duplicateStatus": "confirmed",
+    }),
+    ...(!duplicateResult.isDuplicate && {
+      "duplicateStatus": "none",
+    }),
 
     // Update download URL with signed version
     "sourceFile.downloadUrl": downloadUrl,
 
-    // Keep pending_review status for accountant to review
-    "status": "pending_review",
+    // AUTO-REJECT duplicate, otherwise pending_review
+    "status": shouldAutoReject ?
+      "rejected" : "pending_review",
+
+    // Review tracking (for auto-rejected)
+    ...(shouldAutoReject && {
+      "reviewedBy": "cloud_function_ocr_auto_reject",
+      "reviewedAt": admin.firestore.FieldValue.serverTimestamp(),
+      "reviewNotes": autoRejectReason,
+    }),
 
     // Audit
     "updatedAt": admin.firestore.FieldValue.serverTimestamp(),
   };
 
   await db.collection(COLLECTION).doc(invoiceId).update(updateData);
-  logger.info(`[Expense OCR] Updated expenseInvoice: ${invoiceId}`, {
+  logger.info(`[Expense OCR] Updated: ${invoiceId}`, {
     isPossibleProforma: isProforma,
     documentType: ocrData.documentType,
+    isDuplicate: duplicateResult.isDuplicate,
+    duplicateType: duplicateResult.duplicateType,
+    autoRejected: shouldAutoReject,
   });
 };
 
@@ -616,14 +671,43 @@ const processExpenseInvoiceOcr = onCall(
           }
         }
 
+        // DUPLICATE DETECTION on retry
+        const retryDuplicateResult = await checkForDuplicateInvoice(db, {
+          invoiceNumber: ocrData.invoiceNumber,
+          supplierTaxId: ocrData.supplier?.taxId || null,
+          supplierName: ocrData.supplier?.name || "",
+          excludeId: invoiceId,
+          excludeCollection: "expenseInvoices",
+        });
+
+        if (retryDuplicateResult.isDuplicate) {
+          logger.warn("[Expense OCR Retry] Duplicate detected", {
+            invoiceId,
+            invoiceNumber: ocrData.invoiceNumber,
+            duplicateType: retryDuplicateResult.duplicateType,
+            existingId: retryDuplicateResult.existingInvoiceId,
+          });
+        }
+
+        // AUTO-REJECT: duplicate invoices
+        const retryAutoReject = retryDuplicateResult.isDuplicate;
+        let retryRejectReason = null;
+        if (retryAutoReject) {
+          retryRejectReason = "Automatycznie odrzucone: " +
+            "Duplikat faktury. " +
+            (retryDuplicateResult.message || "");
+        }
+
         // Update the invoice with new OCR data
         const updateData = {
           "invoiceNumber": ocrData.invoiceNumber,
           "invoiceDate": ocrData.invoiceDate ?
-            admin.firestore.Timestamp.fromDate(new Date(ocrData.invoiceDate)) :
+            admin.firestore.Timestamp.fromDate(
+                new Date(ocrData.invoiceDate)) :
             null,
           "dueDate": ocrData.dueDate ?
-            admin.firestore.Timestamp.fromDate(new Date(ocrData.dueDate)) :
+            admin.firestore.Timestamp.fromDate(
+                new Date(ocrData.dueDate)) :
             null,
           "supplier": ocrData.supplier,
           "currency": ocrData.currency,
@@ -632,15 +716,38 @@ const processExpenseInvoiceOcr = onCall(
           "paymentMethod": ocrData.paymentMethod,
           "bankAccount": ocrData.bankAccount,
           "ocrConfidence": ocrData.parseConfidence,
-          "ocrWarnings": ocrData.warnings,
+          "ocrWarnings": retryDuplicateResult.isDuplicate ?
+            [...(ocrData.warnings || []),
+              `DUPLIKAT: ${retryDuplicateResult.message}`] :
+            ocrData.warnings,
           "ocrError": admin.firestore.FieldValue.delete(),
           "ocrProcessed": true,
-          "ocrProcessedAt": admin.firestore.FieldValue.serverTimestamp(),
+          "ocrProcessedAt":
+            admin.firestore.FieldValue.serverTimestamp(),
           "sourceFile.downloadUrl": downloadUrl,
-          "status": "pending_review",
-          "updatedAt": admin.firestore.FieldValue.serverTimestamp(),
-          "lastOcrRetryAt": admin.firestore.FieldValue.serverTimestamp(),
+          "status": retryAutoReject ?
+            "rejected" : "pending_review",
+          "updatedAt":
+            admin.firestore.FieldValue.serverTimestamp(),
+          "lastOcrRetryAt":
+            admin.firestore.FieldValue.serverTimestamp(),
           "lastOcrRetryBy": request.auth.uid,
+          // Duplicate detection fields
+          ...(retryDuplicateResult.isDuplicate && {
+            "duplicateOf":
+              retryDuplicateResult.existingInvoiceId,
+            "duplicateStatus": "confirmed",
+          }),
+          ...(!retryDuplicateResult.isDuplicate && {
+            "duplicateStatus": "none",
+          }),
+          // Review tracking (for auto-rejected)
+          ...(retryAutoReject && {
+            "reviewedBy": "cloud_function_ocr_auto_reject",
+            "reviewedAt":
+              admin.firestore.FieldValue.serverTimestamp(),
+            "reviewNotes": retryRejectReason,
+          }),
         };
 
         // Add exchange rate data if available

@@ -26,6 +26,7 @@ const {
   SUPPORTED_MIME_TYPES,
 } = require("../utils/ocrService");
 const {convertToPLN} = require("../utils/exchangeRates");
+const {checkForDuplicateInvoice, checkCrossPoDuplicate} = require("../utils/duplicateDetection");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -112,11 +113,54 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
   const {checkIfProforma} = require("../utils/ocrService");
   const isProforma = checkIfProforma(ocrData);
 
-  // AUTO-REJECT PROFORMA INVOICES
-  const shouldAutoReject = isProforma;
-  const autoRejectReason = isProforma ?
-    "Automatycznie odrzucone: Faktura Pro Forma nie jest fakturą VAT. Prosimy o przesłanie właściwej faktury." :
-    null;
+  // DUPLICATE DETECTION - check by invoice number + supplier
+  let duplicateResult = {isDuplicate: false};
+  let crossPoResult = {isDuplicate: false};
+
+  if (!isProforma) {
+    duplicateResult = await checkForDuplicateInvoice(db, {
+      invoiceNumber: ocrData.invoiceNumber,
+      supplierTaxId: ocrData.supplier?.taxId || null,
+      supplierName: ocrData.supplier?.name || "",
+    });
+
+    // Also check cross-PO duplicate
+    if (!duplicateResult.isDuplicate && sourceInfo.id) {
+      crossPoResult = await checkCrossPoDuplicate(
+          db,
+          ocrData.invoiceNumber,
+          ocrData.supplier?.taxId || null,
+          sourceInfo.id,
+      );
+    }
+  }
+
+  const isDuplicate = duplicateResult.isDuplicate ||
+    crossPoResult.isDuplicate;
+  const duplicateInfo = duplicateResult.isDuplicate ?
+    duplicateResult : crossPoResult;
+
+  if (isDuplicate) {
+    logger.warn("[OCR] ⚠️ Duplicate invoice detected", {
+      invoiceNumber: ocrData.invoiceNumber,
+      duplicateType: duplicateInfo.duplicateType,
+      existingId: duplicateInfo.existingInvoiceId,
+      message: duplicateInfo.message,
+    });
+  }
+
+  // AUTO-REJECT: proforma or duplicate
+  const shouldAutoReject = isProforma || isDuplicate;
+  let autoRejectReason = null;
+  if (isProforma) {
+    autoRejectReason = "Automatycznie odrzucone: " +
+      "Faktura Pro Forma nie jest fakturą VAT. " +
+      "Prosimy o przesłanie właściwej faktury.";
+  } else if (isDuplicate) {
+    autoRejectReason = "Automatycznie odrzucone: " +
+      "Duplikat faktury. " +
+      (duplicateInfo.message || "");
+  }
 
   const purchaseInvoice = {
     // Invoice data from OCR
@@ -165,17 +209,26 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
 
     // OCR metadata
     ocrConfidence: ocrData.parseConfidence,
-    ocrWarnings: ocrData.warnings,
+    ocrWarnings: isDuplicate ?
+      [...(ocrData.warnings || []), `DUPLIKAT: ${duplicateInfo.message}`] :
+      ocrData.warnings,
     ocrRawData: JSON.stringify(ocrData),
 
-    // Workflow status - AUTO-REJECT PROFORMA
+    // Duplicate detection
+    ...(isDuplicate && {
+      duplicateOf: duplicateInfo.existingInvoiceId,
+      duplicateStatus: "confirmed",
+    }),
+    ...(!isDuplicate && {
+      duplicateStatus: "none",
+    }),
+
+    // Workflow status - AUTO-REJECT PROFORMA / DUPLICATE
     status: shouldAutoReject ? "rejected" : "pending_review",
-    // Status flow: pending_review → approved → posted (after journal entry)
-    //              rejected (auto-reject for proforma invoices)
 
-    journalEntryId: null, // Set when posted to accounting
+    journalEntryId: null,
 
-    // Review tracking (for auto-rejected proforma)
+    // Review tracking (for auto-rejected)
     ...(shouldAutoReject && {
       reviewedBy: "cloud_function_ocr_auto_reject",
       reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -754,19 +807,69 @@ const retryInvoiceOcr = onCall(
         // Check if proforma
         const {checkIfProforma} = require("../utils/ocrService");
         const isProforma = checkIfProforma(ocrData);
-        const shouldAutoReject = isProforma;
-        const autoRejectReason = isProforma ?
-          "Automatycznie odrzucone: Faktura Pro Forma nie jest fakturą VAT. Prosimy o przesłanie właściwej faktury." :
-          null;
+
+        // DUPLICATE DETECTION on retry
+        let retryDuplicateResult = {isDuplicate: false};
+        let retryCrossPoResult = {isDuplicate: false};
+
+        if (!isProforma) {
+          retryDuplicateResult = await checkForDuplicateInvoice(db, {
+            invoiceNumber: ocrData.invoiceNumber,
+            supplierTaxId: ocrData.supplier?.taxId || null,
+            supplierName: ocrData.supplier?.name || "",
+            excludeId: invoiceId,
+            excludeCollection: "purchaseInvoices",
+          });
+
+          if (!retryDuplicateResult.isDuplicate &&
+              invoiceData.sourceId) {
+            retryCrossPoResult = await checkCrossPoDuplicate(
+                db,
+                ocrData.invoiceNumber,
+                ocrData.supplier?.taxId || null,
+                invoiceData.sourceId,
+                invoiceId,
+            );
+          }
+        }
+
+        const retryIsDuplicate =
+          retryDuplicateResult.isDuplicate ||
+          retryCrossPoResult.isDuplicate;
+        const retryDuplicateInfo =
+          retryDuplicateResult.isDuplicate ?
+            retryDuplicateResult : retryCrossPoResult;
+
+        if (retryIsDuplicate) {
+          logger.warn("[OCR Retry] Duplicate detected", {
+            invoiceNumber: ocrData.invoiceNumber,
+            duplicateType: retryDuplicateInfo.duplicateType,
+            existingId: retryDuplicateInfo.existingInvoiceId,
+          });
+        }
+
+        // AUTO-REJECT: proforma or duplicate
+        const shouldAutoReject = isProforma || retryIsDuplicate;
+        let autoRejectReason = null;
+        if (isProforma) {
+          autoRejectReason = "Automatycznie odrzucone: " +
+            "Faktura Pro Forma nie jest fakturą VAT.";
+        } else if (retryIsDuplicate) {
+          autoRejectReason = "Automatycznie odrzucone: " +
+            "Duplikat faktury. " +
+            (retryDuplicateInfo.message || "");
+        }
 
         // Update the invoice with new OCR data
         const updateData = {
           invoiceNumber: ocrData.invoiceNumber,
           invoiceDate: ocrData.invoiceDate ?
-            admin.firestore.Timestamp.fromDate(new Date(ocrData.invoiceDate)) :
+            admin.firestore.Timestamp.fromDate(
+                new Date(ocrData.invoiceDate)) :
             null,
           dueDate: ocrData.dueDate ?
-            admin.firestore.Timestamp.fromDate(new Date(ocrData.dueDate)) :
+            admin.firestore.Timestamp.fromDate(
+                new Date(ocrData.dueDate)) :
             null,
           supplier: ocrData.supplier,
           currency: ocrData.currency,
@@ -777,19 +880,34 @@ const retryInvoiceOcr = onCall(
           documentType: ocrData.documentType || "invoice",
           isProforma: isProforma,
           ocrConfidence: ocrData.parseConfidence,
-          ocrWarnings: ocrData.warnings,
+          ocrWarnings: retryIsDuplicate ?
+            [...(ocrData.warnings || []),
+              `DUPLIKAT: ${retryDuplicateInfo.message}`] :
+            ocrData.warnings,
           ocrError: admin.firestore.FieldValue.delete(),
           ocrRawData: JSON.stringify(ocrData),
-          status: shouldAutoReject ? "rejected" : "pending_review",
+          status: shouldAutoReject ?
+            "rejected" : "pending_review",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryBy: request.auth.uid,
+          // Duplicate detection fields
+          ...(retryIsDuplicate && {
+            duplicateOf: retryDuplicateInfo.existingInvoiceId,
+            duplicateStatus: "confirmed",
+          }),
+          ...(!retryIsDuplicate && {
+            duplicateOf: admin.firestore.FieldValue.delete(),
+            duplicateStatus: "none",
+          }),
         };
 
         // Add review notes if auto-rejected
         if (shouldAutoReject) {
-          updateData.reviewedBy = "cloud_function_ocr_auto_reject";
-          updateData.reviewedAt = admin.firestore.FieldValue.serverTimestamp();
+          updateData.reviewedBy =
+            "cloud_function_ocr_auto_reject";
+          updateData.reviewedAt =
+            admin.firestore.FieldValue.serverTimestamp();
           updateData.reviewNotes = autoRejectReason;
         }
 

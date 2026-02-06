@@ -28,7 +28,8 @@ import {
   Speed as ProgressIcon,
   MonetizationOn as CostsIcon,
   Savings as CashflowIcon,
-  Blender as BlenderIcon
+  Blender as BlenderIcon,
+  EnergySavingsLeaf as EcoIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -114,7 +115,16 @@ const getReportTiles = (t) => [
     path: '/analytics/weekly-sprint',
     gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     iconBg: 'rgba(255, 255, 255, 0.2)'
-  }
+  },
+  {
+    id: 'eco-report',
+    title: t('analyticsDashboard.tiles.ecoReport.title'),
+    description: t('analyticsDashboard.tiles.ecoReport.description'),
+    icon: EcoIcon,
+    path: '/analytics/eco-report',
+    gradient: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
+    iconBg: 'rgba(255, 255, 255, 0.2)'
+  },
   // TYMCZASOWO UKRYTY - Raport mieszań
   // {
   //   id: 'mixing-analytics',

@@ -46,6 +46,10 @@
             "weeklySprint": {
                 "title": "Weekly Sprint",
                 "description": "Mon-Thu production sprint planning. Weekly production analysis and optimization."
+            },
+            "ecoReport": {
+                "title": "ECO Report",
+                "description": "Ecological product flow report. Suppliers, raw materials and finished products for eco audit requirements."
             }
         },
         "quickAccess": {

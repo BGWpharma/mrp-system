@@ -1,0 +1,82 @@
+{
+  "title": "Raport ECO - Rozliczenie przepływu produktów ekologicznych",
+  "loading": "Pobieranie danych raportu ECO...",
+  "filters": {
+    "title": "Okres rozliczeniowy",
+    "dateFrom": "Data od",
+    "dateTo": "Data do"
+  },
+  "actions": {
+    "preview": "Podgląd danych",
+    "search": "Szukaj",
+    "exportExcel": "Eksport Excel",
+    "exportTooltip": "Pobierz raport w formacie Excel z 3 zakładkami (dostawcy, surowce, wyroby gotowe)"
+  },
+  "info": {
+    "title": "Informacja o raporcie ECO",
+    "description": "Raport generuje arkusz Excel zgodny z wymaganiami kontroli ekologicznej. Zawiera 3 zakładki: dostawcy, surowce i wyroby gotowe. Pola oznaczone kolorem żółtym wymagają uzupełnienia ręcznego (dane certyfikatów eko dostawców).",
+    "autoFields": "Pola automatyczne: nazwy, adresy, ilości, stany magazynowe",
+    "manualFields": "Pola ręczne: certyfikaty eko dostawców",
+    "show": "Pokaż informacje"
+  },
+  "stats": {
+    "suppliers": "Pozycje dostawców",
+    "rawMaterials": "Surowce",
+    "finishedProducts": "Wyroby gotowe",
+    "purchaseOrders": "Zamówienia PO",
+    "productionTasks": "Zlecenia MO",
+    "transactions": "Transakcje mag."
+  },
+  "tabs": {
+    "suppliers": "Dostawcy",
+    "rawMaterials": "Surowce",
+    "finishedProducts": "Wyroby gotowe"
+  },
+  "table": {
+    "noData": "Brak danych dla wybranego okresu",
+    "suppliers": {
+      "name": "Nazwa dostawcy",
+      "address": "Adres",
+      "productType": "Rodzaj produktu",
+      "quantity": "Ilość",
+      "unit": "Jednostka",
+      "certAuthority": "Jednostka cert.",
+      "certNumber": "Nr certyfikatu",
+      "certValidity": "Certyfikat ważny od...do...",
+      "manualHint": "To pole wymaga ręcznego uzupełnienia w wyeksportowanym pliku Excel"
+    },
+    "rawMaterials": {
+      "name": "Surowce",
+      "unit": "Jednostka",
+      "openingStock": "Początkowy stan mag.",
+      "purchases": "Zakup surowca",
+      "otherIncome": "Inne przychody",
+      "ownProduction": "Produkcja własna",
+      "consumption": "Zużycie do produkcji",
+      "sales": "Sprzedaż surowca",
+      "otherExpenses": "Inne rozchody",
+      "closingStock": "Końcowy stan mag."
+    },
+    "finishedProducts": {
+      "name": "Produkt",
+      "unit": "Jednostka",
+      "openingStock": "Początkowy stan mag.",
+      "purchases": "Zakup produktu",
+      "otherIncome": "Inne przychody",
+      "ownProduction": "Produkcja własna",
+      "sales": "Sprzedaż produktu",
+      "otherExpenses": "Inne rozchody",
+      "closingStock": "Końcowy stan mag."
+    }
+  },
+  "empty": {
+    "title": "Wybierz okres i wygeneruj raport",
+    "description": "Ustaw zakres dat i kliknij \"Podgląd danych\" aby zobaczyć dane lub \"Eksport Excel\" aby pobrać plik."
+  },
+  "errors": {
+    "selectDates": "Wybierz daty okresu rozliczeniowego",
+    "invalidDateRange": "Data początkowa nie może być późniejsza niż data końcowa",
+    "fetchFailed": "Nie udało się pobrać danych raportu: {{error}}",
+    "exportFailed": "Nie udało się wyeksportować raportu: {{error}}"
+  }
+}

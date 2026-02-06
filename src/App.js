@@ -74,6 +74,7 @@ const TaskDetailsPage = lazy(() => import('./pages/Production/TaskDetailsPage'))
 const EditTaskPage = lazy(() => import('./pages/Production/EditTaskPage'));
 const ConsumptionPage = lazy(() => import('./pages/Production/ConsumptionPage'));
 const ForecastPage = lazy(() => import('./pages/Production/ForecastPage'));
+const EcoReportPage = lazy(() => import('./pages/Reports/EcoReportPage'));
 const ReportsPage = lazy(() => import('./pages/Production/ReportsPage'));
 const CreateFromOrderPage = lazy(() => import('./pages/Production/CreateFromOrderPage'));
 const WorkstationsPage = lazy(() => import('./pages/Production/WorkstationsPage'));
@@ -368,6 +369,7 @@ function App() {
                     <Route path="/analytics/cashflow" element={<PrivateLayout><CashflowPage /></PrivateLayout>} />
                     <Route path="/analytics/mixing" element={<PrivateLayout><MixingAnalyticsPage /></PrivateLayout>} />
                     <Route path="/analytics/weekly-sprint" element={<PrivateLayout><WeeklySprintPage /></PrivateLayout>} />
+                    <Route path="/analytics/eco-report" element={<PrivateLayout><EcoReportPage /></PrivateLayout>} />
                     
                     {/* Admin Routes - dostępne tylko dla administratorów */}
                     <Route path="/admin/users" element={

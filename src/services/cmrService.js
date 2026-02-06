@@ -603,6 +603,7 @@ export const deleteCmrDocument = async (cmrId) => {
 
 // ULEPSZONA funkcja do walidacji czy wszystkie pozycje CMR mają przypisane partie magazynowe
 // NOWA FUNKCJONALNOŚĆ: sprawdza również czy ilość w partiach pokrywa ilość w pozycji CMR
+// FIX: Pobiera AKTUALNE ilości partii z bazy danych zamiast polegać na snapshocie w CMR
 const validateCmrBatches = async (cmrId) => {
   try {
     const cmrData = await getCmrDocumentById(cmrId);
@@ -614,9 +615,13 @@ const validateCmrBatches = async (cmrId) => {
       };
     }
     
+    // Import getBatchById do pobierania aktualnych danych partii z bazy
+    const { getBatchById } = await import('./inventory/batchService');
+    
     const errors = [];
     
-    cmrData.items.forEach((item, index) => {
+    for (let index = 0; index < cmrData.items.length; index++) {
+      const item = cmrData.items[index];
       const itemNumber = index + 1;
       const itemDescription = item.description || `Pozycja ${itemNumber}`;
       const cmrQuantity = parseFloat(item.quantity) || parseFloat(item.numberOfPackages) || 0;
@@ -629,7 +634,7 @@ const validateCmrBatches = async (cmrId) => {
           error: 'Brak powiązanych partii magazynowych',
           type: 'no_batches'
         });
-        return; // Przejdź do następnej pozycji
+        continue; // Przejdź do następnej pozycji
       }
       
       // WALIDACJA 2: Sprawdź czy pozycja CMR ma określoną ilość
@@ -641,35 +646,53 @@ const validateCmrBatches = async (cmrId) => {
           type: 'invalid_cmr_quantity',
           cmrQuantity: cmrQuantity
         });
-        return; // Przejdź do następnej pozycji
+        continue; // Przejdź do następnej pozycji
       }
       
-      // WALIDACJA 3: Oblicz łączną ilość w przypisanych partiach
+      // WALIDACJA 3: Oblicz łączną ilość w przypisanych partiach - POBIERZ AKTUALNE DANE Z BAZY
       let totalBatchQuantity = 0;
       const batchDetails = [];
       
-      item.linkedBatches.forEach((batch, batchIndex) => {
-        const batchQuantity = parseFloat(batch.quantity) || 0;
-        totalBatchQuantity += batchQuantity;
+      for (let batchIndex = 0; batchIndex < item.linkedBatches.length; batchIndex++) {
+        const batch = item.linkedBatches[batchIndex];
+        
+        // Pobierz aktualną ilość partii z bazy danych zamiast ze snapshotu w CMR
+        let liveQuantity = parseFloat(batch.quantity) || 0;
+        if (batch.id) {
+          try {
+            const liveBatch = await getBatchById(batch.id);
+            if (liveBatch) {
+              liveQuantity = parseFloat(liveBatch.quantity) || 0;
+              console.log(`🔍 [VALIDATE] Partia ${batch.batchNumber || batch.lotNumber}: snapshot=${batch.quantity}, aktualna z bazy=${liveQuantity}`);
+            } else {
+              console.warn(`⚠️ [VALIDATE] Partia ${batch.id} (${batch.batchNumber}) nie istnieje w bazie - używam snapshotu (${batch.quantity})`);
+            }
+          } catch (fetchError) {
+            console.warn(`⚠️ [VALIDATE] Nie udało się pobrać aktualnych danych partii ${batch.batchNumber}:`, fetchError.message);
+            // Fallback na snapshot z CMR
+          }
+        }
+        
+        totalBatchQuantity += liveQuantity;
         
         batchDetails.push({
           batchNumber: batch.batchNumber || batch.lotNumber || `Partia ${batchIndex + 1}`,
-          quantity: batchQuantity,
+          quantity: liveQuantity,
           unit: batch.unit || item.unit || 'szt'
         });
         
         // Sprawdź czy pojedyncza partia ma prawidłową ilość
-        if (batchQuantity <= 0) {
+        if (liveQuantity <= 0) {
           errors.push({
             index: itemNumber,
             description: itemDescription,
-            error: `Partia "${batch.batchNumber || batch.lotNumber || 'Nieznana'}" ma zerową lub nieprawidłową ilość (${batchQuantity})`,
+            error: `Partia "${batch.batchNumber || batch.lotNumber || 'Nieznana'}" ma zerową lub nieprawidłową ilość (${liveQuantity})`,
             type: 'invalid_batch_quantity',
             batchNumber: batch.batchNumber || batch.lotNumber,
-            batchQuantity: batchQuantity
+            batchQuantity: liveQuantity
           });
         }
-      });
+      }
       
       // WALIDACJA 4: KLUCZOWA - Sprawdź czy łączna ilość w partiach pokrywa ilość CMR
       if (totalBatchQuantity < cmrQuantity) {
@@ -692,7 +715,7 @@ const validateCmrBatches = async (cmrId) => {
         const surplus = totalBatchQuantity - cmrQuantity;
         console.warn(`⚠️ Pozycja "${itemDescription}" ma nadmiar w partiach: +${surplus} ${item.unit || 'szt'} (CMR: ${cmrQuantity}, partie: ${totalBatchQuantity})`);
       }
-    });
+    }
     
     if (errors.length > 0) {
       // Podziel błędy na kategorie dla lepszego komunikatu
@@ -942,6 +965,14 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
     }
 
     // Jeśli przechodzi na status "Dostarczone", anuluj rezerwacje i wydaj produkty
+    console.log('🔍 [DEBUG-DELIVERY] === ZMIANA STATUSU CMR ===');
+    console.log('🔍 [DEBUG-DELIVERY] cmrId:', cmrId);
+    console.log('🔍 [DEBUG-DELIVERY] currentStatus:', currentStatus);
+    console.log('🔍 [DEBUG-DELIVERY] newStatus:', newStatus);
+    console.log('🔍 [DEBUG-DELIVERY] CMR_STATUSES.DELIVERED:', CMR_STATUSES.DELIVERED);
+    console.log('🔍 [DEBUG-DELIVERY] newStatus === DELIVERED?', newStatus === CMR_STATUSES.DELIVERED);
+    console.log('🔍 [DEBUG-DELIVERY] typeof newStatus:', typeof newStatus);
+    console.log('🔍 [DEBUG-DELIVERY] typeof DELIVERED:', typeof CMR_STATUSES.DELIVERED);
     if (newStatus === CMR_STATUSES.DELIVERED) {
       console.log('Dostarczenie CMR - usuwanie rezerwacji i wydanie produktów...');
       try {
@@ -1040,6 +1071,7 @@ export const updateCmrStatus = async (cmrId, newStatus, userId) => {
 };
 
 // Funkcja do rezerwacji partii magazynowych dla dokumentu CMR
+// FIX: Pobiera AKTUALNE ilości partii z bazy danych zamiast polegać na snapshocie w CMR
 export const reserveBatchesForCmr = async (cmrId, userId) => {
   try {
     // Pobierz dane dokumentu CMR z elementami
@@ -1051,6 +1083,7 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
     }
     
     const { bookInventoryForTask } = await import('./inventory');
+    const { getBatchById } = await import('./inventory/batchService');
     const reservationResults = [];
     const errors = [];
     
@@ -1069,18 +1102,36 @@ export const reserveBatchesForCmr = async (cmrId, userId) => {
         continue;
       }
       
-      // Oblicz całkowitą ilość we wszystkich powiązanych partiach
-      const totalBatchQuantity = item.linkedBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
+      // Pobierz AKTUALNE ilości partii z bazy danych
+      let totalBatchQuantity = 0;
+      const liveBatchQuantities = new Map();
+      
+      for (const linkedBatch of item.linkedBatches) {
+        let liveQuantity = parseFloat(linkedBatch.quantity) || 0;
+        if (linkedBatch.id) {
+          try {
+            const liveBatch = await getBatchById(linkedBatch.id);
+            if (liveBatch) {
+              liveQuantity = parseFloat(liveBatch.quantity) || 0;
+              console.log(`🔍 [RESERVE] Partia ${linkedBatch.batchNumber}: snapshot=${linkedBatch.quantity}, aktualna z bazy=${liveQuantity}`);
+            }
+          } catch (fetchError) {
+            console.warn(`⚠️ [RESERVE] Nie udało się pobrać aktualnych danych partii ${linkedBatch.batchNumber}:`, fetchError.message);
+          }
+        }
+        liveBatchQuantities.set(linkedBatch.id || linkedBatch.batchNumber, liveQuantity);
+        totalBatchQuantity += liveQuantity;
+      }
       
       if (totalBatchQuantity <= 0) {
-        console.log(`Element "${item.description}" ma powiązane partie z zerową ilością - pomijam`);
+        console.log(`Element "${item.description}" ma powiązane partie z zerową ilością (po sprawdzeniu bazy) - pomijam`);
         continue;
       }
       
       // Dla każdej powiązanej partii, oblicz proporcjonalną ilość do zarezerwowania
       for (const linkedBatch of item.linkedBatches) {
         try {
-          const batchQuantity = parseFloat(linkedBatch.quantity) || 0;
+          const batchQuantity = liveBatchQuantities.get(linkedBatch.id || linkedBatch.batchNumber) || 0;
           
           // Oblicz ilość do zarezerwowania z tej partii (proporcjonalnie)
           const quantityToReserve = (batchQuantity / totalBatchQuantity) * cmrItemQuantity;
@@ -1171,7 +1222,36 @@ export const processCmrDelivery = async (cmrId, userId) => {
     // Pobierz dane dokumentu CMR z elementami
     const cmrData = await getCmrDocumentById(cmrId);
     
+    console.log('🔍 [DEBUG-DELIVERY] === PROCESS CMR DELIVERY START ===');
+    console.log('🔍 [DEBUG-DELIVERY] cmrId:', cmrId);
+    console.log('🔍 [DEBUG-DELIVERY] cmrData exists?', !!cmrData);
+    console.log('🔍 [DEBUG-DELIVERY] cmrData.items?', !!cmrData?.items);
+    console.log('🔍 [DEBUG-DELIVERY] cmrData.items.length:', cmrData?.items?.length);
+    console.log('🔍 [DEBUG-DELIVERY] cmrData.cmrNumber:', cmrData?.cmrNumber);
+    console.log('🔍 [DEBUG-DELIVERY] cmrData.status:', cmrData?.status);
+    
+    if (cmrData?.items) {
+      cmrData.items.forEach((item, idx) => {
+        console.log(`🔍 [DEBUG-DELIVERY] Item[${idx}]:`, {
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          hasLinkedBatches: !!item.linkedBatches,
+          linkedBatchesCount: item.linkedBatches?.length || 0,
+          linkedBatches: item.linkedBatches?.map(b => ({
+            id: b.id,
+            batchNumber: b.batchNumber,
+            itemId: b.itemId,
+            quantity: b.quantity,
+            unit: b.unit,
+            warehouseId: b.warehouseId
+          }))
+        });
+      });
+    }
+    
     if (!cmrData || !cmrData.items || cmrData.items.length === 0) {
+      console.log('🔍 [DEBUG-DELIVERY] ❌ EARLY RETURN - brak danych/elementów CMR');
       console.log('Brak elementów w dokumencie CMR do przetworzenia');
       return { success: true, message: 'Brak elementów do przetworzenia' };
     }
@@ -1184,9 +1264,11 @@ export const processCmrDelivery = async (cmrId, userId) => {
     const cmrTaskId = `CMR-${cmrData.cmrNumber}-${cmrId}`;
     
     console.log(`Przetwarzanie dostarczenia dla taskId: ${cmrTaskId}`);
+    console.log('🔍 [DEBUG-DELIVERY] cmrTaskId:', cmrTaskId);
     
     // Usuń wszystkie rezerwacje związane z tym CMR (jak w deleteTask)
     try {
+      console.log('🔍 [DEBUG-DELIVERY] Wywołuję cleanupTaskReservations...');
       console.log(`Usuwanie wszystkich rezerwacji dla CMR ${cmrTaskId} przy dostarczeniu...`);
       const cleanupResult = await cleanupTaskReservations(cmrTaskId);
       console.log(`Usunięto wszystkie rezerwacje związane z CMR ${cmrTaskId}:`, cleanupResult);
@@ -1200,6 +1282,9 @@ export const processCmrDelivery = async (cmrId, userId) => {
     }
     
     // Oblicz całkowitą ilość we wszystkich powiązanych partiach dla każdego elementu
+    // FIX: Pobiera AKTUALNE ilości partii z bazy danych zamiast polegać na snapshocie w CMR
+    const { getBatchById } = await import('./inventory/batchService');
+    
     for (const item of cmrData.items) {
       if (!item.linkedBatches || item.linkedBatches.length === 0) {
         console.log(`Element "${item.description}" nie ma powiązanych partii - pomijam`);
@@ -1214,19 +1299,37 @@ export const processCmrDelivery = async (cmrId, userId) => {
         continue;
       }
       
-      // Oblicz całkowitą ilość we wszystkich powiązanych partiach
-      const totalBatchQuantity = item.linkedBatches.reduce((sum, batch) => sum + (parseFloat(batch.quantity) || 0), 0);
+      // Pobierz AKTUALNE ilości partii z bazy danych
+      let totalBatchQuantity = 0;
+      const liveBatchQuantities = new Map();
+      
+      for (const linkedBatch of item.linkedBatches) {
+        let liveQuantity = parseFloat(linkedBatch.quantity) || 0;
+        if (linkedBatch.id) {
+          try {
+            const liveBatch = await getBatchById(linkedBatch.id);
+            if (liveBatch) {
+              liveQuantity = parseFloat(liveBatch.quantity) || 0;
+              console.log(`🔍 [DELIVERY] Partia ${linkedBatch.batchNumber}: snapshot=${linkedBatch.quantity}, aktualna z bazy=${liveQuantity}`);
+            }
+          } catch (fetchError) {
+            console.warn(`⚠️ [DELIVERY] Nie udało się pobrać aktualnych danych partii ${linkedBatch.batchNumber}:`, fetchError.message);
+          }
+        }
+        liveBatchQuantities.set(linkedBatch.id || linkedBatch.batchNumber, liveQuantity);
+        totalBatchQuantity += liveQuantity;
+      }
       
       if (totalBatchQuantity <= 0) {
-        console.log(`Element "${item.description}" ma powiązane partie z zerową ilością - pomijam`);
+        console.log(`Element "${item.description}" ma powiązane partie z zerową ilością (po sprawdzeniu bazy) - pomijam`);
         continue;
       }
       
       // Wydaj produkty z konkretnych partii
       for (const linkedBatch of item.linkedBatches) {
-        // Oblicz ilość do wydania z tej partii (proporcjonalnie)
+        // Oblicz ilość do wydania z tej partii (proporcjonalnie) - używając aktualnych danych z bazy
         // Definicja przed try block aby była dostępna w catch
-        const batchQuantity = parseFloat(linkedBatch.quantity) || 0;
+        const batchQuantity = liveBatchQuantities.get(linkedBatch.id || linkedBatch.batchNumber) || 0;
         const quantityToIssue = item.linkedBatches.length === 1 
           ? cmrItemQuantity 
           : (batchQuantity / totalBatchQuantity) * cmrItemQuantity;
@@ -1267,6 +1370,13 @@ export const processCmrDelivery = async (cmrId, userId) => {
           }
           
           console.log(`Wydawanie z partii ${linkedBatch.batchNumber} - ${quantityToIssue} ${linkedBatch.unit} dla CMR ${cmrData.cmrNumber}`);
+          
+          console.log('🔍 [DEBUG-DELIVERY] === ISSUE INVENTORY CALL ===');
+          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.itemId:', linkedBatch.itemId);
+          console.log('🔍 [DEBUG-DELIVERY] quantityToIssue:', quantityToIssue);
+          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.warehouseId:', linkedBatch.warehouseId);
+          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.id (batchId):', linkedBatch.id);
+          console.log('🔍 [DEBUG-DELIVERY] linkedBatch.batchNumber:', linkedBatch.batchNumber);
           
           // Wydaj produkt z konkretnej partii
           const issueResult = await issueInventory(

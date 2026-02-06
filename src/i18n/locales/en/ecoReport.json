@@ -1,0 +1,82 @@
+{
+  "title": "ECO Report - Organic Product Flow Settlement",
+  "loading": "Fetching ECO report data...",
+  "filters": {
+    "title": "Reporting period",
+    "dateFrom": "Date from",
+    "dateTo": "Date to"
+  },
+  "actions": {
+    "preview": "Preview data",
+    "search": "Search",
+    "exportExcel": "Export Excel",
+    "exportTooltip": "Download report in Excel format with 3 tabs (suppliers, raw materials, finished products)"
+  },
+  "info": {
+    "title": "ECO Report Information",
+    "description": "The report generates an Excel spreadsheet compliant with organic control requirements. It contains 3 tabs: suppliers, raw materials and finished products. Fields marked in yellow require manual completion (supplier eco certificate data).",
+    "autoFields": "Auto fields: names, addresses, quantities, stock levels",
+    "manualFields": "Manual fields: supplier eco certificates",
+    "show": "Show information"
+  },
+  "stats": {
+    "suppliers": "Supplier entries",
+    "rawMaterials": "Raw materials",
+    "finishedProducts": "Finished products",
+    "purchaseOrders": "Purchase Orders",
+    "productionTasks": "Production Orders",
+    "transactions": "Warehouse transactions"
+  },
+  "tabs": {
+    "suppliers": "Suppliers",
+    "rawMaterials": "Raw Materials",
+    "finishedProducts": "Finished Products"
+  },
+  "table": {
+    "noData": "No data for selected period",
+    "suppliers": {
+      "name": "Supplier name",
+      "address": "Address",
+      "productType": "Product type",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "certAuthority": "Cert. authority",
+      "certNumber": "Certificate no.",
+      "certValidity": "Certificate valid from...to...",
+      "manualHint": "This field requires manual completion in the exported Excel file"
+    },
+    "rawMaterials": {
+      "name": "Raw materials",
+      "unit": "Unit",
+      "openingStock": "Opening stock",
+      "purchases": "Raw material purchase",
+      "otherIncome": "Other income",
+      "ownProduction": "Own production",
+      "consumption": "Production consumption",
+      "sales": "Raw material sales",
+      "otherExpenses": "Other expenses",
+      "closingStock": "Closing stock"
+    },
+    "finishedProducts": {
+      "name": "Product",
+      "unit": "Unit",
+      "openingStock": "Opening stock",
+      "purchases": "Product purchase",
+      "otherIncome": "Other income",
+      "ownProduction": "Own production",
+      "sales": "Product sales",
+      "otherExpenses": "Other expenses",
+      "closingStock": "Closing stock"
+    }
+  },
+  "empty": {
+    "title": "Select period and generate report",
+    "description": "Set the date range and click \"Preview data\" to view data or \"Export Excel\" to download the file."
+  },
+  "errors": {
+    "selectDates": "Select reporting period dates",
+    "invalidDateRange": "Start date cannot be later than end date",
+    "fetchFailed": "Failed to fetch report data: {{error}}",
+    "exportFailed": "Failed to export report: {{error}}"
+  }
+}

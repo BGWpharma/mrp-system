@@ -1428,6 +1428,87 @@ export const calculateEstimatedPriceFromBatches = async (materialId) => {
 };
 
 /**
+ * Pobiera historię transakcji dla konkretnej partii (LOT)
+ * Pozwala prześledzić dlaczego partia jest wirtualnie na magazynie
+ * (np. wszystkie rezerwacje, korekty, wydania, przyjęcia)
+ * 
+ * @param {string} batchId - ID partii
+ * @param {Object} options - Opcje zapytania
+ * @param {number} options.limit - Limit rekordów (domyślnie 50)
+ * @returns {Promise<Array>} - Lista transakcji powiązanych z partią
+ * @throws {ValidationError} - Gdy ID jest nieprawidłowe
+ * @throws {Error} - Gdy wystąpi błąd podczas pobierania
+ */
+export const getBatchTransactionHistory = async (batchId, options = {}) => {
+  try {
+    if (!batchId) {
+      return [];
+    }
+
+    const validatedBatchId = validateId(batchId, 'batchId');
+    const queryLimit = options.limit || 50;
+
+    // Pobierz wszystkie transakcje powiązane z partią
+    const transactionsRef = collection(db, COLLECTIONS.INVENTORY_TRANSACTIONS);
+    const q = query(
+      transactionsRef,
+      where('batchId', '==', validatedBatchId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    let transactions = querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: convertTimestampToDate(data.createdAt),
+        transactionDate: convertTimestampToDate(data.transactionDate) || convertTimestampToDate(data.createdAt)
+      };
+    });
+
+    // Wzbogać o nazwy użytkowników
+    const userIds = [...new Set(transactions.map(t => t.createdBy).filter(Boolean))];
+    const userNamesMap = {};
+
+    if (userIds.length > 0) {
+      const userPromises = userIds.map(async (userId) => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            userNamesMap[userId] = userData.displayName || userData.email || userId;
+          }
+        } catch (error) {
+          console.warn(`Nie można pobrać użytkownika ${userId}:`, error);
+        }
+      });
+      await Promise.all(userPromises);
+    }
+
+    // Dodaj nazwy użytkowników do transakcji
+    transactions = transactions.map(t => ({
+      ...t,
+      createdByName: t.createdByName || userNamesMap[t.createdBy] || t.createdBy || '—'
+    }));
+
+    // Zastosuj limit
+    if (queryLimit && transactions.length > queryLimit) {
+      transactions = transactions.slice(0, queryLimit);
+    }
+
+    return transactions;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    console.error('Błąd podczas pobierania historii transakcji partii:', error);
+    return [];
+  }
+};
+
+/**
  * Grupowe pobieranie szacunkowych cen dla wielu materiałów
  * Optymalizowane - używa jednego grupowego zapytania dla wszystkich materiałów
  * 
