@@ -147,14 +147,18 @@ const fetchInventoryItems = async () => {
 };
 
 /**
- * Pobiera transakcje magazynowe.
+ * Pobiera WSZYSTKIE transakcje magazynowe (bez filtrowania po datach).
+ * 
+ * Forward calculation wymaga kompletnej historii transakcji, ponieważ
+ * stan na dowolną datę obliczany jest jako suma transakcji od początku.
+ * 
  * Używamy dwóch zapytań (po transactionDate i createdAt) i łączymy wyniki,
  * ponieważ różne serwisy zapisują transakcje z różnymi polami dat:
  * - inventoryOperationsService: transactionDate (bez createdAt)
  * - productionService: createdAt (bez transactionDate)
  * Firestore orderBy wyklucza dokumenty bez danego pola.
  */
-const fetchTransactions = async (dateFrom, dateTo) => {
+const fetchTransactions = async () => {
   // Dwa zapytania - po różnych polach dat
   const qByTransactionDate = query(
     collection(db, INVENTORY_TRANSACTIONS_COLLECTION),
@@ -344,50 +348,32 @@ const isProductionConsumption = (tx) => {
 };
 
 /**
- * Oblicza stan magazynowy na podaną datę (cofanie transakcji od stanu aktualnego)
+ * Oblicza stan magazynowy na podaną datę metodą FORWARD (sumowanie transakcji od początku).
  * 
- * Stan na datę X = aktualny stan - suma transakcji po dacie X
- * RECEIVE po dacie → odejmij (bo były dodane po interesującej nas dacie)
- * ISSUE po dacie → dodaj z powrotem (bo były odjęte po interesującej nas dacie)
- * adjustment-add po dacie → odejmij
- * adjustment-remove po dacie → dodaj z powrotem
+ * Niezależny od aktualnego stanu w bazie (material.quantity) — opiera się
+ * wyłącznie na przefiltrowanych (valid) transakcjach magazynowych.
+ * Dzięki temu raport jest odporny na zmiany bieżącego stanu magazynowego.
  * 
- * UWAGA: Korekty danych historycznych (ADJUSTMENT, STOCKTAKING) datowane PO końcu
- * okresu raportowego (reportEndDate) NIE są cofane — traktowane jako naprawy danych,
- * które powinny być uwzględnione w obliczeniach historycznych.
+ * Metoda: sumuje wszystkie transakcje "add" i odejmuje "remove" aż do cutoffDate.
  * 
  * @param {string} itemId - ID produktu
- * @param {number} currentQuantity - aktualny stan w bazie
- * @param {Array} transactions - wszystkie transakcje
- * @param {Date} targetDate - data, na którą obliczamy stan
- * @param {Date|null} reportEndDate - koniec okresu raportowego (korekty po tej dacie nie są cofane)
+ * @param {Array} transactions - przefiltrowane (valid) transakcje (bez osierooconych)
+ * @param {Date} cutoffDate - data graniczna
+ * @param {boolean} inclusive - true: txDate <= cutoffDate, false: txDate < cutoffDate
  */
-const calculateStockAtDate = (itemId, currentQuantity, transactions, targetDate, reportEndDate = null) => {
-  let stock = currentQuantity || 0;
+const calculateStockForward = (itemId, transactions, cutoffDate, inclusive = false) => {
+  let stock = 0;
 
-  // Typy transakcji uznawane za korekty/naprawy danych historycznych
-  const DATA_REPAIR_TYPES = ['ADJUSTMENT-ADD', 'ADJUSTMENT-REMOVE', 'STOCKTAKING-COMPLETED'];
-
-  // Filtruj transakcje po targetDate dla danego itemu
-  const futureTransactions = transactions.filter(tx => {
-    if (tx.itemId !== itemId) return false;
+  for (const tx of transactions) {
+    if (tx.itemId !== itemId) continue;
     const txDate = safeConvertDate(tx.createdAt) || safeConvertDate(tx.transactionDate);
-    return txDate && txDate > targetDate;
-  });
+    if (!txDate) continue;
 
-  for (const tx of futureTransactions) {
+    // Filtruj po dacie: inclusive → txDate <= cutoffDate, exclusive → txDate < cutoffDate
+    if (inclusive ? txDate > cutoffDate : txDate >= cutoffDate) continue;
+
     const qty = parseFloat(tx.quantity) || 0;
     const type = normalizeTransactionType(tx.type);
-
-    // Korekty (ADJUSTMENT, STOCKTAKING) datowane PO końcu okresu raportowego
-    // to naprawy danych historycznych — NIE cofaj ich, bo odzwierciedlają
-    // faktyczny stan, który był błędnie zapisany w systemie.
-    if (reportEndDate && DATA_REPAIR_TYPES.includes(type)) {
-      const txDate = safeConvertDate(tx.createdAt) || safeConvertDate(tx.transactionDate);
-      if (txDate && txDate > reportEndDate) {
-        continue; // pomiń korektę po okresie raportowym
-      }
-    }
 
     switch (type) {
       case 'RECEIVE':
@@ -395,12 +381,12 @@ const calculateStockAtDate = (itemId, currentQuantity, transactions, targetDate,
       case 'STOCKTAKING-COMPLETED':
       case 'PRODUCTION-SESSION-ADD':
       case 'PRODUCTION-CORRECTION-ADD':
-        stock -= qty;
+        stock += qty;
         break;
       case 'ISSUE':
       case 'ADJUSTMENT-REMOVE':
       case 'PRODUCTION-CORRECTION-REMOVE':
-        stock += qty;
+        stock -= qty;
         break;
       // TRANSFER, booking - nie wpływają na ogólny stan
       default:
@@ -521,7 +507,6 @@ const convertToTons = (quantity, unit) => {
 const generateRawMaterialsData = (
   inventoryItems, 
   transactions, 
-  allTransactions,
   productionTasks, 
   dateFrom, 
   dateTo,
@@ -604,19 +589,9 @@ const generateRawMaterialsData = (
       }
     }
 
-    // Początkowy stan magazynowy
-    // WAŻNE: używamy allTransactions (wszystkie, włącznie z osieroc.) do calculateStockAtDate,
-    // ponieważ product.quantity w bazie odzwierciedla efekt WSZYSTKICH transakcji.
-    // Gdybyśmy cofali tylko validTransactions, efekty osierooconych tx
-    // pozostałyby "wpieczone" w stan historyczny.
-    // dateTo jako reportEndDate → korekty po okresie raportowym nie są cofane
-    const openingStock = calculateStockAtDate(
-      itemId, 
-      material.quantity || 0, 
-      allTransactions, 
-      dateFrom,
-      dateTo
-    );
+    // Początkowy stan magazynowy — forward calculation
+    // Suma wszystkich valid transakcji PRZED dateFrom (niezależna od aktualnego stanu w bazie)
+    const openingStock = calculateStockForward(itemId, transactions, dateFrom, false);
 
     // Zakup surowca - TYLKO transakcje RECEIVE powiązane z PO (source='purchase' lub orderId)
     // Ręczne dodania do magazynu (RECEIVE bez PO) nie są zakupami
@@ -629,11 +604,10 @@ const generateRawMaterialsData = (
       .filter(tx => isReceiveTransaction(tx) && isProductionRelated(tx))
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
 
-    // Inne przychody - TYLKO ręczne dodania (RECEIVE bez PO i bez produkcji)
-    // NIE liczymy ADJUSTMENT-ADD — to korekty wewnętrzne (cofanie/ponowna konsumpcja),
-    // które mają odpowiadające ADJUSTMENT-REMOVE. Obie strony wpływają na 
-    // calculateStockAtDate i wzajemnie się znoszą. Włączanie ich zawyża bilans.
-    const otherIncome = itemTransactions
+    // Przychody ręczne (RECEIVE bez PO i bez produkcji) — bazowa część "Inne przychody"
+    // Korekty inwentaryzacyjne (ADJUSTMENT-ADD/REMOVE) NIE są tu liczone —
+    // trafiają do residual i są automatycznie domykane w bilansie poniżej.
+    const rawOtherIncome = itemTransactions
       .filter(tx => isReceiveTransaction(tx) && !isProductionRelated(tx) && !isPurchaseReceive(tx))
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
 
@@ -707,37 +681,24 @@ const generateRawMaterialsData = (
       .filter(tx => isIssueTransaction(tx) && !isProductionRelated(tx) && tx.referenceId)
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
 
-    // Końcowy stan magazynowy — PODWÓJNA METODA z ochroną przed zawyżeniem
+    // Końcowy stan magazynowy — forward calculation
+    // Suma wszystkich valid transakcji DO dateTo włącznie (niezależna od aktualnego stanu w bazie)
+    const closingStock = calculateStockForward(itemId, transactions, dateTo, true);
+
+    // --- Domknięcie bilansu ---
+    // closingStock (forward) jest źródłem prawdy. classifiedBalance to suma
+    // sklasyfikowanych przepływów. Różnica (residual) wynika z niesklasyfikowanych
+    // korekt inwentaryzacyjnych (ADJUSTMENT-ADD/REMOVE, korekty partii, duplikaty).
     //
-    // Problem: calculateStockAtDate cofa transakcje od aktualnego stanu w bazie.
-    // Gdy brakuje transakcji ISSUE (np. bug konsumpcji przy transporcie/CMR),
-    // lub korekty ręczne mają datę po dateTo — wynik jest zawyżony.
-    //
-    // Rozwiązanie: obliczamy dwoma metodami i bierzemy niższą wartość:
-    // 1) Transakcyjna: cofanie od aktualnego stanu (może być zawyżona)
-    // 2) Bilansowa: openingStock + przychody - rozchody (niezależna od aktualnego stanu)
-    //
-    // Jeśli transakcyjna > bilansowa → brakujące ISSUE → bierzemy bilansową
-    // Jeśli transakcyjna < bilansowa → realne straty/ubytki → bierzemy transakcyjną
+    // residual > 0 → niesklasyfikowane rozchody (straty, korekty −) → Inne rozchody
+    // residual < 0 → niesklasyfikowane przychody (korekty +)       → dodaj do Inne przychody
+    const classifiedBalance = openingStock + purchases + rawOtherIncome + ownProduction - productionConsumption - sales;
+    const residual = parseFloat((classifiedBalance - closingStock).toFixed(3));
 
-    const transactionBasedClosing = calculateStockAtDate(
-      itemId,
-      material.quantity || 0,
-      allTransactions,
-      dateTo,
-      dateTo
-    );
+    const otherExpenses = Math.max(0, residual);
+    const otherIncome = rawOtherIncome + Math.max(0, -residual);
 
-    const balanceBasedClosing = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales;
-
-    const closingStock = Math.max(0, Math.min(transactionBasedClosing, balanceBasedClosing));
-
-    // Inne rozchody = różnica między bilansem (bez strat) a faktycznym stanem końcowym
-    // Gdy transakcyjna < bilansowa: straty = balanceBasedClosing - transactionBasedClosing
-    // Gdy transakcyjna >= bilansowa: straty = 0 (brak strat lub brakujące ISSUE)
-    const otherExpenses = Math.max(0, parseFloat((balanceBasedClosing - closingStock).toFixed(3)));
-
-    // Bilans weryfikacyjny (powinien zawsze wynosić 0 lub bliski 0 z powodu zaokrągleń)
+    // Bilans weryfikacyjny (powinien zawsze wynosić 0 dzięki domknięciu)
     const calculatedClosing = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales - otherExpenses;
 
     // === SZCZEGÓŁOWE LOGI DLA POZYCJI Z TRANSAKCJAMI ===
@@ -746,12 +707,11 @@ const generateRawMaterialsData = (
       // Loguj szczególnie gdy bilans się nie zgadza lub są duże inne rozchody
       if (Math.abs(balanceDiff) > 0.01 || otherExpenses > 0 || productionConsumption > 0) {
         console.log(`[ECO DETAIL] === ${material.name} (id: ${itemId}) ===`);
-        console.log(`[ECO DETAIL]   Aktualny stan w bazie: ${material.quantity}`);
-        console.log(`[ECO DETAIL]   Stan początkowy: ${openingStock}`);
-        console.log(`[ECO DETAIL]   Zakup (PO): ${purchases}, Inne przychody: ${otherIncome}, Produkcja własna: ${ownProduction}`);
+        console.log(`[ECO DETAIL]   Stan początkowy (forward): ${openingStock}`);
+        console.log(`[ECO DETAIL]   Zakup (PO): ${purchases}, Inne przychody: ${otherIncome} (ręczne: ${rawOtherIncome}, korekty: ${Math.max(0, -residual)}), Produkcja własna: ${ownProduction}`);
         console.log(`[ECO DETAIL]   Zużycie do produkcji: ${productionConsumption}`);
         console.log(`[ECO DETAIL]   Sprzedaż: ${sales}, Inne rozchody (residualne): ${otherExpenses}`);
-        console.log(`[ECO DETAIL]   Stan końcowy: ${closingStock} (transakcyjny: ${transactionBasedClosing.toFixed(3)}, bilansowy: ${balanceBasedClosing.toFixed(3)}, wybrany: min)`);
+        console.log(`[ECO DETAIL]   Stan końcowy (forward): ${closingStock}`);
         console.log(`[ECO DETAIL]   Obliczony z bilansu: ${calculatedClosing}`);
         console.log(`[ECO DETAIL]   Różnica bilansu: ${balanceDiff}`);
         
@@ -807,7 +767,6 @@ const generateRawMaterialsData = (
 const generateFinishedProductsData = (
   inventoryItems,
   transactions,
-  allTransactions,
   productionTasks,
   cmrs,
   cmrItems,
@@ -838,16 +797,9 @@ const generateFinishedProductsData = (
     const itemId = product.id;
     const itemTransactions = periodTransactions.filter(tx => tx.itemId === itemId);
 
-    // Początkowy stan
-    // WAŻNE: allTransactions (włącznie z osieroc.) — patrz komentarz w generateRawMaterialsData
-    // dateTo jako reportEndDate → korekty po okresie raportowym nie są cofane
-    const openingStock = calculateStockAtDate(
-      itemId,
-      product.quantity || 0,
-      allTransactions,
-      dateFrom,
-      dateTo
-    );
+    // Początkowy stan — forward calculation
+    // Suma wszystkich valid transakcji PRZED dateFrom (niezależna od aktualnego stanu w bazie)
+    const openingStock = calculateStockForward(itemId, transactions, dateFrom, false);
 
     // Zakup produktu - TYLKO RECEIVE powiązane z PO
     const purchases = itemTransactions
@@ -870,7 +822,8 @@ const generateFinishedProductsData = (
     // Inne przychody - RECEIVE niezwiązane z produkcją ani z PO + korekty na plus
     // KLUCZOWE: odliczamy produkcję pokrytą przez MO, żeby uniknąć podwójnego liczenia.
     // Stare RECEIVE z produkcji (bez flag) trafiają do nonProdReceive — musimy je odjąć.
-    const otherIncome = (() => {
+    // Przychody ręczne — bazowa część "Inne przychody" (bez korekt inwentaryzacyjnych)
+    const rawOtherIncome = (() => {
       // RECEIVE z flagami produkcyjnymi (moNumber/taskId) — już policzone w ownProduction
       const prodReceive = itemTransactions
         .filter(tx => isReceiveTransaction(tx) && isProductionRelated(tx))
@@ -888,14 +841,8 @@ const generateFinishedProductsData = (
       const unaccountedProduction = Math.max(0, ownProduction - prodReceive);
       const genuineOtherReceive = Math.max(0, nonProdNonPoReceive - unaccountedProduction);
 
-      // NIE LICZYMY ADJUSTMENT-ADD jako "Inne przychody":
-      // Te korekty (cofanie konsumpcji, korekty partii) to operacje wewnętrzne,
-      // które mają odpowiadające ADJUSTMENT-REMOVE. Obie strony wpływają na 
-      // calculateStockAtDate i wzajemnie się znoszą. Dodawanie ich do otherIncome
-      // zawyża bilans, bo residualne otherExpenses musi je kompensować.
-
       if (genuineOtherReceive > 0) {
-        console.log(`[ECO DEBUG FIN] "${product.name}": otherIncome: genuineOtherReceive=${genuineOtherReceive} (prodReceive=${prodReceive}, nonProdNonPoReceive=${nonProdNonPoReceive}, unaccountedProd=${unaccountedProduction})`);
+        console.log(`[ECO DEBUG FIN] "${product.name}": rawOtherIncome: genuineOtherReceive=${genuineOtherReceive} (prodReceive=${prodReceive}, nonProdNonPoReceive=${nonProdNonPoReceive}, unaccountedProd=${unaccountedProduction})`);
       }
 
       return genuineOtherReceive;
@@ -963,22 +910,18 @@ const generateFinishedProductsData = (
       return total;
     })();
 
-    // Końcowy stan — PODWÓJNA METODA z ochroną przed zawyżeniem
-    // (identyczna logika jak w generateRawMaterialsData — patrz komentarz tam)
-    const transactionBasedClosing = calculateStockAtDate(
-      itemId,
-      product.quantity || 0,
-      allTransactions,
-      dateTo,
-      dateTo
-    );
+    // Końcowy stan — forward calculation
+    // Suma wszystkich valid transakcji DO dateTo włącznie (niezależna od aktualnego stanu w bazie)
+    const closingStock = calculateStockForward(itemId, transactions, dateTo, true);
 
-    const balanceBasedClosing = openingStock + purchases + otherIncome + ownProduction - sales;
+    // --- Domknięcie bilansu (analogicznie jak dla surowców) ---
+    // residual > 0 → niesklasyfikowane rozchody → Inne rozchody
+    // residual < 0 → niesklasyfikowane przychody (korekty +) → dodaj do Inne przychody
+    const classifiedBalance = openingStock + purchases + rawOtherIncome + ownProduction - sales;
+    const residual = parseFloat((classifiedBalance - closingStock).toFixed(3));
 
-    const closingStock = Math.max(0, Math.min(transactionBasedClosing, balanceBasedClosing));
-
-    // Inne rozchody = straty/ubytki (gdy transakcyjna < bilansowa)
-    const otherExpenses = Math.max(0, parseFloat((balanceBasedClosing - closingStock).toFixed(3)));
+    const otherExpenses = Math.max(0, residual);
+    const otherIncome = rawOtherIncome + Math.max(0, -residual);
 
     // Znajdź powiązane MO dla szczegółów strat
     const relatedMOs = completedTasks.filter(task => {
@@ -1048,7 +991,7 @@ export const fetchEcoReportData = async (filters) => {
     fetchSuppliers(),
     fetchPurchaseOrders(startDate, endDate),
     fetchInventoryItems(),
-    fetchTransactions(startDate, endDate),
+    fetchTransactions(),
     fetchBatches(),
     fetchProductionTasks(startDate, endDate),
     fetchCmrData(startDate, endDate)
@@ -1157,15 +1100,39 @@ export const fetchEcoReportData = async (filters) => {
     });
   }
 
+  // ============================================================
+  // DEDUPLIKACJA KOREKT INWENTARYZACYJNYCH
+  // ============================================================
+  // Inwentaryzacja tworzy DWIE transakcje dla tej samej zmiany:
+  //   1) Item-level: reason="Korekta z inwentaryzacji (...)" — aktualizuje inventory.quantity
+  //   2) Batch-level: reason="Korekta ilości partii"         — aktualizuje batch.quantity
+  // Obie reprezentują tę samą fizyczną zmianę — forward calculation liczyłby ją podwójnie.
+  //
+  // Filtrujemy transakcje item-level (reason zaczyna się od "Korekta z inwentaryzacji"),
+  // zostawiając batch-level ("Korekta ilości partii") jako źródło prawdy.
+  
+  let itemLevelCorrectionCount = 0;
+  const deduplicatedTransactions = validTransactions.filter(tx => {
+    const reason = (tx.reason || '').trim();
+    if (reason.startsWith('Korekta z inwentaryzacji')) {
+      itemLevelCorrectionCount++;
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`[ECO DEDUP] Odfiltrowano ${itemLevelCorrectionCount} item-level korekt inwentaryzacyjnych (duplikaty batch-level)`);
+  console.log(`[ECO DEDUP] Transakcje po deduplikacji: ${deduplicatedTransactions.length} (było: ${validTransactions.length})`);
+
   // Generuj dane dla każdej zakładki
-  // validTransactions — do kategoryzacji przepływów (zakupy, sprzedaż, produkcja, etc.)
-  // transactions (ALL) — do calculateStockAtDate, bo product.quantity odzwierciedla WSZYSTKIE tx
+  // deduplicatedTransactions — do wszystkich obliczeń (forward calculation + kategoryzacja przepływów)
+  // Metoda forward nie wymaga aktualnego stanu z bazy — opiera się wyłącznie na transakcjach
   const suppliersData = generateSuppliersData(suppliers, purchaseOrders, inventoryItems);
   const rawMaterialsData = generateRawMaterialsData(
-    inventoryItems, validTransactions, transactions, productionTasks, startDate, endDate, existingBatchIds
+    inventoryItems, deduplicatedTransactions, productionTasks, startDate, endDate, existingBatchIds
   );
   const finishedProductsData = generateFinishedProductsData(
-    inventoryItems, validTransactions, transactions, productionTasks,
+    inventoryItems, deduplicatedTransactions, productionTasks,
     cmrData.cmrs, cmrData.cmrItems, startDate, endDate, existingBatchIds
   );
 

@@ -55,6 +55,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { formatDate, formatDateTime, formatQuantity } from '../../utils/formatters';
+import { preciseAdd } from '../../utils/mathUtils';
 import { Timestamp } from 'firebase/firestore';
 import LabelDialog from '../../components/inventory/LabelDialog';
 
@@ -181,6 +182,16 @@ const ItemDetailsPage = () => {
         });
         setBatches(batchesWithWarehouseNames);
         updateLoadingState('batches', false);
+
+        // Przelicz ilość z partii (tak jak w widoku listy) - wartość w dokumencie może być nieaktualna
+        if (batchesData.length > 0) {
+          let totalQuantity = 0;
+          batchesData.forEach(batch => {
+            totalQuantity = preciseAdd(totalQuantity, parseFloat(batch.quantity || 0));
+          });
+          itemData.quantity = totalQuantity;
+          setItem({ ...itemData });
+        }
 
         // 🚀 ROZWIĄZANIE 2: Optymalizacja pobierania dostawców - tylko potrzebni
         const supplierPricesPromise = getSupplierPrices(id).then(async (supplierPricesData) => {

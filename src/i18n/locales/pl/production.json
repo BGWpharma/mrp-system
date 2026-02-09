@@ -796,7 +796,18 @@
       "duration": "Czas trwania",
       "priority": "Priorytet",
       "description": "Opis",
-      "cannotEdit": "Nie można edytować - zadanie zakończone"
+      "cannotEdit": "Nie można edytować - zadanie zakończone",
+      "poDeliveryEta": "ETA surowców z PO",
+      "poDeliveryDelayed": "{{count}} opóźn.",
+      "poDeliveryDelivered": "dostarczone",
+      "poDeliveryNoDate": "brak daty",
+      "poDeliveryInvalidDate": "nieprawidłowa data",
+      "poDeliveryUnknownMaterial": "Materiał",
+      "poDeliveryMore": "...i {{count}} więcej",
+      "poDeliveryDelayDot": "Opóźnione dostawy PO ({{count}})",
+      "poDeliveryDelayDays": "{{days}} dni opóźnienia",
+      "poDeliveryMissingDate": "brak daty dostawy",
+      "materials": "Materiały"
     },
     "groups": {
       "noWorkstation": "Bez stanowiska",

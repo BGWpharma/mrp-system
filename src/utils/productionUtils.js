@@ -150,6 +150,88 @@ export const calculateConsumptionExcess = (consumedQuantity, issuedQuantity) => 
 };
 
 /**
+ * Sprawdza czy zadanie produkcyjne ma opóźnienia w dostawach zarezerwowanych surowców z PO.
+ * Porównuje planowane daty dostaw z datą rozpoczęcia produkcji (scheduledDate).
+ * @param {Object} task - Obiekt zadania produkcyjnego z polem poDeliveryInfo
+ * @returns {Object} Obiekt z flagą hasDelay, liczbą opóźnionych pozycji i detalami
+ */
+export const checkPODeliveryDelays = (task) => {
+  const result = {
+    hasDelay: false,
+    delayedCount: 0,
+    totalPendingPO: 0,
+    delayedItems: []
+  };
+
+  // Brak danych o dostawach PO lub zadanie zakończone - brak opóźnień
+  if (!task.poDeliveryInfo || task.poDeliveryInfo.length === 0) {
+    return result;
+  }
+  if (task.status === 'Zakończone' || task.status === 'completed') {
+    return result;
+  }
+
+  // Ustal datę rozpoczęcia produkcji
+  const scheduledDate = task.scheduledDate instanceof Date
+    ? task.scheduledDate
+    : task.scheduledDate?.toDate?.()
+      ? task.scheduledDate.toDate()
+      : new Date(task.scheduledDate);
+
+  if (isNaN(scheduledDate.getTime())) {
+    return result;
+  }
+
+  // Sprawdź każdą rezerwację PO
+  task.poDeliveryInfo.forEach(info => {
+    // Tylko pending (niedostarczone) rezerwacje są ryzykowne
+    if (info.status !== 'pending') return;
+
+    result.totalPendingPO++;
+
+    if (!info.expectedDeliveryDate) {
+      // Brak daty dostawy = potencjalne ryzyko, traktuj jako opóźnienie
+      result.hasDelay = true;
+      result.delayedCount++;
+      result.delayedItems.push({
+        materialName: info.materialName || 'Nieznany materiał',
+        poNumber: info.poNumber || '-',
+        expectedDeliveryDate: null,
+        scheduledDate: scheduledDate,
+        delayDays: null
+      });
+      return;
+    }
+
+    const deliveryDate = info.expectedDeliveryDate instanceof Date
+      ? info.expectedDeliveryDate
+      : info.expectedDeliveryDate?.toDate?.()
+        ? info.expectedDeliveryDate.toDate()
+        : new Date(info.expectedDeliveryDate);
+
+    if (isNaN(deliveryDate.getTime())) return;
+
+    // Porównanie: jeśli dostawa planowana po dacie startu produkcji = opóźnienie
+    if (deliveryDate > scheduledDate) {
+      const delayMs = deliveryDate.getTime() - scheduledDate.getTime();
+      const delayDays = Math.ceil(delayMs / (1000 * 60 * 60 * 24));
+
+      result.hasDelay = true;
+      result.delayedCount++;
+      result.delayedItems.push({
+        materialName: info.materialName || 'Nieznany materiał',
+        poNumber: info.poNumber || '-',
+        expectedDeliveryDate: deliveryDate,
+        scheduledDate: scheduledDate,
+        delayDays: delayDays
+      });
+    }
+  });
+
+  return result;
+};
+
+/**
  * Zwraca kolory dla statusów rezerwacji materiałów
  * Kolory są dostosowane aby nie kolidować z kolorami timeline
  * @param {string} status - Status rezerwacji

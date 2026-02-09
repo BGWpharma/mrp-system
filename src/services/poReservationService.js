@@ -124,7 +124,7 @@ export const createPOReservation = async (taskId, poId, poItemId, reservedQuanti
       unit: poItem.unit,
       unitPrice: parseFloat(poItem.unitPrice || 0),
       currency: po.currency || 'EUR',
-      expectedDeliveryDate: po.expectedDeliveryDate,
+      expectedDeliveryDate: poItem.plannedDeliveryDate || po.expectedDeliveryDate,
       supplier: po.supplier ? {
         id: po.supplier.id,
         name: po.supplier.name

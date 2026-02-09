@@ -138,7 +138,7 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     });
   }
 
-  // AUTO-REJECT: duplicate invoices (like proformas)
+  // AUTO-REJECT: only duplicates (proformas get dedicated "proforma" status)
   const shouldAutoReject = duplicateResult.isDuplicate;
   let autoRejectReason = null;
   if (shouldAutoReject) {
@@ -171,7 +171,7 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
 
     // Document type detection
     "documentType": ocrData.documentType || "invoice",
-    "isPossibleProforma": isProforma,
+    "isProforma": isProforma,
 
     // Multi-currency support
     ...(exchangeRateData && {
@@ -208,9 +208,9 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     // Update download URL with signed version
     "sourceFile.downloadUrl": downloadUrl,
 
-    // AUTO-REJECT duplicate, otherwise pending_review
-    "status": shouldAutoReject ?
-      "rejected" : "pending_review",
+    // proforma → "proforma", duplicate → "rejected", normal → "pending_review"
+    "status": isProforma ? "proforma" :
+      (shouldAutoReject ? "rejected" : "pending_review"),
 
     // Review tracking (for auto-rejected)
     ...(shouldAutoReject && {
@@ -225,7 +225,7 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
 
   await db.collection(COLLECTION).doc(invoiceId).update(updateData);
   logger.info(`[Expense OCR] Updated: ${invoiceId}`, {
-    isPossibleProforma: isProforma,
+    isProforma: isProforma,
     documentType: ocrData.documentType,
     isDuplicate: duplicateResult.isDuplicate,
     duplicateType: duplicateResult.duplicateType,
@@ -689,6 +689,10 @@ const processExpenseInvoiceOcr = onCall(
           });
         }
 
+        // Check if proforma
+        const {checkIfProforma} = require("../utils/ocrService");
+        const isProforma = checkIfProforma(ocrData);
+
         // AUTO-REJECT: duplicate invoices
         const retryAutoReject = retryDuplicateResult.isDuplicate;
         let retryRejectReason = null;
@@ -715,6 +719,8 @@ const processExpenseInvoiceOcr = onCall(
           "summary": ocrData.summary,
           "paymentMethod": ocrData.paymentMethod,
           "bankAccount": ocrData.bankAccount,
+          "documentType": ocrData.documentType || "invoice",
+          "isProforma": isProforma,
           "ocrConfidence": ocrData.parseConfidence,
           "ocrWarnings": retryDuplicateResult.isDuplicate ?
             [...(ocrData.warnings || []),
@@ -725,8 +731,9 @@ const processExpenseInvoiceOcr = onCall(
           "ocrProcessedAt":
             admin.firestore.FieldValue.serverTimestamp(),
           "sourceFile.downloadUrl": downloadUrl,
-          "status": retryAutoReject ?
-            "rejected" : "pending_review",
+          // proforma → "proforma", duplicate → "rejected", normal → "pending_review"
+          "status": isProforma ? "proforma" :
+            (retryAutoReject ? "rejected" : "pending_review"),
           "updatedAt":
             admin.firestore.FieldValue.serverTimestamp(),
           "lastOcrRetryAt":

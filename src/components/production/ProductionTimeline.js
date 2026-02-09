@@ -106,7 +106,8 @@ import {
   getTasksByDateRangeOptimizedNew,
   getAllTasks,
   getProductionHistory,
-  enrichTasksWithAllPONumbers
+  enrichTasksWithAllPONumbers,
+  enrichTasksWithPODeliveryInfo
 } from '../../services/productionService';
 import { getAllWorkstations } from '../../services/workstationService';
 import { getAllCustomers } from '../../services/customerService';
@@ -115,7 +116,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useTranslation } from '../../hooks/useTranslation';
 import TimelineExport from './TimelineExport';
-import { calculateMaterialReservationStatus, getReservationStatusColors } from '../../utils/productionUtils';
+import { calculateMaterialReservationStatus, getReservationStatusColors, checkPODeliveryDelays } from '../../utils/productionUtils';
 import { calculateEndDateExcludingWeekends, calculateProductionTimeBetweenExcludingWeekends, calculateEndDateForTimeline, isWeekend, calculateEndDateWithWorkingHours } from '../../utils/dateUtils';
 // ✅ OPTYMALIZACJA: Import wspólnych stylów MUI
 import { 
@@ -455,9 +456,9 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
         if (reservationStatus.status !== 'no_materials' && reservationStatus.status !== 'completed_confirmed') {
           const statusColors = getReservationStatusColors(reservationStatus.status);
           return (
-            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center' }}>
+            <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center' }}>
               <span style={{ marginRight: '8px', color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)' }}>
-                Materiały:
+                {t('production.timeline.tooltip.materials')}:
               </span>
               <span style={{ 
                 color: statusColors.main, 
@@ -473,6 +474,145 @@ const CustomTooltip = React.memo(({ task, position, visible, themeMode, workstat
           );
         }
         return null;
+      })()}
+
+      {/* ETA surowców z rezerwacji PO */}
+      {(() => {
+        const poInfo = task.poDeliveryInfo;
+        if (!poInfo || poInfo.length === 0) return null;
+        if (task.status === 'Zakończone' || task.status === 'completed') return null;
+
+        const labelColor = themeMode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)';
+
+        // Oblicz datę startu produkcji do porównania
+        const scheduledDate = task.scheduledDate instanceof Date
+          ? task.scheduledDate
+          : task.scheduledDate?.toDate?.()
+            ? task.scheduledDate.toDate()
+            : new Date(task.scheduledDate);
+        const scheduledValid = !isNaN(scheduledDate.getTime());
+
+        // Przetworz każdą rezerwację PO
+        const items = poInfo.map((info, idx) => {
+          const isDelivered = info.status === 'delivered' || info.status === 'converted';
+
+          let deliveryDate = null;
+          let isLate = false;
+          let delayDays = null;
+          let dateLabel = t('production.timeline.tooltip.poDeliveryNoDate');
+
+          if (info.expectedDeliveryDate) {
+            deliveryDate = info.expectedDeliveryDate instanceof Date
+              ? info.expectedDeliveryDate
+              : info.expectedDeliveryDate?.toDate?.()
+                ? info.expectedDeliveryDate.toDate()
+                : new Date(info.expectedDeliveryDate);
+            
+            if (!isNaN(deliveryDate.getTime())) {
+              dateLabel = format(deliveryDate, 'dd.MM.yyyy', { locale: pl });
+              if (scheduledValid && !isDelivered && deliveryDate > scheduledDate) {
+                isLate = true;
+                delayDays = Math.ceil((deliveryDate.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24));
+              }
+            } else {
+              dateLabel = t('production.timeline.tooltip.poDeliveryInvalidDate');
+            }
+          }
+
+          // Kolor kropki statusu
+          let dotColor = '#4caf50'; // zielony - na czas
+          if (isDelivered) {
+            dotColor = '#2196f3'; // niebieski - dostarczone
+          } else if (isLate) {
+            dotColor = '#ff1744'; // czerwony - opóźnione
+          } else if (!info.expectedDeliveryDate) {
+            dotColor = '#9e9e9e'; // szary - brak daty
+          }
+
+          return { ...info, idx, isDelivered, isLate, delayDays, dateLabel, dotColor };
+        });
+
+        const delayedCount = items.filter(i => i.isLate).length;
+
+        return (
+          <div style={{ 
+            marginBottom: '6px',
+            borderTop: themeMode === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.06)',
+            paddingTop: '6px'
+          }}>
+            <div style={{ 
+              marginBottom: '4px', 
+              display: 'flex', 
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <span style={{ color: labelColor }}>
+                {t('production.timeline.tooltip.poDeliveryEta')}:
+              </span>
+              {delayedCount > 0 && (
+                <span style={{
+                  color: '#ff1744',
+                  fontWeight: 500,
+                  backgroundColor: 'rgba(255, 23, 68, 0.12)',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem'
+                }}>
+                  {t('production.timeline.tooltip.poDeliveryDelayed', { count: delayedCount })}
+                </span>
+              )}
+            </div>
+            {items.slice(0, 5).map((item) => (
+              <div key={item.idx} style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginBottom: '3px',
+                fontSize: '0.8rem'
+              }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  minWidth: '6px',
+                  backgroundColor: item.dotColor,
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  flexShrink: 0
+                }} />
+                <span style={{ 
+                  flex: 1, 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis', 
+                  whiteSpace: 'nowrap',
+                  color: labelColor
+                }}>
+                  {item.materialName || t('production.timeline.tooltip.poDeliveryUnknownMaterial')}
+                </span>
+                <span style={{ 
+                  flexShrink: 0,
+                  fontWeight: 500,
+                  color: item.isDelivered 
+                    ? '#2196f3'
+                    : item.isLate 
+                      ? '#ff1744' 
+                      : (themeMode === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.7)')
+                }}>
+                  {item.isDelivered ? t('production.timeline.tooltip.poDeliveryDelivered') : item.dateLabel}
+                  {item.isLate && item.delayDays ? ` (+${item.delayDays}d)` : ''}
+                </span>
+              </div>
+            ))}
+            {items.length > 5 && (
+              <div style={{ 
+                color: themeMode === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.35)',
+                fontSize: '0.8rem',
+                fontStyle: 'italic'
+              }}>
+                {t('production.timeline.tooltip.poDeliveryMore', { count: items.length - 5 })}
+              </div>
+            )}
+          </div>
+        );
       })()}
 
       {/* Daty */}
@@ -564,9 +704,11 @@ const ProductionTimeline = React.memo(({
     endDate: null
   });
   
-  // Stan dla wzbogacania zadań o numery PO (lazy loading)
+  // Stan dla wzbogacania zadań o numery PO (lazy loading - pełne wzbogacanie)
   const [tasksEnrichedWithPO, setTasksEnrichedWithPO] = useState(false);
   const [enrichmentInProgress, setEnrichmentInProgress] = useState(false);
+  // Stan dla szybkiego wzbogacania o dane dostawowe PO (ETA)
+  const [deliveryInfoEnriched, setDeliveryInfoEnriched] = useState(false);
   
   // Stan dla trybu edycji
   const [editMode, setEditMode] = useState(false);
@@ -706,17 +848,14 @@ const ProductionTimeline = React.memo(({
       // Zresetuj stan wzbogacenia przy nowym ładowaniu zadań
       // (nowe zadania mogą być inne lub z innego zakresu dat)
       setTasksEnrichedWithPO(false);
+      setDeliveryInfoEnriched(false);
       
-      // ⚡ OPTYMALIZACJA: Wzbogacanie PO tylko dla małych zbiorów (< 100 zadań)
-      // Dla większych zbiorów wzbogacaj on-demand przy hover
-      if (data.length > 0 && data.length <= 100) {
-        console.log('⚡ ProductionTimeline: Wzbogacanie PO dla małego zbioru...');
-        // Opóźnione wzbogacanie żeby nie blokować pierwszego renderowania
+      // Szybkie wzbogacanie o dane dostawowe PO (ETA) - wymagane do czerwonych kropek na harmonogramie
+      if (data.length > 0) {
+        console.log(`⚡ ProductionTimeline: Wzbogacanie danych dostawowych PO dla ${data.length} zadań...`);
         setTimeout(() => {
-          enrichTasksInBackground(data);
-        }, 500);
-      } else if (data.length > 100) {
-        console.log(`⚡ ProductionTimeline: Pominięto wzbogacanie PO dla ${data.length} zadań (on-demand)`);
+          enrichDeliveryInfoInBackground(data);
+        }, 300);
       }
     } catch (error) {
       console.error('Błąd podczas pobierania zadań:', error);
@@ -726,19 +865,20 @@ const ProductionTimeline = React.memo(({
     }
   }, [canvasTimeStart, canvasTimeEnd, showError]);
   
-  // ⚡ OPTYMALIZACJA: Wzbogacanie zadań o numery PO w tle
-  const enrichTasksInBackground = useCallback(async (tasksToEnrich) => {
-    if (tasksEnrichedWithPO || !tasksToEnrich || tasksToEnrich.length === 0) return;
+  // ⚡ OPTYMALIZACJA: Szybkie wzbogacanie o dane dostawowe PO (tylko rezerwacje, bez partii)
+  const enrichDeliveryInfoInBackground = useCallback(async (tasksToEnrich) => {
+    if (deliveryInfoEnriched || !tasksToEnrich || tasksToEnrich.length === 0) return;
     
     try {
-      const enrichedTasks = await enrichTasksWithAllPONumbers(tasksToEnrich, false);
+      // Szybkie wzbogacanie - tylko dane dostawowe (ETA) z rezerwacji PO
+      const enrichedTasks = await enrichTasksWithPODeliveryInfo(tasksToEnrich);
       setTasks(enrichedTasks);
-      setTasksEnrichedWithPO(true);
-      console.log('⚡ ProductionTimeline: Wzbogacono zadania o numery PO');
+      setDeliveryInfoEnriched(true);
+      console.log('⚡ ProductionTimeline: Wzbogacono zadania o dane dostawowe PO');
     } catch (error) {
-      console.warn('Nie udało się wzbogacić zadań o numery PO:', error.message);
+      console.warn('Nie udało się wzbogacić zadań o dane dostawowe PO:', error.message);
     }
-  }, [tasksEnrichedWithPO]);
+  }, [deliveryInfoEnriched]);
 
   // Funkcja do pobierania historii produkcji dla zadań zakończonych
   const fetchProductionHistoryForCompletedTasks = useCallback(async () => {
@@ -3195,6 +3335,16 @@ const ProductionTimeline = React.memo(({
                 }).length 
               : 0;
             
+            // Sprawdź opóźnienia dostaw PO
+            const deliveryDelayInfo = checkPODeliveryDelays(item.task);
+            
+            // Przygotuj tooltip dla opóźnień
+            const deliveryDelayTooltip = deliveryDelayInfo.hasDelay
+              ? deliveryDelayInfo.delayedItems.map(d => 
+                  `${d.materialName} (${d.poNumber})${d.delayDays ? ` - ${t('production.timeline.tooltip.poDeliveryDelayDays', { days: d.delayDays })}` : ` - ${t('production.timeline.tooltip.poDeliveryMissingDate')}`}`
+                ).join('\n')
+              : '';
+            
             return (
               <div 
                 key={key}
@@ -3232,6 +3382,22 @@ const ProductionTimeline = React.memo(({
                    overflow: 'hidden'
                  }}
               >
+                {/* Czerwona kropka - opóźnienie dostawy surowców z PO */}
+                {deliveryDelayInfo.hasDelay && (
+                  <span
+                    title={`${t('production.timeline.tooltip.poDeliveryDelayDot', { count: deliveryDelayInfo.delayedCount })}:\n${deliveryDelayTooltip}`}
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      minWidth: '8px',
+                      backgroundColor: '#ff1744',
+                      borderRadius: '50%',
+                      border: '1px solid rgba(255,255,255,0.6)',
+                      boxShadow: '0 0 4px rgba(255,23,68,0.7)',
+                      flexShrink: 0
+                    }}
+                  />
+                )}
                 <span style={{
                   flex: 1,
                   overflow: 'hidden',

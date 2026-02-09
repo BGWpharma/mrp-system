@@ -55,6 +55,7 @@ import {
 
   // Cache dla wzbogacania zadań o numery PO
   const enrichmentCache = new Map(); // taskId -> poNumbers[]
+  const deliveryInfoCache = new Map(); // taskId -> [{expectedDeliveryDate, status, materialName}]
   let enrichmentCacheTimestamp = null;
   const ENRICHMENT_CACHE_TTL = 5 * 60 * 1000; // 5 minut
 
@@ -829,6 +830,7 @@ import {
         const cachedTasks = tasks.map(task => ({
           ...task,
           poNumbers: enrichmentCache.get(task.id) || [],
+          poDeliveryInfo: deliveryInfoCache.get(task.id) || [],
           _enrichedWithPO: enrichmentCache.has(task.id)
         }));
         
@@ -842,6 +844,7 @@ import {
       const enrichStartTime = performance.now();
       
       const poNumbersMap = new Map(); // task.id -> Set(poNumbers)
+      const poDeliveryInfoMap = new Map(); // task.id -> [{expectedDeliveryDate, status, materialName}]
       
       // ========================================
       // CZĘŚĆ 1: Bezpośrednie rezerwacje PO
@@ -851,6 +854,7 @@ import {
         if (task.poReservationIds && task.poReservationIds.length > 0) {
           task.poReservationIds.forEach(id => allReservationIds.add(id));
           poNumbersMap.set(task.id, new Set());
+          poDeliveryInfoMap.set(task.id, []);
         }
       });
       
@@ -875,6 +879,16 @@ import {
             
             if (data.poNumber && poNumbersMap.has(taskId)) {
               poNumbersMap.get(taskId).add(data.poNumber);
+            }
+            
+            // Zbierz informacje o datach dostaw dla rezerwacji PO
+            if (poDeliveryInfoMap.has(taskId)) {
+              poDeliveryInfoMap.get(taskId).push({
+                expectedDeliveryDate: data.expectedDeliveryDate,
+                status: data.status,
+                materialName: data.materialName,
+                poNumber: data.poNumber
+              });
             }
           });
         }
@@ -1013,15 +1027,20 @@ import {
       // ========================================
       const enrichedTasks = tasks.map(task => {
         const poNumbers = Array.from(poNumbersMap.get(task.id) || []);
+        const poDeliveryInfo = poDeliveryInfoMap.get(task.id) || [];
         
         // Zaktualizuj cache dla tego zadania
         if (poNumbers.length > 0) {
           enrichmentCache.set(task.id, poNumbers);
         }
+        if (poDeliveryInfo.length > 0) {
+          deliveryInfoCache.set(task.id, poDeliveryInfo);
+        }
         
         return {
           ...task,
           poNumbers: poNumbers,
+          poDeliveryInfo: poDeliveryInfo,
           _enrichedWithPO: poNumbers.length > 0
         };
       });
@@ -1039,6 +1058,111 @@ import {
     } catch (error) {
       console.error('❌ Błąd podczas wzbogacania zadań o numery PO:', error);
       // Zwróć zadania bez wzbogacenia
+      return tasks;
+    }
+  };
+  
+  /**
+   * Lekkie wzbogacanie zadań o dane dostawowe z rezerwacji PO.
+   * Pobiera TYLKO dokumenty poReservations (bez partii i PO) - szybkie.
+   * Wystarczające do wyświetlania ETA dostaw i czerwonych kropek na harmonogramie.
+   * @param {Array} tasks - Lista zadań do wzbogacenia
+   * @returns {Promise<Array>} - Zadania wzbogacone o pole poDeliveryInfo[]
+   */
+  export const enrichTasksWithPODeliveryInfo = async (tasks) => {
+    if (!tasks || tasks.length === 0) return tasks;
+
+    try {
+      const now = Date.now();
+
+      // Sprawdź cache
+      if (enrichmentCacheTimestamp && (now - enrichmentCacheTimestamp) < ENRICHMENT_CACHE_TTL) {
+        const hasCachedDeliveryInfo = tasks.some(t => 
+          t.poReservationIds?.length > 0 && deliveryInfoCache.has(t.id)
+        );
+        if (hasCachedDeliveryInfo) {
+          console.log('🎯 Używam cache dla danych dostawowych PO');
+          return tasks.map(task => ({
+            ...task,
+            poDeliveryInfo: deliveryInfoCache.get(task.id) || task.poDeliveryInfo || []
+          }));
+        }
+      }
+
+      console.log(`🚀 Szybkie wzbogacanie ${tasks.length} zadań o dane dostawowe PO...`);
+      const startTime = performance.now();
+
+      // Zbierz wszystkie ID rezerwacji PO z zadań
+      const taskReservationMap = new Map(); // reservationId -> taskId
+      const tasksWithReservations = new Set();
+
+      tasks.forEach(task => {
+        if (task.poReservationIds && task.poReservationIds.length > 0) {
+          tasksWithReservations.add(task.id);
+          task.poReservationIds.forEach(resId => {
+            taskReservationMap.set(resId, task.id);
+          });
+        }
+      });
+
+      if (taskReservationMap.size === 0) {
+        console.log('🚀 Brak rezerwacji PO do pobrania');
+        return tasks;
+      }
+
+      // Pobierz rezerwacje PO w paczkach po 10
+      const poDeliveryInfoMap = new Map(); // taskId -> []
+      tasksWithReservations.forEach(taskId => poDeliveryInfoMap.set(taskId, []));
+
+      const reservationIds = Array.from(taskReservationMap.keys());
+      const chunks = [];
+      for (let i = 0; i < reservationIds.length; i += 10) {
+        chunks.push(reservationIds.slice(i, i + 10));
+      }
+
+      // Równoległe pobieranie chunków
+      await Promise.all(chunks.map(async (chunk) => {
+        const reservationsQuery = query(
+          collection(db, 'poReservations'),
+          where('__name__', 'in', chunk)
+        );
+
+        const snapshot = await getDocs(reservationsQuery);
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const taskId = data.taskId;
+
+          if (poDeliveryInfoMap.has(taskId)) {
+            poDeliveryInfoMap.get(taskId).push({
+              expectedDeliveryDate: data.expectedDeliveryDate,
+              status: data.status,
+              materialName: data.materialName,
+              poNumber: data.poNumber
+            });
+          }
+        });
+      }));
+
+      // Zaktualizuj cache
+      poDeliveryInfoMap.forEach((info, taskId) => {
+        if (info.length > 0) {
+          deliveryInfoCache.set(taskId, info);
+        }
+      });
+
+      const enrichedTasks = tasks.map(task => ({
+        ...task,
+        poDeliveryInfo: poDeliveryInfoMap.get(task.id) || task.poDeliveryInfo || []
+      }));
+
+      const endTime = performance.now();
+      const tasksWithInfo = enrichedTasks.filter(t => t.poDeliveryInfo.length > 0).length;
+      console.log(`🚀 Dane dostawowe PO pobrane w ${(endTime - startTime).toFixed(0)}ms. Zadań z danymi: ${tasksWithInfo}`);
+
+      return enrichedTasks;
+
+    } catch (error) {
+      console.error('❌ Błąd podczas pobierania danych dostawowych PO:', error);
       return tasks;
     }
   };

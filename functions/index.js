@@ -14,6 +14,7 @@
  * - refreshExpiryStats        (callable)
  * - getRandomBatch            (callable)
  * - recalculateShippedQuantities (callable)
+ * - suggestAccountsForPosting (callable: AI account suggestions)
  * - onPurchaseOrderUpdate     (trigger: purchaseOrders)
  * - onBatchPriceUpdate        (trigger: _systemEvents)
  * - onProductionTaskCostUpdate (trigger: _systemEvents)
@@ -38,6 +39,7 @@ require("./config");
 const {refreshExpiryStats} = require("./callable/expiryStats");
 const {getRandomBatch} = require("./callable/randomBatch");
 const {recalculateShippedQuantities} = require("./callable/recalculateShipped");
+const {suggestAccountsForPosting} = require("./callable/suggestAccounts");
 
 // ============================================================================
 // FIRESTORE TRIGGERS - Automatyczne aktualizacje danych
@@ -81,6 +83,7 @@ const {checkUnorderedPOReservations} = require("./scheduled/poOrderReminder");
 exports.refreshExpiryStats = refreshExpiryStats;
 exports.getRandomBatch = getRandomBatch;
 exports.recalculateShippedQuantities = recalculateShippedQuantities;
+exports.suggestAccountsForPosting = suggestAccountsForPosting;
 exports.onPurchaseOrderUpdate = onPurchaseOrderUpdate;
 exports.onBatchPriceUpdate = onBatchPriceUpdate;
 exports.onProductionTaskCostUpdate = onProductionTaskCostUpdate;

@@ -589,6 +589,14 @@ export const updateBatch = async (batchId, batchData, userId) => {
       }
     }
     
+    // Emituj zdarzenie o zmianie stanu magazynu (aby odświeżyć widok szczegółów)
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'batch-update', batchId: validatedBatchId }
+      });
+      window.dispatchEvent(event);
+    }
+    
     return {
       id: validatedBatchId,
       ...currentBatch,
@@ -1352,6 +1360,14 @@ export const deleteBatch = async (batchId, userData) => {
 
     // Usuń partię
     await deleteDoc(batchRef);
+    
+    // Emituj zdarzenie o zmianie stanu magazynu (aby odświeżyć widok szczegółów)
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('inventory-updated', { 
+        detail: { itemId, action: 'batch-delete', batchId: validatedBatchId }
+      });
+      window.dispatchEvent(event);
+    }
     
     return {
       success: true,

@@ -44,8 +44,17 @@ RETURN JSON in this EXACT format:
   "dueDate": "YYYY-MM-DD or null",
   "supplier": {
     "name": "supplier company name",
-    "taxId": "NIP/VAT ID if visible",
-    "address": "full address if visible"
+    "taxId": "NIP/VAT ID number if visible (Polish NIP or foreign tax ID)",
+    "vatEu": "VAT EU number if visible and different from taxId (e.g. PL1234567890), else null",
+    "address": {
+      "street": "street and building number",
+      "city": "city name",
+      "postalCode": "postal/zip code",
+      "country": "country name or null if not visible"
+    },
+    "email": "supplier email if visible on document, else null",
+    "phone": "supplier phone number if visible on document, else null",
+    "bankName": "bank name if visible on document, else null"
   },
   "currency": "EUR or PLN",
   "items": [
@@ -244,6 +253,26 @@ const checkIfProforma = (ocrData) => {
  * @return {Object} Normalized data
  */
 const normalizeOcrResult = (ocrData) => {
+  // Handle supplier address - can be string (old format) or object (new format)
+  const rawAddress = ocrData.supplier?.address;
+  let normalizedAddress = null;
+  if (rawAddress && typeof rawAddress === "object") {
+    normalizedAddress = {
+      street: rawAddress.street || null,
+      city: rawAddress.city || null,
+      postalCode: rawAddress.postalCode || null,
+      country: rawAddress.country || null,
+    };
+  } else if (rawAddress && typeof rawAddress === "string") {
+    // Legacy format: full address as string - store as street
+    normalizedAddress = {
+      street: rawAddress,
+      city: null,
+      postalCode: null,
+      country: null,
+    };
+  }
+
   const normalized = {
     documentType: ocrData.documentType || "invoice",
     invoiceNumber: ocrData.invoiceNumber || "UNKNOWN",
@@ -252,7 +281,11 @@ const normalizeOcrResult = (ocrData) => {
     supplier: {
       name: ocrData.supplier?.name || "Unknown Supplier",
       taxId: ocrData.supplier?.taxId || null,
-      address: ocrData.supplier?.address || null,
+      vatEu: ocrData.supplier?.vatEu || null,
+      address: normalizedAddress,
+      email: ocrData.supplier?.email || null,
+      phone: ocrData.supplier?.phone || null,
+      bankName: ocrData.supplier?.bankName || null,
     },
     currency: ocrData.currency || "EUR",
     items: (ocrData.items || []).map((item, idx) => ({

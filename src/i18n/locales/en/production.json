@@ -747,7 +747,18 @@
       "duration": "Duration",
       "priority": "Priority",
       "description": "Description",
-      "cannotEdit": "Cannot edit - task completed"
+      "cannotEdit": "Cannot edit - task completed",
+      "poDeliveryEta": "PO Materials ETA",
+      "poDeliveryDelayed": "{{count}} delayed",
+      "poDeliveryDelivered": "delivered",
+      "poDeliveryNoDate": "no date",
+      "poDeliveryInvalidDate": "invalid date",
+      "poDeliveryUnknownMaterial": "Material",
+      "poDeliveryMore": "...and {{count}} more",
+      "poDeliveryDelayDot": "Delayed PO deliveries ({{count}})",
+      "poDeliveryDelayDays": "{{days}} days late",
+      "poDeliveryMissingDate": "no delivery date",
+      "materials": "Materials"
     },
     "groups": {
       "noWorkstation": "No Workstation",

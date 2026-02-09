@@ -1822,7 +1822,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                 const reinvoicedData = reinvoicedAmounts.items[itemId];
                                 const reinvoicedAmount = reinvoicedData?.totalReinvoiced || 0;
                                 const itemValue = parseFloat(item.totalPrice) || 0;
-                                const isFullyReinvoiced = reinvoicedAmount >= itemValue;
+                                const isFullyReinvoiced = Math.abs(reinvoicedAmount - itemValue) < 0.01;
+                                const hasDiscrepancy = reinvoicedAmount > 0 && !isFullyReinvoiced;
+                                const discrepancyAmount = reinvoicedAmount - itemValue;
                                 
                                 if (reinvoicedAmount > 0) {
                                   return (
@@ -1837,12 +1839,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                               • {inv.invoiceNumber} → {inv.customerName || 'Brak klienta'}: {formatCurrency(inv.itemValue, purchaseOrder.currency)}
                                             </Typography>
                                           ))}
+                                          {hasDiscrepancy && (
+                                            <Typography variant="body2" sx={{ mt: 0.5, color: 'error.light', fontWeight: 'bold' }}>
+                                              Niezgodność: {discrepancyAmount > 0 ? '+' : ''}{formatCurrency(discrepancyAmount, purchaseOrder.currency)} ({discrepancyAmount > 0 ? 'nadwyżka' : 'niedobór'} vs wartość PO: {formatCurrency(itemValue, purchaseOrder.currency)})
+                                            </Typography>
+                                          )}
                                         </Box>
                                       }
                                     >
                                       <Typography 
                                         sx={{ 
-                                          color: isFullyReinvoiced ? 'success.main' : 'warning.main',
+                                          color: isFullyReinvoiced ? 'success.main' : 'error.main',
                                           fontWeight: 'medium',
                                           cursor: 'pointer',
                                           display: 'flex',
@@ -1851,7 +1858,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                           gap: 0.5
                                         }}
                                       >
-                                        {isFullyReinvoiced ? '✅' : '⚠️'}
+                                        {isFullyReinvoiced ? '✅' : '❌'}
                                         {formatCurrency(reinvoicedAmount, purchaseOrder.currency)}
                                       </Typography>
                                     </Tooltip>
@@ -2571,7 +2578,9 @@ const PurchaseOrderDetails = ({ orderId }) => {
                       // Dane o refakturowaniu
                       const reinvoicedData = reinvoicedAmounts.additionalCosts[costId];
                       const reinvoicedAmount = reinvoicedData?.totalReinvoiced || 0;
-                      const isFullyReinvoiced = reinvoicedAmount >= costValue;
+                      const isFullyReinvoiced = Math.abs(reinvoicedAmount - costValue) < 0.01;
+                      const hasDiscrepancy = reinvoicedAmount > 0 && !isFullyReinvoiced;
+                      const discrepancyAmount = reinvoicedAmount - costValue;
                       
                       return (
                         <TableRow key={cost.id || index}>
@@ -2593,12 +2602,17 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                         • {inv.invoiceNumber} → {inv.customerName || 'Brak klienta'}: {formatCurrency(inv.itemValue, purchaseOrder.currency)}
                                       </Typography>
                                     ))}
+                                    {hasDiscrepancy && (
+                                      <Typography variant="body2" sx={{ mt: 0.5, color: 'error.light', fontWeight: 'bold' }}>
+                                        Niezgodność: {discrepancyAmount > 0 ? '+' : ''}{formatCurrency(discrepancyAmount, purchaseOrder.currency)} ({discrepancyAmount > 0 ? 'nadwyżka' : 'niedobór'} vs wartość PO: {formatCurrency(costValue, purchaseOrder.currency)})
+                                      </Typography>
+                                    )}
                                   </Box>
                                 }
                               >
                                 <Typography 
                                   sx={{ 
-                                    color: isFullyReinvoiced ? 'success.main' : 'warning.main',
+                                    color: isFullyReinvoiced ? 'success.main' : 'error.main',
                                     fontWeight: 'medium',
                                     cursor: 'pointer',
                                     display: 'flex',
@@ -2607,7 +2621,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                     gap: 0.5
                                   }}
                                 >
-                                  {isFullyReinvoiced ? '✅' : '⚠️'}
+                                  {isFullyReinvoiced ? '✅' : '❌'}
                                   {formatCurrency(reinvoicedAmount, purchaseOrder.currency)}
                                 </Typography>
                               </Tooltip>

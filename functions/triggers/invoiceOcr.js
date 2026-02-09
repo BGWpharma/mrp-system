@@ -27,6 +27,7 @@ const {
 } = require("../utils/ocrService");
 const {convertToPLN} = require("../utils/exchangeRates");
 const {checkForDuplicateInvoice, checkCrossPoDuplicate} = require("../utils/duplicateDetection");
+const {matchAndUpdateSupplier} = require("../utils/supplierMatchingService");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -149,14 +150,10 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     });
   }
 
-  // AUTO-REJECT: proforma or duplicate
-  const shouldAutoReject = isProforma || isDuplicate;
+  // AUTO-REJECT: only duplicates (proformas get dedicated "proforma" status for cashflow)
+  const shouldAutoReject = isDuplicate;
   let autoRejectReason = null;
-  if (isProforma) {
-    autoRejectReason = "Automatycznie odrzucone: " +
-      "Faktura Pro Forma nie jest fakturą VAT. " +
-      "Prosimy o przesłanie właściwej faktury.";
-  } else if (isDuplicate) {
+  if (isDuplicate) {
     autoRejectReason = "Automatycznie odrzucone: " +
       "Duplikat faktury. " +
       (duplicateInfo.message || "");
@@ -223,8 +220,8 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
       duplicateStatus: "none",
     }),
 
-    // Workflow status - AUTO-REJECT PROFORMA / DUPLICATE
-    status: shouldAutoReject ? "rejected" : "pending_review",
+    // Workflow status: proforma → "proforma", duplicate → "rejected", normal → "pending_review"
+    status: isProforma ? "proforma" : (shouldAutoReject ? "rejected" : "pending_review"),
 
     journalEntryId: null,
 
@@ -350,6 +347,26 @@ const onInvoiceAttachmentUploaded = onObjectFinalized(
           downloadUrl: downloadUrl,
           fileName: fileName,
         });
+
+        // Match & enrich supplier data from OCR
+        try {
+          const supplierResult = await matchAndUpdateSupplier(db, ocrData, {
+            type: "po",
+            id: orderId,
+          });
+          if (supplierResult.updated) {
+            logger.info("[OCR] Supplier enriched from invoice OCR", {
+              supplierId: supplierResult.supplierId,
+              updatedFields: supplierResult.updatedFields,
+              matchMethod: supplierResult.matchMethod,
+            });
+          }
+        } catch (supplierError) {
+          // Non-critical, log and continue
+          logger.warn("[OCR] Supplier matching failed (non-critical)", {
+            error: supplierError.message,
+          });
+        }
 
         // Update source PO with reference (optional, for traceability)
         try {
@@ -507,6 +524,26 @@ const onCmrInvoiceCreated = onDocumentCreated(
           downloadUrl: invoiceData.downloadURL,
           fileName: invoiceData.fileName,
         });
+
+        // Match & enrich supplier data from OCR
+        try {
+          const supplierResult = await matchAndUpdateSupplier(db, ocrData, {
+            type: "cmr",
+            id: invoiceData.cmrId,
+          });
+          if (supplierResult.updated) {
+            logger.info("[OCR] Supplier enriched from CMR invoice OCR", {
+              supplierId: supplierResult.supplierId,
+              updatedFields: supplierResult.updatedFields,
+              matchMethod: supplierResult.matchMethod,
+            });
+          }
+        } catch (supplierError) {
+          // Non-critical, log and continue
+          logger.warn("[OCR] Supplier matching failed (non-critical)", {
+            error: supplierError.message,
+          });
+        }
 
         // Mark CMR invoice as processed
         await db.collection("cmrInvoices").doc(invoiceId).update({
@@ -848,13 +885,10 @@ const retryInvoiceOcr = onCall(
           });
         }
 
-        // AUTO-REJECT: proforma or duplicate
-        const shouldAutoReject = isProforma || retryIsDuplicate;
+        // AUTO-REJECT: only duplicates (proformas get dedicated "proforma" status)
+        const shouldAutoReject = retryIsDuplicate;
         let autoRejectReason = null;
-        if (isProforma) {
-          autoRejectReason = "Automatycznie odrzucone: " +
-            "Faktura Pro Forma nie jest fakturą VAT.";
-        } else if (retryIsDuplicate) {
+        if (retryIsDuplicate) {
           autoRejectReason = "Automatycznie odrzucone: " +
             "Duplikat faktury. " +
             (retryDuplicateInfo.message || "");
@@ -886,8 +920,9 @@ const retryInvoiceOcr = onCall(
             ocrData.warnings,
           ocrError: admin.firestore.FieldValue.delete(),
           ocrRawData: JSON.stringify(ocrData),
-          status: shouldAutoReject ?
-            "rejected" : "pending_review",
+          // proforma → "proforma", duplicate → "rejected", normal → "pending_review"
+          status: isProforma ? "proforma" :
+            (shouldAutoReject ? "rejected" : "pending_review"),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryBy: request.auth.uid,
@@ -925,6 +960,30 @@ const retryInvoiceOcr = onCall(
         }
 
         await db.collection("purchaseInvoices").doc(invoiceId).update(updateData);
+
+        // Match & enrich supplier data from OCR (on retry too)
+        try {
+          const sourceType = invoiceData.sourceType || "po";
+          const sourceId = invoiceData.sourceId;
+          if (sourceId) {
+            const supplierResult = await matchAndUpdateSupplier(db, ocrData, {
+              type: sourceType,
+              id: sourceId,
+            });
+            if (supplierResult.updated) {
+              logger.info("[OCR Retry] Supplier enriched from OCR retry", {
+                supplierId: supplierResult.supplierId,
+                updatedFields: supplierResult.updatedFields,
+                matchMethod: supplierResult.matchMethod,
+              });
+            }
+          }
+        } catch (supplierError) {
+          // Non-critical, log and continue
+          logger.warn("[OCR Retry] Supplier matching failed (non-critical)", {
+            error: supplierError.message,
+          });
+        }
 
         logger.info("[OCR Retry] ✅ Invoice updated successfully", {
           invoiceId,
