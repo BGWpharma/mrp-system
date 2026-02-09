@@ -469,6 +469,23 @@
         { "fieldPath": "code", "order": "ASCENDING" }
       ]
     }
+    ,
+    {
+      "collectionGroup": "supplierProducts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supplierId", "order": "ASCENDING" },
+        { "fieldPath": "productName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "supplierProducts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inventoryItemId", "order": "ASCENDING" },
+        { "fieldPath": "lastPrice", "order": "ASCENDING" }
+      ]
+    }
   ],
   "fieldOverrides": []
 } 

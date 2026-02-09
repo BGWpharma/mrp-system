@@ -376,18 +376,6 @@ const PurchaseOrderDetails = ({ orderId }) => {
         }
       }
       
-      // Jeśli nadal nic nie znaleziono, pokaż wszystkie numery PO w kolekcji dla debugowania
-      if (unloadingData.length === 0) {
-        console.log('🔍 No results found for any variant. Let me check all PO numbers in the collection...');
-        const allDocsQuery = query(collection(db, 'Forms/RozladunekTowaru/Odpowiedzi'));
-        const allDocsSnapshot = await getDocs(allDocsQuery);
-        console.log('📋 All PO numbers in collection:');
-        allDocsSnapshot.docs.forEach((doc, index) => {
-          const data = doc.data();
-          console.log(`${index + 1}. PO: "${data.poNumber}" (type: ${typeof data.poNumber})`);
-        });
-      }
-
       // Sortowanie odpowiedzi od najnowszych (według daty wypełnienia)
       const sortByFillDate = (a, b) => {
         const dateA = a.fillDate || new Date(0);

@@ -19,6 +19,7 @@ import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
 import { getSupplierById, createSupplier, updateSupplier } from '../../services/supplierService';
 import { validateNipFormat, getBasicCompanyDataByNip } from '../../services/nipValidationService';
+import SupplierProductCatalog from './SupplierProductCatalog';
 
 const SupplierForm = ({ viewOnly = false, supplierId }) => {
   const { t } = useTranslation();
@@ -493,6 +494,11 @@ const SupplierForm = ({ viewOnly = false, supplierId }) => {
           </Grid>
         </form>
       </Paper>
+
+      {/* Katalog produktów dostawcy - widoczny tylko w trybie podglądu */}
+      {viewOnly && supplierId && (
+        <SupplierProductCatalog supplierId={supplierId} />
+      )}
       
       {/* Dialog dodawania/edycji adresu */}
       <Dialog open={addressDialogOpen} onClose={() => setAddressDialogOpen(false)} maxWidth="sm" fullWidth>

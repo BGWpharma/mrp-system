@@ -3,6 +3,9 @@
  * Trigger 1: PO → Inventory Batches
  * Automatycznie aktualizuje ceny w partiach magazynowych gdy zmienia się PO
  *
+ * Trigger 2: PO Status Change → Supplier Product Catalog
+ * Automatycznie aktualizuje katalog produktów dostawcy gdy PO zmienia status z draft
+ *
  * DEPLOYMENT:
  * firebase deploy --only functions:bgw-mrp:onPurchaseOrderUpdate
  */
@@ -10,6 +13,124 @@
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const {admin} = require("../config");
+
+/**
+ * Aktualizuje katalog produktów dostawcy na podstawie danych PO
+ * Wywoływana gdy PO zmienia status z "draft" na inny
+ */
+async function updateSupplierProductCatalog(db, orderId, poData, logger) {
+  const supplierId = poData.supplierId;
+  if (!supplierId) {
+    logger.warn("PO without supplierId, skipping catalog update", {orderId});
+    return;
+  }
+
+  const items = poData.items;
+  if (!items || items.length === 0) {
+    logger.info("PO has no items, skipping catalog update", {orderId});
+    return;
+  }
+
+  logger.info("Updating supplier product catalog", {
+    orderId,
+    supplierId,
+    itemCount: items.length,
+    newStatus: poData.status,
+  });
+
+  let updatedCount = 0;
+
+  for (const item of items) {
+    const inventoryItemId = item.inventoryItemId || item.itemId;
+    if (!inventoryItemId) continue;
+
+    const unitPrice = parseFloat(item.unitPrice);
+    if (isNaN(unitPrice) || unitPrice <= 0) continue;
+
+    try {
+      // Szukaj istniejącego rekordu
+      const existingQuery = db.collection("supplierProducts")
+          .where("supplierId", "==", supplierId)
+          .where("inventoryItemId", "==", inventoryItemId);
+
+      const existingSnap = await existingQuery.get();
+
+      if (!existingSnap.empty) {
+        // Aktualizacja istniejącego
+        const existingDoc = existingSnap.docs[0];
+        const existingData = existingDoc.data();
+
+        const orderCount = (existingData.orderCount || 0) + 1;
+        const totalOrderedQuantity =
+          (existingData.totalOrderedQuantity || 0) +
+          (parseFloat(item.quantity) || 0);
+
+        const minPrice = Math.min(
+            existingData.minPrice || Infinity, unitPrice);
+        const maxPrice = Math.max(
+            existingData.maxPrice || 0, unitPrice);
+
+        const prevTotal =
+          (existingData.averagePrice || unitPrice) *
+          (existingData.orderCount || 0);
+        const averagePrice = (prevTotal + unitPrice) / orderCount;
+
+        await existingDoc.ref.update({
+          lastPrice: unitPrice,
+          averagePrice: Math.round(averagePrice * 100) / 100,
+          minPrice,
+          maxPrice,
+          currency: item.currency || poData.currency || "PLN",
+          totalOrderedQuantity,
+          orderCount,
+          lastOrderDate: poData.orderDate ||
+            admin.firestore.FieldValue.serverTimestamp(),
+          lastPurchaseOrderId: orderId,
+          lastPurchaseOrderNumber: poData.number || "",
+          productName: item.name || existingData.productName,
+          unit: item.unit || existingData.unit,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Nowy rekord
+        await db.collection("supplierProducts").add({
+          supplierId,
+          inventoryItemId,
+          productName: item.name || "",
+          unit: item.unit || "szt",
+          supplierProductCode: item.supplierProductCode || "",
+          lastPrice: unitPrice,
+          averagePrice: unitPrice,
+          minPrice: unitPrice,
+          maxPrice: unitPrice,
+          currency: item.currency || poData.currency || "PLN",
+          totalOrderedQuantity: parseFloat(item.quantity) || 0,
+          orderCount: 1,
+          lastOrderDate: poData.orderDate ||
+            admin.firestore.FieldValue.serverTimestamp(),
+          lastPurchaseOrderId: orderId,
+          lastPurchaseOrderNumber: poData.number || "",
+          firstSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      updatedCount++;
+    } catch (error) {
+      logger.error("Error updating catalog for item", {
+        orderId,
+        inventoryItemId,
+        error: error.message,
+      });
+    }
+  }
+
+  logger.info(`✅ Supplier catalog updated: ${updatedCount} products`, {
+    orderId,
+    supplierId,
+    updatedCount,
+  });
+}
 
 const onPurchaseOrderUpdate = onDocumentUpdated(
     {
@@ -30,6 +151,17 @@ const onPurchaseOrderUpdate = onDocumentUpdated(
       try {
         const db = admin.firestore();
 
+        // === TRIGGER 2: Aktualizacja katalogu produktów dostawcy ===
+        // Reaguje na zmianę statusu z 'draft' na dowolny inny
+        const statusChanged = beforeData.status !== afterData.status;
+        const wasFromDraft = beforeData.status === "draft" &&
+                            afterData.status !== "draft";
+
+        if (statusChanged && wasFromDraft) {
+          await updateSupplierProductCatalog(db, orderId, afterData, logger);
+        }
+
+        // === TRIGGER 1: Aktualizacja cen partii magazynowych ===
         // Sprawdź czy są zmiany w pozycjach lub dodatkowych kosztach
         const itemsChanged = JSON.stringify(beforeData.items) !==
                             JSON.stringify(afterData.items);

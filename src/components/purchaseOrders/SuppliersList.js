@@ -20,7 +20,8 @@ import {
   Error as ErrorIcon,
   Warning as WarningIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  BuildCircle as BuildCircleIcon
 } from '@mui/icons-material';
 import { getAllSuppliers, deleteSupplier } from '../../services/supplierService';
 import { useNotification } from '../../hooks/useNotification';
@@ -32,6 +33,7 @@ import {
   previewSuppliersImport,
   importSuppliersFromCSV
 } from '../../services/supplierExportService';
+import { rebuildAllSupplierCatalogs } from '../../services/supplierProductService';
 
 const SuppliersList = () => {
   const { t } = useTranslation();
@@ -50,6 +52,9 @@ const SuppliersList = () => {
   // Stany dla paginacji
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  
+  // Stan dla przebudowy katalogów
+  const [rebuildingCatalogs, setRebuildingCatalogs] = useState(false);
   
   // Stany dla eksportu/importu
   const [exporting, setExporting] = useState(false);
@@ -253,6 +258,26 @@ const SuppliersList = () => {
     }
   };
   
+  // === PRZEBUDOWA KATALOGÓW DOSTAWCÓW ===
+  const handleRebuildAllCatalogs = async () => {
+    try {
+      setRebuildingCatalogs(true);
+      const result = await rebuildAllSupplierCatalogs();
+      showSuccess(
+        t('suppliers.catalog.rebuildAllSuccess', {
+          products: result.updated,
+          orders: result.ordersProcessed,
+          suppliers: result.suppliersProcessed
+        })
+      );
+    } catch (error) {
+      console.error('Błąd podczas przebudowy katalogów:', error);
+      showError(t('suppliers.catalog.rebuildAllFailed'));
+    } finally {
+      setRebuildingCatalogs(false);
+    }
+  };
+  
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -301,6 +326,23 @@ const SuppliersList = () => {
               onClick={handleDownloadTemplate}
             >
               {t('suppliers.actions.template', 'Szablon')}
+            </Button>
+          </Tooltip>
+          
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+          
+          <Tooltip title={t('suppliers.catalog.rebuildAllTooltip', 'Przebuduj katalogi produktów wszystkich dostawców na podstawie istniejących zamówień zakupu')}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={rebuildingCatalogs ? <CircularProgress size={20} /> : <BuildCircleIcon />}
+              onClick={handleRebuildAllCatalogs}
+              disabled={rebuildingCatalogs}
+            >
+              {rebuildingCatalogs 
+                ? t('suppliers.catalog.rebuilding', 'Przebudowywanie...') 
+                : t('suppliers.catalog.rebuildAll', 'Przebuduj katalogi')
+              }
             </Button>
           </Tooltip>
         </Box>

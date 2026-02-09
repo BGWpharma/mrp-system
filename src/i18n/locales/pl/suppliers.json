@@ -102,5 +102,33 @@
     "unchangedList": "Bez zmian",
     "importing": "Importowanie...",
     "import": "Importuj"
+  },
+  "catalog": {
+    "title": "Katalog produktów dostawcy",
+    "noProducts": "Brak produktów w katalogu. Katalog uzupełni się automatycznie po zatwierdzeniu zamówień zakupu lub kliknij \"Przebuduj katalog\" aby zaimportować dane z istniejących PO.",
+    "noSearchResults": "Brak produktów spełniających kryteria wyszukiwania",
+    "searchPlaceholder": "Szukaj po nazwie produktu lub kodzie...",
+    "loadFailed": "Nie udało się załadować katalogu produktów",
+    "rebuild": "Przebuduj katalog",
+    "rebuilding": "Przebudowywanie...",
+    "rebuildSuccess": "Katalog przebudowany: {{products}} produktów z {{orders}} zamówień",
+    "rebuildFailed": "Nie udało się przebudować katalogu",
+    "refresh": "Odśwież",
+    "supplierCode": "Kod dostawcy",
+    "priceUp": "Cena wyższa niż średnia",
+    "priceDown": "Cena niższa niż średnia",
+    "columns": {
+      "product": "Produkt",
+      "lastPrice": "Ostatnia cena",
+      "avgPrice": "Średnia cena",
+      "priceRange": "Zakres cen",
+      "totalOrdered": "Zamówiono łącznie",
+      "orderCount": "Ilość zamówień",
+      "lastOrder": "Ostatnie zamówienie"
+    },
+    "rebuildAll": "Przebuduj katalogi",
+    "rebuildAllTooltip": "Przebuduj katalogi produktów wszystkich dostawców na podstawie istniejących zamówień zakupu",
+    "rebuildAllSuccess": "Katalogi przebudowane: {{products}} produktów z {{orders}} zamówień dla {{suppliers}} dostawców",
+    "rebuildAllFailed": "Nie udało się przebudować katalogów dostawców"
   }
 }

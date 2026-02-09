@@ -102,5 +102,33 @@
     "unchangedList": "Unchanged",
     "importing": "Importing...",
     "import": "Import"
+  },
+  "catalog": {
+    "title": "Supplier Product Catalog",
+    "noProducts": "No products in catalog. The catalog will update automatically when purchase orders are confirmed, or click \"Rebuild catalog\" to import data from existing POs.",
+    "noSearchResults": "No products match the search criteria",
+    "searchPlaceholder": "Search by product name or code...",
+    "loadFailed": "Failed to load product catalog",
+    "rebuild": "Rebuild catalog",
+    "rebuilding": "Rebuilding...",
+    "rebuildSuccess": "Catalog rebuilt: {{products}} products from {{orders}} orders",
+    "rebuildFailed": "Failed to rebuild catalog",
+    "refresh": "Refresh",
+    "supplierCode": "Supplier code",
+    "priceUp": "Price above average",
+    "priceDown": "Price below average",
+    "columns": {
+      "product": "Product",
+      "lastPrice": "Last Price",
+      "avgPrice": "Average Price",
+      "priceRange": "Price Range",
+      "totalOrdered": "Total Ordered",
+      "orderCount": "Orders",
+      "lastOrder": "Last Order"
+    },
+    "rebuildAll": "Rebuild catalogs",
+    "rebuildAllTooltip": "Rebuild product catalogs for all suppliers based on existing purchase orders",
+    "rebuildAllSuccess": "Catalogs rebuilt: {{products}} products from {{orders}} orders for {{suppliers}} suppliers",
+    "rebuildAllFailed": "Failed to rebuild supplier catalogs"
   }
 }
