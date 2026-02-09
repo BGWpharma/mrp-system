@@ -413,7 +413,7 @@ const EcoReportPage = () => {
                         <TableCell>{row.supplierName}</TableCell>
                         <TableCell>{row.address}</TableCell>
                         <TableCell>{row.productType}</TableCell>
-                        <TableCell align="right">{row.rawQuantity?.toFixed(3)}</TableCell>
+                        <TableCell align="right">{row.quantity?.toFixed(3)}</TableCell>
                         <TableCell>{row.unit}</TableCell>
                         <TableCell sx={{ bgcolor: 'warning.50' }}>{row.certAuthority || '—'}</TableCell>
                         <TableCell sx={{ bgcolor: 'warning.50' }}>{row.certNumber || '—'}</TableCell>

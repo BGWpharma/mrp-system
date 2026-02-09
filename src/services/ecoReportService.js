@@ -19,6 +19,7 @@ import {
 import { db } from './firebase/config';
 import { formatDateForExport } from '../utils/exportUtils';
 import ExcelJS from 'exceljs';
+import i18n from '../i18n';
 
 // Kolekcje Firebase
 const SUPPLIERS_COLLECTION = 'suppliers';
@@ -350,9 +351,22 @@ const isProductionConsumption = (tx) => {
  * ISSUE po dacie → dodaj z powrotem (bo były odjęte po interesującej nas dacie)
  * adjustment-add po dacie → odejmij
  * adjustment-remove po dacie → dodaj z powrotem
+ * 
+ * UWAGA: Korekty danych historycznych (ADJUSTMENT, STOCKTAKING) datowane PO końcu
+ * okresu raportowego (reportEndDate) NIE są cofane — traktowane jako naprawy danych,
+ * które powinny być uwzględnione w obliczeniach historycznych.
+ * 
+ * @param {string} itemId - ID produktu
+ * @param {number} currentQuantity - aktualny stan w bazie
+ * @param {Array} transactions - wszystkie transakcje
+ * @param {Date} targetDate - data, na którą obliczamy stan
+ * @param {Date|null} reportEndDate - koniec okresu raportowego (korekty po tej dacie nie są cofane)
  */
-const calculateStockAtDate = (itemId, currentQuantity, transactions, targetDate) => {
+const calculateStockAtDate = (itemId, currentQuantity, transactions, targetDate, reportEndDate = null) => {
   let stock = currentQuantity || 0;
+
+  // Typy transakcji uznawane za korekty/naprawy danych historycznych
+  const DATA_REPAIR_TYPES = ['ADJUSTMENT-ADD', 'ADJUSTMENT-REMOVE', 'STOCKTAKING-COMPLETED'];
 
   // Filtruj transakcje po targetDate dla danego itemu
   const futureTransactions = transactions.filter(tx => {
@@ -364,6 +378,17 @@ const calculateStockAtDate = (itemId, currentQuantity, transactions, targetDate)
   for (const tx of futureTransactions) {
     const qty = parseFloat(tx.quantity) || 0;
     const type = normalizeTransactionType(tx.type);
+
+    // Korekty (ADJUSTMENT, STOCKTAKING) datowane PO końcu okresu raportowego
+    // to naprawy danych historycznych — NIE cofaj ich, bo odzwierciedlają
+    // faktyczny stan, który był błędnie zapisany w systemie.
+    if (reportEndDate && DATA_REPAIR_TYPES.includes(type)) {
+      const txDate = safeConvertDate(tx.createdAt) || safeConvertDate(tx.transactionDate);
+      if (txDate && txDate > reportEndDate) {
+        continue; // pomiń korektę po okresie raportowym
+      }
+    }
+
     switch (type) {
       case 'RECEIVE':
       case 'ADJUSTMENT-ADD':
@@ -393,7 +418,7 @@ const calculateStockAtDate = (itemId, currentQuantity, transactions, targetDate)
  *          Jednostka cert. | Nr certyfikatu | Certyfikat ważny od...do...
  */
 const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems) => {
-  // Grupuj PO wg dostawcy - tylko surowce
+  // Grupuj PO wg dostawcy - surowce i opakowania jednostkowe
   const supplierProducts = {};
 
   for (const po of purchaseOrders) {
@@ -405,13 +430,14 @@ const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems) => {
       const itemId = item.itemId || item.inventoryItemId;
       const inventoryItem = itemId ? inventoryItems[itemId] : null;
       
-      // Filtruj tylko surowce
-      const isRawMaterial = inventoryItem && (
+      // Filtruj surowce i opakowania jednostkowe
+      const isRelevantItem = inventoryItem && (
         inventoryItem.isRawMaterial === true || 
         inventoryItem.type === 'raw' || 
-        inventoryItem.category === 'Surowce'
+        inventoryItem.category === 'Surowce' ||
+        inventoryItem.category === 'Opakowania jednostkowe'
       );
-      if (!isRawMaterial) continue;
+      if (!isRelevantItem) continue;
 
       const itemName = item.name || inventoryItem?.name || 'Nieznany';
       const unit = item.unit || inventoryItem?.unit || 'kg';
@@ -442,18 +468,17 @@ const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems) => {
     const productList = Object.values(products);
 
     for (const product of productList) {
+      const qty = parseFloat(product.totalQuantity) || 0;
       rows.push({
         supplierName: supplier.name || '',
         address: formatSupplierAddress(supplier),
         productType: product.name,
-        quantityInTons: convertToTons(product.totalQuantity, product.unit),
+        quantity: qty,
+        unit: product.unit || '',
         certAuthority: supplier.ecoCertAuthority || '', // wymaga rozszerzenia modelu
         certNumber: supplier.ecoCertNumber || '',       // wymaga rozszerzenia modelu
         certValidFrom: supplier.ecoCertValidFrom ? formatDateForExport(safeConvertDate(supplier.ecoCertValidFrom)) : '',
         certValidTo: supplier.ecoCertValidTo ? formatDateForExport(safeConvertDate(supplier.ecoCertValidTo)) : '',
-        // Surowe dane do ręcznej edycji
-        unit: product.unit,
-        rawQuantity: product.totalQuantity
       });
     }
   }
@@ -584,11 +609,13 @@ const generateRawMaterialsData = (
     // ponieważ product.quantity w bazie odzwierciedla efekt WSZYSTKICH transakcji.
     // Gdybyśmy cofali tylko validTransactions, efekty osierooconych tx
     // pozostałyby "wpieczone" w stan historyczny.
+    // dateTo jako reportEndDate → korekty po okresie raportowym nie są cofane
     const openingStock = calculateStockAtDate(
       itemId, 
       material.quantity || 0, 
       allTransactions, 
-      dateFrom
+      dateFrom,
+      dateTo
     );
 
     // Zakup surowca - TYLKO transakcje RECEIVE powiązane z PO (source='purchase' lub orderId)
@@ -680,18 +707,35 @@ const generateRawMaterialsData = (
       .filter(tx => isIssueTransaction(tx) && !isProductionRelated(tx) && tx.referenceId)
       .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
 
-    // Końcowy stan magazynowy (allTransactions — patrz komentarz przy openingStock)
-    const closingStock = calculateStockAtDate(
+    // Końcowy stan magazynowy — PODWÓJNA METODA z ochroną przed zawyżeniem
+    //
+    // Problem: calculateStockAtDate cofa transakcje od aktualnego stanu w bazie.
+    // Gdy brakuje transakcji ISSUE (np. bug konsumpcji przy transporcie/CMR),
+    // lub korekty ręczne mają datę po dateTo — wynik jest zawyżony.
+    //
+    // Rozwiązanie: obliczamy dwoma metodami i bierzemy niższą wartość:
+    // 1) Transakcyjna: cofanie od aktualnego stanu (może być zawyżona)
+    // 2) Bilansowa: openingStock + przychody - rozchody (niezależna od aktualnego stanu)
+    //
+    // Jeśli transakcyjna > bilansowa → brakujące ISSUE → bierzemy bilansową
+    // Jeśli transakcyjna < bilansowa → realne straty/ubytki → bierzemy transakcyjną
+
+    const transactionBasedClosing = calculateStockAtDate(
       itemId,
       material.quantity || 0,
       allTransactions,
+      dateTo,
       dateTo
     );
 
-    // Inne rozchody - OBLICZANE RESIDUALNIE z bilansu
-    // Formuła: otherExpenses = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales - closingStock
-    // Dzięki temu bilans zawsze się zgadza i nie ma podwójnego liczenia.
-    const otherExpenses = Math.max(0, openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales - closingStock);
+    const balanceBasedClosing = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales;
+
+    const closingStock = Math.max(0, Math.min(transactionBasedClosing, balanceBasedClosing));
+
+    // Inne rozchody = różnica między bilansem (bez strat) a faktycznym stanem końcowym
+    // Gdy transakcyjna < bilansowa: straty = balanceBasedClosing - transactionBasedClosing
+    // Gdy transakcyjna >= bilansowa: straty = 0 (brak strat lub brakujące ISSUE)
+    const otherExpenses = Math.max(0, parseFloat((balanceBasedClosing - closingStock).toFixed(3)));
 
     // Bilans weryfikacyjny (powinien zawsze wynosić 0 lub bliski 0 z powodu zaokrągleń)
     const calculatedClosing = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales - otherExpenses;
@@ -707,7 +751,8 @@ const generateRawMaterialsData = (
         console.log(`[ECO DETAIL]   Zakup (PO): ${purchases}, Inne przychody: ${otherIncome}, Produkcja własna: ${ownProduction}`);
         console.log(`[ECO DETAIL]   Zużycie do produkcji: ${productionConsumption}`);
         console.log(`[ECO DETAIL]   Sprzedaż: ${sales}, Inne rozchody (residualne): ${otherExpenses}`);
-        console.log(`[ECO DETAIL]   Stan końcowy (z bazy): ${closingStock}, Obliczony: ${calculatedClosing}`);
+        console.log(`[ECO DETAIL]   Stan końcowy: ${closingStock} (transakcyjny: ${transactionBasedClosing.toFixed(3)}, bilansowy: ${balanceBasedClosing.toFixed(3)}, wybrany: min)`);
+        console.log(`[ECO DETAIL]   Obliczony z bilansu: ${calculatedClosing}`);
         console.log(`[ECO DETAIL]   Różnica bilansu: ${balanceDiff}`);
         
         // Pokaż WSZYSTKIE transakcje tego surowca z podziałem na kategorie
@@ -795,11 +840,13 @@ const generateFinishedProductsData = (
 
     // Początkowy stan
     // WAŻNE: allTransactions (włącznie z osieroc.) — patrz komentarz w generateRawMaterialsData
+    // dateTo jako reportEndDate → korekty po okresie raportowym nie są cofane
     const openingStock = calculateStockAtDate(
       itemId,
       product.quantity || 0,
       allTransactions,
-      dateFrom
+      dateFrom,
+      dateTo
     );
 
     // Zakup produktu - TYLKO RECEIVE powiązane z PO
@@ -916,17 +963,22 @@ const generateFinishedProductsData = (
       return total;
     })();
 
-    // Końcowy stan (allTransactions — patrz komentarz przy openingStock)
-    const closingStock = calculateStockAtDate(
+    // Końcowy stan — PODWÓJNA METODA z ochroną przed zawyżeniem
+    // (identyczna logika jak w generateRawMaterialsData — patrz komentarz tam)
+    const transactionBasedClosing = calculateStockAtDate(
       itemId,
       product.quantity || 0,
       allTransactions,
+      dateTo,
       dateTo
     );
 
-    // Inne rozchody - OBLICZANE RESIDUALNIE z bilansu
-    // otherExpenses = openingStock + purchases + otherIncome + ownProduction - sales - closingStock
-    const otherExpenses = Math.max(0, openingStock + purchases + otherIncome + ownProduction - sales - closingStock);
+    const balanceBasedClosing = openingStock + purchases + otherIncome + ownProduction - sales;
+
+    const closingStock = Math.max(0, Math.min(transactionBasedClosing, balanceBasedClosing));
+
+    // Inne rozchody = straty/ubytki (gdy transakcyjna < bilansowa)
+    const otherExpenses = Math.max(0, parseFloat((balanceBasedClosing - closingStock).toFixed(3)));
 
     // Znajdź powiązane MO dla szczegółów strat
     const relatedMOs = completedTasks.filter(task => {
@@ -1179,24 +1231,33 @@ export const exportEcoReportToExcel = async (data, filters) => {
     alignment: { horizontal: 'left', vertical: 'middle' }
   };
 
+  // Funkcja tłumaczenia dla namespace ecoReport
+  const t = i18n.getFixedT(null, 'ecoReport');
+
   // ============================================================
   // TAB 1 - DOSTAWCY
   // ============================================================
-  const ws1 = workbook.addWorksheet('Tab.1 Dostawcy');
+  const ws1 = workbook.addWorksheet(t('excel.sheets.suppliers'));
   
   // Tytuł
-  ws1.mergeCells('A1:G1');
-  ws1.getCell('A1').value = 'Tab.1 do kategorii przetwórstwo/obrót/import';
+  ws1.mergeCells('A1:H1');
+  ws1.getCell('A1').value = t('excel.tab1.title');
   ws1.getCell('A1').style = titleStyle;
 
-  ws1.mergeCells('A2:G2');
-  ws1.getCell('A2').value = `Informacja o dostawcach i zakupionych produktach ekologicznych za okres ${periodFrom} do ${periodTo}`;
+  ws1.mergeCells('A2:H2');
+  ws1.getCell('A2').value = t('excel.tab1.subtitle', { periodFrom, periodTo });
   ws1.getCell('A2').style = { ...titleStyle, font: { ...titleStyle.font, size: 11 } };
 
   // Nagłówki
   const supplierHeaders = [
-    'Nazwa dostawcy', 'Adres', 'Rodzaj produktu', 'Ilość w tonach',
-    'Jednostka cert.', 'Nr certyfikatu', 'Certyfikat ważny od....do....'
+    t('excel.tab1.headers.supplierName'),
+    t('excel.tab1.headers.address'),
+    t('excel.tab1.headers.productType'),
+    t('excel.tab1.headers.quantity'),
+    t('excel.tab1.headers.unit'),
+    t('excel.tab1.headers.certAuthority'),
+    t('excel.tab1.headers.certNumber'),
+    t('excel.tab1.headers.certValidity')
   ];
   
   const headerRow1 = ws1.getRow(4);
@@ -1215,7 +1276,8 @@ export const exportEcoReportToExcel = async (data, filters) => {
       row.supplierName,
       row.address,
       row.productType,
-      row.quantityInTons,
+      row.quantity,
+      row.unit,
       row.certAuthority,
       row.certNumber,
       row.certValidFrom && row.certValidTo ? `${row.certValidFrom} - ${row.certValidTo}` : ''
@@ -1232,7 +1294,7 @@ export const exportEcoReportToExcel = async (data, filters) => {
   const minRows1 = Math.max(15, data.suppliersData.length);
   for (let i = data.suppliersData.length; i < minRows1; i++) {
     const emptyRow = ws1.getRow(row1Idx);
-    for (let c = 1; c <= 7; c++) {
+    for (let c = 1; c <= 8; c++) {
       emptyRow.getCell(c).style = cellStyle;
     }
     row1Idx++;
@@ -1240,44 +1302,48 @@ export const exportEcoReportToExcel = async (data, filters) => {
 
   // Stopka z informacją
   row1Idx += 1;
-  ws1.mergeCells(`A${row1Idx}:G${row1Idx}`);
-  ws1.getCell(`A${row1Idx}`).value = 'rozliczenia przepływu dokonuje się od ostatniej przeprowadzonej kontroli obligatoryjnej do dnia kontroli zaplanowanej w bieżącym roku; jeżeli produkcja na poziomie zakładu jest rozliczana w okresach miesięcznych za koniec okresu rozliczenia produktu można uznać ostatni dzień miesiąca poprzedzającego kontrolę;';
+  ws1.mergeCells(`A${row1Idx}:H${row1Idx}`);
+  ws1.getCell(`A${row1Idx}`).value = t('excel.tab1.footnote1');
   ws1.getCell(`A${row1Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
   row1Idx++;
-  ws1.mergeCells(`A${row1Idx}:G${row1Idx}`);
-  ws1.getCell(`A${row1Idx}`).value = 'wszelkich niezbędne informacje do wypełnienia powyższej tabeli znajdą Państwo na kopiach certyfikatów dostawców, które powinny być udostępnione do wglądu na dzień kontroli.';
+  ws1.mergeCells(`A${row1Idx}:H${row1Idx}`);
+  ws1.getCell(`A${row1Idx}`).value = t('excel.tab1.footnote2');
   ws1.getCell(`A${row1Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
 
   // Szerokości kolumn
   ws1.columns = [
     { width: 25 }, { width: 35 }, { width: 22 }, { width: 15 },
-    { width: 18 }, { width: 18 }, { width: 22 }
+    { width: 12 }, { width: 18 }, { width: 18 }, { width: 22 }
   ];
 
   // ============================================================
   // TAB 2 - SUROWCE
   // ============================================================
-  const ws2 = workbook.addWorksheet('Tab.2 Surowce');
+  const ws2 = workbook.addWorksheet(t('excel.sheets.rawMaterials'));
 
   ws2.mergeCells('A1:I1');
-  ws2.getCell('A1').value = 'Tab.2 do kategorii przetwórstwo';
+  ws2.getCell('A1').value = t('excel.tab2.title');
   ws2.getCell('A1').style = titleStyle;
 
   ws2.mergeCells('A2:I2');
-  ws2.getCell('A2').value = `Rozliczenie przepływu surowców ekologicznych za okres od ${periodFrom} do ${periodTo}`;
+  ws2.getCell('A2').value = t('excel.tab2.subtitle', { periodFrom, periodTo });
   ws2.getCell('A2').style = { ...titleStyle, font: { ...titleStyle.font, size: 11 } };
 
   ws2.mergeCells('A3:I3');
-  ws2.getCell('A3').value = 'Tabelę należy wypełniać w jednostkach wagowych lub objętościowych';
+  ws2.getCell('A3').value = t('excel.tab2.instruction');
   ws2.getCell('A3').style = { font: { size: 9, italic: true, name: 'Calibri' } };
 
   // Nagłówki
   const rawMaterialHeaders = [
-    'surowce*', 'początkowy stan\nmagazynowy', 'zakup surowca\n(sumaryczny zakup w\ndanym asortymencie)',
-    'inne przychody\n(ręczne dodania,\nkorekty na plus)',
-    'produkcja własna (w\nprzypadku\npółfabrykatów**)', 'zużycie surowca do\nprodukcji',
-    'sprzedaż surowca', 'inne rozchody surowca\n(np.straty nadzwyczajne,\nprzekazanie do produkcji\nnieekologicznej)',
-    'końcowy stan\nmagazynowy'
+    t('excel.tab2.headers.rawMaterials'),
+    t('excel.tab2.headers.openingStock'),
+    t('excel.tab2.headers.purchases'),
+    t('excel.tab2.headers.otherIncome'),
+    t('excel.tab2.headers.ownProduction'),
+    t('excel.tab2.headers.consumption'),
+    t('excel.tab2.headers.sales'),
+    t('excel.tab2.headers.otherExpenses'),
+    t('excel.tab2.headers.closingStock')
   ];
 
   const headerRow2 = ws2.getRow(5);
@@ -1329,11 +1395,11 @@ export const exportEcoReportToExcel = async (data, filters) => {
   // Stopki
   row2Idx += 1;
   ws2.mergeCells(`A${row2Idx}:I${row2Idx}`);
-  ws2.getCell(`A${row2Idx}`).value = '*za surowiec uznaje się produkt do dalszego przetwarzania;';
+  ws2.getCell(`A${row2Idx}`).value = t('excel.tab2.footnote1');
   ws2.getCell(`A${row2Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
   row2Idx++;
   ws2.mergeCells(`A${row2Idx}:I${row2Idx}`);
-  ws2.getCell(`A${row2Idx}`).value = '**półfabrykat wytworzony na poziomie zakładu powinien zostać ujęty w tabeli surowce w przypadku,gdy podlega dalszemu przetworzeniu; natomiast jeżeli jest sprzedawany/wydawany na zewnątrz traktowany jest jako wyrób gotowy i powinien się znaleźć w tabeli 3 (wyroby gotowe)';
+  ws2.getCell(`A${row2Idx}`).value = t('excel.tab2.footnote2');
   ws2.getCell(`A${row2Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
 
   // Szerokości kolumn
@@ -1345,29 +1411,32 @@ export const exportEcoReportToExcel = async (data, filters) => {
   // ============================================================
   // TAB 3 - WYROBY GOTOWE
   // ============================================================
-  const ws3 = workbook.addWorksheet('Tab.3 Wyroby gotowe');
+  const ws3 = workbook.addWorksheet(t('excel.sheets.finishedProducts'));
 
   ws3.mergeCells('A1:H1');
-  ws3.getCell('A1').value = 'Tab.3 do kategorii przetwósrwto/obrót/import';
+  ws3.getCell('A1').value = t('excel.tab3.title');
   ws3.getCell('A1').style = titleStyle;
 
   ws3.mergeCells('A2:H2');
-  ws3.getCell('A2').value = `Rozliczenie przepływu wyrobu gotowy ekologicznych za okres od ${periodFrom} do ${periodTo}`;
+  ws3.getCell('A2').value = t('excel.tab3.subtitle', { periodFrom, periodTo });
   ws3.getCell('A2').style = { ...titleStyle, font: { ...titleStyle.font, size: 11 } };
 
   ws3.mergeCells('A3:H3');
 
   ws3.mergeCells('A4:H4');
-  ws3.getCell('A4').value = 'Dane należy podawać w jednostkach wagowych lub objętościowych. W przypadku danych w sztukach należy dołączyć informacje o gramaturze / objętości opakowania poszczególnych produktów.';
+  ws3.getCell('A4').value = t('excel.tab3.instruction');
   ws3.getCell('A4').style = { font: { size: 9, italic: true, name: 'Calibri' } };
 
   // Nagłówki
   const finishedHeaders = [
-    'produkt', 'początkowy stan\nmagazynowy', 'zakup produktu\n(sumaryczny zakup w\ndanym asortymencie)',
-    'inne przychody\n(ręczne dodania,\nkorekty na plus)',
-    'producja własna', 'sprzedaż\nproduktu', 
-    'inne rozchody produktu\n(np.straty nadzwyczajne)',
-    'końcowy stan\nmagazynowy'
+    t('excel.tab3.headers.product'),
+    t('excel.tab3.headers.openingStock'),
+    t('excel.tab3.headers.purchases'),
+    t('excel.tab3.headers.otherIncome'),
+    t('excel.tab3.headers.ownProduction'),
+    t('excel.tab3.headers.sales'),
+    t('excel.tab3.headers.otherExpenses'),
+    t('excel.tab3.headers.closingStock')
   ];
 
   const headerRow3 = ws3.getRow(5);
@@ -1417,7 +1486,7 @@ export const exportEcoReportToExcel = async (data, filters) => {
   // Stopka
   row3Idx += 1;
   ws3.mergeCells(`A${row3Idx}:H${row3Idx}`);
-  ws3.getCell(`A${row3Idx}`).value = 'Tabela obejmuje asortyment wytworzony w zakładzie i/lub zakupiony celem dalszego wprowadzenia do obrotu.';
+  ws3.getCell(`A${row3Idx}`).value = t('excel.tab3.footnote');
   ws3.getCell(`A${row3Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
 
   // Szerokości kolumn
@@ -1434,7 +1503,10 @@ export const exportEcoReportToExcel = async (data, filters) => {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
   });
   
-  const filename = `Raport_ECO_${periodFrom.replace(/\./g, '-')}_${periodTo.replace(/\./g, '-')}.xlsx`;
+  const filename = t('excel.filename', { 
+    periodFrom: periodFrom.replace(/\./g, '-'), 
+    periodTo: periodTo.replace(/\./g, '-') 
+  });
   
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -1448,7 +1520,7 @@ export const exportEcoReportToExcel = async (data, filters) => {
   return {
     success: true,
     filename,
-    message: `Wygenerowano raport ECO: ${filename}`
+    message: t('excel.successMessage', { filename })
   };
 };
 

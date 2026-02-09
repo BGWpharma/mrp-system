@@ -78,5 +78,64 @@
     "invalidDateRange": "Data początkowa nie może być późniejsza niż data końcowa",
     "fetchFailed": "Nie udało się pobrać danych raportu: {{error}}",
     "exportFailed": "Nie udało się wyeksportować raportu: {{error}}"
+  },
+  "excel": {
+    "sheets": {
+      "suppliers": "Tab.1 Dostawcy",
+      "rawMaterials": "Tab.2 Surowce",
+      "finishedProducts": "Tab.3 Wyroby gotowe"
+    },
+    "tab1": {
+      "title": "Tab.1 do kategorii przetwórstwo/obrót/import",
+      "subtitle": "Informacja o dostawcach i zakupionych produktach ekologicznych za okres {{periodFrom}} do {{periodTo}}",
+      "headers": {
+        "supplierName": "Nazwa dostawcy",
+        "address": "Adres",
+        "productType": "Rodzaj produktu",
+        "quantity": "Ilość",
+        "unit": "Jednostka",
+        "certAuthority": "Jednostka cert.",
+        "certNumber": "Nr certyfikatu",
+        "certValidity": "Certyfikat ważny od....do...."
+      },
+      "footnote1": "rozliczenia przepływu dokonuje się od ostatniej przeprowadzonej kontroli obligatoryjnej do dnia kontroli zaplanowanej w bieżącym roku; jeżeli produkcja na poziomie zakładu jest rozliczana w okresach miesięcznych za koniec okresu rozliczenia produktu można uznać ostatni dzień miesiąca poprzedzającego kontrolę;",
+      "footnote2": "wszelkich niezbędne informacje do wypełnienia powyższej tabeli znajdą Państwo na kopiach certyfikatów dostawców, które powinne być udostępnione do wglądu na dzień kontroli."
+    },
+    "tab2": {
+      "title": "Tab.2 do kategorii przetwórstwo",
+      "subtitle": "Rozliczenie przepływu surowców ekologicznych za okres od {{periodFrom}} do {{periodTo}}",
+      "instruction": "Tabelę należy wypełniać w jednostkach wagowych lub objętościowych",
+      "headers": {
+        "rawMaterials": "surowce*",
+        "openingStock": "początkowy stan\nmagazynowy",
+        "purchases": "zakup surowca\n(sumaryczny zakup w\ndanym asortymencie)",
+        "otherIncome": "inne przychody\n(ręczne dodania,\nkorekty na plus)",
+        "ownProduction": "produkcja własna (w\nprzypadku\npółfabrykatów**)",
+        "consumption": "zużycie surowca do\nprodukcji",
+        "sales": "sprzedaż surowca",
+        "otherExpenses": "inne rozchody surowca\n(np.straty nadzwyczajne,\nprzekazanie do produkcji\nnieekologicznej)",
+        "closingStock": "końcowy stan\nmagazynowy"
+      },
+      "footnote1": "*za surowiec uznaje się produkt do dalszego przetwarzania;",
+      "footnote2": "**półfabrykat wytworzony na poziomie zakładu powinien zostać ujęty w tabeli surowce w przypadku,gdy podlega dalszemu przetworzeniu; natomiast jeżeli jest sprzedawany/wydawany na zewnątrz traktowany jest jako wyrób gotowy i powinien się znaleźć w tabeli 3 (wyroby gotowe)"
+    },
+    "tab3": {
+      "title": "Tab.3 do kategorii przetwórstwo/obrót/import",
+      "subtitle": "Rozliczenie przepływu wyrobów gotowych ekologicznych za okres od {{periodFrom}} do {{periodTo}}",
+      "instruction": "Dane należy podawać w jednostkach wagowych lub objętościowych. W przypadku danych w sztukach należy dołączyć informacje o gramaturze / objętości opakowania poszczególnych produktów.",
+      "headers": {
+        "product": "produkt",
+        "openingStock": "początkowy stan\nmagazynowy",
+        "purchases": "zakup produktu\n(sumaryczny zakup w\ndanym asortymencie)",
+        "otherIncome": "inne przychody\n(ręczne dodania,\nkorekty na plus)",
+        "ownProduction": "produkcja własna",
+        "sales": "sprzedaż\nproduktu",
+        "otherExpenses": "inne rozchody produktu\n(np.straty nadzwyczajne)",
+        "closingStock": "końcowy stan\nmagazynowy"
+      },
+      "footnote": "Tabela obejmuje asortyment wytworzony w zakładzie i/lub zakupiony celem dalszego wprowadzenia do obrotu."
+    },
+    "filename": "Raport_ECO_{{periodFrom}}_{{periodTo}}.xlsx",
+    "successMessage": "Wygenerowano raport ECO: {{filename}}"
   }
 }

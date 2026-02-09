@@ -78,5 +78,64 @@
     "invalidDateRange": "Start date cannot be later than end date",
     "fetchFailed": "Failed to fetch report data: {{error}}",
     "exportFailed": "Failed to export report: {{error}}"
+  },
+  "excel": {
+    "sheets": {
+      "suppliers": "Tab.1 Suppliers",
+      "rawMaterials": "Tab.2 Raw Materials",
+      "finishedProducts": "Tab.3 Finished Products"
+    },
+    "tab1": {
+      "title": "Tab.1 for processing/trade/import category",
+      "subtitle": "Information about suppliers and purchased organic products for the period {{periodFrom}} to {{periodTo}}",
+      "headers": {
+        "supplierName": "Supplier name",
+        "address": "Address",
+        "productType": "Product type",
+        "quantity": "Quantity",
+        "unit": "Unit",
+        "certAuthority": "Cert. authority",
+        "certNumber": "Certificate no.",
+        "certValidity": "Certificate valid from....to...."
+      },
+      "footnote1": "the flow settlement is carried out from the last mandatory inspection to the date of the inspection planned for the current year; if production at the plant level is settled on a monthly basis, the last day of the month preceding the inspection can be considered the end of the product settlement period;",
+      "footnote2": "all necessary information to fill in the above table can be found on copies of supplier certificates, which should be available for inspection on the day of the audit."
+    },
+    "tab2": {
+      "title": "Tab.2 for processing category",
+      "subtitle": "Organic raw materials flow settlement for the period from {{periodFrom}} to {{periodTo}}",
+      "instruction": "Fill the table in weight or volume units",
+      "headers": {
+        "rawMaterials": "raw materials*",
+        "openingStock": "opening\nstock",
+        "purchases": "raw material purchase\n(total purchase in\na given assortment)",
+        "otherIncome": "other income\n(manual additions,\npositive corrections)",
+        "ownProduction": "own production (in\ncase of\nsemi-finished products**)",
+        "consumption": "raw material\nconsumption\nfor production",
+        "sales": "raw material\nsales",
+        "otherExpenses": "other raw material expenses\n(e.g. extraordinary losses,\ntransfer to non-organic\nproduction)",
+        "closingStock": "closing\nstock"
+      },
+      "footnote1": "*a raw material is a product intended for further processing;",
+      "footnote2": "**a semi-finished product manufactured at the plant level should be included in the raw materials table if it is subject to further processing; however, if it is sold/released externally, it is treated as a finished product and should be included in table 3 (finished products)"
+    },
+    "tab3": {
+      "title": "Tab.3 for processing/trade/import category",
+      "subtitle": "Organic finished products flow settlement for the period from {{periodFrom}} to {{periodTo}}",
+      "instruction": "Data should be provided in weight or volume units. In the case of data in pieces, information about the weight/volume of the packaging of individual products should be attached.",
+      "headers": {
+        "product": "product",
+        "openingStock": "opening\nstock",
+        "purchases": "product purchase\n(total purchase in\na given assortment)",
+        "otherIncome": "other income\n(manual additions,\npositive corrections)",
+        "ownProduction": "own\nproduction",
+        "sales": "product\nsales",
+        "otherExpenses": "other product expenses\n(e.g. extraordinary losses)",
+        "closingStock": "closing\nstock"
+      },
+      "footnote": "The table covers the assortment manufactured at the plant and/or purchased for further marketing."
+    },
+    "filename": "ECO_Report_{{periodFrom}}_{{periodTo}}.xlsx",
+    "successMessage": "ECO report generated: {{filename}}"
   }
 }
