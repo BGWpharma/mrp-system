@@ -17,6 +17,11 @@ const {admin} = require("../config");
 /**
  * Aktualizuje katalog produktów dostawcy na podstawie danych PO
  * Wywoływana gdy PO zmienia status z "draft" na inny
+ *
+ * @param {Object} db - Firestore database instance
+ * @param {string} orderId - Purchase order ID
+ * @param {Object} poData - Purchase order data
+ * @param {Object} logger - Logger instance
  */
 async function updateSupplierProductCatalog(db, orderId, poData, logger) {
   const supplierId = poData.supplierId;

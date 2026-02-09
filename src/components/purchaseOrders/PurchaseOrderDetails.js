@@ -1994,6 +1994,7 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                     </Typography>
                                     
                                     {getReservationsByItemId(item.id).length > 0 ? (
+                                      <>
                                       <List dense>
                                         {getReservationsByItemId(item.id).map((reservation) => {
                                           // Określ kolor statusu
@@ -2079,6 +2080,44 @@ const PurchaseOrderDetails = ({ orderId }) => {
                                           );
                                         })}
                                       </List>
+                                      {/* Suma rezerwacji PO - wyświetlana gdy więcej niż 1 rezerwacja */}
+                                      {getReservationsByItemId(item.id).length > 1 && (() => {
+                                        const reservations = getReservationsByItemId(item.id);
+                                        const totalQuantity = reservations.reduce((sum, r) => sum + (r.reservedQuantity || 0), 0);
+                                        const totalValue = reservations.reduce((sum, r) => sum + ((r.reservedQuantity || 0) * (r.unitPrice || 0)), 0);
+                                        const totalDelivered = reservations.reduce((sum, r) => sum + (r.deliveredQuantity || 0), 0);
+                                        const currency = reservations[0]?.currency || purchaseOrder.currency;
+                                        
+                                        return (
+                                          <Box sx={{ 
+                                            mt: 1, 
+                                            p: 1.5, 
+                                            bgcolor: 'primary.50', 
+                                            borderRadius: 1, 
+                                            border: '1px solid',
+                                            borderColor: 'primary.200',
+                                            backgroundColor: 'rgba(25, 118, 210, 0.08)'
+                                          }}>
+                                            <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                                              Suma rezerwacji ({reservations.length})
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                                              <Typography variant="body2" color="text.primary">
+                                                Łączna ilość: <strong>{totalQuantity} {item.unit}</strong>
+                                              </Typography>
+                                              <Typography variant="body2" color="text.primary">
+                                                Łączna wartość: <strong>{formatCurrency(totalValue, currency)}</strong>
+                                              </Typography>
+                                              {totalDelivered > 0 && (
+                                                <Typography variant="body2" color="success.main">
+                                                  Łącznie dostarczone: <strong>{totalDelivered} {item.unit}</strong>
+                                                </Typography>
+                                              )}
+                                            </Box>
+                                          </Box>
+                                        );
+                                      })()}
+                                      </>
                                     ) : (
                                       <Typography variant="body2" color="text.secondary">
                                         Brak rezerwacji PO dla tej pozycji

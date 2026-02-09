@@ -390,7 +390,6 @@ const Sidebar = ({ onToggle }) => {
       path: '/',
       hasSubmenu: true,
       children: [
-        { text: t('submenu.dashboard.main'), icon: <HomeIcon />, path: '/' },
         { text: t('submenu.dashboard.analytics'), icon: <InsightsIcon />, path: '/analytics' },
         { text: t('submenu.dashboard.taskboard'), icon: <TaskboardIcon />, path: '/taskboard' },
       ].sort((a, b) => a.text.localeCompare(b.text))

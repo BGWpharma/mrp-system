@@ -549,7 +549,7 @@ const suggestAccountsForInvoice = async (apiKey, invoiceData) => {
   // 1. Fetch all accounts from Firestore
   logger.info("[AccountSuggestion] Fetching accounts from Firestore...");
   const accountsSnapshot = await db
-      .collection("accounts")
+      .collection("BookkeepingAccounts")
       .where("isActive", "==", true)
       .orderBy("accountNumber", "asc")
       .get();
