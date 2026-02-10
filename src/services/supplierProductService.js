@@ -14,7 +14,8 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { db } from './firebase/config';
+import { db, storage } from './firebase/config';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const SUPPLIER_PRODUCTS_COLLECTION = 'supplierProducts';
 const PURCHASE_ORDERS_COLLECTION = 'purchaseOrders';
@@ -46,7 +47,9 @@ export const getSupplierProducts = async (supplierId) => {
         ...data,
         lastOrderDate: data.lastOrderDate?.toDate?.() || data.lastOrderDate || null,
         firstSeenAt: data.firstSeenAt?.toDate?.() || data.firstSeenAt || null,
-        updatedAt: data.updatedAt?.toDate?.() || data.updatedAt || null
+        updatedAt: data.updatedAt?.toDate?.() || data.updatedAt || null,
+        certificateValidFrom: data.certificateValidFrom?.toDate?.() || data.certificateValidFrom || null,
+        certificateValidTo: data.certificateValidTo?.toDate?.() || data.certificateValidTo || null
       });
     });
 
@@ -84,7 +87,9 @@ export const getProductSuppliers = async (inventoryItemId) => {
         ...data,
         lastOrderDate: data.lastOrderDate?.toDate?.() || data.lastOrderDate || null,
         firstSeenAt: data.firstSeenAt?.toDate?.() || data.firstSeenAt || null,
-        updatedAt: data.updatedAt?.toDate?.() || data.updatedAt || null
+        updatedAt: data.updatedAt?.toDate?.() || data.updatedAt || null,
+        certificateValidFrom: data.certificateValidFrom?.toDate?.() || data.certificateValidFrom || null,
+        certificateValidTo: data.certificateValidTo?.toDate?.() || data.certificateValidTo || null
       });
     });
 
@@ -92,6 +97,218 @@ export const getProductSuppliers = async (inventoryItemId) => {
   } catch (error) {
     console.error('Błąd podczas pobierania dostawców produktu:', error);
     throw new Error(`Nie udało się pobrać dostawców produktu: ${error.message}`);
+  }
+};
+
+/**
+ * Typy certyfikatów dostępne w systemie (zgodne z certyfikacjami receptur)
+ */
+export const CERTIFICATE_TYPES = [
+  { value: 'eco', label: 'Eco' },
+  { value: 'halal', label: 'Halal' },
+  { value: 'kosher', label: 'Kosher' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'vege', label: 'Vegetarian' },
+  { value: 'gmp', label: 'GMP' },
+  { value: 'iso', label: 'ISO' },
+  { value: 'other', label: 'Inny' }
+];
+
+/**
+ * Aktualizuje dane certyfikatu produktu dostawcy
+ * @param {string} productId - ID rekordu supplierProduct
+ * @param {Object} certificateData - Dane certyfikatu
+ * @param {string} certificateData.certificateUnit - Jednostka certyfikatu
+ * @param {string} certificateData.certificateNumber - Nr certyfikatu
+ * @param {string} certificateData.certificateType - Typ certyfikatu (eco, halal, kosher, vegan, vege, gmp, iso, other)
+ * @param {Date|null} certificateData.certificateValidFrom - Ważny od
+ * @param {Date|null} certificateData.certificateValidTo - Ważny do
+ * @returns {Promise<Object>} - Zaktualizowany rekord
+ */
+export const updateProductCertificate = async (productId, certificateData) => {
+  try {
+    if (!productId) {
+      throw new Error('ID produktu jest wymagane');
+    }
+
+    const docRef = doc(db, SUPPLIER_PRODUCTS_COLLECTION, productId);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error('Nie znaleziono produktu w katalogu');
+    }
+
+    const updateData = {
+      certificateUnit: certificateData.certificateUnit || '',
+      certificateNumber: certificateData.certificateNumber || '',
+      certificateType: certificateData.certificateType || '',
+      certificateValidFrom: certificateData.certificateValidFrom
+        ? Timestamp.fromDate(new Date(certificateData.certificateValidFrom))
+        : null,
+      certificateValidTo: certificateData.certificateValidTo
+        ? Timestamp.fromDate(new Date(certificateData.certificateValidTo))
+        : null,
+      updatedAt: serverTimestamp()
+    };
+
+    await updateDoc(docRef, updateData);
+
+    return { id: productId, ...docSnap.data(), ...updateData };
+  } catch (error) {
+    console.error('Błąd podczas aktualizacji certyfikatu:', error);
+    throw new Error(`Nie udało się zaktualizować certyfikatu: ${error.message}`);
+  }
+};
+
+/**
+ * Przesyła plik certyfikatu PDF do Firebase Storage
+ * @param {string} supplierId - ID dostawcy
+ * @param {string} productId - ID rekordu supplierProduct
+ * @param {File} file - Plik do przesłania (PDF)
+ * @returns {Promise<Object>} - Obiekt z downloadURL i storagePath
+ */
+export const uploadCertificateFile = async (supplierId, productId, file) => {
+  try {
+    if (!supplierId || !productId) {
+      throw new Error('ID dostawcy i produktu są wymagane');
+    }
+    if (!file) {
+      throw new Error('Plik jest wymagany');
+    }
+
+    // Walidacja typu pliku
+    const allowedTypes = ['application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Dozwolony jest tylko format PDF');
+    }
+
+    // Limit rozmiaru: 10MB
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('Maksymalny rozmiar pliku to 10MB');
+    }
+
+    const timestamp = new Date().getTime();
+    const fileName = `${timestamp}_${file.name}`;
+    const storagePath = `SupplierCertificates/${supplierId}/${productId}/${fileName}`;
+
+    const fileRef = storageRef(storage, storagePath);
+    await uploadBytes(fileRef, file);
+    const downloadURL = await getDownloadURL(fileRef);
+
+    // Aktualizacja dokumentu supplierProduct
+    const docRef = doc(db, SUPPLIER_PRODUCTS_COLLECTION, productId);
+    await updateDoc(docRef, {
+      certificateFileName: file.name,
+      certificateContentType: file.type,
+      certificateStoragePath: storagePath,
+      certificateFileUrl: downloadURL,
+      certificateUploadedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    return { downloadURL, storagePath, fileName: file.name };
+  } catch (error) {
+    console.error('Błąd podczas przesyłania pliku certyfikatu:', error);
+    throw new Error(`Nie udało się przesłać pliku certyfikatu: ${error.message}`);
+  }
+};
+
+/**
+ * Usuwa plik certyfikatu z Firebase Storage i czyści pola w dokumencie
+ * @param {string} productId - ID rekordu supplierProduct
+ * @returns {Promise<void>}
+ */
+export const deleteCertificateFile = async (productId) => {
+  try {
+    if (!productId) {
+      throw new Error('ID produktu jest wymagane');
+    }
+
+    const docRef = doc(db, SUPPLIER_PRODUCTS_COLLECTION, productId);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error('Nie znaleziono produktu w katalogu');
+    }
+
+    const data = docSnap.data();
+
+    // Usuń plik z Storage jeśli istnieje
+    if (data.certificateStoragePath) {
+      const fileRef = storageRef(storage, data.certificateStoragePath);
+      try {
+        await deleteObject(fileRef);
+      } catch (storageError) {
+        console.warn('Nie można usunąć pliku z Storage:', storageError);
+      }
+    }
+
+    // Wyczyść pola pliku w dokumencie
+    await updateDoc(docRef, {
+      certificateFileName: '',
+      certificateContentType: '',
+      certificateStoragePath: '',
+      certificateFileUrl: '',
+      certificateUploadedAt: null,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Błąd podczas usuwania pliku certyfikatu:', error);
+    throw new Error(`Nie udało się usunąć pliku certyfikatu: ${error.message}`);
+  }
+};
+
+/**
+ * Pomocnicza funkcja: zbiera dane certyfikatów z istniejących rekordów katalogu
+ * @param {Array} docs - Dokumenty Firestore
+ * @returns {Map} - Mapa inventoryItemId → dane certyfikatu
+ */
+const collectCertificateData = (docs) => {
+  const certMap = new Map();
+  docs.forEach((docSnap) => {
+    const data = docSnap.data();
+    const hasAnyCertData = data.certificateUnit || data.certificateNumber ||
+      data.certificateValidFrom || data.certificateValidTo || data.certificateType ||
+      data.certificateFileUrl || data.certificateStoragePath;
+    if (hasAnyCertData) {
+      certMap.set(data.inventoryItemId, {
+        certificateUnit: data.certificateUnit || '',
+        certificateNumber: data.certificateNumber || '',
+        certificateType: data.certificateType || '',
+        certificateValidFrom: data.certificateValidFrom || null,
+        certificateValidTo: data.certificateValidTo || null,
+        certificateFileName: data.certificateFileName || '',
+        certificateContentType: data.certificateContentType || '',
+        certificateStoragePath: data.certificateStoragePath || '',
+        certificateFileUrl: data.certificateFileUrl || '',
+        certificateUploadedAt: data.certificateUploadedAt || null
+      });
+    }
+  });
+  return certMap;
+};
+
+/**
+ * Pomocnicza funkcja: przywraca dane certyfikatów do nowo utworzonych rekordów
+ * @param {string} supplierId - ID dostawcy
+ * @param {Map} certMap - Mapa inventoryItemId → dane certyfikatu
+ */
+const restoreCertificateData = async (supplierId, certMap) => {
+  if (certMap.size === 0) return;
+
+  const q = query(
+    collection(db, SUPPLIER_PRODUCTS_COLLECTION),
+    where('supplierId', '==', supplierId)
+  );
+  const snapshot = await getDocs(q);
+
+  for (const docSnap of snapshot.docs) {
+    const data = docSnap.data();
+    const certData = certMap.get(data.inventoryItemId);
+    if (certData) {
+      await updateDoc(doc(db, SUPPLIER_PRODUCTS_COLLECTION, docSnap.id), certData);
+    }
   }
 };
 
@@ -253,13 +470,15 @@ export const rebuildSupplierCatalog = async (supplierId) => {
       throw new Error('ID dostawcy jest wymagane');
     }
 
-    // 1. Usuń stare rekordy katalogu tego dostawcy
+    // 1. Zachowaj dane certyfikatów przed usunięciem
     const existingQuery = query(
       collection(db, SUPPLIER_PRODUCTS_COLLECTION),
       where('supplierId', '==', supplierId)
     );
     const existingDocs = await getDocs(existingQuery);
+    const savedCertificates = collectCertificateData(existingDocs.docs);
 
+    // 2. Usuń stare rekordy katalogu tego dostawcy
     if (!existingDocs.empty) {
       const batch = writeBatch(db);
       existingDocs.docs.forEach((docSnap) => {
@@ -268,7 +487,7 @@ export const rebuildSupplierCatalog = async (supplierId) => {
       await batch.commit();
     }
 
-    // 2. Pobierz wszystkie PO dostawcy (nie-draft)
+    // 3. Pobierz wszystkie PO dostawcy (nie-draft)
     const poQuery = query(
       collection(db, PURCHASE_ORDERS_COLLECTION),
       where('supplierId', '==', supplierId),
@@ -317,6 +536,9 @@ export const rebuildSupplierCatalog = async (supplierId) => {
       ordersProcessed++;
     }
 
+    // 4. Przywróć dane certyfikatów
+    await restoreCertificateData(supplierId, savedCertificates);
+
     return {
       success: true,
       updated: totalUpdated,
@@ -335,9 +557,32 @@ export const rebuildSupplierCatalog = async (supplierId) => {
  */
 export const rebuildAllSupplierCatalogs = async () => {
   try {
-    // 1. Usuń wszystkie istniejące rekordy w supplierProducts
+    // 1. Zachowaj dane certyfikatów przed usunięciem (mapa: supplierId+inventoryItemId → certData)
     const allExisting = await getDocs(collection(db, SUPPLIER_PRODUCTS_COLLECTION));
-    
+    const globalCertMap = new Map();
+    allExisting.docs.forEach((docSnap) => {
+      const data = docSnap.data();
+      const hasAnyCertData = data.certificateUnit || data.certificateNumber ||
+        data.certificateValidFrom || data.certificateValidTo || data.certificateType ||
+        data.certificateFileUrl || data.certificateStoragePath;
+      if (hasAnyCertData && data.supplierId && data.inventoryItemId) {
+        const key = `${data.supplierId}__${data.inventoryItemId}`;
+        globalCertMap.set(key, {
+          certificateUnit: data.certificateUnit || '',
+          certificateNumber: data.certificateNumber || '',
+          certificateType: data.certificateType || '',
+          certificateValidFrom: data.certificateValidFrom || null,
+          certificateValidTo: data.certificateValidTo || null,
+          certificateFileName: data.certificateFileName || '',
+          certificateContentType: data.certificateContentType || '',
+          certificateStoragePath: data.certificateStoragePath || '',
+          certificateFileUrl: data.certificateFileUrl || '',
+          certificateUploadedAt: data.certificateUploadedAt || null
+        });
+      }
+    });
+
+    // 2. Usuń wszystkie istniejące rekordy w supplierProducts
     if (!allExisting.empty) {
       // Usuwamy w batchach po max 500
       const batchSize = 500;
@@ -352,7 +597,7 @@ export const rebuildAllSupplierCatalogs = async () => {
       }
     }
 
-    // 2. Pobierz wszystkie PO (nie-draft)
+    // 3. Pobierz wszystkie PO (nie-draft)
     const poSnapshot = await getDocs(collection(db, PURCHASE_ORDERS_COLLECTION));
 
     let totalUpdated = 0;
@@ -392,6 +637,31 @@ export const rebuildAllSupplierCatalogs = async () => {
       }
 
       ordersProcessed++;
+    }
+
+    // 4. Przywróć dane certyfikatów do nowo utworzonych rekordów
+    if (globalCertMap.size > 0) {
+      const allNewDocs = await getDocs(collection(db, SUPPLIER_PRODUCTS_COLLECTION));
+      const restoreBatchSize = 500;
+      let restoreBatch = writeBatch(db);
+      let restoreCount = 0;
+
+      for (const docSnap of allNewDocs.docs) {
+        const data = docSnap.data();
+        const key = `${data.supplierId}__${data.inventoryItemId}`;
+        const certData = globalCertMap.get(key);
+        if (certData) {
+          restoreBatch.update(docSnap.ref, certData);
+          restoreCount++;
+          if (restoreCount % restoreBatchSize === 0) {
+            await restoreBatch.commit();
+            restoreBatch = writeBatch(db);
+          }
+        }
+      }
+      if (restoreCount % restoreBatchSize !== 0) {
+        await restoreBatch.commit();
+      }
     }
 
     return {

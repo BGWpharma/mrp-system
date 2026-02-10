@@ -40,6 +40,7 @@
     "noData": "Brak danych dla wybranego okresu",
     "suppliers": {
       "name": "Nazwa dostawcy",
+      "email": "Email",
       "address": "Adres",
       "productType": "Rodzaj produktu",
       "quantity": "Ilość",
@@ -94,6 +95,7 @@
       "subtitle": "Informacja o dostawcach i zakupionych produktach ekologicznych za okres {{periodFrom}} do {{periodTo}}",
       "headers": {
         "supplierName": "Nazwa dostawcy",
+        "email": "Email",
         "address": "Adres",
         "productType": "Rodzaj produktu",
         "quantity": "Ilość",

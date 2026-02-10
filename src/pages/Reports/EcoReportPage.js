@@ -383,6 +383,7 @@ const EcoReportPage = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 180 }}>{t('table.suppliers.name')}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 180 }}>{t('table.suppliers.email')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>{t('table.suppliers.address')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 180 }}>{t('table.suppliers.productType')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 120 }} align="right">{t('table.suppliers.quantity')}</TableCell>
@@ -416,7 +417,7 @@ const EcoReportPage = () => {
                 <TableBody>
                   {reportData.suppliersData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                         <Typography color="text.secondary">{t('table.noData')}</Typography>
                       </TableCell>
                     </TableRow>
@@ -424,6 +425,7 @@ const EcoReportPage = () => {
                     reportData.suppliersData.map((row, idx) => (
                       <TableRow key={idx} hover>
                         <TableCell>{row.supplierName}</TableCell>
+                        <TableCell>{row.email || '—'}</TableCell>
                         <TableCell>{row.address}</TableCell>
                         <TableCell>{row.productType}</TableCell>
                         <TableCell align="right">{row.quantity?.toFixed(3)}</TableCell>

@@ -40,6 +40,7 @@
     "noData": "No data for selected period",
     "suppliers": {
       "name": "Supplier name",
+      "email": "Email",
       "address": "Address",
       "productType": "Product type",
       "quantity": "Quantity",
@@ -94,6 +95,7 @@
       "subtitle": "Information about suppliers and purchased organic products for the period {{periodFrom}} to {{periodTo}}",
       "headers": {
         "supplierName": "Supplier name",
+        "email": "Email",
         "address": "Address",
         "productType": "Product type",
         "quantity": "Quantity",

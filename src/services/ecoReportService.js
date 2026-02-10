@@ -375,6 +375,10 @@ const isIssueTransaction = (tx) => normalizeTransactionType(tx.type) === 'ISSUE'
  * Sprawdza czy transakcja RECEIVE pochodzi z zamówienia zakupowego (PO).
  * Ręczne dodania do magazynu to też RECEIVE, ale bez powiązania z PO.
  * PO-linked mają: source='purchase', reason='purchase', lub orderId.
+ * 
+ * UWAGA: Transakcje z reason="other" i reference="POxxxxx" to często
+ * ręczne wprowadzenia migracyjne (z innego systemu), NIE zakupy.
+ * Pole reference jest tylko notatką, nie powiązaniem z PO.
  */
 const isPurchaseReceive = (tx) => {
   return isReceiveTransaction(tx) && 
@@ -461,54 +465,76 @@ const calculateStockForward = (itemId, transactions, cutoffDate, inclusive = fal
 /**
  * Generuje dane Tab.1 - Dostawcy
  * 
- * Kolumny: Nazwa dostawcy | Adres | Rodzaj produktu | Ilość w tonach | 
- *          Jednostka cert. | Nr certyfikatu | Certyfikat ważny od...do...
+ * Bazuje na transakcjach RECEIVE powiązanych z zamówieniami zakupowymi (PO),
+ * filtrowanych po DACIE PRZYJĘCIA TOWARU (nie po dacie utworzenia PO).
+ * Dzięki temu raport odzwierciedla faktyczne przyjęcia w wybranym okresie.
+ * 
+ * Kolumny: Nazwa dostawcy | Email | Adres | Rodzaj produktu | Ilość | 
+ *          Jednostka | Jednostka cert. | Nr certyfikatu | Certyfikat ważny od...do...
  */
-const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems, ecoRawMaterialIds = null) => {
-  // Grupuj PO wg dostawcy - surowce i opakowania jednostkowe
+const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems, transactions, dateFrom, dateTo, ecoRawMaterialIds = null) => {
+  // Mapa PO wg ID — do lookup supplierId z transakcji RECEIVE
+  const purchaseOrdersMap = {};
+  for (const po of purchaseOrders) {
+    purchaseOrdersMap[po.id] = po;
+  }
+
+  // Filtruj transakcje RECEIVE powiązane z zakupem (PO) w wybranym okresie
+  const periodPurchaseReceives = transactions.filter(tx => {
+    const txDate = safeConvertDate(tx.createdAt) || safeConvertDate(tx.transactionDate);
+    return isDateInRange(txDate, dateFrom, dateTo) && isPurchaseReceive(tx);
+  });
+
+  console.log('[ECO SUPPLIERS] Transakcje RECEIVE (zakup) w okresie:', periodPurchaseReceives.length);
+
   const supplierProducts = {};
 
-  for (const po of purchaseOrders) {
-    if (!po.supplierId || !po.items) continue;
-    const supplier = suppliers[po.supplierId];
-    if (!supplier) continue;
+  for (const tx of periodPurchaseReceives) {
+    const itemId = tx.itemId;
+    const inventoryItem = itemId ? inventoryItems[itemId] : null;
 
-    for (const item of po.items) {
-      const itemId = item.itemId || item.inventoryItemId;
-      const inventoryItem = itemId ? inventoryItems[itemId] : null;
-      
-      // Filtruj surowce i opakowania jednostkowe
-      const isRelevantItem = inventoryItem && (
-        inventoryItem.isRawMaterial === true || 
-        inventoryItem.type === 'raw' || 
-        inventoryItem.category === 'Surowce' ||
-        inventoryItem.category === 'Opakowania jednostkowe'
-      );
-      if (!isRelevantItem) continue;
+    // Tryb EKO: tylko surowce (bez opakowań jednostkowych)
+    // Tryb normalny: surowce + opakowania jednostkowe
+    const isRawMaterial = inventoryItem && (
+      inventoryItem.isRawMaterial === true || 
+      inventoryItem.type === 'raw' || 
+      inventoryItem.category === 'Surowce'
+    );
+    const isPackaging = inventoryItem && inventoryItem.category === 'Opakowania jednostkowe';
+    
+    const isRelevantItem = ecoRawMaterialIds 
+      ? isRawMaterial  // tryb EKO — tylko surowce
+      : (isRawMaterial || isPackaging); // tryb normalny — surowce + opakowania
+    if (!isRelevantItem) continue;
 
-      // Tryb EKO: pokaż tylko pozycje powiązane z recepturami EKO
-      if (ecoRawMaterialIds && !ecoRawMaterialIds.has(itemId)) continue;
+    // Tryb EKO: pokaż tylko pozycje powiązane z recepturami EKO
+    if (ecoRawMaterialIds && !ecoRawMaterialIds.has(itemId)) continue;
 
-      const itemName = item.name || inventoryItem?.name || 'Nieznany';
-      const unit = item.unit || inventoryItem?.unit || 'kg';
-      const quantity = parseFloat(item.quantity) || 0;
+    // Znajdź dostawcę przez PO (orderId → PO → supplierId → supplier)
+    const po = tx.orderId ? purchaseOrdersMap[tx.orderId] : null;
+    const supplier = po && po.supplierId ? suppliers[po.supplierId] : null;
+    if (!supplier) continue; // Bez powiązania z dostawcą — pomijamy
 
-      if (!supplierProducts[po.supplierId]) {
-        supplierProducts[po.supplierId] = {
-          supplier,
-          products: {} // klucz = nazwa produktu
-        };
-      }
+    const supplierId = po.supplierId;
+    const itemName = tx.itemName || inventoryItem?.name || 'Nieznany';
+    const unit = inventoryItem?.unit || 'kg';
+    const quantity = parseFloat(tx.quantity) || 0;
 
-      if (!supplierProducts[po.supplierId].products[itemName]) {
-        supplierProducts[po.supplierId].products[itemName] = {
-          name: itemName,
-          unit,
-          totalQuantity: 0
-        };
-      }
-      supplierProducts[po.supplierId].products[itemName].totalQuantity += quantity;
+    if (!supplierProducts[supplierId]) {
+      supplierProducts[supplierId] = {
+        supplier,
+        products: {} // klucz = nazwa produktu
+      };
     }
+
+    if (!supplierProducts[supplierId].products[itemName]) {
+      supplierProducts[supplierId].products[itemName] = {
+        name: itemName,
+        unit,
+        totalQuantity: 0
+      };
+    }
+    supplierProducts[supplierId].products[itemName].totalQuantity += quantity;
   }
 
   // Konwertuj na wiersze tabeli
@@ -521,6 +547,7 @@ const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems, ecoRaw
       const qty = parseFloat(product.totalQuantity) || 0;
       rows.push({
         supplierName: supplier.name || '',
+        email: supplier.email || '',
         address: formatSupplierAddress(supplier),
         productType: product.name,
         quantity: qty,
@@ -759,18 +786,26 @@ const generateRawMaterialsData = (
     // --- Domknięcie bilansu ---
     // closingStock (forward) jest źródłem prawdy. classifiedBalance to suma
     // sklasyfikowanych przepływów. Różnica (residual) wynika z niesklasyfikowanych
-    // korekt inwentaryzacyjnych (ADJUSTMENT-ADD/REMOVE, korekty partii, duplikaty).
+    // korekt ilości partii (ADJUSTMENT-ADD/REMOVE z reason="Korekta ilości partii").
     //
-    // residual > 0 → niesklasyfikowane rozchody (straty, korekty −) → Inne rozchody
-    // residual < 0 → niesklasyfikowane przychody (korekty +)       → dodaj do Inne przychody
+    // Te korekty partii odzwierciedlają realne zużycie w produkcji:
+    // system zapisuje konsumpcję produkcyjną zarówno jako "Konsumpcja w produkcji"
+    // (sklasyfikowane) jak i korekty ilości partii (niesklasyfikowane).
+    // Forward calculation liczy je poprawnie, ale klasyfikacja nie obejmowała korekt partii.
+    //
+    // Rozwiązanie: pozytywny residual (netto korekt partii = niesklasyfikowane rozchody)
+    // doliczamy do zużycia produkcyjnego, bo dla surowców to główna przyczyna ubytku.
+    // Negatywny residual (niesklasyfikowane przychody z korekt +) → dodaj do Inne przychody.
     const classifiedBalance = openingStock + purchases + rawOtherIncome + ownProduction - productionConsumption - sales;
     const residual = parseFloat((classifiedBalance - closingStock).toFixed(3));
 
-    const otherExpenses = Math.max(0, residual);
+    // Pozytywny residual → dolicz do zużycia produkcyjnego (korekty partii = realne zużycie)
+    const adjustedConsumption = productionConsumption + Math.max(0, residual);
+    const otherExpenses = 0;
     const otherIncome = rawOtherIncome + Math.max(0, -residual);
 
     // Bilans weryfikacyjny (powinien zawsze wynosić 0 dzięki domknięciu)
-    const calculatedClosing = openingStock + purchases + otherIncome + ownProduction - productionConsumption - sales - otherExpenses;
+    const calculatedClosing = openingStock + purchases + otherIncome + ownProduction - adjustedConsumption - sales - otherExpenses;
 
     // === SZCZEGÓŁOWE LOGI DLA POZYCJI Z TRANSAKCJAMI ===
     if (itemTransactions.length > 0) {
@@ -780,8 +815,8 @@ const generateRawMaterialsData = (
         console.log(`[ECO DETAIL] === ${material.name} (id: ${itemId}) ===`);
         console.log(`[ECO DETAIL]   Stan początkowy (forward): ${openingStock}`);
         console.log(`[ECO DETAIL]   Zakup (PO): ${purchases}, Inne przychody: ${otherIncome} (ręczne: ${rawOtherIncome}, korekty: ${Math.max(0, -residual)}), Produkcja własna: ${ownProduction}`);
-        console.log(`[ECO DETAIL]   Zużycie do produkcji: ${productionConsumption}`);
-        console.log(`[ECO DETAIL]   Sprzedaż: ${sales}, Inne rozchody (residualne): ${otherExpenses}`);
+        console.log(`[ECO DETAIL]   Zużycie do produkcji: ${adjustedConsumption} (sklasyfikowane: ${productionConsumption}, z korekt partii: ${Math.max(0, residual)})`);
+        console.log(`[ECO DETAIL]   Sprzedaż: ${sales}, Inne rozchody: ${otherExpenses}`);
         console.log(`[ECO DETAIL]   Stan końcowy (forward): ${closingStock}`);
         console.log(`[ECO DETAIL]   Obliczony z bilansu: ${calculatedClosing}`);
         console.log(`[ECO DETAIL]   Różnica bilansu: ${balanceDiff}`);
@@ -814,7 +849,7 @@ const generateRawMaterialsData = (
       purchases: parseFloat(purchases.toFixed(3)),
       otherIncome: parseFloat(otherIncome.toFixed(3)),
       ownProduction: parseFloat(ownProduction.toFixed(3)),
-      productionConsumption: parseFloat(productionConsumption.toFixed(3)),
+      productionConsumption: parseFloat(adjustedConsumption.toFixed(3)),
       sales: parseFloat(sales.toFixed(3)),
       otherExpenses: parseFloat(otherExpenses.toFixed(3)),
       closingStock: parseFloat(closingStock.toFixed(3)),
@@ -1085,7 +1120,7 @@ export const fetchEcoReportData = async (filters) => {
     cmrData
   ] = await Promise.all([
     fetchSuppliers(),
-    fetchPurchaseOrders(startDate, endDate),
+    fetchPurchaseOrders(), // Pobierz WSZYSTKIE PO — potrzebne jako lookup (supplierId) dla transakcji RECEIVE
     fetchInventoryItems(),
     fetchTransactions(),
     fetchBatches(),
@@ -1238,7 +1273,9 @@ export const fetchEcoReportData = async (filters) => {
   // Generuj dane dla każdej zakładki
   // deduplicatedTransactions — do wszystkich obliczeń (forward calculation + kategoryzacja przepływów)
   // Metoda forward nie wymaga aktualnego stanu z bazy — opiera się wyłącznie na transakcjach
-  const suppliersData = generateSuppliersData(suppliers, purchaseOrders, inventoryItems, ecoRawMaterialIds);
+  const suppliersData = generateSuppliersData(
+    suppliers, purchaseOrders, inventoryItems, deduplicatedTransactions, startDate, endDate, ecoRawMaterialIds
+  );
   const rawMaterialsData = generateRawMaterialsData(
     inventoryItems, deduplicatedTransactions, productionTasks, startDate, endDate, existingBatchIds, ecoRawMaterialIds
   );
@@ -1256,7 +1293,10 @@ export const fetchEcoReportData = async (filters) => {
       suppliersCount: suppliersData.length,
       rawMaterialsCount: rawMaterialsData.length,
       finishedProductsCount: finishedProductsData.length,
-      purchaseOrdersCount: purchaseOrders.length,
+      purchaseOrdersCount: purchaseOrders.filter(po => {
+        const poDate = safeConvertDate(po.orderDate);
+        return isDateInRange(poDate, startDate, endDate);
+      }).length,
       productionTasksCount: productionTasks.length,
       cmrsCount: cmrData.cmrs.length,
       transactionsCount: transactions.length
@@ -1319,17 +1359,18 @@ export const exportEcoReportToExcel = async (data, filters) => {
   const ws1 = workbook.addWorksheet(t('excel.sheets.suppliers'));
   
   // Tytuł
-  ws1.mergeCells('A1:H1');
+  ws1.mergeCells('A1:I1');
   ws1.getCell('A1').value = t('excel.tab1.title');
   ws1.getCell('A1').style = titleStyle;
 
-  ws1.mergeCells('A2:H2');
+  ws1.mergeCells('A2:I2');
   ws1.getCell('A2').value = t('excel.tab1.subtitle', { periodFrom, periodTo });
   ws1.getCell('A2').style = { ...titleStyle, font: { ...titleStyle.font, size: 11 } };
 
   // Nagłówki
   const supplierHeaders = [
     t('excel.tab1.headers.supplierName'),
+    t('excel.tab1.headers.email'),
     t('excel.tab1.headers.address'),
     t('excel.tab1.headers.productType'),
     t('excel.tab1.headers.quantity'),
@@ -1353,6 +1394,7 @@ export const exportEcoReportToExcel = async (data, filters) => {
     const dataRow = ws1.getRow(row1Idx);
     const values = [
       row.supplierName,
+      row.email,
       row.address,
       row.productType,
       row.quantity,
@@ -1373,7 +1415,7 @@ export const exportEcoReportToExcel = async (data, filters) => {
   const minRows1 = Math.max(15, data.suppliersData.length);
   for (let i = data.suppliersData.length; i < minRows1; i++) {
     const emptyRow = ws1.getRow(row1Idx);
-    for (let c = 1; c <= 8; c++) {
+    for (let c = 1; c <= 9; c++) {
       emptyRow.getCell(c).style = cellStyle;
     }
     row1Idx++;
@@ -1381,17 +1423,17 @@ export const exportEcoReportToExcel = async (data, filters) => {
 
   // Stopka z informacją
   row1Idx += 1;
-  ws1.mergeCells(`A${row1Idx}:H${row1Idx}`);
+  ws1.mergeCells(`A${row1Idx}:I${row1Idx}`);
   ws1.getCell(`A${row1Idx}`).value = t('excel.tab1.footnote1');
   ws1.getCell(`A${row1Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
   row1Idx++;
-  ws1.mergeCells(`A${row1Idx}:H${row1Idx}`);
+  ws1.mergeCells(`A${row1Idx}:I${row1Idx}`);
   ws1.getCell(`A${row1Idx}`).value = t('excel.tab1.footnote2');
   ws1.getCell(`A${row1Idx}`).style = { font: { size: 8, italic: true, name: 'Calibri' } };
 
   // Szerokości kolumn
   ws1.columns = [
-    { width: 25 }, { width: 35 }, { width: 22 }, { width: 15 },
+    { width: 25 }, { width: 25 }, { width: 35 }, { width: 22 }, { width: 15 },
     { width: 12 }, { width: 18 }, { width: 18 }, { width: 22 }
   ];
 
