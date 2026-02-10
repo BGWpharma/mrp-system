@@ -176,7 +176,8 @@
     "tabs": {
         "timeAnalysis": "Time Analysis",
         "weeklyProductivity": "Weekly Reports",
-        "gapAnalysis": "Gap Analysis"
+        "gapAnalysis": "Gap Analysis",
+        "weeklySprint": "Weekly Sprint"
       },
       "timeAnalysis": {
       "title": "Production Time Analysis",

@@ -14,14 +14,12 @@ import {
   TableHead,
   TableRow,
   Alert,
-  AlertTitle,
   CircularProgress,
   Tabs,
   Tab,
   Chip,
   InputAdornment,
   Tooltip,
-  Collapse,
   IconButton,
   Switch,
   FormControlLabel
@@ -37,11 +35,7 @@ import {
   LocalShipping as SupplierIcon,
   Science as RawMaterialIcon,
   Inventory as ProductIcon,
-  Info as InfoIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  WarningAmber as WarningIcon,
-  CheckCircle as CheckIcon
+  WarningAmber as WarningIcon
 } from '@mui/icons-material';
 import { useTranslation } from '../../hooks/useTranslation';
 import { fetchEcoReportData, exportEcoReportToExcel } from '../../services/ecoReportService';
@@ -78,7 +72,6 @@ const EcoReportPage = () => {
   const [reportData, setReportData] = useState(null);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
-  const [showInfo, setShowInfo] = useState(true);
   const [ecoMode, setEcoMode] = useState(false);
 
   /**
@@ -164,32 +157,6 @@ const EcoReportPage = () => {
         </Box>
       </Box>
 
-      {/* Info banner */}
-      <Collapse in={showInfo}>
-        <Alert 
-          severity="info" 
-          sx={{ mb: 3 }}
-          action={
-            <IconButton size="small" onClick={() => setShowInfo(false)}>
-              <ExpandLessIcon />
-            </IconButton>
-          }
-        >
-          <AlertTitle>{t('info.title')}</AlertTitle>
-          <Typography variant="body2">{t('info.description')}</Typography>
-          <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Chip icon={<CheckIcon />} label={t('info.autoFields')} color="success" size="small" variant="outlined" />
-            <Chip icon={<WarningIcon />} label={t('info.manualFields')} color="warning" size="small" variant="outlined" />
-          </Box>
-        </Alert>
-      </Collapse>
-      {!showInfo && (
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <IconButton size="small" onClick={() => setShowInfo(true)} title={t('info.show')}>
-            <InfoIcon color="info" />
-          </IconButton>
-        </Box>
-      )}
 
       {/* Filtry dat */}
       <Paper sx={{ p: 3, mb: 3, borderRadius: 2, boxShadow: 3 }}>

@@ -1,5 +1,5 @@
 // src/components/recipes/RecipeForm.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -21,6 +21,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TableFooter,
   TableRow,
   Autocomplete,
   CircularProgress,
@@ -124,6 +125,7 @@ const SortableIngredientRow = ({
   canConvertUnit,
   toggleIngredientUnit,
   removeIngredient,
+  percentage,
   t
 }) => {
   const {
@@ -218,6 +220,11 @@ const SortableIngredientRow = ({
             </Tooltip>
           )}
         </Box>
+      </TableCell>
+      <TableCell align="center">
+        <Typography variant="body2" color="text.secondary" fontWeight="500">
+          {percentage !== null ? `${percentage.toFixed(2)}%` : '—'}
+        </Typography>
       </TableCell>
       <TableCell>
         <TextField
@@ -368,6 +375,13 @@ const RecipeForm = ({ recipeId }) => {
   const [inventorySearchQuery, setInventorySearchQuery] = useState('');
   const [selectedInventoryItem, setSelectedInventoryItem] = useState(null);
   
+  // Stany dla on-demand ładowania pozycji w dialogu powiązania
+  const [linkDialogItems, setLinkDialogItems] = useState([]);
+  const [linkDialogLoading, setLinkDialogLoading] = useState(false);
+  const [linkDialogTotalCount, setLinkDialogTotalCount] = useState(0);
+  const linkDialogSearchTimer = useRef(null);
+  const linkDialogAllItems = useRef(null); // Cache wszystkich pozycji bez recipeId
+  
   // Stany dla dialogu dodawania receptury do listy cenowej
   const [addToPriceListDialogOpen, setAddToPriceListDialogOpen] = useState(false);
   const [priceLists, setPriceLists] = useState([]);
@@ -399,6 +413,36 @@ const RecipeForm = ({ recipeId }) => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Obliczanie sumy wagi (tylko kg/g) i procentowego udziału składników
+  const ingredientsSummary = useMemo(() => {
+    const ingredients = recipeData.ingredients;
+    if (!ingredients || ingredients.length === 0) {
+      return { totalWeight: 0, percentages: [], unitLabel: '' };
+    }
+
+    // Normalizuj ilości do gramów — tylko składniki w kg/g
+    const normalizedQuantities = ingredients.map(ing => {
+      const qty = parseFloat(ing.quantity) || 0;
+      const unit = (ing.unit || '').toLowerCase().trim();
+      if (unit === 'kg') return qty * 1000;
+      if (unit === 'g') return qty;
+      return null; // nie-wagowe składniki nie wchodzą do sumy
+    });
+
+    const totalGrams = normalizedQuantities.reduce((sum, q) => q !== null ? sum + q : sum, 0);
+
+    // Procent obliczany tylko dla składników wagowych (kg/g)
+    const percentages = normalizedQuantities.map(q => 
+      q !== null && totalGrams > 0 ? (q / totalGrams) * 100 : null
+    );
+
+    // Wyświetlaj sumę w kg jeśli >= 1000g, inaczej w g
+    const unitLabel = totalGrams >= 1000 ? 'kg' : 'g';
+    const displayTotal = totalGrams >= 1000 ? totalGrams / 1000 : totalGrams;
+
+    return { totalWeight: displayTotal, percentages, unitLabel };
+  }, [recipeData.ingredients]);
 
   // Funkcja do obsługi zakończenia przeciągania składnika
   const handleIngredientDragEnd = (event) => {
@@ -469,7 +513,7 @@ const RecipeForm = ({ recipeId }) => {
     setShowDisplayUnits(true);
     
     // Pokaż informację o konwersji
-    showInfo(`Składnik "${ingredient.name}" jest teraz wyświetlany w ${nextUnit}, ale będzie zapisany w ${ingredient.unit}`);
+    showInfo(t('recipes.messages.ingredientUnitChanged', { name: ingredient.name, nextUnit, originalUnit: ingredient.unit }));
   };
   
   const toggleCostUnit = () => {
@@ -486,12 +530,12 @@ const RecipeForm = ({ recipeId }) => {
       if (altUnit) {
         setCostUnitDisplay(altUnit);
         setShowDisplayUnits(true);
-        showInfo(`Koszty są teraz wyświetlane w ${altUnit}, ale będą zapisane w szt.`);
+        showInfo(t('recipes.messages.costUnitChanged', { unit: altUnit }));
       }
     } else {
       // Jeśli już jest ustawiona, wyczyść
       setCostUnitDisplay(null);
-      showInfo('Przywrócono oryginalną jednostkę kosztów (szt.)');
+      showInfo(t('recipes.messages.costUnitRestored'));
     }
   };
   
@@ -509,12 +553,12 @@ const RecipeForm = ({ recipeId }) => {
       if (altUnit) {
         setTimeUnitDisplay(altUnit);
         setShowDisplayUnits(true);
-        showInfo(`Czas produkcji jest teraz wyświetlany w ${altUnit}, ale będzie zapisany w szt.`);
+        showInfo(t('recipes.messages.timeUnitChanged', { unit: altUnit }));
       }
     } else {
       // Jeśli już jest ustawiona, wyczyść
       setTimeUnitDisplay(null);
-      showInfo('Przywrócono oryginalną jednostkę czasu produkcji (szt.)');
+      showInfo(t('recipes.messages.timeUnitRestored'));
     }
   };
   
@@ -634,7 +678,7 @@ const RecipeForm = ({ recipeId }) => {
             setCreateProductDialogOpen(true);
           }
         } catch (error) {
-          showError('Błąd podczas pobierania receptury: ' + error.message);
+          showError(t('recipes.messages.fetchRecipeError', { error: error.message }));
           console.error('Error fetching recipe:', error);
         } finally {
           setLoading(false);
@@ -652,7 +696,7 @@ const RecipeForm = ({ recipeId }) => {
         setInventoryItems(items);
       } catch (error) {
         console.error('Błąd podczas pobierania składników z magazynu:', error);
-        showError('Nie udało się pobrać składników z magazynu');
+        showError(t('recipes.messages.fetchInventoryError'));
       } finally {
         setLoadingInventory(false);
       }
@@ -684,7 +728,7 @@ const RecipeForm = ({ recipeId }) => {
         setCustomers(customersData);
       } catch (error) {
         console.error('Błąd podczas pobierania klientów:', error);
-        showError('Nie udało się pobrać listy klientów');
+        showError(t('recipes.messages.fetchCustomersError'));
       } finally {
         setLoadingCustomers(false);
       }
@@ -698,7 +742,7 @@ const RecipeForm = ({ recipeId }) => {
         setWorkstations(workstationsData);
       } catch (error) {
         console.error('Błąd podczas pobierania stanowisk produkcyjnych:', error);
-        showError('Nie udało się pobrać listy stanowisk produkcyjnych');
+        showError(t('recipes.messages.fetchWorkstationsError'));
       } finally {
         setLoadingWorkstations(false);
       }
@@ -718,7 +762,7 @@ const RecipeForm = ({ recipeId }) => {
       setPriceLists(data);
     } catch (error) {
       console.error('Błąd podczas pobierania list cenowych:', error);
-      showError('Błąd podczas pobierania list cenowych');
+      showError(t('recipes.messages.fetchPriceListsError'));
     } finally {
       setLoadingPriceLists(false);
     }
@@ -1036,7 +1080,7 @@ const RecipeForm = ({ recipeId }) => {
       // Utwórz nową pozycję magazynową
       const result = await createInventoryItem(itemData, currentUser.uid);
       
-      showSuccess(`Dodano pozycję magazynową: ${result.name}`);
+      showSuccess(t('recipes.messages.inventoryItemAdded', { name: result.name }));
       
       // Odśwież listę pozycji magazynowych
       const items = await getAllInventoryItems();
@@ -1071,7 +1115,7 @@ const RecipeForm = ({ recipeId }) => {
       });
       
     } catch (error) {
-      showError('Błąd podczas dodawania pozycji magazynowej: ' + error.message);
+      showError(t('recipes.messages.addInventoryItemError', { error: error.message }));
       console.error('Error adding inventory item:', error);
     } finally {
       setAddingInventoryItem(false);
@@ -1092,7 +1136,7 @@ const RecipeForm = ({ recipeId }) => {
       setRecipeData(updatedRecipe);
     } catch (error) {
       console.error('Błąd podczas naprawiania wydajności:', error);
-      showError('Nie udało się naprawić wydajności receptury');
+      showError(t('recipes.messages.fixYieldError'));
     } finally {
       setSaving(false);
     }
@@ -1112,7 +1156,7 @@ const RecipeForm = ({ recipeId }) => {
   // Funkcja do tworzenia produktu w magazynie
   const handleCreateProduct = async () => {
     if (!productData.name || !productData.warehouseId) {
-      showError('SKU produktu i lokalizacja są wymagane');
+      showError(t('recipes.messages.productSkuAndLocationRequired'));
       return;
     }
     
@@ -1147,7 +1191,7 @@ const RecipeForm = ({ recipeId }) => {
       // Utwórz produkt w magazynie
       const createdProduct = await createInventoryItem(newProductData, currentUser.uid);
       
-      showSuccess(`SKU produktu "${createdProduct.name}" został pomyślnie dodany do stanów "${selectedWarehouse?.name || 'wybranym'}"`);
+      showSuccess(t('recipes.messages.productCreated', { name: createdProduct.name, warehouse: selectedWarehouse?.name || '' }));
       setCreateProductDialogOpen(false);
       
       // Odśwież listę składników, aby nowo utworzony produkt był widoczny
@@ -1155,7 +1199,7 @@ const RecipeForm = ({ recipeId }) => {
       setInventoryItems(updatedItems);
       
     } catch (error) {
-      showError('Błąd podczas tworzenia produktu: ' + error.message);
+      showError(t('recipes.messages.createProductError', { error: error.message }));
       console.error('Error creating product:', error);
     } finally {
       setCreatingProduct(false);
@@ -1169,11 +1213,20 @@ const RecipeForm = ({ recipeId }) => {
       return;
     }
     
+    // Jeśli pozycja jest już powiązana z inną recepturą - potwierdź nadpisanie
+    if (selectedInventoryItem.recipeId) {
+      const confirmOverwrite = window.confirm(
+        `Pozycja "${selectedInventoryItem.name}" jest powiązana z recepturą "${selectedInventoryItem.recipeInfo?.name || 'nieznaną'}". Czy na pewno chcesz nadpisać to powiązanie?`
+      );
+      if (!confirmOverwrite) return;
+    }
+    
     try {
       setLinkingInventory(true);
       
-      // Aktualizuj pozycję magazynową - dodaj recipeId i recipeInfo
+      // Aktualizuj pozycję magazynową - dodaj/nadpisz recipeId i recipeInfo
       await updateInventoryItem(selectedInventoryItem.id, {
+        name: selectedInventoryItem.name, // Wymagane przez walidator
         recipeId: recipeId,
         recipeInfo: {
           name: recipeData.name,
@@ -1200,25 +1253,87 @@ const RecipeForm = ({ recipeId }) => {
     }
   };
 
-  // Filtrowanie pozycji magazynowych dla dialogu powiązania
-  const getFilteredInventoryItemsForLinking = () => {
-    if (!inventoryItems) return [];
+  // On-demand ładowanie pozycji magazynowych dla dialogu powiązania
+  const fetchLinkDialogItems = useCallback(async (searchQuery = '') => {
+    try {
+      setLinkDialogLoading(true);
+      
+      // Pobierz i zcachuj pozycje "Gotowe produkty" (tylko raz na otwarcie dialogu)
+      // Wyklucz pozycje już powiązane z AKTUALNĄ recepturą (nie ma sensu przypisywać ponownie)
+      if (!linkDialogAllItems.current) {
+        const allItems = await getAllInventoryItems();
+        linkDialogAllItems.current = allItems
+          .filter(item => 
+            (item.category === 'Gotowe produkty' || item.category === 'Produkty gotowe' || item.isFinishedProduct === true) &&
+            item.recipeId !== recipeId // Wyklucz tylko pozycje już powiązane z TĄ recepturą
+          )
+          // Sortuj: wolne pozycje na górze, powiązane z inną recepturą na dole
+          .sort((a, b) => {
+            const aLinked = !!a.recipeId;
+            const bLinked = !!b.recipeId;
+            if (aLinked !== bLinked) return aLinked ? 1 : -1;
+            return (a.name || '').localeCompare(b.name || '', 'pl');
+          });
+      }
+      
+      const allAvailable = linkDialogAllItems.current;
+      
+      // Filtruj po wyszukiwaniu
+      let filtered = allAvailable;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        filtered = allAvailable.filter(item => 
+          item.name?.toLowerCase().includes(q) ||
+          item.description?.toLowerCase().includes(q) ||
+          item.category?.toLowerCase().includes(q) ||
+          item.recipeInfo?.name?.toLowerCase().includes(q)
+        );
+      }
+      
+      setLinkDialogTotalCount(filtered.length);
+      setLinkDialogItems(filtered.slice(0, 100)); // Pokaż do 100 wyników
+    } catch (error) {
+      console.error('Błąd ładowania pozycji dla dialogu powiązania:', error);
+      showError(t('recipes.messages.loadInventoryItemsError'));
+    } finally {
+      setLinkDialogLoading(false);
+    }
+  }, [showError]);
+  
+  // Debounced wyszukiwanie w dialogu powiązania
+  const handleLinkDialogSearch = useCallback((searchValue) => {
+    setInventorySearchQuery(searchValue);
     
-    // Filtruj pozycje które NIE mają jeszcze przypisanej receptury
-    let filtered = inventoryItems.filter(item => !item.recipeId);
-    
-    // Filtruj po wyszukiwaniu
-    if (inventorySearchQuery.trim()) {
-      const query = inventorySearchQuery.toLowerCase().trim();
-      filtered = filtered.filter(item => 
-        item.name?.toLowerCase().includes(query) ||
-        item.description?.toLowerCase().includes(query) ||
-        item.category?.toLowerCase().includes(query)
-      );
+    // Wyczyść poprzedni timer
+    if (linkDialogSearchTimer.current) {
+      clearTimeout(linkDialogSearchTimer.current);
     }
     
-    return filtered.slice(0, 50); // Ogranicz do 50 wyników
-  };
+    // Ustaw nowy timer z debounce 300ms
+    linkDialogSearchTimer.current = setTimeout(() => {
+      fetchLinkDialogItems(searchValue);
+    }, 300);
+  }, [fetchLinkDialogItems]);
+  
+  // Ładuj pozycje przy otwarciu dialogu
+  useEffect(() => {
+    if (linkInventoryDialogOpen) {
+      linkDialogAllItems.current = null; // Wyczyść cache przy każdym otwarciu
+      fetchLinkDialogItems('');
+    } else {
+      // Wyczyść przy zamknięciu
+      setLinkDialogItems([]);
+      setLinkDialogTotalCount(0);
+      linkDialogAllItems.current = null;
+    }
+    
+    // Cleanup timer
+    return () => {
+      if (linkDialogSearchTimer.current) {
+        clearTimeout(linkDialogSearchTimer.current);
+      }
+    };
+  }, [linkInventoryDialogOpen, fetchLinkDialogItems]);
 
   // Dodajemy przyciski do zarządzania powiązaniem z magazynem
   const renderInventoryLinkButtons = () => {
@@ -1266,7 +1381,7 @@ const RecipeForm = ({ recipeId }) => {
       ingredients: updatedIngredients
     }));
     
-    showSuccess(`Powiązano składnik "${ingredientName}" z pozycją stanów`);
+    showSuccess(t('recipes.messages.ingredientLinked', { name: ingredientName }));
   };
   
   // Funkcja do wyszukiwania i linkowania składników z magazynem
@@ -1360,10 +1475,10 @@ const RecipeForm = ({ recipeId }) => {
       }
       
       if (linkedCount === 0 && notFoundCount === 0 && !resetLinks) {
-        showInfo('Wszystkie składniki są już powiązane ze stanami lub nie można znaleźć dopasowań');
+        showInfo(t('recipes.messages.allIngredientsLinked'));
       }
     } catch (error) {
-      showError('Błąd podczas linkowania składników: ' + error.message);
+      showError(t('recipes.messages.linkIngredientsError', { error: error.message }));
       console.error('Error linking ingredients:', error);
     } finally {
       setLoading(false);
@@ -1441,18 +1556,18 @@ const RecipeForm = ({ recipeId }) => {
           ingredients: updatedIngredients
         }));
         
-        showSuccess(`Pobrano numery CAS dla ${syncedCount} składników z pozycji magazynowych`);
+        showSuccess(t('recipes.messages.casSynced', { count: syncedCount }));
       }
       
       if (skippedCount > 0) {
-        showInfo(`Pominięto ${skippedCount} składników (brak powiązania z magazynem lub CAS już aktualny)`);
+        showInfo(t('recipes.messages.casSkipped', { count: skippedCount }));
       }
       
       if (syncedCount === 0) {
-        showInfo('Brak numerów CAS do aktualizacji. Wszystkie składniki mają już aktualne numery CAS lub nie są powiązane z magazynem.');
+        showInfo(t('recipes.messages.noCasToUpdate'));
       }
     } catch (error) {
-      showError('Błąd podczas pobierania numerów CAS: ' + error.message);
+      showError(t('recipes.messages.casSyncError', { error: error.message }));
       console.error('Error syncing CAS numbers:', error);
     } finally {
       setLoading(false);
@@ -1575,7 +1690,7 @@ const RecipeForm = ({ recipeId }) => {
   const handleSaveNewNutrient = async () => {
     try {
       if (!newNutrientData.code || !newNutrientData.name || !newNutrientData.unit || !newNutrientData.category) {
-        showError('Wszystkie pola są wymagane');
+        showError(t('recipes.messages.allFieldsRequired'));
         return;
       }
 
@@ -1585,7 +1700,7 @@ const RecipeForm = ({ recipeId }) => {
         isActive: true
       });
       
-      showSuccess('Nowy składnik odżywczy został dodany');
+      showSuccess(t('recipes.messages.nutrientAdded'));
       
       // Odśwież listę składników
       await refreshComponents();
@@ -1609,7 +1724,7 @@ const RecipeForm = ({ recipeId }) => {
       handleCloseAddNutrientDialog();
     } catch (error) {
       console.error('Błąd przy dodawaniu składnika:', error);
-      showError('Wystąpił błąd podczas dodawania składnika');
+      showError(t('recipes.messages.addNutrientError'));
     }
   };
 
@@ -1633,12 +1748,12 @@ const RecipeForm = ({ recipeId }) => {
 
   const handleAddToPriceList = async () => {
     if (!priceListData.priceListId) {
-      showError('Wybierz listę cenową');
+      showError(t('recipes.messages.selectPriceList'));
       return;
     }
 
     if (!priceListData.price || priceListData.price < 0) {
-      showError('Wprowadź poprawną cenę');
+      showError(t('recipes.messages.enterValidPrice'));
       return;
     }
 
@@ -1655,11 +1770,11 @@ const RecipeForm = ({ recipeId }) => {
       };
 
       await addPriceListItem(priceListData.priceListId, itemData, currentUser.uid);
-      showSuccess('Receptura została dodana do listy cenowej');
+      showSuccess(t('recipes.messages.addedToPriceList'));
       handleClosePriceListDialog();
     } catch (error) {
       console.error('Błąd podczas dodawania do listy cenowej:', error);
-      showError('Błąd podczas dodawania receptury do listy cenowej: ' + error.message);
+      showError(t('recipes.messages.addToPriceListError', { error: error.message }));
     } finally {
       setAddingToPriceList(false);
     }
@@ -1670,7 +1785,7 @@ const RecipeForm = ({ recipeId }) => {
   };
 
   if (loading) {
-    return <div>Ładowanie receptury...</div>;
+    return <div>{t('recipes.details.loading')}</div>;
   }
 
   return (
@@ -2187,10 +2302,11 @@ const RecipeForm = ({ recipeId }) => {
                   <TableHead sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.6)' : 'rgba(240, 245, 250, 0.8)' }}>
                     <TableRow>
                       <TableCell width="3%"></TableCell>
-                      <TableCell width="22%"><Typography variant="subtitle2">{t('recipes.ingredients.ingredientSKU')}</Typography></TableCell>
-                      <TableCell width="17%"><Typography variant="subtitle2">{t('recipes.ingredients.quantity')}</Typography></TableCell>
-                      <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.unit')}</Typography></TableCell>
-                      <TableCell width="15%">
+                      <TableCell width="20%"><Typography variant="subtitle2">{t('recipes.ingredients.ingredientSKU')}</Typography></TableCell>
+                      <TableCell width="13%"><Typography variant="subtitle2">{t('recipes.ingredients.quantity')}</Typography></TableCell>
+                      <TableCell width="8%"><Typography variant="subtitle2">{t('recipes.ingredients.unit')}</Typography></TableCell>
+                      <TableCell width="7%" align="center"><Typography variant="subtitle2">{t('recipes.ingredients.percentage')}</Typography></TableCell>
+                      <TableCell width="14%">
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <Typography variant="subtitle2">{t('recipes.ingredients.casNumber')}</Typography>
                           <Tooltip title={t('recipes.ingredients.syncCAS')}>
@@ -2206,7 +2322,7 @@ const RecipeForm = ({ recipeId }) => {
                           </Tooltip>
                         </Box>
                       </TableCell>
-                      <TableCell width="14%"><Typography variant="subtitle2">{t('recipes.ingredients.notes')}</Typography></TableCell>
+                      <TableCell width="12%"><Typography variant="subtitle2">{t('recipes.ingredients.notes')}</Typography></TableCell>
                       <TableCell width="10%"><Typography variant="subtitle2">{t('recipes.ingredients.source')}</Typography></TableCell>
                       <TableCell width="5%"><Typography variant="subtitle2">{t('recipes.ingredients.actions')}</Typography></TableCell>
                     </TableRow>
@@ -2227,11 +2343,44 @@ const RecipeForm = ({ recipeId }) => {
                           canConvertUnit={canConvertUnit}
                           toggleIngredientUnit={toggleIngredientUnit}
                           removeIngredient={removeIngredient}
+                          percentage={ingredientsSummary.percentages[index] ?? null}
                           t={t}
                         />
                       ))}
                     </TableBody>
                   </SortableContext>
+                  {/* Wiersz podsumowania - suma wagi i 100% */}
+                  <TableFooter>
+                    <TableRow sx={{ 
+                      bgcolor: theme => theme.palette.mode === 'dark' ? 'rgba(30, 40, 60, 0.8)' : 'rgba(232, 240, 254, 0.8)',
+                      '& td': { borderBottom: 'none' }
+                    }}>
+                      <TableCell />
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight="700">
+                          {t('recipes.ingredients.totalWeight')}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight="700">
+                          {ingredientsSummary.totalWeight % 1 === 0 
+                            ? ingredientsSummary.totalWeight 
+                            : ingredientsSummary.totalWeight.toFixed(4)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight="700">
+                          {ingredientsSummary.unitLabel}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Typography variant="subtitle2" fontWeight="700">
+                          {ingredientsSummary.totalWeight > 0 ? '100%' : '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell colSpan={4} />
+                    </TableRow>
+                  </TableFooter>
                 </Table>
               </TableContainer>
             </DndContext>
@@ -2787,26 +2936,25 @@ const RecipeForm = ({ recipeId }) => {
             : 'rgba(245, 247, 250, 0.8)'
         }}>
           <ProductIcon color="primary" />
-          <DialogTitle sx={{ p: 0 }}>Dodaj produkt do stanów</DialogTitle>
+          <DialogTitle sx={{ p: 0 }}>{t('recipes.createProductDialog.title')}</DialogTitle>
         </Box>
         
         <DialogContent sx={mt2}>
           <DialogContentText sx={mb2}>
-            Uzupełnij poniższe dane, aby dodać produkt z receptury do stanów. 
-            Koszt produkcji zostanie obliczony na podstawie kosztów składników.
+            {t('recipes.createProductDialog.description')}
           </DialogContentText>
           
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
               <TextField
                 name="name"
-                label="SKU produktu"
+                label={t('recipes.createProductDialog.productSKU')}
                 value={productData.name}
                 onChange={handleProductDataChange}
                 fullWidth
                 required
                 error={!productData.name}
-                helperText={!productData.name ? 'SKU jest wymagany' : ''}
+                helperText={!productData.name ? t('recipes.createProductDialog.skuRequired') : ''}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 InputProps={{
                   startAdornment: (
@@ -2820,14 +2968,14 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} md={6}>
               <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel id="warehouse-select-label">Lokalizacja</InputLabel>
+                <InputLabel id="warehouse-select-label">{t('recipes.createProductDialog.location')}</InputLabel>
                 <Select
                   labelId="warehouse-select-label"
                   id="warehouse-select"
                   name="warehouseId"
                   value={productData.warehouseId}
                   onChange={handleProductDataChange}
-                  label="Lokalizacja"
+                  label={t('recipes.createProductDialog.location')}
                   error={!productData.warehouseId}
                   startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}></Box>}
                 >
@@ -2843,7 +2991,7 @@ const RecipeForm = ({ recipeId }) => {
             <Grid item xs={12}>
               <TextField
                 name="description"
-                label="Opis produktu"
+                label={t('recipes.createProductDialog.productDescription')}
                 value={productData.description}
                 onChange={handleProductDataChange}
                 fullWidth
@@ -2856,7 +3004,7 @@ const RecipeForm = ({ recipeId }) => {
             <Grid item xs={12} md={6}>
               <TextField
                 name="category"
-                label="Kategoria"
+                label={t('recipes.createProductDialog.category')}
                 value={productData.category}
                 onChange={handleProductDataChange}
                 fullWidth
@@ -2872,14 +3020,14 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} md={6}>
               <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel id="unit-select-label">Jednostka</InputLabel>
+                <InputLabel id="unit-select-label">{t('recipes.createProductDialog.unit')}</InputLabel>
                 <Select
                   labelId="unit-select-label"
                   id="unit-select"
                   name="unit"
                   value={productData.unit}
                   onChange={handleProductDataChange}
-                  label="Jednostka"
+                  label={t('recipes.createProductDialog.unit')}
                   startAdornment={<Box sx={{ color: 'text.secondary', mr: 1, display: 'flex', alignItems: 'center' }}></Box>}
                 >
                   <MenuItem value="szt.">szt.</MenuItem>
@@ -2892,7 +3040,7 @@ const RecipeForm = ({ recipeId }) => {
             <Grid item xs={12} md={4}>
               <TextField
                 name="quantity"
-                label="Ilość początkowa"
+                label={t('recipes.createProductDialog.initialQuantity')}
                 type="number"
                 value={productData.quantity}
                 onChange={handleProductDataChange}
@@ -2905,7 +3053,7 @@ const RecipeForm = ({ recipeId }) => {
             <Grid item xs={12} md={4}>
               <TextField
                 name="minStockLevel"
-                label="Minimalny poziom"
+                label={t('recipes.createProductDialog.minLevel')}
                 type="number"
                 value={productData.minStockLevel}
                 onChange={handleProductDataChange}
@@ -2918,7 +3066,7 @@ const RecipeForm = ({ recipeId }) => {
             <Grid item xs={12} md={4}>
               <TextField
                 name="maxStockLevel"
-                label="Optymalny poziom"
+                label={t('recipes.createProductDialog.optimalLevel')}
                 type="number"
                 value={productData.maxStockLevel}
                 onChange={handleProductDataChange}
@@ -2935,7 +3083,7 @@ const RecipeForm = ({ recipeId }) => {
             variant="outlined"
             sx={{ borderRadius: '8px' }}
           >
-            Anuluj
+            {t('recipes.createProductDialog.cancel')}
           </Button>
           <Button 
             onClick={handleCreateProduct} 
@@ -2949,7 +3097,7 @@ const RecipeForm = ({ recipeId }) => {
               px: 3
             }}
           >
-            {creatingProduct ? 'Zapisywanie...' : 'Dodaj do stanów'}
+            {creatingProduct ? t('recipes.createProductDialog.saving') : t('recipes.createProductDialog.addToInventory')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2996,12 +3144,23 @@ const RecipeForm = ({ recipeId }) => {
             fullWidth
             placeholder={t('recipes.linkInventoryDialog.searchPlaceholder')}
             value={inventorySearchQuery}
-            onChange={(e) => setInventorySearchQuery(e.target.value)}
-            sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
+            onChange={(e) => handleLinkDialogSearch(e.target.value)}
+            sx={{ mb: 1, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
             InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+              endAdornment: linkDialogLoading ? <CircularProgress size={20} /> : null
             }}
           />
+          
+          {/* Info o ilości wyników */}
+          {!linkDialogLoading && linkDialogTotalCount > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              {linkDialogTotalCount > 100 
+                ? t('recipes.linkInventoryDialog.showing100of', { total: linkDialogTotalCount })
+                : t('recipes.linkInventoryDialog.foundItems', { count: linkDialogTotalCount })
+              }
+            </Typography>
+          )}
           
           {/* Lista pozycji magazynowych */}
           <Box sx={{ 
@@ -3011,7 +3170,14 @@ const RecipeForm = ({ recipeId }) => {
             borderColor: 'divider',
             borderRadius: '8px'
           }}>
-            {getFilteredInventoryItemsForLinking().length === 0 ? (
+            {linkDialogLoading && linkDialogItems.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: 'center' }}>
+                <CircularProgress size={32} />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {t('recipes.linkInventoryDialog.loadingItems')}
+                </Typography>
+              </Box>
+            ) : linkDialogItems.length === 0 ? (
               <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
                 {inventorySearchQuery 
                   ? t('recipes.linkInventoryDialog.noResults')
@@ -3024,19 +3190,21 @@ const RecipeForm = ({ recipeId }) => {
                   <TableRow>
                     <TableCell padding="checkbox"></TableCell>
                     <TableCell>{t('recipes.linkInventoryDialog.columns.name')}</TableCell>
-                    <TableCell>{t('recipes.linkInventoryDialog.columns.category')}</TableCell>
                     <TableCell>{t('recipes.linkInventoryDialog.columns.unit')}</TableCell>
-                    <TableCell>{t('recipes.linkInventoryDialog.columns.description')}</TableCell>
+                    <TableCell>{t('recipes.linkInventoryDialog.linkStatus')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {getFilteredInventoryItemsForLinking().map((item) => (
+                  {linkDialogItems.map((item) => (
                     <TableRow 
                       key={item.id}
                       hover
                       selected={selectedInventoryItem?.id === item.id}
                       onClick={() => setSelectedInventoryItem(item)}
-                      sx={{ cursor: 'pointer' }}
+                      sx={{ 
+                        cursor: 'pointer',
+                        opacity: item.recipeId ? 0.75 : 1
+                      }}
                     >
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -3051,18 +3219,24 @@ const RecipeForm = ({ recipeId }) => {
                           {item.name}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={item.category || '-'} 
-                          size="small" 
-                          variant="outlined"
-                        />
-                      </TableCell>
                       <TableCell>{item.unit || '-'}</TableCell>
                       <TableCell>
-                        <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
-                          {item.description || '-'}
-                        </Typography>
+                        {item.recipeId ? (
+                          <Chip 
+                            label={item.recipeInfo?.name || t('recipes.linkInventoryDialog.otherRecipe')} 
+                            size="small" 
+                            color="warning"
+                            variant="outlined"
+                            sx={{ maxWidth: 200 }}
+                          />
+                        ) : (
+                          <Chip 
+                            label={t('recipes.linkInventoryDialog.available')} 
+                            size="small" 
+                            color="success"
+                            variant="outlined"
+                          />
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -3073,9 +3247,22 @@ const RecipeForm = ({ recipeId }) => {
           
           {/* Informacja o wybranej pozycji */}
           {selectedInventoryItem && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              {t('recipes.linkInventoryDialog.selectedItem')}: <strong>{selectedInventoryItem.name}</strong>
-            </Alert>
+            <>
+              <Alert severity={selectedInventoryItem.recipeId ? "warning" : "info"} sx={{ mt: 2 }}>
+                {selectedInventoryItem.recipeId ? (
+                  <>
+                    {t('recipes.linkInventoryDialog.alreadyLinkedWarning', { 
+                      name: selectedInventoryItem.name, 
+                      recipeName: selectedInventoryItem.recipeInfo?.name || t('recipes.linkInventoryDialog.otherRecipe') 
+                    })}
+                  </>
+                ) : (
+                  <>
+                    {t('recipes.linkInventoryDialog.selectedItem')}: <strong>{selectedInventoryItem.name}</strong>
+                  </>
+                )}
+              </Alert>
+            </>
           )}
         </DialogContent>
         
@@ -3135,24 +3322,24 @@ const RecipeForm = ({ recipeId }) => {
             : 'rgba(245, 247, 250, 0.8)'
         }}>
           <ScienceIcon color="primary" />
-          <DialogTitle sx={{ p: 0 }}>Dodaj nowy składnik odżywczy</DialogTitle>
+          <DialogTitle sx={{ p: 0 }}>{t('recipes.addNutrientDialog.title')}</DialogTitle>
         </Box>
         
         <DialogContent sx={mt2}>
           <DialogContentText sx={mb2}>
-            Dodaj nowy składnik odżywczy do bazy danych. Po dodaniu będzie automatycznie dodany do receptury.
+            {t('recipes.addNutrientDialog.description')}
           </DialogContentText>
           
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} md={6}>
               <TextField
-                label="Kod składnika"
+                label={t('recipes.addNutrientDialog.code')}
                 value={newNutrientData.code}
                 onChange={(e) => setNewNutrientData(prev => ({ ...prev, code: e.target.value }))}
                 fullWidth
                 required
                 error={!newNutrientData.code}
-                helperText={!newNutrientData.code ? 'Kod jest wymagany' : 'Krótki kod składnika (np. B12, Ca, OMEGA3)'}
+                helperText={!newNutrientData.code ? t('recipes.addNutrientDialog.codeRequired') : t('recipes.addNutrientDialog.codeHelper')}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 InputProps={{
                   startAdornment: (
@@ -3166,38 +3353,38 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} md={6}>
               <TextField
-                label="Jednostka"
+                label={t('recipes.addNutrientDialog.unit')}
                 value={newNutrientData.unit}
                 onChange={(e) => setNewNutrientData(prev => ({ ...prev, unit: e.target.value }))}
                 fullWidth
                 required
                 error={!newNutrientData.unit}
-                helperText={!newNutrientData.unit ? 'Jednostka jest wymagana' : 'np. mg, µg, g, ml'}
+                helperText={!newNutrientData.unit ? t('recipes.addNutrientDialog.unitRequired') : t('recipes.addNutrientDialog.unitHelper')}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             
             <Grid item xs={12}>
               <TextField
-                label="Nazwa składnika"
+                label={t('recipes.addNutrientDialog.name')}
                 value={newNutrientData.name}
                 onChange={(e) => setNewNutrientData(prev => ({ ...prev, name: e.target.value }))}
                 fullWidth
                 required
                 error={!newNutrientData.name}
-                helperText={!newNutrientData.name ? 'Nazwa jest wymagana' : 'Pełna nazwa składnika'}
+                helperText={!newNutrientData.name ? t('recipes.addNutrientDialog.nameRequired') : t('recipes.addNutrientDialog.nameHelper')}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
               />
             </Grid>
             
             <Grid item xs={12}>
               <FormControl fullWidth required sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}>
-                <InputLabel id="category-select-label">Kategoria</InputLabel>
+                <InputLabel id="category-select-label">{t('recipes.addNutrientDialog.category')}</InputLabel>
                 <Select
                   labelId="category-select-label"
                   value={newNutrientData.category}
                   onChange={(e) => setNewNutrientData(prev => ({ ...prev, category: e.target.value }))}
-                  label="Kategoria"
+                  label={t('recipes.addNutrientDialog.category')}
                   error={!newNutrientData.category}
                 >
                   {Object.values(NUTRITIONAL_CATEGORIES).map((category) => (
@@ -3220,7 +3407,7 @@ const RecipeForm = ({ recipeId }) => {
                   ))}
                 </Select>
                 <FormHelperText>
-                  {!newNutrientData.category ? 'Kategoria jest wymagana' : ''}
+                  {!newNutrientData.category ? t('recipes.addNutrientDialog.categoryRequired') : ''}
                 </FormHelperText>
               </FormControl>
             </Grid>
@@ -3233,7 +3420,7 @@ const RecipeForm = ({ recipeId }) => {
             variant="outlined"
             sx={{ borderRadius: '8px' }}
           >
-            Anuluj
+            {t('recipes.addNutrientDialog.cancel')}
           </Button>
           <Button 
             onClick={handleSaveNewNutrient} 
@@ -3247,7 +3434,7 @@ const RecipeForm = ({ recipeId }) => {
               px: 3
             }}
           >
-            Dodaj składnik
+            {t('recipes.addNutrientDialog.addButton')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -3443,12 +3630,12 @@ const RecipeForm = ({ recipeId }) => {
             : 'rgba(245, 247, 250, 0.8)'
         }}>
           <ProductIcon color="primary" />
-          <DialogTitle sx={{ p: 0 }}>Dodaj recepturę do listy cenowej</DialogTitle>
+          <DialogTitle sx={{ p: 0 }}>{t('recipes.priceListDialog.title')}</DialogTitle>
         </Box>
         
         <DialogContent sx={mt2}>
           <DialogContentText sx={mb2}>
-            Receptura "{recipeData.name}" została pomyślnie utworzona. Czy chcesz dodać ją do listy cenowej?
+            {t('recipes.priceListDialog.description', { name: recipeData.name })}
           </DialogContentText>
           
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -3459,18 +3646,18 @@ const RecipeForm = ({ recipeId }) => {
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
                 disabled={loadingPriceLists}
               >
-                <InputLabel id="price-list-select-label">Lista cenowa</InputLabel>
+                <InputLabel id="price-list-select-label">{t('recipes.priceListDialog.priceList')}</InputLabel>
                 <Select
                   labelId="price-list-select-label"
                   value={priceListData.priceListId}
                   onChange={(e) => handlePriceListDataChange('priceListId', e.target.value)}
-                  label="Lista cenowa"
+                  label={t('recipes.priceListDialog.priceList')}
                   error={!priceListData.priceListId}
                 >
                   {loadingPriceLists ? (
                     <MenuItem disabled>
                       <CircularProgress size={20} sx={mr1} />
-                      Ładowanie list cenowych...
+                      {t('recipes.priceListDialog.loadingPriceLists')}
                     </MenuItem>
                   ) : priceLists.length > 0 ? (
                     priceLists.map((priceList) => (
@@ -3480,26 +3667,26 @@ const RecipeForm = ({ recipeId }) => {
                             {priceList.name}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {priceList.customerName || 'Klient nieznany'}
+                            {priceList.customerName || t('recipes.priceListDialog.unknownCustomer')}
                           </Typography>
                         </Box>
                       </MenuItem>
                     ))
                   ) : (
                     <MenuItem disabled>
-                      Brak dostępnych list cenowych
+                      {t('recipes.priceListDialog.noPriceLists')}
                     </MenuItem>
                   )}
                 </Select>
                 <FormHelperText>
-                  {!priceListData.priceListId ? 'Wybierz listę cenową' : ''}
+                  {!priceListData.priceListId ? t('recipes.priceListDialog.selectPriceList') : ''}
                 </FormHelperText>
               </FormControl>
             </Grid>
             
             <Grid item xs={12} md={6}>
               <TextField
-                label="Cena jednostkowa (EUR)"
+                label={t('recipes.priceListDialog.unitPrice')}
                 type="number"
                 value={priceListData.price}
                 onChange={(e) => handlePriceListDataChange('price', parseFloat(e.target.value) || 0)}
@@ -3508,8 +3695,8 @@ const RecipeForm = ({ recipeId }) => {
                 error={!priceListData.price || priceListData.price < 0}
                 helperText={
                   !priceListData.price || priceListData.price < 0 
-                    ? 'Wprowadź poprawną cenę' 
-                    : `Za ${recipeData.yield?.unit || 'szt.'}`
+                    ? t('recipes.priceListDialog.enterValidPrice') 
+                    : t('recipes.priceListDialog.perUnit', { unit: recipeData.yield?.unit || 'szt.' })
                 }
                 inputProps={{ min: 0, step: 0.01 }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
@@ -3525,25 +3712,25 @@ const RecipeForm = ({ recipeId }) => {
             
             <Grid item xs={12} md={6}>
               <TextField
-                label="Jednostka"
+                label={t('recipes.priceListDialog.unit')}
                 value={recipeData.yield?.unit || 'szt.'}
                 fullWidth
                 disabled
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                helperText="Jednostka z receptury"
+                helperText={t('recipes.priceListDialog.unitFromRecipe')}
               />
             </Grid>
             
             <Grid item xs={12}>
               <TextField
-                label="Notatki (opcjonalnie)"
+                label={t('recipes.priceListDialog.notes')}
                 value={priceListData.notes}
                 onChange={(e) => handlePriceListDataChange('notes', e.target.value)}
                 fullWidth
                 multiline
                 rows={2}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-                helperText="Dodatkowe informacje o cenie"
+                helperText={t('recipes.priceListDialog.notesHelper')}
               />
             </Grid>
           </Grid>
@@ -3555,7 +3742,7 @@ const RecipeForm = ({ recipeId }) => {
             variant="outlined"
             sx={{ borderRadius: '8px' }}
           >
-            Pomiń
+            {t('recipes.priceListDialog.skip')}
           </Button>
           <Button 
             onClick={handleAddToPriceList} 
@@ -3569,7 +3756,7 @@ const RecipeForm = ({ recipeId }) => {
               px: 3
             }}
           >
-            {addingToPriceList ? 'Dodawanie...' : 'Dodaj do listy cenowej'}
+            {addingToPriceList ? t('recipes.priceListDialog.adding') : t('recipes.priceListDialog.addButton')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -545,6 +545,29 @@ import {
   // Usuwanie receptury
   export const deleteRecipe = async (recipeId) => {
     try {
+      // Wyczyść recipeId z powiązanej pozycji magazynowej (aby można było ją przypisać do innej receptury)
+      try {
+        const inventoryRef = collection(db, 'inventory');
+        const inventoryQuery = query(inventoryRef, where('recipeId', '==', recipeId));
+        const inventorySnapshot = await getDocs(inventoryQuery);
+        
+        const unlinkPromises = [];
+        inventorySnapshot.forEach(inventoryDoc => {
+          unlinkPromises.push(updateDoc(inventoryDoc.ref, {
+            recipeId: null,
+            recipeInfo: null
+          }));
+        });
+        
+        if (unlinkPromises.length > 0) {
+          await Promise.all(unlinkPromises);
+          console.log(`Odłączono ${unlinkPromises.length} pozycji magazynowych od receptury ${recipeId}`);
+        }
+      } catch (unlinkError) {
+        console.error('Błąd podczas odłączania pozycji magazynowych:', unlinkError);
+        // Nie przerywaj usuwania receptury z powodu błędu odłączania
+      }
+
       // Usuń główny dokument
       await deleteDoc(doc(db, RECIPES_COLLECTION, recipeId));
       

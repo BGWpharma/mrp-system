@@ -990,7 +990,25 @@ const generateFinishedProductsData = (
 
     // Końcowy stan — forward calculation
     // Suma wszystkich valid transakcji DO dateTo włącznie (niezależna od aktualnego stanu w bazie)
-    const closingStock = calculateStockForward(itemId, transactions, dateTo, true);
+    const rawClosingStock = calculateStockForward(itemId, transactions, dateTo, true);
+
+    // --- Korekta stanu końcowego o niezrealizowane sprzedaże CMR ---
+    // CMR w statusie "W transporcie" tworzy booking (nie ISSUE), więc forward calculation
+    // nie widzi tych sprzedaży jako rozchód. Sprzedaż jest jednak liczona z danych CMR.
+    // Musimy odjąć od stanu końcowego tę część sprzedaży CMR, która nie ma
+    // odpowiadających transakcji ISSUE — inaczej bilans się nie domknie.
+    const totalIssueNonProd = itemTransactions
+      .filter(tx => isIssueTransaction(tx) && !isProductionRelated(tx))
+      .reduce((sum, tx) => sum + (parseFloat(tx.quantity) || 0), 0);
+    
+    const unrealizedCmrSales = Math.max(0, parseFloat((sales - totalIssueNonProd).toFixed(3)));
+    const closingStock = unrealizedCmrSales > 0
+      ? Math.max(0, parseFloat((rawClosingStock - unrealizedCmrSales).toFixed(3)))
+      : rawClosingStock;
+
+    if (unrealizedCmrSales > 0) {
+      console.log(`[ECO DEBUG FIN] "${product.name}": closingStock skorygowany o -${unrealizedCmrSales} (CMR bez ISSUE): ${rawClosingStock} → ${closingStock}`);
+    }
 
     // --- Domknięcie bilansu (analogicznie jak dla surowców) ---
     // residual > 0 → niesklasyfikowane rozchody → Inne rozchody

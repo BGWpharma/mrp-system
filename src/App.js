@@ -58,7 +58,7 @@ const ProductionProgressPage = lazy(() => import('./pages/Analytics/ProductionPr
 const ProductionCostsPage = lazy(() => import('./pages/Analytics/ProductionCostsPage'));
 const CashflowPage = lazy(() => import('./pages/Analytics/CashflowPage'));
 const MixingAnalyticsPage = lazy(() => import('./pages/Analytics/MixingAnalyticsPage'));
-const WeeklySprintPage = lazy(() => import('./pages/Analytics/WeeklySprintPage'));
+// WeeklySprintPage przeniesiony jako zakładka do ProductionTimePage
 
 // Recipes
 const RecipesPage = lazy(() => import('./pages/Recipes/RecipesPage'));
@@ -368,7 +368,7 @@ function App() {
                     <Route path="/analytics/production-costs" element={<PrivateLayout><ProductionCostsPage /></PrivateLayout>} />
                     <Route path="/analytics/cashflow" element={<PrivateLayout><CashflowPage /></PrivateLayout>} />
                     <Route path="/analytics/mixing" element={<PrivateLayout><MixingAnalyticsPage /></PrivateLayout>} />
-                    <Route path="/analytics/weekly-sprint" element={<PrivateLayout><WeeklySprintPage /></PrivateLayout>} />
+                    <Route path="/analytics/weekly-sprint" element={<Navigate to="/analytics/production-time" replace />} />
                     <Route path="/analytics/eco-report" element={<PrivateLayout><EcoReportPage /></PrivateLayout>} />
                     
                     {/* Admin Routes - dostępne tylko dla administratorów */}

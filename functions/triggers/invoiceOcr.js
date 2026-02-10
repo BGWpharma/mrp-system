@@ -28,6 +28,11 @@ const {
 const {convertToPLN} = require("../utils/exchangeRates");
 const {checkForDuplicateInvoice, checkCrossPoDuplicate} = require("../utils/duplicateDetection");
 const {matchAndUpdateSupplier} = require("../utils/supplierMatchingService");
+const {
+  matchProformaForPurchaseInvoice,
+  linkProformaToInvoice,
+  unlinkAllProformasFromInvoice,
+} = require("../utils/proformaMatchingService");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -115,25 +120,24 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
   const isProforma = checkIfProforma(ocrData);
 
   // DUPLICATE DETECTION - check by invoice number + supplier
+  // Applies to ALL documents including proformas
   let duplicateResult = {isDuplicate: false};
   let crossPoResult = {isDuplicate: false};
 
-  if (!isProforma) {
-    duplicateResult = await checkForDuplicateInvoice(db, {
-      invoiceNumber: ocrData.invoiceNumber,
-      supplierTaxId: ocrData.supplier?.taxId || null,
-      supplierName: ocrData.supplier?.name || "",
-    });
+  duplicateResult = await checkForDuplicateInvoice(db, {
+    invoiceNumber: ocrData.invoiceNumber,
+    supplierTaxId: ocrData.supplier?.taxId || null,
+    supplierName: ocrData.supplier?.name || "",
+  });
 
-    // Also check cross-PO duplicate
-    if (!duplicateResult.isDuplicate && sourceInfo.id) {
-      crossPoResult = await checkCrossPoDuplicate(
-          db,
-          ocrData.invoiceNumber,
-          ocrData.supplier?.taxId || null,
-          sourceInfo.id,
-      );
-    }
+  // Also check cross-PO duplicate
+  if (!duplicateResult.isDuplicate && sourceInfo.id) {
+    crossPoResult = await checkCrossPoDuplicate(
+        db,
+        ocrData.invoiceNumber,
+        ocrData.supplier?.taxId || null,
+        sourceInfo.id,
+    );
   }
 
   const isDuplicate = duplicateResult.isDuplicate ||
@@ -142,21 +146,69 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     duplicateResult : crossPoResult;
 
   if (isDuplicate) {
-    logger.warn("[OCR] ⚠️ Duplicate invoice detected", {
+    logger.warn("[OCR] ⚠️ Duplicate detected", {
       invoiceNumber: ocrData.invoiceNumber,
+      isProforma,
       duplicateType: duplicateInfo.duplicateType,
       existingId: duplicateInfo.existingInvoiceId,
       message: duplicateInfo.message,
     });
   }
 
-  // AUTO-REJECT: only duplicates (proformas get dedicated "proforma" status for cashflow)
+  // AUTO-REJECT: duplicates (both regular invoices and proformas)
   const shouldAutoReject = isDuplicate;
   let autoRejectReason = null;
   if (isDuplicate) {
+    const docLabel = isProforma ? "proformy" : "faktury";
     autoRejectReason = "Automatycznie odrzucone: " +
-      "Duplikat faktury. " +
+      `Duplikat ${docLabel}. ` +
       (duplicateInfo.message || "");
+  }
+
+  // PROFORMA MATCHING - if this is a VAT invoice, try to find matching proforma
+  let proformaMatch = {matched: false};
+  if (!isProforma && !shouldAutoReject) {
+    try {
+      proformaMatch = await matchProformaForPurchaseInvoice(db, ocrData, sourceInfo);
+      if (proformaMatch.matched) {
+        logger.info("[OCR] Proforma match found", {
+          proformaId: proformaMatch.proformaId,
+          proformaNumber: proformaMatch.proformaNumber,
+          method: proformaMatch.matchMethod,
+          confidence: proformaMatch.confidence,
+          autoLink: proformaMatch.autoLink,
+        });
+      }
+    } catch (matchError) {
+      logger.warn("[OCR] Proforma matching failed (non-critical)", {
+        error: matchError.message,
+      });
+    }
+  }
+
+  // NOTE: Payment status and proforma settlements are NOT set here for autoLink.
+  // linkProformaToInvoice() will set them atomically via a Firestore transaction
+  // after the document is created. This prevents double-counting.
+
+  // Fetch human-readable source number (PO number or CMR number)
+  let sourceNumber = null;
+  try {
+    if (sourceInfo.type === "po" && sourceInfo.id) {
+      const poDoc = await db.collection("purchaseOrders").doc(sourceInfo.id).get();
+      if (poDoc.exists) {
+        sourceNumber = poDoc.data().number || null;
+      }
+    } else if (sourceInfo.type === "cmr" && sourceInfo.id) {
+      const cmrDoc = await db.collection("cmrDocuments").doc(sourceInfo.id).get();
+      if (cmrDoc.exists) {
+        sourceNumber = cmrDoc.data().cmrNumber || null;
+      }
+    }
+    if (sourceNumber) {
+      logger.info("[OCR] Resolved source number", {sourceType: sourceInfo.type, sourceNumber});
+    }
+  } catch (sourceError) {
+    logger.warn("[OCR] Could not fetch source number (non-critical)", {error: sourceError.message});
   }
 
   const purchaseInvoice = {
@@ -198,6 +250,7 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     // Source tracking
     sourceType: sourceInfo.type, // 'po' or 'cmr'
     sourceId: sourceInfo.id,
+    ...(sourceNumber && {sourceNumber}),
     sourceFile: {
       storagePath: sourceInfo.storagePath,
       downloadUrl: sourceInfo.downloadUrl,
@@ -220,10 +273,28 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
       duplicateStatus: "none",
     }),
 
-    // Workflow status: proforma → "proforma", duplicate → "rejected", normal → "pending_review"
-    status: isProforma ? "proforma" : (shouldAutoReject ? "rejected" : "pending_review"),
+    // Workflow status: duplicate → "rejected", proforma → "proforma", normal → "pending_review"
+    status: shouldAutoReject ? "rejected" : (isProforma ? "proforma" : "pending_review"),
 
     journalEntryId: null,
+
+    // === Payment tracking ===
+    // Initial status is "unpaid" - linkProformaToInvoice will update if auto-linked
+    paymentStatus: "unpaid",
+    payments: [],
+    totalPaid: 0,
+    paymentDate: null,
+
+    // === Proforma suggestion (for manual confirmation in UI) ===
+    ...(proformaMatch.matched && !proformaMatch.autoLink && {
+      suggestedProformaMatch: {
+        proformaInvoiceId: proformaMatch.proformaId,
+        proformaNumber: proformaMatch.proformaNumber,
+        proformaGross: proformaMatch.proformaGross,
+        matchMethod: proformaMatch.matchMethod,
+        confidence: proformaMatch.confidence,
+      },
+    }),
 
     // Review tracking (for auto-rejected)
     ...(shouldAutoReject && {
@@ -246,7 +317,7 @@ const createPurchaseInvoice = async (db, ocrData, sourceInfo) => {
     autoRejected: shouldAutoReject,
     documentType: ocrData.documentType,
   });
-  return docRef.id;
+  return {invoiceId: docRef.id, proformaMatch};
 };
 
 // ============================================================================
@@ -340,13 +411,40 @@ const onInvoiceAttachmentUploaded = onObjectFinalized(
         const downloadUrl = await getSignedUrl(bucket, filePath);
 
         // Create purchaseInvoice document
-        const invoiceId = await createPurchaseInvoice(db, ocrData, {
+        const result = await createPurchaseInvoice(db, ocrData, {
           type: "po",
           id: orderId,
           storagePath: filePath,
           downloadUrl: downloadUrl,
           fileName: fileName,
         });
+        const invoiceId = result.invoiceId;
+        const proformaMatch = result.proformaMatch;
+
+        // Link proforma if auto-matched
+        if (proformaMatch.matched && proformaMatch.autoLink) {
+          try {
+            const settlementAmount =
+              ocrData.advancePaymentAmount ||
+              proformaMatch.availableAmount ||
+              proformaMatch.proformaGross;
+            await linkProformaToInvoice(
+                db, "purchaseInvoices",
+                proformaMatch.proformaId, invoiceId,
+                ocrData.invoiceNumber,
+                settlementAmount,
+            );
+            logger.info("[OCR] Auto-linked proforma", {
+              proformaId: proformaMatch.proformaId,
+              invoiceId,
+              settlementAmount,
+            });
+          } catch (linkError) {
+            logger.warn("[OCR] Proforma link failed", {
+              error: linkError.message,
+            });
+          }
+        }
 
         // Match & enrich supplier data from OCR
         try {
@@ -517,13 +615,41 @@ const onCmrInvoiceCreated = onDocumentCreated(
         });
 
         // Create purchaseInvoice document
-        const purchaseInvoiceId = await createPurchaseInvoice(db, ocrData, {
+        const cmrResult = await createPurchaseInvoice(db, ocrData, {
           type: "cmr",
           id: invoiceData.cmrId,
           storagePath: storagePath,
           downloadUrl: invoiceData.downloadURL,
           fileName: invoiceData.fileName,
         });
+        const purchaseInvoiceId = cmrResult.invoiceId;
+        const cmrProformaMatch = cmrResult.proformaMatch;
+
+        // Link proforma if auto-matched
+        if (cmrProformaMatch.matched && cmrProformaMatch.autoLink) {
+          try {
+            const settlementAmount =
+              ocrData.advancePaymentAmount ||
+              cmrProformaMatch.availableAmount ||
+              cmrProformaMatch.proformaGross;
+            await linkProformaToInvoice(
+                db, "purchaseInvoices",
+                cmrProformaMatch.proformaId,
+                purchaseInvoiceId,
+                ocrData.invoiceNumber,
+                settlementAmount,
+            );
+            logger.info("[OCR] Auto-linked proforma (CMR)", {
+              proformaId: cmrProformaMatch.proformaId,
+              purchaseInvoiceId,
+              settlementAmount,
+            });
+          } catch (linkError) {
+            logger.warn("[OCR] Proforma link failed (CMR)", {
+              error: linkError.message,
+            });
+          }
+        }
 
         // Match & enrich supplier data from OCR
         try {
@@ -845,29 +971,27 @@ const retryInvoiceOcr = onCall(
         const {checkIfProforma} = require("../utils/ocrService");
         const isProforma = checkIfProforma(ocrData);
 
-        // DUPLICATE DETECTION on retry
+        // DUPLICATE DETECTION on retry (applies to ALL documents incl. proformas)
         let retryDuplicateResult = {isDuplicate: false};
         let retryCrossPoResult = {isDuplicate: false};
 
-        if (!isProforma) {
-          retryDuplicateResult = await checkForDuplicateInvoice(db, {
-            invoiceNumber: ocrData.invoiceNumber,
-            supplierTaxId: ocrData.supplier?.taxId || null,
-            supplierName: ocrData.supplier?.name || "",
-            excludeId: invoiceId,
-            excludeCollection: "purchaseInvoices",
-          });
+        retryDuplicateResult = await checkForDuplicateInvoice(db, {
+          invoiceNumber: ocrData.invoiceNumber,
+          supplierTaxId: ocrData.supplier?.taxId || null,
+          supplierName: ocrData.supplier?.name || "",
+          excludeId: invoiceId,
+          excludeCollection: "purchaseInvoices",
+        });
 
-          if (!retryDuplicateResult.isDuplicate &&
-              invoiceData.sourceId) {
-            retryCrossPoResult = await checkCrossPoDuplicate(
-                db,
-                ocrData.invoiceNumber,
-                ocrData.supplier?.taxId || null,
-                invoiceData.sourceId,
-                invoiceId,
-            );
-          }
+        if (!retryDuplicateResult.isDuplicate &&
+            invoiceData.sourceId) {
+          retryCrossPoResult = await checkCrossPoDuplicate(
+              db,
+              ocrData.invoiceNumber,
+              ocrData.supplier?.taxId || null,
+              invoiceData.sourceId,
+              invoiceId,
+          );
         }
 
         const retryIsDuplicate =
@@ -880,18 +1004,76 @@ const retryInvoiceOcr = onCall(
         if (retryIsDuplicate) {
           logger.warn("[OCR Retry] Duplicate detected", {
             invoiceNumber: ocrData.invoiceNumber,
+            isProforma,
             duplicateType: retryDuplicateInfo.duplicateType,
             existingId: retryDuplicateInfo.existingInvoiceId,
           });
         }
 
-        // AUTO-REJECT: only duplicates (proformas get dedicated "proforma" status)
+        // AUTO-REJECT: duplicates (both regular invoices and proformas)
         const shouldAutoReject = retryIsDuplicate;
         let autoRejectReason = null;
         if (retryIsDuplicate) {
+          const docLabel = isProforma ? "proformy" : "faktury";
           autoRejectReason = "Automatycznie odrzucone: " +
-            "Duplikat faktury. " +
+            `Duplikat ${docLabel}. ` +
             (retryDuplicateInfo.message || "");
+        }
+
+        // PROFORMA: Unlink old proformas before re-matching
+        if (invoiceData.proformaSettlements && invoiceData.proformaSettlements.length > 0) {
+          try {
+            await unlinkAllProformasFromInvoice(db, "purchaseInvoices", invoiceId);
+            logger.info("[OCR Retry] Unlinked old proforma settlements before re-matching");
+          } catch (unlinkError) {
+            logger.warn("[OCR Retry] Failed to unlink old proformas (non-critical)", {
+              error: unlinkError.message,
+            });
+          }
+        }
+
+        // PROFORMA MATCHING on retry
+        let retryProformaMatch = {matched: false};
+        if (!isProforma && !shouldAutoReject) {
+          try {
+            retryProformaMatch = await matchProformaForPurchaseInvoice(
+                db, ocrData,
+                {type: invoiceData.sourceType || "po", id: invoiceData.sourceId},
+                invoiceId,
+            );
+            if (retryProformaMatch.matched) {
+              logger.info("[OCR Retry] Proforma match found", {
+                proformaId: retryProformaMatch.proformaId,
+                method: retryProformaMatch.matchMethod,
+                autoLink: retryProformaMatch.autoLink,
+              });
+            }
+          } catch (matchError) {
+            logger.warn("[OCR Retry] Proforma matching failed (non-critical)", {
+              error: matchError.message,
+            });
+          }
+        }
+
+        // NOTE: Payment status and proforma settlements for autoLink are NOT set here.
+        // linkProformaToInvoice() will set them atomically after the update.
+        // This prevents double-counting settlements.
+
+        // Fetch source number if not already stored
+        let retrySourceNumber = invoiceData.sourceNumber || null;
+        if (!retrySourceNumber && invoiceData.sourceId) {
+          try {
+            const srcType = invoiceData.sourceType || "po";
+            if (srcType === "po") {
+              const poDoc = await db.collection("purchaseOrders").doc(invoiceData.sourceId).get();
+              if (poDoc.exists) retrySourceNumber = poDoc.data().number || null;
+            } else if (srcType === "cmr") {
+              const cmrDoc = await db.collection("cmrDocuments").doc(invoiceData.sourceId).get();
+              if (cmrDoc.exists) retrySourceNumber = cmrDoc.data().cmrNumber || null;
+            }
+          } catch (srcError) {
+            logger.warn("[OCR Retry] Could not fetch source number", {error: srcError.message});
+          }
         }
 
         // Update the invoice with new OCR data
@@ -920,9 +1102,9 @@ const retryInvoiceOcr = onCall(
             ocrData.warnings,
           ocrError: admin.firestore.FieldValue.delete(),
           ocrRawData: JSON.stringify(ocrData),
-          // proforma → "proforma", duplicate → "rejected", normal → "pending_review"
-          status: isProforma ? "proforma" :
-            (shouldAutoReject ? "rejected" : "pending_review"),
+          // duplicate → "rejected", proforma → "proforma", normal → "pending_review"
+          status: shouldAutoReject ? "rejected" :
+            (isProforma ? "proforma" : "pending_review"),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryAt: admin.firestore.FieldValue.serverTimestamp(),
           lastOcrRetryBy: request.auth.uid,
@@ -934,6 +1116,34 @@ const retryInvoiceOcr = onCall(
           ...(!retryIsDuplicate && {
             duplicateOf: admin.firestore.FieldValue.delete(),
             duplicateStatus: "none",
+          }),
+
+          // Source number (backfill if missing)
+          ...(retrySourceNumber && {sourceNumber: retrySourceNumber}),
+
+          // Payment tracking (preserve manual payments, reset proforma fields)
+          // paymentStatus will be recalculated by linkProformaToInvoice if autoLink
+          paymentStatus: "unpaid",
+          payments: invoiceData.payments || [], // Preserve manual payments
+          totalPaid: invoiceData.totalPaid || 0, // Preserve manual payments
+          paymentDate: null,
+
+          // Reset proforma fields (linkProformaToInvoice will set them for autoLink)
+          proformaSettlements: [],
+          settledFromProformas: 0,
+
+          // Proforma suggestion (only for non-autoLink matches)
+          ...(retryProformaMatch.matched && !retryProformaMatch.autoLink && {
+            suggestedProformaMatch: {
+              proformaInvoiceId: retryProformaMatch.proformaId,
+              proformaNumber: retryProformaMatch.proformaNumber,
+              proformaGross: retryProformaMatch.proformaGross,
+              matchMethod: retryProformaMatch.matchMethod,
+              confidence: retryProformaMatch.confidence,
+            },
+          }),
+          ...((!retryProformaMatch.matched || retryProformaMatch.autoLink) && {
+            suggestedProformaMatch: null,
           }),
         };
 
@@ -960,6 +1170,29 @@ const retryInvoiceOcr = onCall(
         }
 
         await db.collection("purchaseInvoices").doc(invoiceId).update(updateData);
+
+        // Link proforma if auto-matched on retry
+        if (retryProformaMatch.matched && retryProformaMatch.autoLink) {
+          try {
+            const retrySettlementAmount = ocrData.advancePaymentAmount ||
+                retryProformaMatch.availableAmount || retryProformaMatch.proformaGross;
+            await linkProformaToInvoice(
+                db, "purchaseInvoices",
+                retryProformaMatch.proformaId, invoiceId,
+                ocrData.invoiceNumber,
+                retrySettlementAmount,
+            );
+            logger.info("[OCR Retry] ✅ Auto-linked proforma after retry", {
+              proformaId: retryProformaMatch.proformaId,
+              invoiceId,
+              settlementAmount: retrySettlementAmount,
+            });
+          } catch (linkError) {
+            logger.warn("[OCR Retry] Failed to link proforma after retry (non-critical)", {
+              error: linkError.message,
+            });
+          }
+        }
 
         // Match & enrich supplier data from OCR (on retry too)
         try {

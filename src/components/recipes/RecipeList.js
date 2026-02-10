@@ -59,7 +59,7 @@ import {
   MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import { getAllRecipes, deleteRecipe, getRecipesByCustomer, getRecipesWithPagination, syncAllRecipesCAS } from '../../services/recipeService';
-import { getInventoryItemByRecipeId, getAllInventoryItems } from '../../services/inventory';
+import { getInventoryItemsByRecipeIds, getAllInventoryItems } from '../../services/inventory';
 import { exportRecipesToCSV, exportRecipesWithSuppliers } from '../../services/recipeExportService';
 import { getNutritionalComponents } from '../../services/nutritionalComponentsService';
 import { useCustomersCache } from '../../hooks/useCustomersCache';
@@ -182,22 +182,17 @@ const RecipeList = () => {
     }
   }, []);
   
-  // Funkcja do pobierania pozycji magazynowych dla receptur
+  // ⚡ OPTYMALIZACJA: Batch query zamiast N osobnych zapytań do Firestore
   const fetchInventoryProducts = useCallback(async (recipesList) => {
-    const inventoryProductsMap = {};
-    
-    for (const recipe of recipesList) {
-      try {
-        const inventoryItem = await getInventoryItemByRecipeId(recipe.id);
-        if (inventoryItem) {
-          inventoryProductsMap[recipe.id] = inventoryItem;
-        }
-      } catch (error) {
-        console.error(`Błąd podczas pobierania pozycji magazynowej dla receptury ${recipe.id}:`, error);
-      }
+    try {
+      const recipeIds = recipesList.map(r => r.id).filter(Boolean);
+      if (recipeIds.length === 0) return;
+      
+      const inventoryProductsMap = await getInventoryItemsByRecipeIds(recipeIds);
+      setInventoryProducts(prev => ({ ...prev, ...inventoryProductsMap }));
+    } catch (error) {
+      console.error('Błąd podczas batch pobierania pozycji magazynowych:', error);
     }
-    
-    setInventoryProducts(prev => ({ ...prev, ...inventoryProductsMap }));
   }, []);
   
   // Obsługa debounce dla wyszukiwania
@@ -248,11 +243,6 @@ const RecipeList = () => {
       setTotalItems(result.pagination.totalItems);
       setTotalPages(result.pagination.totalPages);
       
-      // Pobierz pozycje magazynowe dla receptur
-      if (result.data.length > 0) {
-        await fetchInventoryProducts(result.data);
-      }
-      
       // Aktualizacja informacji o indeksie
       setSearchIndexStatus({
         isLoaded: true,
@@ -262,7 +252,14 @@ const RecipeList = () => {
       console.log('Pobrano receptur z indeksu wyszukiwania:', result.data.length);
       console.log('Łącznie receptur w indeksie:', result.pagination.totalItems);
       
+      // ⚡ OPTYMALIZACJA: Zakończ loading PRZED pobraniem danych magazynowych
+      // Pozycje magazynowe dociągną się w tle (chipy pojawią się po załadowaniu)
       setLoading(false);
+      
+      // Pobierz pozycje magazynowe dla receptur w tle (nie blokuje UI)
+      if (result.data.length > 0) {
+        fetchInventoryProducts(result.data);
+      }
     } catch (error) {
       console.error('Błąd podczas wyszukiwania receptur:', error);
       
@@ -285,16 +282,17 @@ const RecipeList = () => {
         setTotalItems(fallbackResult.pagination.totalItems);
         setTotalPages(fallbackResult.pagination.totalPages);
         
-        // Pobierz pozycje magazynowe dla receptur w fallback
+        setLoading(false);
+        
+        // Pobierz pozycje magazynowe dla receptur w fallback (w tle)
         if (fallbackResult.data.length > 0) {
-          await fetchInventoryProducts(fallbackResult.data);
+          fetchInventoryProducts(fallbackResult.data);
         }
       } catch (fallbackError) {
         console.error('Błąd podczas awaryjnego pobierania receptur:', fallbackError);
         showError('Nie udało się pobrać receptur');
+        setLoading(false);
       }
-      
-      setLoading(false);
     }
   }, [page, limit, tableSort, selectedCustomerId, debouncedSearchTerm, notesFilter, showError]);
       
@@ -365,6 +363,13 @@ const RecipeList = () => {
   }, [fetchWorkstations]);
   
   // Ustawiamy klientów do wyświetlenia w zakładce "grupowane wg klienta"
+  // Odświeżamy listę klientów przy przełączeniu na zakładkę, aby nowi klienci byli widoczni
+  useEffect(() => {
+    if (tabValue === 1) {
+      refreshCustomers();
+    }
+  }, [tabValue]);
+
   useEffect(() => {
     if (tabValue === 1 && customers.length > 0) {
       prepareCustomerGroups();
@@ -420,16 +425,16 @@ const RecipeList = () => {
       const result = await searchService.searchRecipes(debouncedSearchTerm, searchOptions);
       customerRecipesData = result.data;
       
-      // Pobierz pozycje magazynowe dla receptur klienta
-      if (customerRecipesData.length > 0) {
-        await fetchInventoryProducts(customerRecipesData);
-      }
-      
-      // Zapisz receptury dla danego klienta
+      // Zapisz receptury dla danego klienta (wyświetl od razu)
       setCustomerRecipes(prev => ({
         ...prev,
         [customerId]: customerRecipesData
       }));
+      
+      // ⚡ Pobierz pozycje magazynowe w tle (nie blokuje wyświetlania listy)
+      if (customerRecipesData.length > 0) {
+        fetchInventoryProducts(customerRecipesData);
+      }
       
     } catch (error) {
       console.error(`Błąd podczas pobierania receptur dla klienta ${customerId}:`, error);
@@ -464,16 +469,16 @@ const RecipeList = () => {
           );
         }
         
-        // Pobierz pozycje magazynowe dla receptur klienta (fallback)
-        if (fallbackData.length > 0) {
-          await fetchInventoryProducts(fallbackData);
-        }
-        
-        // Zapisz receptury dla danego klienta
+        // Zapisz receptury dla danego klienta (wyświetl od razu)
         setCustomerRecipes(prev => ({
           ...prev,
           [customerId]: fallbackData
         }));
+        
+        // Pobierz pozycje magazynowe w tle (fallback)
+        if (fallbackData.length > 0) {
+          fetchInventoryProducts(fallbackData);
+        }
       } catch (fallbackError) {
         console.error(`Błąd podczas awaryjnego pobierania receptur dla klienta ${customerId}:`, fallbackError);
         showError(`Nie udało się pobrać receptur dla wybranego klienta`);

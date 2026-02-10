@@ -338,6 +338,50 @@ export const getInventoryItemByRecipeId = async (recipeId) => {
 };
 
 /**
+ * ⚡ OPTYMALIZACJA: Pobiera pozycje magazynowe dla wielu receptur jednym zapytaniem batch
+ * Zamiast N osobnych zapytań (getInventoryItemByRecipeId w pętli), wykonuje 1 zapytanie
+ * z operatorem 'in' (Firestore obsługuje do 30 elementów w 'in').
+ * Dla większych zbiorów automatycznie dzieli na chunki po 30.
+ * 
+ * @param {string[]} recipeIds - Tablica ID receptur
+ * @returns {Promise<Object>} - Mapa { recipeId: inventoryItem }
+ */
+export const getInventoryItemsByRecipeIds = async (recipeIds) => {
+  try {
+    if (!recipeIds || recipeIds.length === 0) {
+      return {};
+    }
+
+    // Firestore 'in' obsługuje max 30 elementów - dzielimy na chunki
+    const CHUNK_SIZE = 30;
+    const inventoryMap = {};
+    
+    for (let i = 0; i < recipeIds.length; i += CHUNK_SIZE) {
+      const chunk = recipeIds.slice(i, i + CHUNK_SIZE);
+      
+      const itemsRef = FirebaseQueryBuilder.getCollectionRef(COLLECTIONS.INVENTORY);
+      const q = query(itemsRef, where('recipeId', 'in', chunk));
+      const snapshot = await getDocs(q);
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.recipeId) {
+          inventoryMap[data.recipeId] = {
+            id: doc.id,
+            ...data
+          };
+        }
+      });
+    }
+    
+    return inventoryMap;
+  } catch (error) {
+    console.error('Błąd podczas batch pobierania pozycji magazynowych dla receptur:', error);
+    return {};
+  }
+};
+
+/**
  * Tworzy nową pozycję magazynową
  * @param {Object} itemData - Dane pozycji
  * @param {string} itemData.name - Nazwa pozycji (wymagana)

@@ -56,7 +56,8 @@ import {
   CalendarToday as WeeklyIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon,
-  FileDownload as ExportIcon
+  FileDownload as ExportIcon,
+  Speed as SprintIcon
 } from '@mui/icons-material';
 import { Button } from '@mui/material';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -71,6 +72,7 @@ import {
 import { getRecipeById } from '../../services/recipeService';
 import ProductionGapAnalysisTab from './ProductionGapAnalysisTab';
 import WeeklyProductivityTab from './WeeklyProductivityTab';
+import WeeklySprintTab from './WeeklySprintTab';
 
 const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) => {
   const { t } = useTranslation('production');
@@ -329,6 +331,12 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
             iconPosition="start"
             sx={{ minHeight: 48 }}
           />
+          <Tab 
+            icon={<SprintIcon />} 
+            label={t('productionReport.tabs.weeklySprint', 'Weekly Sprint')} 
+            iconPosition="start"
+            sx={{ minHeight: 48 }}
+          />
         </Tabs>
       </Paper>
 
@@ -380,6 +388,12 @@ const ProductionTimeAnalysisTab = ({ startDate, endDate, customers, isMobile }) 
           startDate={startDate}
           endDate={endDate}
           isMobile={isMobile}
+        />
+      )}
+
+      {selectedTab === 3 && (
+        <WeeklySprintTab
+          isMobileView={isMobileView}
         />
       )}
     </Box>

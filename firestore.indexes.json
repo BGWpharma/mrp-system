@@ -404,13 +404,6 @@
       ]
     },
     {
-      "collectionGroup": "purchaseOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "expectedDeliveryDate", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "customers",
       "queryScope": "COLLECTION",
       "fields": [
@@ -484,6 +477,49 @@
       "fields": [
         { "fieldPath": "inventoryItemId", "order": "ASCENDING" },
         { "fieldPath": "lastPrice", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "purchaseInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sourceId", "order": "ASCENDING" },
+        { "fieldPath": "isProforma", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "purchaseInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supplier.taxId", "order": "ASCENDING" },
+        { "fieldPath": "isProforma", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "expenseInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supplier.taxId", "order": "ASCENDING" },
+        { "fieldPath": "isProforma", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "purchaseInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isProforma", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "expenseInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isProforma", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     }
   ],

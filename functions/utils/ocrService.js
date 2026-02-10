@@ -83,6 +83,10 @@ RETURN JSON in this EXACT format:
 }
 \`\`\`
 
+ADDITIONAL EXTRACTION (for VAT invoices that reference a proforma/advance):
+- "referencedProformaNumber": If this VAT invoice references a proforma or advance invoice number anywhere on the document (e.g. "Dotyczy proformy PF/2026/001", "Ref: Proforma XXX", "Zaliczka wg proformy nr...", "Based on proforma invoice no...", "Advance payment ref:", "Na podstawie faktury pro forma nr"), extract that proforma number exactly as written. Otherwise null.
+- "advancePaymentAmount": If the invoice shows a settled advance/proforma amount (e.g. "Zaliczka: 5000 EUR", "Advance payment settled: 5000", "Rozliczenie zaliczki: 5000"), extract the amount as a number. Otherwise null.
+
 CRITICAL RULES:
 - Set documentType to "proforma" if document contains ANY of these markers:
   * "Pro Forma", "Proforma", "PRO-FORMA" (any case)
@@ -308,6 +312,11 @@ const normalizeOcrResult = (ocrData) => {
     bankAccount: ocrData.bankAccount || null,
     parseConfidence: parseFloat(ocrData.parseConfidence) || 0.5,
     warnings: ocrData.warnings || [],
+
+    // Proforma reference extraction (for VAT invoices referencing a proforma)
+    referencedProformaNumber: ocrData.referencedProformaNumber || null,
+    advancePaymentAmount: ocrData.advancePaymentAmount ?
+      parseFloat(ocrData.advancePaymentAmount) : null,
   };
 
   // Check if this is a proforma and add warning

@@ -108,15 +108,6 @@ const getReportTiles = (t) => [
     iconBg: 'rgba(255, 255, 255, 0.2)'
   },
   {
-    id: 'weekly-sprint',
-    title: t('analyticsDashboard.tiles.weeklySprint.title', 'Weekly Sprint'),
-    description: t('analyticsDashboard.tiles.weeklySprint.description', 'Planowanie sprintu produkcyjnego Pon-Czw'),
-    icon: ScheduleIcon,
-    path: '/analytics/weekly-sprint',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    iconBg: 'rgba(255, 255, 255, 0.2)'
-  },
-  {
     id: 'eco-report',
     title: t('analyticsDashboard.tiles.ecoReport.title'),
     description: t('analyticsDashboard.tiles.ecoReport.description'),

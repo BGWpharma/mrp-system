@@ -32,6 +32,9 @@ const {
 } = require("../utils/ocrService");
 const {convertToPLN} = require("../utils/exchangeRates");
 const {checkForDuplicateInvoice} = require("../utils/duplicateDetection");
+const {
+  matchProformaForExpenseInvoice,
+} = require("../utils/proformaMatchingService");
 
 // Define secret for Gemini API key
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
@@ -147,6 +150,26 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
       (duplicateResult.message || "");
   }
 
+  // PROFORMA MATCHING - for expense invoices, always suggest (never autoLink)
+  let expenseProformaMatch = {matched: false};
+  if (!isProforma && !shouldAutoReject) {
+    try {
+      expenseProformaMatch = await matchProformaForExpenseInvoice(db, ocrData, invoiceId);
+      if (expenseProformaMatch.matched) {
+        logger.info("[Expense OCR] Proforma match suggestion found", {
+          proformaId: expenseProformaMatch.proformaId,
+          proformaNumber: expenseProformaMatch.proformaNumber,
+          method: expenseProformaMatch.matchMethod,
+          confidence: expenseProformaMatch.confidence,
+        });
+      }
+    } catch (matchError) {
+      logger.warn("[Expense OCR] Proforma matching failed (non-critical)", {
+        error: matchError.message,
+      });
+    }
+  }
+
   const updateData = {
     // Invoice data from OCR
     "invoiceNumber": ocrData.invoiceNumber,
@@ -212,6 +235,26 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     "status": isProforma ? "proforma" :
       (shouldAutoReject ? "rejected" : "pending_review"),
 
+    // === Payment tracking ===
+    "paymentStatus": "unpaid",
+    "payments": [],
+    "totalPaid": 0,
+    "paymentDate": null,
+
+    // === Proforma suggestion (expense invoices never autoLink) ===
+    ...(expenseProformaMatch.matched && {
+      "suggestedProformaMatch": {
+        proformaInvoiceId: expenseProformaMatch.proformaId,
+        proformaNumber: expenseProformaMatch.proformaNumber,
+        proformaGross: expenseProformaMatch.proformaGross,
+        matchMethod: expenseProformaMatch.matchMethod,
+        confidence: expenseProformaMatch.confidence,
+      },
+    }),
+    ...(!expenseProformaMatch.matched && {
+      "suggestedProformaMatch": null,
+    }),
+
     // Review tracking (for auto-rejected)
     ...(shouldAutoReject && {
       "reviewedBy": "cloud_function_ocr_auto_reject",
@@ -230,6 +273,7 @@ const updateExpenseInvoiceWithOcr = async (db, invoiceId, ocrData, downloadUrl) 
     isDuplicate: duplicateResult.isDuplicate,
     duplicateType: duplicateResult.duplicateType,
     autoRejected: shouldAutoReject,
+    proformaMatch: expenseProformaMatch.matched,
   });
 };
 
@@ -702,6 +746,27 @@ const processExpenseInvoiceOcr = onCall(
             (retryDuplicateResult.message || "");
         }
 
+        // PROFORMA MATCHING on retry (expense = always suggest)
+        let retryExpenseProformaMatch = {matched: false};
+        if (!isProforma && !retryAutoReject) {
+          try {
+            retryExpenseProformaMatch = await matchProformaForExpenseInvoice(
+                db, ocrData, invoiceId,
+            );
+            if (retryExpenseProformaMatch.matched) {
+              logger.info("[Expense OCR Retry] Proforma match suggestion found", {
+                proformaId: retryExpenseProformaMatch.proformaId,
+                method: retryExpenseProformaMatch.matchMethod,
+                confidence: retryExpenseProformaMatch.confidence,
+              });
+            }
+          } catch (matchError) {
+            logger.warn("[Expense OCR Retry] Proforma matching failed (non-critical)", {
+              error: matchError.message,
+            });
+          }
+        }
+
         // Update the invoice with new OCR data
         const updateData = {
           "invoiceNumber": ocrData.invoiceNumber,
@@ -748,6 +813,26 @@ const processExpenseInvoiceOcr = onCall(
           ...(!retryDuplicateResult.isDuplicate && {
             "duplicateStatus": "none",
           }),
+          // === Payment tracking (preserve manual payments on retry) ===
+          "paymentStatus": isProforma ? "unpaid" : (invoiceData.paymentStatus || "unpaid"),
+          "payments": invoiceData.payments || [],
+          "totalPaid": invoiceData.totalPaid || 0,
+          "paymentDate": invoiceData.paymentDate || null,
+
+          // === Proforma suggestion (expense = always suggest) ===
+          ...(retryExpenseProformaMatch.matched && {
+            "suggestedProformaMatch": {
+              proformaInvoiceId: retryExpenseProformaMatch.proformaId,
+              proformaNumber: retryExpenseProformaMatch.proformaNumber,
+              proformaGross: retryExpenseProformaMatch.proformaGross,
+              matchMethod: retryExpenseProformaMatch.matchMethod,
+              confidence: retryExpenseProformaMatch.confidence,
+            },
+          }),
+          ...(!retryExpenseProformaMatch.matched && {
+            "suggestedProformaMatch": null,
+          }),
+
           // Review tracking (for auto-rejected)
           ...(retryAutoReject && {
             "reviewedBy": "cloud_function_ocr_auto_reject",
