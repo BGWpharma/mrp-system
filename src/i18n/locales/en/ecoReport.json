@@ -1,20 +1,24 @@
 {
-  "title": "ECO Report - Organic Product Flow Settlement",
-  "loading": "Fetching ECO report data...",
+  "title": "ECO Turnover Sheet - Organic Product Flow Settlement",
+  "loading": "Fetching ECO turnover sheet data...",
+  "ecoModeInfo": "ECO mode active — the report includes only raw materials and finished products linked to recipes with organic certification.",
   "filters": {
     "title": "Reporting period",
     "dateFrom": "Date from",
-    "dateTo": "Date to"
+    "dateTo": "Date to",
+    "ecoMode": "ECO mode (organic recipes only)",
+    "ecoModeTooltip": "Filters data to only raw materials and finished products linked to recipes with ECO certification",
+    "ecoModeActive": "ECO mode active"
   },
   "actions": {
     "preview": "Preview data",
     "search": "Search",
     "exportExcel": "Export Excel",
-    "exportTooltip": "Download report in Excel format with 3 tabs (suppliers, raw materials, finished products)"
+    "exportTooltip": "Download turnover sheet in Excel format with 3 tabs (suppliers, raw materials, finished products)"
   },
   "info": {
-    "title": "ECO Report Information",
-    "description": "The report generates an Excel spreadsheet compliant with organic control requirements. It contains 3 tabs: suppliers, raw materials and finished products. Fields marked in yellow require manual completion (supplier eco certificate data).",
+    "title": "ECO Turnover Sheet Information",
+    "description": "The turnover sheet generates an Excel spreadsheet compliant with organic control requirements. It contains 3 tabs: suppliers, raw materials and finished products. Fields marked in yellow require manual completion (supplier eco certificate data).",
     "autoFields": "Auto fields: names, addresses, quantities, stock levels",
     "manualFields": "Manual fields: supplier eco certificates",
     "show": "Show information"
@@ -70,14 +74,14 @@
     }
   },
   "empty": {
-    "title": "Select period and generate report",
+    "title": "Select period and generate turnover sheet",
     "description": "Set the date range and click \"Preview data\" to view data or \"Export Excel\" to download the file."
   },
   "errors": {
     "selectDates": "Select reporting period dates",
     "invalidDateRange": "Start date cannot be later than end date",
-    "fetchFailed": "Failed to fetch report data: {{error}}",
-    "exportFailed": "Failed to export report: {{error}}"
+    "fetchFailed": "Failed to fetch turnover sheet data: {{error}}",
+    "exportFailed": "Failed to export turnover sheet: {{error}}"
   },
   "excel": {
     "sheets": {
@@ -135,7 +139,7 @@
       },
       "footnote": "The table covers the assortment manufactured at the plant and/or purchased for further marketing."
     },
-    "filename": "ECO_Report_{{periodFrom}}_{{periodTo}}.xlsx",
-    "successMessage": "ECO report generated: {{filename}}"
+    "filename": "ECO_Turnover_Sheet_{{periodFrom}}_{{periodTo}}.xlsx",
+    "successMessage": "ECO turnover sheet generated: {{filename}}"
   }
 }

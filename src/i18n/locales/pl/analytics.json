@@ -48,8 +48,8 @@
                 "description": "Planowanie sprintu produkcyjnego Pon-Czw. Analiza i optymalizacja tygodniowej produkcji."
             },
             "ecoReport": {
-                "title": "Raport ECO",
-                "description": "Rozliczenie przepływu produktów ekologicznych. Dostawcy, surowce i wyroby gotowe zgodnie z wymaganiami kontroli eko."
+                "title": "Obrotówka EKO",
+                "description": "Zestawienie obrotów produktów ekologicznych. Dostawcy, surowce i wyroby gotowe zgodnie z wymaganiami kontroli eko."
             }
         },
         "quickAccess": {

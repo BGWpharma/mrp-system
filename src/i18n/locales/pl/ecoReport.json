@@ -1,20 +1,24 @@
 {
-  "title": "Raport ECO - Rozliczenie przepływu produktów ekologicznych",
-  "loading": "Pobieranie danych raportu ECO...",
+  "title": "Obrotówka EKO - Zestawienie obrotów produktów ekologicznych",
+  "loading": "Pobieranie danych obrotówki EKO...",
+  "ecoModeInfo": "Tryb EKO aktywny — raport zawiera wyłącznie surowce i wyroby gotowe powiązane z recepturami posiadającymi certyfikat ekologiczny.",
   "filters": {
     "title": "Okres rozliczeniowy",
     "dateFrom": "Data od",
-    "dateTo": "Data do"
+    "dateTo": "Data do",
+    "ecoMode": "Tryb EKO (tylko receptury ekologiczne)",
+    "ecoModeTooltip": "Filtruje dane tylko do surowców i wyrobów gotowych powiązanych z recepturami posiadającymi certyfikat EKO",
+    "ecoModeActive": "Tryb EKO aktywny"
   },
   "actions": {
     "preview": "Podgląd danych",
     "search": "Szukaj",
     "exportExcel": "Eksport Excel",
-    "exportTooltip": "Pobierz raport w formacie Excel z 3 zakładkami (dostawcy, surowce, wyroby gotowe)"
+    "exportTooltip": "Pobierz obrotówkę w formacie Excel z 3 zakładkami (dostawcy, surowce, wyroby gotowe)"
   },
   "info": {
-    "title": "Informacja o raporcie ECO",
-    "description": "Raport generuje arkusz Excel zgodny z wymaganiami kontroli ekologicznej. Zawiera 3 zakładki: dostawcy, surowce i wyroby gotowe. Pola oznaczone kolorem żółtym wymagają uzupełnienia ręcznego (dane certyfikatów eko dostawców).",
+    "title": "Informacja o obrotówce EKO",
+    "description": "Obrotówka generuje arkusz Excel zgodny z wymaganiami kontroli ekologicznej. Zawiera 3 zakładki: dostawcy, surowce i wyroby gotowe. Pola oznaczone kolorem żółtym wymagają uzupełnienia ręcznego (dane certyfikatów eko dostawców).",
     "autoFields": "Pola automatyczne: nazwy, adresy, ilości, stany magazynowe",
     "manualFields": "Pola ręczne: certyfikaty eko dostawców",
     "show": "Pokaż informacje"
@@ -70,14 +74,14 @@
     }
   },
   "empty": {
-    "title": "Wybierz okres i wygeneruj raport",
+    "title": "Wybierz okres i wygeneruj obrotówkę",
     "description": "Ustaw zakres dat i kliknij \"Podgląd danych\" aby zobaczyć dane lub \"Eksport Excel\" aby pobrać plik."
   },
   "errors": {
     "selectDates": "Wybierz daty okresu rozliczeniowego",
     "invalidDateRange": "Data początkowa nie może być późniejsza niż data końcowa",
-    "fetchFailed": "Nie udało się pobrać danych raportu: {{error}}",
-    "exportFailed": "Nie udało się wyeksportować raportu: {{error}}"
+    "fetchFailed": "Nie udało się pobrać danych obrotówki: {{error}}",
+    "exportFailed": "Nie udało się wyeksportować obrotówki: {{error}}"
   },
   "excel": {
     "sheets": {
@@ -135,7 +139,7 @@
       },
       "footnote": "Tabela obejmuje asortyment wytworzony w zakładzie i/lub zakupiony celem dalszego wprowadzenia do obrotu."
     },
-    "filename": "Raport_ECO_{{periodFrom}}_{{periodTo}}.xlsx",
-    "successMessage": "Wygenerowano raport ECO: {{filename}}"
+    "filename": "Obrotowka_EKO_{{periodFrom}}_{{periodTo}}.xlsx",
+    "successMessage": "Wygenerowano obrotówkę EKO: {{filename}}"
   }
 }

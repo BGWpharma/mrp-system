@@ -22,7 +22,9 @@ import {
   InputAdornment,
   Tooltip,
   Collapse,
-  IconButton
+  IconButton,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -54,7 +56,7 @@ const TabPanel = ({ children, value, index, ...other }) => (
 );
 
 /**
- * Strona raportu ECO - Rozliczenie przepływu produktów ekologicznych
+ * Strona obrotówki EKO - Zestawienie obrotów produktów ekologicznych
  */
 const EcoReportPage = () => {
   const { t } = useTranslation('ecoReport');
@@ -77,6 +79,7 @@ const EcoReportPage = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [showInfo, setShowInfo] = useState(true);
+  const [ecoMode, setEcoMode] = useState(false);
 
   /**
    * Generuj podgląd danych
@@ -96,15 +99,15 @@ const EcoReportPage = () => {
     setReportData(null);
 
     try {
-      const data = await fetchEcoReportData({ dateFrom, dateTo });
+      const data = await fetchEcoReportData({ dateFrom, dateTo, ecoMode });
       setReportData(data);
     } catch (err) {
-      console.error('Błąd pobierania danych raportu ECO:', err);
+      console.error('Błąd pobierania danych obrotówki EKO:', err);
       setError(t('errors.fetchFailed', { error: err.message }));
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, t]);
+  }, [dateFrom, dateTo, ecoMode, t]);
 
   /**
    * Eksport do Excel
@@ -116,18 +119,18 @@ const EcoReportPage = () => {
     try {
       let data = reportData;
       if (!data) {
-        data = await fetchEcoReportData({ dateFrom, dateTo });
+        data = await fetchEcoReportData({ dateFrom, dateTo, ecoMode });
         setReportData(data);
       }
-      const result = await exportEcoReportToExcel(data, { dateFrom, dateTo });
-      console.log('ECO Report exported:', result);
+      const result = await exportEcoReportToExcel(data, { dateFrom, dateTo, ecoMode });
+      console.log('Obrotówka EKO wyeksportowana:', result);
     } catch (err) {
-      console.error('Błąd eksportu raportu ECO:', err);
+      console.error('Błąd eksportu obrotówki EKO:', err);
       setError(t('errors.exportFailed', { error: err.message }));
     } finally {
       setExporting(false);
     }
-  }, [reportData, dateFrom, dateTo, t]);
+  }, [reportData, dateFrom, dateTo, ecoMode, t]);
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
@@ -265,6 +268,42 @@ const EcoReportPage = () => {
             </Button>
           </Grid>
         </Grid>
+
+        {/* Przełącznik trybu EKO */}
+        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Tooltip title={t('filters.ecoModeTooltip')}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={ecoMode}
+                  onChange={(e) => {
+                    setEcoMode(e.target.checked);
+                    setReportData(null); // Reset danych przy zmianie trybu
+                  }}
+                  color="success"
+                  disabled={loading || exporting}
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <EcoIcon color={ecoMode ? 'success' : 'disabled'} fontSize="small" />
+                  <Typography variant="body2" fontWeight={ecoMode ? 'bold' : 'normal'}>
+                    {t('filters.ecoMode')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Tooltip>
+          {ecoMode && (
+            <Chip 
+              icon={<EcoIcon />} 
+              label={t('filters.ecoModeActive')} 
+              color="success" 
+              size="small" 
+              variant="outlined" 
+            />
+          )}
+        </Box>
       </Paper>
 
       {/* Error */}
@@ -282,6 +321,13 @@ const EcoReportPage = () => {
             {t('loading')}
           </Typography>
         </Paper>
+      )}
+
+      {/* Info o trybie EKO */}
+      {reportData && !loading && reportData.ecoMode && (
+        <Alert severity="success" sx={{ mb: 2 }} icon={<EcoIcon />}>
+          {t('ecoModeInfo')}
+        </Alert>
       )}
 
       {/* Statystyki */}

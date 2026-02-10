@@ -1,6 +1,6 @@
 // src/services/ecoReportService.js
 /**
- * Serwis generowania raportu ECO - rozliczenie przepływu produktów ekologicznych
+ * Serwis generowania obrotówki EKO - zestawienie obrotów produktów ekologicznych
  * 
  * Generuje Excel z 3 zakładkami:
  * Tab.1 - Dostawcy: Informacja o dostawcach i zakupionych produktach ekologicznych
@@ -30,6 +30,7 @@ const INVENTORY_BATCHES_COLLECTION = 'inventoryBatches';
 const PRODUCTION_TASKS_COLLECTION = 'productionTasks';
 const CMR_COLLECTION = 'cmrDocuments';
 const CMR_ITEMS_COLLECTION = 'cmrItems';
+const RECIPES_COLLECTION = 'recipes';
 
 /**
  * Bezpieczna konwersja dat Firebase/JS
@@ -283,6 +284,66 @@ const fetchCmrData = async (dateFrom, dateTo) => {
   return { cmrs, cmrItems };
 };
 
+/**
+ * Pobiera receptury z certyfikatem EKO (certifications.eco === true)
+ */
+const fetchEcoRecipes = async () => {
+  const q = query(
+    collection(db, RECIPES_COLLECTION),
+    where('certifications.eco', '==', true)
+  );
+  const snapshot = await getDocs(q);
+  const recipes = [];
+  snapshot.forEach(doc => {
+    recipes.push({ id: doc.id, ...doc.data() });
+  });
+  console.log('[EKO] Pobrano receptur EKO:', recipes.length);
+  return recipes;
+};
+
+/**
+ * Buduje zbiory ID pozycji magazynowych powiązanych z recepturami EKO.
+ * - ecoRawMaterialIds: ID surowców (z ingredients[].id receptur EKO)
+ * - ecoFinishedProductIds: ID wyrobów gotowych (z inventoryItems gdzie recipeId === eco recipe ID
+ *   ORAZ z recipe.productMaterialId jeśli ustawione)
+ * 
+ * Powiązanie receptura → wyrób gotowy jest odwrotne:
+ * to pozycja magazynowa (inventory) ma pole recipeId wskazujące na recepturę,
+ * a nie receptura na pozycję magazynową.
+ */
+const buildEcoItemIds = (ecoRecipes, inventoryItems) => {
+  const ecoRawMaterialIds = new Set();
+  const ecoFinishedProductIds = new Set();
+  const ecoRecipeIds = new Set(ecoRecipes.map(r => r.id));
+
+  for (const recipe of ecoRecipes) {
+    // Składniki receptury → surowce EKO
+    if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+      for (const ing of recipe.ingredients) {
+        if (ing.id) {
+          ecoRawMaterialIds.add(ing.id);
+        }
+      }
+    }
+    // Wyrób gotowy receptury → wyrób EKO (jeśli productMaterialId ustawione)
+    if (recipe.productMaterialId) {
+      ecoFinishedProductIds.add(recipe.productMaterialId);
+    }
+  }
+
+  // Powiązanie odwrotne: pozycje magazynowe z recipeId wskazującym na recepturę EKO
+  for (const item of Object.values(inventoryItems)) {
+    if (item.recipeId && ecoRecipeIds.has(item.recipeId)) {
+      ecoFinishedProductIds.add(item.id);
+    }
+  }
+
+  console.log('[EKO] Zbudowano zbiory ID — surowce EKO:', ecoRawMaterialIds.size, 
+    ', wyroby EKO:', ecoFinishedProductIds.size,
+    ', (z recipeId:', Object.values(inventoryItems).filter(i => i.recipeId && ecoRecipeIds.has(i.recipeId)).length, ')');
+  return { ecoRawMaterialIds, ecoFinishedProductIds };
+};
+
 // ============================================================
 // LOGIKA OBLICZENIOWA
 // ============================================================
@@ -403,7 +464,7 @@ const calculateStockForward = (itemId, transactions, cutoffDate, inclusive = fal
  * Kolumny: Nazwa dostawcy | Adres | Rodzaj produktu | Ilość w tonach | 
  *          Jednostka cert. | Nr certyfikatu | Certyfikat ważny od...do...
  */
-const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems) => {
+const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems, ecoRawMaterialIds = null) => {
   // Grupuj PO wg dostawcy - surowce i opakowania jednostkowe
   const supplierProducts = {};
 
@@ -424,6 +485,9 @@ const generateSuppliersData = (suppliers, purchaseOrders, inventoryItems) => {
         inventoryItem.category === 'Opakowania jednostkowe'
       );
       if (!isRelevantItem) continue;
+
+      // Tryb EKO: pokaż tylko pozycje powiązane z recepturami EKO
+      if (ecoRawMaterialIds && !ecoRawMaterialIds.has(itemId)) continue;
 
       const itemName = item.name || inventoryItem?.name || 'Nieznany';
       const unit = item.unit || inventoryItem?.unit || 'kg';
@@ -510,12 +574,19 @@ const generateRawMaterialsData = (
   productionTasks, 
   dateFrom, 
   dateTo,
-  existingBatchIds = new Set()
+  existingBatchIds = new Set(),
+  ecoRawMaterialIds = null
 ) => {
   // Filtruj surowce (uwzględnij category, isRawMaterial i type)
-  const rawMaterials = Object.values(inventoryItems).filter(
+  let rawMaterials = Object.values(inventoryItems).filter(
     item => item.isRawMaterial === true || item.type === 'raw' || item.category === 'Surowce'
   );
+
+  // Tryb EKO: filtruj tylko surowce powiązane z recepturami EKO
+  if (ecoRawMaterialIds) {
+    rawMaterials = rawMaterials.filter(item => ecoRawMaterialIds.has(item.id));
+    console.log('[EKO] Tryb EKO - surowce po filtrze receptur EKO:', rawMaterials.length);
+  }
 
   console.log('[ECO DEBUG] ====== generateRawMaterialsData ======');
   console.log('[ECO DEBUG] Zakres dat:', dateFrom, '-', dateTo);
@@ -772,13 +843,20 @@ const generateFinishedProductsData = (
   cmrItems,
   dateFrom,
   dateTo,
-  existingBatchIds = new Set()
+  existingBatchIds = new Set(),
+  ecoFinishedProductIds = null
 ) => {
   // Filtruj wyroby gotowe (uwzględnij category, isFinishedProduct i type)
-  const finishedProducts = Object.values(inventoryItems).filter(
+  let finishedProducts = Object.values(inventoryItems).filter(
     item => item.isFinishedProduct === true || item.type === 'finished' || 
             item.category === 'Gotowe produkty' || item.category === 'Produkty gotowe'
   );
+
+  // Tryb EKO: filtruj tylko wyroby gotowe powiązane z recepturami EKO
+  if (ecoFinishedProductIds) {
+    finishedProducts = finishedProducts.filter(item => ecoFinishedProductIds.has(item.id));
+    console.log('[EKO] Tryb EKO - wyroby gotowe po filtrze receptur EKO:', finishedProducts.length);
+  }
 
   // Transakcje w okresie
   const periodTransactions = transactions.filter(tx => {
@@ -966,17 +1044,17 @@ const generateFinishedProductsData = (
 // ============================================================
 
 /**
- * Pobiera wszystkie dane potrzebne do raportu ECO
+ * Pobiera wszystkie dane potrzebne do obrotówki EKO
  */
 export const fetchEcoReportData = async (filters) => {
-  const { dateFrom, dateTo } = filters;
+  const { dateFrom, dateTo, ecoMode = false } = filters;
   
   const startDate = new Date(dateFrom);
   startDate.setHours(0, 0, 0, 0);
   const endDate = new Date(dateTo);
   endDate.setHours(23, 59, 59, 999);
 
-  console.log('[ECO Report] Pobieranie danych za okres:', startDate, '-', endDate);
+  console.log('[EKO Obrotówka] Pobieranie danych za okres:', startDate, '-', endDate);
 
   // Pobierz wszystkie dane równolegle
   const [
@@ -997,7 +1075,7 @@ export const fetchEcoReportData = async (filters) => {
     fetchCmrData(startDate, endDate)
   ]);
 
-  console.log('[ECO Report] Pobrano dane:', {
+  console.log('[EKO Obrotówka] Pobrano dane:', {
     suppliers: Object.keys(suppliers).length,
     purchaseOrders: purchaseOrders.length,
     inventoryItems: Object.keys(inventoryItems).length,
@@ -1012,9 +1090,9 @@ export const fetchEcoReportData = async (filters) => {
   if (cmrData.cmrs.length > 0) {
     const statusCounts = {};
     cmrData.cmrs.forEach(c => { statusCounts[c.status] = (statusCounts[c.status] || 0) + 1; });
-    console.log('[ECO Report] CMR statusy:', statusCounts);
+    console.log('[EKO Obrotówka] CMR statusy:', statusCounts);
     const itemsWithBatches = cmrData.cmrItems.filter(ci => ci.linkedBatches && ci.linkedBatches.length > 0).length;
-    console.log(`[ECO Report] cmrItems z linkedBatches: ${itemsWithBatches}/${cmrData.cmrItems.length}`);
+    console.log(`[EKO Obrotówka] cmrItems z linkedBatches: ${itemsWithBatches}/${cmrData.cmrItems.length}`);
   }
 
   // ============================================================
@@ -1124,22 +1202,38 @@ export const fetchEcoReportData = async (filters) => {
   console.log(`[ECO DEDUP] Odfiltrowano ${itemLevelCorrectionCount} item-level korekt inwentaryzacyjnych (duplikaty batch-level)`);
   console.log(`[ECO DEDUP] Transakcje po deduplikacji: ${deduplicatedTransactions.length} (było: ${validTransactions.length})`);
 
+  // ============================================================
+  // TRYB EKO: filtrowanie po recepturach z certyfikatem EKO
+  // ============================================================
+  let ecoRawMaterialIds = null;
+  let ecoFinishedProductIds = null;
+
+  if (ecoMode) {
+    const ecoRecipes = await fetchEcoRecipes();
+    const ecoIds = buildEcoItemIds(ecoRecipes, inventoryItems);
+    ecoRawMaterialIds = ecoIds.ecoRawMaterialIds;
+    ecoFinishedProductIds = ecoIds.ecoFinishedProductIds;
+    console.log('[EKO] Tryb EKO aktywny — receptury EKO:', ecoRecipes.length,
+      ', surowców EKO:', ecoRawMaterialIds.size, ', wyrobów EKO:', ecoFinishedProductIds.size);
+  }
+
   // Generuj dane dla każdej zakładki
   // deduplicatedTransactions — do wszystkich obliczeń (forward calculation + kategoryzacja przepływów)
   // Metoda forward nie wymaga aktualnego stanu z bazy — opiera się wyłącznie na transakcjach
-  const suppliersData = generateSuppliersData(suppliers, purchaseOrders, inventoryItems);
+  const suppliersData = generateSuppliersData(suppliers, purchaseOrders, inventoryItems, ecoRawMaterialIds);
   const rawMaterialsData = generateRawMaterialsData(
-    inventoryItems, deduplicatedTransactions, productionTasks, startDate, endDate, existingBatchIds
+    inventoryItems, deduplicatedTransactions, productionTasks, startDate, endDate, existingBatchIds, ecoRawMaterialIds
   );
   const finishedProductsData = generateFinishedProductsData(
     inventoryItems, deduplicatedTransactions, productionTasks,
-    cmrData.cmrs, cmrData.cmrItems, startDate, endDate, existingBatchIds
+    cmrData.cmrs, cmrData.cmrItems, startDate, endDate, existingBatchIds, ecoFinishedProductIds
   );
 
   return {
     suppliersData,
     rawMaterialsData,
     finishedProductsData,
+    ecoMode,
     stats: {
       suppliersCount: suppliersData.length,
       rawMaterialsCount: rawMaterialsData.length,
@@ -1153,7 +1247,7 @@ export const fetchEcoReportData = async (filters) => {
 };
 
 /**
- * Eksportuje raport ECO do pliku Excel z 3 zakładkami
+ * Eksportuje obrotówkę EKO do pliku Excel z 3 zakładkami
  * Formatowanie zgodne z dostarczonym arkuszem
  */
 export const exportEcoReportToExcel = async (data, filters) => {
@@ -1492,16 +1586,16 @@ export const exportEcoReportToExcel = async (data, filters) => {
 };
 
 /**
- * Główna funkcja - pobiera dane i generuje raport
+ * Główna funkcja - pobiera dane i generuje obrotówkę
  */
 export const generateEcoReport = async (filters) => {
   try {
-    console.log('[ECO Report] Rozpoczynam generowanie raportu z filtrami:', filters);
+    console.log('[EKO Obrotówka] Rozpoczynam generowanie obrotówki z filtrami:', filters);
     
     // Pobierz dane
     const data = await fetchEcoReportData(filters);
     
-    console.log('[ECO Report] Dane wygenerowane:', data.stats);
+    console.log('[EKO Obrotówka] Dane wygenerowane:', data.stats);
 
     // Eksportuj do Excel
     const result = await exportEcoReportToExcel(data, filters);
@@ -1512,7 +1606,7 @@ export const generateEcoReport = async (filters) => {
       stats: data.stats
     };
   } catch (error) {
-    console.error('[ECO Report] Błąd generowania raportu:', error);
+    console.error('[EKO Obrotówka] Błąd generowania obrotówki:', error);
     throw error;
   }
 };

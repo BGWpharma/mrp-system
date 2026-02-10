@@ -48,8 +48,8 @@
                 "description": "Mon-Thu production sprint planning. Weekly production analysis and optimization."
             },
             "ecoReport": {
-                "title": "ECO Report",
-                "description": "Ecological product flow report. Suppliers, raw materials and finished products for eco audit requirements."
+                "title": "ECO Turnover Sheet",
+                "description": "Ecological product turnover sheet. Suppliers, raw materials and finished products for eco audit requirements."
             }
         },
         "quickAccess": {
