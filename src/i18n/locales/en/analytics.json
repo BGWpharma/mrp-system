@@ -179,6 +179,7 @@
             "noData": "No consumption data",
             "date": "Date",
             "task": "Task",
+            "moNumber": "MO Number",
             "product": "Product",
             "batch": "Batch",
             "quantity": "Quantity",
@@ -186,10 +187,26 @@
             "cost": "Cost",
             "user": "User"
         },
+        "moSection": {
+            "title": "Production tasks (MO)",
+            "description": "Expand a task to see material breakdown: planned quantity vs consumed.",
+            "noData": "No production tasks with consumption in selected period.",
+            "material": "Material",
+            "plannedQuantity": "Planned quantity",
+            "consumedQuantity": "Consumption",
+            "unit": "Unit",
+            "difference": "Difference",
+            "materials": "materials",
+            "unnamedMO": "MO without number"
+        },
         "export": {
             "success": "Consumption report exported to CSV files",
             "error": "Failed to export report",
-            "csv": "Export CSV"
+            "csv": "Export CSV",
+            "excel": "Export Excel (with per-MO sheets)",
+            "excelSuccess": "Data exported to Excel with per-MO material sheets",
+            "summarySheet": "Summary",
+            "detailsSheet": "Details"
         }
     },
     "productionCostsReport": {

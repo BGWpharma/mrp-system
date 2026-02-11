@@ -1219,6 +1219,19 @@ export const updatePurchaseOrder = async (purchaseOrderId, updatedData, userId =
       console.error('❌ [PO_UPDATE_DEBUG] Błąd podczas aktualizacji cen w rezerwacjach PO:', error);
       // Nie przerywamy procesu zapisywania PO z powodu błędu aktualizacji rezerwacji
     }
+
+    // Aktualizuj planowaną datę dostawy w rezerwacjach PO
+    const hasDeliveryDateChange = updatedData.expectedDeliveryDate !== undefined ||
+      (updatedData.items?.some(item => item.plannedDeliveryDate !== undefined));
+    if (hasDeliveryDateChange) {
+      try {
+        const { updatePOReservationsDeliveryDateOnPOChange } = await import('./poReservationService');
+        const dateUpdateResult = await updatePOReservationsDeliveryDateOnPOChange(purchaseOrderId, newPoData, userId || 'system');
+        console.log('✅ [PO_UPDATE_DEBUG] Zaktualizowano daty dostawy w rezerwacjach PO:', dateUpdateResult);
+      } catch (error) {
+        console.error('❌ [PO_UPDATE_DEBUG] Błąd aktualizacji dat dostawy w rezerwacjach PO:', error);
+      }
+    }
     
     // WYŁĄCZONA STARA LOGIKA: Nowa funkcja updateBatchPricesOnAnySave już obsługuje wszystkie przypadki
     // Stara funkcja updateBatchBasePricesOnUnitPriceChange powodowała konflikty przy dopasowywaniu partii

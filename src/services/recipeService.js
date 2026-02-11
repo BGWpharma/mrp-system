@@ -374,6 +374,26 @@ import {
       throw new Error('Receptura nie istnieje');
     }
   };
+
+  /**
+   * Pobiera receptury zawierające dany składnik (pozycję magazynową)
+   * Używane m.in. przy aktualizacji nazwy SKU - aby zaktualizować nazwę składnika we wszystkich recepturach
+   * @param {string} inventoryItemId - ID pozycji magazynowej (ingredient.id)
+   * @returns {Promise<Array>} - Tablica receptur zawierających ten składnik
+   */
+  export const getRecipesContainingIngredient = async (inventoryItemId) => {
+    if (!inventoryItemId) return [];
+    try {
+      const allRecipes = await getAllRecipes();
+      return allRecipes.filter(recipe => {
+        const ingredients = recipe.ingredients || [];
+        return ingredients.some(ing => ing.id === inventoryItemId);
+      });
+    } catch (error) {
+      console.error('Błąd podczas pobierania receptur zawierających składnik:', error);
+      return [];
+    }
+  };
   
   // Tworzenie nowej receptury
   export const createRecipe = async (recipeData, userId) => {

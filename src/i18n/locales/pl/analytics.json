@@ -179,6 +179,7 @@
             "noData": "Brak danych konsumpcji",
             "date": "Data",
             "task": "Zadanie",
+            "moNumber": "Numer MO",
             "product": "Produkt",
             "batch": "Partia",
             "quantity": "Ilość",
@@ -186,10 +187,26 @@
             "cost": "Koszt",
             "user": "Użytkownik"
         },
+        "moSection": {
+            "title": "Zadania produkcyjne (MO)",
+            "description": "Rozwiń zadanie, aby zobaczyć zestawienie materiałów: ilość planowana vs skonsumowana.",
+            "noData": "Brak zadań produkcyjnych z konsumpcją w wybranym okresie.",
+            "material": "Materiał",
+            "plannedQuantity": "Ilość planowana",
+            "consumedQuantity": "Konsumpcja",
+            "unit": "Jednostka",
+            "difference": "Różnica",
+            "materials": "materiałów",
+            "unnamedMO": "MO bez numeru"
+        },
         "export": {
             "success": "Wyeksportowano raport konsumpcji do plików CSV",
             "error": "Nie udało się wyeksportować raportu",
-            "csv": "Eksportuj CSV"
+            "csv": "Eksportuj CSV",
+            "excel": "Eksportuj Excel (z arkuszami per MO)",
+            "excelSuccess": "Dane zostały wyeksportowane do pliku Excel z arkuszami per MO",
+            "summarySheet": "Podsumowanie",
+            "detailsSheet": "Szczegóły"
         }
     },
     "productionCostsReport": {

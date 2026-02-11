@@ -413,6 +413,14 @@
     "collectivePackaging": "Collective packaging",
     "individualPackaging": "Individual packaging",
     "finishedProducts": "Finished products",
-    "other": "Other"
+    "other": "Other",
+    "updateSuccess": "Item has been updated",
+    "updateSuccessWithRecipes": "Item updated. Updated {{count}} recipe(s) with new ingredient name.",
+    "recipeUpdateDialog": {
+      "title": "Recipe update",
+      "message": "This ingredient (inventory item ID) is used in {{count}} recipe(s). Update them automatically to a new version with the new ingredient name?",
+      "confirm": "Yes, update recipes",
+      "decline": "No, only save the item"
+    }
   }
 }

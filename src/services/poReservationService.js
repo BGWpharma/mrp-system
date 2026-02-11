@@ -1091,7 +1091,103 @@ export const updatePOReservationsPricesOnPOChange = async (purchaseOrderId, poDa
     console.error('❌ [PO_RES_PRICE_UPDATE] Błąd podczas aktualizacji cen w rezerwacjach PO:', error);
     throw error;
   }
-}; 
+};
+
+/**
+ * Konwertuje wartość daty do formatu porównywalnego (ms)
+ * @param {Date|string|object} value - data w dowolnym formacie
+ * @returns {number|null} - timestamp w ms lub null
+ */
+const normalizeDateToMs = (value) => {
+  if (!value) return null;
+  try {
+    if (value instanceof Date) return value.getTime();
+    if (value.toDate && typeof value.toDate === 'function') return value.toDate().getTime();
+    if (typeof value === 'string') return new Date(value).getTime();
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Aktualizuje planowaną datę dostawy w rezerwacjach PO po zmianie w zamówieniu zakupowym
+ * @param {string} purchaseOrderId - ID zamówienia zakupowego
+ * @param {Object} poData - Dane zamówienia zakupowego z nowymi datami
+ * @param {string} userId - ID użytkownika
+ * @returns {Promise<Object>} - Wynik aktualizacji
+ */
+export const updatePOReservationsDeliveryDateOnPOChange = async (purchaseOrderId, poData, userId = 'system') => {
+  try {
+    console.log(`🔄 [PO_RES_DATE_UPDATE] Aktualizacja dat dostawy w rezerwacjach PO dla zamówienia ${purchaseOrderId}`);
+
+    const q = query(
+      collection(db, PO_RESERVATIONS_COLLECTION),
+      where('poId', '==', purchaseOrderId),
+      where('status', 'in', ['pending', 'delivered'])
+    );
+
+    const snapshot = await getDocs(q);
+    const reservations = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (reservations.length === 0) {
+      return { success: true, updated: 0, message: 'Brak rezerwacji do aktualizacji' };
+    }
+
+    let updatedCount = 0;
+    let errorCount = 0;
+
+    for (const reservation of reservations) {
+      try {
+        const poItem = poData.items?.find(item => item.id === reservation.poItemId);
+        if (!poItem) {
+          errorCount++;
+          continue;
+        }
+
+        const newExpectedDate = poItem.plannedDeliveryDate ?? poData.expectedDeliveryDate ?? null;
+        const newMs = normalizeDateToMs(newExpectedDate);
+        const oldMs = normalizeDateToMs(reservation.expectedDeliveryDate);
+
+        if (newMs === oldMs) continue;
+        if (newMs === null && oldMs === null) continue;
+
+        let valueToStore = null;
+        if (newExpectedDate instanceof Date) {
+          valueToStore = newExpectedDate.toISOString();
+        } else if (newExpectedDate?.toDate && typeof newExpectedDate.toDate === 'function') {
+          valueToStore = newExpectedDate.toDate().toISOString();
+        } else if (typeof newExpectedDate === 'string' && newExpectedDate.match(/^\d{4}-/)) {
+          valueToStore = newExpectedDate;
+        }
+
+        if (!valueToStore) {
+          errorCount++;
+          continue;
+        }
+
+        const reservationRef = doc(db, PO_RESERVATIONS_COLLECTION, reservation.id);
+        await updateDoc(reservationRef, {
+          expectedDeliveryDate: valueToStore,
+          updatedAt: serverTimestamp(),
+          updatedBy: userId
+        });
+
+        updatedCount++;
+        console.log(`✅ [PO_RES_DATE_UPDATE] Rezerwacja ${reservation.id}: data dostawy zaktualizowana`);
+      } catch (error) {
+        console.error(`❌ [PO_RES_DATE_UPDATE] Błąd rezerwacji ${reservation.id}:`, error);
+        errorCount++;
+      }
+    }
+
+    console.log(`📊 [PO_RES_DATE_UPDATE] Zaktualizowano ${updatedCount} rezerwacji, ${errorCount} błędów`);
+    return { success: true, updated: updatedCount, errors: errorCount };
+  } catch (error) {
+    console.error('❌ [PO_RES_DATE_UPDATE] Błąd aktualizacji dat w rezerwacjach PO:', error);
+    throw error;
+  }
+};
 
 export default {
   createPOReservation,
@@ -1105,5 +1201,6 @@ export default {
   getPOReservationStats,
   syncPOReservationsWithBatches,
   refreshLinkedBatchesQuantities,
-  updatePOReservationsPricesOnPOChange
+  updatePOReservationsPricesOnPOChange,
+  updatePOReservationsDeliveryDateOnPOChange
 }; 

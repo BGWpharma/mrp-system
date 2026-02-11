@@ -102,8 +102,68 @@ export const calculateTotalWeight = (components) => {
 // ==================== MATRYCA CZASU PRACY ====================
 
 /**
- * Domyślna matryca czasu pracy (gramatura -> czas w minutach)
- * Może być rozszerzona/nadpisana przez dane z analizy
+ * Matryca czasu/kosztu według formatu produktu (Pack weight + flavored)
+ * Źródło: CSV - Target Time (sec), At cost factory per hour
+ */
+export const LABOR_MATRIX_BY_FORMAT = [
+  { packWeightMin: 60, packWeightMax: 180, flavored: null, targetTimeSec: 15, costPerHourEur: 0.60 },  // ALL CAPS FORMAT
+  { packWeightMin: 300, packWeightMax: 300, flavored: true, targetTimeSec: 17, costPerHourEur: 0.68 },   // 300g FLAVORED
+  { packWeightMin: 300, packWeightMax: 300, flavored: false, targetTimeSec: 15, costPerHourEur: 0.60 },  // 300g UNFLAVORED
+  { packWeightMin: 900, packWeightMax: 900, flavored: null, targetTimeSec: 40, costPerHourEur: 1.59 }, // 900g FORMAT
+];
+
+/** Dostępne gramatury opakowań do wyboru (g) */
+export const PACK_WEIGHT_OPTIONS = [60, 90, 120, 180, 300, 900];
+
+/**
+ * Pobiera parametry czasu i kosztu z matrycy na podstawie formatu (pack weight + flavored)
+ * @param {number} packWeight - Gramatura opakowania (g)
+ * @param {boolean|null} flavored - Czy produkt smakowy (tylko dla 300g)
+ * @returns {Object|null} - { targetTimeSec, costPerHourEur } lub null jeśli brak dopasowania
+ */
+export const getLaborParamsByFormat = (packWeight, flavored = false) => {
+  if (!packWeight) return null;
+
+  const match = LABOR_MATRIX_BY_FORMAT.find(entry => {
+    if (packWeight < entry.packWeightMin || packWeight > entry.packWeightMax) return false;
+    if (entry.packWeightMin === 300 && entry.packWeightMax === 300) {
+      return entry.flavored === Boolean(flavored);
+    }
+    return true;
+  });
+
+  return match ? { targetTimeSec: match.targetTimeSec, costPerHourEur: match.costPerHourEur } : null;
+};
+
+/**
+ * Oblicza koszt pracy na jednostkę według matrycy formatu
+ * Formuła: (targetTimeSec / 3600) * costPerHourEur
+ * @param {number} packWeight - Gramatura opakowania (g)
+ * @param {boolean} flavored - Czy produkt smakowy (dla 300g)
+ * @param {number} quantity - Ilość jednostek (domyślnie 1)
+ * @returns {Object|null} - { targetTimeSec, costPerHourEur, laborCostPerUnit, laborCostTotal } lub null
+ */
+export const calculateLaborCostByFormat = (packWeight, flavored = false, quantity = 1) => {
+  const params = getLaborParamsByFormat(packWeight, flavored);
+  if (!params) return null;
+
+  const laborCostPerUnit = (params.targetTimeSec / 3600) * params.costPerHourEur;
+  const laborCostTotal = laborCostPerUnit * quantity;
+  const estimatedMinutes = (params.targetTimeSec / 60) * quantity;
+
+  return {
+    targetTimeSec: params.targetTimeSec,
+    costPerHourEur: params.costPerHourEur,
+    laborCostPerUnit,
+    laborCostTotal,
+    estimatedMinutes,
+    source: 'format'
+  };
+};
+
+/**
+ * Domyślna matryca czasu pracy - FALLBACK (gramatura surowca -> czas w minutach)
+ * Używana gdy użytkownik nie wybierze formatu (pack weight)
  */
 const DEFAULT_LABOR_TIME_MATRIX = [
   { minGrams: 0, maxGrams: 100, minutes: 0.6 },
@@ -117,21 +177,20 @@ const DEFAULT_LABOR_TIME_MATRIX = [
 ];
 
 /**
- * Oblicza szacowany czas pracy na podstawie gramatury
+ * Oblicza szacowany czas pracy na podstawie gramatury (tryb fallback)
  * @param {number} gramatura - Gramatura surowca w gramach
  * @param {Array} laborMatrix - Opcjonalna niestandardowa matryca czasu pracy
  * @returns {number} - Szacowany czas w minutach
  */
 export const calculateLaborTime = (gramatura, laborMatrix = null) => {
   const matrix = laborMatrix || DEFAULT_LABOR_TIME_MATRIX;
-  
+
   const range = matrix.find(r => gramatura >= r.minGrams && gramatura < r.maxGrams);
-  
+
   if (range) {
     return range.minutes;
   }
-  
-  // Jeśli poza zakresem, użyj ostatniego przedziału
+
   return matrix[matrix.length - 1].minutes;
 };
 
@@ -302,7 +361,7 @@ export const getCurrentCostPerMinute = async () => {
  * @returns {Promise<Object>} - Obliczona wycena
  */
 export const calculateQuotation = async (quotationData) => {
-  const { components, packaging, laborMatrix, customCostPerMinute } = quotationData;
+  const { components, packaging, laborMatrix, customCostPerMinute, packWeight, flavored } = quotationData;
   
   // 1. Oblicz koszt komponentów
   let componentsCost = 0;
@@ -378,21 +437,39 @@ export const calculateQuotation = async (quotationData) => {
   
   // 3. Oblicz koszt pracy
   const totalGramatura = calculateTotalWeight(components);
-  const estimatedMinutes = calculateLaborTime(totalGramatura, laborMatrix);
-  
-  let costPerMinute = customCostPerMinute;
-  if (!costPerMinute || costPerMinute <= 0) {
-    costPerMinute = await getCurrentCostPerMinute();
+  const packagingQuantity = packaging?.quantity || 1;
+  let laborDetails;
+  let laborCost;
+
+  // Tryb nowej matrycy (pack weight + flavored) - koszt z matrycy formatu
+  const formatLabor = calculateLaborCostByFormat(packWeight, flavored, packagingQuantity);
+  if (formatLabor) {
+    laborCost = formatLabor.laborCostTotal;
+    laborDetails = {
+      gramatura: totalGramatura,
+      estimatedMinutes: formatLabor.estimatedMinutes,
+      targetTimeSec: formatLabor.targetTimeSec,
+      costPerHourEur: formatLabor.costPerHourEur,
+      totalCost: laborCost,
+      source: 'format'
+    };
+  } else {
+    // Fallback: stara matryca (gramatura -> minuty) × costPerMinute
+    const estimatedMinutes = calculateLaborTime(totalGramatura, laborMatrix);
+    let costPerMinute = customCostPerMinute;
+    if (!costPerMinute || costPerMinute <= 0) {
+      const costData = await getCurrentCostPerMinute();
+      costPerMinute = costData.costPerMinute;
+    }
+    laborCost = estimatedMinutes * (costPerMinute || 0);
+    laborDetails = {
+      gramatura: totalGramatura,
+      estimatedMinutes,
+      costPerMinute: costPerMinute || 0,
+      totalCost: laborCost,
+      source: 'gramatura'
+    };
   }
-  
-  const laborCost = estimatedMinutes * costPerMinute;
-  
-  const laborDetails = {
-    gramatura: totalGramatura,
-    estimatedMinutes,
-    costPerMinute,
-    totalCost: laborCost
-  };
   
   // 4. Oblicz COGS
   const totalCOGS = componentsCost + packagingCost + laborCost;
@@ -539,5 +616,9 @@ export default {
   getAllQuotations,
   
   // Stałe
-  DEFAULT_LABOR_TIME_MATRIX
+  DEFAULT_LABOR_TIME_MATRIX,
+  LABOR_MATRIX_BY_FORMAT,
+  PACK_WEIGHT_OPTIONS,
+  getLaborParamsByFormat,
+  calculateLaborCostByFormat
 };

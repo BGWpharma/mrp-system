@@ -6,8 +6,6 @@ import {
   Box,
   Paper,
   Grid,
-  Card,
-  CardContent,
   TableContainer,
   Table,
   TableHead,
@@ -23,13 +21,18 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-  Tooltip
+  Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import {
   LocalDining as ConsumptionIcon,
   Download as DownloadIcon,
   ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
+  ArrowDownward as ArrowDownwardIcon,
+  ExpandMore as ExpandMoreIcon,
+  TableChart as TableChartIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -41,7 +44,7 @@ import { getAllOrders } from '../../services/orderService';
 import { getAllCustomers } from '../../services/customerService';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
-import { exportToCSV, formatDateForExport } from '../../utils/exportUtils';
+import { exportToCSV, exportToExcel, formatDateForExport } from '../../utils/exportUtils';
 
 const MOConsumptionPage = () => {
   const { t } = useTranslation('analytics');
@@ -64,6 +67,7 @@ const MOConsumptionPage = () => {
   const [ordersList, setOrdersList] = useState([]);
   const [sortField, setSortField] = useState('consumptionDate');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [expandedMo, setExpandedMo] = useState(null); // taskId of expanded MO
 
   useEffect(() => {
     fetchData();
@@ -232,6 +236,88 @@ const MOConsumptionPage = () => {
     setFilteredConsumption(sortedData);
   };
 
+  // Zadania produkcyjne (MO) z zestawieniem materiałów: planowana vs konsumpcja
+  const getTasksWithMaterialsBreakdown = () => {
+    let filteredTasks = tasks;
+    if (selectedOrder !== 'all') {
+      filteredTasks = filteredTasks.filter(task => task.orderId === selectedOrder);
+    }
+
+    return filteredTasks
+      .filter(task => (task.consumedMaterials?.length > 0 || task.materials?.length > 0))
+      .filter(task => {
+        // Sprawdź czy ma jakąkolwiek konsumpcję w zakresie dat
+        const hasConsumptionInRange = task.consumedMaterials?.some(consumed => {
+          let consumptionDate = null;
+          if (consumed.timestamp?.toDate) consumptionDate = consumed.timestamp.toDate();
+          else if (consumed.timestamp) consumptionDate = new Date(consumed.timestamp);
+          else if (consumed.date?.toDate) consumptionDate = consumed.date.toDate();
+          else if (consumed.date) consumptionDate = new Date(consumed.date);
+          else if (task.updatedAt?.toDate) consumptionDate = task.updatedAt.toDate();
+          return consumptionDate ? (consumptionDate >= startDate && consumptionDate <= endDate) : false;
+        });
+        return hasConsumptionInRange;
+      })
+      .map(task => {
+        const materialIds = new Set();
+        const materialsMap = {};
+
+        // Załaduj planowane materiały z task.materials
+        // material.quantity = "Oryginalna ilość" (całkowita przeliczona z receptury przy tworzeniu)
+        // actualMaterialUsage[material.id] = nadpisana ilość gdy użytkownik zmienił w szczegółach zadania
+        const actualUsage = task.actualMaterialUsage || {};
+        (task.materials || []).forEach(material => {
+          const materialId = material.inventoryItemId || material.id;
+          const basePlanned = parseFloat(material.quantity) || 0;
+          const plannedQty = actualUsage[material.id] !== undefined
+            ? parseFloat(actualUsage[material.id]) || 0
+            : basePlanned;
+          materialIds.add(materialId);
+          materialsMap[materialId] = {
+            materialId,
+            materialName: material.name || t('moConsumptionReport.unknownMaterial'),
+            unit: material.unit || 'szt',
+            plannedQuantity: plannedQty,
+            consumedQuantity: 0
+          };
+        });
+
+        // Dodaj konsumpcję z consumedMaterials
+        (task.consumedMaterials || []).forEach(consumed => {
+          const materialId = consumed.materialId;
+          const material = task.materials?.find(m => (m.inventoryItemId || m.id) === materialId);
+          const materialName = material?.name || consumed.materialName || t('moConsumptionReport.unknownMaterial');
+          const materialUnit = material?.unit || consumed.unit || 'szt';
+          const qty = parseFloat(consumed.quantity) || 0;
+
+          materialIds.add(materialId);
+          if (!materialsMap[materialId]) {
+            materialsMap[materialId] = {
+              materialId,
+              materialName,
+              unit: materialUnit,
+              plannedQuantity: 0,
+              consumedQuantity: 0
+            };
+          }
+          materialsMap[materialId].consumedQuantity += qty;
+        });
+
+        const materialsBreakdown = Array.from(materialIds).map(id => ({
+          ...materialsMap[id],
+          difference: (materialsMap[id].consumedQuantity || 0) - (materialsMap[id].plannedQuantity || 0)
+        }));
+
+        return {
+          ...task,
+          materialsBreakdown
+        };
+      })
+      .sort((a, b) => (a.moNumber || '').localeCompare(b.moNumber || ''));
+  };
+
+  const tasksWithMaterialsBreakdown = getTasksWithMaterialsBreakdown();
+
   const sortConsumptionData = (data) => {
     return [...data].sort((a, b) => {
       let aValue, bValue;
@@ -355,6 +441,104 @@ const MOConsumptionPage = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    try {
+      const startDateStr = formatDateForExport(startDate, 'yyyyMMdd');
+      const endDateStr = formatDateForExport(endDate, 'yyyyMMdd');
+      const filename = `mo_consumption_report_${startDateStr}_${endDateStr}`;
+
+      const worksheets = [];
+
+      // Arkusz 1: Podsumowanie
+      if (consumptionData.length > 0) {
+        worksheets.push({
+          name: t('moConsumptionReport.export.summarySheet') || 'Podsumowanie',
+          data: consumptionData.map(m => ({
+            materialName: m.materialName,
+            totalQuantity: formatQuantity(m.totalQuantity),
+            unit: m.unit,
+            avgUnitPrice: m.avgUnitPrice.toFixed(2),
+            totalCost: m.totalCost.toFixed(2),
+            batchCount: m.batchCount,
+            taskCount: m.taskCount
+          })),
+          headers: [
+            { label: t('moConsumptionReport.table.material'), key: 'materialName' },
+            { label: t('moConsumptionReport.table.totalQuantity'), key: 'totalQuantity' },
+            { label: t('moConsumptionReport.table.unit'), key: 'unit' },
+            { label: t('moConsumptionReport.table.avgUnitPrice'), key: 'avgUnitPrice' },
+            { label: t('moConsumptionReport.table.totalCost'), key: 'totalCost' },
+            { label: t('moConsumptionReport.table.batchCount'), key: 'batchCount' },
+            { label: t('moConsumptionReport.table.taskCount'), key: 'taskCount' }
+          ]
+        });
+      }
+
+      // Arkusz 2: Szczegóły
+      if (filteredConsumption.length > 0) {
+        worksheets.push({
+          name: t('moConsumptionReport.export.detailsSheet') || 'Szczegóły',
+          data: filteredConsumption.map(item => ({
+            consumptionDate: item.consumptionDate ? format(item.consumptionDate, 'yyyy-MM-dd HH:mm:ss') : '',
+            taskName: item.taskName,
+            moNumber: item.moNumber || '',
+            productName: item.productName,
+            materialName: item.materialName,
+            batchNumber: item.batchNumber,
+            quantity: formatQuantity(item.quantity),
+            unit: item.unit,
+            unitPrice: item.unitPrice.toFixed(2),
+            totalCost: item.totalCost.toFixed(2),
+            userName: item.userName
+          })),
+          headers: [
+            { label: t('moConsumptionReport.details.date'), key: 'consumptionDate' },
+            { label: t('moConsumptionReport.details.task'), key: 'taskName' },
+            { label: t('moConsumptionReport.details.moNumber'), key: 'moNumber' },
+            { label: t('moConsumptionReport.details.product'), key: 'productName' },
+            { label: t('moConsumptionReport.table.material'), key: 'materialName' },
+            { label: t('moConsumptionReport.details.batch'), key: 'batchNumber' },
+            { label: t('moConsumptionReport.details.quantity'), key: 'quantity' },
+            { label: t('moConsumptionReport.details.unitShort'), key: 'unit' },
+            { label: t('moConsumptionReport.details.cost'), key: 'totalCost' },
+            { label: t('moConsumptionReport.details.user'), key: 'userName' }
+          ]
+        });
+      }
+
+      // Arkusze per MO z zestawieniem materiałów
+      tasksWithMaterialsBreakdown.forEach(task => {
+        const sheetName = (task.moNumber || task.name || task.id || 'MO').replace(/[[\]\\\/\?\*\:]/g, '_').substring(0, 31);
+        worksheets.push({
+          name: sheetName,
+          data: task.materialsBreakdown.map(m => ({
+            materialName: m.materialName,
+            plannedQuantity: formatQuantity(m.plannedQuantity),
+            consumedQuantity: formatQuantity(m.consumedQuantity),
+            unit: m.unit,
+            difference: formatQuantity(m.difference)
+          })),
+          headers: [
+            { label: t('moConsumptionReport.moSection.material'), key: 'materialName' },
+            { label: t('moConsumptionReport.moSection.plannedQuantity'), key: 'plannedQuantity' },
+            { label: t('moConsumptionReport.moSection.consumedQuantity'), key: 'consumedQuantity' },
+            { label: t('moConsumptionReport.moSection.unit'), key: 'unit' },
+            { label: t('moConsumptionReport.moSection.difference'), key: 'difference' }
+          ]
+        });
+      });
+
+      if (worksheets.length > 0 && exportToExcel(worksheets, filename)) {
+        showSuccess(t('moConsumptionReport.export.excelSuccess') || 'Dane zostały wyeksportowane do pliku Excel');
+      } else {
+        showError(t('moConsumptionReport.export.error') || 'Błąd podczas eksportowania danych');
+      }
+    } catch (error) {
+      console.error('Błąd podczas eksportu Excel:', error);
+      showError(t('moConsumptionReport.export.error') || 'Błąd podczas eksportowania danych');
+    }
+  };
+
   const SortableTableCell = ({ field, children, align = 'left', ...props }) => {
     const isActive = sortField === field;
     const isDesc = sortDirection === 'desc';
@@ -433,15 +617,26 @@ const MOConsumptionPage = () => {
               </Typography>
             </Box>
           </Box>
-          <Tooltip title={t('moConsumptionReport.export.csv') || 'Eksportuj CSV'}>
-            <IconButton 
-              onClick={handleExportCSV} 
-              sx={{ color: 'white' }}
-              disabled={loading || (consumptionData.length === 0 && filteredConsumption.length === 0)}
-            >
-              <DownloadIcon />
-            </IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title={t('moConsumptionReport.export.excel') || 'Eksportuj Excel (z arkuszami per MO)'}>
+              <IconButton 
+                onClick={handleExportExcel} 
+                sx={{ color: 'white' }}
+                disabled={loading || (consumptionData.length === 0 && filteredConsumption.length === 0 && tasksWithMaterialsBreakdown.length === 0)}
+              >
+                <TableChartIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('moConsumptionReport.export.csv') || 'Eksportuj CSV'}>
+              <IconButton 
+                onClick={handleExportCSV} 
+                sx={{ color: 'white' }}
+                disabled={loading || (consumptionData.length === 0 && filteredConsumption.length === 0)}
+              >
+                <DownloadIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
       </Paper>
 
@@ -564,6 +759,94 @@ const MOConsumptionPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+      </Paper>
+
+      {/* Zadania produkcyjne (MO) z zestawieniem materiałów */}
+      <Paper sx={{ p: isMobile ? 1.5 : 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>{t('moConsumptionReport.moSection.title')}</Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          {t('moConsumptionReport.moSection.description')}
+        </Typography>
+        
+        {tasksWithMaterialsBreakdown.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="body1" color="text.secondary">
+              {t('moConsumptionReport.moSection.noData')}
+            </Typography>
+          </Box>
+        ) : (
+          <Box>
+            {tasksWithMaterialsBreakdown.map((task) => (
+              <Accordion
+                key={task.id}
+                expanded={expandedMo === task.id}
+                onChange={() => setExpandedMo(expandedMo === task.id ? null : task.id)}
+                sx={{
+                  '&:before': { display: 'none' },
+                  boxShadow: 'none',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  mb: 1,
+                  '&:last-of-type': { mb: 0 }
+                }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      {task.moNumber || task.name || t('moConsumptionReport.moSection.unnamedMO')}
+                    </Typography>
+                    <Chip label={task.productName || '-'} size="small" variant="outlined" />
+                    {task.orderNumber && (
+                      <Typography variant="caption" color="text.secondary">
+                        CO #{task.orderNumber}
+                      </Typography>
+                    )}
+                    <Chip 
+                      label={`${task.materialsBreakdown?.length || 0} ${t('moConsumptionReport.moSection.materials')}`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 0 }}>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{t('moConsumptionReport.moSection.material')}</TableCell>
+                          <TableCell align="right">{t('moConsumptionReport.moSection.plannedQuantity')}</TableCell>
+                          <TableCell align="right">{t('moConsumptionReport.moSection.consumedQuantity')}</TableCell>
+                          <TableCell>{t('moConsumptionReport.moSection.unit')}</TableCell>
+                          <TableCell align="right">{t('moConsumptionReport.moSection.difference')}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {task.materialsBreakdown?.map((m, idx) => (
+                          <TableRow key={idx} hover>
+                            <TableCell sx={{ fontWeight: 'medium' }}>{m.materialName}</TableCell>
+                            <TableCell align="right">{formatQuantity(m.plannedQuantity)}</TableCell>
+                            <TableCell align="right">{formatQuantity(m.consumedQuantity)}</TableCell>
+                            <TableCell>{m.unit}</TableCell>
+                            <TableCell 
+                              align="right" 
+                              sx={{ 
+                                fontWeight: 'bold',
+                                color: m.difference > 0 ? 'error.main' : m.difference < 0 ? 'success.main' : 'text.secondary'
+                              }}
+                            >
+                              {m.difference > 0 ? '+' : ''}{formatQuantity(m.difference)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
         )}
       </Paper>
 

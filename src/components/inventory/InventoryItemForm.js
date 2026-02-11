@@ -15,7 +15,12 @@ import {
   FormHelperText,
   Alert,
   Divider,
-  Autocomplete
+  Autocomplete,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -32,6 +37,7 @@ import {
   getInventoryItemById,
   getAllInventoryItems
 } from '../../services/inventory';
+import { getRecipesContainingIngredient } from '../../services/recipeService';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification } from '../../hooks/useNotification';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -42,6 +48,8 @@ const InventoryItemForm = ({ itemId }) => {
   const [saving, setSaving] = useState(false);
   const [packageItems, setPackageItems] = useState([]);
   const [selectedPackageItem, setSelectedPackageItem] = useState(null);
+  const [originalName, setOriginalName] = useState('');
+  const [recipeUpdateDialog, setRecipeUpdateDialog] = useState({ open: false, count: 0 });
   const { currentUser } = useAuth();
   const { showSuccess, showError } = useNotification();
   const { t } = useTranslation();
@@ -80,6 +88,7 @@ const InventoryItemForm = ({ itemId }) => {
           // Usuwamy pola, które nie chcemy edytować bezpośrednio
           const { quantity, bookedQuantity, notes, ...restItem } = item;
           setItemData(restItem);
+          setOriginalName(restItem.name || '');
           
           // Znajdź wybrany karton jeśli istnieje
           if (restItem.parentPackageItemId) {
@@ -98,29 +107,59 @@ const InventoryItemForm = ({ itemId }) => {
     fetchData();
   }, [itemId, showError]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const performSave = async (skipRecipeUpdates = false) => {
     setSaving(true);
-    
     try {
-      if (itemId) {
-        await updateInventoryItem(itemId, itemData, currentUser.uid);
-        showSuccess('Pozycja została zaktualizowana');
-        navigate(`/inventory/${itemId}`);
-      } else {
-        const newItem = await createInventoryItem(itemData, currentUser.uid);
-        showSuccess('Pozycja została utworzona');
-        // Małe opóźnienie żeby dać czas na odświeżenie listy
-        setTimeout(() => {
-          navigate('/inventory');
-        }, 100);
-      }
+      const result = await updateInventoryItem(itemId, itemData, currentUser.uid, { skipRecipeUpdates });
+      const message = result.updatedRecipesCount > 0
+        ? t('inventory.itemForm.updateSuccessWithRecipes', { count: result.updatedRecipesCount })
+        : t('inventory.itemForm.updateSuccess');
+      showSuccess(message);
+      navigate(`/inventory/${itemId}`);
     } catch (error) {
       showError('Błąd podczas zapisywania pozycji: ' + error.message);
       console.error('Error saving inventory item:', error);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (itemId) {
+      const nameChanged = (itemData.name || '').trim() !== (originalName || '').trim();
+      if (nameChanged) {
+        const recipes = await getRecipesContainingIngredient(itemId);
+        if (recipes.length > 0) {
+          setRecipeUpdateDialog({ open: true, count: recipes.length });
+          return;
+        }
+      }
+      performSave(false);
+    } else {
+      setSaving(true);
+      try {
+        const newItem = await createInventoryItem(itemData, currentUser.uid);
+        showSuccess('Pozycja została utworzona');
+        setTimeout(() => navigate('/inventory'), 100);
+      } catch (error) {
+        showError('Błąd podczas zapisywania pozycji: ' + error.message);
+        console.error('Error saving inventory item:', error);
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleRecipeUpdateDialogConfirm = () => {
+    setRecipeUpdateDialog(prev => ({ ...prev, open: false }));
+    performSave(false);
+  };
+
+  const handleRecipeUpdateDialogDecline = () => {
+    setRecipeUpdateDialog(prev => ({ ...prev, open: false }));
+    performSave(true);
   };
 
   const handleChange = (e) => {
@@ -492,6 +531,30 @@ const InventoryItemForm = ({ itemId }) => {
           <SupplierPricesList itemId={itemId} currency={itemData.currency || 'EUR'} />
         </Paper>
       )}
+
+      <Dialog
+        open={recipeUpdateDialog.open}
+        onClose={handleRecipeUpdateDialogDecline}
+        aria-labelledby="recipe-update-dialog-title"
+        aria-describedby="recipe-update-dialog-description"
+      >
+        <DialogTitle id="recipe-update-dialog-title">
+          {t('inventory.itemForm.recipeUpdateDialog.title')}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="recipe-update-dialog-description">
+            {t('inventory.itemForm.recipeUpdateDialog.message', { count: recipeUpdateDialog.count })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleRecipeUpdateDialogDecline} color="secondary">
+            {t('inventory.itemForm.recipeUpdateDialog.decline')}
+          </Button>
+          <Button onClick={handleRecipeUpdateDialogConfirm} color="primary" variant="contained" autoFocus>
+            {t('inventory.itemForm.recipeUpdateDialog.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

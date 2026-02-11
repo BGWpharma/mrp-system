@@ -463,11 +463,12 @@ export const createInventoryItem = async (itemData, userId) => {
  * @param {string} itemId - ID pozycji do aktualizacji
  * @param {Object} itemData - Nowe dane pozycji
  * @param {string} userId - ID użytkownika aktualizującego pozycję
+ * @param {Object} [options] - Opcje (np. skipRecipeUpdates: true - pomiń aktualizację receptur przy zmianie nazwy)
  * @returns {Promise<Object>} - Zaktualizowana pozycja
  * @throws {ValidationError} - Gdy dane są nieprawidłowe
  * @throws {Error} - Gdy pozycja nie istnieje lub nazwa jest zajęta
  */
-export const updateInventoryItem = async (itemId, itemData, userId) => {
+export const updateInventoryItem = async (itemId, itemData, userId, options = {}) => {
   try {
     // Walidacja ID
     const validatedId = validateId(itemId, 'itemId');
@@ -518,6 +519,38 @@ export const updateInventoryItem = async (itemId, itemData, userId) => {
     
     console.log('✅ updateInventoryItem - zapis do Firebase zakończony pomyślnie');
     
+    // Jeśli nazwa się zmieniła - zaktualizuj składniki we wszystkich recepturach (nowa wersja receptury)
+    // Pomijane gdy options.skipRecipeUpdates === true (np. użytkownik odmówił w dialogu)
+    let updatedRecipesCount = 0;
+    if (!options.skipRecipeUpdates && validatedData.name && validatedData.name !== currentItem.name) {
+      try {
+        const { getRecipesContainingIngredient, updateRecipe } = await import('../recipeService');
+        const recipesToUpdate = await getRecipesContainingIngredient(validatedId);
+        
+        for (const recipe of recipesToUpdate) {
+          try {
+            const updatedIngredients = (recipe.ingredients || []).map(ing =>
+              ing.id === validatedId ? { ...ing, name: validatedData.name } : ing
+            );
+            const { id: _recipeId, ...recipeFields } = recipe;
+            const recipeDataForUpdate = {
+              ...recipeFields,
+              ingredients: updatedIngredients
+            };
+            await updateRecipe(recipe.id, recipeDataForUpdate, validatedUserId);
+            updatedRecipesCount++;
+          } catch (recipeError) {
+            console.error(`Błąd podczas aktualizacji receptury ${recipe.id} po zmianie nazwy SKU:`, recipeError);
+          }
+        }
+        if (updatedRecipesCount > 0) {
+          console.log(`📋 updateInventoryItem - zaktualizowano ${updatedRecipesCount} receptur(ach) z nową nazwą składnika`);
+        }
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji receptur po zmianie nazwy pozycji magazynowej:', error);
+      }
+    }
+    
     // Emituj zdarzenie o aktualizacji pozycji magazynowej
     if (typeof window !== 'undefined') {
       const event = new CustomEvent('inventory-updated', { 
@@ -541,7 +574,8 @@ export const updateInventoryItem = async (itemId, itemData, userId) => {
     return {
       id: validatedId,
       ...currentItem,
-      ...updatedItem
+      ...updatedItem,
+      ...(updatedRecipesCount > 0 && { updatedRecipesCount })
     };
   } catch (error) {
     if (error instanceof ValidationError) {

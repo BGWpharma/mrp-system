@@ -414,6 +414,14 @@
     "collectivePackaging": "Opakowania zbiorcze",
     "individualPackaging": "Opakowania jednostkowe",
     "finishedProducts": "Gotowe produkty",
-    "other": "Inne"
+    "other": "Inne",
+    "updateSuccess": "Pozycja została zaktualizowana",
+    "updateSuccessWithRecipes": "Pozycja zaktualizowana. Zaktualizowano {{count}} receptur(y) z nową nazwą składnika.",
+    "recipeUpdateDialog": {
+      "title": "Aktualizacja receptur",
+      "message": "Ten składnik (ID pozycji magazynowej) występuje w {{count}} recepturach. Zaktualizować je automatycznie do nowej wersji z nową nazwą składnika?",
+      "confirm": "Tak, zaktualizuj receptury",
+      "decline": "Nie, tylko zapisz pozycję"
+    }
   }
 }

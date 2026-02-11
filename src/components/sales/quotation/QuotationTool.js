@@ -40,6 +40,8 @@ import {
   Grid,
   Card,
   CardContent,
+  FormControlLabel,
+  Checkbox,
   useTheme,
   useMediaQuery
 } from '@mui/material';
@@ -69,11 +71,12 @@ import {
   calculateQuotation,
   calculateTotalWeight,
   calculateLaborTime,
+  calculateLaborCostByFormat,
   saveQuotation,
   updateQuotation,
   deleteQuotation,
   getAllQuotations,
-  DEFAULT_LABOR_TIME_MATRIX
+  PACK_WEIGHT_OPTIONS
 } from '../../../services/quotationService';
 
 // Jednostki dostępne dla komponentów
@@ -108,6 +111,8 @@ const QuotationTool = () => {
   const [components, setComponents] = useState([]);
   const [packaging, setPackaging] = useState(null);
   const [packagingQuantity, setPackagingQuantity] = useState(1);
+  const [packWeight, setPackWeight] = useState(null);  // Gramatura opakowania (g): 60, 90, 120, 180, 300, 900
+  const [flavored, setFlavored] = useState(false);    // Produkt smakowy (tylko dla 300g)
 
   // Stan kalkulacji
   const [calculatedQuotation, setCalculatedQuotation] = useState(null);
@@ -207,6 +212,8 @@ const QuotationTool = () => {
           unitPrice: parseFloat(packaging.unitPrice) || 0,
           quantity: packagingQuantity
         } : null,
+        packWeight,
+        flavored,
         costPerMinute,
         summary: quickCalculation
       };
@@ -277,6 +284,10 @@ const QuotationTool = () => {
       setCostPerMinute(quotation.costPerMinute);
     }
 
+    // Ustaw format produktu (pack weight, flavored)
+    setPackWeight(quotation.packWeight ?? null);
+    setFlavored(quotation.flavored ?? false);
+
     setQuotationsDialog(false);
     showNotification(t('quotation.loaded', 'Wycena została załadowana'), 'success');
   };
@@ -319,9 +330,27 @@ const QuotationTool = () => {
     return calculateTotalWeight(components);
   }, [components]);
 
-  const estimatedMinutes = useMemo(() => {
-    return calculateLaborTime(totalGramatura);
-  }, [totalGramatura]);
+  // Koszt pracy: tryb matrycy formatu (pack weight) lub fallback (gramatura)
+  const laborCalculation = useMemo(() => {
+    const formatLabor = calculateLaborCostByFormat(packWeight, flavored, packagingQuantity);
+    if (formatLabor) {
+      return {
+        laborCost: formatLabor.laborCostTotal,
+        estimatedMinutes: formatLabor.estimatedMinutes,
+        targetTimeSec: formatLabor.targetTimeSec,
+        costPerHourEur: formatLabor.costPerHourEur,
+        source: 'format'
+      };
+    }
+    const estimatedMinutes = calculateLaborTime(totalGramatura);
+    return {
+      laborCost: estimatedMinutes * costPerMinute,
+      estimatedMinutes,
+      targetTimeSec: null,
+      costPerHourEur: null,
+      source: 'gramatura'
+    };
+  }, [components, packWeight, flavored, packagingQuantity, totalGramatura, costPerMinute]);
 
   // Szybka kalkulacja bez zapytań do API
   const quickCalculation = useMemo(() => {
@@ -336,15 +365,16 @@ const QuotationTool = () => {
       ? (parseFloat(packaging.unitPrice) || 0) * packagingQuantity 
       : 0;
 
-    const laborCost = estimatedMinutes * costPerMinute;
+    const laborCost = laborCalculation.laborCost;
 
     return {
       componentsCost: parseFloat(componentsCost.toFixed(2)),
       packagingCost: parseFloat(packagingCost.toFixed(2)),
       laborCost: parseFloat(laborCost.toFixed(2)),
-      totalCOGS: parseFloat((componentsCost + packagingCost + laborCost).toFixed(2))
+      totalCOGS: parseFloat((componentsCost + packagingCost + laborCost).toFixed(2)),
+      laborSource: laborCalculation.source
     };
-  }, [components, packaging, packagingQuantity, estimatedMinutes, costPerMinute]);
+  }, [components, packaging, packagingQuantity, laborCalculation]);
 
   // Dodawanie komponentu z magazynu
   const handleAddComponent = () => {
@@ -443,6 +473,8 @@ const QuotationTool = () => {
           unitPrice: packaging.unitPrice,
           quantity: packagingQuantity
         } : null,
+        packWeight,
+        flavored,
         customCostPerMinute: costPerMinute
       });
 
@@ -463,6 +495,8 @@ const QuotationTool = () => {
     setComponents([]);
     setPackaging(null);
     setPackagingQuantity(1);
+    setPackWeight(null);
+    setFlavored(false);
     setCalculatedQuotation(null);
   };
 
@@ -825,7 +859,8 @@ const QuotationTool = () => {
         </Typography>
 
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={6} md={3}>
+          {/* Gramatura surowca - informacyjnie */}
+          <Grid item xs={6} md={2}>
             <TextField
               size="small"
               fullWidth
@@ -837,14 +872,56 @@ const QuotationTool = () => {
               }}
             />
           </Grid>
-          <Grid item xs={6} md={3}>
+          {/* Gramatura opakowania (format produktu) */}
+          <Grid item xs={6} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>{t('quotation.packWeight', 'Gramatura opakowania')}</InputLabel>
+              <Select
+                value={packWeight ?? ''}
+                label={t('quotation.packWeight', 'Gramatura opakowania')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPackWeight(val === '' ? null : Number(val));
+                  if (val !== 300) setFlavored(false);
+                }}
+              >
+                <MenuItem value="">{t('quotation.packWeightNone', '— Nie wybrano —')}</MenuItem>
+                {PACK_WEIGHT_OPTIONS.map(w => (
+                  <MenuItem key={w} value={w}>{w} g</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              {t('quotation.packWeightHelp', 'Matryca czasu/kosztu')}
+            </Typography>
+          </Grid>
+          {/* Produkt smakowy - tylko gdy 300g */}
+          {packWeight === 300 && (
+            <Grid item xs={12} md={2}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={flavored}
+                    onChange={(e) => setFlavored(e.target.checked)}
+                    color="primary"
+                    size="small"
+                  />
+                }
+                label={t('quotation.flavored', 'Produkt smakowy')}
+              />
+            </Grid>
+          )}
+          {/* Szacowany czas / Czas z matrycy */}
+          <Grid item xs={6} md={2}>
             <TextField
               size="small"
               fullWidth
-              label={t('quotation.estimatedTime', 'Szacowany czas')}
-              value={estimatedMinutes}
+              label={laborCalculation.source === 'format' ? t('quotation.targetTime', 'Czas/szt.') : t('quotation.estimatedTime', 'Szacowany czas')}
+              value={laborCalculation.source === 'format' 
+                ? `${laborCalculation.targetTimeSec} s` 
+                : laborCalculation.estimatedMinutes}
               InputProps={{
-                endAdornment: <InputAdornment position="end">min</InputAdornment>,
+                endAdornment: <InputAdornment position="end">{laborCalculation.source === 'format' ? '' : 'min'}</InputAdornment>,
                 readOnly: true
               }}
             />
@@ -852,43 +929,54 @@ const QuotationTool = () => {
               {t('quotation.fromMatrix', '(z matrycy czasu)')}
             </Typography>
           </Grid>
-          <Grid item xs={6} md={3}>
-            <Tooltip
-              title={
-                costPerMinuteSource 
-                  ? t('quotation.costPerMinuteSourceTooltip', 'Źródło: Koszty zakładu {{startDate}} - {{endDate}}', {
-                      startDate: costPerMinuteSource.startDate?.toLocaleDateString?.() || '?',
-                      endDate: costPerMinuteSource.endDate?.toLocaleDateString?.() || '?'
-                    })
-                  : t('quotation.noCostPerMinuteSource', 'Brak danych - wprowadź ręcznie')
-              }
-              arrow
-            >
+          {/* Koszt/h - tylko w trybie formatu; w fallback kost/min */}
+          {laborCalculation.source === 'format' ? (
+            <Grid item xs={6} md={2}>
               <TextField
                 size="small"
                 fullWidth
-                type="number"
-                label={t('quotation.costPerMinute', 'Koszt/minutę')}
-                value={costPerMinute}
-                onChange={(e) => setCostPerMinute(parseFloat(e.target.value) || 0)}
+                label={t('quotation.costPerHour', 'Koszt/h')}
+                value={laborCalculation.costPerHourEur?.toFixed(2)}
                 InputProps={{
-                  endAdornment: <InputAdornment position="end">€</InputAdornment>
-                }}
-                inputProps={{ min: 0, step: 0.01 }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    backgroundColor: costPerMinuteSource ? 'inherit' : 'rgba(255, 152, 0, 0.1)'
-                  }
+                  endAdornment: <InputAdornment position="end">€</InputAdornment>,
+                  readOnly: true
                 }}
               />
-            </Tooltip>
-            {costPerMinuteSource && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                {t('quotation.fromFactoryCosts', '(z kosztów zakładu)')}
-              </Typography>
-            )}
-          </Grid>
-          <Grid item xs={6} md={3}>
+            </Grid>
+          ) : (
+            <Grid item xs={6} md={2}>
+              <Tooltip
+                title={
+                  costPerMinuteSource 
+                    ? t('quotation.costPerMinuteSourceTooltip', 'Źródło: Koszty zakładu {{startDate}} - {{endDate}}', {
+                        startDate: costPerMinuteSource.startDate?.toLocaleDateString?.() || '?',
+                        endDate: costPerMinuteSource.endDate?.toLocaleDateString?.() || '?'
+                      })
+                    : t('quotation.noCostPerMinuteSource', 'Brak danych - wprowadź ręcznie')
+                }
+                arrow
+              >
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="number"
+                  label={t('quotation.costPerMinute', 'Koszt/minutę')}
+                  value={costPerMinute}
+                  onChange={(e) => setCostPerMinute(parseFloat(e.target.value) || 0)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">€</InputAdornment>
+                  }}
+                  inputProps={{ min: 0, step: 0.01 }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: costPerMinuteSource ? 'inherit' : 'rgba(255, 152, 0, 0.1)'
+                    }
+                  }}
+                />
+              </Tooltip>
+            </Grid>
+          )}
+          <Grid item xs={6} md={2}>
             <Typography variant="body2" align="right">
               {t('quotation.laborTotal', 'Koszt pracy')}: <strong>{quickCalculation.laborCost.toFixed(2)} €</strong>
             </Typography>
@@ -897,12 +985,14 @@ const QuotationTool = () => {
 
         {/* Info o źródle danych */}
         <Alert 
-          severity={costPerMinuteSource ? "info" : "warning"} 
+          severity={laborCalculation.source === 'format' ? "success" : (costPerMinuteSource ? "info" : "warning")} 
           sx={{ mt: 2 }} 
           icon={<InfoIcon />}
         >
           <Typography variant="body2">
-            {costPerMinuteSource ? (
+            {laborCalculation.source === 'format' ? (
+              t('quotation.laborInfoFormat', 'Koszt pracy z matrycy formatu produktu (gramatura opakowania + smak).')
+            ) : costPerMinuteSource ? (
               <>
                 {t('quotation.laborInfoWithSource', 'Koszt/minutę pobrany z najnowszego wpisu kosztów zakładu')}
                 {' '}
@@ -912,9 +1002,11 @@ const QuotationTool = () => {
                 {costPerMinuteSource.effectiveHours && (
                   <> — {t('quotation.effectiveTime', 'efektywny czas')}: {costPerMinuteSource.effectiveHours?.toFixed(1)}h</>
                 )}
+                {' '}
+                {t('quotation.laborInfoSelectFormat', 'Wybierz gramaturę opakowania dla precyzyjniejszej kalkulacji.')}
               </>
             ) : (
-              t('quotation.laborInfoNoSource', 'Brak wpisów kosztów zakładu. Wprowadź koszt/minutę ręcznie lub dodaj wpis w zakładce "Koszty zakładu".')
+              t('quotation.laborInfoNoSource', 'Brak wpisów kosztów zakładu. Wprowadź koszt/minutę ręcznie lub dodaj wpis w zakładce "Koszty zakładu". Wybierz gramaturę opakowania dla precyzyjniejszej kalkulacji.')
             )}
           </Typography>
         </Alert>

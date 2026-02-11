@@ -25,7 +25,6 @@ import {
   ShowChart as ShowChartIcon,
   Schedule as ScheduleIcon,
   LocalDining as ConsumptionIcon,
-  Speed as ProgressIcon,
   MonetizationOn as CostsIcon,
   Savings as CashflowIcon,
   Blender as BlenderIcon,
@@ -71,15 +70,16 @@ const getReportTiles = (t) => [
     gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
     iconBg: 'rgba(255, 255, 255, 0.2)'
   },
-  {
-    id: 'production-progress',
-    title: t('analyticsDashboard.tiles.productionProgress.title'),
-    description: t('analyticsDashboard.tiles.productionProgress.description'),
-    icon: ProgressIcon,
-    path: '/analytics/production-progress',
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    iconBg: 'rgba(255, 255, 255, 0.2)'
-  },
+  // TYMCZASOWO UKRYTY - Raport postępu produkcji (nieużywany)
+  // {
+  //   id: 'production-progress',
+  //   title: t('analyticsDashboard.tiles.productionProgress.title'),
+  //   description: t('analyticsDashboard.tiles.productionProgress.description'),
+  //   icon: ProgressIcon,
+  //   path: '/analytics/production-progress',
+  //   gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  //   iconBg: 'rgba(255, 255, 255, 0.2)'
+  // },
   {
     id: 'inventory-expiry',
     title: t('analyticsDashboard.tiles.inventoryExpiry.title'),
